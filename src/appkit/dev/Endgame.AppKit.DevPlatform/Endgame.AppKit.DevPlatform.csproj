@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    TEST DOUBLE. A local fake of the platform API the app kit calls, so the kit and the template are
+    tested end to end without the real control plane. Never deployed, never referenced by an app's
+    runtime code — only by Endgame.AppKit.Testing and the proof's host.
+  -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Endgame.AppKit.DevPlatform</PackageId>
+    <Description>Test double of the Endgame platform API for app tests. Not for production.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../sdk-dotnet/Endgame.AppKit/Endgame.AppKit.csproj" />
+  </ItemGroup>
+</Project>

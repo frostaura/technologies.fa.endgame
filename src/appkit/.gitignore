@@ -1,0 +1,10 @@
+# Packed kit packages, copied into the template by `make vendor`. A generated app's repository
+# commits its vendor/ directory; this one regenerates it, so it is never tracked here.
+template/vendor/
+
+# The web build's output inside the API project.
+template/api/wwwroot/
+
+# Proof run output.
+proof/test-results/
+proof/playwright-report/

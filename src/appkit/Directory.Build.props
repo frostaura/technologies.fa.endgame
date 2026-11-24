@@ -1,0 +1,23 @@
+<Project>
+  <!--
+    The app kit's own build: the SDK packages, the dev platform fake and their tests.
+    The template under template/ has its own Directory.Build.props and never inherits this one,
+    because a generated app is a repository of its own.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+    <!-- One version for every kit package; a generated app pins it in its Directory.Packages.props. -->
+    <Version>0.1.0</Version>
+    <Authors>FrostAura</Authors>
+    <Company>FrostAura</Company>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)template/vendor/nuget</PackageOutputPath>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

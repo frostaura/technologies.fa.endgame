@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!--
+    TEST DOUBLE HOST. One process playing every part of Endgame an app touches, for the proof:
+      :8080  the platform API fake           (what ENDGAME_PLATFORM_URL points at)
+      :8081  the egress proxy fake           (what ENDGAME_EGRESS_PROXY points at; logs every call)
+      :8082  Edge, path form                 (/<org>/<division>/<project>/ → the app, prefix stripped)
+      :8083  Edge, organisation subdomain    (host root → the app)
+    Never deployed.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ContainerRepository>test-appkit-devplatform</ContainerRepository>
+    <ContainerFamily>noble-chiseled</ContainerFamily>
+    <ContainerUser>app</ContainerUser>
+  </PropertyGroup>
+  <ItemGroup>
+    <ContainerPort Include="8080;8081;8082;8083" Type="tcp" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Yarp.ReverseProxy" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Endgame.AppKit.DevPlatform/Endgame.AppKit.DevPlatform.csproj" />
+  </ItemGroup>
+</Project>

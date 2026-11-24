@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!--
+    The app: one .NET API that serves its own built front end (web/ → wwwroot/).
+    `make image` (dotnet publish /t:PublishContainer) builds the front end, then the container image:
+    ReadyToRun on the chiseled base, framework-dependent, never trimmed, never Native AOT.
+  -->
+  <PropertyGroup>
+    <RootNamespace>App</RootNamespace>
+    <AssemblyName>App.Api</AssemblyName>
+    <ContainerRepository>app</ContainerRepository>
+    <ContainerFamily>noble-chiseled</ContainerFamily>
+    <ContainerUser>app</ContainerUser>
+    <SelfContained>false</SelfContained>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishAot>false</PublishAot>
+    <!-- Publishing targets Linux on this machine's CPU unless the platform passes -r. -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(_IsPublishing)' == 'true'">linux-$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant())</RuntimeIdentifier>
+    <WebProjectDir>$(MSBuildProjectDirectory)/../web</WebProjectDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Required by the read-only root filesystem the platform runs apps on. -->
+    <ContainerEnvironmentVariable Include="DOTNET_EnableDiagnostics" Value="0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Endgame.AppKit" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- wwwroot is build output; it is added to the publish below, after the web build has run. -->
+    <Content Remove="wwwroot/**" />
+    <None Remove="wwwroot/**" />
+  </ItemGroup>
+
+  <Target Name="BuildWeb" BeforeTargets="ComputeResolvedFilesToPublishList" Condition="'$(SkipWebBuild)' != 'true'">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(WebProjectDir)" Condition="!Exists('$(WebProjectDir)/node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(WebProjectDir)" />
+    <ItemGroup>
+      <WebAsset Include="wwwroot/**" />
+      <ResolvedFileToPublish Include="@(WebAsset->'%(FullPath)')" RelativePath="%(WebAsset.Identity)" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+    <Error Condition="!Exists('wwwroot/index.html')" Text="The web build did not produce api/wwwroot/index.html. Run `make build` and read its output." />
+  </Target>
+</Project>

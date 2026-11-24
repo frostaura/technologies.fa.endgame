@@ -1,0 +1,11 @@
+bin/
+obj/
+node_modules/
+TestResults/
+api/wwwroot/
+web/test-results/
+web/coverage/
+*.tsbuildinfo
+.tmp/
+.env
+.DS_Store

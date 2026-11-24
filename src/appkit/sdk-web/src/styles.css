@@ -1,0 +1,25 @@
+/*
+ * The kit's base look: self-hosted typefaces and the page ground. Import it once, before the
+ * Tailwind directives, in the app's src/index.css. Colours come from the variables the Tailwind
+ * preset writes under :root; nothing here names a colour of its own.
+ */
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/space-grotesk/index.css";
+
+html {
+  background-color: rgb(var(--color-ground));
+  color: rgb(var(--color-ink));
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
