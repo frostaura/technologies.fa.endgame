@@ -250,6 +250,12 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         var config = Config(page);
         Assert.True(config.GetProperty("handoff").GetBoolean());
         Assert.Equal($"http://acme.endgame.test:{publicPort}/apps/secret/web/page?a=b", config.GetProperty("returnTo").GetString());
+        Assert.False(config.GetProperty("signedIn").GetBoolean()); // nothing to hand off: the page never asks
+
+        using var member = new HttpRequestMessage(HttpMethod.Get, $"/acme/apps/secret/web/_endgame/auth/sign-in?returnTo={Uri.EscapeDataString($"http://acme.endgame.test:{publicPort}/apps/secret/web/")}");
+        member.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.MemberSession}");
+        using var withSession = await client.SendAsync(member);
+        Assert.True(Config(await withSession.Content.ReadAsStringAsync()).GetProperty("signedIn").GetBoolean()); // handed off at once
     }
 
     [Fact]
