@@ -22,6 +22,9 @@ public sealed class HostingEnvironment : IAsyncLifetime
     public const string SubnetPool = "10.214.0.0/16";
     public const string NotesHost = "acme.endgame.test";
 
+    /// <summary>The fake control plane as apps reach it, through the proxy.</summary>
+    public const string PlatformHost = "endgame-platform.test";
+
     public static readonly Guid OrganisationId = Guid.Parse("a0000000-0000-0000-0000-00000000000a");
 
     private static readonly TimeSpan Long = TimeSpan.FromMinutes(20);
@@ -30,6 +33,8 @@ public sealed class HostingEnvironment : IAsyncLifetime
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
 
     public string RepositoryRoot { get; } = FindRepositoryRoot();
+
+    private string Dockerfile => Path.Combine(RepositoryRoot, "src", "backend", "Dockerfile");
 
     public FakeControlPlane ControlPlane { get; private set; } = null!;
 
@@ -55,7 +60,7 @@ public sealed class HostingEnvironment : IAsyncLifetime
 
     public static string Container(string name) => DockerCli.Prefix + name;
 
-    public static string AppContainer(Guid appId) => $"{DockerCli.Prefix}app-{appId:D}";
+    public static string AppContainer(Guid appId) => $"{DockerCli.Prefix}app-{appId:N}";
 
     public async Task InitializeAsync()
     {
@@ -69,8 +74,8 @@ public sealed class HostingEnvironment : IAsyncLifetime
 
         var clock = Stopwatch.StartNew();
         await Task.WhenAll(
-            DockerCli.CheckedAsync(Long, "build", "-q", "-f", "src/backend/Dockerfile", "--build-arg", "PROJECT=Endgame.Dock", "-t", Container("dock:it"), RepositoryRoot),
-            DockerCli.CheckedAsync(Long, "build", "-q", "-f", "src/backend/Dockerfile", "--build-arg", "PROJECT=Endgame.Edge", "-t", Container("edge:it"), RepositoryRoot),
+            DockerCli.CheckedAsync(Long, "build", "-q", "-f", Dockerfile, "--build-arg", "PROJECT=Endgame.Dock", "-t", Container("dock:it"), RepositoryRoot),
+            DockerCli.CheckedAsync(Long, "build", "-q", "-f", Dockerfile, "--build-arg", "PROJECT=Endgame.Edge", "-t", Container("edge:it"), RepositoryRoot),
             DockerCli.CheckedAsync(Long, "build", "-q", "-t", Container("egress:it"), Path.Combine(RepositoryRoot, "src", "egress")));
         Timings.Add($"service images built in {clock.Elapsed.TotalSeconds:F0}s");
 
@@ -86,7 +91,10 @@ public sealed class HostingEnvironment : IAsyncLifetime
         await DockerCli.CheckedAsync("network", "create", "--label", "endgame.test=1", Container("ctl"));
         await DockerCli.CheckedAsync(["run", "-d", "--name", Container("postgres"), "--network", Container("ctl"),
             "-e", $"POSTGRES_PASSWORD={postgresPassword}", "postgres:16.16-alpine"]);
-        await DockerCli.CheckedAsync(["run", "-d", "--name", Container("egress"), "--network", Container("ctl"), .. hostGateway, Container("egress:it")]);
+        // The proxy reaches the fake control plane by a name with only an IPv4 address: Docker
+        // Desktop also gives host.docker.internal an IPv6 one, which the proxy tries first and cannot reach.
+        await DockerCli.CheckedAsync(["run", "-d", "--name", Container("egress"), "--network", Container("ctl"), "--add-host", $"{PlatformHost}:host-gateway",
+            "--sysctl", "net.ipv6.conf.all.disable_ipv6=1", Container("egress:it")]);
         await WaitAsync("PostgreSQL", async () => (await DockerCli.RunAsync(TimeSpan.FromSeconds(10), "exec", Container("postgres"), "pg_isready", "-U", "postgres")).ExitCode == 0, TimeSpan.FromMinutes(1));
 
         var template = Path.Combine(RepositoryRoot, "src", "backend", "Endgame.Tests", "Hosting", "Fixtures", "app-template");
@@ -110,16 +118,17 @@ public sealed class HostingEnvironment : IAsyncLifetime
             "-e", $"Dock__Peers__Egress={Container("egress")}",
             "-e", $"Dock__ControlPlaneUrl={platform}",
             "-e", $"Dock__EdgeControlUrl=http://{Container("edge")}:8081",
-            "-e", $"Dock__PlatformUrlForApps={platform}",
-            "-e", "Dock__PlatformHost=host.docker.internal",
+            "-e", $"Dock__PlatformUrlForApps=http://{PlatformHost}:{ControlPlane.Port}",
+            "-e", $"Dock__PlatformHost={PlatformHost}",
             "-e", $"Dock__PlatformPort={ControlPlane.Port}",
             "-e", "Dock__LeaseSweepSeconds=2",
             "-e", "Dock__MemorySampleSeconds=2",
+            "-e", "Dock__TelemetryExport=false",
             Container("dock:it"),
         ]);
         await DockerCli.CheckedAsync(
         [
-            "run", "-d", "--name", Container("edge"), "--network", Container("ctl"), .. hostGateway,
+            "run", "-d", "--name", Container("edge"), "--network", $"name={Container("ctl")},gw-priority=100", .. hostGateway,
             "-p", $"127.0.0.1:{edgePort}:8080",
             "-p", $"127.0.0.1:{edgeControlPort}:8081",
             "-e", $"{HostingConventions.ServiceTokenVariable}={Token}",
@@ -130,8 +139,8 @@ public sealed class HostingEnvironment : IAsyncLifetime
             "-e", "Edge__IdleSweepMilliseconds=250",
             "-e", "Edge__CrashBackoffSeconds=4",
             "-e", "Edge__AccessCacheSeconds=0",
+            "-e", "Edge__SecondsPerIdleMinute=1",
             "-e", $"Edge__PlatformOrigin=http://localhost:{edgePort}",
-            "-e", $"ReverseProxy__Clusters__control-plane__Destinations__primary__Address={platform}/",
             "-e", $"ReverseProxy__Clusters__console__Destinations__primary__Address={platform}/",
             Container("edge:it"),
         ]);
@@ -164,7 +173,8 @@ public sealed class HostingEnvironment : IAsyncLifetime
                 Timings.Add($"first app build in {BuildTime.TotalSeconds:F1}s");
             }
 
-            await DockAsync<AppStatus>(HttpMethod.Post, $"/internal/apps/{app:D}/start", new StartAppRequest(OrganisationId, null, $"app-token-{app:N}", null, allowed));
+            // No token in the request: Dock asks the control plane for it.
+            await DockAsync<AppStatus>(HttpMethod.Post, $"/internal/apps/{app:D}/start", new StartAppRequest(OrganisationId, null, null, null, allowed));
         }
 
         PublishRoutes();
@@ -179,17 +189,32 @@ public sealed class HostingEnvironment : IAsyncLifetime
         }
 
         await ControlPlane.DisposeAsync();
+        if (Environment.GetEnvironmentVariable("ENDGAME_TEST_KEEP_DOCKER") == "1")
+        {
+            return; // debugging only: leaves every test-endgame-* resource for inspection
+        }
+
         await DockerCli.RemoveEverythingOursAsync();
     }
 
     /// <summary>Publishes the routing table, with per-app overrides of the defaults.</summary>
-    public void PublishRoutes(SleepPolicy? notesSleep = null, SleepPolicy? ledgerSleep = null, string notesAvailability = AppAvailability.Available)
+    /// <param name="ledgerIdleSeconds">The ledger app's idle setting; the edge under test counts an idle minute as a second.</param>
+    /// <param name="extra">More routes, e.g. the real template's app.</param>
+    public void PublishRoutes(int ledgerIdleSeconds = 3600, params RouteView[] extra)
     {
         ControlPlane.SetRoutes(
-            new AppRoute(NotesApp, OrganisationId, Organisation, Division, "notes", [NotesHost], $"http://{AppContainer(NotesApp)}:8080",
-                AppAccess.Public, notesSleep ?? new SleepPolicy(false, 3600), notesAvailability),
-            new AppRoute(LedgerApp, OrganisationId, Organisation, Division, "ledger", [], $"http://{AppContainer(LedgerApp)}:8080",
-                AppAccess.Public, ledgerSleep ?? new SleepPolicy(false, 3600), AppAvailability.Available));
+        [
+            Route(NotesApp, "notes", 3600),
+            Route(LedgerApp, "ledger", ledgerIdleSeconds),
+            .. extra,
+        ]);
+    }
+
+    public RouteView Route(Guid app, string project, int idleSeconds, string access = AppAccess.Public)
+    {
+        var scope = $"{Organisation}/{Division}/{project}/web";
+        return new RouteView(app, OrganisationId, scope, $"/{scope}/", NotesHost, $"/{Division}/{project}/web/", $"http://{AppContainer(app)}:8080",
+            "running", false, new SleepSetting(SleepSetting.Auto, idleSeconds, "default", "default"), "v1", access);
     }
 
     public async Task RefreshEdgeAsync()
@@ -270,7 +295,7 @@ public sealed class HostingEnvironment : IAsyncLifetime
 
     public async Task<string> LogsAsync(string name)
     {
-        var (_, stdout, stderr) = await DockerCli.RunAsync(TimeSpan.FromSeconds(20), "logs", "--tail", "60", Container(name));
+        var (_, stdout, stderr) = await DockerCli.RunAsync(TimeSpan.FromSeconds(20), "logs", "--tail", "400", Container(name));
         return stdout + stderr;
     }
 

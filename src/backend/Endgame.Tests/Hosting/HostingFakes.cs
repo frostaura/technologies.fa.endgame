@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Endgame.Edge.Routing;
 using Endgame.Edge.Runtime;
 using Endgame.Hosting.Contracts;
 
@@ -6,17 +7,31 @@ namespace Endgame.Tests.Hosting;
 
 internal static class Routes
 {
-    public static AppRoute App(
+    public const string Domain = "endgame.test";
+
+    /// <summary>A route as the control plane serves it.</summary>
+    public static RouteView View(
         Guid? id = null,
         string org = "acme",
         string division = "apps",
         string project = "notes",
-        string[]? hosts = null,
+        string app = "web",
         string target = "http://app-x:8080",
-        string access = AppAccess.Public,
-        SleepPolicy? sleep = null,
-        string availability = AppAvailability.Available) =>
-        new(id ?? Guid.NewGuid(), Guid.NewGuid(), org, division, project, hosts ?? [], target, access, sleep ?? new SleepPolicy(false, 600), availability);
+        string? access = AppAccess.Public,
+        string sleepMode = SleepSetting.Auto,
+        int idleMinutes = 15,
+        string? version = "v1",
+        bool paused = false)
+    {
+        var scope = $"{org}/{division}/{project}/{app}";
+        return new RouteView(id ?? Guid.NewGuid(), Guid.NewGuid(), scope, $"/{scope}/", $"{org}.{Domain}", $"/{division}/{project}/{app}/",
+            target, "running", false, new SleepSetting(sleepMode, idleMinutes, "default", "default"), version, access, paused);
+    }
+
+    /// <summary>An app as the edge holds it.</summary>
+    public static EdgeApp App(Guid? id = null, string project = "notes", TimeSpan? idleAfter = null, bool alwaysOn = false) =>
+        new(id ?? Guid.NewGuid(), Guid.NewGuid(), $"acme/apps/{project}/web", $"/acme/apps/{project}/web", $"acme.{Domain}", $"/apps/{project}/web",
+            "http://app-x:8080", AppAccess.Public, alwaysOn ? null : idleAfter ?? TimeSpan.FromMinutes(10), AppAvailability.Available);
 }
 
 /// <summary>A Dock and an app that do what a test tells them, and count what they were asked.</summary>

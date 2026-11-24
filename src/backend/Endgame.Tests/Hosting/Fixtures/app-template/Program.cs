@@ -13,13 +13,15 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.KnownIPNetworks.Clear(); // the only peer on the app's network that sends requests is the edge
     o.KnownProxies.Clear();
 });
-builder.Services.AddHttpClient("out", c => c.Timeout = TimeSpan.FromSeconds(15));
+// No pooled connections: a changed allow-list must show on the very next request.
+builder.Services.AddHttpClient("out", c => c.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.Zero });
 builder.Services.AddHttpClient("direct", c => c.Timeout = TimeSpan.FromSeconds(5))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(4) });
 
 var app = builder.Build();
 app.UseForwardedHeaders();
-var connectionString = app.Configuration.GetConnectionString("App") ?? throw new InvalidOperationException("No database.");
+var connectionString = Environment.GetEnvironmentVariable("ENDGAME_DATABASE") ?? throw new InvalidOperationException("ENDGAME_DATABASE is not set.");
 
 await using (var setup = new NpgsqlConnection(connectionString))
 {
@@ -36,7 +38,7 @@ app.MapGet("/api/whoami", (HttpContext c) => new
     path = c.Request.Path.Value ?? "",
     host = c.Request.Host.Value ?? "",
     scheme = c.Request.Scheme,
-    user = c.Request.Headers["X-Endgame-User-Id"].ToString(),
+    session = c.Request.Headers["X-Endgame-Session"].ToString(),
     cookie = c.Request.Headers.Cookie.ToString(),
     appId = Environment.GetEnvironmentVariable("ENDGAME_APP_ID") ?? "",
     platform = Environment.GetEnvironmentVariable("ENDGAME_PLATFORM_URL") ?? "",

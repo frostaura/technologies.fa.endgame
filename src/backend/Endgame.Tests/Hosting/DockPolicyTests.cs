@@ -349,7 +349,7 @@ public sealed class ResourceNamesTests
     public void Production_names_follow_ARCH_004_and_tests_carry_their_prefix()
     {
         var app = Guid.Parse("11111111-2222-3333-4444-555555555555");
-        Assert.Equal("app-11111111-2222-3333-4444-555555555555", new ResourceNames("", "endgame").AppContainer(app));
+        Assert.Equal("app-11111111222233334444555555555555", new ResourceNames("", "endgame").AppContainer(app)); // the control plane's target names it so
         Assert.Equal("ws-11111111-2222-3333-4444-555555555555", new ResourceNames("", "endgame").WorkspaceContainer(app));
         Assert.StartsWith("test-endgame-", new ResourceNames("test-endgame-", "test-endgame").AppNetwork(app), StringComparison.Ordinal);
         Assert.Equal("test-endgame", new ResourceNames("test-endgame-", "test-endgame").Labels(ResourceNames.AppKind, app)[ResourceNames.ManagedByLabel]);

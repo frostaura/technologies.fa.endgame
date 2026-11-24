@@ -24,7 +24,7 @@ public sealed class FakeControlPlane : IAsyncDisposable
 
     private readonly WebApplication app;
     private readonly string token;
-    private RoutingTable table = new("empty", []);
+    private RoutingTable table = new(DateTimeOffset.UtcNow, []);
     private int version;
 
     private FakeControlPlane(WebApplication app, string token)
@@ -37,15 +37,25 @@ public sealed class FakeControlPlane : IAsyncDisposable
 
     public int Port => Address.Port;
 
-    public ConcurrentQueue<AppPublished> Published { get; } = new();
+    public ConcurrentQueue<(Guid AppId, PublishedReport Report)> Published { get; } = new();
 
-    public ConcurrentQueue<AppStateReport> States { get; } = new();
+    public ConcurrentQueue<(Guid AppId, ControlPlaneAppState Report)> States { get; } = new();
 
     public ConcurrentQueue<AccessCheckRequest> AccessChecks { get; } = new();
+
+    /// <summary>Every platform-API path an app called.</summary>
+    public ConcurrentQueue<string> AppCalls { get; } = new();
+
+    public static string AppToken(Guid appId) => $"app-token-{appId:N}";
+
+    public static string SessionFor(Guid appId) => $"app-session-{appId:N}";
 
     public int RouteReads;
     public int RouteNotModified;
     public volatile bool AccessDown;
+
+    /// <summary>Answer the per-app access check with 404, as the real control plane does today, so the edge falls back to <c>/api/me</c>.</summary>
+    public volatile bool AccessCheckMissing;
 
     public static async Task<FakeControlPlane> StartAsync(string token, bool listenOnAllInterfaces = false)
     {
@@ -71,7 +81,14 @@ public sealed class FakeControlPlane : IAsyncDisposable
         return fake;
     }
 
-    public void SetRoutes(params AppRoute[] apps) => table = new RoutingTable($"v{Interlocked.Increment(ref version)}", apps);
+    public void SetRoutes(params RouteView[] apps)
+    {
+        Interlocked.Increment(ref version);
+        table = new RoutingTable(DateTimeOffset.UtcNow, apps);
+    }
+
+    /// <summary>Sends an ETag (the real control plane does not yet), so the edge's 304 path is exercised.</summary>
+    public string ETag => $"\"v{Volatile.Read(ref version)}\"";
 
     public RoutingTable Table => table;
 
@@ -87,8 +104,8 @@ public sealed class FakeControlPlane : IAsyncDisposable
             }
 
             Interlocked.Increment(ref RouteReads);
-            var current = table;
-            var etag = $"\"{current.Version}\"";
+            var current = table with { GeneratedAt = DateTimeOffset.UtcNow };
+            var etag = ETag;
             if (context.Request.Headers.IfNoneMatch.ToString() == etag)
             {
                 Interlocked.Increment(ref RouteNotModified);
@@ -99,25 +116,25 @@ public sealed class FakeControlPlane : IAsyncDisposable
             return Results.Json(current);
         });
 
-        web.MapPost("/internal/apps/{id:guid}/published", (HttpContext context, Guid id, AppPublished report) =>
+        web.MapPost("/internal/apps/{id:guid}/published", (HttpContext context, Guid id, PublishedReport report) =>
         {
             if (!Authorised(context))
             {
                 return Results.Unauthorized();
             }
 
-            Published.Enqueue(report);
+            Published.Enqueue((id, report));
             return Results.NoContent();
         });
 
-        web.MapPost("/internal/apps/{id:guid}/state", (HttpContext context, Guid id, AppStateReport report) =>
+        web.MapPost("/internal/apps/{id:guid}/state", (HttpContext context, Guid id, ControlPlaneAppState report) =>
         {
             if (!Authorised(context))
             {
                 return Results.Unauthorized();
             }
 
-            States.Enqueue(report);
+            States.Enqueue((id, report));
             return Results.NoContent();
         });
 
@@ -133,26 +150,86 @@ public sealed class FakeControlPlane : IAsyncDisposable
                 return Results.StatusCode(StatusCodes.Status500InternalServerError);
             }
 
+            if (AccessCheckMissing)
+            {
+                return Results.NotFound();
+            }
+
             AccessChecks.Enqueue(request);
             var cookie = request.Cookie ?? "";
             if (cookie.Contains($"endgame_session={MemberSession}", StringComparison.Ordinal))
             {
-                return Results.Json(new AccessCheckResult(AccessOutcome.Allowed, MemberId, null));
+                return Results.Json(new AccessCheckResult(AccessDecisions.Allow, SessionFor(request.AppId), null));
             }
 
             if (cookie.Contains($"endgame_session={OutsiderSession}", StringComparison.Ordinal))
             {
-                return Results.Json(new AccessCheckResult(AccessOutcome.Forbidden, null, null));
+                return Results.Json(new AccessCheckResult(AccessDecisions.Deny, null, null));
             }
 
-            return Results.Json(new AccessCheckResult(AccessOutcome.SignInRequired, null, $"/sign-in?returnTo={Uri.EscapeDataString(request.Path)}"));
+            return Results.Json(new AccessCheckResult(AccessDecisions.SignIn, null, null));
+        });
+
+        web.MapPost("/internal/apps/{id:guid}/token", (HttpContext context, Guid id) =>
+            Authorised(context) ? Results.Json(new AppTokenResult(AppToken(id))) : Results.Unauthorized());
+
+        // The platform API apps call (PLATFORM-API §3), through the egress proxy, with their token.
+        var platform = web.MapGroup("/platform/v1");
+        platform.MapPost("/identity/resolve", (HttpContext context, SessionBody body) =>
+        {
+            AppCalls.Enqueue(context.Request.Path.Value ?? "");
+            return body.Session?.StartsWith("app-session-", StringComparison.Ordinal) == true
+                ? Results.Json(new
+                {
+                    user = new { id = $"usr_{MemberId:N}", email = "member@endgame.test", displayName = "Member", kind = "member", role = "builder" },
+                    expiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+                })
+                : Results.Json(new { code = "session_invalid" }, statusCode: StatusCodes.Status401Unauthorized);
+        });
+        platform.MapPut("/schedules", (HttpContext context, System.Text.Json.Nodes.JsonObject body) =>
+        {
+            AppCalls.Enqueue(context.Request.Path.Value ?? "");
+            return Results.Json(body);
+        });
+        platform.MapPut("/webhooks", (HttpContext context, System.Text.Json.Nodes.JsonObject body) =>
+        {
+            AppCalls.Enqueue(context.Request.Path.Value ?? "");
+            return Results.Json(body);
+        });
+        platform.MapPost("/telemetry/events", () => Results.Accepted());
+        platform.MapPost("/otlp/v1/{signal}", () => Results.Ok());
+
+        // The session check, shaped like the control plane's MeView: a member holds a role on the
+        // division `acme/apps`; an outsider only on another organisation.
+        web.MapGet("/api/me", (HttpContext c) =>
+        {
+            var cookie = c.Request.Headers.Cookie.ToString();
+            if (cookie.Contains($"endgame_session={MemberSession}", StringComparison.Ordinal))
+            {
+                return Results.Json(new { user = new { id = MemberId, displayName = "Member" }, isOperator = false, memberships = new[] { new { scope = "acme/apps", role = "builder" } } });
+            }
+
+            if (cookie.Contains($"endgame_session={OutsiderSession}", StringComparison.Ordinal))
+            {
+                return Results.Json(new { user = new { id = Guid.NewGuid(), displayName = "Outsider" }, isOperator = false, memberships = new[] { new { scope = "acmesubsidiary", role = "owner" } } });
+            }
+
+            return Results.StatusCode(StatusCodes.Status401Unauthorized);
         });
 
         // The platform's public API and the console, reached through the edge's static routes.
-        web.MapGet("/api/{**rest}", () => Results.Json(new { from = "control-plane" }));
+        web.MapGet("/api/{**rest}", (HttpContext c) => Results.Json(new
+        {
+            from = "control-plane",
+            forwardedHost = c.Request.Headers["X-Forwarded-Host"].ToString(),
+            forwardedProto = c.Request.Headers["X-Forwarded-Proto"].ToString(),
+            origin = c.Request.Headers.Origin.ToString(),
+        }));
         web.MapFallback(() => Results.Content("<!doctype html><div id=\"root\">console</div>", "text/html"));
     }
 
     private bool Authorised(HttpContext context) =>
         context.Request.Headers.Authorization.ToString() == $"{HostingConventions.ServiceTokenScheme} {token}";
 }
+
+public sealed record SessionBody(string? Session);

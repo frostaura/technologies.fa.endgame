@@ -138,3 +138,34 @@ public sealed class DockerFactAttribute : FactAttribute
         }
     }
 }
+
+/// <summary>
+/// A real-Docker test that also needs the app kit's template packed (<c>make -C src/appkit vendor</c>);
+/// reported SKIPPED with that instruction when it is not.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class DockerWithAppKitFactAttribute : FactAttribute
+{
+    public DockerWithAppKitFactAttribute()
+    {
+        if (DockerCli.WhyUnavailable is { } reason)
+        {
+            Skip = $"SKIPPED — real-Docker hosting test not run: {reason}.";
+            return;
+        }
+
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var vendor = Path.Combine(dir.FullName, "src", "appkit", "template", "vendor", "nuget");
+            if (File.Exists(Path.Combine(dir.FullName, "src", "backend", "Endgame.slnx")))
+            {
+                if (!Directory.Exists(vendor) || !Directory.EnumerateFiles(vendor, "*.nupkg").Any())
+                {
+                    Skip = "SKIPPED — the app kit's template is not packed: run `make -C src/appkit vendor` first.";
+                }
+
+                return;
+            }
+        }
+    }
+}

@@ -1,5 +1,6 @@
 using System.Net;
 using Endgame.Edge;
+using Endgame.Edge.Access;
 using Endgame.Edge.Pages;
 using Endgame.Edge.Routing;
 using Endgame.Hosting.Contracts;
@@ -10,71 +11,110 @@ public sealed class RouteSnapshotTests
 {
     private static readonly string[] Reserved = new EdgeOptions().ReservedSegments.ToArray();
 
+    private static RouteSnapshot Snapshot(params RouteView[] routes) => RouteSnapshot.From(new RoutingTable(DateTimeOffset.UtcNow, routes), Reserved);
+
     [Fact]
-    public void Valid_apps_are_indexed_by_prefix_and_host()
+    public void A_valid_route_is_indexed_by_both_of_its_addresses()
     {
-        var app = Routes.App(hosts: ["Acme.Endgame.Test"]);
-        var snapshot = RouteSnapshot.From(new RoutingTable("v1", [app]), Reserved);
-        Assert.Same(snapshot.ById[app.AppId], snapshot.ByPrefix["/acme/apps/notes"]);
-        Assert.Equal(app.AppId, snapshot.ByHost["acme.endgame.test"].AppId);
+        var route = Routes.View();
+        var snapshot = Snapshot(route);
+        var app = snapshot.ById[route.AppId];
+        Assert.Same(app, snapshot.ByPrefix["/acme/apps/notes/web"]);
+        Assert.Same(app, snapshot.ByHostPrefix["acme.endgame.test/apps/notes/web"]);
+        Assert.Equal(TimeSpan.FromMinutes(15), app.IdleAfter);
+        Assert.Equal(AppAvailability.Available, app.Availability);
         Assert.Empty(snapshot.Rejected);
     }
 
-    [Theory]
-    [InlineData("api", "apps", "notes")]
-    [InlineData("internal", "apps", "notes")]
-    [InlineData("Acme", "apps", "notes")]
-    [InlineData("acme", "apps/x", "notes")]
-    [InlineData("acme", "apps", "")]
-    [InlineData("acme", "-apps", "notes")]
-    public void Unsafe_or_reserved_slugs_are_left_out(string org, string division, string project)
+    [Fact]
+    public void The_version_ignores_when_the_table_was_generated_and_follows_the_routes()
     {
-        var snapshot = RouteSnapshot.From(new RoutingTable("v1", [Routes.App(org: org, division: division, project: project)]), Reserved);
+        var route = Routes.View();
+        var a = RouteSnapshot.VersionOf(new RoutingTable(DateTimeOffset.UtcNow, [route]));
+        var b = RouteSnapshot.VersionOf(new RoutingTable(DateTimeOffset.UtcNow.AddMinutes(1), [route]));
+        var c = RouteSnapshot.VersionOf(new RoutingTable(DateTimeOffset.UtcNow, [route with { Sleeping = true }]));
+        Assert.Equal(a, b);
+        Assert.NotEqual(a, c);
+    }
+
+    [Theory]
+    [InlineData("api", "apps", "notes", "web")]
+    [InlineData("internal", "apps", "notes", "web")]
+    [InlineData("Acme", "apps", "notes", "web")]
+    [InlineData("acme", "-apps", "notes", "web")]
+    [InlineData("acme", "apps", "notes", "")]
+    public void Unsafe_or_reserved_slugs_are_left_out(string org, string division, string project, string app)
+    {
+        var snapshot = Snapshot(Routes.View(org: org, division: division, project: project, app: app));
         Assert.Empty(snapshot.Apps);
         Assert.Single(snapshot.Rejected);
     }
+
+    [Fact]
+    public void A_route_whose_prefixes_disagree_with_its_scope_is_left_out() =>
+        Assert.Empty(Snapshot(Routes.View() with { PathBase = "/acme/apps/notes/" }).Apps);
 
     [Theory]
     [InlineData("https://app-x:8080")]
     [InlineData("http://app-x:8080/some/path")]
     [InlineData("not a url")]
-    public void Targets_must_be_plain_http_origins(string target) =>
-        Assert.Empty(RouteSnapshot.From(new RoutingTable("v1", [Routes.App(target: target)]), Reserved).Apps);
+    public void Targets_must_be_plain_http_origins(string target) => Assert.Empty(Snapshot(Routes.View(target: target)).Apps);
 
     [Fact]
-    public void Two_apps_claiming_one_prefix_or_host_keep_only_the_first()
+    public void Two_routes_claiming_one_address_keep_only_the_first()
     {
-        var first = Routes.App(hosts: ["acme.endgame.test"]);
-        var samePrefix = Routes.App();
-        var sameHost = Routes.App(project: "other", hosts: ["acme.endgame.test"]);
-        var snapshot = RouteSnapshot.From(new RoutingTable("v1", [first, samePrefix, sameHost]), Reserved);
+        var first = Routes.View();
+        var snapshot = Snapshot(first, Routes.View());
         Assert.Equal([first.AppId], snapshot.Apps.Select(a => a.AppId));
-        Assert.Equal(2, snapshot.Rejected.Count);
     }
 
     [Fact]
-    public void Unknown_access_or_availability_is_never_guessed()
+    public void Access_defaults_to_private_and_an_unknown_one_is_never_guessed()
     {
-        var snapshot = RouteSnapshot.From(new RoutingTable("v1", [Routes.App(access: "everyone"), Routes.App(project: "b", availability: "maybe")]), Reserved);
-        Assert.Empty(snapshot.Apps);
+        Assert.Equal(AppAccess.Private, Snapshot(Routes.View(access: null)).Apps.Single().Access);
+        Assert.Empty(Snapshot(Routes.View(access: "everyone")).Apps);
+    }
+
+    [Fact]
+    public void Always_on_never_sleeps_and_an_unknown_mode_is_left_out()
+    {
+        Assert.Null(Snapshot(Routes.View(sleepMode: SleepSetting.AlwaysOn)).Apps.Single().IdleAfter);
+        Assert.Empty(Snapshot(Routes.View(sleepMode: "sometimes")).Apps);
+    }
+
+    [Fact]
+    public void Availability_follows_the_version_and_the_pause()
+    {
+        Assert.Equal(AppAvailability.Unpublished, Snapshot(Routes.View(version: null)).Apps.Single().Availability);
+        Assert.Equal(AppAvailability.Paused, Snapshot(Routes.View(paused: true)).Apps.Single().Availability);
+    }
+
+    [Fact]
+    public void Tests_may_compress_an_idle_minute()
+    {
+        var app = RouteSnapshot.From(new RoutingTable(DateTimeOffset.UtcNow, [Routes.View(idleMinutes: 2)]), Reserved, secondsPerIdleMinute: 1).Apps.Single();
+        Assert.Equal(TimeSpan.FromSeconds(2), app.IdleAfter);
     }
 }
 
 public sealed class AppProxyConfigTests
 {
     [Fact]
-    public void Each_app_gets_a_path_route_a_route_per_host_and_one_cluster()
+    public void Each_app_gets_a_path_route_a_host_route_and_one_cluster()
     {
-        var app = Routes.App(hosts: ["acme.endgame.test", "notes.acme.test"], target: "http://app-1:8080");
-        var (routes, clusters) = AppProxyConfig.Build(RouteSnapshot.From(new RoutingTable("v1", [app]), []));
+        var route = Routes.View(target: "http://app-1:8080");
+        var (routes, clusters) = AppProxyConfig.Build(RouteSnapshot.From(new RoutingTable(DateTimeOffset.UtcNow, [route]), []));
         var path = Assert.Single(routes, r => r.Metadata![AppProxyConfig.ShapeKey] == AppProxyConfig.PathShape);
-        Assert.Equal("/acme/apps/notes/{**rest}", path.Match.Path);
-        Assert.Equal("/acme/apps/notes", path.Metadata![AppProxyConfig.PrefixKey]);
-        var hosts = routes.Where(r => r.Metadata![AppProxyConfig.ShapeKey] == AppProxyConfig.HostShape).ToList();
-        Assert.Equal(2, hosts.Count);
-        Assert.All(hosts, r => Assert.Equal(AppProxyConfig.HostRouteOrder, r.Order));
+        Assert.Equal("/acme/apps/notes/web/{**rest}", path.Match.Path);
+        Assert.Null(path.Match.Hosts);
+        Assert.Equal("/acme/apps/notes/web", path.Metadata![AppProxyConfig.PrefixKey]);
+        var host = Assert.Single(routes, r => r.Metadata![AppProxyConfig.ShapeKey] == AppProxyConfig.HostShape);
+        Assert.Equal(["acme.endgame.test"], host.Match.Hosts!);
+        Assert.Equal("/apps/notes/web/{**rest}", host.Match.Path);
+        Assert.Equal("/apps/notes/web", host.Metadata![AppProxyConfig.PrefixKey]);
+        Assert.Equal(AppProxyConfig.HostRouteOrder, host.Order);
         Assert.Equal("http://app-1:8080", Assert.Single(clusters).Destinations!["app"].Address);
-        Assert.Equal(app.AppId, AppProxyConfig.AppOf(path));
+        Assert.Equal(route.AppId, AppProxyConfig.AppOf(path));
     }
 
     [Fact]
@@ -84,6 +124,20 @@ public sealed class AppProxyConfigTests
         Assert.True(AppProxyConfig.HostRouteOrder < AppProxyConfig.PathRouteOrder);
         Assert.True(AppProxyConfig.PathRouteOrder < 10);
     }
+}
+
+public sealed class AccessCoverageTests
+{
+    [Theory]
+    [InlineData("acme", true)]
+    [InlineData("acme/apps", true)]
+    [InlineData("acme/apps/notes/web", true)]
+    [InlineData("acme/apps/notes/other", false)]
+    [InlineData("acme/app", false)]
+    [InlineData("acmesubsidiary", false)]
+    [InlineData("", false)]
+    public void A_role_applies_at_its_scope_and_beneath(string grant, bool covers) =>
+        Assert.Equal(covers, AccessGate.Covers(grant, "acme/apps/notes/web"));
 }
 
 public sealed class AppNetworkListenerTests
@@ -121,7 +175,7 @@ public sealed class UnavailablePageTests
         }
 
         Assert.Contains("src=\"/brand/endgame-mark.svg\"", html, StringComparison.Ordinal);
-        Assert.Contains(System.Net.WebUtility.HtmlEncode(title), html, StringComparison.Ordinal);
+        Assert.Contains(WebUtility.HtmlEncode(title), html, StringComparison.Ordinal);
     }
 
     [Fact]

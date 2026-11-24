@@ -129,10 +129,10 @@ public sealed class AppRuntimeTests
     {
         var backend = new FakeBackend();
         var registry = new AppRegistry(TimeProvider.System);
-        var quick = Routes.App(project: "quick", sleep: new SleepPolicy(false, 1));
-        var pinned = Routes.App(project: "pinned", sleep: new SleepPolicy(true, 1));
-        var patient = Routes.App(project: "patient", sleep: new SleepPolicy(false, 3600));
-        registry.Apply(Endgame.Edge.Routing.RouteSnapshot.From(new RoutingTable("v1", [quick, pinned, patient]), []));
+        var quick = Routes.View(project: "quick", idleMinutes: 1);
+        var pinned = Routes.View(project: "pinned", sleepMode: SleepSetting.AlwaysOn);
+        var patient = Routes.View(project: "patient", idleMinutes: 3600);
+        registry.Apply(Endgame.Edge.Routing.RouteSnapshot.From(new RoutingTable(DateTimeOffset.UtcNow, [quick, pinned, patient]), [], secondsPerIdleMinute: 1));
         foreach (var app in registry.All)
         {
             app.MarkAwake();

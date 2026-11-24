@@ -199,34 +199,40 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     public async Task The_app_is_served_at_both_address_shapes_from_one_image()
     {
         using var path = env.EdgeClient();
-        using (var bare = await path.GetAsync("/acme/apps/notes"))
+        using (var bare = await path.GetAsync("/acme/apps/notes/web"))
         {
             Assert.Equal(HttpStatusCode.PermanentRedirect, bare.StatusCode);
-            Assert.Equal("/acme/apps/notes/", bare.Headers.Location!.OriginalString);
+            Assert.Equal("/acme/apps/notes/web/", bare.Headers.Location!.OriginalString);
         }
 
-        var page = await path.GetStringAsync("/acme/apps/notes/");
-        Assert.Contains("<base href=\"/acme/apps/notes/\" />", page, StringComparison.Ordinal);
+        var page = await path.GetStringAsync("/acme/apps/notes/web/");
+        Assert.Contains("<base href=\"/acme/apps/notes/web/\" />", page, StringComparison.Ordinal);
         Assert.Contains("<script src=\"app.js\">", page, StringComparison.Ordinal);
-        Assert.Contains("Relative to the page", await path.GetStringAsync("/acme/apps/notes/app.js"), StringComparison.Ordinal);
+        Assert.Contains("Relative to the page", await path.GetStringAsync("/acme/apps/notes/web/app.js"), StringComparison.Ordinal);
 
-        using var spoofed = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/notes/api/whoami");
+        using var spoofed = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/notes/web/api/whoami");
         spoofed.Headers.Add("X-Forwarded-Prefix", "/elsewhere");
         spoofed.Headers.Add("Cookie", "endgame_session=secret-value; theme=dark");
         using var whoamiResponse = await path.SendAsync(spoofed);
         var whoami = await whoamiResponse.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("/acme/apps/notes", whoami.GetProperty("pathBase").GetString());
+        Assert.Equal("/acme/apps/notes/web", whoami.GetProperty("pathBase").GetString());
         Assert.Equal("/api/whoami", whoami.GetProperty("path").GetString());
         Assert.Equal(env.EdgeUrl.Authority, whoami.GetProperty("host").GetString());
         Assert.Equal("theme=dark", whoami.GetProperty("cookie").GetString());
         Assert.Equal(env.NotesApp.ToString("D"), whoami.GetProperty("appId").GetString());
-        Assert.True(whoami.GetProperty("token").GetBoolean());
+        Assert.True(whoami.GetProperty("token").GetBoolean()); // fetched from the control plane by Dock
+        Assert.Equal("", whoami.GetProperty("session").GetString()); // no cookie, no session
 
         using var host = env.EdgeClient(HostingEnvironment.NotesHost);
-        var hostPage = await host.GetStringAsync("/");
-        Assert.Contains("<base href=\"/\" />", hostPage, StringComparison.Ordinal);
-        var hostWhoami = await host.GetFromJsonAsync<JsonElement>("/api/whoami");
-        Assert.Equal("", hostWhoami.GetProperty("pathBase").GetString());
+        using (var hostBare = await host.GetAsync("/apps/notes/web"))
+        {
+            Assert.Equal(HttpStatusCode.PermanentRedirect, hostBare.StatusCode);
+        }
+
+        var hostPage = await host.GetStringAsync("/apps/notes/web/");
+        Assert.Contains("<base href=\"/apps/notes/web/\" />", hostPage, StringComparison.Ordinal);
+        var hostWhoami = await host.GetFromJsonAsync<JsonElement>("/apps/notes/web/api/whoami");
+        Assert.Equal("/apps/notes/web", hostWhoami.GetProperty("pathBase").GetString());
         Assert.Equal(HostingEnvironment.NotesHost, hostWhoami.GetProperty("host").GetString());
 
         // The platform's own paths are never the app's, and internal APIs are never routed.
@@ -268,18 +274,18 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     [DockerFact]
     public async Task An_idle_app_sleeps_by_its_own_setting_and_wakes_on_the_next_request()
     {
-        env.PublishRoutes(ledgerSleep: new SleepPolicy(false, 2));
+        env.PublishRoutes(ledgerIdleSeconds: 2);
         await env.RefreshEdgeAsync();
         try
         {
             using var client = env.EdgeClient();
-            (await client.GetAsync("/acme/apps/ledger/api/notes")).EnsureSuccessStatusCode();
+            (await client.GetAsync("/acme/apps/ledger/web/api/notes")).EnsureSuccessStatusCode();
             await HostingEnvironment.WaitAsync("the ledger app to sleep", async () =>
                 (await env.DockAsync<AppStatus>(HttpMethod.Get, $"/internal/apps/{env.LedgerApp:D}")).State == AppRuntimeState.Sleeping, TimeSpan.FromSeconds(30));
             var notes = await env.DockAsync<AppStatus>(HttpMethod.Get, $"/internal/apps/{env.NotesApp:D}");
             Assert.Equal(AppRuntimeState.Running, notes.State); // its own setting is an hour
 
-            using var woken = await client.GetAsync("/acme/apps/ledger/api/notes");
+            using var woken = await client.GetAsync("/acme/apps/ledger/web/api/notes");
             Assert.Equal(HttpStatusCode.OK, woken.StatusCode);
             Assert.True(woken.Headers.Contains(HostingConventions.WakeTimeHeader));
         }
@@ -299,10 +305,10 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
             await SleepNotesAsync();
             using var client = env.EdgeClient();
             var clock = Stopwatch.StartNew();
-            using var response = await client.GetAsync("/acme/apps/notes/", HttpCompletionOption.ResponseHeadersRead);
+            using var response = await client.GetAsync("/acme/apps/notes/web/", HttpCompletionOption.ResponseHeadersRead);
             var firstByte = clock.Elapsed.TotalMilliseconds;
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.True(response.Headers.Contains(HostingConventions.WakeTimeHeader), "the request did not wake the app");
+            Assert.True(response.StatusCode == HttpStatusCode.OK, $"wake {i}: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+            Assert.True(response.Headers.Contains(HostingConventions.WakeTimeHeader), $"wake {i}: the request did not wake the app: {await env.EdgeAppsAsync()}");
             timings.Add(firstByte);
         }
 
@@ -320,7 +326,7 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
         await SleepNotesAsync();
         var before = WakesOf(await env.EdgeAppsAsync(), env.NotesApp);
         using var client = env.EdgeClient();
-        var responses = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => client.GetAsync("/acme/apps/notes/api/notes")));
+        var responses = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => client.GetAsync("/acme/apps/notes/web/api/notes")));
         Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
         Assert.Equal(before + 1, WakesOf(await env.EdgeAppsAsync(), env.NotesApp));
         foreach (var response in responses)
@@ -334,19 +340,19 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     {
         var reported = env.ControlPlane.States.Count;
         using var client = env.EdgeClient();
-        (await client.GetAsync("/acme/apps/ledger/api/notes")).EnsureSuccessStatusCode();
-        using (var crash = await client.PostAsync("/acme/apps/ledger/api/crash", null))
+        (await client.GetAsync("/acme/apps/ledger/web/api/notes")).EnsureSuccessStatusCode();
+        using (var crash = await client.PostAsync("/acme/apps/ledger/web/api/crash", null))
         {
             Assert.Equal(HttpStatusCode.Accepted, crash.StatusCode);
         }
 
-        await HostingEnvironment.WaitAsync("the crash report", () => Task.FromResult(env.ControlPlane.States.Skip(reported).Any(s => s.AppId == env.LedgerApp && s.State == AppRuntimeState.Crashed)), TimeSpan.FromSeconds(15));
-        var report = env.ControlPlane.States.Last(s => s.AppId == env.LedgerApp);
-        Assert.Equal(3, report.ExitCode);
-        Assert.Equal(AppRuntimeState.Crashed, (await env.DockAsync<AppStatus>(HttpMethod.Get, $"/internal/apps/{env.LedgerApp:D}")).State);
+        await HostingEnvironment.WaitAsync("the crash report", () => Task.FromResult(env.ControlPlane.States.Skip(reported).Any(s => s.AppId == env.LedgerApp && s.Report.Status == ControlPlaneAppState.Failed)), TimeSpan.FromSeconds(15));
+        var status = await env.DockAsync<AppStatus>(HttpMethod.Get, $"/internal/apps/{env.LedgerApp:D}");
+        Assert.Equal(AppRuntimeState.Crashed, status.State);
+        Assert.Equal(3, status.ExitCode);
 
         var clock = Stopwatch.StartNew();
-        using var page = await client.GetAsync("/acme/apps/ledger/");
+        using var page = await client.GetAsync("/acme/apps/ledger/web/");
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"the page took {clock.Elapsed}");
         Assert.Equal(HttpStatusCode.ServiceUnavailable, page.StatusCode);
         var html = await page.Content.ReadAsStringAsync();
@@ -356,7 +362,7 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
 
         // After the back-off the next visitor wakes it again.
         await Task.Delay(TimeSpan.FromSeconds(5));
-        using var recovered = await client.GetAsync("/acme/apps/ledger/api/notes");
+        using var recovered = await client.GetAsync("/acme/apps/ledger/web/api/notes");
         Assert.Equal(HttpStatusCode.OK, recovered.StatusCode);
     }
 
@@ -365,7 +371,7 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     {
         using var client = env.EdgeClient();
         async Task<JsonElement> Fetch(string app, string url, bool direct = false) =>
-            await client.GetFromJsonAsync<JsonElement>($"/acme/apps/{app}/api/fetch?url={Uri.EscapeDataString(url)}&direct={direct.ToString().ToLowerInvariant()}");
+            await client.GetFromJsonAsync<JsonElement>($"/acme/apps/{app}/web/api/fetch?url={Uri.EscapeDataString(url)}&direct={direct.ToString().ToLowerInvariant()}");
 
         var allowed = await Fetch("notes", "https://example.com");
         Assert.True(allowed.GetProperty("reached").GetBoolean(), allowed.ToString());
@@ -375,7 +381,7 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
         Assert.False((await Fetch("notes", "https://example.com", direct: true)).GetProperty("reached").GetBoolean());
 
         // Every app reaches the platform API, and only through the proxy.
-        var platform = await Fetch("ledger", $"http://host.docker.internal:{env.ControlPlane.Port}/api/ping");
+        var platform = await Fetch("ledger", $"http://{HostingEnvironment.PlatformHost}:{env.ControlPlane.Port}/api/ping");
         Assert.True(platform.GetProperty("reached").GetBoolean(), platform.ToString());
 
         // The allow-list is changed without a restart.
@@ -390,13 +396,13 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     {
         using var client = env.EdgeClient();
         var marker = $"note-{Guid.NewGuid():N}";
-        (await client.PostAsync("/acme/apps/notes/api/notes", new StringContent(marker))).EnsureSuccessStatusCode();
-        Assert.Contains(marker, await client.GetFromJsonAsync<string[]>("/acme/apps/notes/api/notes") ?? []);
-        Assert.DoesNotContain(marker, await client.GetFromJsonAsync<string[]>("/acme/apps/ledger/api/notes") ?? []);
+        (await client.PostAsync("/acme/apps/notes/web/api/notes", new StringContent(marker))).EnsureSuccessStatusCode();
+        Assert.Contains(marker, await client.GetFromJsonAsync<string[]>("/acme/apps/notes/web/api/notes") ?? []);
+        Assert.DoesNotContain(marker, await client.GetFromJsonAsync<string[]>("/acme/apps/ledger/web/api/notes") ?? []);
 
         foreach (var app in new[] { "notes", "ledger" })
         {
-            var databases = await client.GetFromJsonAsync<JsonElement>($"/acme/apps/{app}/api/databases");
+            var databases = await client.GetFromJsonAsync<JsonElement>($"/acme/apps/{app}/web/api/databases");
             var own = databases.GetProperty("own").GetString();
             var opened = databases.GetProperty("opened").EnumerateArray().Select(e => e.GetString()).ToList();
             var visible = databases.GetProperty("visible").EnumerateArray().Select(e => e.GetString()).ToList();
@@ -419,9 +425,9 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
             $"http://{HostingEnvironment.AppContainer(env.LedgerApp)}:8080/health",
         })
         {
-            var direct = await client.GetFromJsonAsync<JsonElement>($"/acme/apps/notes/api/fetch?url={Uri.EscapeDataString(url)}&direct=true");
+            var direct = await client.GetFromJsonAsync<JsonElement>($"/acme/apps/notes/web/api/fetch?url={Uri.EscapeDataString(url)}&direct=true");
             Assert.False(direct.GetProperty("reached").GetBoolean(), $"{url}: {direct}");
-            var proxied = await client.GetFromJsonAsync<JsonElement>($"/acme/apps/notes/api/fetch?url={Uri.EscapeDataString(url)}");
+            var proxied = await client.GetFromJsonAsync<JsonElement>($"/acme/apps/notes/web/api/fetch?url={Uri.EscapeDataString(url)}");
             Assert.False(proxied.GetProperty("reached").GetBoolean() && proxied.GetProperty("status").GetInt32() == 200, $"{url} via proxy: {proxied}");
         }
     }
@@ -431,8 +437,102 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     {
         var notes = env.ControlPlane.Published.Where(p => p.AppId == env.NotesApp).ToList();
         var published = Assert.Single(notes);
-        Assert.Equal(env.NotesBuild, published.Image);
-        Assert.Equal(40, published.Commit.Length);
+        Assert.Equal(40, published.Report.Version.Length);
+        Assert.EndsWith(published.Report.Version, env.NotesBuild, StringComparison.Ordinal);
+        Assert.Contains(env.ControlPlane.States, s => s.AppId == env.NotesApp && s.Report.Status == AppRuntimeState.Running);
+    }
+
+    [DockerWithAppKitFact]
+    public async Task The_app_kit_template_is_committed_built_and_served_at_both_shapes_with_its_sessions()
+    {
+        var template = Path.Combine(env.RepositoryRoot, "src", "appkit", "template");
+        var app = Guid.NewGuid();
+        await env.DockAsync<RepositoryInfo>(HttpMethod.Post, "/internal/repos", new CreateRepositoryRequest(app));
+
+        // An agent's way in: a workspace, the template's files written one by one, committed.
+        var run = await CreateWorkspaceAsync(app);
+        try
+        {
+            Assert.Equal(0, (await ExecAsync(run, "find /workspace -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +")).ExitCode);
+            string[] skipped = ["node_modules", "bin", "obj", "wwwroot", ".tmp", "TestResults", "test-results", "coverage"];
+            var files = Directory.EnumerateFiles(template, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(template, f).Replace('\\', '/'))
+                .Where(r => !r.Split('/').Any(skipped.Contains) && !r.EndsWith(".DS_Store", StringComparison.Ordinal))
+                .ToList();
+            foreach (var file in files)
+            {
+                var bytes = await File.ReadAllBytesAsync(Path.Combine(template, file));
+                await env.DockAsync<WriteFileResult>(HttpMethod.Put, $"/internal/workspaces/{run:D}/files", new WriteFileRequest(file, Convert.ToBase64String(bytes), "base64"));
+            }
+
+            Assert.Contains("ENDGAME_TEST_DATABASE=Host=postgres", (await ExecAsync(run, "env | grep ENDGAME_TEST_DATABASE")).Stdout, StringComparison.Ordinal);
+            Assert.Equal(0, (await ExecAsync(run, "exec 3<>/dev/tcp/postgres/5432")).ExitCode);
+            var commit = await env.DockAsync<WorkspaceCommitResult>(HttpMethod.Post, $"/internal/workspaces/{run:D}/commit", new WorkspaceCommitRequest("Start from the app kit's template", Author, AuthorEmail));
+            Assert.True(commit.Changed);
+            output.WriteLine($"template: {files.Count} files committed as {commit.CommitId[..12]}");
+        }
+        finally
+        {
+            await DestroyWorkspaceAsync(run);
+        }
+
+        var clock = Stopwatch.StartNew();
+        var build = await env.DockAsync<BuildResult>(HttpMethod.Post, $"/internal/apps/{app:D}/build", new BuildRequest(null));
+        output.WriteLine($"template build: {clock.Elapsed.TotalSeconds:F0}s");
+        var started = await env.DockAsync<AppStatus>(HttpMethod.Post, $"/internal/apps/{app:D}/start", new StartAppRequest(HostingEnvironment.OrganisationId, null, null, null, null));
+        Assert.Equal(AppRuntimeState.Running, started.State);
+        Assert.Equal(build.Image, started.Image);
+        env.PublishRoutes(3600, env.Route(app, "kit", 3600));
+        await env.RefreshEdgeAsync();
+        try
+        {
+            using var path = env.EdgeClient();
+            await HostingEnvironment.WaitAsync("the template app", async () => (await path.GetAsync("/acme/apps/kit/web/health")).IsSuccessStatusCode, TimeSpan.FromSeconds(60));
+            using (var bare = await path.GetAsync("/acme/apps/kit/web"))
+            {
+                Assert.Equal(HttpStatusCode.PermanentRedirect, bare.StatusCode);
+            }
+
+            Assert.Contains("<base href=\"/acme/apps/kit/web/\"", await path.GetStringAsync("/acme/apps/kit/web/"), StringComparison.Ordinal);
+            using var host = env.EdgeClient(HostingEnvironment.NotesHost);
+            Assert.Contains("<base href=\"/apps/kit/web/\"", await host.GetStringAsync("/apps/kit/web/notes/new"), StringComparison.Ordinal);
+            Assert.Equal(HttpStatusCode.OK, (await host.GetAsync("/apps/kit/web/api/notes")).StatusCode);
+
+            // Signed out, writing is refused by the app; the sign-in page is the edge's.
+            using (var anonymous = await path.PostAsJsonAsync("/acme/apps/kit/web/api/notes", new { title = "anonymous", body = "x" }))
+            {
+                Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+            }
+
+            using (var signIn = await path.GetAsync("/acme/apps/kit/web/_endgame/auth/sign-in?returnTo=%2Facme%2Fapps%2Fkit%2Fweb%2Fnotes%2Fnew"))
+            {
+                Assert.Equal(HttpStatusCode.Redirect, signIn.StatusCode);
+                Assert.Contains("sign-in?returnTo=", signIn.Headers.Location!.OriginalString, StringComparison.Ordinal);
+            }
+
+            // Signed in, the edge hands the app an app-scoped session; the kit resolves it through the platform.
+            using var write = new HttpRequestMessage(HttpMethod.Post, "/acme/apps/kit/web/api/notes") { Content = JsonContent.Create(new { title = "Through the edge", body = "Written by a member." }) };
+            write.Headers.Add("Cookie", $"endgame_session={FakeControlPlane.MemberSession}");
+            using var written = await path.SendAsync(write);
+            Assert.True(written.StatusCode == HttpStatusCode.Created, $"{(int)written.StatusCode}: {await written.Content.ReadAsStringAsync()}");
+            Assert.Contains(env.ControlPlane.AppCalls, c => c.EndsWith("/identity/resolve", StringComparison.Ordinal));
+            var list = await path.GetStringAsync("/acme/apps/kit/web/api/notes");
+            Assert.Contains("Through the edge", list, StringComparison.Ordinal);
+
+            using (var callback = await path.PostAsync("/acme/apps/kit/web/_platform/schedules/nightly", null))
+            {
+                Assert.Equal(HttpStatusCode.NotFound, callback.StatusCode);
+            }
+        }
+        finally
+        {
+            env.PublishRoutes();
+            await env.RefreshEdgeAsync();
+            if (Environment.GetEnvironmentVariable("ENDGAME_TEST_KEEP_DOCKER") != "1")
+            {
+                using var retired = await env.DockAsync(HttpMethod.Delete, $"/internal/apps/{app:D}");
+            }
+        }
     }
 
     private async Task SleepNotesAsync()
