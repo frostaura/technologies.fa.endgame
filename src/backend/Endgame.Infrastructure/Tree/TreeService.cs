@@ -26,6 +26,15 @@ public sealed class AddressOptions
 
     /// <summary>The subdomain form: <c>https://{org}.{OrganisationDomain}/{division}/{project}/{app}/</c>.</summary>
     public string OrganisationDomain { get; set; } = "frostaura.net";
+
+    /// <summary>The scheme visitors use at both addresses: <c>https</c>, except a stack on a developer's machine.</summary>
+    public string Scheme { get; set; } = "https";
+
+    /// <summary>The port visitors use at both addresses; none (the scheme's default) unless set.</summary>
+    public int? Port { get; set; }
+
+    /// <summary><c>scheme://host[:port]</c> for <paramref name="host"/>.</summary>
+    public string Origin(string host) => Port is { } port ? $"{Scheme}://{host}:{port}" : $"{Scheme}://{host}";
 }
 
 public sealed record NodeView(Guid Id, string Level, string Slug, string Name, string Path, string Status, DateTimeOffset CreatedAt);
@@ -306,7 +315,8 @@ public sealed class TreeService(
     {
         ArgumentNullException.ThrowIfNull(path);
         var tail = string.Join('/', path.Segments.Skip(1));
-        return new AppAddresses($"https://{addresses.Value.PathHost}/{path}/", $"https://{path.Organisation}.{addresses.Value.OrganisationDomain}/{tail}/");
+        var o = addresses.Value;
+        return new AppAddresses($"{o.Origin(o.PathHost)}/{path}/", $"{o.Origin($"{path.Organisation}.{o.OrganisationDomain}")}/{tail}/");
     }
 
     private static SleepSetting Sleep(IEnumerable<CascadeEntry> settings)
