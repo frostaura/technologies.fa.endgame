@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- For an app's TEST projects only: hosts the app in memory against the dev platform fake and a throwaway database. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Endgame.AppKit.Testing</PackageId>
+    <Description>In-memory test host for Endgame apps: the app, a throwaway PostgreSQL database and the dev platform fake.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Endgame.AppKit/Endgame.AppKit.csproj" />
+    <ProjectReference Include="../../dev/Endgame.AppKit.DevPlatform/Endgame.AppKit.DevPlatform.csproj" />
+  </ItemGroup>
+</Project>

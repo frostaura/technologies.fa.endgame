@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/sdk-dotnet/">
+    <Project Path="sdk-dotnet/Endgame.AppKit/Endgame.AppKit.csproj" />
+    <Project Path="sdk-dotnet/Endgame.AppKit.Testing/Endgame.AppKit.Testing.csproj" />
+    <Project Path="sdk-dotnet/Endgame.AppKit.Tests/Endgame.AppKit.Tests.csproj" />
+  </Folder>
+  <Folder Name="/dev/">
+    <Project Path="dev/Endgame.AppKit.DevPlatform/Endgame.AppKit.DevPlatform.csproj" />
+    <Project Path="dev/Endgame.AppKit.DevPlatform.Host/Endgame.AppKit.DevPlatform.Host.csproj" />
+  </Folder>
+</Solution>
