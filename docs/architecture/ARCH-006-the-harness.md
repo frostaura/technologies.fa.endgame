@@ -3,7 +3,7 @@
 Endgame's own agent loop. These rules come from a benchmark run on 2026-11-24: a throwaway .NET
 loop with six tools built real features in a small .NET and React app, inside a workspace
 container, across eight model configurations, three repeats each, with hidden acceptance checks.
-About US$4.40 was spent. The harness is built to these rules; the spike's code is not reused.
+US$4.56 was spent across 144 runs. The harness is built to these rules; the spike's code is not reused.
 
 ## The answer
 
@@ -18,7 +18,7 @@ six tasks, three times each, cost about two-thirds of a cent per task.
 | `anthropic/claude-sonnet-5.5` | 18 of 18 | $0.0630 | Half the steps of the cheap tiers. |
 | `typesafe/jev-router` | 17 of 18 | $0.1059 | Dearest of all; routed to frontier models. |
 | `qwen/qwen3.7-flash` | 15 of 18 | $0.0023 | Misses exact wording and the hardest task. |
-| `mistralai/mistral-small-3.2-24b-instruct` | about 2 of 18 | $0.026 | Breaks the edit tool with wrong line endings. |
+| `mistralai/mistral-small-3.2-24b-instruct` | 2 of 18 | $0.034 | Breaks the edit tool with wrong line endings. |
 | `meta-llama/llama-3.1-8b-instruct` | 0 of 18 | $0.003 | Hundreds of tool calls per turn; edits nothing. |
 
 **The task set was too easy to separate the four passing tiers.** Treat "the cheapest tier is
