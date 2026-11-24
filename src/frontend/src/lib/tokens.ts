@@ -16,13 +16,19 @@
 export const primitives = {
   white: "#FFFFFF",
   ground: "#F5F6FB",
-  ink: { 900: "#0B1020", 600: "#535B70" },
-  line: "#E4E7F2",
-  blue: { 50: "#EEF2FF", 500: "#2F5BFF", 700: "#1E3FCC" },
-  violet: { 50: "#F3EEFF", 500: "#6B4BF0" },
-  teal: { 50: "#E3F8FB", 600: "#0B8FA6" },
+  ink: { 900: "#0B1020", 700: "#3B4350", 600: "#535B70", 500: "#434A5E" },
+  line: { DEFAULT: "#E4E7F2", strong: "#C9CEDF" },
+  slate: { 100: "#EEF0F7" },
+  navy: "#141B4D",
+  blue: { 50: "#EEF2FF", 100: "#DCE4FF", 200: "#C6D2FF", 300: "#A9B8FF", 500: "#2F5BFF", 600: "#2447D6", 700: "#1E3FCC" },
+  violet: { 50: "#F3EEFF", 200: "#D9CCFF", 400: "#8D7BE8", 500: "#6B4BF0", 600: "#5B3FD6", 800: "#3F2E87" },
+  teal: { 50: "#E3F8FB", 600: "#0B8FA6", 700: "#0B6E7F" },
+  mint: "#7DF0DC",
   green: { 50: "#E9FBF1", 500: "#12A15E", 800: "#0E6B42" },
-  red: { 50: "#FFF1EC", 700: "#B42318" },
+  coral: { 50: "#FFF1EC", 100: "#FFE3DC", 200: "#FFC9BA", 300: "#FFB6A3", 25: "#FFF8F5", 500: "#D9432B", 900: "#5C2A1F" },
+  red: { 50: "#FFF1EC", 700: "#B42318", 800: "#8A1C0F" },
+  orange: { 700: "#C2410C" },
+  magenta: { 600: "#B4237A" },
 } as const;
 
 const p = primitives;
@@ -31,23 +37,109 @@ const p = primitives;
 export const roles = {
   ground: p.ground,
   surface: p.white,
-  ink: { DEFAULT: p.ink[900], muted: p.ink[600] },
-  border: p.line,
-  primary: { DEFAULT: p.blue[500], hover: p.blue[700], tint: p.blue[50], ink: p.white },
-  violet: { DEFAULT: p.violet[500], tint: p.violet[50] },
-  teal: { DEFAULT: p.teal[600], tint: p.teal[50] },
+  ink: { DEFAULT: p.ink[900], body: p.ink[700], muted: p.ink[600] },
+  border: { DEFAULT: p.line.DEFAULT, strong: p.line.strong },
+  /** The quiet chip and track: sleeping, private, unknown. */
+  quiet: { DEFAULT: p.slate[100], text: p.ink[500] },
+  primary: {
+    DEFAULT: p.blue[500],
+    hover: p.blue[700],
+    link: p.blue[600],
+    tint: p.blue[50],
+    line: p.blue[200],
+    soft: p.blue[300],
+    ink: p.white,
+    /** Secondary text set on the primary band. */
+    "ink-soft": p.blue[100],
+  },
+  /** People: employees and contractors. */
+  violet: { DEFAULT: p.violet[500], text: p.violet[600], deep: p.violet[800], line: p.violet[200], dash: p.violet[400], tint: p.violet[50] },
+  /** The factory: research, plan, build, evaluate, publish. */
+  teal: { DEFAULT: p.teal[600], text: p.teal[700], tint: p.teal[50] },
+  /** Money and health. */
   success: { DEFAULT: p.green[500], text: p.green[800], tint: p.green[50] },
-  attention: { text: p.red[700], tint: p.red[50] },
+  /** Anything that needs the owner. */
+  attention: {
+    DEFAULT: p.coral[500],
+    text: p.red[700],
+    strong: p.red[800],
+    deep: p.coral[900],
+    tint: p.coral[50],
+    wash: p.coral[25],
+    chip: p.coral[100],
+    line: p.coral[200],
+    dash: p.coral[300],
+  },
+  /** The verdict band. */
+  night: p.navy,
+  /** The lit node of the mark. */
+  live: p.mint,
+  /** Avatar fills for named employees, picked by a stable hash of the name. */
+  avatar: { a: p.blue[500], b: p.violet[500], c: p.teal[600], d: p.orange[700], e: p.magenta[600], f: p.green[800] },
 } as const;
 
 /** Corner radii: controls, cards, panels. */
-export const radius = { sm: "14px", md: "18px", lg: "24px", full: "9999px" } as const;
+export const radius = { xs: "8px", sm: "14px", md: "18px", lg: "24px", full: "9999px" } as const;
 
 /** Elevation. Soft and low: a card lifts off the ground, it does not float. */
 export const shadow = {
-  card: "0 1px 2px rgb(11 16 32 / 0.04), 0 8px 24px -12px rgb(11 16 32 / 0.10)",
-  raised: "0 2px 4px rgb(11 16 32 / 0.05), 0 16px 40px -16px rgb(11 16 32 / 0.16)",
+  card: "0 1px 2px rgb(11 16 32 / 0.05), 0 10px 28px rgb(11 16 32 / 0.05)",
+  raised: "0 2px 4px rgb(11 16 32 / 0.06), 0 18px 40px rgb(47 91 255 / 0.16)",
+  press: "0 8px 20px rgb(47 91 255 / 0.22)",
+  toggle: "0 1px 2px rgb(11 16 32 / 0.12)",
 } as const;
+
+/**
+ * Motion, as drawn in the approved design. Every animation is switched off under
+ * `prefers-reduced-motion` by the base layer in `index.css`.
+ */
+export const motion = {
+  ease: { out: "cubic-bezier(.2,.7,.2,1)", spring: "cubic-bezier(.2,.9,.3,1.2)" },
+  keyframes: {
+    rise: { from: { opacity: "0", transform: "translateY(16px)" }, to: { opacity: "1", transform: "none" } },
+    grow: { from: { transform: "scaleX(0)" }, to: { transform: "scaleX(1)" } },
+    pulse: { "0%": { boxShadow: "0 0 0 0 rgb(18 161 94 / 0.55)" }, "100%": { boxShadow: "0 0 0 10px rgb(18 161 94 / 0)" } },
+    ring: { "0%": { boxShadow: "0 0 0 0 rgb(47 91 255 / 0.5)" }, "100%": { boxShadow: "0 0 0 12px rgb(47 91 255 / 0)" } },
+    drift: {
+      "0%": { transform: "translate(0,0) scale(1)" },
+      "50%": { transform: "translate(70px,-24px) scale(1.25)" },
+      "100%": { transform: "translate(0,0) scale(1)" },
+    },
+    travel: { "0%": { top: "0", opacity: "0" }, "12%": { opacity: "1" }, "88%": { opacity: "1" }, "100%": { top: "100%", opacity: "0" } },
+    sheen: { from: { backgroundPosition: "0 0" }, to: { backgroundPosition: "40px 0" } },
+    bob: { "0%, 80%, 100%": { transform: "translateY(0)", opacity: "0.4" }, "40%": { transform: "translateY(-5px)", opacity: "1" } },
+    stamp: {
+      "0%": { opacity: "0", transform: "scale(1.6) rotate(-6deg)" },
+      "60%": { opacity: "1", transform: "scale(.96) rotate(0)" },
+      "100%": { transform: "scale(1)" },
+    },
+    shimmer: { from: { backgroundPosition: "-200% 0" }, to: { backgroundPosition: "200% 0" } },
+  },
+  animation: {
+    rise: "rise .7s cubic-bezier(.2,.7,.2,1) both",
+    grow: "grow 1.1s .35s cubic-bezier(.2,.7,.2,1) both",
+    pulse: "pulse 1.8s ease-out infinite",
+    ring: "ring 1.8s ease-out infinite",
+    drift: "drift 12s ease-in-out infinite",
+    travel: "travel 3.2s linear infinite",
+    sheen: "sheen 1s linear infinite",
+    bob: "bob 1.2s ease-in-out infinite",
+    stamp: "stamp .6s .35s cubic-bezier(.2,.9,.3,1.2) both",
+    shimmer: "shimmer 1.6s linear infinite",
+    live: "grow 1.1s .35s cubic-bezier(.2,.7,.2,1) both, sheen 1s linear infinite",
+  },
+  /** Stagger between siblings that rise in. */
+  delay: { 1: "80ms", 2: "160ms", 3: "240ms", 4: "320ms", 5: "400ms" },
+} as const;
+
+/** The live-progress stripe and the skeleton shimmer, set as background images. */
+export const surfaces = {
+  stripe: "repeating-linear-gradient(115deg, rgb(255 255 255 / 0.3) 0 10px, rgb(255 255 255 / 0) 10px 20px)",
+  shimmer: "linear-gradient(90deg, rgb(228 231 242 / 0.6) 0%, rgb(245 246 251 / 0.9) 50%, rgb(228 231 242 / 0.6) 100%)",
+} as const;
+
+/** Blur radius of the aura blobs on the coloured bands. */
+export const blur = { aura: "48px" } as const;
 
 export const typography = {
   fontFamily: {
@@ -55,11 +147,21 @@ export const typography = {
     display: ["Space Grotesk Variable", "Space Grotesk", "Inter Variable", "ui-sans-serif", "system-ui", "sans-serif"],
     mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
   },
+  /** The display sizes the design uses above Tailwind's own scale. */
+  fontSize: {
+    hero: ["44px", { lineHeight: "1", letterSpacing: "-0.03em" }],
+    balance: ["64px", { lineHeight: "1", letterSpacing: "-0.03em" }],
+    eyebrow: ["12px", { lineHeight: "1.3", letterSpacing: "0.08em" }],
+  },
 } as const;
 
 /** Named widths. `page` bounds the console so lines stay readable on an ultrawide. */
 export const layout = {
-  width: { page: "96rem", aside: "22rem" },
+  width: { page: "96rem", aside: "22rem", dock: "26rem", form: "40rem", prose: "45rem", aura: "20rem", bubble: "85%", reply: "92%" },
+  /** The smallest comfortable touch target. */
+  touch: "44px",
+  /** Where the org chart's connecting wire sits under a division's badge. */
+  wireInset: "39px",
 } as const;
 
 // ---------------------------------------------------------------------------------------------
