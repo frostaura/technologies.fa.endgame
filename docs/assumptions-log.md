@@ -14,6 +14,7 @@ what was assumed, why, and how to reverse it. Product decisions he made himself 
 | 6 | **Nothing is changed in the live Cloudflare account.** The Cloudflare integration is built and tested against a local fake; the wildcard record, tunnel route and outage page are not applied. | No Cloudflare credential exists on this machine, and a wildcard record on `frostaura.net` changes how his whole domain resolves — not something to do unattended. | Supply a scoped token and say go; the plan's Cloudflare spike then runs for real. |
 | 7 | **Email is built behind one interface and sent to a local mail catcher in development.** No mail leaves the machine. | Who sends production email is an open founder question; real sends from an unattended run risk his sending reputation. | Point the interface at the chosen sender. |
 | 8 | **This laptop is the host.** The stack runs on its Docker. | **Confirmed by the founder on 2026-11-24:** "for all intents and purposes this is the mac mini", and all Docker work on it is allowed. | Deploy elsewhere with the production compose file. |
+| 9 | **Model spend caps for the spikes: US$12 for the harness benchmark and US$2 for the OpenRouter capability checks**, each enforced by the spike itself before every call. | Enough to measure four or five model tiers on six tasks three times; small enough to be an acceptable surprise. | Lower the caps in the spike briefs, or stop the runs. |
 
 ## Founder replies
 
