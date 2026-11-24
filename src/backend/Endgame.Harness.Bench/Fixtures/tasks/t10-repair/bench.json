@@ -1,0 +1,4 @@
+{
+  "evaluation": "dotnet test Library.slnx --filter FullyQualifiedName~Evaluation -nologo",
+  "repairRounds": 2
+}

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Endgame's own agent harness (ARCH-006): the loop, the tools, the permission pipeline, hooks,
+    compaction, sub-agents, skills, tasks and plans. No agent framework or SDK of any kind: only the
+    base class library, the domain's vocabulary and the hosting contracts' wire shapes.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Endgame.Domain/Endgame.Domain.csproj" />
+    <ProjectReference Include="../Endgame.Hosting.Contracts/Endgame.Hosting.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Endgame.Tests" />
+  </ItemGroup>
+</Project>

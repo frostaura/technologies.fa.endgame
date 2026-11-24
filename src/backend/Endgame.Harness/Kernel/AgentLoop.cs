@@ -1,0 +1,488 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using Endgame.Harness.Context;
+using Endgame.Harness.Events;
+using Endgame.Harness.Kernel;
+using Endgame.Harness.Model;
+using Endgame.Harness.Permissions;
+using Endgame.Harness.Tools;
+using Endgame.Harness.Workspaces;
+
+namespace Endgame.Harness;
+
+/// <summary>
+/// The kernel (ARCH-006, the build plan's part 1): model call → tool calls → results → repeat, until
+/// the model stops calling tools or a limit is reached. Every step is an event in the run log, written
+/// before the state it describes changes, so a crashed run is rebuilt exactly by <see cref="Replay"/>.
+/// </summary>
+public sealed class AgentLoop
+{
+    /// <summary>What a tool result may carry into the context.</summary>
+    public const int MaxResultChars = RunTool.MaxOutput + 500;
+
+    private static readonly Regex TextToolCall = new(@"<tool_call>|<function=|<\|tool|""name""\s*:\s*""[a-z_]+""\s*,\s*""(arguments|parameters)""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private readonly AgentDefinition agent;
+    private readonly AgentServices services;
+    private readonly IWorkspace workspace;
+    private readonly AgentEventWriter events;
+
+    public AgentLoop(AgentDefinition agent, AgentServices services, IWorkspace workspace, IEventSink sink)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(workspace);
+        ArgumentNullException.ThrowIfNull(sink);
+        this.agent = agent;
+        this.services = services;
+        this.workspace = workspace;
+        events = new AgentEventWriter(sink, agent.Id);
+    }
+
+    public AgentDefinition Definition => agent;
+
+    /// <summary>Starts a fresh session on a task.</summary>
+    public async Task<AgentResult> StartAsync(string task, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+        var state = new AgentState { AgentId = agent.Id };
+        await events.WriteAsync(HarnessEvents.Message, new JsonObject
+        {
+            ["kind"] = MessageKinds.AgentStart,
+            ["taskType"] = agent.TaskType,
+            ["system"] = agent.SystemPrompt,
+            ["task"] = task,
+        }, cancellationToken);
+        state.Messages =
+        [
+            new JsonObject { ["role"] = "system", ["content"] = agent.SystemPrompt },
+            new JsonObject { ["role"] = "user", ["content"] = task },
+        ];
+        return await ContinueAsync(state, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resumes from the run's log: replays this agent's events into its state, answers any call that
+    /// was in flight when the run died, and carries on. An agent that had already stopped returns at once.
+    /// </summary>
+    public async Task<AgentResult> ResumeAsync(IReadOnlyList<RunEvent> log, string task, CancellationToken cancellationToken)
+    {
+        var replayed = Replay.Fold(log, agent.Id);
+        if (!replayed.State.Started)
+        {
+            return await StartAsync(task, cancellationToken);
+        }
+
+        if (replayed.State.StopReason is { } stopped)
+        {
+            return new AgentResult(stopped, replayed.State.FinalText, replayed.State);
+        }
+
+        foreach (var call in replayed.Interrupted)
+        {
+            await events.WriteAsync(HarnessEvents.ToolResult, new JsonObject
+            {
+                ["callId"] = call.CallId,
+                ["name"] = call.Name,
+                ["isError"] = true,
+                ["errorKind"] = "interrupted",
+                ["content"] = Replay.InterruptedText,
+            }, cancellationToken);
+        }
+
+        return await ContinueAsync(replayed.State, cancellationToken);
+    }
+
+    /// <summary>Runs the loop on a state, which may be fresh or replayed.</summary>
+    public async Task<AgentResult> ContinueAsync(AgentState state, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var schemas = agent.Tools.Schemas();
+        while (true)
+        {
+            var signal = await services.Control.CheckAsync(cancellationToken);
+            if (signal != RunSignal.Continue)
+            {
+                return Suspend(state, signal switch
+                {
+                    RunSignal.Pause => StopReasons.Paused,
+                    RunSignal.Cancel => StopReasons.Cancelled,
+                    _ => StopReasons.LeaseLost,
+                });
+            }
+
+            if (state.Steps >= agent.Limits.MaxSteps)
+            {
+                return await StopAsync(state, StopReasons.MaxSteps, $"Stopped after {state.Steps} steps without finishing.", cancellationToken);
+            }
+
+            if (agent.Limits.CreditBudget is { } budget && state.SettledCredits >= budget)
+            {
+                return await StopAsync(state, StopReasons.BudgetSliceSpent, $"This agent's budget of {budget} credits is spent.", cancellationToken);
+            }
+
+            if (Compactor.ShouldCompact(state.Messages, agent.Compaction))
+            {
+                var compacted = await CompactAsync(state, cancellationToken);
+                if (compacted is not null)
+                {
+                    return compacted;
+                }
+            }
+
+            ModelReply reply;
+            try
+            {
+                reply = await CallModelAsync(state, schemas, cancellationToken);
+            }
+            catch (ModelCallException e)
+            {
+                state.SettledCredits += e.SettledCredits;
+                var reason = e.Failure switch
+                {
+                    ModelFailure.BudgetExhausted => StopReasons.BudgetExhausted,
+                    ModelFailure.RunClosed => StopReasons.RunClosed,
+                    ModelFailure.CeilingUnreachable => StopReasons.CeilingUnreachable,
+                    _ => StopReasons.ModelError,
+                };
+                return await StopAsync(state, reason, e.Message, cancellationToken);
+            }
+
+            var message = reply.Message;
+            message.Remove("refusal");
+            var toolCalls = message["tool_calls"] as JsonArray;
+            if (toolCalls is { Count: 0 })
+            {
+                message.Remove("tool_calls");
+                toolCalls = null;
+            }
+
+            var accounting = Accounting(reply);
+            if (toolCalls is null)
+            {
+                var text = message["content"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
+                var nudge = await StopNudgeAsync(state, text, cancellationToken);
+                await events.WriteAsync(HarnessEvents.Message, new JsonObject
+                {
+                    ["kind"] = MessageKinds.AgentReply,
+                    ["assistant"] = message.DeepClone(),
+                    ["final"] = nudge is null,
+                    ["text"] = OutputText.Truncate(text, 4000),
+                    ["accounting"] = accounting,
+                }, cancellationToken);
+                state.Messages.Add(message);
+                if (nudge is null)
+                {
+                    state.FinalText = text;
+                    state.StopReason = state.EverEdited ? StopReasons.Completed : StopReasons.CompletedNoEdits;
+                    return new AgentResult(state.StopReason, text, state);
+                }
+
+                await events.WriteAsync(HarnessEvents.Message, new JsonObject { ["kind"] = MessageKinds.Nudge, ["text"] = nudge.Value.Text, ["source"] = nudge.Value.Source }, cancellationToken);
+                Replay.ApplyNudge(state, nudge.Value.Source, nudge.Value.Text);
+                continue;
+            }
+
+            var repeated = false;
+            var first = true;
+            var index = 0;
+            foreach (var call in toolCalls.OfType<JsonObject>())
+            {
+                call["id"] ??= $"call_{state.Steps}_{index}";
+                var callId = call["id"]!.GetValue<string>();
+                var fn = call["function"] as JsonObject;
+                var name = fn?["name"]?.GetValue<string>() ?? "";
+                var requested = new JsonObject
+                {
+                    ["callId"] = callId,
+                    ["name"] = name,
+                    ["arguments"] = fn?["arguments"]?.DeepClone(),
+                    ["step"] = state.Steps,
+                };
+                if (first)
+                {
+                    requested["assistant"] = message.DeepClone();
+                    requested["accounting"] = accounting.DeepClone();
+                }
+
+                await events.WriteAsync(HarnessEvents.ToolRequested, requested, cancellationToken);
+                if (first)
+                {
+                    state.Messages.Add(message);
+                    first = false;
+                }
+
+                state.ToolCalls++;
+                var outcome = await ExecuteAsync(state, callId, name, fn?["arguments"], index, cancellationToken);
+                var failed = outcome.IsError || (name == "run" && !outcome.Content.StartsWith("[exit code 0]", StringComparison.Ordinal));
+                string? failureKey = null;
+                if (failed)
+                {
+                    failureKey = Signature(name, fn?["arguments"], outcome.Content);
+                }
+
+                var content = OutputText.Truncate(outcome.Content, MaxResultChars);
+                var result = new JsonObject
+                {
+                    ["callId"] = callId,
+                    ["name"] = name,
+                    ["isError"] = outcome.IsError,
+                    ["errorKind"] = outcome.ErrorKind,
+                    ["content"] = content,
+                    ["edited"] = (!outcome.IsError && IsWrite(name)) || outcome.Edited,
+                    ["credits"] = outcome.Credits,
+                    ["verified"] = name == "run" && agent.VerifyCommand.IsMatch(Json.Str(ParseOrEmpty(fn?["arguments"]), "command") ?? ""),
+                    ["failureKey"] = failureKey,
+                };
+                await events.WriteAsync(HarnessEvents.ToolResult, result, cancellationToken);
+                Replay.ApplyToolResult(state, result);
+                index++;
+                if (state.RepeatedFailures >= agent.Limits.MaxRepeatedFailures)
+                {
+                    repeated = true;
+                }
+            }
+
+            if (repeated)
+            {
+                return await StopAsync(state, StopReasons.RepeatedFailure, $"The same call failed the same way {state.RepeatedFailures} times in a row.", cancellationToken);
+            }
+        }
+    }
+
+    private async Task<ModelReply> CallModelAsync(AgentState state, JsonArray schemas, CancellationToken cancellationToken)
+    {
+        state.Steps++;
+        var step = state.Steps;
+        var (reply, _) = await services.Retry.RunAsync(attempt => services.Model.CompleteAsync(new ChatCall(
+            agent.TaskType,
+            agent.Scope,
+            agent.RunId,
+            agent.EmployeeId,
+            ModelTraits.WithCacheMarks(state.Messages, state.LastModel),
+            schemas.Count > 0 ? schemas : null,
+            agent.Limits.MaxOutputTokens,
+            agent.Repair,
+            state.PinnedProvider is { } p ? [p] : null,
+            $"{agent.RunId}:{agent.Id}:{step}:{attempt}:{services.SessionNonce}"), cancellationToken), cancellationToken);
+        Replay.ApplyAccounting(state, Accounting(reply));
+        return reply;
+    }
+
+    private async Task<ToolOutcome> ExecuteAsync(AgentState state, string callId, string name, JsonNode? rawArguments, int index, CancellationToken cancellationToken)
+    {
+        var (arguments, parseError) = Json.ParseArguments(rawArguments);
+        if (parseError is not null)
+        {
+            return ToolOutcome.Error($"The arguments for {name} were not valid JSON ({parseError}). Nothing ran. Send the call again with a JSON object.", "malformed");
+        }
+
+        if (index >= agent.Limits.MaxToolCallsPerTurn)
+        {
+            return ToolOutcome.Error($"Not run: at most {agent.Limits.MaxToolCallsPerTurn} tool calls are run per turn. Send the rest in your next turn.", "turn_cap");
+        }
+
+        if (!agent.Tools.TryGet(name, out var tool))
+        {
+            return ToolOutcome.Error($"There is no tool called '{name}'. The tools are: {string.Join(", ", agent.Tools.Names)}.", "unknown_tool");
+        }
+
+        var (targets, targetError) = tool.Target(arguments!, workspace.Root);
+        if (targetError is not null)
+        {
+            return ToolOutcome.Error(targetError, targetError.Contains("outside the workspace", StringComparison.Ordinal) ? "denied" : "bad_arguments");
+        }
+
+        var decision = agent.Permissions.Decide(name, tool.Effect, targets, state.Plan is not null && state.PlanAccepted);
+        if (decision.Verdict == PermissionVerdict.Ask)
+        {
+            decision = await AskAsync(name, targets, decision, cancellationToken);
+        }
+
+        await events.WriteAsync(decision.Verdict == PermissionVerdict.Allow ? HarnessEvents.ToolPermitted : HarnessEvents.ToolDenied, new JsonObject
+        {
+            ["callId"] = callId,
+            ["name"] = name,
+            ["rule"] = decision.Rule,
+            ["reason"] = decision.Reason,
+            ["paths"] = Json.Array(targets.Paths.Select(p => p.Relative)),
+            ["command"] = targets.Command is { } c ? OutputText.Truncate(c, 1000) : null,
+        }, cancellationToken);
+        if (decision.Verdict != PermissionVerdict.Allow)
+        {
+            return ToolOutcome.Error($"Permission denied ({decision.Rule}): {decision.Reason}", "denied");
+        }
+
+        var context = new ToolContext(workspace, state, services, events, agent);
+        var toolCall = new ToolCall(callId, name, arguments!, context);
+        foreach (var hook in agent.ToolHooks)
+        {
+            if (await hook.BeforeAsync(toolCall, cancellationToken) is { } blocked)
+            {
+                return ToolOutcome.Error(blocked, "blocked");
+            }
+        }
+
+        ToolOutcome outcome;
+        try
+        {
+            outcome = await tool.ExecuteAsync(toolCall, cancellationToken);
+        }
+        catch (WorkspaceException e)
+        {
+            outcome = ToolOutcome.Error($"The workspace refused: {e.Message}", e.Code == "protected_path" ? "denied" : "workspace_error");
+        }
+        catch (Exception e) when (e is not OperationCanceledException and not ModelCallException)
+        {
+            outcome = ToolOutcome.Error($"{name} failed: {e.Message}", "tool_error");
+        }
+
+        foreach (var hook in agent.ToolHooks)
+        {
+            outcome = await hook.AfterAsync(toolCall, outcome, cancellationToken);
+        }
+
+        return outcome;
+    }
+
+    private async Task<PermissionDecision> AskAsync(string name, ToolTargets targets, PermissionDecision asked, CancellationToken cancellationToken)
+    {
+        if (services.Approvals is null || asked.Checkpoint is null)
+        {
+            return asked with { Verdict = PermissionVerdict.Deny, Rule = $"unattended:{asked.Rule}" };
+        }
+
+        var what = targets.Command ?? string.Join(", ", targets.Paths.Select(p => p.Relative));
+        var approved = await services.Approvals.RequestAsync(
+            OutputText.Truncate($"Allow {name}{(what.Length > 0 ? $": {what}" : "")}?", 300),
+            $"{asked.Reason} Checkpoint: {asked.Checkpoint}.",
+            cancellationToken);
+        return approved
+            ? new PermissionDecision(PermissionVerdict.Allow, $"checkpoint:{asked.Checkpoint}:approved", "The owner approved this call.")
+            : new PermissionDecision(PermissionVerdict.Deny, $"checkpoint:{asked.Checkpoint}:rejected", "The owner rejected this call. Do the work another way, or finish and explain.");
+    }
+
+    private async Task<(string Text, string Source)?> StopNudgeAsync(AgentState state, string text, CancellationToken cancellationToken)
+    {
+        if (TextToolCall.IsMatch(text) && state.TextToolNudges < agent.Limits.MaxTextToolNudges)
+        {
+            return ("Your last reply wrote a tool call as plain text, so nothing ran. Call tools through the function-calling interface instead or, if you have finished, reply with your summary only.", Replay.TextToolSource);
+        }
+
+        foreach (var hook in agent.StopHooks)
+        {
+            if (state.StopHookRuns.GetValueOrDefault(hook.Name) >= hook.MaxRuns)
+            {
+                continue;
+            }
+
+            if (await hook.OnStopAsync(state, workspace, cancellationToken) is { } nudge)
+            {
+                return (nudge, hook.Name);
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<AgentResult?> CompactAsync(AgentState state, CancellationToken cancellationToken)
+    {
+        var head = agent.Compaction.KeepHeadMessages;
+        var cut = Compactor.CutPoint(state.Messages, agent.Compaction);
+        if (cut < 0)
+        {
+            return null;
+        }
+
+        ModelReply summary;
+        try
+        {
+            (summary, _) = await services.Retry.RunAsync(attempt => services.Model.CompleteAsync(new ChatCall(
+                agent.SummaryTaskType,
+                agent.Scope,
+                agent.RunId,
+                agent.EmployeeId,
+                [
+                    new JsonObject { ["role"] = "system", ["content"] = Compactor.SummariserPrompt },
+                    new JsonObject { ["role"] = "user", ["content"] = Compactor.Transcript(state.Messages, head, cut) },
+                ],
+                null,
+                3000,
+                agent.Repair,
+                null,
+                $"{agent.RunId}:{agent.Id}:compact:{state.Compactions}:{attempt}:{services.SessionNonce}"), cancellationToken), cancellationToken);
+        }
+        catch (ModelCallException e) when (e.Terminal)
+        {
+            return await StopAsync(state, e.Failure == ModelFailure.BudgetExhausted ? StopReasons.BudgetExhausted : StopReasons.RunClosed, e.Message, cancellationToken);
+        }
+        catch (ModelCallException)
+        {
+            // A failed summary is not fatal: carry on uncompacted, and the next step tries again.
+            return null;
+        }
+
+        state.SettledCredits += summary.SettledCredits;
+        var text = summary.Message["content"]?.GetValue<string>() ?? "";
+        var message = Compactor.SummaryMessage(text, state);
+        await events.WriteAsync(HarnessEvents.Message, new JsonObject
+        {
+            ["kind"] = MessageKinds.Compaction,
+            ["head"] = head,
+            ["cut"] = cut,
+            ["count"] = state.Messages.Count,
+            ["summary"] = message,
+            ["credits"] = summary.SettledCredits,
+            ["tokensBefore"] = Compactor.EstimateTokens(state.Messages),
+        }, cancellationToken);
+        Replay.ApplyCompaction(state, head, cut, message);
+        return null;
+    }
+
+    private async Task<AgentResult> StopAsync(AgentState state, string reason, string text, CancellationToken cancellationToken)
+    {
+        await events.WriteAsync(HarnessEvents.Message, new JsonObject { ["kind"] = MessageKinds.AgentStopped, ["reason"] = reason, ["text"] = text }, cancellationToken);
+        state.StopReason = reason;
+        state.FinalText ??= text;
+        return new AgentResult(reason, text, state);
+    }
+
+    private static AgentResult Suspend(AgentState state, string reason) => new(reason, null, state);
+
+    private static JsonObject Accounting(ModelReply reply) => new()
+    {
+        ["model"] = reply.Model,
+        ["provider"] = reply.Provider,
+        ["promptTokens"] = reply.PromptTokens,
+        ["completionTokens"] = reply.CompletionTokens,
+        ["cachedTokens"] = reply.CachedTokens,
+        ["settledCredits"] = reply.SettledCredits,
+        ["finishReason"] = reply.FinishReason,
+    };
+
+    private static bool IsWrite(string name) => name is "edit_file" or "write_file";
+
+    private static JsonObject ParseOrEmpty(JsonNode? raw) => Json.ParseArguments(raw).Args ?? [];
+
+    private static string Signature(string name, JsonNode? arguments, string content)
+    {
+        var text = $"{name}\n{(arguments is JsonValue v && v.TryGetValue<string>(out var s) ? s : arguments?.ToJsonString())}\n{content}";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16].ToLower(CultureInfo.InvariantCulture);
+    }
+}
+
+/// <summary>The <c>kind</c> of the harness's <c>message</c> events.</summary>
+public static class MessageKinds
+{
+    public const string AgentStart = "agent.start";
+    public const string AgentReply = "agent.reply";
+    public const string AgentStopped = "agent.stopped";
+    public const string Nudge = "nudge";
+    public const string Compaction = "compaction";
+    public const string Notes = "notes";
+    public const string PlanMark = "plan.mark";
+    public const string Workflow = "workflow.step";
+}
