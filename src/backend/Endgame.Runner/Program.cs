@@ -1,7 +1,8 @@
-var builder = WebApplication.CreateBuilder(args);
-var app = builder.Build();
+namespace Endgame.Runner;
 
-var revision = app.Configuration["BUILD_SHA"] is { Length: > 0 } sha ? sha : "unknown";
-app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "runner", revision }));
-
-app.Run();
+// A named entry point rather than top-level statements: the test project references the Runner and
+// the control plane, and two generated global `Program` classes would collide there.
+internal static class Program
+{
+    private static void Main(string[] args) => RunnerHost.Create(args).Run();
+}
