@@ -26,8 +26,9 @@ path, and the bill is the ledger, line by line.
 2. Each model call is admitted under the organisation's advisory lock: the balance (plus the tightest
    overdraft on the chain) and every cap on the call's chain must cover the reservation; the reservation is
    inserted in the same transaction. Concurrent calls therefore admit exactly as many as fit.
-3. The reply settles the reservation from its own `usage.cost` (converted at `Credits:CreditsPerUsd`, plus
-   `Credits:Margin`). A run's open reservations are released when it finishes; a reservation lapses with its
+3. The reply settles the reservation from its own `usage.cost` (converted at `Credits:CreditsPerUsd` times the
+   one margin factor `Credits:Margin`; 1.0, the default, is no margin and stands until the founder sets one).
+   Hosting is charged the same way from Dock's usage samples ([UC-111](UC-111-metering-overdraft-and-god-mode.md)). A run's open reservations are released when it finishes; a reservation lapses with its
    run's lease, and a sweep writes the release.
 4. `GET /api/credits?scope=` → `{ scope, balance, month { spent, ai, hosting }, monthsLeftAtPace, budgets[] { scope, name, level, depth, spentCredits, capCredits, appId } (tree order), estimates | null, notCharged { credits, repairs }, overdraft { frostauraLimit, ownLimit }, topUps[], heldCredits, available }`.
 
@@ -35,6 +36,8 @@ path, and the bill is the ledger, line by line.
 
 - **A1 — a cap would be exceeded.** The call is refused 402 `budget_exhausted`, `terminal: true`, naming the
   binding scope; the run is marked and every later call for it is refused without reaching the provider.
+- **A1b — past the overdraft limit.** Refused 402 `overdraft_limit`, `terminal: true`; the run is not marked,
+  so it may continue once the organisation is topped up.
 - **A2 — repair work.** `repair: true` reserves and records with `billable = false`; never charged, shown under `notCharged`.
 - **A3 — nothing scored yet.** `estimates` is null, not zeros.
 

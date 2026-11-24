@@ -1,3 +1,4 @@
+using Endgame.Application.Email;
 using Endgame.Application.Gateway;
 using Endgame.Application.Status;
 using Endgame.Infrastructure.Access;
@@ -7,10 +8,12 @@ using Endgame.Infrastructure.Gateway;
 using Endgame.Infrastructure.Health;
 using Endgame.Infrastructure.Identity;
 using Endgame.Infrastructure.Persistence;
+using Endgame.Infrastructure.Platform;
 using Endgame.Infrastructure.Runs;
 using Endgame.Infrastructure.Sweeps;
 using Endgame.Infrastructure.Tenancy;
 using Endgame.Infrastructure.Tree;
+using Endgame.Infrastructure.Vault;
 using Endgame.Infrastructure.Work;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -41,8 +44,10 @@ public static class DependencyInjection
 
         var status = configuration.GetSection(StatusOptions.SectionName).Get<StatusOptions>() ?? new StatusOptions();
         var timeout = TimeSpan.FromMilliseconds(status.ProbeTimeoutMs);
+        var peers = configuration.GetSection(ServiceAddresses.SectionName).Get<ServiceAddresses>() ?? new ServiceAddresses();
+        services.Configure<ServiceAddresses>(configuration.GetSection(ServiceAddresses.SectionName));
         services.AddHttpClient(HttpHealthProbe.ClientName);
-        foreach (var endpoint in status.Services)
+        foreach (var endpoint in StatusOptions.Probes(peers, status.Services))
         {
             services.AddScoped<IServiceHealthProbe>(sp =>
                 new HttpHealthProbe(endpoint, sp.GetRequiredService<IHttpClientFactory>(), timeout));
@@ -70,9 +75,45 @@ public static class DependencyInjection
         services.AddScoped<EmployeeService>();
         services.AddScoped<AccountService>();
         services.AddScoped<IGatewayContext, GatewayContext>();
-        services.AddHostedService<LeaseSweep>();
+        services.AddSingleton<LeaseSweep>();
+        services.AddHostedService(sp => sp.GetRequiredService<LeaseSweep>());
+
+        services.AddPlatformApi(configuration);
 
         services.AddModelGateway(configuration);
+        return services;
+    }
+
+    /// <summary>The services apps reach through the platform API (PLATFORM-API.md), and the workers behind them.</summary>
+    public static IServiceCollection AddPlatformApi(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddSingleton<EnvelopeVault>();
+        services.Configure<AppModelOptions>(configuration.GetSection(AppModelOptions.SectionName));
+        services.Configure<AppSessionOptions>(configuration.GetSection(AppSessionOptions.SectionName));
+        services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
+        services.Configure<TelemetryOptions>(configuration.GetSection(TelemetryOptions.SectionName));
+        services.Configure<HostingOptions>(configuration.GetSection(HostingOptions.SectionName));
+        services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+
+        services.AddScoped<AppTokenService>();
+        services.AddScoped<AppIdentityService>();
+        services.AddScoped<AppModelService>();
+        services.AddScoped<AppSecretService>();
+        services.AddScoped<AppEmailService>();
+        services.AddScoped<AppDeclarationService>();
+        services.AddScoped<TelemetryService>();
+        services.AddScoped<HostingMeter>();
+        services.AddSingleton<EdgeNotifier>();
+        services.AddSingleton<AppCallbackClient>();
+        services.AddHttpClient(EdgeNotifier.ClientName);
+        services.AddHttpClient(AppCallbackClient.ClientName);
+
+        services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        services.AddSingleton<EmailDispatcher>();
+        services.AddHostedService(sp => sp.GetRequiredService<EmailDispatcher>());
+        services.AddSingleton<Scheduler>();
+        services.AddHostedService(sp => sp.GetRequiredService<Scheduler>());
         return services;
     }
 
@@ -87,7 +128,13 @@ public static class DependencyInjection
         }
 
         services.AddSingleton(gateway);
-        services.AddSingleton(configuration.GetSection(CreditOptions.SectionName).Get<CreditOptions>() ?? new CreditOptions());
+        var credits = configuration.GetSection(CreditOptions.SectionName).Get<CreditOptions>() ?? new CreditOptions();
+        if (credits.Validate() is { Count: > 0 } creditFaults)
+        {
+            throw new InvalidOperationException("The credit settings are invalid:" + Environment.NewLine + string.Join(Environment.NewLine, creditFaults));
+        }
+
+        services.AddSingleton(credits);
         services.AddHttpClient<IModelProvider, OpenRouterProvider>(OpenRouterProvider.ClientName, client =>
             client.Timeout = TimeSpan.FromSeconds(gateway.RequestTimeoutSeconds));
         services.AddScoped<ModelGateway>();

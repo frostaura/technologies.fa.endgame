@@ -3,12 +3,14 @@ using Endgame.Application.Common;
 using Endgame.Domain;
 using Endgame.Domain.Access;
 using Endgame.Domain.Cascade;
+using Endgame.Domain.Platform;
 using Endgame.Domain.Tree;
 using Endgame.Infrastructure.Cascade;
 using Endgame.Infrastructure.Persistence;
 using Endgame.Infrastructure.Persistence.Records;
 using Endgame.Infrastructure.Tenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
@@ -32,7 +34,12 @@ public sealed record AppAddresses(string Path, string Subdomain);
 
 public sealed record SleepSetting(string Mode, int IdleMinutes, string ModeSetAt, string IdleSetAt);
 
-public sealed record RouteView(Guid AppId, Guid OrganisationId, string Scope, string PathBase, string Host, string HostPathBase, string Target, string Status, bool Sleeping, SleepSetting Sleep, string? Version);
+/// <param name="Access"><c>private</c>, <c>shared</c> or <c>public</c>, resolved down the cascade.</param>
+/// <param name="Paused">True when the app must not be served: Edge shows the holding page. Nothing is deleted.</param>
+/// <param name="PausedReason"><c>overdraft_limit</c> (the organisation's balance is past its overdraft limit) or <c>budget_exhausted</c> (a monthly budget on the app's chain is spent); null when not paused.</param>
+/// <param name="Hooks">The app's declared webhook names: Edge admits <c>POST hooks/&lt;name&gt;</c> for these, even on a private app.</param>
+public sealed record RouteView(Guid AppId, Guid OrganisationId, string Scope, string PathBase, string Host, string HostPathBase, string Target, string Status, bool Sleeping, SleepSetting Sleep, string? Version,
+    string Access, bool Paused, string? PausedReason, IReadOnlyList<string> Hooks);
 
 public sealed record RoutingTable(DateTimeOffset GeneratedAt, IReadOnlyList<RouteView> Routes);
 
@@ -41,7 +48,8 @@ public sealed class TreeService(
     EndgameDbContext db,
     TenantSession session,
     IOptions<AddressOptions> addresses,
-    TimeProvider clock)
+    TimeProvider clock,
+    IServiceProvider services)
 {
     public const string DefaultSleepMode = "auto";
     public const int DefaultIdleMinutes = 15;
@@ -206,29 +214,92 @@ public sealed class TreeService(
                           where a.Status != NodeStatuses.Archived && o.Status == NodeStatuses.Active
                           orderby o.Slug, d.Slug, p.Slug, a.Slug
                           select new { App = a, Org = o.Slug, Division = d.Slug, DivisionId = d.Id, Project = p.Slug }).ToListAsync(cancellationToken);
-        var sleepEntries = await db.CascadeEntries.AsNoTracking()
-            .Where(e => e.Kind == "setting" && (e.Key == CascadeKeys.SleepMode || e.Key == CascadeKeys.SleepIdleMinutes))
+        string[] keys = [CascadeKeys.SleepMode, CascadeKeys.SleepIdleMinutes, CascadeKeys.Access, CascadeKeys.OverdraftLimit, CascadeKeys.OverdraftOwnLimit];
+        var settingEntries = await db.CascadeEntries.AsNoTracking()
+            .Where(e => (e.Kind == "setting" && keys.Contains(e.Key)) || (e.Kind == "budget" && e.Key == CascadeKeys.MonthlyCredits))
             .ToListAsync(cancellationToken);
+        var hooks = (await db.AppWebhooks.AsNoTracking().Select(w => new { w.AppId, w.Name }).ToListAsync(cancellationToken))
+            .ToLookup(w => w.AppId, w => w.Name);
+        var ledger = services.GetRequiredService<Credits.CreditLedger>();
+        session.UseSystem();
+        var balances = await ledger.SettledBalancesAsync(cancellationToken);
+        var spend = await MonthSpendByNodeAsync(cancellationToken);
         var routes = new List<RouteView>();
         foreach (var row in rows)
         {
             var path = ScopePath.Of(row.Org, row.Division, row.Project, row.App.Slug);
             var nodes = new[] { row.Org, $"{row.Org}/{row.Division}", $"{row.Org}/{row.Division}/{row.Project}", path.ToString() };
-            var chain = sleepEntries
+            var chainRows = settingEntries
                 .Where(e => e.OrganisationId == row.App.OrganisationId
                     && (e.DivisionId == null || e.DivisionId == row.DivisionId)
                     && (e.ProjectId == null || e.ProjectId == row.App.ProjectId)
                     && (e.AppId == null || e.AppId == row.App.Id))
+                .ToList();
+            var chain = chainRows
+                .Where(e => e.Kind == "setting")
                 .Select(e => new CascadeEntry(CascadeKind.Setting, e.Key, e.ValueJson, e.Level(), e.NodeId(), nodes[(int)e.Level()], e.SetAt))
                 .ToList();
             var sleep = Sleep(chain);
+            var accessEntry = CascadeResolver.ResolveKey(CascadeKind.Setting, CascadeKeys.Access, chain);
+            var access = accessEntry is not null && JsonNode.Parse(accessEntry.Entry.ValueJson)?.GetValue<string>() is { } a && AppAccess.All.Contains(a) ? a : AppAccess.Private;
+
+            // At the limit (spec, Overdraft): apps pause behind a holding page; a top-up restores them at once.
+            string? paused = null;
+            var balance = balances.GetValueOrDefault(row.App.OrganisationId);
+            if (balance + CascadeService.EffectiveOverdraft(chain) < 0)
+            {
+                paused = Application.Gateway.Refusals.OverdraftLimit;
+            }
+            else if (chainRows.Where(e => e.Kind == "budget").Any(e => CascadeService.NumberOf(JsonNode.Parse(e.ValueJson)) is { } cap
+                && spend.GetValueOrDefault((e.OrganisationId, e.Level(), e.NodeId())) is var spent && spent > 0 && spent >= cap))
+            {
+                paused = Application.Gateway.Refusals.BudgetExhausted;
+            }
+
             var tail = $"/{row.Division}/{row.Project}/{row.App.Slug}/";
             routes.Add(new RouteView(row.App.Id, row.App.OrganisationId, path.ToString(), $"/{path}/", $"{row.Org}.{addresses.Value.OrganisationDomain}", tail,
-                $"http://app-{row.App.Id:N}:8080", row.App.Status, row.App.Status == NodeStatuses.Sleeping, sleep, row.App.CurrentVersion));
+                $"http://app-{row.App.Id:N}:8080", row.App.Status, row.App.Status == NodeStatuses.Sleeping, sleep, row.App.CurrentVersion,
+                access, paused is not null, paused, hooks[row.App.Id].Order(StringComparer.Ordinal).ToList()));
         }
 
         session.Clear();
         return new RoutingTable(clock.GetUtcNow(), routes);
+    }
+
+    /// <summary>This month's billable spend (model calls and hosting) at every node of every organisation. Runs as the platform.</summary>
+    private async Task<Dictionary<(Guid Organisation, NodeLevel Level, Guid Node), decimal>> MonthSpendByNodeAsync(CancellationToken cancellationToken)
+    {
+        await using var command = await db.CommandAsync("""
+            SELECT organisation_id, division_id, project_id, app_id, SUM(amount)
+            FROM credit_entries
+            WHERE kind IN ('settlement', 'hosting') AND billable AND created_at >= @month
+            GROUP BY organisation_id, division_id, project_id, app_id
+            """, cancellationToken, Db.P("month", Credits.CreditLedger.MonthStart(clock.GetUtcNow())));
+        var spend = new Dictionary<(Guid, NodeLevel, Guid), decimal>();
+        void Add(Guid org, NodeLevel level, Guid node, decimal amount) => spend[(org, level, node)] = spend.GetValueOrDefault((org, level, node)) + amount;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var org = reader.GetGuid(0);
+            var amount = reader.GetDecimal(4);
+            Add(org, NodeLevel.Organisation, org, amount);
+            if (reader.GuidOrNull("division_id") is { } division)
+            {
+                Add(org, NodeLevel.Division, division, amount);
+            }
+
+            if (reader.GuidOrNull("project_id") is { } project)
+            {
+                Add(org, NodeLevel.Project, project, amount);
+            }
+
+            if (reader.GuidOrNull("app_id") is { } app)
+            {
+                Add(org, NodeLevel.App, app, amount);
+            }
+        }
+
+        return spend;
     }
 
     public AppAddresses Addresses(ScopePath path)

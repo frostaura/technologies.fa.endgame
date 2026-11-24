@@ -4,6 +4,7 @@ using Endgame.Application.Gateway;
 using Endgame.Domain.Cascade;
 using Endgame.Domain.Tree;
 using Endgame.Infrastructure.Cascade;
+using Endgame.Infrastructure.Platform;
 using Endgame.Infrastructure.Runs;
 using Endgame.Infrastructure.Tree;
 using Endgame.Infrastructure.Work;
@@ -29,6 +30,10 @@ public sealed record RaiseApprovalRequest(Guid RunId, string? Title, string? Det
 public sealed record PublishedRequest(string? Version);
 
 public sealed record AppStateRequest(string? Status);
+
+public sealed record AppTokenResult(string Token);
+
+public sealed record HandoffRedeemRequest(Guid AppId, string? Code);
 
 public sealed record HireRequest(string? Scope, string? Name, string? Role, string? JobDescription, decimal? MonthlyCreditLimit);
 
@@ -186,6 +191,28 @@ internal static class InternalEndpoints
             return Results.Ok(await tree.AppStateAsync(scope, request.Status ?? "", ct));
         })
         .WithName("AppState").WithSummary("Dock or the edge report that an app is building, running, sleeping, stopped or failed.").Produces<NodeView>();
+
+        group.MapPost("/apps/{id:guid}/token", async (Guid id, ScopeResolver scopes, AppTokenService tokens, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
+            return Results.Ok(new AppTokenResult(await tokens.IssueAsync(scope, ct)));
+        })
+        .WithName("IssueAppToken").WithSummary("Dock, before it starts an app: a fresh platform token for it (stored only as a hash). The previous one keeps working for a short grace period.").Produces<AppTokenResult>();
+
+        group.MapPost("/access/check", async (AccessCheckRequest request, AppIdentityService identity, CancellationToken ct) =>
+            Results.Ok(await identity.CheckAsync(request, ct)))
+        .WithName("CheckAppAccess").WithSummary("Edge, for a request into an app: allow (with an app-scoped session token), sign-in or deny, from the app's access setting, the visitor's role, its shares and its end users.").Produces<AccessCheckResult>();
+
+        group.MapPost("/access/handoff", async (HandoffRedeemRequest request, AppIdentityService identity, CancellationToken ct) =>
+            await identity.RedeemHandoffAsync(request.AppId, request.Code, ct) is { } redeemed
+                ? Results.Ok(redeemed)
+                : Problems.From(new EndgameProblem(410, "handoff_invalid", "The sign-in link has expired",
+                    "That hand-off code is unknown, already used, or older than a minute. Sign in again.")))
+        .WithName("RedeemHandoff").WithSummary("Edge, on the organisation subdomain: redeems a one-time hand-off code into that host's own app-session cookie (name, value, expiry) and where to send the visitor.").Produces<AppIdentityService.HandoffRedeemed>();
+
+        group.MapPost("/usage/hosting", async (HostingUsageRequest request, HostingMeter meter, CancellationToken ct) =>
+            Results.Ok(await meter.RecordAsync(request, ct)))
+        .WithName("RecordHostingUsage").WithSummary("Dock reports per-app usage samples (awake seconds, memory, storage, requests); each becomes one hosting credit entry. A sampleId is charged once.").Produces<HostingUsageResult>();
 
         group.MapPost("/ideas/{id:guid}/verdict", async (Guid id, JsonObject verdict, IdeaService ideas, CancellationToken ct) =>
             Results.Ok(await ideas.RecordVerdictAsync(id, verdict, ct)))

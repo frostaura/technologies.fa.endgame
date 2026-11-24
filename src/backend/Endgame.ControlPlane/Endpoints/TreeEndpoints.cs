@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Endgame.Application.Common;
 using Endgame.Domain.Access;
 using Endgame.Domain.Cascade;
+using Endgame.Domain.Platform;
 using Endgame.Domain.Tree;
 using Endgame.Infrastructure.Access;
 using Endgame.Infrastructure.Cascade;
@@ -10,6 +11,7 @@ using Endgame.Infrastructure.Credits;
 using Endgame.Infrastructure.Identity;
 using Endgame.Infrastructure.Persistence;
 using Endgame.Infrastructure.Persistence.Records;
+using Endgame.Infrastructure.Platform;
 using Endgame.Infrastructure.Tree;
 using Microsoft.AspNetCore.Identity;
 
@@ -35,7 +37,7 @@ internal static class TreeEndpoints
 {
     public static void MapTree(this RouteGroupBuilder api)
     {
-        api.MapGet("/tree", async (string? organisation, ClaimsPrincipal principal, AccessService access, ReadModels reads, CancellationToken ct) =>
+        api.MapGet("/tree", async (string? organisation, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, ReadModels reads, CancellationToken ct) =>
         {
             var me = principal.Id();
             var memberships = await access.MembershipsOfAsync(me, ct);
@@ -45,8 +47,20 @@ internal static class TreeEndpoints
                 return Results.Ok(reads.FirstRun());
             }
 
-            var chosen = (organisation is null ? memberships.FirstOrDefault() : memberships.FirstOrDefault(m => m.OrganisationSlug == organisation))
-                ?? throw EndgameProblem.NotFound($"The organisation '{organisation}'");
+            var chosen = organisation is null ? memberships.FirstOrDefault() : memberships.FirstOrDefault(m => m.OrganisationSlug == organisation);
+            if (chosen is null && organisation is not null && await access.IsOperatorAsync(me, ct)
+                && await scopes.FindAsync(Endgame.Domain.Tree.ScopePath.Parse(organisation), ct) is { Level: NodeLevel.Organisation } entered)
+            {
+                // God mode: an operator enters an organisation they hold no role in — as an Admin, and logged.
+                var entry = await access.OperatorEntryAsync(me, entered, ct);
+                return Results.Ok(await reads.TreeAsync(entered.OrganisationId, [entry!], ct));
+            }
+
+            if (chosen is null)
+            {
+                throw EndgameProblem.NotFound($"The organisation '{organisation}'");
+            }
+
             var grants = await access.GrantsInOrganisationAsync(me, chosen.OrganisationId, ct);
             return Results.Ok(await reads.TreeAsync(chosen.OrganisationId, grants, ct));
         })
@@ -123,13 +137,19 @@ internal static class TreeEndpoints
             return Results.Ok(await values.ResolveAsync(resolved, parsed, ct));
         })
         .WithName("ResolveCascade").WithSummary("The effective values of one kind at a scope, each with the level that set it.").Produces<IReadOnlyList<EffectiveValue>>();
-        cascade.MapPut("", async (CascadeSetRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, CascadeService values, CancellationToken ct) =>
+        cascade.MapPut("", async (CascadeSetRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, CascadeService values, EdgeNotifier edge, CancellationToken ct) =>
         {
             var parsed = Kind(request.Kind);
             var key = request.Key ?? "";
             var (resolved, _) = await access.RequireAsync(principal.Id(), request.Scope, CascadeService.RoleToSet(parsed, key), ct);
             var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
-            return Results.Ok(await values.SetAsync(resolved, parsed, key, request.Value, me.Id, access.IsOperator(me), ct));
+            var result = await values.SetAsync(resolved, parsed, key, request.Value, me.Id, access.IsOperator(me) ? Actor.Operator : Actor.Member, ct);
+            if (parsed == CascadeKind.Setting || parsed == CascadeKind.Budget)
+            {
+                edge.RoutesChanged();
+            }
+
+            return Results.Ok(result);
         })
         .WithName("SetCascadeValue").WithSummary("Sets a budget, rule set, context, setting or secret at a scope; it applies beneath unless narrowed.").Produces<EffectiveValue>();
         cascade.MapDelete("", async (string? scope, string? kind, string? key, ClaimsPrincipal principal, AccessService access, CascadeService values, CancellationToken ct) =>
@@ -171,7 +191,7 @@ internal static class TreeEndpoints
             return Results.Ok(await reads.CreditsAsync(resolved, ct));
         })
         .WithName("GetCredits").WithSummary("Balance, this month's spend, budgets down the cascade in tree order, estimate accuracy, what was not charged, overdraft and top-ups.").Produces<CreditsView>();
-        credits.MapPost("/top-ups", async (TopUpRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, ScopeResolver scopes, CreditLedger ledger, CancellationToken ct) =>
+        credits.MapPost("/top-ups", async (TopUpRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, ScopeResolver scopes, CreditLedger ledger, EdgeNotifier edge, CancellationToken ct) =>
         {
             var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
             if (!access.IsOperator(me))
@@ -186,6 +206,8 @@ internal static class TreeEndpoints
             }
 
             var entry = await ledger.TopUpAsync(organisation.OrganisationId, request.Credits, request.Note, me.Id, request.IdempotencyKey, ct);
+            // A top-up settles the debt first and restores paused apps at once (spec, Overdraft).
+            edge.RoutesChanged();
             return Results.Ok(new { entry.Id, entry.Amount, entry.CreatedAt, Organisation = organisation.Path.ToString() });
         })
         .WithName("TopUpCredits").WithSummary("Adds credits to an organisation (FrostAura operators only; logged for the Owner to read).");

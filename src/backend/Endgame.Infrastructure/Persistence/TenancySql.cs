@@ -87,4 +87,49 @@ public static class TenancySql
         sql.AppendLine("DROP FUNCTION IF EXISTS endgame_current_organisation();");
         return sql.ToString();
     }
+
+    /// <summary>
+    /// Row-level security, grants and the tenant policy for tables a later migration adds. The
+    /// migration passes its own literal list, so what an applied migration did never changes.
+    /// </summary>
+    public static string EnableFor(IEnumerable<string> tables)
+    {
+        var sql = new System.Text.StringBuilder();
+        foreach (var table in tables)
+        {
+            sql.AppendLine($"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO endgame_app, endgame_system;");
+            sql.AppendLine($"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;");
+            sql.AppendLine($"ALTER TABLE {table} FORCE ROW LEVEL SECURITY;");
+            sql.AppendLine($"CREATE POLICY {table}_tenant ON {table} USING (organisation_id = endgame_current_organisation()) WITH CHECK (organisation_id = endgame_current_organisation());");
+        }
+
+        return sql.ToString();
+    }
+
+    /// <summary>Makes tables a later migration adds append-only, as <see cref="AppendOnlyTables"/> are.</summary>
+    public static string AppendOnlyFor(IEnumerable<string> tables)
+    {
+        var sql = new System.Text.StringBuilder();
+        foreach (var table in tables)
+        {
+            sql.AppendLine($"REVOKE UPDATE, DELETE, TRUNCATE ON {table} FROM endgame_app, endgame_system;");
+            sql.AppendLine($"CREATE TRIGGER {table}_append_only BEFORE UPDATE OR DELETE OR TRUNCATE ON {table} FOR EACH STATEMENT EXECUTE FUNCTION endgame_refuse_change();");
+        }
+
+        return sql.ToString();
+    }
+
+    public static string DisableFor(IEnumerable<string> tables)
+    {
+        var sql = new System.Text.StringBuilder();
+        foreach (var table in tables)
+        {
+            sql.AppendLine($"DROP TRIGGER IF EXISTS {table}_append_only ON {table};");
+            sql.AppendLine($"DROP POLICY IF EXISTS {table}_tenant ON {table};");
+            sql.AppendLine($"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY;");
+            sql.AppendLine($"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY;");
+        }
+
+        return sql.ToString();
+    }
 }

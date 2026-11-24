@@ -66,4 +66,33 @@ public static class CascadeKeys
 
     /// <summary>Setting: minutes idle before an app sleeps.</summary>
     public const string SleepIdleMinutes = "sleep.idle_minutes";
+
+    /// <summary>
+    /// Setting, organisation level only: the organisation's own overdraft, tighter than (never deeper
+    /// than) the <see cref="OverdraftLimit"/> a FrostAura operator set on it.
+    /// </summary>
+    public const string OverdraftOwnLimit = "overdraft_own_limit";
+
+    /// <summary>Setting: who may open an app — <c>private</c>, <c>shared</c> or <c>public</c> (<see cref="Platform.AppAccess"/>).</summary>
+    public const string Access = "access";
+
+    /// <summary>Setting: the most credits an app's own model calls may spend in one calendar month.</summary>
+    public const string AppModelMonthlyCredits = "app_models.monthly_credits";
+}
+
+/// <summary>
+/// Secret names: <c>UPPER_SNAKE_CASE</c>, 2 to 128 characters (for example <c>STRIPE_API_KEY</c>) —
+/// the rule the app kit checks before it asks (PLATFORM-API §3.3).
+/// </summary>
+public static class SecretNames
+{
+    public const int MaxLength = 128;
+
+    public static bool IsValid(string? name) =>
+        name is { Length: >= 2 and <= MaxLength }
+        && name[0] is >= 'A' and <= 'Z'
+        && name.All(c => c is (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '_');
+
+    public static string Require(string? name) =>
+        IsValid(name) ? name! : throw new DomainException($"'{name}' is not a secret name: use UPPER_SNAKE_CASE, 2-{MaxLength} characters, starting with a letter (for example STRIPE_API_KEY).");
 }

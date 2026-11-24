@@ -69,8 +69,6 @@ namespace Endgame.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasAlternateKey("OrganisationId", "Id");
-
                     b.HasIndex("ProjectId", "Slug")
                         .IsUnique();
 
@@ -306,6 +304,448 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppEndUserPasskeyRecord", b =>
+                {
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<byte[]>("CredentialId")
+                        .HasMaxLength(1024)
+                        .HasColumnType("bytea")
+                        .HasColumnName("credential_id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<byte[]>("AttestationObject")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("attestation_object");
+
+                    b.Property<byte[]>("ClientDataJson")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("client_data_json");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EndUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("end_user_id");
+
+                    b.Property<bool>("IsBackedUp")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_backed_up");
+
+                    b.Property<bool>("IsBackupEligible")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_backup_eligible");
+
+                    b.Property<bool>("IsUserVerified")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_user_verified");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<byte[]>("PublicKey")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("public_key");
+
+                    b.Property<long>("SignCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sign_count");
+
+                    b.PrimitiveCollection<string[]>("Transports")
+                        .HasColumnType("text[]")
+                        .HasColumnName("transports");
+
+                    b.HasKey("OrganisationId", "CredentialId");
+
+                    b.HasIndex("OrganisationId", "AppId");
+
+                    b.HasIndex("OrganisationId", "EndUserId");
+
+                    b.ToTable("app_end_user_passkeys", (string)null);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppEndUserRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("email");
+
+                    b.Property<DateTimeOffset?>("LastSignInAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_sign_in_at");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "AppId", "Email")
+                        .IsUnique();
+
+                    b.ToTable("app_end_users", (string)null);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppHandoffRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("EndUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("end_user_id");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<string>("ReturnTo")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("return_to");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrganisationId", "AppId");
+
+                    b.HasIndex("OrganisationId", "EndUserId");
+
+                    b.ToTable("app_handoffs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_app_handoffs_subject", "(end_user_id IS NULL) <> (user_id IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppScheduleRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<string>("Cron")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("cron");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset?>("LastRunAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_run_at");
+
+                    b.Property<DateTimeOffset?>("LastScheduledFor")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_scheduled_for");
+
+                    b.Property<int?>("LastStatus")
+                        .HasColumnType("integer")
+                        .HasColumnName("last_status");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at");
+
+                    b.Property<string>("LeaseHolder")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("lease_holder");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset?>("NextRunAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_run_at");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("path");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("time_zone");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextRunAt");
+
+                    b.HasIndex("OrganisationId", "AppId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("app_schedules", (string)null);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppSessionRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("EndUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("end_user_id");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrganisationId", "AppId");
+
+                    b.HasIndex("OrganisationId", "EndUserId");
+
+                    b.ToTable("app_sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_app_sessions_subject", "(end_user_id IS NULL) <> (user_id IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppShareRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("InvitationCodeHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("invitation_code_hash");
+
+                    b.Property<DateTimeOffset?>("InvitationExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invitation_expires_at");
+
+                    b.Property<DateTimeOffset>("InvitedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invited_at");
+
+                    b.Property<Guid>("InvitedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invited_by");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "AppId", "Email")
+                        .IsUnique();
+
+                    b.ToTable("app_shares", (string)null);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppTokenRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<byte[]>("Salt")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("salt");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset?>("ValidUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("valid_until");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("OrganisationId", "AppId", "CreatedAt");
+
+                    b.ToTable("app_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppWebhookRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("path");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "AppId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("app_webhooks", (string)null);
                 });
 
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.ApprovalRecord", b =>
@@ -606,13 +1046,95 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_credit_entries_amount", "amount >= 0");
 
-                            t.HasCheckConstraint("ck_credit_entries_kind", "kind IN ('top_up', 'reservation', 'settlement', 'release')");
+                            t.HasCheckConstraint("ck_credit_entries_kind", "kind IN ('top_up', 'reservation', 'settlement', 'release', 'hosting')");
 
                             t.HasCheckConstraint("ck_credit_entries_path", "(app_id IS NULL OR project_id IS NOT NULL) AND (project_id IS NULL OR division_id IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_credit_entries_reservation", "(kind = 'reservation') = (expires_at IS NOT NULL) AND (kind IN ('settlement', 'release')) = (reservation_id IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_credit_entries_top_up", "kind <> 'top_up' OR (division_id IS NULL AND billable)");
+                        });
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmailMessageRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("HtmlBody")
+                        .HasColumnType("text")
+                        .HasColumnName("html_body");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.PrimitiveCollection<string[]>("Recipients")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("recipients");
+
+                    b.Property<string>("ReplyTo")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("reply_to");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("subject");
+
+                    b.Property<string>("TextBody")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("text_body");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "AppId");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("email_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_email_messages_status", "status IN ('queued', 'sending', 'sent', 'failed')");
                         });
                 });
 
@@ -703,6 +1225,83 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_employees_path", "(app_id IS NULL OR project_id IS NOT NULL) AND (project_id IS NULL OR division_id IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_employees_status", "status IN ('idle', 'working', 'paused', 'released')");
+                        });
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.HostingSampleRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<long>("AwakeSeconds")
+                        .HasColumnType("bigint")
+                        .HasColumnName("awake_seconds");
+
+                    b.Property<decimal>("CostUsd")
+                        .HasPrecision(20, 10)
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("cost_usd");
+
+                    b.Property<Guid>("CreditEntryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("credit_entry_id");
+
+                    b.Property<decimal>("Credits")
+                        .HasPrecision(20, 6)
+                        .HasColumnType("numeric(20,6)")
+                        .HasColumnName("credits");
+
+                    b.Property<long>("MemoryBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("memory_bytes");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<DateTimeOffset>("PeriodEnd")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("period_end");
+
+                    b.Property<DateTimeOffset>("PeriodStart")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("period_start");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<long>("Requests")
+                        .HasColumnType("bigint")
+                        .HasColumnName("requests");
+
+                    b.Property<string>("SampleId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("sample_id");
+
+                    b.Property<long>("StorageBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("storage_bytes");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "CreditEntryId");
+
+                    b.HasIndex("OrganisationId", "SampleId")
+                        .IsUnique();
+
+                    b.HasIndex("OrganisationId", "AppId", "PeriodEnd");
+
+                    b.ToTable("hosting_samples", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_hosting_samples_period", "period_end > period_start AND awake_seconds >= 0 AND memory_bytes >= 0 AND storage_bytes >= 0 AND requests >= 0");
                         });
                 });
 
@@ -1191,6 +1790,258 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.TelemetryEventRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<string>("PropertiesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("properties");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAt");
+
+                    b.HasIndex("OrganisationId", "AppId", "At");
+
+                    b.ToTable("telemetry_events", (string)null);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.TelemetryLogRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("body");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("category");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<int>("SeverityNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("severity_number");
+
+                    b.Property<string>("SeverityText")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("severity_text");
+
+                    b.Property<string>("SpanId")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("span_id");
+
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("trace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAt");
+
+                    b.HasIndex("OrganisationId", "AppId", "At");
+
+                    b.ToTable("telemetry_logs", (string)null);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.TelemetryMetricRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<long?>("Count")
+                        .HasColumnType("bigint")
+                        .HasColumnName("count");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<double?>("Sum")
+                        .HasColumnType("double precision")
+                        .HasColumnName("sum");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("unit");
+
+                    b.Property<double?>("Value")
+                        .HasColumnType("double precision")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAt");
+
+                    b.HasIndex("OrganisationId", "AppId", "Name", "At");
+
+                    b.ToTable("telemetry_metrics", (string)null);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.TelemetrySpanRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<double>("DurationMs")
+                        .HasColumnType("double precision")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("HttpMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("http_method");
+
+                    b.Property<string>("HttpRoute")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("http_route");
+
+                    b.Property<int?>("HttpStatus")
+                        .HasColumnType("integer")
+                        .HasColumnName("http_status");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<string>("ParentSpanId")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("parent_span_id");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("SpanId")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("span_id");
+
+                    b.Property<DateTimeOffset>("StartAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_at");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_code");
+
+                    b.Property<string>("TraceId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("trace_id");
+
+                    b.Property<string>("UrlPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("url_path");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAt");
+
+                    b.HasIndex("OrganisationId", "AppId", "Kind", "StartAt");
+
+                    b.ToTable("telemetry_spans", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -1323,6 +2174,115 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppEndUserPasskeyRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.AppEndUserRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "EndUserId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppEndUserRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppHandoffRecord", b =>
+                {
+                    b.HasOne("Endgame.Infrastructure.Identity.EndgameUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.AppEndUserRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "EndUserId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppScheduleRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppSessionRecord", b =>
+                {
+                    b.HasOne("Endgame.Infrastructure.Identity.EndgameUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.AppEndUserRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "EndUserId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppShareRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppTokenRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppWebhookRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.ApprovalRecord", b =>
                 {
                     b.HasOne("Endgame.Infrastructure.Persistence.Records.RunRecord", null)
@@ -1438,6 +2398,16 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmailMessageRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", b =>
                 {
                     b.HasOne("Endgame.Domain.Tree.Organisation", null)
@@ -1463,6 +2433,23 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OrganisationId", "ProjectId", "AppId")
                         .HasPrincipalKey("OrganisationId", "ProjectId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.HostingSampleRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.CreditEntryRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "CreditEntryId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.IdeaRecord", b =>
@@ -1656,6 +2643,46 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OrganisationId", "ProjectId", "AppId")
                         .HasPrincipalKey("OrganisationId", "ProjectId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.TelemetryEventRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.TelemetryLogRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.TelemetryMetricRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.TelemetrySpanRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>", b =>

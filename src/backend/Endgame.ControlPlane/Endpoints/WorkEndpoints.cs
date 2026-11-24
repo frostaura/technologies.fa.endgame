@@ -6,11 +6,13 @@ using Endgame.Application.Common;
 using Endgame.Application.Gateway;
 using Endgame.Domain.Access;
 using Endgame.Domain.Cascade;
+using Endgame.Domain.Platform;
 using Endgame.Domain.Runs;
 using Endgame.Domain.Tree;
 using Endgame.Infrastructure.Access;
 using Endgame.Infrastructure.Cascade;
 using Endgame.Infrastructure.Identity;
+using Endgame.Infrastructure.Platform;
 using Endgame.Infrastructure.Runs;
 using Endgame.Infrastructure.Tree;
 using Endgame.Infrastructure.Work;
@@ -31,7 +33,7 @@ public sealed record ControlRequest(string? Reason);
 public sealed record AnswerRequest(string? Decision, string? Note);
 
 /// <param name="Running">'sleep' or 'always-on'.</param>
-/// <param name="Access">'private' (the only access this version enforces).</param>
+/// <param name="Access">'private', 'shared' or 'public'. Setting it needs the Admin role; 'public' only ever from a person.</param>
 /// <param name="IdleMinutes">Optional: minutes idle before the app sleeps (1-1440).</param>
 public sealed record AppSettingsRequest(string? Running, string? Access, int? IdleMinutes);
 
@@ -161,7 +163,7 @@ internal static class WorkEndpoints
         })
         .WithName("GetApp").WithSummary("An app's health, running state, both addresses, cost against its cap and settings.").Produces<PublicAppView>();
         apps.MapPost("/{id:guid}/settings", async (Guid id, AppSettingsRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access,
-            ScopeResolver scopes, CascadeService cascade, ReadModels reads, CancellationToken ct) =>
+            ScopeResolver scopes, CascadeService cascade, ReadModels reads, EdgeNotifier edge, CancellationToken ct) =>
         {
             if (request.Running is null && request.Access is null && request.IdleMinutes is null)
             {
@@ -175,30 +177,36 @@ internal static class WorkEndpoints
                 "always-on" => "always_on",
                 _ => throw EndgameProblem.Invalid("running is 'sleep' or 'always-on'."),
             };
-            if (request.Access is not (null or "private"))
+            if (request.Access is not (null or AppAccess.Private or AppAccess.Shared or AppAccess.Public))
             {
-                // Shared and public apps need end-user sign-up and the edge's access checks (build plan, Phase 4).
-                // Recording a setting nothing enforces would tell the owner an app is public when it is not.
-                throw new EndgameProblem(422, "access_unavailable", "This access setting cannot be enforced yet",
-                    "Apps are private: only members with rights over an app can open it. Sharing and public apps are not enforced by this version, so they cannot be switched on.");
+                throw EndgameProblem.Invalid("access is 'private', 'shared' or 'public'.");
             }
 
             var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
-            await access.RequireAsync(principal.Id(), scope, MemberRole.Builder, ct);
+            // Running is a Builder's call; who may open the app is an Admin's (spec, roles).
+            await access.RequireAsync(principal.Id(), scope, request.Access is null ? MemberRole.Builder : MemberRole.Admin, ct);
             var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
+            // A person, signed in to the console: the only kind of actor that may make an app public.
+            var actor = access.IsOperator(me) ? Actor.Operator : Actor.Member;
             if (mode is not null)
             {
-                await cascade.SetAsync(scope, CascadeKind.Setting, CascadeKeys.SleepMode, JsonValue.Create(mode), me.Id, access.IsOperator(me), ct);
+                await cascade.SetAsync(scope, CascadeKind.Setting, CascadeKeys.SleepMode, JsonValue.Create(mode), me.Id, actor, ct);
             }
 
             if (request.IdleMinutes is { } minutes)
             {
-                await cascade.SetAsync(scope, CascadeKind.Setting, CascadeKeys.SleepIdleMinutes, JsonValue.Create(minutes), me.Id, access.IsOperator(me), ct);
+                await cascade.SetAsync(scope, CascadeKind.Setting, CascadeKeys.SleepIdleMinutes, JsonValue.Create(minutes), me.Id, actor, ct);
             }
 
+            if (request.Access is { } accessSetting)
+            {
+                await cascade.SetAsync(scope, CascadeKind.Setting, CascadeKeys.Access, JsonValue.Create(accessSetting), me.Id, actor, ct);
+            }
+
+            edge.RoutesChanged();
             return Results.Ok(await reads.AppAsync(scope, ct));
         })
-        .WithName("UpdateAppSettings").WithSummary("Changes how the app runs (sleeps when idle, or always on) on the app itself; it otherwise inherits down the cascade.").Produces<PublicAppView>();
+        .WithName("UpdateAppSettings").WithSummary("Changes how the app runs (sleeps when idle, or always on) and who may open it (private, shared, public) on the app itself; both otherwise inherit down the cascade.").Produces<PublicAppView>();
 
         var conversations = api.MapGroup("/conversations").WithTags("Conversation");
         conversations.MapPost("", async (ConversationRequest request, ClaimsPrincipal principal, AccessService access, ConversationService service, ReadModels reads, CancellationToken ct) =>

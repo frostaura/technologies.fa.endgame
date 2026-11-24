@@ -5,10 +5,12 @@ using Endgame.Application.Common;
 using Endgame.Domain;
 using Endgame.Domain.Access;
 using Endgame.Domain.Cascade;
+using Endgame.Domain.Platform;
 using Endgame.Domain.Tree;
 using Endgame.Infrastructure.Persistence;
 using Endgame.Infrastructure.Persistence.Records;
 using Endgame.Infrastructure.Tree;
+using Endgame.Infrastructure.Vault;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,9 +24,10 @@ public sealed record EffectiveValue(string Kind, string Key, JsonNode? Value, st
 /// <see cref="CascadeResolver"/>. Permissions are read from role grants; the other five kinds from
 /// <c>cascade_entries</c>. Nothing else in the control plane implements inheritance.
 /// </summary>
-public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider protection, TimeProvider clock)
+public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider protection, EnvelopeVault vault, TimeProvider clock)
 {
-    private const string VaultPurpose = "Endgame.Vault.v1";
+    /// <summary>The first control-plane pass sealed secrets with the data-protection key ring; those still open.</summary>
+    private const string LegacyVaultPurpose = "Endgame.Vault.v1";
 
     public async Task<IReadOnlyList<CascadeEntry>> ChainEntriesAsync(ResolvedScope scope, CascadeKind? kind, CancellationToken cancellationToken)
     {
@@ -93,16 +96,17 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
     {
         CascadeKind.Context => MemberRole.Builder,
         CascadeKind.Setting when key.StartsWith("sleep.", StringComparison.Ordinal) => MemberRole.Builder,
+        CascadeKind.Setting when key == CascadeKeys.OverdraftOwnLimit => MemberRole.Owner,
         _ => MemberRole.Admin,
     };
 
     /// <summary>Sets one value at the scope's own node, replacing what was set there before.</summary>
-    public async Task<EffectiveValue> SetAsync(ResolvedScope scope, CascadeKind kind, string key, JsonNode? value, Guid setBy, bool byOperator, CancellationToken cancellationToken)
+    public async Task<EffectiveValue> SetAsync(ResolvedScope scope, CascadeKind kind, string key, JsonNode? value, Guid setBy, Actor actor, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);
         try
         {
-            CascadeKinds.RequireKey(key);
+            _ = kind == CascadeKind.Secret ? SecretNames.Require(key) : CascadeKinds.RequireKey(key);
         }
         catch (DomainException ex)
         {
@@ -123,13 +127,18 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
                 throw EndgameProblem.Invalid("A secret's value is a non-empty string.");
             }
 
-            protectedValue = protection.CreateProtector(VaultPurpose).Protect(v.GetValue<string>());
+            if (v.GetValue<string>().Length > MaxSecretLength)
+            {
+                throw EndgameProblem.Invalid($"A secret's value is at most {MaxSecretLength} characters.");
+            }
+
+            protectedValue = vault.Seal(v.GetValue<string>(), SecretBinding(scope.OrganisationId, scope.NodeId, key));
             valueJson = """{"set":true}""";
         }
         else
         {
             valueJson = (value ?? JsonValue.Create((string?)null))?.ToJsonString() ?? "null";
-            await ValidateWellKnownAsync(scope, kind, key, value, byOperator, cancellationToken);
+            await ValidateWellKnownAsync(scope, kind, key, value, actor, cancellationToken);
         }
 
         var wire = kind.ToWire();
@@ -170,29 +179,47 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
         return removed > 0;
     }
 
-    /// <summary>The numbers the control plane itself reads, and the overdraft rule: never deeper than what is inherited.</summary>
-    private async Task ValidateWellKnownAsync(ResolvedScope scope, CascadeKind kind, string key, JsonNode? value, bool byOperator, CancellationToken cancellationToken)
+    /// <summary>The numbers the control plane itself reads, the overdraft rule (never deeper than what is inherited) and the access rule.</summary>
+    private async Task ValidateWellKnownAsync(ResolvedScope scope, CascadeKind kind, string key, JsonNode? value, Actor actor, CancellationToken cancellationToken)
     {
-        if ((kind == CascadeKind.Budget && key == CascadeKeys.MonthlyCredits) || (kind == CascadeKind.Setting && key == CascadeKeys.OverdraftLimit))
+        var isOverdraft = kind == CascadeKind.Setting && key is CascadeKeys.OverdraftLimit or CascadeKeys.OverdraftOwnLimit;
+        var isCreditNumber = (kind == CascadeKind.Budget && key == CascadeKeys.MonthlyCredits) || (kind == CascadeKind.Setting && key == CascadeKeys.AppModelMonthlyCredits);
+        if (isOverdraft || isCreditNumber)
         {
             var number = NumberOf(value) ?? throw EndgameProblem.Invalid($"'{key}' is a number of credits.");
             if (number < 0)
             {
                 throw EndgameProblem.Invalid($"'{key}' cannot be negative.");
             }
+        }
 
-            if (key == CascadeKeys.OverdraftLimit)
+        if (isOverdraft)
+        {
+            var number = NumberOf(value)!.Value;
+            var chain = await ChainEntriesAsync(scope, CascadeKind.Setting, cancellationToken);
+            if (key == CascadeKeys.OverdraftLimit && scope.Level == NodeLevel.Organisation)
             {
-                if (scope.Level == NodeLevel.Organisation && !byOperator)
+                if (actor != Actor.Operator)
                 {
-                    throw EndgameProblem.Forbidden("An organisation's deepest overdraft is set by a FrostAura operator. Set a tighter one on a division, project or app.");
+                    throw EndgameProblem.Forbidden("An organisation's deepest overdraft is set by a FrostAura operator. Set a tighter one of your own (overdraft_own_limit), or on a division, project or app.");
+                }
+            }
+            else if (key == CascadeKeys.OverdraftOwnLimit)
+            {
+                if (scope.Level != NodeLevel.Organisation)
+                {
+                    throw EndgameProblem.Invalid("overdraft_own_limit is the organisation's own limit; narrow a division, project or app with overdraft_limit.");
                 }
 
-                var inherited = (await ChainEntriesAsync(scope, CascadeKind.Setting, cancellationToken))
-                    .Where(e => e.Key == CascadeKeys.OverdraftLimit && e.Level < scope.Level)
-                    .Select(e => NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m)
-                    .DefaultIfEmpty(scope.Level == NodeLevel.Organisation ? decimal.MaxValue : 0m)
-                    .Min();
+                var operatorMax = OperatorOverdraft(chain);
+                if (number > operatorMax)
+                {
+                    throw EndgameProblem.Invalid($"The organisation's own overdraft may be tighter than the {operatorMax.ToString(CultureInfo.InvariantCulture)} credits FrostAura set, never deeper.");
+                }
+            }
+            else
+            {
+                var inherited = EffectiveOverdraft(chain.Where(e => e.Level < scope.Level));
                 if (number > inherited)
                 {
                     throw EndgameProblem.Invalid($"An overdraft here may be tighter than the {inherited.ToString(CultureInfo.InvariantCulture)} credits inherited, never deeper.");
@@ -209,7 +236,74 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
         {
             throw EndgameProblem.Invalid("sleep.idle_minutes is a whole number from 1 to 1440.");
         }
+
+        if (kind == CascadeKind.Setting && key == CascadeKeys.Access)
+        {
+            var access = value is JsonValue a && a.GetValueKind() == JsonValueKind.String ? a.GetValue<string>() : null;
+            if (access is null || !AppAccess.All.Contains(access))
+            {
+                throw EndgameProblem.Invalid("access is 'private', 'shared' or 'public'.");
+            }
+
+            if (access == AppAccess.Public && !actor.IsHuman())
+            {
+                // CLAUDE.md rule 10: going public is a human act. No agent, and no service, may do it.
+                throw new EndgameProblem(403, "human_only", "Only a person can make an app public",
+                    "Making an app public is a human act; an agent or a service can never set it.");
+            }
+        }
     }
+
+    /// <summary>The deepest overdraft a FrostAura operator allows the organisation: zero when none was set.</summary>
+    public static decimal OperatorOverdraft(IEnumerable<CascadeEntry> chainSettings) =>
+        chainSettings.Where(e => e.Key == CascadeKeys.OverdraftLimit && e.Level == NodeLevel.Organisation)
+            .Select(e => NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m)
+            .DefaultIfEmpty(0m)
+            .Min();
+
+    /// <summary>
+    /// How far below zero the organisation's balance may run for work at a scope: the operator's
+    /// maximum (zero when unset), narrowed by the organisation's own limit and by any overdraft set
+    /// lower on the chain. The tightest wins; nothing can make it deeper.
+    /// </summary>
+    public static decimal EffectiveOverdraft(IEnumerable<CascadeEntry> chainSettings)
+    {
+        var list = chainSettings.ToList();
+        var narrower = list
+            .Where(e => (e.Key == CascadeKeys.OverdraftOwnLimit && e.Level == NodeLevel.Organisation) || (e.Key == CascadeKeys.OverdraftLimit && e.Level > NodeLevel.Organisation))
+            .Select(e => NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m);
+        return narrower.Prepend(OperatorOverdraft(list)).Min();
+    }
+
+    /// <summary>
+    /// A secret's value, resolved through the cascade from <paramref name="scope"/> upwards: the
+    /// deepest level that sets it wins. Null when no level on the chain sets it.
+    /// </summary>
+    public async Task<(string Value, string SetAtPath)?> RevealSecretAsync(ResolvedScope scope, string name, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var rows = await db.CascadeEntries.AsNoTracking()
+            .Where(e => e.OrganisationId == scope.OrganisationId && e.Kind == "secret" && e.Key == name)
+            .Where(e => e.DivisionId == null || e.DivisionId == scope.DivisionId)
+            .Where(e => e.ProjectId == null || e.ProjectId == scope.ProjectId)
+            .Where(e => e.AppId == null || e.AppId == scope.AppId)
+            .ToListAsync(cancellationToken);
+        var row = rows.OrderByDescending(r => r.Level()).FirstOrDefault();
+        if (row?.ProtectedValue is not { } sealedValue)
+        {
+            return null;
+        }
+
+        var value = EnvelopeVault.IsSealed(sealedValue)
+            ? vault.Open(sealedValue, SecretBinding(row.OrganisationId, row.NodeId(), row.Key))
+            : protection.CreateProtector(LegacyVaultPurpose).Unprotect(sealedValue);
+        return (value, scope.PathAt(row.Level()));
+    }
+
+    /// <summary>What a sealed secret is bound to: its organisation, its node and its name.</summary>
+    private static string SecretBinding(Guid organisationId, Guid nodeId, string name) => $"secret:{organisationId:N}:{nodeId:N}:{name}";
+
+    public const int MaxSecretLength = 16_384;
 
     public static decimal? NumberOf(JsonNode? value) =>
         value is JsonValue v && v.GetValueKind() == JsonValueKind.Number && v.TryGetValue<decimal>(out var d) ? d : null;

@@ -30,7 +30,7 @@ public sealed class CascadeCreditsAndAppsTests(PostgresServer postgres) : IAsync
         await owner.SetAsync("frostaura", "context", "house-style", "Plain English.");
         await owner.SetAsync("frostaura", "rule_set", "build", new { signOff = true });
         await owner.SetAsync("frostaura/technologies/squash", "rule_set", "build", new { signOff = false });
-        await owner.SetAsync("frostaura/technologies", "secret", "smtp-password", "hunter2");
+        await owner.SetAsync("frostaura/technologies", "secret", "SMTP_PASSWORD", "hunter2");
 
         var rules = (await ControlPlaneApp.Ok(owner.GetAsync("/api/cascade?scope=frostaura/technologies/squash/bookings&kind=rule_set"))).AsArray();
         var build = Assert.Single(rules)!;
@@ -43,7 +43,7 @@ public sealed class CascadeCreditsAndAppsTests(PostgresServer postgres) : IAsync
         Assert.Equal(4, context["levels"]!.AsArray().Count);
         Assert.Equal("organisation", context["context"]![0]!["setAtLevel"]!.GetValue<string>());
         var secret = Assert.Single(context["secrets"]!.AsArray())!;
-        Assert.Equal("smtp-password", secret["key"]!.GetValue<string>());
+        Assert.Equal("SMTP_PASSWORD", secret["key"]!.GetValue<string>());
         Assert.DoesNotContain("hunter2", context.ToJsonString(), StringComparison.Ordinal);
         Assert.Equal("owner", context["permissions"]![0]!["value"]!.GetValue<string>());
 
@@ -111,8 +111,8 @@ public sealed class CascadeCreditsAndAppsTests(PostgresServer postgres) : IAsync
         Assert.Equal("always-on", alwaysOn["running"]!.GetValue<string>());
         Assert.Equal("always-on", alwaysOn["settings"]!["running"]!.GetValue<string>());
         Assert.Equal("healthy", alwaysOn["health"]!["state"]!.GetValue<string>());
-        var unavailable = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync($"/api/apps/{appId}/settings", new { access = "public" }), (HttpStatusCode)422);
-        Assert.Equal("access_unavailable", unavailable["code"]!.GetValue<string>());
+        var shared = await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/apps/{appId}/settings", new { access = "shared" }));
+        Assert.Equal("shared", shared["settings"]!["access"]!.GetValue<string>());
 
         var routes = await ControlPlaneApp.Ok(service.GetAsync("/internal/routes"));
         var route = Assert.Single(routes["routes"]!.AsArray())!;
@@ -122,6 +122,7 @@ public sealed class CascadeCreditsAndAppsTests(PostgresServer postgres) : IAsync
         Assert.Equal("always_on", route["sleep"]!["mode"]!.GetValue<string>());
         Assert.Equal("frostaura/technologies/squash/bookings", route["sleep"]!["modeSetAt"]!.GetValue<string>());
         Assert.Equal("abc123", route["version"]!.GetValue<string>());
+        Assert.Equal("shared", route["access"]!.GetValue<string>());
 
         await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/state", new { status = "sleeping" }));
         Assert.True((await ControlPlaneApp.Ok(service.GetAsync("/internal/routes")))["routes"]![0]!["sleeping"]!.GetValue<bool>());

@@ -177,13 +177,15 @@ internal static class AuthEndpoints
         .WithSummary("Finishes signing in with a passkey.")
         .Produces<MeView>();
 
-        auth.MapPost("/logout", async (SignInManager<EndgameUser> signIn) =>
+        auth.MapPost("/logout", async (HttpContext http, SignInManager<EndgameUser> signIn, Endgame.Infrastructure.Platform.AppIdentityService apps, CancellationToken ct) =>
         {
             await signIn.SignOutAsync();
+            // Edge's sign-out sends the whole cookie header here: every app session it carries ends too.
+            await apps.SignOutEverywhereAsync(http, ct);
             return Results.NoContent();
         })
         .WithName("Logout")
-        .WithSummary("Ends the session.");
+        .WithSummary("Ends the session, and every app end-user session the browser carries.");
 
         api.MapGet("/me", async (HttpContext http, UserManager<EndgameUser> users, AccessService access, CancellationToken ct) =>
             await users.GetUserAsync(http.User) is { } user

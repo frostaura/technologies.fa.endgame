@@ -177,22 +177,50 @@ public sealed class WebSearchOptions
     public int PromptTokensPerResult { get; set; } = 1500;
 }
 
-/// <summary>How credits relate to money: priced at what the work costs plus one fixed margin.</summary>
+/// <summary>
+/// How credits relate to money: priced at what the work costs (models and hosting) times one fixed
+/// margin factor (spec, <i>What they pay for</i>). This class is the one place cost becomes credits.
+/// </summary>
 public sealed class CreditOptions
 {
     public const string SectionName = "Credits";
 
     public decimal CreditsPerUsd { get; set; } = 100m;
 
-    /// <summary>The fixed margin over cost, as a fraction (0.2 is 20 %).</summary>
-    public decimal Margin { get; set; }
+    /// <summary>
+    /// The margin as a factor on cost: 1.0 is no margin, 1.2 is twenty per cent. Configured as
+    /// <c>Credits__Margin</c>. The default of 1.0 stands until the founder sets the margin (owed).
+    /// </summary>
+    public decimal Margin { get; set; } = 1m;
 
     /// <summary>How long a reservation for a call without a run stays held.</summary>
     public int ReservationMinutes { get; set; } = 15;
 
-    /// <summary>A settlement: what the work cost, in credits, to the micro-credit.</summary>
-    public decimal ToCredits(decimal usd) => decimal.Round(usd * CreditsPerUsd * (1m + Margin), 6, MidpointRounding.AwayFromZero);
+    /// <summary>A settlement or a hosting charge: what the work cost, in credits, to the micro-credit.</summary>
+    public decimal ToCredits(decimal usd) => decimal.Round(usd * CreditsPerUsd * Margin, 6, MidpointRounding.AwayFromZero);
 
     /// <summary>A reservation: rounded up, so it is never below the cost it covers.</summary>
-    public decimal ToCreditsCeiling(decimal usd) => Math.Ceiling(usd * CreditsPerUsd * (1m + Margin) * 1_000_000m) / 1_000_000m;
+    public decimal ToCreditsCeiling(decimal usd) => Math.Ceiling(usd * CreditsPerUsd * Margin * 1_000_000m) / 1_000_000m;
+
+    /// <summary>Faults that stop the host at start: a price that is not positive, or a margin below cost.</summary>
+    public IReadOnlyList<string> Validate()
+    {
+        var faults = new List<string>();
+        if (CreditsPerUsd <= 0)
+        {
+            faults.Add("Credits:CreditsPerUsd must be positive.");
+        }
+
+        if (Margin < 1m)
+        {
+            faults.Add("Credits:Margin is a factor on cost; 1.0 is no margin, and below 1.0 would sell work for less than it costs.");
+        }
+
+        if (ReservationMinutes <= 0)
+        {
+            faults.Add("Credits:ReservationMinutes must be positive.");
+        }
+
+        return faults;
+    }
 }
