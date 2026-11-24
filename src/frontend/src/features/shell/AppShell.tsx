@@ -29,19 +29,23 @@ export function AppShell({ crumbs, aside, children }: { crumbs: Crumb[]; aside?:
         Skip to the content
       </a>
       <header className="border-b bg-surface">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3 sm:px-8">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
-            <Link href={paths.home()} className="flex items-center gap-2.5 rounded-xs text-ink">
+        {/*
+          Desktop: one row. Phone: two — the mark, where you are and sign-out; then the mode toggle
+          and the balance. Where you are keeps to one line there, showing its last two steps.
+        */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:gap-x-4 sm:gap-y-3 sm:px-8">
+          <div className="flex min-w-0 flex-1 items-center gap-x-3 sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
+            <Link href={paths.home()} aria-label="Endgame home" className="flex shrink-0 items-center gap-2.5 rounded-xs text-ink">
               <img src="/brand/endgame-mark.svg" alt="" width={30} height={30} className="size-8" />
-              <span className="font-display text-lg font-bold tracking-tight">Endgame</span>
+              <span className={cn("font-display text-lg font-bold tracking-tight", crumbs.length > 0 && "hidden sm:inline")}>Endgame</span>
             </Link>
             {crumbs.length > 0 && <Breadcrumb crumbs={crumbs} />}
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="order-last flex w-full items-center justify-between gap-3 sm:order-none sm:w-auto sm:justify-end">
             <ModeToggle />
             {org && <CreditsPill scope={org.slug} />}
-            {me && <SignOut />}
           </div>
+          {me && <SignOut />}
         </div>
       </header>
       <div className="flex flex-1 flex-col lg:flex-row">
@@ -57,20 +61,30 @@ export function AppShell({ crumbs, aside, children }: { crumbs: Crumb[]; aside?:
 }
 
 export function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
+  // On a phone only the last two steps show, after an ellipsis, so the header stays two rows.
+  const firstShownOnPhone = Math.max(0, crumbs.length - 2);
   return (
     <nav aria-label="Where you are" className="min-w-0">
-      <ol className="flex flex-wrap items-center gap-2 text-ink-muted">
+      <ol className="flex min-w-0 items-center gap-2 text-ink-muted sm:flex-wrap">
         {crumbs.map((crumb, i) => {
           const last = i === crumbs.length - 1;
           return (
-            <li key={`${i}-${crumb.label}`} className="flex min-w-0 items-center gap-2">
-              {i > 0 && <span aria-hidden>/</span>}
+            <li
+              key={`${i}-${crumb.label}`}
+              className={cn(
+                "min-w-0 items-center gap-2",
+                i < firstShownOnPhone ? "hidden sm:flex" : "flex",
+                // The steps hidden on a phone leave an ellipsis, drawn by CSS with empty alternative text so it is never read out.
+                i === firstShownOnPhone && i > 0 && "before:shrink-0 before:[content:'…_/'_/_''] sm:before:[content:none]",
+              )}
+            >
+              {i > 0 && <span aria-hidden className={cn(i === firstShownOnPhone && "hidden sm:inline")}>/</span>}
               {crumb.onSelect && !last ? (
-                <button type="button" onClick={crumb.onSelect} className="min-h-touch rounded-xs text-primary-link hover:text-primary-hover">
+                <button type="button" onClick={crumb.onSelect} className="min-h-touch min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover">
                   {crumb.label}
                 </button>
               ) : crumb.href && !last ? (
-                <Link href={crumb.href} className="rounded-xs text-primary-link hover:text-primary-hover">
+                <Link href={crumb.href} className="min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover">
                   {crumb.label}
                 </Link>
               ) : (
@@ -95,7 +109,7 @@ function ModeToggle() {
       aria-pressed={mode === value}
       onClick={() => dispatch(modeSet(value))}
       className={cn(
-        "min-h-touch rounded-xs px-4 text-sm transition-colors",
+        "min-h-touch rounded-xs px-2.5 text-sm transition-colors sm:px-4",
         mode === value ? "bg-surface font-semibold text-ink shadow-toggle" : "bg-transparent text-ink-muted hover:text-ink",
       )}
     >
@@ -107,9 +121,9 @@ function ModeToggle() {
       {option("normal", "Normal")}
       {option("technical", "Technical")}
       {mode === "technical" && (
-        <Link href={paths.system()} className="ml-1 flex min-h-touch items-center gap-1.5 rounded-xs px-3 text-sm text-ink-muted hover:text-ink">
+        <Link href={paths.system()} className="ml-1 flex min-h-touch min-w-touch items-center justify-center gap-1.5 rounded-xs px-2 text-sm text-ink-muted hover:text-ink sm:px-3">
           <Icon name="health" className="size-4" />
-          System
+          <span className="sr-only sm:not-sr-only">System</span>
         </Link>
       )}
     </div>
@@ -118,14 +132,16 @@ function ModeToggle() {
 
 function CreditsPill({ scope }: { scope: string }) {
   const query = useGetCreditsQuery(scope, { pollingInterval: 30_000, skipPollingIfUnfocused: true });
-  const base = "flex min-h-touch items-center gap-2.5 rounded-sm px-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-press motion-reduce:transition-none motion-reduce:hover:translate-y-0";
+  const base = "flex min-h-touch items-center gap-2 rounded-sm px-3 transition sm:gap-2.5 sm:px-4 duration-200 hover:-translate-y-0.5 hover:shadow-press motion-reduce:transition-none motion-reduce:hover:translate-y-0";
   if (query.data) {
     const low = query.data.balance <= 0;
     return (
       <Link href={paths.credits()} className={cn(base, low ? "bg-attention-tint text-ink" : "bg-success-tint text-ink")}>
         <span aria-hidden className={cn("size-2 rounded-full", low ? "bg-attention-text" : "animate-pulse bg-success motion-reduce:animate-none")} />
         <span className="font-semibold">{formatNumber(query.data.balance)}</span>
-        <span className={low ? "text-attention-text" : "text-success-text"}>credits left</span>
+        <span className={low ? "text-attention-text" : "text-success-text"}>
+          credits<span className="sr-only sm:not-sr-only"> left</span>
+        </span>
       </Link>
     );
   }
@@ -137,7 +153,7 @@ function CreditsPill({ scope }: { scope: string }) {
     );
   }
   return (
-    <span role="status" aria-busy="true" className={cn(base, "w-40 animate-shimmer bg-shimmer text-ink-muted motion-reduce:animate-none")}>
+    <span role="status" aria-busy="true" className={cn(base, "w-32 animate-shimmer sm:w-40 bg-shimmer text-ink-muted motion-reduce:animate-none")}>
       <span className="sr-only">Loading the balance</span>
     </span>
   );

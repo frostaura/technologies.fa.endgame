@@ -13,6 +13,8 @@ namespace Endgame.Edge.Routing;
 /// <param name="Host">The organisation subdomain.</param>
 /// <param name="HostPrefix">The prefix on that subdomain, <c>/division/project/app</c>.</param>
 /// <param name="IdleAfter">How long with no request before the app sleeps; null when always on.</param>
+/// <param name="PausedReason">Why the app is paused (<see cref="PausedReasons"/>), when <paramref name="Availability"/> is paused.</param>
+/// <param name="Hooks">The declared webhook names: only <c>POST hooks/&lt;name&gt;</c> for these skips the access check.</param>
 public sealed record EdgeApp(
     Guid AppId,
     Guid OrganisationId,
@@ -23,7 +25,13 @@ public sealed record EdgeApp(
     string Target,
     string Access,
     TimeSpan? IdleAfter,
-    string Availability);
+    string Availability,
+    string? PausedReason = null,
+    IReadOnlySet<string>? Hooks = null)
+{
+    /// <summary>True when <paramref name="name"/> is one of the app's declared webhooks.</summary>
+    public bool DeclaresHook(string name) => Hooks is { } hooks && hooks.Contains(name);
+}
 
 /// <summary>
 /// One immutable reading of the routing table, validated: every app the edge will route, indexed
@@ -137,6 +145,7 @@ public sealed partial class RouteSnapshot
             return $"the target '{route.Target}' is not an http origin";
         }
 
+        // Absent means private: the edge never opens an app it was not told it may.
         var access = route.Access ?? AppAccess.Private;
         if (access is not (AppAccess.Private or AppAccess.Shared or AppAccess.Public))
         {
@@ -154,10 +163,15 @@ public sealed partial class RouteSnapshot
             return "its sleep setting is not known";
         }
 
+        // A webhook name that is not a slug opens nothing; the app itself is still routed.
+        var hooks = (route.Hooks ?? []).Where(h => h is not null && Slug().IsMatch(h)).ToFrozenSet(StringComparer.Ordinal);
+
         var availability = route.Paused ? AppAvailability.Paused
             : route.Version is null ? AppAvailability.Unpublished
             : AppAvailability.Available;
-        app = new EdgeApp(route.AppId, route.OrganisationId, route.Scope!, pathPrefix, route.Host.ToLowerInvariant(), hostPrefix, route.Target, access, idle, availability);
+        var pausedReason = route.Paused ? route.PausedReason ?? PausedReasons.OverdraftLimit : null;
+        app = new EdgeApp(route.AppId, route.OrganisationId, route.Scope!, pathPrefix, route.Host.ToLowerInvariant(), hostPrefix, route.Target, access, idle, availability,
+            pausedReason, hooks);
         return null;
     }
 

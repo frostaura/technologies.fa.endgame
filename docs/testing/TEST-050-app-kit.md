@@ -25,7 +25,8 @@
 | Unit (web SDK, 54) | `src/appkit/sdk-web/src/**/*.test.ts(x)` | `api()`/errors, router base, sign-in URLs, hooks' three states, the ESLint rule (RuleTester), token layer |
 | Template (.NET, 10) | `src/appkit/template/api.tests` | Notes API end to end; pages under a prefix; health; OpenAPI ids |
 | Template (web, 13) | `src/appkit/template/web/src/**/*.test.ts(x)` | 8 — each page's states; the lint rule is wired into the app's config |
-| Browser proof (10) | `src/appkit/proof` (`make -C src/appkit proof`) | 1 and 7 on the real image, desktop and phone, through the dev edge |
+| Browser proof (10) | `src/appkit/proof` (`make -C src/appkit proof`) | 1 and 7 on the real image, desktop and phone, through the dev edge, at four-segment addresses (`/acme/labs/demo/notes/`, `acme.localhost/labs/demo/notes/`) |
+| Browser proof, real Edge (8 + 1 skipped) | `src/appkit/proof/edge.sh` (run by `make e2e-stack`) | 1 on an app Dock built from the untouched template, through the real stack's Edge: the edge's own sign-in page with the development sign-in, and on the subdomain the hand-off. 7 is the dev platform's state view, so it is skipped there; `TEST-090` checks telemetry in the real control plane. |
 
 ## Fixture variation
 

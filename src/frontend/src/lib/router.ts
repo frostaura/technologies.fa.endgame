@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * The console's router: the History API and a pattern matcher, nothing else. Seven screens do
+ * The console's router: the History API and a pattern matcher, nothing else. Nine screens do
  * not need a routing library, and every URL stays a real, shareable address.
  */
 
@@ -42,6 +42,8 @@ export type Route =
   | { name: "idea"; id: string }
   | { name: "app"; id: string }
   | { name: "credits" }
+  | { name: "secrets" }
+  | { name: "operator-access" }
   | { name: "system" }
   | { name: "not-found" };
 
@@ -54,6 +56,8 @@ const table: [RegExp, (m: RegExpMatchArray) => Route][] = [
   [new RegExp(`^/ideas/${id}/?$`), (m) => ({ name: "idea", id: m[1] ?? "" })],
   [new RegExp(`^/apps/${id}/?$`), (m) => ({ name: "app", id: m[1] ?? "" })],
   [/^\/credits\/?$/, () => ({ name: "credits" })],
+  [/^\/secrets\/?$/, () => ({ name: "secrets" })],
+  [/^\/operator-access\/?$/, () => ({ name: "operator-access" })],
   [/^\/system\/?$/, () => ({ name: "system" })],
 ];
 
@@ -73,5 +77,8 @@ export const paths = {
   idea: (ideaId: string) => `/ideas/${encodeURIComponent(ideaId)}`,
   app: (appId: string) => `/apps/${encodeURIComponent(appId)}`,
   credits: () => "/credits",
+  /** The secrets that apply at a scope (a path of slugs). */
+  secrets: (scope: string) => `/secrets?scope=${encodeURIComponent(scope)}`,
+  operatorAccess: () => "/operator-access",
   system: () => "/system",
 };

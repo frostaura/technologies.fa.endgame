@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectNoSidewaysScroll, mockRequests, useScenario } from "./support.ts";
+import { expectNoSidewaysScroll, isPhone, mockRequests, useScenario } from "./support.ts";
 
 /**
  * The console's main flows, end to end in a real browser, against the TEST-ONLY mock control
@@ -65,6 +65,58 @@ test.describe("home — the living org chart", () => {
     await chart.getByRole("button", { name: /Ada · Product researcher/ }).click();
     await expect(page.getByRole("heading", { name: "Talking to Ada" })).toBeVisible();
     await expectNoSidewaysScroll(page);
+  });
+
+  test("the conversation survives a reload: earlier turns are read back, new ones appended once", async ({ page }) => {
+    await useScenario("populated");
+    await page.goto("/");
+    const log = page.getByRole("log", { name: "Conversation with Northwind" });
+    await expect(log.getByText("Is anything over budget?")).toBeVisible();
+    await expect(log.getByText("Nothing is over budget. Booking desk is at 310 of its 500 credit cap.")).toBeVisible();
+
+    await page.getByLabel("Message Northwind").fill("Anything to approve?");
+    await page.getByRole("button", { name: "Send" }).click();
+    const reply = "About “Anything to approve?”: one verdict is waiting and one approval.";
+    await expect(log.getByText(reply)).toBeVisible();
+    // The owner's own message is in the run's log too; it is drawn once, as theirs.
+    await expect(log.getByText("Anything to approve?", { exact: true })).toHaveCount(1);
+
+    await page.reload();
+    await expect(log.getByText(reply)).toBeVisible();
+    await expect(log.getByText("Anything to approve?", { exact: true })).toHaveCount(1);
+    const texts = await log.locator("p").allTextContents();
+    expect(texts.indexOf("Is anything over budget?")).toBeLessThan(texts.indexOf("Anything to approve?"));
+    expect((await mockRequests()).some((r) => r.method === "GET" && r.path === "/api/conversations?scope=northwind")).toBe(true);
+  });
+
+  test("the header is at most two rows, and keeps the mode, the balance and sign-out", async ({ page }) => {
+    await useScenario("populated");
+    await page.goto("/apps/app1");
+    await expect(page.getByRole("heading", { name: "Booking desk" })).toBeVisible();
+    const phone = isPhone(page);
+    // The narrowest phone in common use as well as the project's own.
+    for (const [mode, width] of phone ? ([["Normal", 0], ["Technical", 0], ["Normal", 375], ["Technical", 375]] as const) : ([["Normal", 0], ["Technical", 0]] as const)) {
+      if (width) await page.setViewportSize({ width, height: 812 });
+      await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: mode }).click();
+      const banner = page.getByRole("banner");
+      await expect(banner.getByRole("group", { name: "Mode" })).toBeVisible();
+      await expect(banner.getByRole("link", { name: /credits left/ })).toBeVisible();
+      await expect(banner.getByRole("button", { name: "Sign out" })).toBeVisible();
+      // Rows of the header's flex line: a child starts a new row when it sits wholly below the last one.
+      const rows = await banner.evaluate((el) => {
+        const boxes = [...(el.firstElementChild as HTMLElement).children].map((c) => c.getBoundingClientRect()).filter((b) => b.height > 0).sort((a, b) => a.top - b.top);
+        let count = 0;
+        let bottom = -Infinity;
+        for (const b of boxes) {
+          if (b.top >= bottom - 1) count += 1;
+          bottom = Math.max(b.top >= bottom - 1 ? b.bottom : bottom, b.bottom);
+        }
+        return count;
+      });
+      expect(rows, `${mode} mode${width ? ` at ${width}px` : ""}`).toBeLessThanOrEqual(phone ? 2 : 1);
+      await expectNoSidewaysScroll(page);
+    }
+    await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Normal" }).click();
   });
 
   test("a failed read is shown as a failure, with a way to try again", async ({ page }) => {
@@ -174,6 +226,61 @@ test.describe("app and credits", () => {
     await expect(page.getByRole("radio", { name: /Private/ })).toBeChecked();
   });
 
+  test("an app that has measured nothing yet says so, never zero", async ({ page }) => {
+    await useScenario("populated");
+    await page.goto("/");
+    await page.getByRole("link", { name: "Tide board" }).click();
+    await expect(page.getByRole("heading", { name: "Tide board" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Today" }).getByText("Not measured yet")).toHaveCount(2);
+    await expect(page.getByText(/Its monthly cost is not measured yet/)).toHaveCount(2);
+    await page.goto("/");
+    await expect(page.getByRole("article", { name: "Recipes" }).getByText("Not measured yet")).toBeVisible();
+  });
+
+  test("making an app public waits for a person to confirm it", async ({ page }) => {
+    await useScenario("populated");
+    await page.goto("/apps/app1");
+    await page.getByRole("radio", { name: /Public/ }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Make Booking desk public?" });
+    await expect(dialog).toBeVisible();
+    expect((await mockRequests()).some((r) => r.path === "/api/apps/app1/settings")).toBe(false);
+    await dialog.getByRole("button", { name: "Make it public" }).click();
+    await expect(page.getByRole("radio", { name: /Public/ })).toBeChecked();
+    expect((await mockRequests()).find((r) => r.path === "/api/apps/app1/settings")?.body).toEqual({ access: "public" });
+  });
+
+  test("a shared app lists its people, invites by e-mail with a code shown once, and stops sharing", async ({ page, context }) => {
+    await useScenario("populated");
+    await page.goto("/apps/app2");
+    const sharing = page.getByRole("region", { name: "Sharing" });
+    const people = sharing.getByRole("list", { name: "People it is shared with" });
+    await expect(people.getByRole("listitem")).toHaveCount(2);
+    await expect(people.getByText("Registered")).toBeVisible();
+
+    await sharing.getByLabel("Invite by e-mail").fill("guest@example.test");
+    await sharing.getByRole("button", { name: "Invite" }).click();
+    const code = sharing.getByRole("status", { name: "Invitation code" });
+    await expect(code.getByText("It will not be shown again.")).toBeVisible();
+    const shown = (await code.locator("code").textContent()) ?? "";
+    expect(shown).toMatch(/^[0-9a-f]{32}$/);
+    await expect(people.getByRole("listitem")).toHaveCount(3);
+    if (!isPhone(page)) {
+      await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+      await code.getByRole("button", { name: "Copy the code" }).click();
+      await expect(code.getByRole("button", { name: "Copied" })).toBeVisible();
+    }
+
+    // Once gone, it is gone: a reload does not bring the code back.
+    await page.reload();
+    await expect(people.getByText("guest@example.test")).toBeVisible();
+    await expect(page.getByText(shown)).toHaveCount(0);
+
+    await people.getByRole("button", { name: "Stop sharing with taster@example.test" }).click();
+    await sharing.getByRole("group", { name: "Confirm stopping sharing with taster@example.test" }).getByRole("button", { name: "Stop sharing" }).click();
+    await expect(people.getByRole("listitem")).toHaveCount(2);
+    expect((await mockRequests()).some((r) => r.method === "DELETE" && r.path === "/api/apps/app2/shares?email=taster%40example.test")).toBe(true);
+  });
+
   test("credits show the balance, the cascade of budgets, and a failed read as a failure", async ({ page }) => {
     await useScenario("populated");
     await page.goto("/");
@@ -189,6 +296,69 @@ test.describe("app and credits", () => {
   });
 });
 
+test.describe("secrets and operator access", () => {
+  test("secrets are set, inherited, replaced and removed by name, and a value is never shown", async ({ page }) => {
+    await useScenario("populated");
+    await page.goto("/");
+    await page.getByRole("region", { name: "Organisation chart" }).getByRole("button", { name: /Software/ }).first().click();
+    await page.getByRole("navigation", { name: "Manage" }).getByRole("link", { name: "Secrets for Software" }).click();
+    await expect(page.getByRole("heading", { name: "Secrets for Software" })).toBeVisible();
+    const list = page.getByRole("list", { name: "Secrets" });
+    const maps = list.getByRole("listitem").filter({ hasText: "MAPS_KEY" });
+    await expect(maps.getByText("Set here")).toBeVisible();
+    await expect(maps.getByText("Replaces the one set at Northwind.")).toBeVisible();
+    await expect(list.getByRole("listitem").filter({ hasText: "MAIL_API_KEY" }).getByText(/Inherited from/)).toBeVisible();
+    await expect(page.getByRole("list", { name: "Set beneath" }).getByText("PAYMENTS_KEY")).toBeVisible();
+
+    const add = page.getByRole("region", { name: "Add a secret" });
+    await add.getByLabel("Name").fill("weather api key");
+    await expect(add.getByLabel("Name")).toHaveValue("WEATHER_API_KEY");
+    await add.getByLabel("Value").fill("fixture-value-never-shown");
+    await add.getByRole("button", { name: "Save the secret" }).click();
+    await expect(add.getByText("WEATHER_API_KEY is saved. Its value is sealed and will not be shown.")).toBeVisible();
+    await expect(add.getByLabel("Value")).toHaveValue("");
+    await expect(list.getByText("WEATHER_API_KEY")).toBeVisible();
+    await expect(page.getByText("fixture-value-never-shown")).toHaveCount(0);
+    expect((await mockRequests()).find((r) => r.method === "PUT")?.body).toEqual({ scope: "northwind/software", name: "WEATHER_API_KEY", value: "fixture-value-never-shown" });
+
+    await maps.getByRole("button", { name: "Remove" }).click();
+    await maps.getByRole("group", { name: "Confirm removing MAPS_KEY" }).getByRole("button", { name: "Remove it" }).click();
+    // The organisation's own MAPS_KEY applies again, inherited.
+    await expect(list.getByRole("listitem").filter({ hasText: "MAPS_KEY" }).getByText(/Inherited from/)).toBeVisible();
+    await expectNoSidewaysScroll(page);
+  });
+
+  test("a refused secret is taken back off the list, with the reason on the page", async ({ page }) => {
+    await useScenario("secret-refused");
+    await page.goto("/secrets?scope=northwind");
+    const add = page.getByRole("region", { name: "Add a secret" });
+    await add.getByLabel("Name").fill("NEW_KEY");
+    await add.getByLabel("Value").fill("x");
+    await add.getByRole("button", { name: "Save the secret" }).click();
+    await expect(add.getByRole("alert")).toContainText("NEW_KEY was not saved: This needs the admin role");
+    await expect(page.getByRole("list", { name: "Secrets" }).getByText("NEW_KEY")).toHaveCount(0);
+  });
+
+  test("the Owner reads every operator entry; anyone else is refused, shown as a failure", async ({ page }) => {
+    await useScenario("populated");
+    await page.goto("/");
+    await page.getByRole("navigation", { name: "Manage" }).getByRole("link", { name: "Operator access" }).click();
+    const log = page.getByRole("list", { name: "Operator log" });
+    await expect(log.getByRole("listitem")).toHaveCount(2);
+    await expect(log.getByText("Added 10,000 credits")).toBeVisible();
+    await expect(log.getByText("Entered the organisation")).toBeVisible();
+    await expect(page.getByText("credits.top_up")).toHaveCount(0);
+
+    await useScenario("not-owner");
+    await page.goto("/");
+    await expect(page.getByRole("navigation", { name: "Manage" }).getByRole("link", { name: /Secrets for/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Operator access" })).toHaveCount(0);
+    await page.goto("/operator-access");
+    await expect(page.getByRole("alert").filter({ hasText: "Only the Owner can read the operator log" })).toBeVisible();
+    await expect(page.getByText(/No one from FrostAura has entered/)).toHaveCount(0);
+  });
+});
+
 test.describe("every screen, every width", () => {
   const screens: [string, Parameters<typeof useScenario>[0], string, string][] = [
     ["home", "populated", "/", "Talking to Northwind"],
@@ -196,6 +366,10 @@ test.describe("every screen, every width", () => {
     ["run", "populated", "/runs/run-done", "Research: Court ladder"],
     ["verdict", "populated", "/ideas/idea-ladder", "Do not build this as its own app."],
     ["app", "populated", "/apps/app1", "Booking desk"],
+    ["shared app", "populated", "/apps/app2", "Recipe box"],
+    ["unmeasured app", "populated", "/apps/app3", "Tide board"],
+    ["secrets", "populated", "/secrets?scope=northwind%2Fsoftware%2Fbooking%2Fdesk", "Secrets for Booking desk"],
+    ["operator access", "populated", "/operator-access", "Operator access"],
     ["credits", "populated", "/credits", "Budgets"],
     ["sign-in", "signed-out", "/sign-in", "Sign in"],
   ];

@@ -12,7 +12,7 @@ only by editing this file first. The app-facing half is fixed field for field in
 | --- | --- | --- | --- |
 | Browser | Edge | HTTPS | The only door. |
 | Edge | Control plane, Console, app containers | HTTP | Routing; Edge alone joins each app's network. |
-| Edge | Control plane | `/internal/*`, service token | Routing table, access checks, session hand-offs. |
+| Edge | Control plane | `/internal/*`, service token | Routing table, access checks, session hand-offs, hosting usage (requests). |
 | Edge | Dock | Internal API | Wake a sleeping app. |
 | Console | Control plane (through Edge) | `/api/*`, cookie session | Everything a member does. |
 | Identity pages | Control plane (through Edge) | `/api/app-auth/{appId}/*` | Sign-in and sign-up at an app. |
@@ -20,6 +20,7 @@ only by editing this file first. The app-facing half is fixed field for field in
 | Runner | Dock | Internal API | Workspaces, builds, app lifecycle, repositories. |
 | Dock | Control plane | Internal API | App tokens, published versions, states, hosting usage. |
 | Dock | Edge control listener (`:8081`) | Internal API | Crash reports. |
+| Control plane | SMTP server (development: the `mailcatcher` service) | SMTP | Mail; in development every message stays in the catcher. |
 | Control plane | Edge control listener | Internal API | Route refreshes; platform-to-app callbacks. |
 | Control plane | OpenRouter | HTTPS | **The only component holding the OpenRouter key.** |
 | Control plane | SMTP server | SMTP | **Only when `Smtp__Host` and `Smtp__From` are set**; otherwise mail waits in the outbox. |
@@ -39,9 +40,12 @@ the control plane owns the database schema and migrations.
 - A **scope** is a node in the tree, written as a path of slugs: `org`, `org/division`,
   `org/division/project`, `org/division/project/app`.
 - **An app's address has four segments in both shapes**: the path form
-  `https://<path host>/<org>/<division>/<project>/<app>/` and the organisation subdomain
-  `https://<org>.<organisation domain>/<division>/<project>/<app>/`. (PLATFORM-API §5 still writes the
-  path form with three segments; this file is right, that one is owed a correction.)
+  `<scheme>://<path host>[:port]/<org>/<division>/<project>/<app>/` and the organisation subdomain
+  `<scheme>://<org>.<organisation domain>[:port]/<division>/<project>/<app>/` (PLATFORM-API §5). The
+  control plane builds both from `Addresses:PathHost`, `Addresses:OrganisationDomain`,
+  `Addresses:Scheme` (default `https`) and `Addresses:Port` (default none); a stack on a developer's
+  machine is `http://localhost:<edge port>` and `http://<org>.localhost:<edge port>`. The routing
+  table's `host` is the bare host name; Edge matches it on any port.
 - The **cascade resolver** answers, for a scope and a kind (permission, secret, budget, rule set,
   context, setting): the effective value and which level set it. Nothing else implements inheritance.
 - Slugs are lowercase letters, digits and hyphens, 2 to 40 characters, unique among siblings. Secret
@@ -113,12 +117,12 @@ form; anything else is 400 `invalid_return_to`. When it points at the subdomain 
 | `POST /internal/approvals` | A checkpoint the run waits on. |
 | `POST /internal/ideas/{id}/verdict` | Research's verdict document. |
 | `POST`/`GET /internal/employees` | Hire; list at and beneath a scope. |
-| `GET /internal/routes` | `{ generatedAt, routes: [{ appId, organisationId, scope, pathBase, host, hostPathBase, target, status, sleeping, sleep { mode, idleMinutes, modeSetAt, idleSetAt }, version, access, paused, pausedReason, hooks }] }`. `access` is `private`/`shared`/`public`; `paused` is true when the organisation's settled balance is past its overdraft limit (`pausedReason: overdraft_limit`) or a monthly budget on the app's chain is spent (`budget_exhausted`); `hooks` lists declared webhook names. |
-| `POST /internal/access/check { appId, cookie, path }` | → `{ decision: allow | sign-in | deny, sessionToken, signInUrl, reason }`. `cookie` is the request's whole `Cookie` header; `sessionToken` is app-scoped (`egs_…`, 15 minutes) and never a cookie value; `signInUrl` is null (Edge uses the app's own sign-in page). |
+| `GET /internal/routes` | `{ generatedAt, routes: [{ appId, organisationId, scope, pathBase, host, hostPathBase, target, status, sleeping, sleep { mode, idleMinutes, modeSetAt, idleSetAt }, version, access, paused, pausedReason, hooks }] }` (`Endgame.Hosting.Contracts.RouteView`). `access` is `private`/`shared`/`public`; `paused` is true when the organisation's settled balance is past its overdraft limit (`pausedReason: overdraft_limit`) or a monthly budget on the app's chain is spent (`budget_exhausted`) — Edge serves the holding page for each, and never wakes the app; `hooks` lists declared webhook names, and only `POST hooks/<name>` for one of them skips the access check. |
+| `POST /internal/access/check { appId, cookie, path }` | → `{ decision: allow | sign-in | deny, sessionToken, signInUrl, reason }`. `cookie` is the request's whole `Cookie` header; `sessionToken` is app-scoped (`egs_…`, 15 minutes) and never a cookie value; `signInUrl` is null (Edge uses the app's own sign-in page). Edge decides nothing itself: any other answer, or none, leaves a private or shared app closed (503). |
 | `POST /internal/access/handoff { appId, code }` | → `{ cookieName, cookieValue, expiresAt, returnTo }` for Edge to set on the subdomain host, or `410 handoff_invalid` (unknown, used, or older than a minute). |
 | `POST /internal/apps/{id}/token` | → `{ token }` (`egt_…`). Mints a fresh app token, stored only as a hash; the previous one keeps working for `AppSessions:TokenGraceSeconds`. |
 | `POST /internal/apps/{id}/published { version }`, `POST /internal/apps/{id}/state { status }` | Dock's reports. |
-| `POST /internal/usage/hosting { samples: [{ sampleId, appId, from, to, awakeSeconds, memoryBytes, storageBytes, requests }] }` | → `{ recorded, duplicates, credits }`. One `hosting` ledger entry per sample; a `sampleId` is charged once. |
+| `POST /internal/usage/hosting { samples: [{ sampleId, appId, from, to, awakeSeconds, memoryBytes, storageBytes, requests }] }` | → `{ recorded, duplicates, credits }`. One `hosting` ledger entry per sample; a `sampleId` is charged once. **Two reporters**, each sending its own samples: Dock (`dock:<instance>:<app>:<period start>` — awake seconds and mean memory from its memory sampler, the app database's size, `requests: 0`) and Edge (`edge:<process>:<app>:<period start>` — the requests it forwarded, nothing else), every `UsageReportSeconds` (300). Edge alone sees requests, so it reports them rather than handing counts to Dock. A sample not taken is resent under the same id; one refused for good (4xx) is dropped. |
 
 ## Control plane — platform API for apps (`/platform/v1`, app token)
 
@@ -136,9 +140,11 @@ request's encoding.
 A schedule run is `POST <app>/_platform/schedules/<name>` with body `{ "scheduledFor" }`, signed
 `X-Endgame-Signature: t=<unix>,v1=<hex HMAC-SHA256(app token, "<t>." + body)>`. The control plane
 sends it to **Edge's control listener** as `POST {EdgeControl}/internal/apps/{appId}/platform/schedules/<name>`
-with the service token and the signature header; Edge (owed) wakes the app and forwards the body and
-signature to `http://app-<id:N>:8080/_platform/schedules/<name>`, returning the app's status. `204` is
-success. `Scheduler__Transport=direct` posts straight to the container instead.
+with the service token and the signature header; Edge wakes the app if it sleeps and forwards the
+body and signature unchanged to `http://app-<id:N>:8080/_platform/schedules/<name>`, returning the
+app's status (`400` without a signature, `404` for an app it does not route, `409` for a paused or
+unpublished one, `503` when it cannot be woken). `204` is success. `Scheduler__Transport=direct`
+posts straight to the container instead.
 
 ## Dock — internal API
 
@@ -146,13 +152,30 @@ success. `Scheduler__Transport=direct` posts straight to the container instead.
 `POST …/exec`, `GET`/`PUT …/files`, `POST …/commit`; `POST /internal/repos`,
 `GET /internal/repos/{appId}` and `…/log`, `…/files`, `…/archive`, `…/export`, `POST …/restore`;
 `POST /internal/apps/{id}/build`, `…/start`, `…/stop`, `…/wake`, `PUT …/egress`,
-`GET /internal/apps` and `…/{id}`, `DELETE …/{id}`. Shapes are in `Endgame.Hosting.Contracts`.
+`GET /internal/apps` and `…/{id}`, `DELETE …/{id}`; `POST /internal/usage/flush`. Shapes are in
+`Endgame.Hosting.Contracts`. `start` asks the control plane for a fresh app token
+(`POST /internal/apps/{id}/token`) unless one is given, and injects it as `ENDGAME_APP_TOKEN`.
 
 ## Edge — control listener (`:8081`, service token)
 
 `POST /internal/routes/refresh` → `{ version, apps }`; `POST /internal/apps/{id}/state` (Dock's crash
-reports); `GET /internal/apps`, `GET /internal/routes`. The control plane calls `routes/refresh` when
-access, settings, budgets, webhooks or the balance change, best effort.
+reports); `POST /internal/apps/{id}/platform/schedules/{name}` (platform callbacks, above);
+`POST /internal/usage/flush` (closes the hosting-usage period now); `GET /internal/apps`,
+`GET /internal/routes`. The control plane calls `routes/refresh` when access, settings, budgets,
+webhooks or the balance change, best effort.
+
+## Edge — the identity pages (`<app address>/_endgame/auth/*`, public side)
+
+| Page | What |
+| --- | --- |
+| `sign-in`, `sign-up` | Pages served by Edge itself (strict CSP, per-response nonce) that drive `/api/app-auth/{appId}/*` and, for members, `/api/auth/passkey/login/*`; the development sign-in when `GET /api/app-auth/{appId}` advertises it. Served on the platform's host: on an organisation subdomain they redirect there (with an absolute `returnTo`) and come back through `handoff`. |
+| `handoff?code=…` | `POST /internal/access/handoff`; on success sets the returned cookie host-only (`HttpOnly`, `SameSite=Lax`, `Secure` over https) and redirects to the returned `returnTo`, re-checked to be inside the app; `410` page otherwise. |
+| `sign-out` | `POST /api/auth/logout` when the visitor carries the console session, otherwise `POST /api/app-auth/{appId}/sign-out`; the cleared cookies are passed back. |
+
+`returnTo` must be a path inside the app's address on this host, or an absolute address inside either
+of its two addresses (same scheme and port, no credentials); anything else is replaced by the app's
+home. Before forwarding any request to an app Edge strips every `endgame.*` cookie and every
+client-sent `X-Endgame-*` header.
 
 ## Run log — the event stream
 
@@ -183,7 +206,7 @@ proxy. PLATFORM-API.md is the contract.
 ## Ports and names (inside the compose network)
 
 Every service listens on `8080`; Edge's control listener on `8081`. Names: `edge`, `control-plane`,
-`runner`, `dock`, `console`, `postgres`, `egress`. App containers are `app-<app id>`, workspaces
-`ws-<run id>`. The control plane finds its peers through `Services__ControlPlane`, `__Edge`,
+`runner`, `dock`, `console`, `postgres`, `egress`, and in development `mailcatcher` (SMTP `1025`).
+App containers are `app-<app id>`, workspaces `ws-<run id>`. The control plane finds its peers through `Services__ControlPlane`, `__Edge`,
 `__EdgeControl`, `__Runner`, `__Dock`, `__Console`, `__Collector`, whose defaults are these names in
 every environment.

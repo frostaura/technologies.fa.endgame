@@ -1,0 +1,27 @@
+# The stack's acceptance test (`make e2e-stack`), layered over docker-compose.yml. Test only, never
+# deployed: it changes nothing about how a service behaves, only what the test can reach and how
+# long it waits.
+#
+# - Dock's internal API on loopback, so the test can do what the Runner will do (create an app's
+#   repository from the template, build it, start it). Still behind the service token.
+# - Time compressed: one minute of an app's idle setting lasts SECONDS_PER_IDLE_MINUTE seconds, and
+#   hosting usage and the scheduler report and poll every few seconds.
+services:
+  dock:
+    ports:
+      - "127.0.0.1:${DOCK_HOST_PORT:-18096}:8080"
+    environment:
+      Dock__UsageReportSeconds: ${ENDGAME_USAGE_REPORT_SECONDS:-10}
+      Dock__MemorySampleSeconds: "2"
+
+  edge:
+    environment:
+      Edge__SecondsPerIdleMinute: ${SECONDS_PER_IDLE_MINUTE:-5}
+      Edge__IdleSweepMilliseconds: "500"
+      Edge__UsageReportSeconds: ${ENDGAME_USAGE_REPORT_SECONDS:-10}
+
+  control-plane:
+    environment:
+      Scheduler__PollSeconds: "2"
+      Email__DispatchSeconds: "1"
+      Sweeps__IntervalSeconds: "5"

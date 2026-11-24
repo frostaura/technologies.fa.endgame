@@ -129,20 +129,33 @@ produces and checks exactly this; the control plane may reference it.
 
 ## 5. What Edge does to every request into an app
 
-1. Path form: `/<org>/<division>/<project>` → `308` to the same path with `/`. Strip the prefix;
-   set `X-Forwarded-Prefix: /<org>/<division>/<project>` (no trailing slash). Subdomain form: no prefix header.
+An app has two addresses, both four segments deep (ARCH-004): the path form
+`https://<platform host>/<org>/<division>/<project>/<app>/` and the organisation subdomain
+`https://<org>.<organisation domain>/<division>/<project>/<app>/` (or that subdomain's root, when the
+control plane gives an app the whole of it).
+
+1. Either form without its trailing slash (`/<org>/<division>/<project>/<app>`, or
+   `/<division>/<project>/<app>` on the subdomain) → `308` to the same address with `/`. Strip the
+   prefix; set `X-Forwarded-Prefix` to it, no trailing slash: `/<org>/<division>/<project>/<app>` on
+   the path form, `/<division>/<project>/<app>` on the subdomain. An app at a subdomain's root gets no
+   prefix header.
 2. Set `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-For`; remove any the client sent.
 3. Remove every client-sent `X-Endgame-*` header. If the visitor has a session valid for this app,
    set `X-Endgame-Session` to an **app-scoped** token — never the browser's own cookie value, so
-   an app cannot replay it against the console. Strip the platform's session cookie from `Cookie`.
-4. Serve `<app address>/_endgame/auth/{sign-in|sign-up|sign-out}?returnTo=<path>` itself (the
-   organisation's identity pages); accept only a `returnTo` inside the same app address.
-5. Never route `<app address>/_platform/*` from the public side.
+   an app cannot replay it against the console. Strip every platform cookie (`endgame.*`: the console
+   session and every `endgame.app.*` app session) from `Cookie`.
+4. Serve `<app address>/_endgame/auth/{sign-in|sign-up|sign-out|handoff}?returnTo=<path or address>`
+   itself (the organisation's identity pages, driving the control plane's `/api/app-auth/{appId}/*`);
+   accept only a `returnTo` inside one of the app's two addresses. On the subdomain, sign-in and
+   sign-up move to the path form on the platform's host and come back through `handoff`, which sets
+   the subdomain's own app-session cookie.
+5. Never route `<app address>/_platform/*` from the public side. Platform callbacks reach the app
+   from Edge's control listener, signed (§4).
 6. A request to a private app without a session is redirected to step 4's sign-in — except
-   declared `hooks/<name>` and `health` polled from Edge's own listener.
+   `POST hooks/<name>` for a name the app declared (§3.6) and `health` polled from Edge's own listener.
 
-The React Router home of a path-form app is written as `/<org>/<division>/<project>` (no trailing
-slash) during client navigation; rule 1 makes a reload there land correctly.
+The React Router home of an app is written without its trailing slash during client navigation;
+rule 1 makes a reload there land correctly.
 
 ## 6. Building and starting an app (Dock)
 

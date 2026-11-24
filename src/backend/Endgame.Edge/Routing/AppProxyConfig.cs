@@ -55,7 +55,10 @@ public static class AppProxyConfig
         return (routes, clusters);
     }
 
-    public static string ClusterId(Guid appId) => $"app-{appId:D}";
+    /// <summary>Every app's cluster id starts with this; the platform's own clusters never do.</summary>
+    public const string ClusterPrefix = "app-";
+
+    public static string ClusterId(Guid appId) => $"{ClusterPrefix}{appId:D}";
 
     /// <summary>The app a matched route belongs to, or null for a platform route.</summary>
     public static Guid? AppOf(RouteConfig route) =>
@@ -74,4 +77,7 @@ public static class ForwardedHeaders
         HostingConventions.ForwardedPrefixHeader,
         "X-Real-IP",
     ];
+
+    /// <summary>W3C and legacy trace-context headers: an app starts its own traces.</summary>
+    public static readonly string[] TraceContext = ["traceparent", "tracestate", "baggage", "Request-Id", "Correlation-Context"];
 }

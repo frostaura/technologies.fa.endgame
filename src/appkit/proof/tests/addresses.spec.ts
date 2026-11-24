@@ -1,25 +1,30 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * ONE image of the template, ONE running container, reached through the dev edge at the two
- * address shapes Endgame serves every app at (ARCH-005):
- *   path form       http://127.0.0.1:<PW_PORT>/acme/labs/demo/   (Edge strips the prefix, sends X-Forwarded-Prefix)
- *   subdomain root  http://acme.localhost:<PW_HOST_PORT>/         (no prefix)
+ * ONE image of the template, ONE running container, reached through an edge at the two address
+ * shapes Endgame serves every app at — four segments on the path form, three on the subdomain
+ * (ARCH-004, ARCH-005):
+ *   path form            PW_PATH_URL  e.g. http://127.0.0.1:<port>/acme/labs/demo/notes/
+ *   organisation domain  PW_HOST_URL  e.g. http://acme.localhost:<port>/labs/demo/notes/
+ * Edge strips the prefix and sends X-Forwarded-Prefix in both.
+ *
+ * Two edges: the dev platform's (proof/run.sh, the default), or the REAL Edge of a running stack
+ * (proof/edge.sh, PW_EDGE=1), where sign-in is the edge's own page with the development sign-in
+ * for PW_MEMBER_EMAIL, and on the subdomain it returns through the hand-off.
  */
-const pathPort = required("PW_PORT");
-const hostPort = required("PW_HOST_PORT");
-const platformPort = required("PW_PLATFORM_PORT");
+const edge = process.env.PW_EDGE === "1";
+const memberEmail = edge ? required("PW_MEMBER_EMAIL") : "";
 
 function required(name: string): string {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is not set; run the proof through proof/run.sh.`);
+  if (!value) throw new Error(`${name} is not set; run the proof through proof/run.sh or proof/edge.sh.`);
   return value;
 }
 
 const shapes = [
-  { name: "path form", origin: `http://127.0.0.1:${pathPort}`, base: "/acme/labs/demo/" },
-  { name: "subdomain root", origin: `http://acme.localhost:${hostPort}`, base: "/" },
-];
+  { name: "path form", url: new URL(required("PW_PATH_URL")) },
+  { name: "organisation subdomain", url: new URL(required("PW_HOST_URL")) },
+].map((s) => ({ name: s.name, origin: s.url.origin, base: s.url.pathname.endsWith("/") ? s.url.pathname : `${s.url.pathname}/` }));
 
 /** Every response the page gets that is not a success, and every script error: the test ends with none. */
 function watch(page: Page) {
@@ -45,7 +50,7 @@ for (const shape of shapes) {
         if (/\/assets\/(NoteDetailPage|NewNotePage)-[\w-]+\.js$/.test(r.url())) chunks.push(`${r.status()} ${r.url()}`);
       });
 
-      // The project address without its trailing slash is redirected to the app (path form only).
+      // The app's address without its trailing slash is redirected to the app.
       if (shape.base !== "/") {
         await page.goto(`${shape.origin}${shape.base.replace(/\/$/, "")}`);
         await expect(page).toHaveURL(at());
@@ -64,16 +69,25 @@ for (const shape of shapes) {
       await expect(page).toHaveURL(at("notes/new"));
       await page.getByRole("main").getByRole("link", { name: "Sign in" }).click();
 
-      // The platform's sign-in page lives under the app's own address.
-      await expect(page).toHaveURL(new RegExp(`^${escape(at("_endgame/auth/sign-in"))}\\?returnTo=`));
-      const email = `${info.project.name}.${shape.name.replace(" ", "-")}@example.test`;
-      await page.getByLabel("Email").fill(email);
-      await page.getByLabel("Name").fill("Proof Runner");
-      await page.getByRole("button", { name: "Sign in" }).click();
+      if (edge) {
+        // The edge's own sign-in page, under the app's path-form address on the platform's host —
+        // the subdomain's sign-in moves there, where a member's session lives.
+        await expect(page).toHaveURL(/\/_endgame\/auth\/sign-in\?returnTo=/);
+        await page.getByLabel("E-mail address").fill(memberEmail);
+        await page.getByRole("button", { name: "As a member" }).click();
+      } else {
+        // The platform's sign-in page lives under the app's own address.
+        await expect(page).toHaveURL(new RegExp(`^${escape(at("_endgame/auth/sign-in"))}\\?returnTo=`));
+        const email = `${info.project.name}.${shape.name.replace(" ", "-")}@example.test`;
+        await page.getByLabel("Email").fill(email);
+        await page.getByLabel("Name").fill("Proof Runner");
+        await page.getByRole("button", { name: "Sign in" }).click();
+      }
 
       // Back where they started, signed in.
       await expect(page).toHaveURL(at("notes/new"));
-      await expect(page.getByTestId("signed-in-as")).toHaveText("Proof Runner");
+      if (edge) await expect(page.getByTestId("signed-in-as")).not.toBeEmpty();
+      else await expect(page.getByTestId("signed-in-as")).toHaveText("Proof Runner");
 
       // Write through the API; the app routes to the new note (another lazy chunk).
       const title = `Proof ${shape.name} ${info.project.name} ${Date.now()}`;
@@ -136,6 +150,8 @@ for (const shape of shapes) {
 }
 
 test("the app reported to the platform, and every platform call went out through the egress proxy", async ({ request }) => {
+  test.skip(edge, "The dev platform's state view exists only in the test double; against the real stack, `make e2e-stack` checks telemetry in the control plane.");
+  const platformPort = required("PW_PLATFORM_PORT");
   let state: { otlpRequests: Record<string, number>; events: { name: string }[]; egress: string[] } | undefined;
   await expect
     .poll(

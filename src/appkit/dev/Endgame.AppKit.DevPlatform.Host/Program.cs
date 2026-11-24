@@ -1,6 +1,8 @@
 // TEST DOUBLE HOST — see the .csproj for what each port plays. Configuration (environment):
 //   DEV_APP_URL      the app container, e.g. http://test-appkit-app:8080      (required)
-//   DEV_PATH_PREFIX  the path-form address, e.g. /acme/labs/demo             (default /acme/labs/demo)
+//   DEV_PATH_PREFIX  the path-form address, e.g. /acme/labs/demo/notes       (default /acme/labs/demo/notes)
+//   DEV_HOST_PREFIX  the address on the organisation subdomain, e.g. /labs/demo/notes (default /labs/demo/notes;
+//                    empty serves the app at the subdomain's root)
 //   DEV_APP_TOKEN    the token the app was started with                      (default dev-app-token)
 using System.Net;
 using Endgame.AppKit.DevPlatform;
@@ -20,7 +22,8 @@ builder.WebHost.ConfigureKestrel(k =>
 builder.Services.AddHttpForwarder();
 
 var appUrl = new Uri(builder.Configuration["DEV_APP_URL"] ?? throw new InvalidOperationException("DEV_APP_URL is required (the app container's address)."));
-var prefix = (builder.Configuration["DEV_PATH_PREFIX"] ?? "/acme/labs/demo").TrimEnd('/');
+var pathPrefix = (builder.Configuration["DEV_PATH_PREFIX"] ?? "/acme/labs/demo/notes").TrimEnd('/');
+var hostPrefix = (builder.Configuration["DEV_HOST_PREFIX"] ?? "/labs/demo/notes").TrimEnd('/');
 var state = new DevPlatformState { AppToken = builder.Configuration["DEV_APP_TOKEN"] ?? "dev-app-token" };
 
 var app = builder.Build();
@@ -46,11 +49,13 @@ app.UseWhen(c => c.Connection.LocalPort == EgressPort, egress => egress.Run(asyn
 
 app.UseWhen(c => c.Connection.LocalPort is PathEdgePort or HostEdgePort, edge => edge.Run(async context =>
 {
-    var pathForm = context.Connection.LocalPort == PathEdgePort;
-    var appBase = pathForm ? prefix : "";
+    // Both shapes carry a prefix (four segments on the path form, three on the subdomain), unless the
+    // subdomain serves the app at its root.
+    var prefix = context.Connection.LocalPort == PathEdgePort ? pathPrefix : hostPrefix;
+    var appBase = prefix;
     var path = context.Request.Path.Value ?? "/";
 
-    if (pathForm)
+    if (prefix.Length > 0)
     {
         if (path == prefix)
         {

@@ -28,6 +28,7 @@ public sealed class AppRuntime(EdgeApp route, TimeProvider time)
     private DateTimeOffset crashedUntil = DateTimeOffset.MinValue;
     private volatile bool awake;
     private int inFlight;
+    private long requests;
     private long lastSeenTicks = time.GetTimestamp();
     private int wakes;
     private int sleeps;
@@ -55,8 +56,12 @@ public sealed class AppRuntime(EdgeApp route, TimeProvider time)
     public void Enter()
     {
         Interlocked.Increment(ref inFlight);
+        Interlocked.Increment(ref requests);
         Touch();
     }
+
+    /// <summary>Requests counted in since the last call, for hosting usage; the count restarts at zero.</summary>
+    public long TakeRequests() => Interlocked.Exchange(ref requests, 0);
 
     public void Leave()
     {

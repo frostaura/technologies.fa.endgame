@@ -21,11 +21,14 @@ internal static class Routes
         string sleepMode = SleepSetting.Auto,
         int idleMinutes = 15,
         string? version = "v1",
-        bool paused = false)
+        bool paused = false,
+        string? pausedReason = null,
+        params string[] hooks)
     {
         var scope = $"{org}/{division}/{project}/{app}";
         return new RouteView(id ?? Guid.NewGuid(), Guid.NewGuid(), scope, $"/{scope}/", $"{org}.{Domain}", $"/{division}/{project}/{app}/",
-            target, "running", false, new SleepSetting(sleepMode, idleMinutes, "default", "default"), version, access, paused);
+            target, "running", false, new SleepSetting(sleepMode, idleMinutes, "default", "default"), version, access, paused,
+            paused ? pausedReason ?? PausedReasons.OverdraftLimit : null, hooks);
     }
 
     /// <summary>An app as the edge holds it.</summary>

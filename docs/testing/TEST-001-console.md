@@ -13,6 +13,10 @@
 - Normal mode never names infrastructure; technical mode shows models, tools, rules and raw events.
 - An estimate is shown before research can start; research cannot start without one.
 - Overrule and go-public need an explicit human confirmation; an overrule is shown as one.
+- A figure the app has not measured reads "not measured yet", never zero.
+- A secret's value and an invitation code never enter the store, and a value is never shown.
+- The conversation survives a reload without drawing a turn twice.
+- The header is at most two rows on a phone (375 and 412 px) and keeps the toggle, balance and sign-out.
 - Optimistic changes roll back on refusal with the reason on the page.
 - No screen scrolls sideways at desktop or phone width; nothing animates under reduced motion.
 - No raw colour outside the token layer; every icon in the sprite is typed.
@@ -23,9 +27,9 @@
 | --- | --- | --- |
 | Unit | `src/features/runs/runModel.test.ts` | Merging and deriving the run log; normal against technical wording. |
 | Unit | `src/features/runs/useRunStream.test.ts` | Resume with `after=`, de-duplication, close on finish, giving up after six failures. |
-| Component | `src/features/*/*View.test.tsx`, `src/App.test.tsx` | The four states of every screen; selection scoping; streamed replies; optimistic rollback; confirmations; session routing; technical-mode gating. |
+| Component | `src/features/*/*View.test.tsx`, `src/App.test.tsx` | The four states of every screen; selection scoping; streamed replies and conversation history; optimistic rollback; confirmations; session routing; technical-mode gating; secrets (`secrets/SecretsView.test.tsx`), the operator log (`audit/OperatorAccessView.test.tsx`), sharing and unmeasured telemetry (`apps/AppView.test.tsx`). |
 | Unit | `src/tokens.test.ts`, `src/components/iconNames.test.ts` | One token layer, contrast, the sprite and the typed names agree. |
-| End to end | `tests-e2e/console.spec.ts` against `tests-e2e/mock-api/` (test only) | Sign-in (development and a real passkey via a virtual authenticator), home, first run to verdict to overrule, inline approval, pause and resume, app settings and rollback, credits, sideways scroll and reduced motion — on desktop and phone. |
+| End to end | `tests-e2e/console.spec.ts` against `tests-e2e/mock-api/` (test only) | Sign-in (development and a real passkey via a virtual authenticator), home, first run to verdict to overrule, inline approval, pause and resume, app settings and rollback, go-public confirmation, sharing with a one-time code, an unmeasured app, secrets set / inherited / removed and refused, the operator log and its refusal, conversation history across a reload, the two-row phone header, credits, sideways scroll and reduced motion — on desktop and phone. |
 | End to end | `tests-e2e/smoke.spec.ts` with `PW_BASE_URL` (`make e2e`) | The real stack through the edge. |
 
 Commands: `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test -- --run`,
@@ -38,6 +42,11 @@ Commands: `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test --
 - `parseEvent`: an empty `id:` line once parsed as sequence 0 — caught by the `"{}"` case.
 - Home counts: the employee count is derived from the tree; set the fixture worker's `kind` to
   `contractor` and the org-chart test fails (the employee chip and the count both depend on it; checked).
+
+- Conversation history: drop the filter that leaves out turns already drawn from a live run and the
+  "does not draw a turn twice" component test fails (checked).
+- Secrets: the refused-write test holds the request open, so it proves the name was listed before the
+  answer and taken back after it.
 
 ## Against the running system
 

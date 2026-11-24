@@ -61,6 +61,12 @@ builder.Services.AddSingleton<AppRuntimeRegistry>();
 builder.Services.AddSingleton<AppService>();
 builder.Services.AddSingleton<BuildService>();
 builder.Services.AddSingleton<PlatformReports>();
+builder.Services.AddSingleton(sp =>
+{
+    var o = sp.GetRequiredService<IOptions<DockOptions>>().Value;
+    return new UsageLedger(sp.GetRequiredService<TimeProvider>(), TimeSpan.FromSeconds(Math.Max(1, o.MemorySampleSeconds) * 3));
+});
+builder.Services.AddSingleton<HostingUsageReporter>();
 
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WorkspaceImage>());
 builder.Services.AddHostedService<EgressReconciler>();
@@ -68,6 +74,7 @@ builder.Services.AddHostedService<PlatformDatabaseLockdown>();
 builder.Services.AddHostedService<LeaseSweeper>();
 builder.Services.AddHostedService<CrashWatcher>();
 builder.Services.AddHostedService<MemorySampler>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<HostingUsageReporter>());
 
 var app = builder.Build();
 

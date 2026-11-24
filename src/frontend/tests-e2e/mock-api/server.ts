@@ -8,6 +8,8 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
+
+const now = () => new Date().toISOString();
 import { scenario, type MockState, type ScenarioName, type MockEvent } from "./fixtures.ts";
 
 const port = Number(process.argv[2] ?? 5591);
@@ -41,6 +43,63 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   } catch {
     return null;
   }
+}
+
+/** `GET /api/me` as the control plane writes it. */
+function me() {
+  const org = state.org;
+  return {
+    user: state.user,
+    organisation: org ? { id: org.id, slug: org.slug, name: org.name } : null,
+    isOperator: false,
+    passkeys: 1,
+    memberships: org
+      ? [{ id: "m1", scope: org.slug, level: "organisation", role: state.viewerRole === "none" ? "owner" : state.viewerRole, organisationId: org.id, organisationSlug: org.slug, organisationName: org.name }]
+      : [],
+  };
+}
+
+const SECRET_NAME = /^[A-Z][A-Z0-9_]{1,127}$/;
+const LEVELS = ["organisation", "division", "project", "app"];
+
+/** The control plane's secret listing: the nearest level wins; names only, never a value. */
+function secretList(scope: string) {
+  const parts = scope.split("/");
+  const chain = parts.map((_, i) => parts.slice(0, i + 1).join("/"));
+  const effective = new Map<string, { name: string; setAtLevel: string; setAtPath: string; setAt: string; inherited: boolean; overrides: string[] }>();
+  for (const path of chain) {
+    for (const e of state.secrets.filter((x) => x.scope === path)) {
+      const above = effective.get(e.name);
+      effective.set(e.name, {
+        name: e.name,
+        setAtLevel: LEVELS[path.split("/").length - 1] ?? "app",
+        setAtPath: path,
+        setAt: e.setAt,
+        inherited: path !== scope,
+        overrides: above ? [above.setAtPath, ...above.overrides] : [],
+      });
+    }
+  }
+  const setBelow = state.secrets
+    .filter((x) => x.scope.startsWith(`${scope}/`))
+    .map((x) => ({ name: x.name, setAtPath: x.scope }))
+    .sort((a, b) => a.setAtPath.localeCompare(b.setAtPath) || a.name.localeCompare(b.name));
+  return { scope, effective: [...effective.values()].sort((a, b) => a.name.localeCompare(b.name)), setBelow };
+}
+
+/** The conversation docked at a scope, read from the released `message` events of its runs. */
+function conversation(scope: string, employeeId: string | null) {
+  const runs = Object.values(state.runs).filter((r) => r.summary.kind === "conversation" && r.summary.scope === scope && (r.summary.employeeId ?? null) === employeeId);
+  if (runs.length === 0) return { scope, conversationId: null, employeeId, messages: [] };
+  const messages = runs
+    .sort((a, b) => a.summary.createdAt.localeCompare(b.summary.createdAt))
+    .flatMap((r) =>
+      r.events
+        .slice(0, r.released)
+        .filter((e) => e.type === "message")
+        .map((e) => ({ runId: r.summary.id, seq: e.seq, at: e.at, from: String(e.payload.from ?? "employee"), text: String(e.payload.text ?? "") })),
+    );
+  return { scope, conversationId: runs[0]?.summary.conversationId ?? null, employeeId, messages: messages.slice(-200) };
 }
 
 function b64url(bytes: Buffer) {
@@ -143,12 +202,12 @@ const server = createServer(async (req, res) => {
   if (path === "/api/auth/options") return send(res, 200, { passkey: true, developmentSignIn: state.developmentSignIn });
   if (path === "/api/me") {
     if (!state.signedIn) return problem(res, 401, "Not signed in");
-    return send(res, 200, { user: state.user, organisation: state.org ? { id: state.org.id, slug: state.org.slug, name: state.org.name } : null });
+    return send(res, 200, me());
   }
   if (path === "/api/auth/development" && method === "POST") {
     if (!state.developmentSignIn) return problem(res, 404, "Not found");
     state.signedIn = true;
-    return send(res, 200, { user: state.user, organisation: state.org ? { id: state.org.id, slug: state.org.slug, name: state.org.name } : null });
+    return send(res, 200, me());
   }
   if (path === "/api/auth/logout" && method === "POST") {
     state.signedIn = false;
@@ -179,7 +238,7 @@ const server = createServer(async (req, res) => {
     const credential = (body as { credential?: { id?: string; response?: Record<string, unknown> } } | null)?.credential;
     if (!credential?.id || !credential.response?.clientDataJSON) return problem(res, 400, "That passkey response could not be read");
     state.signedIn = true;
-    return send(res, 200, { user: state.user, organisation: state.org ? { id: state.org.id, slug: state.org.slug, name: state.org.name } : null });
+    return send(res, 200, me());
   }
 
   if (!state.signedIn) return problem(res, 401, "Not signed in");
@@ -192,7 +251,8 @@ const server = createServer(async (req, res) => {
   if (path === "/api/organisations" && method === "POST") {
     const b = body as { name: string; slug: string };
     state.org = { id: "org-new", slug: b.slug, name: b.name, summary: null };
-    return send(res, 201, { id: state.org.id, slug: b.slug, name: b.name });
+    state.viewerRole = "owner";
+    return send(res, 201, { id: state.org.id, slug: b.slug, name: b.name, ownerEmail: state.user.email, ownerInvitationCode: null, invitationExpiresAt: null });
   }
 
   // Ideas --------------------------------------------------------------------------------
@@ -290,6 +350,10 @@ const server = createServer(async (req, res) => {
   }
 
   // Conversation -------------------------------------------------------------------------
+  if (path === "/api/conversations" && method === "GET") {
+    const scope = url.searchParams.get("scope") ?? "";
+    return send(res, 200, conversation(scope, url.searchParams.get("employeeId")));
+  }
   if (path === "/api/conversations" && method === "POST") {
     if (state.failConversation) return problem(res, 503, "The conversation could not start");
     const b = body as { scope: string; message: string; employeeId?: string };
@@ -314,6 +378,66 @@ const server = createServer(async (req, res) => {
     }
     Object.assign(app.settings, body);
     return send(res, 200, app);
+  }
+
+  // Sharing ------------------------------------------------------------------------------
+  m = path.match(/^\/api\/apps\/([^/]+)\/shares$/);
+  if (m) {
+    const appId = m[1] as string;
+    const app = state.apps[appId];
+    if (!app) return problem(res, 404, "App not found");
+    const list = (state.shares[appId] ??= []);
+    if (method === "GET") return send(res, 200, list);
+    if (method === "POST") {
+      const email = String((body as { email?: string } | null)?.email ?? "").trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return problem(res, 400, "That is not an e-mail address");
+      const existing = list.find((x) => x.email === email);
+      if (existing?.registered) return problem(res, 409, "Conflict", "That address is already registered with this app; sign in instead.");
+      if (!existing) list.push({ email, invitedAt: now(), registered: false });
+      list.sort((a, b) => a.email.localeCompare(b.email));
+      app.sharedWith = list.length;
+      return send(res, 201, { email, invitationCode: randomBytes(16).toString("hex"), expiresAt: new Date(Date.now() + 14 * 86_400_000).toISOString() });
+    }
+    if (method === "DELETE") {
+      const email = (url.searchParams.get("email") ?? "").trim().toLowerCase();
+      const i = list.findIndex((x) => x.email === email);
+      if (i < 0) return problem(res, 404, "Not found", `A share with '${email}' was not found.`);
+      list.splice(i, 1);
+      app.sharedWith = list.length;
+      return send(res, 204);
+    }
+  }
+
+  // Secrets ------------------------------------------------------------------------------
+  if (path === "/api/secrets") {
+    if (method === "GET") return send(res, 200, secretList(url.searchParams.get("scope") ?? ""));
+    if (method === "PUT") {
+      const b = (body ?? {}) as { scope?: string; name?: string; value?: string };
+      if (state.failSecretWrite) return problem(res, 403, "Forbidden", `This needs the admin role at '${b.scope}'; you are a builder there (set at ${b.scope}).`);
+      if (!SECRET_NAME.test(b.name ?? "")) return problem(res, 400, "Invalid", `'${b.name}' is not a secret name: use UPPER_SNAKE_CASE.`);
+      if (typeof b.value !== "string" || b.value.length === 0) return problem(res, 400, "Invalid", "A secret needs a value.");
+      const scope = b.scope ?? "";
+      const existing = state.secrets.find((x) => x.scope === scope && x.name === b.name);
+      const setAt = now();
+      if (existing) existing.setAt = setAt;
+      else state.secrets.push({ scope, name: b.name as string, setAt });
+      return send(res, 200, { name: b.name, setAtLevel: LEVELS[scope.split("/").length - 1], setAtPath: scope, setAt, inherited: false, overrides: [] });
+    }
+    if (method === "DELETE") {
+      const scope = url.searchParams.get("scope") ?? "";
+      const name = url.searchParams.get("name") ?? "";
+      const i = state.secrets.findIndex((x) => x.scope === scope && x.name === name);
+      if (i < 0) return problem(res, 404, "Not found", `A secret '${name}' set at '${scope}' was not found.`);
+      state.secrets.splice(i, 1);
+      return send(res, 204);
+    }
+  }
+
+  // Operator access ----------------------------------------------------------------------
+  if (path === "/api/audit/operator-access") {
+    const org = url.searchParams.get("organisation") ?? "";
+    if (state.viewerRole !== "owner") return problem(res, 403, "Forbidden", `This needs the owner role at '${org}'; you are a ${state.viewerRole} there (set at ${org}).`);
+    return send(res, 200, state.operatorLog);
   }
 
   // Credits ------------------------------------------------------------------------------

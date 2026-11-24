@@ -1,27 +1,33 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Avatar } from "@/components/Avatar";
 import { Link } from "@/components/Link";
+import { Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { describeError } from "@/lib/queryState";
+import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { useStartConversationMutation } from "@/store/api";
-import type { Tree } from "@/store/types";
+import { useGetConversationQuery, useStartConversationMutation } from "@/store/api";
+import type { ConversationMessage, Tree } from "@/store/types";
 import { conversationKey, messageQueued, messageSettled, type ChatMessage, type Selection } from "@/store/uiSlice";
 import { deriveRun, isTerminal } from "../runs/runModel";
 import { useRunStream } from "../runs/useRunStream";
 import { activeWork } from "./treeModel";
 
 /**
- * The one conversation, docked beside the org chart and scoped to whatever is selected. The
- * owner's messages are kept per scope; each starts a run, and the replies are that run's
- * `message` events, streamed.
+ * The one conversation, docked beside the org chart and scoped to whatever is selected. What was
+ * said before is read from the control plane, so it survives a reload; each new message starts a
+ * run, and its replies are that run's `message` events, streamed and appended below.
  */
 export function ConversationDock({ tree, selection }: { tree: Tree; selection: Selection }) {
   const dispatch = useAppDispatch();
   const key = conversationKey(selection);
   const messages = useAppSelector((s) => s.ui.conversations[key]) ?? NONE;
+  const historyQuery = useGetConversationQuery({ scope: selection.scope, ...(selection.employeeId ? { employeeId: selection.employeeId } : {}) });
+  const history = viewOf(historyQuery);
+  // A turn sent in this visit is drawn from its live run; the history copy of it is left out.
+  const liveRuns = new Set(messages.map((m) => m.runId).filter((id): id is string => id !== null));
+  const earlier = history.kind === "loaded" ? groupTurns(history.data.messages.filter((m) => !liveRuns.has(m.runId))) : [];
   const [start] = useStartConversationMutation();
   const [draft, setDraft] = useState("");
   const inputId = useId();
@@ -33,7 +39,7 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
   useEffect(() => {
     const el = logRef.current;
     if (el && typeof el.scrollTo === "function") el.scrollTo({ top: el.scrollHeight });
-  }, [messages.length]);
+  }, [messages.length, earlier.length]);
 
   const send = async (text: string) => {
     const id = newMessageId();
@@ -67,7 +73,34 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
       </div>
 
       <div ref={logRef} role="log" aria-live="polite" aria-label={`Conversation with ${name}`} className="flex flex-1 flex-col gap-3.5 overflow-y-auto py-5 lg:max-h-screen">
-        {messages.length === 0 && <p className="text-ink-muted">Ask what needs you, or tell it what to change. It answers for {name} and everything beneath it.</p>}
+        {history.kind === "loading" && (
+          <div role="status" aria-busy="true" data-state="loading" className="flex flex-col gap-3.5">
+            <span className="sr-only">Loading what was said before</span>
+            <Skeleton className="h-10 w-2/3 self-end rounded-md" />
+            <Skeleton className="h-16 w-5/6 rounded-md" />
+          </div>
+        )}
+        {history.kind === "failed" && (
+          <div role="alert" data-state="failed" className="flex flex-col gap-2 rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+            What was said before could not be loaded: {history.reason} New messages still send.
+            <button type="button" onClick={() => void historyQuery.refetch()} className="min-h-touch self-start rounded-xs font-semibold underline">
+              Try again
+            </button>
+          </div>
+        )}
+        {history.kind === "loaded" && history.stale && (
+          <p role="alert" data-state="stale" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+            The latest refresh failed: {history.stale.reason}
+          </p>
+        )}
+        {history.kind === "loaded" && earlier.length === 0 && messages.length === 0 && (
+          <p data-state="empty" className="text-ink-muted">
+            Ask what needs you, or tell it what to change. It answers for {name} and everything beneath it.
+          </p>
+        )}
+        {earlier.map((turn) => (
+          <EarlierTurn key={turn.key} turn={turn} />
+        ))}
         {messages.map((m) => (
           <Exchange key={m.id} message={m} onRetry={() => void send(m.text)} />
         ))}
@@ -109,6 +142,41 @@ function newMessageId(): string {
   return `m-${sequence}`;
 }
 
+interface Turn {
+  key: string;
+  runId: string;
+  from: string;
+  owner: boolean;
+  texts: string[];
+}
+
+/** Consecutive messages from the same side of the same run read as one bubble. */
+function groupTurns(messages: ConversationMessage[]): Turn[] {
+  const turns: Turn[] = [];
+  for (const m of messages) {
+    const owner = m.from === "owner";
+    const last = turns[turns.length - 1];
+    if (last && last.runId === m.runId && last.owner === owner && last.from === m.from) last.texts.push(m.text);
+    else turns.push({ key: `${m.runId}-${m.seq}`, runId: m.runId, from: m.from, owner, texts: [m.text] });
+  }
+  return turns;
+}
+
+function EarlierTurn({ turn }: { turn: Turn }) {
+  if (turn.owner) {
+    return <p className="max-w-bubble self-end whitespace-pre-line rounded-md rounded-br-xs bg-primary px-4 py-2.5 text-primary-ink">{turn.texts.join("\n\n")}</p>;
+  }
+  return (
+    <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">
+      {turn.texts.map((text, i) => (
+        <p key={i} className="whitespace-pre-line">
+          {text}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function lowerFirst(s: string): string {
   return s.charAt(0).toLowerCase() + s.slice(1);
 }
@@ -145,11 +213,13 @@ function Replies({ runId }: { runId: string }) {
   const log = useRunStream(runId, retry);
   const run = deriveRun(log.events);
   const done = isTerminal(run.status);
+  // The run's log opens with the owner's own message; it is already drawn as their bubble.
+  const replies = run.messages.filter((m) => m.from !== "owner");
   return (
     <>
-      {run.messages.length > 0 && (
+      {replies.length > 0 && (
         <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">
-          {run.messages.map((m) => (
+          {replies.map((m) => (
             <p key={m.seq} className="whitespace-pre-line">
               {m.text}
             </p>

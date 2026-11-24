@@ -305,8 +305,16 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
 
     public const int MaxSecretLength = 16_384;
 
+    /// <summary>
+    /// The value as a number, whether it was parsed from JSON or created in code: a
+    /// <see cref="JsonValue"/> made from an <c>int</c> answers <c>TryGetValue&lt;decimal&gt;</c> false, so
+    /// it is read through its JSON text.
+    /// </summary>
     public static decimal? NumberOf(JsonNode? value) =>
-        value is JsonValue v && v.GetValueKind() == JsonValueKind.Number && v.TryGetValue<decimal>(out var d) ? d : null;
+        value is JsonValue v && v.GetValueKind() == JsonValueKind.Number
+            && (v.TryGetValue<decimal>(out var d) || decimal.TryParse(v.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out d))
+            ? d
+            : null;
 
     private static EffectiveValue View(EffectiveEntry effective)
     {

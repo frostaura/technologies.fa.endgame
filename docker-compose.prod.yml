@@ -3,7 +3,11 @@
 # Pulls the published images instead of building. WHICH RELEASE RUNS is one variable,
 # ENDGAME_IMAGE_TAG (an immutable sha-<commit> tag from CI); unset, it falls back to :latest.
 # Required values are `:?` so a stack missing one refuses to start instead of booting on a default:
-#   POSTGRES_PASSWORD, CLOUDFLARE_TUNNEL_TOKEN, ENDGAME_SERVICE_TOKEN, DOCK_SECRET_KEY.
+#   POSTGRES_PASSWORD, CLOUDFLARE_TUNNEL_TOKEN, ENDGAME_SERVICE_TOKEN, DOCK_SECRET_KEY,
+#   OPENROUTER_API_KEY, ENDGAME_VAULT_MASTER_KEY, ENDGAME_OPERATORS.
+#
+# The development sign-in can never be on here: every service is Production and the control
+# plane's ENDGAME_DEV_LOGIN is the literal "false", not a variable. There is no mail catcher.
 #
 # Nothing is published to the host. Cloudflared runs inside this stack and reaches the edge by
 # service name; the edge is the only service it is pointed at.
@@ -54,6 +58,13 @@ services:
       Database__AutoMigrateOnStartup: "true"
       # The only component holding the OpenRouter key (ARCH-004).
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}
+      # Seals every secret and derives app tokens (32 random bytes, hex or base64). Changing it
+      # makes every sealed secret unreadable.
+      ENDGAME_VAULT_MASTER_KEY: ${ENDGAME_VAULT_MASTER_KEY:?ENDGAME_VAULT_MASTER_KEY is required}
+      # God mode: an explicit list of e-mail addresses, never inferred from a domain.
+      ENDGAME_OPERATORS: ${ENDGAME_OPERATORS:?ENDGAME_OPERATORS is required}
+      # Never a variable: production cannot enable the development sign-in.
+      ENDGAME_DEV_LOGIN: "false"
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +84,7 @@ services:
       Dock__Peers__Postgres: endgame-postgres-1
       Dock__Peers__Egress: endgame-egress-1
       Dock__AppMemoryBudgetMb: ${DOCK_APP_MEMORY_BUDGET_MB:-4096}
+      Dock__Instance: endgame
     # The ONLY service given the Docker socket.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

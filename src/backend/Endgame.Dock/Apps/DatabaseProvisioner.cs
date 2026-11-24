@@ -149,6 +149,33 @@ public sealed class DatabaseProvisioner(IOptions<DockOptions> options, OpaqueNam
         }
     }
 
+    /// <summary>The size of each app's database in bytes; an app with no database yet is left out.</summary>
+    public async Task<IReadOnlyDictionary<Guid, long>> SizesAsync(IEnumerable<Guid> appIds, CancellationToken cancellationToken)
+    {
+        var sizes = new Dictionary<Guid, long>();
+        if (!Configured)
+        {
+            return sizes;
+        }
+
+        var byName = appIds.Distinct().ToDictionary(names.Database);
+        if (byName.Count == 0)
+        {
+            return sizes;
+        }
+
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var query = new NpgsqlCommand("SELECT datname, pg_database_size(datname) FROM pg_database WHERE datname = ANY(@names)", connection);
+        query.Parameters.AddWithValue("names", byName.Keys.ToArray());
+        await using var reader = await query.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            sizes[byName[reader.GetString(0)]] = reader.GetInt64(1);
+        }
+
+        return sizes;
+    }
+
     /// <summary>Revokes <c>CONNECT</c> from <c>PUBLIC</c> on every database that is not an app's.</summary>
     public async Task LockDownPlatformAsync(CancellationToken cancellationToken)
     {

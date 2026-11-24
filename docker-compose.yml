@@ -1,19 +1,30 @@
 # Local development stack: `make up`.
 #
+# Every value has a development default here, so a fresh clone runs with an empty .env (only key
+# names are in .env.example). docker-compose.prod.yml requires each secret instead and can never
+# turn the development sign-in on.
+#
+# The control plane runs in Development with ENDGAME_DEV_LOGIN=true by default, so `make up` gives a
+# developer the development sign-in. Service addresses never depend on the environment name: each
+# peer is found by its compose name in every environment. Every other service runs as Production.
+#
+# A second stack beside this one (an integration run, a demo): set COMPOSE_PROJECT_NAME, the host
+# ports and DOCK_SUBNET_POOL in the environment, e.g. `make up COMPOSE_PROJECT_NAME=endgame-int
+# EDGE_HOST_PORT=18095 POSTGRES_HOST_PORT=15446 MAIL_UI_HOST_PORT=18026 DOCK_SUBNET_POOL=10.215.0.0/16`.
+# Its Dock then owns only its own apps (Dock__Instance) and cuts their networks from its own pool.
+#
 # Every service uses `restart: always`, not the `unless-stopped` of docker-compose.prod.yml.
 # Quitting Docker Desktop stops the containers, and `unless-stopped` then declines to bring them
 # back when the daemon starts again; `always` restarts them with the daemon. On the production
 # host `unless-stopped` is right, because there an operator's stop should stick.
-#
-# The project name is pinned so the volume names never depend on the clone's folder name.
-name: endgame
+name: ${COMPOSE_PROJECT_NAME:-endgame}
 
 x-dotnet-service: &dotnet-service
   restart: always
   environment: &dotnet-env
-    ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+    ASPNETCORE_ENVIRONMENT: Production
     # Every internal API call between services carries this (ARCH-004).
-    ENDGAME_SERVICE_TOKEN: ${ENDGAME_SERVICE_TOKEN:?ENDGAME_SERVICE_TOKEN is required (copy .env.example to .env)}
+    ENDGAME_SERVICE_TOKEN: ${ENDGAME_SERVICE_TOKEN:-endgame_dev_service_token_change_me}
   healthcheck:
     test: [ "CMD-SHELL", "curl --fail --silent http://127.0.0.1:8080/health > /dev/null || exit 1" ]
     interval: 5s
@@ -27,7 +38,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-endgame}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (copy .env.example to .env)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-endgame_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-endgame}
     ports:
       # Host-side dev only (dotnet ef, psql); loopback so nothing else on the network reaches it.
@@ -48,12 +59,32 @@ services:
       args: { PROJECT: Endgame.ControlPlane }
     environment:
       <<: *dotnet-env
-      ConnectionStrings__Endgame: Host=postgres;Port=5432;Database=${POSTGRES_DB:-endgame};Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD}
+      # Development turns on the development sign-in (with ENDGAME_DEV_LOGIN) and the mail catcher
+      # (appsettings.Development.json). Set ENDGAME_CONTROL_PLANE_ENVIRONMENT=Production to run without both.
+      ASPNETCORE_ENVIRONMENT: ${ENDGAME_CONTROL_PLANE_ENVIRONMENT:-Development}
+      ENDGAME_DEV_LOGIN: ${ENDGAME_DEV_LOGIN:-true}
+      ConnectionStrings__Endgame: Host=postgres;Port=5432;Database=${POSTGRES_DB:-endgame};Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD:-endgame_dev_password}
       Database__AutoMigrateOnStartup: "true"
-      # The only component holding the OpenRouter key (ARCH-004).
+      # The only component holding the OpenRouter key (ARCH-004). Empty: model calls are refused, nothing else changes.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Seals every secret and derives app tokens: 32 bytes as hex or base64. Development value only.
+      ENDGAME_VAULT_MASTER_KEY: ${ENDGAME_VAULT_MASTER_KEY:-656e6467616d652d6465762d7661756c742d6d61737465722d6b65792d303031}
+      # God mode comes from this explicit list alone (comma-separated e-mail addresses).
+      ENDGAME_OPERATORS: ${ENDGAME_OPERATORS:-operator@endgame.localhost}
+      # The addresses apps are given, as a browser on this machine reaches the edge.
+      Addresses__PathHost: localhost
+      Addresses__OrganisationDomain: localhost
+      Addresses__Scheme: http
+      Addresses__Port: ${EDGE_HOST_PORT:-8095}
+      # No mail leaves this machine: every message lands in the mail catcher.
+      Smtp__Host: mailcatcher
+      Smtp__Port: "1025"
+      Smtp__From: endgame@endgame.localhost
+      Smtp__StartTls: "false"
     depends_on:
       postgres:
+        condition: service_healthy
+      mailcatcher:
         condition: service_healthy
 
   runner:
@@ -71,12 +102,16 @@ services:
       args: { PROJECT: Endgame.Dock }
     environment:
       <<: *dotnet-env
-      Dock__SecretKey: ${DOCK_SECRET_KEY:?DOCK_SECRET_KEY is required (copy .env.example to .env)}
-      Dock__PostgresAdmin: Host=postgres;Port=5432;Database=postgres;Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD}
-      Dock__Peers__Edge: endgame-edge-1
-      Dock__Peers__Postgres: endgame-postgres-1
-      Dock__Peers__Egress: endgame-egress-1
+      Dock__SecretKey: ${DOCK_SECRET_KEY:-endgame_dev_dock_secret_key_change_me_now}
+      Dock__PostgresAdmin: Host=postgres;Port=5432;Database=postgres;Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD:-endgame_dev_password}
+      # Everything this Dock creates is labelled with its stack's name, and nothing else is touched.
+      Dock__Instance: ${COMPOSE_PROJECT_NAME:-endgame}
+      Dock__SubnetPool: ${DOCK_SUBNET_POOL:-10.213.0.0/16}
+      Dock__Peers__Edge: ${COMPOSE_PROJECT_NAME:-endgame}-edge-1
+      Dock__Peers__Postgres: ${COMPOSE_PROJECT_NAME:-endgame}-postgres-1
+      Dock__Peers__Egress: ${COMPOSE_PROJECT_NAME:-endgame}-egress-1
       Dock__AppMemoryBudgetMb: ${DOCK_APP_MEMORY_BUDGET_MB:-4096}
+      Dock__UsageReportSeconds: ${ENDGAME_USAGE_REPORT_SECONDS:-300}
     # The ONLY service given the Docker socket (CLAUDE.md rule 5). Never copy these two keys elsewhere.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -99,6 +134,22 @@ services:
     sysctls:
       net.ipv6.conf.all.disable_ipv6: 1
 
+  # Development only: an SMTP server on 1025 that keeps every message and sends none. Its web view
+  # and API (GET /api/v1/messages) are on loopback.
+  mailcatcher:
+    image: axllent/mailpit:v1.27.10
+    restart: always
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports:
+      - "127.0.0.1:${MAIL_UI_HOST_PORT:-8126}:8025"
+    healthcheck:
+      test: [ "CMD", "/mailpit", "readyz" ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   console:
     build:
       context: .
@@ -119,6 +170,8 @@ services:
     environment:
       <<: *dotnet-env
       Edge__PlatformOrigin: http://localhost:${EDGE_HOST_PORT:-8095}
+      Edge__AppSubnetPools__0: ${DOCK_SUBNET_POOL:-10.213.0.0/16}
+      Edge__UsageReportSeconds: ${ENDGAME_USAGE_REPORT_SECONDS:-300}
     ports:
       - "${EDGE_HOST_PORT:-8095}:8080"
     depends_on:

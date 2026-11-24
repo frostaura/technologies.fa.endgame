@@ -126,18 +126,71 @@ public sealed class AppProxyConfigTests
     }
 }
 
-public sealed class AccessCoverageTests
+public sealed class AppAddressRulesTests
 {
+    private static readonly EdgeApp App = Routes.App(project: "notes") with { Hooks = new HashSet<string>(StringComparer.Ordinal) { "court-sensor" } };
+
     [Theory]
-    [InlineData("acme", true)]
-    [InlineData("acme/apps", true)]
-    [InlineData("acme/apps/notes/web", true)]
-    [InlineData("acme/apps/notes/other", false)]
-    [InlineData("acme/app", false)]
-    [InlineData("acmesubsidiary", false)]
-    [InlineData("", false)]
-    public void A_role_applies_at_its_scope_and_beneath(string grant, bool covers) =>
-        Assert.Equal(covers, AccessGate.Covers(grant, "acme/apps/notes/web"));
+    [InlineData("/hooks/court-sensor", "court-sensor")]
+    [InlineData("/hooks/court-sensor/", "court-sensor")]
+    [InlineData("/hooks/court-sensor/deeper", null)]
+    [InlineData("/hooks/", null)]
+    [InlineData("/hooks", null)]
+    [InlineData("/HOOKS/court-sensor", null)]
+    [InlineData("/api/hooks/court-sensor", null)]
+    public void A_hook_is_exactly_hooks_slash_its_name(string path, string? name) => Assert.Equal(name, AppGate.HookName(path));
+
+    [Fact]
+    public void Only_declared_hooks_skip_the_access_check()
+    {
+        Assert.True(App.DeclaresHook("court-sensor"));
+        Assert.False(App.DeclaresHook("other"));
+        Assert.False((App with { Hooks = null }).DeclaresHook("court-sensor"));
+    }
+
+    [Theory]
+    [InlineData("endgame.session", true)]
+    [InlineData("endgame.app.0123456789abcdef0123456789abcdef", true)]
+    [InlineData("endgame.app_auth", true)]
+    [InlineData("Endgame.Registration", true)]
+    [InlineData("endgame_session", false)]
+    [InlineData("theme", false)]
+    public void Every_platform_cookie_is_recognised(string name, bool platform) => Assert.Equal(platform, AppRequestTransforms.IsPlatformCookie(name));
+
+    [Theory]
+    [InlineData("/acme/apps/notes/web/notes/new?x=1", "https://endgame.test/acme/apps/notes/web/notes/new?x=1")]
+    [InlineData("https://endgame.test/acme/apps/notes/web/", "https://endgame.test/acme/apps/notes/web/")]
+    [InlineData("https://acme.endgame.test/apps/notes/web/notes", "https://acme.endgame.test/apps/notes/web/notes")]
+    [InlineData("https://ACME.endgame.test/apps/notes/web", "https://acme.endgame.test/apps/notes/web")]
+    [InlineData("/acme/apps/other/web/", null)]
+    [InlineData("//evil.example/acme/apps/notes/web/", null)]
+    [InlineData("https://evil.example/acme/apps/notes/web/", null)]
+    [InlineData("https://user@endgame.test/acme/apps/notes/web/", null)]
+    [InlineData("http://endgame.test/acme/apps/notes/web/", null)]
+    [InlineData("https://endgame.test:8443/acme/apps/notes/web/", null)]
+    [InlineData("https://acme.endgame.test/apps/notes/webby/", null)]
+    [InlineData("/acme/apps/notes/web/../../other/web/", null)]
+    [InlineData("javascript:alert(1)", null)]
+    public void A_return_address_must_be_inside_one_of_the_apps_two_addresses(string returnTo, string? inside)
+    {
+        var addresses = new AppAddresses(App, AppProxyConfig.PathShape, "https", new Microsoft.AspNetCore.Http.HostString("endgame.test"), new Uri("https://endgame.test"));
+        Assert.Equal(inside, addresses.Inside(returnTo, AppProxyConfig.PathShape));
+    }
+
+    [Fact]
+    public void The_two_homes_carry_the_visitors_scheme_and_port()
+    {
+        var local = new AppAddresses(App, AppProxyConfig.PathShape, "http", new Microsoft.AspNetCore.Http.HostString("localhost:18095"), new Uri("http://localhost:18095"));
+        Assert.Equal("http://localhost:18095/acme/apps/notes/web/", local.PathHome);
+        Assert.Equal("http://acme.endgame.test:18095/apps/notes/web/", local.SubdomainHome);
+        Assert.True(local.IsOnSubdomain(local.SubdomainHome));
+        Assert.False(local.IsOnSubdomain(local.PathHome));
+
+        // From the subdomain, the path form is named on the platform's own origin.
+        var fromSubdomain = new AppAddresses(App, AppProxyConfig.HostShape, "https", new Microsoft.AspNetCore.Http.HostString("acme.endgame.test"), new Uri("https://endgame.test"));
+        Assert.Equal("https://endgame.test/acme/apps/notes/web/", fromSubdomain.PathHome);
+        Assert.Equal("https://acme.endgame.test/apps/notes/web/", fromSubdomain.Home(AppProxyConfig.HostShape));
+    }
 }
 
 public sealed class AppNetworkListenerTests

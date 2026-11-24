@@ -27,8 +27,11 @@ and credit.
 2. **Home** shows the organisation band (name, divisions, apps, employees, credits this month), what
    needs the owner (verdicts waiting, approvals), and the org chart: divisions, projects, apps with
    health, running and access chips, spend and the employees on each. Selecting a node or an employee
-   changes the breadcrumb and the conversation's scope. A message starts a run; its `message` events
-   stream back as the reply.
+   changes the breadcrumb and the conversation's scope. What was said before at that scope is read back
+   from the control plane, so the conversation survives a reload; a new message starts a run, and its
+   `message` events (other than the owner's own, which the run's log also carries) stream back as the
+   reply, appended below. An Admin or the Owner is offered the selected level's secrets; the Owner,
+   the operator log.
 3. **Start**: on first run the owner names the organisation; the idea and optional constraints are
    described; the research estimate is shown before anything is charged; research starts.
 4. **Run view**: the live, resumable trace — plan, tasks, cost (estimate, spent, held), approvals
@@ -37,18 +40,32 @@ and credit.
 5. **Verdict**: the verdict, who already does this, the gap, who would want it, what would change it,
    and the decision — change, overrule (confirmed, recorded as an overrule) or drop.
 6. **App**: health, both addresses, today's telemetry, cost against cap; running (sleeps / always on)
-   and who can open it, changed optimistically. Making an app public needs a person's confirmation.
-7. **Credits**: balance, AI against hosting, budgets down the cascade, estimate accuracy, what was not
+   and who can open it, changed optimistically. Making an app public waits on an explicit confirmation
+   dialog. Telemetry and running cost the app has not measured yet read "not measured yet", never zero.
+   A shared app lists who it is shared with (registered or invited), invites by e-mail — the one-time
+   code is shown once, with a copy button, and never stored — and stops sharing after a confirmation.
+   The secrets it can read are listed by name, with a way to manage them.
+7. **Secrets** (`/secrets?scope=`): at any level, the names that apply, the level that set each
+   (inherited, or set here and what it replaces) and those set beneath. Set, replace and remove; names
+   are UPPER_SNAKE_CASE, checked before sending. A value is write-only: typed, sent once outside the
+   store, cleared, and never shown.
+8. **Operator access** (`/operator-access`, the Owner): every FrostAura entry into the organisation and
+   every operator action, newest first, in plain words; technical mode adds the raw action and detail.
+9. **Credits**: balance, AI against hosting, budgets down the cascade, estimate accuracy, what was not
    charged, overdraft and top-ups.
-8. **System status** is reachable only in technical mode.
+10. **System status** is reachable only in technical mode.
+11. **The header** is one row on a desktop and at most two on a phone (375–412 px): the mark, where you
+    are (its last two steps) and sign-out; then the mode toggle and the balance.
 
 ## Alternate and failure flows
 
 - **A1 — a read fails.** Every screen shows loading, empty, loaded and failed as distinct states. A
   failed read is recorded on the page with the reason and a retry; it is never drawn as an empty list.
   A failed refresh keeps the last good data, marked stale.
-- **A2 — a write is refused.** Optimistic changes (app settings, pause / resume / cancel, approvals)
-  roll back, and the reason stays on the page.
+- **A2 — a write is refused.** Optimistic changes (app settings, pause / resume / cancel, approvals,
+  a secret set or removed, an invitation or a removed share) roll back, and the reason stays on the page.
+- **A6 — a role is missing.** A 403 (secrets below Admin, the operator log for anyone but the Owner,
+  sharing below Admin) is drawn as a failed read with the control plane's reason, never as an empty list.
 - **A3 — the event stream drops.** It reconnects with `after=<last sequence held>`; repeats are dropped.
   After six failed attempts the page says so and offers to reconnect.
 - **A4 — the estimate cannot be worked out.** Research cannot start; the reason is shown.
@@ -64,40 +81,29 @@ and credit.
 - Normal mode never names infrastructure (CLAUDE.md rule 12). An estimate is shown before work starts
   (rule 11). Go-public is a human act (rule 10). One token layer for the look (rule 13).
 
-## The API the console expects — assumptions beyond ARCH-004
+## The API the console reads — as built
 
-ARCH-004 names the endpoints; it does not give their JSON. The console's full reading is the typed
-contract in [`src/frontend/src/store/types.ts`](../../src/frontend/src/store/types.ts) (camelCase JSON,
-problem-details errors). These points are assumptions the control-plane lane must match or correct:
+The console's typed contract is [`src/frontend/src/store/types.ts`](../../src/frontend/src/store/types.ts),
+checked field by field against the control plane (`Endgame.Infrastructure/Tree/ConsoleViews.cs` and the
+console endpoints); [ARCH-004](../architecture/ARCH-004-service-contracts.md) is the endpoint list. JSON
+is camelCase, errors are problem details. What the console relies on beyond ARCH-004's table:
 
-| Endpoint | Assumption |
+| Endpoint | The console reads |
 | --- | --- |
-| `GET /api/auth/options` | **Not in ARCH-004.** `{ passkey: bool, developmentSignIn: bool }`, readable signed out. |
-| `POST /api/auth/development` | **Not in ARCH-004.** Development only; sets the session; returns `Me`. 404 otherwise. |
-| `POST /api/auth/passkey/register/options` | Body `{ displayName, email }` → `{ publicKey: PublicKeyCredentialCreationOptionsJSON }` (base64url binary fields). |
-| `POST /api/auth/passkey/register/complete` | Body `{ credential: RegistrationResponseJSON }` → `Me`, session set. |
-| `POST /api/auth/passkey/login/options` | Body `{}` → `{ publicKey: PublicKeyCredentialRequestOptionsJSON }`. |
-| `POST /api/auth/passkey/login/complete` | Body `{ credential: AuthenticationResponseJSON }` → `Me`. |
-| `GET /api/me` | `{ user: { id, displayName, email }, organisation: { id, slug, name } \| null }`; **401** when signed out. |
-| `GET /api/tree` | `Tree`: `organisation` (null on first run) with `summary`, `spend.monthCredits`, `workers`; `divisions[].projects[].apps[]`; each node has `spend.monthCredits` and `workers[] { id, name, role, kind: employee\|contractor, activity }`; projects carry `stage`, `ideaId`, `note`, `progress { runId, label, step, of, spentCredits, estimatedCredits }`; apps carry `health`, `running`, `access`, `sharedWith`, `visitsToday`, `lastVisitAt`; plus `needsYou[]` of `{ kind: "verdict", id, ideaId, title, verdict, detail }` or `{ kind: "approval", id, runId, approvalId, title, detail }`. |
-| `POST /api/organisations` | Body `{ name, slug }` → `{ id, slug, name }`. |
-| `POST /api/ideas/estimate` | **Not in ARCH-004.** Body `{ text, constraints[] }` → `{ credits, basis }`. Free; must work before an organisation exists. Needed because the estimate is shown before research starts. |
-| `POST /api/ideas` | Body `{ text, constraints[] }` → `Idea` with `runId`. |
-| `GET /api/ideas/{id}` | `Idea`: `status` (researching / verdict / decided / failed), `runId`, `scope`, `research { estimatedCredits, spentCredits, by }`, `verdict` (null until ready: `outcome` build\|change\|do-not-build, `headline`, `summary`, `existing[] { name, description, url }`, `gap[]`, `demand { paragraphs[], evidenceFound }`, `wouldChange { text, changeLabel, estimateCredits } \| null`, `method`), `decision { choice, at, by, overruled, runId } \| null`, and the organisation's `record { total, build, change, doNotBuild, overruled[] { ideaId, title, verdict, outcome } }`. |
-| `POST /api/ideas/{id}/decision` | Body `{ choice: build\|change\|overrule\|drop }` → the updated `Idea`; `decision.runId` is the run that follows, if any. |
-| `GET /api/runs/{id}` | `Run { id, kind, title, scope, status: queued\|running\|waiting\|paused\|finished\|failed\|cancelled, startedAt, finishedAt, lastSeq, ideaId, estimateCredits, spentCredits }`. |
-| `GET /api/runs/{id}/events` | SSE. Resumes from `?after=<seq>` (the console always sends it, and closes on `run.finished`). Each message: `id: <seq>`, optional `event: <type>`, `data: { seq, type, at, payload }`. Payload keys the console reads: `run.paused { reason }`, `run.finished { outcome: succeeded\|failed\|cancelled, summary, totals { credits } }`, `plan.* { summary, items[] { id, text, check } }`, `task.* { taskId, summary, holder, reason }`, `model.requested { callId, taskType, model, reservedCredits }`, `model.replied { callId, model, tokens { input, output }, settledCredits }`, `tool.* { tool, arguments, rule, reason, result }`, `subagent.* { subagentId, brief, summary }`, `approval.requested { approvalId, question, detail }`, `approval.answered { approvalId, answer }`, `evaluation.* { item (plan item id), evidence }`, `estimate.made { credits }`, `estimate.scored { estimated, actual }`, `message { text, from }`. |
-| `POST /api/runs/{id}/pause\|resume\|cancel` | No body → the updated `Run`. |
-| `POST /api/runs/{id}/approvals/{approvalId}` | Body `{ decision: approve\|reject, note? }` → 204. |
-| `POST /api/conversations` | Body `{ scope, message, employeeId? }` (`employeeId` when talking to one employee) → the `Run`. No conversation history endpoint exists, so history lasts the browser session. |
-| `GET /api/apps/{id}` | `AppDetail { id, name, scope, health { state, summary }, running, addresses { path, subdomain \| null } (absolute URLs), telemetry { visitsToday, requestsToday, errorsToday, latencyP50Ms, latencyP95Ms, lastVisitAt }, cost { monthCredits, capCredits }, settings { running: sleep\|always-on, access: private\|shared\|public }, runningCost { sleep, alwaysOn } \| null, sharedWith }`. |
-| `POST /api/apps/{id}/settings` | Body: a partial `settings` → the updated `AppDetail`. |
-| `GET /api/credits?scope=<org slug>` | `Credits { scope, balance, month { spent, ai, hosting }, monthsLeftAtPace, budgets[] { scope, name, level, depth, spentCredits, capCredits, appId } (in tree order), estimates { pieces, withinPercent, under, over, largestMissPercent } \| null, notCharged { credits, repairs }, overdraft { frostauraLimit, ownLimit } \| null, topUps[] { at, credits, note } }`. |
+| `GET /api/me` | `{ user { id, displayName, email \| null }, organisation \| null, isOperator, passkeys, memberships[] { id, scope, level, role, organisationId, organisationSlug, organisationName } }`; **401** signed out. |
+| `GET /api/tree` | `{ generatedAt, viewerRole: owner\|admin\|builder\|viewer\|none, organisation \| null, divisions[], needsYou[] }`; app `visitsToday` is null until measured. `viewerRole` gates the secrets and operator-log links. |
+| `GET /api/runs/{id}` | Also `employeeId`, `conversationId`, `budgetExhausted`, `outcome`, `summary`, `createdAt`. A conversation run's log opens with the owner's own `message { from: "owner", text }`. |
+| `GET /api/conversations?scope=&employeeId=` | `{ scope, conversationId \| null, employeeId \| null, messages[] { runId, seq, at, from, text } }`, oldest first, at most 200. |
+| `GET /api/apps/{id}` | `telemetry` and `runningCost` are **null** until measured; also `status`, `version`, `publishedAt`, `idleMinutes`. |
+| `GET /api/credits?scope=` | Also `heldCredits` and `available`. |
+| `GET/PUT/DELETE /api/secrets` | `{ scope, effective[] { name, setAtLevel, setAtPath, setAt, inherited, overrides[] }, setBelow[] { name, setAtPath } }`; `PUT { scope, name, value }` is sent with `fetch`, never through the store. |
+| `GET/POST/DELETE /api/apps/{id}/shares` | `[{ email, invitedAt, registered }]`; `POST { email }` → `{ email, invitationCode, expiresAt }`, sent with `fetch` so the code never reaches the store. |
+| `GET /api/audit/operator-access?organisation=` | `[{ id, at, action, operator { id, email, displayName }, detail }]`; 403 for anyone but the Owner. |
 
 ## Not built, because the contract has no backend for it
 
 The Employee screen (job, track record, memory), the app's "ask about this app", its version history
-and download, hire proposals, sharing by email address, changing the overdraft limit and asking for a
+and download, hire proposals, changing the overdraft limit and asking for a
 top-up. Each appears in the approved design and returns when its endpoint exists.
 
 ## Acceptance

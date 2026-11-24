@@ -18,6 +18,8 @@ const CREDITS: Credits = {
   notCharged: { credits: 42, repairs: 3 },
   overdraft: { frostauraLimit: 2000, ownLimit: null },
   topUps: [{ at: "2026-11-01T00:00:00Z", credits: 5000, note: "Added by FrostAura" }],
+  heldCredits: 6,
+  available: 6321,
 };
 
 afterEach(() => {

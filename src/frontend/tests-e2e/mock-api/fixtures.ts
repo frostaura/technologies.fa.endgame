@@ -1,6 +1,8 @@
 /**
  * TEST ONLY. Fixture organisations for the mock control plane. Every name and figure here is
- * invented for the specs and exists nowhere in the running console.
+ * invented for the specs and exists nowhere in the running console. The shapes are the control
+ * plane's own (Endgame.Infrastructure/Tree/ConsoleViews.cs and the console endpoints), so the
+ * console is driven by what the real system returns.
  */
 
 export type ScenarioName =
@@ -14,6 +16,8 @@ export type ScenarioName =
   | "settings-fail"
   | "estimate-fails"
   | "conversation-fails"
+  | "not-owner"
+  | "secret-refused"
   | "slow";
 
 export interface MockEvent {
@@ -38,6 +42,12 @@ interface RunSummary {
   ideaId: string | null;
   estimateCredits: number | null;
   spentCredits: number;
+  employeeId: string | null;
+  conversationId: string | null;
+  budgetExhausted: boolean;
+  outcome: string | null;
+  summary: string | null;
+  createdAt: string;
 }
 
 export interface MockRun {
@@ -63,8 +73,23 @@ export interface AppFixture {
   [key: string]: unknown;
 }
 
+export interface SecretEntry {
+  scope: string;
+  name: string;
+  setAt: string;
+}
+
+export interface ShareEntry {
+  email: string;
+  invitedAt: string;
+  registered: boolean;
+}
+
 export interface MockState {
   signedIn: boolean;
+  /** The signed-in person's role over the tree, as GET /api/tree reports it. */
+  viewerRole: "owner" | "admin" | "builder" | "viewer" | "none";
+  failSecretWrite: boolean;
   developmentSignIn: boolean;
   delayMs: number;
   failTree: boolean;
@@ -80,6 +105,10 @@ export interface MockState {
   runs: Record<string, MockRun>;
   ideas: Record<string, IdeaFixture>;
   apps: Record<string, AppFixture>;
+  /** Names and where each was set. A value is never kept, not even by the mock. */
+  secrets: SecretEntry[];
+  shares: Record<string, ShareEntry[]>;
+  operatorLog: unknown[];
   tree: () => unknown;
   credits: () => unknown;
   addIdea: (b: { text: string; constraints: string[] }) => IdeaFixture;
@@ -97,7 +126,26 @@ function ev(type: string, payload: Record<string, unknown> = {}, delayMs = 60, g
 function makeRun(id: string, summary: Partial<RunSummary>, script: Omit<MockEvent, "seq" | "at">[], released = 0): MockRun {
   const events = script.map((e, i) => ({ ...e, seq: i + 1, at: ago(script.length - i) }));
   return {
-    summary: { id, kind: "research", title: "Work", scope: "fixture", status: "running", startedAt: ago(30), finishedAt: null, lastSeq: 0, ideaId: null, estimateCredits: null, spentCredits: 0, ...summary },
+    summary: {
+      id,
+      kind: "research",
+      title: "Work",
+      scope: "fixture",
+      status: "running",
+      startedAt: ago(30),
+      finishedAt: null,
+      lastSeq: 0,
+      ideaId: null,
+      estimateCredits: null,
+      spentCredits: 0,
+      employeeId: null,
+      conversationId: null,
+      budgetExhausted: false,
+      outcome: null,
+      summary: null,
+      createdAt: ago(30),
+      ...summary,
+    },
     events,
     released,
     paused: false,
@@ -150,6 +198,8 @@ function researchScript(withApproval: boolean): Omit<MockEvent, "seq" | "at">[] 
 export function scenario(name: ScenarioName): MockState {
   const s: MockState = {
     signedIn: !name.startsWith("signed-out"),
+    viewerRole: name === "first-run" ? "none" : name === "not-owner" ? "admin" : "owner",
+    failSecretWrite: name === "secret-refused",
     developmentSignIn: name === "signed-out-dev",
     delayMs: name === "slow" ? 1500 : 0,
     failTree: name === "tree-fails",
@@ -165,6 +215,22 @@ export function scenario(name: ScenarioName): MockState {
     runs: {},
     ideas: {},
     apps: {},
+    secrets: [
+      { scope: "northwind", name: "MAIL_API_KEY", setAt: ago(60 * 24 * 20) },
+      { scope: "northwind", name: "MAPS_KEY", setAt: ago(60 * 24 * 12) },
+      { scope: "northwind/software", name: "MAPS_KEY", setAt: ago(60 * 24 * 3) },
+      { scope: "northwind/software/booking/desk", name: "PAYMENTS_KEY", setAt: ago(60 * 5) },
+    ],
+    shares: {
+      app2: [
+        { email: "cook@example.test", invitedAt: ago(60 * 24 * 6), registered: true },
+        { email: "taster@example.test", invitedAt: ago(60 * 30), registered: false },
+      ],
+    },
+    operatorLog: [
+      { id: "op2", at: ago(60 * 26), action: "credits.top_up", operator: { id: "op-u1", email: "support@example.test", displayName: "Fixture Operator" }, detail: { credits: 10000, note: "Added by FrostAura", entryId: "ce1" } },
+      { id: "op1", at: ago(60 * 24 * 10), action: "organisation.entered", operator: { id: "op-u1", email: "support@example.test", displayName: "Fixture Operator" }, detail: { path: "northwind" } },
+    ],
     tree: () => null,
     credits: () => null,
     addIdea: () => ({ id: "", title: "", runId: "", status: "", decision: null }),
@@ -190,6 +256,10 @@ export function scenario(name: ScenarioName): MockState {
       settings: { running: "always-on", access: "private" },
       runningCost: { sleep: 30, alwaysOn: 180 },
       sharedWith: 0,
+      status: "running",
+      version: "1.4.0",
+      publishedAt: ago(60 * 24 * 6),
+      idleMinutes: 15,
     },
     app2: {
       id: "app2",
@@ -203,6 +273,28 @@ export function scenario(name: ScenarioName): MockState {
       settings: { running: "sleep", access: "shared" },
       runningCost: { sleep: 20, alwaysOn: 150 },
       sharedWith: 2,
+      status: "sleeping",
+      version: "0.9.2",
+      publishedAt: ago(60 * 24 * 40),
+      idleMinutes: 15,
+    },
+    // Published but not yet measured: the control plane sends telemetry and runningCost as null.
+    app3: {
+      id: "app3",
+      name: "Tide board",
+      scope: "northwind/research/recipes/tides",
+      health: { state: "healthy", summary: "Running version 0.1.0." },
+      running: "awake",
+      addresses: { path: "https://endgame.example.test/northwind/research/recipes/tides", subdomain: null },
+      telemetry: null,
+      cost: { monthCredits: 0, capCredits: null },
+      settings: { running: "sleep", access: "public" },
+      runningCost: null,
+      sharedWith: 0,
+      status: "running",
+      version: "0.1.0",
+      publishedAt: ago(20),
+      idleMinutes: 15,
     },
   };
 
@@ -218,6 +310,19 @@ export function scenario(name: ScenarioName): MockState {
     ],
     5,
   );
+
+  // An earlier exchange at the organisation, so the dock has history to read back after a reload.
+  s.runs["run-conv-past"] = makeRun(
+    "run-conv-past",
+    { kind: "conversation", title: "Is anything over budget?", scope: "northwind", status: "finished", finishedAt: ago(90), startedAt: ago(91), createdAt: ago(91), conversationId: "conv-northwind#" },
+    [
+      ev("message", { from: "owner", userId: "u1", text: "Is anything over budget?" }),
+      ev("run.started", {}),
+      ev("message", { from: "Ada", text: "Nothing is over budget. Booking desk is at 310 of its 500 credit cap." }),
+      ev("run.finished", { outcome: "succeeded", totals: { credits: 0.3 } }),
+    ],
+  );
+  s.runs["run-conv-past"].released = s.runs["run-conv-past"].events.length;
 
   s.runs["run-research"] = makeRun("run-research", { kind: "research", title: "Researching Court ladder", scope: "northwind", ideaId: "idea-ladder", estimateCredits: 60, spentCredits: 0 }, researchScript(true));
 
@@ -257,10 +362,12 @@ export function scenario(name: ScenarioName): MockState {
   const division = (id: string, slug: string, name: string, monthCredits: number, projects: unknown[]) => ({ id, slug, name, spend: { monthCredits }, workers: [], projects });
 
   s.tree = () => {
-    if (!s.org) return { organisation: null, divisions: [], needsYou: [] };
+    const head = { generatedAt: now(), viewerRole: s.viewerRole };
+    if (!s.org) return { ...head, viewerRole: "none", organisation: null, divisions: [], needsYou: [] };
     const organisation = { ...s.org, spend: { monthCredits: 452 }, workers: [ada] };
-    if (name === "empty-org") return { organisation: { ...organisation, summary: null, workers: [] }, divisions: [], needsYou: [] };
+    if (name === "empty-org") return { ...head, organisation: { ...organisation, summary: null, workers: [] }, divisions: [], needsYou: [] };
     return {
+      ...head,
       organisation,
       divisions: [
         division("d1", "software", "Software", 310, [
@@ -289,7 +396,10 @@ export function scenario(name: ScenarioName): MockState {
             progress: null,
             spend: { monthCredits: 22 },
             workers: [ada, { id: "c1", name: "Contractor", role: "Researcher", kind: "contractor", activity: "competitor sweep" }, { id: "c2", name: "Contractor", role: "Researcher", kind: "contractor", activity: null }],
-            apps: [{ id: "app2", slug: "box", name: "Recipe box", health: "healthy", running: "asleep", access: "shared", sharedWith: 2, visitsToday: null, lastVisitAt: ago(60 * 50), spend: { monthCredits: 22 }, workers: [] }],
+            apps: [
+              { id: "app2", slug: "box", name: "Recipe box", health: "healthy", running: "asleep", access: "shared", sharedWith: s.shares.app2?.length ?? 0, visitsToday: null, lastVisitAt: ago(60 * 50), spend: { monthCredits: 22 }, workers: [] },
+              { id: "app3", slug: "tides", name: "Tide board", health: "healthy", running: "awake", access: "public", sharedWith: 0, visitsToday: null, lastVisitAt: null, spend: { monthCredits: 0 }, workers: [] },
+            ],
           },
           {
             id: "p4",
@@ -328,6 +438,8 @@ export function scenario(name: ScenarioName): MockState {
     notCharged: { credits: 37, repairs: 2 },
     overdraft: { frostauraLimit: 3000, ownLimit: 1000 },
     topUps: [{ at: ago(60 * 24 * 10), credits: 10_000, note: "Added by FrostAura" }],
+    heldCredits: 12,
+    available: (name === "empty-org" ? 0 : 9_548) + 3000,
   });
 
   s.addRun = (title, kind) => {
@@ -356,7 +468,9 @@ export function scenario(name: ScenarioName): MockState {
     counter += 1;
     const id = `run-conv-${counter}`;
     const who = employeeId ? "Ada" : (scope.split("/").pop() ?? scope);
-    s.runs[id] = makeRun(id, { kind: "conversation", title: "Conversation", scope, startedAt: now() }, [
+    s.runs[id] = makeRun(id, { kind: "conversation", title: message.slice(0, 120), scope, startedAt: now(), createdAt: now(), employeeId: employeeId ?? null, conversationId: `conv-${scope}#${employeeId ?? ""}` }, [
+      // The control plane writes the owner's own message into the run's log first.
+      ev("message", { from: "owner", userId: s.user.id, text: message }, 0),
       ev("run.started", {}, 50),
       ev("message", { from: who, text: `About “${message}”: one verdict is waiting and one approval.` }, 500),
       ev("run.finished", { outcome: "succeeded", totals: { credits: 0.4 } }, 50),
