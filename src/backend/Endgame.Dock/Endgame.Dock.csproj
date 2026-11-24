@@ -2,5 +2,15 @@
   <ItemGroup>
     <!-- The only Docker Engine client in the solution, and Dock the only service given the socket. -->
     <PackageReference Include="Docker.DotNet.Enhanced" />
+    <!-- Provisions each app's database and role on the shared server. -->
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Endgame.Hosting.Contracts/Endgame.Hosting.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The workspace image Dock builds for itself (Workspaces/WorkspaceImage.cs). -->
+    <EmbeddedResource Include="Workspaces/workspace.Dockerfile" LogicalName="workspace.Dockerfile" />
+    <EmbeddedResource Include="Workspaces/endgame-build.sh" LogicalName="endgame-build.sh" />
   </ItemGroup>
 </Project>
