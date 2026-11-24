@@ -61,8 +61,8 @@ public static class TenancySql
         foreach (var table in AppendOnlyTables)
         {
             sql.AppendLine($"REVOKE UPDATE, DELETE, TRUNCATE ON {table} FROM endgame_app, endgame_system;");
-            sql.AppendLine($"CREATE TRIGGER {table}_append_only BEFORE UPDATE OR DELETE ON {table} FOR EACH ROW EXECUTE FUNCTION endgame_refuse_change();");
-            sql.AppendLine($"CREATE TRIGGER {table}_no_truncate BEFORE TRUNCATE ON {table} FOR EACH STATEMENT EXECUTE FUNCTION endgame_refuse_change();");
+            // Statement-level, so even an UPDATE or DELETE that matches no row is refused.
+            sql.AppendLine($"CREATE TRIGGER {table}_append_only BEFORE UPDATE OR DELETE OR TRUNCATE ON {table} FOR EACH STATEMENT EXECUTE FUNCTION endgame_refuse_change();");
         }
 
         return sql.ToString();
@@ -74,7 +74,6 @@ public static class TenancySql
         foreach (var table in AppendOnlyTables)
         {
             sql.AppendLine($"DROP TRIGGER IF EXISTS {table}_append_only ON {table};");
-            sql.AppendLine($"DROP TRIGGER IF EXISTS {table}_no_truncate ON {table};");
         }
 
         foreach (var table in TenantTables)

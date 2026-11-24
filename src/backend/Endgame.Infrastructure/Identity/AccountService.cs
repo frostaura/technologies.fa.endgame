@@ -149,9 +149,10 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
             : throw EndgameProblem.Conflict(string.Join(" ", result.Errors.Select(e => e.Description)));
     }
 
-    public async Task ClearInvitationAsync(EndgameUser user)
+    public async Task ClearInvitationAsync(EndgameUser given)
     {
-        ArgumentNullException.ThrowIfNull(user);
+        ArgumentNullException.ThrowIfNull(given);
+        var user = await Fresh(given);
         user.InvitationCodeHash = null;
         user.InvitationExpiresAt = null;
         await users.UpdateAsync(user);
@@ -211,9 +212,10 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
     /// A fresh one-time invitation code for someone who has no passkey yet — returned once, stored only
     /// as a hash, open for <see cref="InvitationLifetime"/>. Someone with a passkey needs none.
     /// </summary>
-    public async Task<(string? Code, DateTimeOffset? ExpiresAt)> IssueInvitationIfNeededAsync(EndgameUser user)
+    public async Task<(string? Code, DateTimeOffset? ExpiresAt)> IssueInvitationIfNeededAsync(EndgameUser given)
     {
-        ArgumentNullException.ThrowIfNull(user);
+        ArgumentNullException.ThrowIfNull(given);
+        var user = await Fresh(given);
         if ((await users.GetPasskeysAsync(user)).Count > 0)
         {
             return (null, null);
@@ -226,6 +228,10 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
         await users.UpdateAsync(user);
         return (code, expires);
     }
+
+    /// <summary>The tracked copy of a person: other work in the request may have cleared the change tracker since it was read.</summary>
+    private async Task<EndgameUser> Fresh(EndgameUser user) =>
+        await users.FindByIdAsync(user.Id.ToString()) ?? throw EndgameProblem.NotFound("The account");
 
     /// <summary>Everyone granted a role at the scope or beneath it.</summary>
     public async Task<IReadOnlyList<MemberView>> MembersAsync(ResolvedScope scope, CancellationToken cancellationToken)

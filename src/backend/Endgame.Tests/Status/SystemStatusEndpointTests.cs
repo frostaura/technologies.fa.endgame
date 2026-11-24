@@ -22,6 +22,7 @@ public sealed class SystemStatusEndpointTests
         {
             builder.UseSetting("ConnectionStrings:Endgame", UnreachableDatabase);
             builder.UseSetting("Database:AutoMigrateOnStartup", "false");
+            builder.UseSetting("Sweeps:Enabled", "false");
             builder.UseEnvironment("Testing");
             builder.ConfigureServices(services =>
                 services.AddHttpClient(HttpHealthProbe.ClientName)

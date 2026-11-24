@@ -19,6 +19,17 @@ builder.Services.Configure<IdentityPasskeyOptions>(options =>
     {
         options.ServerDomain = domain;
     }
+
+    // Identity's default accepts the origin the browser reports when it matches the request's Origin
+    // header. Where the public addresses are known, hold them to exactly those as well.
+    var allowed = builder.Configuration.GetSection("Passkeys:AllowedOrigins").Get<string[]>() ?? [];
+    if (allowed.Length > 0)
+    {
+        options.ValidateOrigin = context => ValueTask.FromResult(
+            !context.CrossOrigin
+            && allowed.Contains(context.Origin, StringComparer.OrdinalIgnoreCase)
+            && context.HttpContext.Request.Headers.Origin is [var sent] && string.Equals(sent, context.Origin, StringComparison.OrdinalIgnoreCase));
+    }
 });
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddIdentityCookies(cookies => cookies.ApplicationCookie?.Configure(options =>

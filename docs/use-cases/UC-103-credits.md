@@ -1,0 +1,59 @@
+# UC-103 — Pay for work with credits, within caps
+
+| Field | Value |
+| --- | --- |
+| **ID** | UC-103 |
+| **Title** | Top up, cap spend at any level, and read balance, spend and accuracy |
+| **Primary actor** | Owner · Admin (caps) · FrostAura operator (top-ups) · system (reservations) |
+| **Scope** | Control plane (`/api/credits`, `/api/credits/top-ups`, `/api/cascade`, the ledger) |
+| **Cascade level** | Organisation balance; `monthly_credits` caps at any node and per employee |
+| **Status** | Built |
+
+## Goal
+
+Cost is predictable: every model call reserves its worst case before it is sent, under every cap on its
+path, and the bill is the ledger, line by line.
+
+## Preconditions
+
+- A top-up exists (operators only: `POST /api/credits/top-ups { organisation, credits, note, idempotencyKey? }`,
+  logged in `operator_actions` for the Owner to read).
+
+## Main flow
+
+1. An Admin sets caps: `PUT /api/cascade { scope, kind: "budget", key: "monthly_credits", value }` at any node;
+   an employee carries its own `monthlyCreditLimit`.
+2. Each model call is admitted under the organisation's advisory lock: the balance (plus the tightest
+   overdraft on the chain) and every cap on the call's chain must cover the reservation; the reservation is
+   inserted in the same transaction. Concurrent calls therefore admit exactly as many as fit.
+3. The reply settles the reservation from its own `usage.cost` (converted at `Credits:CreditsPerUsd`, plus
+   `Credits:Margin`). A run's open reservations are released when it finishes; a reservation lapses with its
+   run's lease, and a sweep writes the release.
+4. `GET /api/credits?scope=` → `{ scope, balance, month { spent, ai, hosting }, monthsLeftAtPace, budgets[] { scope, name, level, depth, spentCredits, capCredits, appId } (tree order), estimates | null, notCharged { credits, repairs }, overdraft { frostauraLimit, ownLimit }, topUps[], heldCredits, available }`.
+
+## Alternate and failure flows
+
+- **A1 — a cap would be exceeded.** The call is refused 402 `budget_exhausted`, `terminal: true`, naming the
+  binding scope; the run is marked and every later call for it is refused without reaching the provider.
+- **A2 — repair work.** `repair: true` reserves and records with `billable = false`; never charged, shown under `notCharged`.
+- **A3 — nothing scored yet.** `estimates` is null, not zeros.
+
+## Postconditions
+
+- `credit_entries` only grows (grants and a statement trigger refuse UPDATE, DELETE and TRUNCATE). Balance and
+  spend are always derived from it; no counter exists anywhere else.
+
+## Rules this use case must honour
+
+- Credits reserved before a model call, never counted after (rule 8). Repair not billed (rule 9). Overdraft has no interest or fees (rule 3).
+
+## Acceptance
+
+- 40 concurrent admissions against a budget fitting 13 admit exactly 13; 12 concurrent HTTP calls fitting 5 reach the provider exactly 5 times.
+- Settled spend equals the reply's cost; a refusal or provider error releases the hold.
+
+Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `ModelGatewayTests`, `DatabaseInvariantTests`, `CascadeCreditsAndAppsTests`.
+
+## Links
+
+- Spec *Credits* · ARCH-002 (budget failures prohibited) · ARCH-003 · ARCH-004 *Credits*.

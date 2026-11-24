@@ -56,8 +56,8 @@ internal static class InternalEndpoints
             {
                 var result = await gateway.CompleteAsync(request, ct);
                 http.Response.Headers["Endgame-Reservation-Id"] = result.Settlement.ReservationId.ToString();
-                http.Response.Headers["Endgame-Reserved-Credits"] = result.Settlement.ReservedCredits.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                http.Response.Headers["Endgame-Settled-Credits"] = result.Settlement.SettledCredits.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                http.Response.Headers["Endgame-Reserved-Credits"] = result.Settlement.ReservedCredits.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
+                http.Response.Headers["Endgame-Settled-Credits"] = result.Settlement.SettledCredits.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
                 return Results.Content(result.Body, "application/json");
             }
 
