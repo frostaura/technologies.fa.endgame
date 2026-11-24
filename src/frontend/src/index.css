@@ -13,7 +13,7 @@
   }
 
   body {
-    @apply min-h-screen bg-ground font-sans text-ink;
+    @apply min-h-screen bg-ground font-sans text-sm text-ink;
   }
 
   h1,
@@ -26,13 +26,14 @@
     @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-ground;
   }
 
+  /* Every animation in the design is decoration; under reduced motion none of it runs, and
+     everything simply appears in its final state. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      animation: none !important;
+      transition: none !important;
       scroll-behavior: auto !important;
     }
   }
