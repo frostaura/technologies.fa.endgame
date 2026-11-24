@@ -27,8 +27,8 @@ export default defineConfig([
   },
   {
     // Tests spell out forbidden values on purpose, to prove the guards catch them.
-    files: ["**/*.test.{ts,tsx}"],
-    rules: { "no-restricted-syntax": "off" },
+    files: ["**/*.test.{ts,tsx}", "src/test/**/*.{ts,tsx}"],
+    rules: { "no-restricted-syntax": "off", "react-refresh/only-export-components": "off" },
   },
   {
     files: ["src/components/ui/**/*.tsx"],
