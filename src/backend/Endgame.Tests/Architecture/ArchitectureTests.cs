@@ -16,13 +16,15 @@ public sealed class ArchitectureTests
     private static readonly IReadOnlyDictionary<string, ProjectFile> Projects = BackendRoot
         .EnumerateFiles("*.csproj", SearchOption.AllDirectories)
         .Where(f => !f.FullName.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        // Test fixtures (an app the hosting tests build inside a container) are not solution projects.
+        .Where(f => !f.FullName.Contains($"{Path.DirectorySeparatorChar}Fixtures{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         .Select(ProjectFile.Load)
         .ToDictionary(p => p.Name, StringComparer.Ordinal);
 
     [Fact]
     public void Every_project_in_the_solution_was_found() =>
         Assert.Equal(
-            ["Endgame.Application", "Endgame.ControlPlane", "Endgame.Dock", "Endgame.Domain", "Endgame.Edge", "Endgame.Infrastructure", "Endgame.Runner", "Endgame.Tests"],
+            ["Endgame.Application", "Endgame.ControlPlane", "Endgame.Dock", "Endgame.Domain", "Endgame.Edge", "Endgame.Hosting.Contracts", "Endgame.Infrastructure", "Endgame.Runner", "Endgame.Tests"],
             Projects.Keys.Order(StringComparer.Ordinal));
 
     [Fact]

@@ -77,4 +77,4 @@ smoke: up
 
 # Parse the production stack file with throwaway values for its required variables.
 prod-config:
-	POSTGRES_PASSWORD=config-check CLOUDFLARE_TUNNEL_TOKEN=config-check docker compose -f docker-compose.prod.yml config -q
+	POSTGRES_PASSWORD=config-check CLOUDFLARE_TUNNEL_TOKEN=config-check ENDGAME_SERVICE_TOKEN=config-check DOCK_SECRET_KEY=config-check OPENROUTER_API_KEY=config-check docker compose -f docker-compose.prod.yml config -q

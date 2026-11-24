@@ -19,14 +19,24 @@ ARG BUILD_SHA=
 RUN dotnet publish src/backend/${PROJECT}/${PROJECT}.csproj -c Release -o /app/publish --no-restore \
     -p:UseAppHost=false ${BUILD_SHA:+-p:SourceRevisionId=$BUILD_SHA}
 
+# The app-kit template every new app's repository starts from, for Dock. The glob tolerates the
+# template being absent (Dock then reports it missing and refuses to create repositories); the
+# Dockerfile itself is copied only so the instruction always has one source, and is removed below.
+FROM scratch AS app-template
+COPY src/backend/Dockerfile src/appkit/templat[e] /template/
+
 FROM ${DOTNET_RUNTIME} AS runtime
 ARG PROJECT
 WORKDIR /app
 # curl for the compose healthcheck; tini as PID 1 so a start-up crash exits and the restart policy
-# fires, instead of dotnet-as-init spinning on its own SIGABRT.
+# fires, instead of dotnet-as-init spinning on its own SIGABRT. Dock also drives the git CLI.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl tini \
+    && apt-get install -y --no-install-recommends curl tini $([ "$PROJECT" = "Endgame.Dock" ] && echo git) \
     && rm -rf /var/lib/apt/lists/*
+COPY --from=app-template /template/ /opt/endgame/app-template/
+# Only Dock keeps the template; only Dock has a data directory (repositories, its small state).
+RUN rm -f /opt/endgame/app-template/Dockerfile \
+    && if [ "$PROJECT" = "Endgame.Dock" ]; then mkdir -p /data && chown app:app /data; else rm -rf /opt/endgame; fi
 COPY --from=build /app/publish .
 ENV APP_DLL=${PROJECT}.dll
 ENV ASPNETCORE_HTTP_PORTS=8080

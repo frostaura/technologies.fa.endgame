@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!--
+    The app the hosting integration tests create a repository from, build, run and route to: shaped
+    like a generated Endgame app (one container, an API that serves its own front end), small enough
+    to build in seconds. It is a test fixture, not the app kit's template.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="10.0.4" />
+  </ItemGroup>
+</Project>
