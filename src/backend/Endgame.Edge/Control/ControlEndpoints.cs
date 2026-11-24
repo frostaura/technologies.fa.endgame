@@ -47,6 +47,8 @@ public static class ControlEndpoints
             return Results.NoContent();
         });
 
+        control.MapPost("/apps/{id:guid}/platform/schedules/{name}", PlatformCallbacks.ScheduleAsync);
+
         control.MapGet("/apps", (AppRegistry registry) => registry.All.Select(a => new
         {
             a.Route.AppId,
@@ -61,6 +63,8 @@ public static class ControlEndpoints
             a.Sleeps,
             a.LastWakeMs,
         }));
+
+        control.MapPost("/usage/flush", async (UsageReporter usage, CancellationToken ct) => Results.Ok(new { taken = await usage.FlushAsync(ct) }));
 
         control.MapGet("/routes", (RouteTableSource routes) => new
         {

@@ -51,17 +51,18 @@ public sealed class EdgeOptions
     /// </summary>
     public string PublicScheme { get; set; } = "";
 
-    /// <summary>The console's origin, for links from pages served on organisation subdomains.</summary>
+    /// <summary>
+    /// The platform's own origin (the path form's host, where the console and its session live),
+    /// e.g. <c>https://endgame.frostaura.net</c>. An organisation subdomain's sign-in page sends the
+    /// visitor here, where a member's console session can be handed off to the subdomain.
+    /// </summary>
     public string PlatformOrigin { get; set; } = "";
 
-    /// <summary>The platform's sign-in page, relative to <see cref="PlatformOrigin"/>.</summary>
-    public string SignInPath { get; set; } = "/sign-in";
-
-    /// <summary>The platform's sign-up page, relative to <see cref="PlatformOrigin"/>.</summary>
-    public string SignUpPath { get; set; } = "/sign-up";
-
-    /// <summary>The platform's own cookies: never forwarded to an app, which shares the console's origin on the path form.</summary>
-    public List<string> PlatformCookies { get; set; } = ["endgame_session"];
+    /// <summary>
+    /// How often the requests each app served are reported to the control plane as hosting usage
+    /// (<c>POST /internal/usage/hosting</c>). Zero turns reporting off.
+    /// </summary>
+    public int UsageReportSeconds { get; set; } = 300;
 
     /// <summary>First path segments that are the platform's, never an organisation's.</summary>
     public List<string> ReservedSegments { get; set; } = ["api", "internal", "brand", "assets", "health", "sign-in", "sign-out", "static", "favicon.ico"];

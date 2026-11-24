@@ -37,7 +37,7 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
         switch (app.Route.Availability)
         {
             case AppAvailability.Paused:
-                await UnavailablePage.WriteAsync(context, Unavailable.Paused, mark);
+                await UnavailablePage.WriteAsync(context, app.Route.PausedReason == PausedReasons.BudgetExhausted ? Unavailable.BudgetSpent : Unavailable.Paused, mark);
                 return;
             case AppAvailability.Unpublished:
                 await UnavailablePage.WriteAsync(context, Unavailable.NotReady, mark);
@@ -50,19 +50,19 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
         var appAddress = context.Request.PathBase + prefix;
         if (StartsWithSegment(inApp, HostingConventions.PlatformCallbackPath))
         {
-            // Platform-to-app callbacks come from the control plane directly, never through here.
+            // Platform-to-app callbacks arrive on the edge's control listener, signed, never on the public side.
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
 
         if (StartsWithSegment(inApp, HostingConventions.AuthPath))
         {
-            await auth.HandleAsync(context, app.Route, appAddress, inApp[HostingConventions.AuthPath.Length..]);
+            await auth.HandleAsync(context, app.Route, shape ?? AppProxyConfig.PathShape, appAddress, inApp[HostingConventions.AuthPath.Length..]);
             return;
         }
 
-        // Declared webhooks reach even a private app: the app kit verifies their signature.
-        var isHook = HttpMethods.IsPost(context.Request.Method) && StartsWithSegment(inApp, HostingConventions.HooksPath);
+        // Declared webhooks — and only those — reach even a private app: the app kit verifies their signature.
+        var isHook = HttpMethods.IsPost(context.Request.Method) && HookName(inApp) is { } hook && app.Route.DeclaresHook(hook);
         if (!isHook)
         {
             var decision = await access.CheckAsync(app.Route, context, inApp + context.Request.QueryString, context.RequestAborted);
@@ -112,6 +112,19 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
         {
             app.Leave();
         }
+    }
+
+    /// <summary>The <c>&lt;name&gt;</c> of <c>/hooks/&lt;name&gt;</c>, or null for any other path.</summary>
+    public static string? HookName(string inApp)
+    {
+        var prefix = HostingConventions.HooksPath + "/";
+        if (!inApp.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var name = inApp[prefix.Length..].TrimEnd('/');
+        return name.Length > 0 && !name.Contains('/', StringComparison.Ordinal) ? name : null;
     }
 
     private static bool StartsWithSegment(string path, string segment) =>

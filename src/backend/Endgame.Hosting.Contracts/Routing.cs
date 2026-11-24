@@ -19,11 +19,10 @@ public sealed record RoutingTable(DateTimeOffset GeneratedAt, IReadOnlyList<Rout
 /// <param name="Sleeping">The control plane's last word on whether it sleeps.</param>
 /// <param name="Sleep">The sleep setting, resolved down the cascade.</param>
 /// <param name="Version">The running version; null until the first publish.</param>
-/// <param name="Access">
-/// Extension: <c>private</c>, <c>shared</c> or <c>public</c>. Not yet sent by the control plane;
-/// absent means private — the edge never opens an app it was not told it may.
-/// </param>
-/// <param name="Paused">Extension: the organisation reached its overdraft limit. Not yet sent; absent means false.</param>
+/// <param name="Access"><c>private</c>, <c>shared</c> or <c>public</c>, resolved down the cascade. Absent is read as private.</param>
+/// <param name="Paused">True when the app must not be served: the edge shows the holding page. Nothing is deleted.</param>
+/// <param name="PausedReason">One of <see cref="PausedReasons"/> when paused; null otherwise.</param>
+/// <param name="Hooks">The app's declared webhook names: the edge admits <c>POST hooks/&lt;name&gt;</c> for these alone, even on a private app. Absent is none.</param>
 public sealed record RouteView(
     Guid AppId,
     Guid OrganisationId,
@@ -36,8 +35,20 @@ public sealed record RouteView(
     bool Sleeping,
     SleepSetting Sleep,
     string? Version,
-    string? Access = null,
-    bool Paused = false);
+    string? Access,
+    bool Paused,
+    string? PausedReason,
+    IReadOnlyList<string>? Hooks);
+
+/// <summary>Why the routing table pauses an app.</summary>
+public static class PausedReasons
+{
+    /// <summary>The organisation's settled balance is past its overdraft limit.</summary>
+    public const string OverdraftLimit = "overdraft_limit";
+
+    /// <summary>A monthly budget on the app's chain is spent.</summary>
+    public const string BudgetExhausted = "budget_exhausted";
+}
 
 /// <summary>The app's sleep setting: <c>auto</c> (sleep after <see cref="IdleMinutes"/>) or <c>always_on</c>.</summary>
 public sealed record SleepSetting(string Mode, int IdleMinutes, string ModeSetAt, string IdleSetAt)
@@ -76,6 +87,7 @@ public static class AppAvailability
 /// <c>POST /internal/access/check</c> on the control plane: may this visitor open this app, and as
 /// whom? Edge sends it for every request into a private or shared app it has no fresh decision for,
 /// and for a public app whenever the visitor carries a cookie (so the app learns who they are).
+/// The control plane alone decides; when it cannot answer, a private or shared app stays closed.
 /// </summary>
 /// <param name="AppId">The app being opened.</param>
 /// <param name="Cookie">The request's whole <c>Cookie</c> header, or null when it had none.</param>
@@ -86,7 +98,8 @@ public sealed record AccessCheckRequest(Guid AppId, string? Cookie, string Path)
 /// <param name="Decision">One of <see cref="AccessDecisions"/>.</param>
 /// <param name="SessionToken">An app-scoped token for <c>X-Endgame-Session</c>; never the browser's cookie.</param>
 /// <param name="SignInUrl">Where to send a visitor who must sign in first; the app's own sign-in page when null.</param>
-public sealed record AccessCheckResult(string Decision, string? SessionToken, string? SignInUrl);
+/// <param name="Reason">Why, for the logs; never shown to the visitor.</param>
+public sealed record AccessCheckResult(string Decision, string? SessionToken, string? SignInUrl, string? Reason = null);
 
 /// <summary>The three answers an access check can give.</summary>
 public static class AccessDecisions
@@ -98,3 +111,44 @@ public static class AccessDecisions
 
 /// <summary><c>POST /internal/apps/{id}/token</c> on the control plane: the app's platform token, which Dock injects.</summary>
 public sealed record AppTokenResult(string Token);
+
+/// <summary><c>POST /internal/access/handoff</c> on the control plane: a one-time code from the identity pages, redeemed on the organisation subdomain.</summary>
+public sealed record HandoffRequest(Guid AppId, string Code);
+
+/// <summary>The cookie Edge sets on the subdomain host (host-only), and where the visitor goes next.</summary>
+public sealed record HandoffRedeemed(string CookieName, string CookieValue, DateTimeOffset ExpiresAt, string ReturnTo);
+
+/// <summary>Cookie names the platform owns. None of them is ever forwarded to an app.</summary>
+public static class PlatformCookies
+{
+    /// <summary>A member's console session.</summary>
+    public const string MemberSession = "endgame.session";
+
+    /// <summary>An app session: <c>endgame.app.&lt;app id, 32 hex&gt;</c>, one per app and host.</summary>
+    public const string AppSessionPrefix = "endgame.app.";
+
+    /// <summary>Every platform cookie starts with this (sessions, passkey ceremonies, registrations).</summary>
+    public const string Prefix = "endgame.";
+
+    public static string AppSession(Guid appId) => AppSessionPrefix + appId.ToString("N");
+}
+
+/// <summary><c>POST /internal/usage/hosting</c> on the control plane: what an app used over a period. A sample id is charged once.</summary>
+/// <param name="SampleId">Stable for the period, so reporting it again charges nothing.</param>
+/// <param name="AwakeSeconds">Seconds the app was running inside the period.</param>
+/// <param name="MemoryBytes">Mean memory in use while awake.</param>
+/// <param name="StorageBytes">What the app stores (its database), at the end of the period.</param>
+/// <param name="Requests">Requests the edge forwarded to it.</param>
+public sealed record HostingSample(string SampleId, Guid AppId, DateTimeOffset From, DateTimeOffset To, long AwakeSeconds, long MemoryBytes, long StorageBytes, long Requests);
+
+public sealed record HostingUsageReport(IReadOnlyList<HostingSample> Samples);
+
+/// <summary>The control plane's answer to a <see cref="HostingUsageReport"/>.</summary>
+public sealed record HostingUsageRecorded(int Recorded, int Duplicates, decimal Credits);
+
+/// <summary>Platform-to-app callbacks (PLATFORM-API §4).</summary>
+public static class Callbacks
+{
+    /// <summary><c>t=&lt;unix&gt;,v1=&lt;hex HMAC-SHA256(app token, "&lt;t&gt;." + body)&gt;</c>, forwarded by the edge unchanged.</summary>
+    public const string SignatureHeader = "X-Endgame-Signature";
+}

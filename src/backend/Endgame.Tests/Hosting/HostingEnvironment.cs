@@ -214,7 +214,7 @@ public sealed class HostingEnvironment : IAsyncLifetime
     {
         var scope = $"{Organisation}/{Division}/{project}/web";
         return new RouteView(app, OrganisationId, scope, $"/{scope}/", NotesHost, $"/{Division}/{project}/web/", $"http://{AppContainer(app)}:8080",
-            "running", false, new SleepSetting(SleepSetting.Auto, idleSeconds, "default", "default"), "v1", access);
+            "running", false, new SleepSetting(SleepSetting.Auto, idleSeconds, "default", "default"), "v1", access, false, null, []);
     }
 
     public async Task RefreshEdgeAsync()

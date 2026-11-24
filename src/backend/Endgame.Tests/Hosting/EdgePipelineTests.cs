@@ -41,6 +41,8 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     private readonly Guid privateApp = Guid.NewGuid();
     private readonly Guid pausedApp = Guid.NewGuid();
     private readonly Guid unpublishedApp = Guid.NewGuid();
+    private readonly Guid budgetApp = Guid.NewGuid();
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<(string Name, string Signature, string Body)> Callbacks = new();
 
     public async Task InitializeAsync()
     {
@@ -48,9 +50,10 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         (echo, echoAddress) = await StartEchoAsync();
         controlPlane.SetRoutes(
             Routes.View(publicApp, project: "notes", target: Target),
-            Routes.View(privateApp, project: "secret", target: Target, access: AppAccess.Private),
+            Routes.View(privateApp, project: "secret", target: Target, access: AppAccess.Private, hooks: "court-sensor"),
             Routes.View(pausedApp, project: "paused", target: Target, paused: true),
-            Routes.View(unpublishedApp, project: "soon", target: Target, version: null));
+            Routes.View(unpublishedApp, project: "soon", target: Target, version: null),
+            Routes.View(budgetApp, project: "budget", target: Target, paused: true, pausedReason: PausedReasons.BudgetExhausted));
 
         publicPort = FreePort();
         controlPort = FreePort();
@@ -70,6 +73,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
                 ["Edge:CrashBackoffSeconds"] = "30",
                 ["Edge:AccessCacheSeconds"] = "0",
                 ["Edge:PlatformOrigin"] = "https://endgame.test",
+                ["Edge:UsageReportSeconds"] = "0",
                 ["ReverseProxy:Routes:api:ClusterId"] = "control-plane",
                 ["ReverseProxy:Routes:api:Order"] = "10",
                 ["ReverseProxy:Routes:api:Match:Path"] = "/api/{**rest}",
@@ -82,7 +86,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         }, services => services.Replace(ServiceDescriptor.Singleton<IAppBackend>(backend)));
         await edge.StartAsync();
         client = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false }) { BaseAddress = new Uri($"http://127.0.0.1:{publicPort}") };
-        await WaitForAsync(async () => (await ControlAsync(HttpMethod.Get, "/internal/routes")).Contains("\"apps\":4", StringComparison.Ordinal));
+        await WaitForAsync(async () => (await ControlAsync(HttpMethod.Get, "/internal/routes")).Contains("\"apps\":5", StringComparison.Ordinal));
     }
 
     public async Task DisposeAsync()
@@ -115,7 +119,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         request.Headers.Add("X-Forwarded-Host", "evil.example");
         request.Headers.Add(HostingConventions.SessionHeader, "forged");
         request.Headers.Add("X-Endgame-Anything", "forged");
-        request.Headers.Add("Cookie", "endgame_session=member-session; app_pref=dark");
+        request.Headers.Add("Cookie", $"endgame.session=member-session; app_pref=dark; endgame.app.{publicApp:N}=app-session-cookie; endgame.app_auth=ceremony");
         var seen = await EchoAsync(request);
         Assert.Equal("/api/whoami", seen.GetProperty("path").GetString());
         Assert.Equal("?q=1", seen.GetProperty("query").GetString());
@@ -165,29 +169,114 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Webhooks_reach_a_private_app_without_a_session()
+    public async Task Declared_webhooks_and_only_those_reach_a_private_app_without_a_session()
     {
         var seen = await EchoAsync(new HttpRequestMessage(HttpMethod.Post, "/acme/apps/secret/web/hooks/court-sensor"));
         Assert.Equal("/hooks/court-sensor", seen.GetProperty("path").GetString());
-        using var get = await client.GetAsync("/acme/apps/secret/web/hooks/court-sensor");
-        Assert.Equal(HttpStatusCode.Redirect, get.StatusCode); // only POSTs are hooks
+        using (var get = await client.GetAsync("/acme/apps/secret/web/hooks/court-sensor"))
+        {
+            Assert.Equal(HttpStatusCode.Redirect, get.StatusCode); // only POSTs are hooks
+        }
+
+        foreach (var undeclared in new[] { "/acme/apps/secret/web/hooks/other", "/acme/apps/secret/web/hooks/court-sensor/deeper", "/acme/apps/secret/web/hooks/" })
+        {
+            using var refused = await client.PostAsync(undeclared, null);
+            Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+            Assert.Contains("/_endgame/auth/sign-in?returnTo=", refused.Headers.Location!.OriginalString, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
-    public async Task The_edge_answers_the_apps_sign_in_pages_and_keeps_return_addresses_inside_the_app()
+    public async Task The_sign_in_page_is_the_edges_own_and_drives_the_control_planes_app_identity_endpoints()
     {
-        using var signIn = await client.GetAsync("/acme/apps/notes/web/_endgame/auth/sign-in?returnTo=%2Facme%2Fapps%2Fnotes%2Fweb%2Fnotes%2Fnew");
-        Assert.Equal(HttpStatusCode.Redirect, signIn.StatusCode);
-        var location = signIn.Headers.Location!.OriginalString;
-        Assert.StartsWith("https://endgame.test/sign-in?returnTo=", location, StringComparison.Ordinal);
-        Assert.Contains(Uri.EscapeDataString($"http://127.0.0.1:{publicPort}/acme/apps/notes/web/notes/new"), location, StringComparison.Ordinal);
+        using var signIn = await client.GetAsync("/acme/apps/secret/web/_endgame/auth/sign-in?returnTo=%2Facme%2Fapps%2Fsecret%2Fweb%2Fnotes%2Fnew");
+        Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+        var html = await signIn.Content.ReadAsStringAsync();
+        var config = Config(html);
+        Assert.Equal(privateApp.ToString("D"), config.GetProperty("appId").GetString());
+        Assert.Equal($"http://127.0.0.1:{publicPort}/acme/apps/secret/web/notes/new", config.GetProperty("returnTo").GetString());
+        Assert.False(config.GetProperty("handoff").GetBoolean());
+        Assert.Contains("/api/app-auth/${config.appId}", html, StringComparison.Ordinal);
+        Assert.Contains("/api/auth/passkey/login/options", html, StringComparison.Ordinal);
+        Assert.Contains("/sign-up/options", html, StringComparison.Ordinal);
+        Assert.Contains("/development", html, StringComparison.Ordinal);
+        var policy = signIn.Headers.GetValues("Content-Security-Policy").Single();
+        Assert.Contains("script-src 'nonce-", policy, StringComparison.Ordinal);
+        Assert.Contains("connect-src 'self'", policy, StringComparison.Ordinal);
+        Assert.DoesNotContain("unsafe-inline", policy, StringComparison.Ordinal);
 
-        using var escape = await client.GetAsync("/acme/apps/notes/web/_endgame/auth/sign-up?returnTo=https%3A%2F%2Fevil.example%2F");
-        Assert.Contains(Uri.EscapeDataString($"http://127.0.0.1:{publicPort}/acme/apps/notes/web/"), escape.Headers.Location!.OriginalString, StringComparison.Ordinal);
-        Assert.DoesNotContain("evil", escape.Headers.Location!.OriginalString, StringComparison.Ordinal);
+        // A return address outside the app is replaced by the app's home, never followed.
+        foreach (var escape in new[] { "https%3A%2F%2Fevil.example%2F", "%2F%2Fevil.example%2F", "%2Facme%2Fapps%2Fnotes%2Fweb%2F" })
+        {
+            using var page = await client.GetAsync($"/acme/apps/secret/web/_endgame/auth/sign-up?returnTo={escape}");
+            Assert.Equal($"http://127.0.0.1:{publicPort}/acme/apps/secret/web/", Config(await page.Content.ReadAsStringAsync()).GetProperty("returnTo").GetString());
+        }
+    }
 
-        using var signOut = await client.GetAsync("/acme/apps/notes/web/_endgame/auth/sign-out?returnTo=%2Facme%2Fother%2Fapp%2Fx%2F");
-        Assert.Equal("/acme/apps/notes/web/", signOut.Headers.Location!.OriginalString);
+    [Fact]
+    public async Task On_the_organisation_subdomain_sign_in_moves_to_the_platforms_host_and_returns_by_hand_off()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/apps/secret/web/_endgame/auth/sign-in?returnTo=%2Fapps%2Fsecret%2Fweb%2Fpage%3Fa%3Db");
+        request.Headers.Host = $"acme.endgame.test:{publicPort}";
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location!.OriginalString;
+        Assert.StartsWith("https://endgame.test/acme/apps/secret/web/_endgame/auth/sign-in?returnTo=", location, StringComparison.Ordinal);
+        Assert.EndsWith(Uri.EscapeDataString($"http://acme.endgame.test:{publicPort}/apps/secret/web/page?a=b"), location, StringComparison.Ordinal);
+
+        // On the platform's host the same absolute address is accepted, and marked for a hand-off.
+        var page = await client.GetStringAsync($"/acme/apps/secret/web/_endgame/auth/sign-in?returnTo={Uri.EscapeDataString($"http://acme.endgame.test:{publicPort}/apps/secret/web/page?a=b")}");
+        var config = Config(page);
+        Assert.True(config.GetProperty("handoff").GetBoolean());
+        Assert.Equal($"http://acme.endgame.test:{publicPort}/apps/secret/web/page?a=b", config.GetProperty("returnTo").GetString());
+    }
+
+    [Fact]
+    public async Task A_hand_off_sets_the_subdomains_own_session_cookie_once_and_the_app_then_admits_it()
+    {
+        controlPlane.HandoffReturnTo = $"http://acme.endgame.test:{publicPort}/apps/secret/web/page";
+        using var redeem = new HttpRequestMessage(HttpMethod.Get, $"/apps/secret/web/_endgame/auth/handoff?code={FakeControlPlane.HandoffCode}&returnTo=https%3A%2F%2Fevil.example%2F");
+        redeem.Headers.Host = $"acme.endgame.test:{publicPort}";
+        using var redeemed = await client.SendAsync(redeem);
+        Assert.Equal(HttpStatusCode.Redirect, redeemed.StatusCode);
+        Assert.Equal(controlPlane.HandoffReturnTo, redeemed.Headers.Location!.OriginalString);
+        var cookie = redeemed.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith(PlatformCookies.AppSession(privateApp), StringComparison.Ordinal));
+        Assert.Contains($"={FakeControlPlane.HandedOffSession}", cookie, StringComparison.Ordinal);
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=lax", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("domain=", cookie, StringComparison.OrdinalIgnoreCase); // host-only
+
+        using var visit = new HttpRequestMessage(HttpMethod.Get, "/apps/secret/web/api/whoami");
+        visit.Headers.Host = $"acme.endgame.test:{publicPort}";
+        visit.Headers.Add("Cookie", $"{PlatformCookies.AppSession(privateApp)}={FakeControlPlane.HandedOffSession}; theme=dark");
+        var seen = await EchoAsync(visit);
+        Assert.Equal(FakeControlPlane.SessionFor(privateApp), seen.GetProperty("session").GetString());
+        Assert.Equal("theme=dark", seen.GetProperty("cookie").GetString());
+
+        // A code works once.
+        using var again = new HttpRequestMessage(HttpMethod.Get, $"/apps/secret/web/_endgame/auth/handoff?code={FakeControlPlane.HandoffCode}");
+        again.Headers.Host = $"acme.endgame.test:{publicPort}";
+        using var gone = await client.SendAsync(again);
+        Assert.Equal(HttpStatusCode.Gone, gone.StatusCode);
+        Assert.Contains("This sign-in link has expired", await gone.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.False(gone.Headers.Contains("Set-Cookie"));
+    }
+
+    [Fact]
+    public async Task Signing_out_ends_the_session_through_the_control_plane_and_comes_back_inside_the_app()
+    {
+        using var member = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/notes/web/_endgame/auth/sign-out?returnTo=%2Facme%2Fother%2Fapp%2Fx%2F");
+        member.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.MemberSession}");
+        using var signedOut = await client.SendAsync(member);
+        Assert.Equal("http://127.0.0.1:" + publicPort + "/acme/apps/notes/web/", signedOut.Headers.Location!.OriginalString);
+        Assert.Contains(signedOut.Headers.GetValues("Set-Cookie"), c => c.StartsWith("endgame.session=;", StringComparison.Ordinal));
+        Assert.Contains("/api/auth/logout", controlPlane.AppCalls);
+
+        using var visitor = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/notes/web/_endgame/auth/sign-out");
+        visitor.Headers.Add("Cookie", $"{PlatformCookies.AppSession(publicApp)}=x");
+        using var visitorOut = await client.SendAsync(visitor);
+        Assert.Contains($"/api/app-auth/{publicApp:D}/sign-out", controlPlane.AppCalls);
+        Assert.Contains(visitorOut.Headers.GetValues("Set-Cookie"), c => c.StartsWith(PlatformCookies.AppSession(publicApp) + "=;", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -271,6 +360,77 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_app_paused_by_a_spent_budget_says_so()
+    {
+        using var response = await client.GetAsync("/acme/apps/budget/web/");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains("This app is paused", html, StringComparison.Ordinal);
+        Assert.Contains("this month&#39;s budget", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_schedule_callback_on_the_control_listener_wakes_the_app_and_forwards_body_and_signature_unchanged()
+    {
+        await ControlAsync(HttpMethod.Post, $"/internal/apps/{privateApp:D}/state", new AppStateReport(privateApp, AppRuntimeState.Sleeping, 0, false, DateTimeOffset.UtcNow));
+        var wakes = backend.WakeCalls;
+        const string body = "{\"scheduledFor\":\"2026-11-25T03:00:00Z\"}";
+        const string signature = "t=1764039600,v1=00ff";
+        using var control = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{controlPort}") };
+        using var callback = new HttpRequestMessage(HttpMethod.Post, $"/internal/apps/{privateApp:D}/platform/schedules/nightly-digest") { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+        callback.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        callback.Headers.TryAddWithoutValidation(HostingConventions.PlatformHeaderPrefix + "Signature", signature);
+        using var answer = await control.SendAsync(callback);
+        Assert.Equal(HttpStatusCode.NoContent, answer.StatusCode); // the app's own status
+        Assert.Equal(wakes + 1, backend.WakeCalls);
+        Assert.Contains(Callbacks, c => c.Name == "nightly-digest" && c.Signature == signature && c.Body == body);
+
+        using (var unsigned = new HttpRequestMessage(HttpMethod.Post, $"/internal/apps/{privateApp:D}/platform/schedules/nightly-digest") { Content = new StringContent(body) })
+        {
+            unsigned.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+            using var refused = await control.SendAsync(unsigned);
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        }
+
+        using (var anonymous = new HttpRequestMessage(HttpMethod.Post, $"/internal/apps/{privateApp:D}/platform/schedules/nightly-digest") { Content = new StringContent(body) })
+        {
+            anonymous.Headers.TryAddWithoutValidation(HostingConventions.PlatformHeaderPrefix + "Signature", signature);
+            using var refused = await control.SendAsync(anonymous);
+            Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+        }
+
+        // Never from the public side.
+        using var publicSide = new HttpRequestMessage(HttpMethod.Post, $"/internal/apps/{privateApp:D}/platform/schedules/nightly-digest") { Content = new StringContent(body) };
+        publicSide.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        using var notRouted = await client.SendAsync(publicSide);
+        Assert.Equal(HttpStatusCode.NotFound, notRouted.StatusCode);
+    }
+
+    [Fact]
+    public async Task Requests_an_app_served_are_reported_as_hosting_usage_once_per_period()
+    {
+        for (var i = 0; i < 3; i++)
+        {
+            using var response = await client.GetAsync("/acme/apps/notes/web/api/count");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        await ControlAsync(HttpMethod.Post, "/internal/usage/flush");
+        var sample = Assert.Single(controlPlane.HostingSamples.Values, s => s.AppId == publicApp);
+        Assert.True(sample.Requests >= 3, $"{sample.Requests} requests");
+        Assert.Equal(0, sample.AwakeSeconds);
+        Assert.Equal(0, sample.MemoryBytes);
+        Assert.True(sample.To > sample.From);
+        Assert.StartsWith("edge:", sample.SampleId, StringComparison.Ordinal);
+
+        // Nothing new served, nothing new charged.
+        var reports = controlPlane.HostingReports;
+        await ControlAsync(HttpMethod.Post, "/internal/usage/flush");
+        Assert.Equal(reports, controlPlane.HostingReports);
+        Assert.Single(controlPlane.HostingSamples.Values, s => s.AppId == publicApp);
+    }
+
+    [Fact]
     public async Task An_unpublished_app_says_it_is_not_ready()
     {
         using var response = await client.GetAsync("/acme/apps/soon/web/");
@@ -290,34 +450,22 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     public async Task A_private_app_admits_a_member_with_an_app_scoped_session_never_the_cookie()
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/secret/web/api/whoami");
-        request.Headers.Add("Cookie", $"endgame_session={FakeControlPlane.MemberSession}");
+        request.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.MemberSession}");
         var seen = await EchoAsync(request);
         Assert.Equal(FakeControlPlane.SessionFor(privateApp), seen.GetProperty("session").GetString());
         Assert.Equal("", seen.GetProperty("cookie").GetString());
     }
 
     [Fact]
-    public async Task Until_the_per_app_check_exists_the_visitors_own_roles_decide()
+    public async Task Without_the_control_planes_access_check_a_private_app_stays_closed_even_to_a_member()
     {
         controlPlane.AccessCheckMissing = true;
         try
         {
             using var member = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/secret/web/api/x");
-            member.Headers.Add("Cookie", $"endgame_session={FakeControlPlane.MemberSession}");
-            using (var admitted = await client.SendAsync(member))
-            {
-                Assert.Equal(HttpStatusCode.OK, admitted.StatusCode);
-            }
-
-            using var outsider = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/secret/web/api/x");
-            outsider.Headers.Add("Cookie", $"endgame_session={FakeControlPlane.OutsiderSession}");
-            using (var refused = await client.SendAsync(outsider))
-            {
-                Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
-            }
-
-            using var anonymous = await client.GetAsync("/acme/apps/secret/web/api/x");
-            Assert.Equal(HttpStatusCode.Redirect, anonymous.StatusCode);
+            member.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.MemberSession}");
+            using var closed = await client.SendAsync(member);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, closed.StatusCode);
         }
         finally
         {
@@ -329,7 +477,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     public async Task A_private_app_refuses_a_signed_in_outsider()
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/secret/web/");
-        request.Headers.Add("Cookie", $"endgame_session={FakeControlPlane.OutsiderSession}");
+        request.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.OutsiderSession}");
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Contains("don&#39;t have access", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
@@ -342,7 +490,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/secret/web/");
-            request.Headers.Add("Cookie", $"endgame_session={FakeControlPlane.MemberSession}");
+            request.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.MemberSession}");
             using var response = await client.SendAsync(request);
             Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         }
@@ -383,6 +531,13 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         Assert.Equal(before + 1, backend.WakeCalls);
     }
 
+    private static JsonElement Config(string html)
+    {
+        const string open = "<script type=\"application/json\" id=\"config\">";
+        var start = html.IndexOf(open, StringComparison.Ordinal) + open.Length;
+        return JsonDocument.Parse(html[start..html.IndexOf("</script>", start, StringComparison.Ordinal)]).RootElement;
+    }
+
     private async Task<JsonElement> EchoAsync(HttpRequestMessage request)
     {
         using var response = await client.SendAsync(request);
@@ -411,6 +566,11 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         builder.Logging.ClearProviders();
         builder.WebHost.UseKestrel(k => k.Listen(IPAddress.Loopback, 0));
         var app = builder.Build();
+        app.MapPost("/_platform/schedules/{name}", async (string name, HttpContext c) =>
+        {
+            Callbacks.Enqueue((name, c.Request.Headers["X-Endgame-Signature"].ToString(), await new StreamReader(c.Request.Body).ReadToEndAsync()));
+            return Results.NoContent();
+        });
         app.MapFallback((HttpContext c) => Results.Json(new
         {
             path = c.Request.Path.Value,

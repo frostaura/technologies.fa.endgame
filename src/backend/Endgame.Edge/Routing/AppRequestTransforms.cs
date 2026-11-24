@@ -9,7 +9,8 @@ namespace Endgame.Edge.Routing;
 /// <summary>
 /// What an app receives (ARCH-005, address rule 6): the prefix stripped, and <c>X-Forwarded-Prefix</c>,
 /// <c>-Host</c>, <c>-Proto</c> and <c>-For</c> set by the edge alone — whatever the visitor sent
-/// is dropped. The platform's own cookies never reach an app.
+/// is dropped, as is every client-sent <c>X-Endgame-*</c> header. The platform's own cookies —
+/// the console session and every <c>endgame.app.*</c> app session — never reach an app.
 /// </summary>
 public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITransformProvider
 {
@@ -48,7 +49,6 @@ public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITrans
         }
 
         var prefix = metadata.GetValueOrDefault(AppProxyConfig.PrefixKey, "");
-        var platformCookies = options.Value.PlatformCookies.ToHashSet(StringComparer.Ordinal);
         var scheme = options.Value.PublicScheme;
         context.UseDefaultForwarders = false;
         context.AddRequestTransform(transform =>
@@ -89,7 +89,7 @@ public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITrans
             {
                 headers.Remove(HeaderNames.Cookie);
                 var kept = CookieHeaderValue.ParseList(request.Headers.Cookie)
-                    .Where(c => !platformCookies.Contains(c.Name.Value ?? ""))
+                    .Where(c => !IsPlatformCookie(c.Name.Value))
                     .Select(c => $"{c.Name}={c.Value}")
                     .ToList();
                 if (kept.Count > 0)
@@ -101,4 +101,8 @@ public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITrans
             return ValueTask.CompletedTask;
         });
     }
+
+    /// <summary>True for every cookie the platform owns (<see cref="PlatformCookies.Prefix"/>): sessions, app sessions, ceremonies.</summary>
+    public static bool IsPlatformCookie(string? name) =>
+        name is null || name.StartsWith(PlatformCookies.Prefix, StringComparison.OrdinalIgnoreCase);
 }

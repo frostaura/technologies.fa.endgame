@@ -24,9 +24,9 @@ public sealed record AccessDecision(string Decision, string? SessionToken, strin
 /// <summary>
 /// Enforces private, shared and public at the edge (spec, "Apps are private by default"). The
 /// control plane owns sessions and decides, per app, through <c>POST /internal/access/check</c>;
-/// the answer is reused briefly for the same cookie and app. Until that endpoint exists (404) the
-/// visitor's own session, <c>GET /api/me</c>, decides by role and scope. When neither answers, a
-/// private or shared app is closed; a public one opens with no session.
+/// the answer is reused briefly for the same cookie and app. When it does not answer — down, an
+/// error, or no such endpoint — a private or shared app is closed and a public one opens with no
+/// session. Nothing at the edge ever decides access on its own.
 /// </summary>
 public sealed class AccessGate(IHttpClientFactory http, IOptions<EdgeOptions> options, IConfiguration configuration, TimeProvider time, ILogger<AccessGate> logger)
 {
@@ -56,8 +56,7 @@ public sealed class AccessGate(IHttpClientFactory http, IOptions<EdgeOptions> op
         AccessDecision decision;
         try
         {
-            decision = await AskAsync(new AccessCheckRequest(app.AppId, cookie.Length > 0 ? cookie : null, pathInApp), cancellationToken)
-                ?? await FromSessionAsync(app, cookie, cancellationToken);
+            decision = await AskAsync(new AccessCheckRequest(app.AppId, cookie.Length > 0 ? cookie : null, pathInApp), cancellationToken);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException && !cancellationToken.IsCancellationRequested)
         {
@@ -74,10 +73,6 @@ public sealed class AccessGate(IHttpClientFactory http, IOptions<EdgeOptions> op
         return decision.Decision == AccessDecision.UnavailableDecision ? decision : Remember(key, decision, now);
     }
 
-    /// <summary>A role granted at <paramref name="grant"/> applies at <paramref name="scope"/> and everything beneath it.</summary>
-    public static bool Covers(string? grant, string scope) =>
-        grant is { Length: > 0 } && (scope == grant || scope.StartsWith(grant + "/", StringComparison.Ordinal));
-
     private AccessDecision Remember(string key, AccessDecision decision, DateTimeOffset now)
     {
         cache[key] = (decision, now.AddSeconds(Math.Max(0, options.Value.AccessCacheSeconds)));
@@ -92,17 +87,12 @@ public sealed class AccessGate(IHttpClientFactory http, IOptions<EdgeOptions> op
         return decision;
     }
 
-    /// <summary>The per-app decision. Null when the control plane does not offer it (404).</summary>
-    private async Task<AccessDecision?> AskAsync(AccessCheckRequest body, CancellationToken cancellationToken)
+    /// <summary>The control plane's decision; <see cref="AccessDecision.Unavailable"/> for anything but a valid answer.</summary>
+    private async Task<AccessDecision> AskAsync(AccessCheckRequest body, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(options.Value.ControlPlaneUrl), "/internal/access/check")) { Content = JsonContent.Create(body) };
         request.Headers.Authorization = new AuthenticationHeaderValue(HostingConventions.ServiceTokenScheme, configuration[HostingConventions.ServiceTokenVariable]);
         using var response = await http.CreateClient(ClientName).SendAsync(request, cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-
         if (!response.IsSuccessStatusCode)
         {
             logger.LogWarning("The access check for app {AppId} answered {Status}.", body.AppId, (int)response.StatusCode);
@@ -110,40 +100,13 @@ public sealed class AccessGate(IHttpClientFactory http, IOptions<EdgeOptions> op
         }
 
         var result = await response.Content.ReadFromJsonAsync<AccessCheckResult>(cancellationToken);
+        if (result?.Decision is AccessDecisions.Deny && result.Reason is { Length: > 0 } reason)
+        {
+            logger.LogDebug("App {AppId} refused a visitor: {Reason}", body.AppId, reason);
+        }
+
         return result?.Decision is AccessDecisions.Allow or AccessDecisions.SignIn or AccessDecisions.Deny
             ? new AccessDecision(result.Decision, result.SessionToken, result.SignInUrl)
             : AccessDecision.Unavailable;
-    }
-
-    /// <summary>
-    /// The fallback: <c>GET /api/me</c> with the visitor's cookie. Signed out is a sign-in; signed
-    /// in, they are admitted only when one of their roles is granted on the app's scope or above it.
-    /// People an app was shared with are not known here, so are refused. No session token can be
-    /// minted this way, so the app sees the visitor as anonymous.
-    /// </summary>
-    private async Task<AccessDecision> FromSessionAsync(EdgeApp app, string cookie, CancellationToken cancellationToken)
-    {
-        if (cookie.Length == 0)
-        {
-            return new AccessDecision(AccessDecisions.SignIn, null, null);
-        }
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(options.Value.ControlPlaneUrl), "/api/me"));
-        request.Headers.TryAddWithoutValidation("Cookie", cookie);
-        using var response = await http.CreateClient(ClientName).SendAsync(request, cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-        {
-            return new AccessDecision(AccessDecisions.SignIn, null, null);
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return AccessDecision.Unavailable;
-        }
-
-        var me = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
-        var covered = me.TryGetProperty("memberships", out var list) && list.ValueKind == JsonValueKind.Array
-            && list.EnumerateArray().Any(m => m.TryGetProperty("scope", out var scope) && Covers(scope.GetString(), app.Scope));
-        return new AccessDecision(covered ? AccessDecisions.Allow : AccessDecisions.Deny, null, null);
     }
 }

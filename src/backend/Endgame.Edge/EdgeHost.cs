@@ -58,7 +58,7 @@ public static class EdgeHost
         });
 
         // YARP pulls in ASP.NET data protection, but the edge protects nothing that must outlive the
-        // process (no session affinity, no cookies). Its key ring is therefore in memory by design,
+        // process (no session affinity; the only cookie it sets is the control plane's own value). Its key ring is therefore in memory by design,
         // stated here, instead of an unpersisted directory that logs a warning on every start.
         builder.Services.Configure<KeyManagementOptions>(options =>
         {
@@ -82,6 +82,9 @@ public static class EdgeHost
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(1), PooledConnectionLifetime = TimeSpan.FromSeconds(5) });
         builder.Services.AddHttpClient(RouteTableSource.ClientName, c => c.Timeout = TimeSpan.FromSeconds(10));
         builder.Services.AddHttpClient(AccessGate.ClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
+        builder.Services.AddHttpClient(UsageReporter.ClientName, c => c.Timeout = TimeSpan.FromSeconds(10));
+        builder.Services.AddHttpClient(PlatformCallbacks.ClientName, c => c.Timeout = TimeSpan.FromSeconds(100))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(5) });
         builder.Services.AddSingleton<AppRegistry>();
         builder.Services.AddSingleton<IAppBackend, DockBackend>();
         builder.Services.AddSingleton<AppDiscovery>();
@@ -93,6 +96,8 @@ public static class EdgeHost
         builder.Services.AddHostedService(sp => sp.GetRequiredService<RouteTableSource>());
         builder.Services.AddSingleton<IdleSweeper>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IdleSweeper>());
+        builder.Services.AddSingleton<UsageReporter>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<UsageReporter>());
         overrideServices?.Invoke(builder.Services);
 
         var app = builder.Build();

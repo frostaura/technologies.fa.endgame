@@ -212,7 +212,7 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
 
         using var spoofed = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/notes/web/api/whoami");
         spoofed.Headers.Add("X-Forwarded-Prefix", "/elsewhere");
-        spoofed.Headers.Add("Cookie", "endgame_session=secret-value; theme=dark");
+        spoofed.Headers.Add("Cookie", "endgame.session=secret-value; theme=dark");
         using var whoamiResponse = await path.SendAsync(spoofed);
         var whoami = await whoamiResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("/acme/apps/notes/web", whoami.GetProperty("pathBase").GetString());
@@ -511,7 +511,7 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
 
             // Signed in, the edge hands the app an app-scoped session; the kit resolves it through the platform.
             using var write = new HttpRequestMessage(HttpMethod.Post, "/acme/apps/kit/web/api/notes") { Content = JsonContent.Create(new { title = "Through the edge", body = "Written by a member." }) };
-            write.Headers.Add("Cookie", $"endgame_session={FakeControlPlane.MemberSession}");
+            write.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.MemberSession}");
             using var written = await path.SendAsync(write);
             Assert.True(written.StatusCode == HttpStatusCode.Created, $"{(int)written.StatusCode}: {await written.Content.ReadAsStringAsync()}");
             Assert.Contains(env.ControlPlane.AppCalls, c => c.EndsWith("/identity/resolve", StringComparison.Ordinal));

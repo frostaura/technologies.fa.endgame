@@ -20,6 +20,12 @@ public sealed class FakeControlPlane : IAsyncDisposable
 {
     public const string MemberSession = "member-session";
     public const string OutsiderSession = "outsider-session";
+
+    /// <summary>The one hand-off code this fake redeems, once.</summary>
+    public const string HandoffCode = "good-handoff-code";
+
+    /// <summary>The app-session value a redeemed hand-off sets; the access check admits it.</summary>
+    public const string HandedOffSession = "handed-off-session";
     public static readonly Guid MemberId = Guid.Parse("0e0e0e0e-1111-2222-3333-444444444444");
 
     private readonly WebApplication app;
@@ -46,6 +52,16 @@ public sealed class FakeControlPlane : IAsyncDisposable
     /// <summary>Every platform-API path an app called.</summary>
     public ConcurrentQueue<string> AppCalls { get; } = new();
 
+    /// <summary>Every hosting-usage sample reported, by its sample id (a repeat is not added twice).</summary>
+    public ConcurrentDictionary<string, HostingSample> HostingSamples { get; } = new();
+
+    public int HostingReports;
+
+    /// <summary>The return address a redeemed hand-off sends the visitor to.</summary>
+    public string HandoffReturnTo { get; set; } = "";
+
+    private int handoffUsed;
+
     public static string AppToken(Guid appId) => $"app-token-{appId:N}";
 
     public static string SessionFor(Guid appId) => $"app-session-{appId:N}";
@@ -54,7 +70,7 @@ public sealed class FakeControlPlane : IAsyncDisposable
     public int RouteNotModified;
     public volatile bool AccessDown;
 
-    /// <summary>Answer the per-app access check with 404, as the real control plane does today, so the edge falls back to <c>/api/me</c>.</summary>
+    /// <summary>Answer the access check with 404 (an older control plane): the edge must stay closed, never decide alone.</summary>
     public volatile bool AccessCheckMissing;
 
     public static async Task<FakeControlPlane> StartAsync(string token, bool listenOnAllInterfaces = false)
@@ -157,17 +173,42 @@ public sealed class FakeControlPlane : IAsyncDisposable
 
             AccessChecks.Enqueue(request);
             var cookie = request.Cookie ?? "";
-            if (cookie.Contains($"endgame_session={MemberSession}", StringComparison.Ordinal))
+            if (cookie.Contains($"{PlatformCookies.MemberSession}={MemberSession}", StringComparison.Ordinal)
+                || cookie.Contains($"{PlatformCookies.AppSession(request.AppId)}={HandedOffSession}", StringComparison.Ordinal))
             {
                 return Results.Json(new AccessCheckResult(AccessDecisions.Allow, SessionFor(request.AppId), null));
             }
 
-            if (cookie.Contains($"endgame_session={OutsiderSession}", StringComparison.Ordinal))
+            if (cookie.Contains($"{PlatformCookies.MemberSession}={OutsiderSession}", StringComparison.Ordinal))
             {
                 return Results.Json(new AccessCheckResult(AccessDecisions.Deny, null, null));
             }
 
             return Results.Json(new AccessCheckResult(AccessDecisions.SignIn, null, null));
+        });
+
+        web.MapPost("/internal/access/handoff", (HttpContext context, HandoffRequest request) =>
+        {
+            if (!Authorised(context))
+            {
+                return Results.Unauthorized();
+            }
+
+            return request.Code == HandoffCode && Interlocked.Exchange(ref handoffUsed, 1) == 0
+                ? Results.Json(new HandoffRedeemed(PlatformCookies.AppSession(request.AppId), HandedOffSession, DateTimeOffset.UtcNow.AddDays(14), HandoffReturnTo))
+                : Results.Json(new { code = "handoff_invalid" }, statusCode: StatusCodes.Status410Gone);
+        });
+
+        web.MapPost("/internal/usage/hosting", (HttpContext context, HostingUsageReport report) =>
+        {
+            if (!Authorised(context))
+            {
+                return Results.Unauthorized();
+            }
+
+            Interlocked.Increment(ref HostingReports);
+            var recorded = report.Samples.Count(sample => HostingSamples.TryAdd(sample.SampleId, sample));
+            return Results.Json(new HostingUsageRecorded(recorded, report.Samples.Count - recorded, 0.01m * recorded));
         });
 
         web.MapPost("/internal/apps/{id:guid}/token", (HttpContext context, Guid id) =>
@@ -199,25 +240,19 @@ public sealed class FakeControlPlane : IAsyncDisposable
         platform.MapPost("/telemetry/events", () => Results.Accepted());
         platform.MapPost("/otlp/v1/{signal}", () => Results.Ok());
 
-        // The session check, shaped like the control plane's MeView: a member holds a role on the
-        // division `acme/apps`; an outsider only on another organisation.
-        web.MapGet("/api/me", (HttpContext c) =>
-        {
-            var cookie = c.Request.Headers.Cookie.ToString();
-            if (cookie.Contains($"endgame_session={MemberSession}", StringComparison.Ordinal))
-            {
-                return Results.Json(new { user = new { id = MemberId, displayName = "Member" }, isOperator = false, memberships = new[] { new { scope = "acme/apps", role = "builder" } } });
-            }
-
-            if (cookie.Contains($"endgame_session={OutsiderSession}", StringComparison.Ordinal))
-            {
-                return Results.Json(new { user = new { id = Guid.NewGuid(), displayName = "Outsider" }, isOperator = false, memberships = new[] { new { scope = "acmesubsidiary", role = "owner" } } });
-            }
-
-            return Results.StatusCode(StatusCodes.Status401Unauthorized);
-        });
-
         // The platform's public API and the console, reached through the edge's static routes.
+        web.MapPost("/api/app-auth/{appId:guid}/sign-out", (HttpContext c) =>
+        {
+            AppCalls.Enqueue(c.Request.Path.Value ?? "");
+            c.Response.Headers.Append("Set-Cookie", "endgame.app.cleared=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/");
+            return Results.NoContent();
+        });
+        web.MapPost("/api/auth/logout", (HttpContext c) =>
+        {
+            AppCalls.Enqueue(c.Request.Path.Value ?? "");
+            c.Response.Headers.Append("Set-Cookie", "endgame.session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/");
+            return Results.NoContent();
+        });
         web.MapGet("/api/{**rest}", (HttpContext c) => Results.Json(new
         {
             from = "control-plane",
