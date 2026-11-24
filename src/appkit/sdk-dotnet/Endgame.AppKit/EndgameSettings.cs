@@ -109,6 +109,12 @@ internal sealed class EndgameSettingsValidation : IValidateOptions<EndgameSettin
 {
     public ValidateOptionsResult Validate(string? name, EndgameSettings options)
     {
+        // `dotnet ef migrations add` builds the host to find the DbContext; it needs no platform.
+        if (Microsoft.EntityFrameworkCore.EF.IsDesignTime)
+        {
+            return ValidateOptionsResult.Success;
+        }
+
         var missing = new List<string>();
         if (options.Database is null)
         {

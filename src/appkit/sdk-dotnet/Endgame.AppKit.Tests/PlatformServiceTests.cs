@@ -25,8 +25,8 @@ public sealed class PlatformServiceTests
     [Fact]
     public async Task Models_answer_through_the_platform_and_a_spent_budget_is_terminal()
     {
-        await using var host = await KitHost.StartAsync(map: app =>
-            app.MapPost("api/summaries", async (IEndgameModels models) => (await models.CompleteAsync(new ChatRequest([ChatMessage.User("hello")], "summarise"))).Content)
+        await using var host = await KitHost.StartAsync(api: api =>
+            api.MapPost("summaries", async (IEndgameModels models) => (await models.CompleteAsync(new ChatRequest([ChatMessage.User("hello")], "summarise"))).Content)
                 .WithName("createSummary").WithDescription("Summarises."));
         var models = host.Services.GetRequiredService<IEndgameModels>();
 

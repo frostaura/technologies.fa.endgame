@@ -11,6 +11,9 @@ namespace Endgame.AppKit;
 /// must carry an operation id and a description. This check runs when the app starts and refuses
 /// to start an app that breaks the contract, naming each endpoint and the line that fixes it.
 /// </summary>
+/// <summary>Marks endpoints mapped on the group <c>UseEndgameApp()</c> returns.</summary>
+internal sealed class EndgameApiMetadata;
+
 internal static class ApiContract
 {
     internal const string ApiPrefix = "api/";
@@ -34,9 +37,9 @@ internal static class ApiContract
                 continue;
             }
 
-            if (!route.StartsWith(ApiPrefix, StringComparison.Ordinal))
+            if (metadata.GetMetadata<EndgameApiMetadata>() is null)
             {
-                problems.Add($"{label}: the app's own endpoints live under api/. Map it as \"{ApiPrefix}{route}\" (or inside app.MapGroup(\"api/...\")).");
+                problems.Add($"{label}: map the app's endpoints on the group UseEndgameApp() returns — `var api = app.UseEndgameApp(); api.MapGet(\"{route}\", …)` — so they live under api/ and their input is validated.");
                 continue;
             }
 
@@ -91,7 +94,7 @@ internal static class ApiContract
 
     internal static string SuggestName(IReadOnlyList<string> methods, string route)
     {
-        var segments = route[ApiPrefix.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var segments = (route.StartsWith(ApiPrefix, StringComparison.Ordinal) ? route[ApiPrefix.Length..] : route).Split('/', StringSplitOptions.RemoveEmptyEntries);
         var nouns = segments.Where(s => !s.StartsWith('{')).Select(Pascal).ToList();
         var byId = segments.Length > 0 && segments[^1].StartsWith('{');
         var noun = nouns.Count == 0 ? "Thing" : string.Concat(nouns);

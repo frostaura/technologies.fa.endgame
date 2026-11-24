@@ -1,6 +1,7 @@
 using Endgame.AppKit.DevPlatform;
 using Endgame.AppKit.Testing;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -34,6 +35,7 @@ internal sealed class KitHost : IAsyncDisposable
     public IServiceProvider Services => App.Services;
 
     public static async Task<KitHost> StartAsync(
+        Action<RouteGroupBuilder>? api = null,
         Action<WebApplication>? map = null,
         Action<Dictionary<string, string?>>? environment = null,
         string environmentName = "Testing",
@@ -66,7 +68,8 @@ internal sealed class KitHost : IAsyncDisposable
             builder.Services.AddHttpClient(EndgameApp.OtlpClientName).ConfigurePrimaryHttpMessageHandler(platform.CreateHandler);
 
             app = builder.Build();
-            app.UseEndgameApp();
+            var group = app.UseEndgameApp();
+            api?.Invoke(group);
             map?.Invoke(app);
             await app.StartAsync();
             return new KitHost(app, database, platform);

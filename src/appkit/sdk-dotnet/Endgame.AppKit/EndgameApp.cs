@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,8 +26,8 @@ namespace Endgame.AppKit;
 /// var builder = WebApplication.CreateBuilder(args);
 /// builder.AddEndgameApp&lt;AppDb&gt;();
 /// var app = builder.Build();
-/// app.UseEndgameApp();
-/// app.MapNotes();          // your endpoints, under api/
+/// var api = app.UseEndgameApp();
+/// api.MapNotes();          // your endpoints, under api/
 /// app.Run();
 /// </code>
 /// </summary>
@@ -86,7 +87,6 @@ public static class EndgameApp
         services.AddProblemDetails(o => o.CustomizeProblemDetails = c =>
             c.ProblemDetails.Extensions.TryAdd("traceId", System.Diagnostics.Activity.Current?.TraceId.ToString() ?? c.HttpContext.TraceIdentifier));
         services.AddExceptionHandler<EndgameExceptionHandler>();
-        services.AddValidation();
         services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
         // OpenAPI: the platform derives the app's MCP tools from this document.
@@ -131,12 +131,13 @@ public static class EndgameApp
     /// <summary>
     /// The request pipeline: forwarded headers and path base, errors, static files, identity, and
     /// the kit's own endpoints — <c>health</c>, <c>openapi/v1.json</c>, <c>api/me</c> and the
-    /// front end, served with its base rewritten. Map your own endpoints after this, under <c>api/</c>.
+    /// front end, served with its base rewritten. Returns the <c>api/</c> group: map every endpoint
+    /// of the app on it, so its input is validated and the platform can describe it.
     /// </summary>
-    public static WebApplication UseEndgameApp(this WebApplication app)
+    public static RouteGroupBuilder UseEndgameApp(this WebApplication app)
     {
         var spa = app.Services.GetRequiredService<SpaHost>();
-        app.Services.GetRequiredService<EndgameEndpoints>().Sources = ((Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)app).DataSources;
+        app.Services.GetRequiredService<EndgameEndpoints>().Sources = ((IEndpointRouteBuilder)app).DataSources;
 
         app.UseForwardedHeaders();
         app.Use((context, next) =>
@@ -158,12 +159,16 @@ public static class EndgameApp
 
         app.MapHealthChecks("/" + HealthPath, new HealthCheckOptions { ResponseWriter = DatabaseHealthCheck.WriteAsync }).ExcludeFromDescription();
         app.MapOpenApi("/openapi/{documentName}.json");
-        app.MapGet("api/me", (EndgameUser? user) => new CurrentUser(user))
+        app.MapSpa(spa);
+
+        var api = app.MapGroup("api");
+        api.WithMetadata(new EndgameApiMetadata());
+        api.AddEndpointFilterFactory(InputValidation.Factory);
+        api.MapGet("me", (EndgameUser? user) => new CurrentUser(user))
             .WithName("getCurrentUser")
             .WithSummary("Who is signed in")
             .WithDescription("The person using the app: their id, email, display name and kind (member or endUser), or user = null when nobody is signed in.");
-        app.MapSpa(spa);
-        return app;
+        return api;
     }
 
     private static void AddTelemetry(WebApplicationBuilder builder)

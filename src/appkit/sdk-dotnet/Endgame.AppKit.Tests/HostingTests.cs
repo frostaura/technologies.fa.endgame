@@ -133,8 +133,8 @@ public sealed class HostingTests
     [Fact]
     public async Task Errors_are_problem_details_with_a_trace_id()
     {
-        await using var host = await KitHost.StartAsync(map: app =>
-            app.MapGet("api/boom", string () => throw new InvalidOperationException("kaboom"))
+        await using var host = await KitHost.StartAsync(api: api =>
+            api.MapGet("boom", string () => throw new InvalidOperationException("kaboom"))
                 .WithName("explode").WithDescription("Fails on purpose."));
         var response = await host.Client().GetAsync("/api/boom");
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
@@ -147,8 +147,8 @@ public sealed class HostingTests
     [Fact]
     public async Task Forwarded_host_and_scheme_are_honoured()
     {
-        await using var host = await KitHost.StartAsync(map: app =>
-            app.MapGet("api/where", (HttpRequest r) => new { r.Scheme, Host = r.Host.Value, PathBase = r.PathBase.Value })
+        await using var host = await KitHost.StartAsync(api: api =>
+            api.MapGet("where", (HttpRequest r) => new { r.Scheme, Host = r.Host.Value, PathBase = r.PathBase.Value })
                 .WithName("whereAmI").WithDescription("Echoes the address the request arrived at."));
         using var http = host.Client("/acme/labs/demo");
         http.DefaultRequestHeaders.Add("X-Forwarded-Host", "endgame.frostaura.net");

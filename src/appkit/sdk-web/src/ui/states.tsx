@@ -26,10 +26,21 @@ export function EmptyState({ title, children, className }: { title: string; chil
   );
 }
 
-export function FailedState({ error, onRetry, className }: { error: ApiError; onRetry?: () => void; className?: string }) {
+export function FailedState({
+  error,
+  onRetry,
+  title = "This could not be loaded",
+  className,
+}: {
+  error: ApiError;
+  onRetry?: () => void;
+  /** What failed, e.g. "The note was not saved". */
+  title?: string;
+  className?: string;
+}) {
   return (
     <div role="alert" className={cn("flex flex-col items-start gap-3 rounded-md bg-attention-tint p-6", className)}>
-      <p className="font-display text-base font-semibold text-attention-text">This could not be loaded</p>
+      <p className="font-display text-base font-semibold text-attention-text">{title}</p>
       <p className="text-sm text-ink">{error.message}</p>
       {onRetry ? (
         <Button variant="outline" size="sm" onClick={onRetry}>

@@ -21,11 +21,15 @@ namespace Endgame.AppKit.Testing;
 public class EndgameAppFactory<TProgram> : WebApplicationFactory<TProgram> where TProgram : class
 {
     private readonly Lazy<TestDatabase> _database = new(TestDatabase.Create);
-    private readonly Lazy<DevPlatformServer> _platform;
+    private readonly DevPlatformServer _platform;
 
-    /// <summary>Creates the factory. Nothing starts until the first client is created.</summary>
+    /// <summary>Creates the factory and starts the fake platform; the app starts with the first client.</summary>
+    /// <remarks>
+    /// The fake is started here, never lazily: WebApplicationFactory adopts the first host built on
+    /// the app's start-up path, and a fake built there would be mistaken for the app.
+    /// </remarks>
     public EndgameAppFactory() =>
-        _platform = new Lazy<DevPlatformServer>(() => DevPlatformServer.Start(Platform, () => CreateClient()));
+        _platform = DevPlatformServer.Start(Platform, () => CreateClient());
 
     /// <summary>What the app told the platform, and the switches a test flips (secrets, budget).</summary>
     public DevPlatformState Platform { get; } = new();
@@ -67,8 +71,8 @@ public class EndgameAppFactory<TProgram> : WebApplicationFactory<TProgram> where
         builder.UseSetting(EndgameEnvironment.AppId, "test-app");
         builder.ConfigureTestServices(services =>
         {
-            services.AddHttpClient(EndgameApp.PlatformClientName).ConfigurePrimaryHttpMessageHandler(() => _platform.Value.CreateHandler());
-            services.AddHttpClient(EndgameApp.OtlpClientName).ConfigurePrimaryHttpMessageHandler(() => _platform.Value.CreateHandler());
+            services.AddHttpClient(EndgameApp.PlatformClientName).ConfigurePrimaryHttpMessageHandler(_platform.CreateHandler);
+            services.AddHttpClient(EndgameApp.OtlpClientName).ConfigurePrimaryHttpMessageHandler(_platform.CreateHandler);
         });
     }
 
@@ -76,10 +80,7 @@ public class EndgameAppFactory<TProgram> : WebApplicationFactory<TProgram> where
     public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
-        if (_platform.IsValueCreated)
-        {
-            await _platform.Value.DisposeAsync();
-        }
+        await _platform.DisposeAsync();
 
         if (_database.IsValueCreated)
         {
