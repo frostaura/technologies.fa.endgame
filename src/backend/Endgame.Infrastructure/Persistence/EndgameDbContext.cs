@@ -76,6 +76,8 @@ public sealed class EndgameDbContext : IdentityUserContext<EndgameUser, Guid>, I
 
     public DbSet<AppSessionRecord> AppSessions => Set<AppSessionRecord>();
 
+    public DbSet<AppHandoffRecord> AppHandoffs => Set<AppHandoffRecord>();
+
     public DbSet<AppShareRecord> AppShares => Set<AppShareRecord>();
 
     public DbSet<AppScheduleRecord> AppSchedules => Set<AppScheduleRecord>();

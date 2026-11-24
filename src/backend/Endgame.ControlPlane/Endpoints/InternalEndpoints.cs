@@ -33,6 +33,8 @@ public sealed record AppStateRequest(string? Status);
 
 public sealed record AppTokenResult(string Token);
 
+public sealed record HandoffRedeemRequest(Guid AppId, string? Code);
+
 public sealed record HireRequest(string? Scope, string? Name, string? Role, string? JobDescription, decimal? MonthlyCreditLimit);
 
 public sealed record ScopeLevelView(string Level, Guid Id, string Slug, string Name, string Status, string Path);
@@ -200,6 +202,13 @@ internal static class InternalEndpoints
         group.MapPost("/access/check", async (AccessCheckRequest request, AppIdentityService identity, CancellationToken ct) =>
             Results.Ok(await identity.CheckAsync(request, ct)))
         .WithName("CheckAppAccess").WithSummary("Edge, for a request into an app: allow (with an app-scoped session token), sign-in or deny, from the app's access setting, the visitor's role, its shares and its end users.").Produces<AccessCheckResult>();
+
+        group.MapPost("/access/handoff", async (HandoffRedeemRequest request, AppIdentityService identity, CancellationToken ct) =>
+            await identity.RedeemHandoffAsync(request.AppId, request.Code, ct) is { } redeemed
+                ? Results.Ok(redeemed)
+                : Problems.From(new EndgameProblem(410, "handoff_invalid", "The sign-in link has expired",
+                    "That hand-off code is unknown, already used, or older than a minute. Sign in again.")))
+        .WithName("RedeemHandoff").WithSummary("Edge, on the organisation subdomain: redeems a one-time hand-off code into that host's own app-session cookie (name, value, expiry) and where to send the visitor.").Produces<AppIdentityService.HandoffRedeemed>();
 
         group.MapPost("/usage/hosting", async (HostingUsageRequest request, HostingMeter meter, CancellationToken ct) =>
             Results.Ok(await meter.RecordAsync(request, ct)))

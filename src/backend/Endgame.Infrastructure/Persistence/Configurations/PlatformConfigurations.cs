@@ -93,7 +93,10 @@ internal sealed class AppSessionConfiguration : IEntityTypeConfiguration<AppSess
         builder.Property(s => s.Id).HasColumnName("id").ValueGeneratedNever();
         builder.MapApp();
         builder.Property(s => s.EndUserId).HasColumnName("end_user_id");
+        builder.Property(s => s.UserId).HasColumnName("user_id");
         builder.Property(s => s.TokenHash).HasColumnName("token_hash").HasMaxLength(64);
+        builder.ToTable(t => t.HasCheckConstraint("ck_app_sessions_subject", "(end_user_id IS NULL) <> (user_id IS NULL)"));
+        builder.HasOne<Endgame.Infrastructure.Identity.EndgameUser>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         builder.Property(s => s.CreatedAt).HasColumnName("created_at");
         builder.Property(s => s.ExpiresAt).HasColumnName("expires_at");
         builder.Property(s => s.RevokedAt).HasColumnName("revoked_at");
@@ -302,5 +305,30 @@ internal sealed class HostingSampleConfiguration : IEntityTypeConfiguration<Host
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(h => new { h.OrganisationId, h.SampleId }).IsUnique();
         builder.HasIndex(h => new { h.OrganisationId, h.AppId, h.PeriodEnd });
+    }
+}
+
+internal sealed class AppHandoffConfiguration : IEntityTypeConfiguration<AppHandoffRecord>
+{
+    public void Configure(EntityTypeBuilder<AppHandoffRecord> builder)
+    {
+        builder.ToTable("app_handoffs");
+        builder.HasKey(h => h.Id);
+        builder.Property(h => h.Id).HasColumnName("id").ValueGeneratedNever();
+        builder.MapApp();
+        builder.Property(h => h.EndUserId).HasColumnName("end_user_id");
+        builder.Property(h => h.UserId).HasColumnName("user_id");
+        builder.Property(h => h.CodeHash).HasColumnName("code_hash").HasMaxLength(64);
+        builder.Property(h => h.ReturnTo).HasColumnName("return_to").HasMaxLength(2000);
+        builder.Property(h => h.CreatedAt).HasColumnName("created_at");
+        builder.Property(h => h.ExpiresAt).HasColumnName("expires_at");
+        builder.Property(h => h.UsedAt).HasColumnName("used_at");
+        builder.ToTable(t => t.HasCheckConstraint("ck_app_handoffs_subject", "(end_user_id IS NULL) <> (user_id IS NULL)"));
+        builder.HasOne<AppEndUserRecord>().WithMany()
+            .HasForeignKey(h => new { h.OrganisationId, h.EndUserId })
+            .HasPrincipalKey(u => new { u.OrganisationId, u.Id })
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<Endgame.Infrastructure.Identity.EndgameUser>().WithMany().HasForeignKey(h => h.UserId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(h => h.CodeHash).IsUnique();
     }
 }

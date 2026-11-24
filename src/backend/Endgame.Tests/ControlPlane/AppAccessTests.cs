@@ -99,7 +99,7 @@ public sealed class AppAccessTests(PostgresServer postgres) : IAsyncLifetime
         // Signed out and back in with the same passkey.
         await ControlPlaneApp.Expect(await friend.PostAsync($"/api/app-auth/{bookings}/sign-out", new { }), HttpStatusCode.NoContent);
         Assert.Equal("sign-in", (await CheckAsync(bookings, friend.CookieHeader))["decision"]!.GetValue<string>());
-        var back = await friend.SignInAsync(bookings, authenticator, "https://evil.example/steal");
+        var back = await friend.SignInAsync(bookings, authenticator, null);
         Assert.Equal("https://endgame.frostaura.net/frostaura/technologies/squash/bookings/", back["returnTo"]!.GetValue<string>());
         var check = await CheckAsync(bookings, friend.CookieHeader);
         Assert.Equal("allow", check["decision"]!.GetValue<string>());
@@ -118,6 +118,72 @@ public sealed class AppAccessTests(PostgresServer postgres) : IAsyncLifetime
         await ControlPlaneApp.Expect(await kit.PostAsJsonAsync("/platform/v1/identity/resolve", new { session = check["sessionToken"]!.GetValue<string>() }), HttpStatusCode.Unauthorized);
         var again = await ControlPlaneApp.Ok(friend.PostAsync($"/api/app-auth/{bookings}/sign-in/options", new { }));
         await ControlPlaneApp.Expect(await friend.PostAsync($"/api/app-auth/{bookings}/sign-in/complete", new { credential = authenticator.Get(again["publicKey"]!) }), HttpStatusCode.Forbidden);
+    }
+
+    [Theory]
+    [InlineData("https://evil.example/frostaura/technologies/squash/bookings/")]
+    [InlineData("https://endgame.frostaura.net/frostaura/technologies/squash/ladder/")]
+    [InlineData("https://endgame.frostaura.net/frostaura/technologies/squash/bookings/../ladder/")]
+    [InlineData("https://endgame.frostaura.net@evil.example/frostaura/technologies/squash/bookings/")]
+    [InlineData("http://endgame.frostaura.net/frostaura/technologies/squash/bookings/")]
+    [InlineData("https://endgame.frostaura.net:8443/frostaura/technologies/squash/bookings/")]
+    [InlineData("//evil.example/x")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("/frostaura/technologies/squash/ladder/")]
+    [InlineData("https://other.frostaura.net/technologies/squash/bookings/")]
+    public async Task A_return_address_outside_the_apps_own_addresses_is_refused(string returnTo)
+    {
+        await SetAccessAsync(bookings, "public");
+        var browser = new Browser(app);
+        foreach (var path in new[] { "sign-in/options", "sign-up/options", "development" })
+        {
+            var refused = await ControlPlaneApp.Expect(await browser.PostAsync($"/api/app-auth/{bookings}/{path}", new { email = "p@example.com", returnTo }), HttpStatusCode.BadRequest);
+            Assert.Equal("invalid_return_to", refused["code"]!.GetValue<string>());
+        }
+    }
+
+    [Fact]
+    public async Task A_session_on_the_path_host_is_handed_off_once_to_the_subdomain_host()
+    {
+        await SetAccessAsync(bookings, "public");
+        var player = new Browser(app);
+        // Both of the app's addresses are accepted; returning to the subdomain comes back as a one-time hand-off link.
+        var path = await ControlPlaneApp.Ok(player.PostAsync($"/api/app-auth/{bookings}/development", new { email = "p@example.com", returnTo = "/frostaura/technologies/squash/bookings/courts" }));
+        Assert.Equal("https://endgame.frostaura.net/frostaura/technologies/squash/bookings/courts", path["returnTo"]!.GetValue<string>());
+        var signedIn = await ControlPlaneApp.Ok(player.PostAsync($"/api/app-auth/{bookings}/development", new { email = "p@example.com", returnTo = "https://frostaura.frostaura.net/technologies/squash/bookings/courts?day=1" }));
+        var link = new Uri(signedIn["returnTo"]!.GetValue<string>());
+        Assert.Equal("frostaura.frostaura.net", link.Host);
+        Assert.Equal("/technologies/squash/bookings/_endgame/auth/handoff", link.AbsolutePath);
+        var code = System.Web.HttpUtility.ParseQueryString(link.Query)["code"]!;
+
+        var redeemed = await ControlPlaneApp.Ok(service.PostAsJsonAsync("/internal/access/handoff", new { appId = bookings, code }));
+        Assert.Equal($"endgame.app.{bookings:N}", redeemed["cookieName"]!.GetValue<string>());
+        Assert.Equal("https://frostaura.frostaura.net/technologies/squash/bookings/courts?day=1", redeemed["returnTo"]!.GetValue<string>());
+        var subdomainCookie = $"{redeemed["cookieName"]!.GetValue<string>()}={redeemed["cookieValue"]!.GetValue<string>()}";
+        Assert.NotEqual(player.CookieHeader, subdomainCookie);
+        Assert.NotNull((await CheckAsync(bookings, subdomainCookie))["sessionToken"]);
+
+        // Once only, for this app only.
+        Assert.Equal("handoff_invalid", (await ControlPlaneApp.Expect(await service.PostAsJsonAsync("/internal/access/handoff", new { appId = bookings, code }), HttpStatusCode.Gone))["code"]!.GetValue<string>());
+        var again = new Uri((await ControlPlaneApp.Ok(player.PostAsync($"/api/app-auth/{bookings}/handoff", new { returnTo = "https://frostaura.frostaura.net/technologies/squash/bookings/" })))["url"]!.GetValue<string>());
+        var second = System.Web.HttpUtility.ParseQueryString(again.Query)["code"]!;
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync("/internal/access/handoff", new { appId = ladder, code = second }), HttpStatusCode.Gone);
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync("/internal/access/handoff", new { appId = bookings, code = second }));
+
+        // A member's console session is handed off the same way; the app then knows them by role.
+        var member = new Browser(app);
+        await member.SignInMemberAsync("owner@frostaura.net");
+        var memberLink = new Uri((await ControlPlaneApp.Ok(member.PostAsync($"/api/app-auth/{bookings}/handoff", new { })))["url"]!.GetValue<string>());
+        var memberRedeemed = await ControlPlaneApp.Ok(service.PostAsJsonAsync("/internal/access/handoff", new { appId = bookings, code = System.Web.HttpUtility.ParseQueryString(memberLink.Query)["code"]! }));
+        var memberCheck = await CheckAsync(bookings, $"{memberRedeemed["cookieName"]!.GetValue<string>()}={memberRedeemed["cookieValue"]!.GetValue<string>()}");
+        var token = (await ControlPlaneApp.Ok(service.PostAsync($"/internal/apps/{bookings}/token", null)))["token"]!.GetValue<string>();
+        var kit = app.Internal();
+        kit.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var resolved = await ControlPlaneApp.Ok(kit.PostAsJsonAsync("/platform/v1/identity/resolve", new { session = memberCheck["sessionToken"]!.GetValue<string>() }));
+        Assert.Equal("owner", resolved["user"]!["role"]!.GetValue<string>());
+
+        // Nobody signed in has nothing to hand off.
+        await ControlPlaneApp.Expect(await new Browser(app).PostAsync($"/api/app-auth/{bookings}/handoff", new { }), HttpStatusCode.Unauthorized);
     }
 
     [Fact]

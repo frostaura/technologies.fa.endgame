@@ -78,7 +78,11 @@ public sealed class AppEndUserPasskeyRecord
     public byte[] ClientDataJson { get; set; } = [];
 }
 
-/// <summary>A browser's signed-in session at one app's identity pages. Its cookie holds a token stored only as a hash.</summary>
+/// <summary>
+/// A browser's signed-in session at one app, on one host. Its cookie holds a token stored only as a
+/// hash. Exactly one of <see cref="EndUserId"/> (an end user) and <see cref="UserId"/> (a member whose
+/// console session was handed off to the organisation-subdomain host) is set.
+/// </summary>
 public sealed class AppSessionRecord
 {
     public Guid OrganisationId { get; set; }
@@ -87,7 +91,9 @@ public sealed class AppSessionRecord
 
     public Guid AppId { get; set; }
 
-    public Guid EndUserId { get; set; }
+    public Guid? EndUserId { get; set; }
+
+    public Guid? UserId { get; set; }
 
     public string TokenHash { get; set; } = "";
 
@@ -345,4 +351,33 @@ public sealed class HostingSampleRecord
     public Guid CreditEntryId { get; set; }
 
     public DateTimeOffset ReceivedAt { get; set; }
+}
+
+/// <summary>
+/// A one-time, short-lived hand-off: a session established on the platform's path-form host,
+/// carried to the organisation-subdomain host without sharing a cookie across hosts. Edge redeems
+/// the code on the subdomain and sets that host's own cookie.
+/// </summary>
+public sealed class AppHandoffRecord
+{
+    public Guid OrganisationId { get; set; }
+
+    public Guid Id { get; set; }
+
+    public Guid AppId { get; set; }
+
+    public Guid? EndUserId { get; set; }
+
+    public Guid? UserId { get; set; }
+
+    /// <summary>SHA-256 of the code, hex.</summary>
+    public string CodeHash { get; set; } = "";
+
+    public string ReturnTo { get; set; } = "";
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    public DateTimeOffset? UsedAt { get; set; }
 }

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json.Nodes;
 using Endgame.Infrastructure.Platform;
 
@@ -10,6 +11,8 @@ public sealed record AppSignUpCompleteRequest(JsonNode? Credential, string? Invi
 public sealed record AppSignInOptionsRequest(string? Email, string? ReturnTo);
 
 public sealed record AppCredentialRequest(JsonNode? Credential);
+
+public sealed record AppHandoffRequest(string? ReturnTo);
 
 public sealed record AppDevelopmentSignInRequest(string? Email, string? DisplayName, string? ReturnTo);
 
@@ -49,6 +52,13 @@ internal static class AppAuthEndpoints
             Results.Ok(await identity.SignInCompleteAsync(http, appId, Caller.CredentialJson(request.Credential), ct)))
             .WithName("AppSignInComplete").WithSummary("Finishes an end user's passkey sign-in; a passkey registered for another app never signs anyone in here.")
             .Produces<AppSignedIn>();
+
+        auth.MapPost("/handoff", async (Guid appId, AppHandoffRequest request, HttpContext http, AppIdentityService identity, CancellationToken ct) =>
+        {
+            Guid? member = http.User.Identity?.IsAuthenticated == true && Guid.TryParse(http.User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier), out var id) ? id : null;
+            return Results.Ok(new { url = await identity.HandoffAsync(http, appId, member, request.ReturnTo, ct) });
+        })
+        .WithName("AppHandoff").WithSummary("Carries the visitor's session (member or end user) to the app's organisation-subdomain address: a one-time link, valid for a minute, that Edge redeems there.");
 
         auth.MapPost("/sign-out", async (Guid appId, HttpContext http, AppIdentityService identity, CancellationToken ct) =>
         {

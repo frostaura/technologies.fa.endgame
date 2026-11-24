@@ -108,8 +108,10 @@ public sealed class AppIdentityService(
 
         var mode = await AccessOfAsync(app, cancellationToken);
         var cookieJar = ParseCookies(request.Cookie);
-        var endUser = await EndUserFromCookieAsync(app, cookieJar, cancellationToken);
-        var memberId = MemberFromCookie(request.Cookie);
+        var appSession = await SessionFromCookieAsync(app, cookieJar, cancellationToken);
+        var endUser = appSession is { User: not null } ? appSession : null;
+        var memberId = MemberFromCookie(request.Cookie) ?? appSession?.Session.UserId;
+        Guid? memberSession = MemberFromCookie(request.Cookie) is null ? appSession?.Session.Id : null;
         RoleGrant? role = null;
         if (memberId is { } member)
         {
@@ -120,13 +122,13 @@ public sealed class AppIdentityService(
         var tokenUntil = now.AddMinutes(options.Value.TokenMinutes);
         if (role is not null)
         {
-            return new AccessCheckResult(AccessDecisions.Allow, IssueToken(app.AppId!.Value, "member", memberId!.Value, null, tokenUntil), null);
+            return new AccessCheckResult(AccessDecisions.Allow, IssueToken(app.AppId!.Value, "member", memberId!.Value, memberSession, tokenUntil), null);
         }
 
-        if (endUser is { } signedIn && mode != AppAccess.Private && (mode == AppAccess.Public || await IsSharedWithAsync(app, signedIn.User.Email, cancellationToken)))
+        if (endUser is { } signedIn && mode != AppAccess.Private && (mode == AppAccess.Public || await IsSharedWithAsync(app, signedIn.User!.Email, cancellationToken)))
         {
             var until = signedIn.Session.ExpiresAt < tokenUntil ? signedIn.Session.ExpiresAt : tokenUntil;
-            return new AccessCheckResult(AccessDecisions.Allow, IssueToken(app.AppId!.Value, "endUser", signedIn.User.Id, signedIn.Session.Id, until), null);
+            return new AccessCheckResult(AccessDecisions.Allow, IssueToken(app.AppId!.Value, "endUser", signedIn.User!.Id, signedIn.Session.Id, until), null);
         }
 
         if (mode == AppAccess.Public)
@@ -171,9 +173,10 @@ public sealed class AppIdentityService(
         return Guid.TryParse(ticket.Principal.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
     }
 
-    private sealed record SignedInEndUser(AppEndUserRecord User, AppSessionRecord Session);
+    /// <param name="User">The end user, or null for a member's handed-off session (its <c>UserId</c> is set).</param>
+    private sealed record SignedInAtApp(AppEndUserRecord? User, AppSessionRecord Session);
 
-    private async Task<SignedInEndUser?> EndUserFromCookieAsync(ResolvedScope app, IReadOnlyDictionary<string, string> jar, CancellationToken cancellationToken)
+    private async Task<SignedInAtApp?> SessionFromCookieAsync(ResolvedScope app, IReadOnlyDictionary<string, string> jar, CancellationToken cancellationToken)
     {
         if (!jar.TryGetValue(AppCookieName(app.AppId!.Value), out var token) || token.Length is 0 or > 200)
         {
@@ -183,11 +186,17 @@ public sealed class AppIdentityService(
         var hash = AppTokenService.Hash(token);
         var now = clock.GetUtcNow();
         session.UseOrganisation(app.OrganisationId);
-        var found = await (from s in db.AppSessions.AsNoTracking()
-                           join u in db.AppEndUsers.AsNoTracking() on new { s.OrganisationId, Id = s.EndUserId } equals new { u.OrganisationId, u.Id }
-                           where s.OrganisationId == app.OrganisationId && s.AppId == app.AppId && s.TokenHash == hash && s.RevokedAt == null && s.ExpiresAt > now
-                           select new { Session = s, User = u }).SingleOrDefaultAsync(cancellationToken);
-        return found is null ? null : new SignedInEndUser(found.User, found.Session);
+        var found = await db.AppSessions.AsNoTracking()
+            .SingleOrDefaultAsync(s => s.OrganisationId == app.OrganisationId && s.AppId == app.AppId && s.TokenHash == hash && s.RevokedAt == null && s.ExpiresAt > now, cancellationToken);
+        if (found is null)
+        {
+            return null;
+        }
+
+        var user = found.EndUserId is { } id
+            ? await db.AppEndUsers.AsNoTracking().SingleOrDefaultAsync(u => u.OrganisationId == app.OrganisationId && u.Id == id, cancellationToken)
+            : null;
+        return found.EndUserId is not null && user is null ? null : new SignedInAtApp(user, found);
     }
 
     private async Task<bool> IsSharedWithAsync(ResolvedScope app, string email, CancellationToken cancellationToken) =>
@@ -247,6 +256,12 @@ public sealed class AppIdentityService(
 
         var app = caller.Scope;
         session.UseOrganisation(app.OrganisationId);
+        var now = clock.GetUtcNow();
+        if (payload.S is { } sid && !await db.AppSessions.AsNoTracking().AnyAsync(s => s.OrganisationId == app.OrganisationId && s.Id == sid && s.RevokedAt == null && s.ExpiresAt > now, cancellationToken))
+        {
+            return null;
+        }
+
         if (payload.K == "member")
         {
             var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == payload.U, cancellationToken);
@@ -264,12 +279,6 @@ public sealed class AppIdentityService(
 
         var endUser = await db.AppEndUsers.AsNoTracking().SingleOrDefaultAsync(u => u.OrganisationId == app.OrganisationId && u.AppId == caller.AppId && u.Id == payload.U, cancellationToken);
         if (endUser is null)
-        {
-            return null;
-        }
-
-        var now = clock.GetUtcNow();
-        if (payload.S is { } sid && !await db.AppSessions.AsNoTracking().AnyAsync(s => s.OrganisationId == app.OrganisationId && s.Id == sid && s.RevokedAt == null && s.ExpiresAt > now, cancellationToken))
         {
             return null;
         }
@@ -329,7 +338,7 @@ public sealed class AppIdentityService(
         var removed = await db.AppShares.Where(s => s.OrganisationId == app.OrganisationId && s.AppId == app.AppId && s.Email == address).ExecuteDeleteAsync(cancellationToken);
         var now = clock.GetUtcNow();
         var users = db.AppEndUsers.Where(u => u.OrganisationId == app.OrganisationId && u.AppId == app.AppId && u.Email == address).Select(u => u.Id);
-        await db.AppSessions.Where(s => s.OrganisationId == app.OrganisationId && s.AppId == app.AppId && users.Contains(s.EndUserId) && s.RevokedAt == null)
+        await db.AppSessions.Where(s => s.OrganisationId == app.OrganisationId && s.AppId == app.AppId && s.EndUserId != null && users.Contains(s.EndUserId.Value) && s.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now), cancellationToken);
         return removed > 0;
     }
@@ -370,7 +379,7 @@ public sealed class AppIdentityService(
         var name = AccountService.DisplayName(displayName, address);
         var userId = Guid.NewGuid();
         var options = await Handler(app).MakeCreationOptionsAsync(new PasskeyUserEntity { Id = userId.ToString(), Name = address, DisplayName = name }, http);
-        WriteCeremony(http, new Ceremony(appId, "sign-up", userId, address, name, Stateful(options.AttestationState), returnTo));
+        WriteCeremony(http, new Ceremony(appId, "sign-up", userId, address, name, Stateful(options.AttestationState), RequireReturnTo(app, returnTo)));
         return options.CreationOptionsJson;
     }
 
@@ -429,7 +438,7 @@ public sealed class AppIdentityService(
         var address = email?.Trim().ToLowerInvariant();
         var user = string.IsNullOrEmpty(address) ? null : await db.AppEndUsers.AsNoTracking().SingleOrDefaultAsync(u => u.OrganisationId == app.OrganisationId && u.AppId == appId && u.Email == address, cancellationToken);
         var options = await Handler(app).MakeRequestOptionsAsync(user, http);
-        WriteCeremony(http, new Ceremony(appId, "sign-in", null, null, null, Stateful(options.AssertionState), returnTo));
+        WriteCeremony(http, new Ceremony(appId, "sign-in", null, null, null, Stateful(options.AssertionState), RequireReturnTo(app, returnTo)));
         return options.RequestOptionsJson;
     }
 
@@ -560,7 +569,18 @@ public sealed class AppIdentityService(
 
     private async Task<AppSignedIn> StartSessionAsync(HttpContext http, ResolvedScope app, AppEndUserRecord user, string? returnTo, CancellationToken cancellationToken)
     {
-        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var target = RequireReturnTo(app, returnTo);
+        var (token, expires) = await NewSessionAsync(app, user.Id, null, cancellationToken);
+        await db.AppEndUsers.Where(u => u.OrganisationId == app.OrganisationId && u.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastSignInAt, clock.GetUtcNow()), cancellationToken);
+        http.Response.Cookies.Append(AppCookieName(app.AppId!.Value), token, CookieOptions(http, expires));
+        // A return to the organisation subdomain cannot carry this host's cookie: hand the session off instead.
+        var next = IsOnSubdomain(app, target) ? await HandoffUrlAsync(app, user.Id, null, target, cancellationToken) : target;
+        return new AppSignedIn(new AppUserView(UserId(user.Id), user.Email, user.DisplayName, "endUser", null), next);
+    }
+
+    private async Task<(string Token, DateTimeOffset Expires)> NewSessionAsync(ResolvedScope app, Guid? endUserId, Guid? userId, CancellationToken cancellationToken)
+    {
+        var token = RandomToken();
         var now = clock.GetUtcNow();
         var expires = now.AddDays(options.Value.SessionDays);
         session.UseOrganisation(app.OrganisationId);
@@ -569,17 +589,18 @@ public sealed class AppIdentityService(
             Id = Guid.NewGuid(),
             OrganisationId = app.OrganisationId,
             AppId = app.AppId!.Value,
-            EndUserId = user.Id,
+            EndUserId = endUserId,
+            UserId = userId,
             TokenHash = AppTokenService.Hash(token),
             CreatedAt = now,
             ExpiresAt = expires,
         });
-        await db.AppEndUsers.Where(u => u.OrganisationId == app.OrganisationId && u.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastSignInAt, now), cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
-        http.Response.Cookies.Append(AppCookieName(app.AppId.Value), token, CookieOptions(http, expires));
-        return new AppSignedIn(new AppUserView(UserId(user.Id), user.Email, user.DisplayName, "endUser", null), SafeReturnTo(app, returnTo));
+        return (token, expires);
     }
+
+    private static string RandomToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private CookieOptions CookieOptions(HttpContext http, DateTimeOffset? expires) => new()
     {
@@ -591,32 +612,132 @@ public sealed class AppIdentityService(
         Domain = string.IsNullOrWhiteSpace(options.Value.CookieDomain) ? null : options.Value.CookieDomain,
     };
 
-    /// <summary>Only an address inside this app (either address shape) is a place to return to; anything else returns to the app's home.</summary>
-    public string SafeReturnTo(ResolvedScope app, string? returnTo)
+    // ------------------------------------------------------------------ returnTo and the hand-off
+
+    /// <summary>
+    /// Where to send someone after signing in: an absolute address inside one of this app's two
+    /// addresses (path form or organisation subdomain), or a path inside its path-form address.
+    /// Anything else — another app, another host, a scheme trick, credentials in the URL — is refused
+    /// with 400 <c>invalid_return_to</c>, so the identity pages can never be used as an open redirect.
+    /// Absent, it is the app's home.
+    /// </summary>
+    public string RequireReturnTo(ResolvedScope app, string? returnTo)
     {
         ArgumentNullException.ThrowIfNull(app);
         var addresses = tree.Addresses(app.Path);
-        if (string.IsNullOrWhiteSpace(returnTo) || returnTo.Any(char.IsControl) || returnTo.Contains('\\', StringComparison.Ordinal) || returnTo.Contains("/../", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(returnTo))
         {
             return addresses.Path;
         }
 
-        if (Uri.TryCreate(returnTo, UriKind.Absolute, out var absolute) && absolute.Scheme is "https" or "http")
+        static EndgameProblem Refused() => new(400, "invalid_return_to", "That is not a place inside this app",
+            "returnTo must be an address inside this app, at its path-form address or its organisation subdomain.");
+        if (returnTo.Length > 2000 || returnTo.Any(char.IsControl) || returnTo.Contains('\\', StringComparison.Ordinal))
         {
-            foreach (var home in new[] { addresses.Path, addresses.Subdomain })
+            throw Refused();
+        }
+
+        var candidate = returnTo.StartsWith('/') && !returnTo.StartsWith("//", StringComparison.Ordinal)
+            ? new Uri(new Uri(addresses.Path), returnTo)
+            : Uri.TryCreate(returnTo, UriKind.Absolute, out var absolute) ? absolute : throw Refused();
+        foreach (var home in new[] { addresses.Path, addresses.Subdomain })
+        {
+            var root = new Uri(home);
+            var path = candidate.AbsolutePath;
+            if (candidate.Scheme == root.Scheme && candidate.UserInfo.Length == 0 && candidate.IsDefaultPort == root.IsDefaultPort && candidate.Port == root.Port
+                && string.Equals(candidate.Host, root.Host, StringComparison.OrdinalIgnoreCase)
+                && (path.StartsWith(root.AbsolutePath, StringComparison.Ordinal) || path + "/" == root.AbsolutePath))
             {
-                var root = new Uri(home);
-                if (string.Equals(absolute.Host, root.Host, StringComparison.OrdinalIgnoreCase) && absolute.AbsolutePath.StartsWith(root.AbsolutePath, StringComparison.Ordinal))
-                {
-                    return absolute.ToString();
-                }
+                return candidate.AbsoluteUri;
             }
-
-            return addresses.Path;
         }
 
-        var pathBase = new Uri(addresses.Path).AbsolutePath;
-        return returnTo.StartsWith(pathBase, StringComparison.Ordinal) && !returnTo.StartsWith("//", StringComparison.Ordinal) ? returnTo : addresses.Path;
+        throw Refused();
+    }
+
+    private bool IsOnSubdomain(ResolvedScope app, string target) =>
+        string.Equals(new Uri(target).Host, new Uri(tree.Addresses(app.Path).Subdomain).Host, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A one-time code, valid for a minute, that Edge redeems on the organisation subdomain
+    /// (<c>POST /internal/access/handoff</c>) to set that host's own app-session cookie. The URL is
+    /// the subdomain address's <c>_endgame/auth/handoff?code=…&amp;returnTo=…</c>.
+    /// </summary>
+    private async Task<string> HandoffUrlAsync(ResolvedScope app, Guid? endUserId, Guid? userId, string target, CancellationToken cancellationToken)
+    {
+        var code = RandomToken();
+        var now = clock.GetUtcNow();
+        session.UseOrganisation(app.OrganisationId);
+        db.AppHandoffs.Add(new AppHandoffRecord
+        {
+            Id = Guid.NewGuid(),
+            OrganisationId = app.OrganisationId,
+            AppId = app.AppId!.Value,
+            EndUserId = endUserId,
+            UserId = userId,
+            CodeHash = AppTokenService.Hash(code),
+            ReturnTo = target,
+            CreatedAt = now,
+            ExpiresAt = now.AddSeconds(HandoffSeconds),
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        db.ChangeTracker.Clear();
+        var home = tree.Addresses(app.Path).Subdomain;
+        return $"{home}_endgame/auth/handoff?code={Uri.EscapeDataString(code)}&returnTo={Uri.EscapeDataString(target)}";
+    }
+
+    public const int HandoffSeconds = 60;
+
+    /// <summary>
+    /// <c>POST /api/app-auth/{appId}/handoff</c>: the identity pages, on the platform's host, ask to carry
+    /// the visitor's session to the subdomain. A member needs a role on the app (or God mode); an end
+    /// user needs a live session at this app on this host.
+    /// </summary>
+    public async Task<string> HandoffAsync(HttpContext http, Guid appId, Guid? memberId, string? returnTo, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(http);
+        var (app, mode) = await AppForSignInAsync(appId, cancellationToken);
+        var target = RequireReturnTo(app, returnTo ?? tree.Addresses(app.Path).Subdomain);
+        if (memberId is { } member && (await access.EffectiveRoleAsync(member, app, cancellationToken) ?? await access.OperatorEntryAsync(member, app, cancellationToken)) is not null)
+        {
+            return await HandoffUrlAsync(app, null, member, target, cancellationToken);
+        }
+
+        var signedIn = await SessionFromCookieAsync(app, ParseCookies(http.Request.Headers.Cookie.ToString()), cancellationToken);
+        if (signedIn?.User is { } user)
+        {
+            await RequireMayOpenAsync(app, mode, user.Email, cancellationToken);
+            return await HandoffUrlAsync(app, user.Id, null, target, cancellationToken);
+        }
+
+        throw new EndgameProblem(401, "unauthenticated", "Sign in first", "There is no session at this app to hand off; sign in first.");
+    }
+
+    /// <summary>What Edge sets on the subdomain host when it redeems a hand-off.</summary>
+    public sealed record HandoffRedeemed(string CookieName, string CookieValue, DateTimeOffset ExpiresAt, string ReturnTo);
+
+    /// <summary><c>POST /internal/access/handoff</c>: redeems a code once, within its minute, into a new session for this app on the subdomain host.</summary>
+    public async Task<HandoffRedeemed?> RedeemHandoffAsync(Guid appId, string? code, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(code) || code.Length > 200 || await scopes.FindNodeAsync(NodeLevel.App, appId, cancellationToken) is not { } app)
+        {
+            return null;
+        }
+
+        var hash = AppTokenService.Hash(code);
+        var now = clock.GetUtcNow();
+        session.UseOrganisation(app.OrganisationId);
+        var claimed = await db.AppHandoffs
+            .Where(h => h.OrganisationId == app.OrganisationId && h.AppId == appId && h.CodeHash == hash && h.UsedAt == null && h.ExpiresAt > now)
+            .ExecuteUpdateAsync(s => s.SetProperty(h => h.UsedAt, now), cancellationToken);
+        if (claimed != 1)
+        {
+            return null;
+        }
+
+        var handoff = await db.AppHandoffs.AsNoTracking().SingleAsync(h => h.OrganisationId == app.OrganisationId && h.CodeHash == hash, cancellationToken);
+        var (token, expires) = await NewSessionAsync(app, handoff.EndUserId, handoff.UserId, cancellationToken);
+        return new HandoffRedeemed(AppCookieName(appId), token, expires, handoff.ReturnTo);
     }
 
     private void WriteCeremony(HttpContext http, Ceremony ceremony) =>

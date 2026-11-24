@@ -420,6 +420,69 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                     b.ToTable("app_end_users", (string)null);
                 });
 
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppHandoffRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("EndUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("end_user_id");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<string>("ReturnTo")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("return_to");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrganisationId", "AppId");
+
+                    b.HasIndex("OrganisationId", "EndUserId");
+
+                    b.ToTable("app_handoffs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_app_handoffs_subject", "(end_user_id IS NULL) <> (user_id IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppScheduleRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -516,7 +579,7 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<Guid>("EndUserId")
+                    b.Property<Guid?>("EndUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("end_user_id");
 
@@ -538,16 +601,25 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("token_hash");
 
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
+                    b.HasIndex("UserId");
+
                     b.HasIndex("OrganisationId", "AppId");
 
                     b.HasIndex("OrganisationId", "EndUserId");
 
-                    b.ToTable("app_sessions", (string)null);
+                    b.ToTable("app_sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_app_sessions_subject", "(end_user_id IS NULL) <> (user_id IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppShareRecord", b =>
@@ -2129,6 +2201,27 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppHandoffRecord", b =>
+                {
+                    b.HasOne("Endgame.Infrastructure.Identity.EndgameUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.AppEndUserRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "EndUserId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppScheduleRecord", b =>
                 {
                     b.HasOne("Endgame.Domain.Tree.App", null)
@@ -2141,6 +2234,11 @@ namespace Endgame.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppSessionRecord", b =>
                 {
+                    b.HasOne("Endgame.Infrastructure.Identity.EndgameUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("Endgame.Domain.Tree.App", null)
                         .WithMany()
                         .HasForeignKey("OrganisationId", "AppId")
@@ -2152,8 +2250,7 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("OrganisationId", "EndUserId")
                         .HasPrincipalKey("OrganisationId", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.AppShareRecord", b =>
