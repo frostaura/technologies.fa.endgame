@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Endgame app: health, running, sharing and history</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2447D6;text-decoration:none}a:hover{color:#1E3FCC}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes grow{from{width:0}}
+main>*{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+main>*:nth-child(2){animation-delay:.1s}main>*:nth-child(3){animation-delay:.2s}main>*:nth-child(4){animation-delay:.3s}
+main>section:first-of-type>*{animation:rise .7s cubic-bezier(.2,.7,.2,1) both;transition:transform .22s ease,box-shadow .22s ease}
+main>section:first-of-type>*:nth-child(1){animation-delay:.12s}main>section:first-of-type>*:nth-child(2){animation-delay:.22s}main>section:first-of-type>*:nth-child(3){animation-delay:.32s}main>section:first-of-type>*:nth-child(4){animation-delay:.42s}
+main>section:first-of-type>*:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(11,16,32,.06),0 18px 40px rgba(47,91,255,.16)}
+aside>*{animation:rise .7s .25s cubic-bezier(.2,.7,.2,1) both}
+[role=img]>div>div{animation:grow 1s cubic-bezier(.2,.7,.2,1) both}
+[role=img]>div:nth-child(1)>div{animation-delay:.4s}[role=img]>div:nth-child(2)>div{animation-delay:.48s}[role=img]>div:nth-child(3)>div{animation-delay:.56s}[role=img]>div:nth-child(4)>div{animation-delay:.64s}[role=img]>div:nth-child(5)>div{animation-delay:.72s}[role=img]>div:nth-child(6)>div{animation-delay:.8s}[role=img]>div:nth-child(7)>div{animation-delay:.88s}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(18,161,94,.55)}100%{box-shadow:0 0 0 10px rgba(18,161,94,0)}}
+.pulse{animation:pulse 1.8s ease-out infinite}
+label{transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}label[style*="border-radius"]:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(47,91,255,.14)}
+input[type=radio]{accent-color:#2F5BFF}
+a,button{transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
+button:hover,a[style*="min-height"]:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(47,91,255,.22)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="min-height: 1040px; background: #F5F6FB; color: #0B1020; font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 1.45; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 32px; background: #FFFFFF; border-bottom: 1px solid #E4E7F2">
+<div style="display: flex; align-items: center; gap: 20px">
+<span style="display: flex; align-items: center; gap: 10px"><svg aria-hidden="true" viewBox="0 0 64 64" style="width: 30px; height: 30px"><rect width="64" height="64" rx="16" fill="#2F5BFF"></rect><path d="M21 17v30M21 17h24M21 32h18M21 47h12" fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round"></path><circle cx="45" cy="17" r="5" fill="#FFFFFF"></circle><circle cx="39" cy="32" r="5" fill="#FFFFFF"></circle><circle cx="33" cy="47" r="5" fill="#7DF0DC"></circle></svg><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: -0.01em">Endgame</span></span>
+<nav aria-label="Where you are" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #5A6270">
+<a href="Main.dc.html">FrostAura</a><span aria-hidden="true">/</span><span>Technologies</span><span aria-hidden="true">/</span><span style="color: #0A0F1A; font-weight: 500">Crusaders Squash Control</span>
+</nav>
+</div>
+<a href="Credits.dc.html" style="display: flex; flex-direction: column; color: #0A0F1A"><span style="font-size: 12px; color: #5A6270">Credits left</span><span style="font-weight: 600">18,420</span></a>
+</header>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap">
+
+<main style="flex: 999 1 720px; min-width: 0; padding: 40px 32px; display: flex; flex-direction: column; gap: 32px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 32px; letter-spacing: -0.02em">Crusaders Squash Control</h1>
+<span style="color: #3B4350">crusaders.frostaura.net · also at endgame.frostaura.net/frostaura/technologies/crusaders</span>
+</div>
+<a href="#open" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 14px; background: #2F5BFF; color: #FFFFFF; font-weight: 600">Open the app</a>
+</div>
+
+<section aria-label="Today" style="display: flex; flex-wrap: wrap; gap: 16px">
+<div style="flex: 1 1 160px; display: flex; flex-direction: column; gap: 4px; padding: 18px 20px; border: 1px solid #E4E7F2; border-radius: 18px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)"><span style="color: #5A6270">Health</span><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 26px; color: #0E7A4B; display: flex; align-items: center; gap: 10px"><span aria-hidden="true" class="pulse" style="width: 10px; height: 10px; border-radius: 999px; background: #12A15E"></span>Healthy</span><span style="color: #3B4350">No errors in 6 days</span></div>
+<div style="flex: 1 1 160px; display: flex; flex-direction: column; gap: 4px; padding: 18px 20px; border: 1px solid #E4E7F2; border-radius: 18px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)"><span style="color: #5A6270">Visits today</span><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 26px">412</span><span style="color: #3B4350">38 bookings made</span></div>
+<div style="flex: 1 1 160px; display: flex; flex-direction: column; gap: 4px; padding: 18px 20px; border: 1px solid #E4E7F2; border-radius: 18px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)"><span style="color: #5A6270">Typical response</span><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 26px">0.2 s</span><span style="color: #3B4350">Slowest 1 in 20: 0.6 s</span></div>
+<div style="flex: 1 1 160px; display: flex; flex-direction: column; gap: 4px; padding: 18px 20px; border: 1px solid #E4E7F2; border-radius: 18px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)"><span style="color: #5A6270">Cost this month</span><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 26px">640</span><span style="color: #3B4350">Cap 900 credits</span></div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 16px; padding: 24px; border: 1px solid #E4E7F2; border-radius: 18px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="ask" style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">Ask about this app</label>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<input id="ask" type="text" value="Which days are the courts busiest?" style="flex: 1 1 280px; min-width: 0; min-height: 44px; padding: 0 14px; border: 1px solid #B9C2CE; border-radius: 8px; font: inherit; color: #0A0F1A">
+<button type="button" style="min-height: 44px; padding: 0 16px; border: 0; border-radius: 8px; background: #2F5BFF; color: #FFFFFF; font: inherit; font-weight: 500">Ask</button>
+</div>
+</div>
+<p style="margin: 0; color: #3B4350">Tuesday and Thursday evenings. Bookings over the last four weeks, by day:</p>
+<div role="img" aria-label="Bookings by weekday: Monday 52, Tuesday 96, Wednesday 61, Thursday 88, Friday 40, Saturday 70, Sunday 34" style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 12px"><span style="flex: none; width: 36px; color: #5A6270">Mon</span><div style="width: 54%; height: 14px; border-radius: 4px; background: #A9B8FF"></div><span>52</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="flex: none; width: 36px; color: #5A6270">Tue</span><div style="width: 80%; height: 14px; border-radius: 4px; background: #2F5BFF"></div><span style="font-weight: 600">96</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="flex: none; width: 36px; color: #5A6270">Wed</span><div style="width: 51%; height: 14px; border-radius: 4px; background: #A9B8FF"></div><span>61</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="flex: none; width: 36px; color: #5A6270">Thu</span><div style="width: 73%; height: 14px; border-radius: 4px; background: #2F5BFF"></div><span style="font-weight: 600">88</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="flex: none; width: 36px; color: #5A6270">Fri</span><div style="width: 33%; height: 14px; border-radius: 4px; background: #A9B8FF"></div><span>40</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="flex: none; width: 36px; color: #5A6270">Sat</span><div style="width: 58%; height: 14px; border-radius: 4px; background: #A9B8FF"></div><span>70</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span style="flex: none; width: 36px; color: #5A6270">Sun</span><div style="width: 28%; height: 14px; border-radius: 4px; background: #A9B8FF"></div><span>34</span></div>
+</div>
+<button type="button" style="align-self: flex-start; min-height: 44px; padding: 0 16px; border: 1px solid #0A0F1A; border-radius: 8px; background: #FFFFFF; color: #0A0F1A; font: inherit; font-weight: 500">Keep this on the dashboard</button>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">History</h2>
+<ul style="margin: 0; padding: 0; list-style: none; border: 1px solid #E4E7F2; border-radius: 18px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)">
+<li style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #E3E7EC"><span>Waiting list for full courts</span><span style="color: #5A6270">Idris · 2 days ago · live now</span></li>
+<li style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #E3E7EC"><span>Fixed the door code expiring early</span><span style="color: #5A6270">Idris · 6 days ago</span></li>
+<li style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 14px 20px"><span>Changed the welcome wording</span><span style="color: #5A6270">You · 9 days ago</span></li>
+</ul>
+<span style="color: #5A6270">Any version can be brought back.</span>
+</section>
+
+</main>
+
+<aside aria-label="Settings for this app" style="flex: 1 1 360px; min-width: 0; border-left: 1px solid #E3E7EC; background: #FFFFFF; padding: 40px 32px; display: flex; flex-direction: column; gap: 28px">
+
+<fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 10px">
+<legend style="padding: 0; margin-bottom: 10px; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">Running</legend>
+<label style="display: flex; gap: 12px; padding: 14px 16px; border: 1px solid #D5DAE1; border-radius: 10px; background: #FFFFFF"><input type="radio" name="run" style="margin-top: 3px"><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Sleeps when unused</span><span style="color: #3B4350">Cheapest. The first visitor waits a few seconds. About 40 credits a month.</span></span></label>
+<label style="display: flex; gap: 12px; padding: 14px 16px; border: 1px solid #0A0F1A; border-radius: 10px; background: #FFFFFF"><input type="radio" name="run" checked style="margin-top: 3px"><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Always on</span><span style="color: #3B4350">Instant for everyone. About 220 credits a month.</span></span></label>
+</fieldset>
+
+<fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 10px">
+<legend style="padding: 0; margin-bottom: 10px; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">Who can open it</legend>
+<label style="display: flex; gap: 12px; padding: 12px 16px; border: 1px solid #D5DAE1; border-radius: 10px; background: #FFFFFF"><input type="radio" name="who" style="margin-top: 3px"><span>Private: only people in FrostAura</span></label>
+<label style="display: flex; gap: 12px; padding: 12px 16px; border: 1px solid #D5DAE1; border-radius: 10px; background: #FFFFFF"><input type="radio" name="who" style="margin-top: 3px"><span>Shared: people you invite, after they register</span></label>
+<label style="display: flex; gap: 12px; padding: 12px 16px; border: 1px solid #0A0F1A; border-radius: 10px; background: #FFFFFF"><input type="radio" name="who" checked style="margin-top: 3px"><span>Public: anyone, with members signing in to book</span></label>
+</fieldset>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">What it uses</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="padding: 6px 12px; border-radius: 999px; border: 1px solid #D5DAE1; background: #FFFFFF">Sign-in · 214 members</span>
+<span style="padding: 6px 12px; border-radius: 999px; border: 1px solid #D5DAE1; background: #FFFFFF">Data</span>
+<span style="padding: 6px 12px; border-radius: 999px; border: 1px solid #D5DAE1; background: #FFFFFF">Email</span>
+<span style="padding: 6px 12px; border-radius: 999px; border: 1px solid #D5DAE1; background: #FFFFFF">Court hardware feed</span>
+<span style="padding: 6px 12px; border-radius: 999px; border: 1px solid #D5DAE1; background: #FFFFFF">2 secrets</span>
+<span style="padding: 6px 12px; border-radius: 999px; border: 1px solid #D5DAE1; background: #FFFFFF">Open to AI assistants</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">It is yours</h2>
+<p style="margin: 0; color: #3B4350">Download the code, its full history and all its data whenever you like.</p>
+<button type="button" style="align-self: flex-start; min-height: 44px; padding: 0 16px; border: 1px solid #0A0F1A; border-radius: 8px; background: #FFFFFF; color: #0A0F1A; font: inherit; font-weight: 500">Download everything</button>
+</div>
+
+</aside>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

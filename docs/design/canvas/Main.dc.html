@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Endgame home: the living org chart</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2447D6;text-decoration:none}a:hover{color:#1E3FCC}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes grow{from{width:0}}
+main>*{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+main>*:nth-child(2){animation-delay:.08s}main>*:nth-child(3){animation-delay:.16s}main>*:nth-child(4){animation-delay:.24s}main>*:nth-child(5){animation-delay:.32s}
+aside>*{animation:rise .7s .2s cubic-bezier(.2,.7,.2,1) both}
+[role=img] div[style*="border-radius"]{animation:grow 1.1s .35s cubic-bezier(.2,.7,.2,1) both}
+a,button{transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
+button:hover,a[style*="min-height"]:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(47,91,255,.22)}
+.card{transition:transform .22s ease,box-shadow .22s ease}.card:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(11,16,32,.06),0 18px 40px rgba(47,91,255,.16)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(18,161,94,.55)}100%{box-shadow:0 0 0 10px rgba(18,161,94,0)}}
+.pulse{animation:pulse 1.8s ease-out infinite}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(70px,-24px) scale(1.25)}100%{transform:translate(0,0) scale(1)}}
+.aura{position:absolute;border-radius:999px;filter:blur(48px);opacity:.75;animation:drift 12s ease-in-out infinite}
+@keyframes travel{0%{top:0;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:100%;opacity:0}}
+.wire{position:relative}.wire::before{content:"";position:absolute;left:-6px;top:0;width:10px;height:10px;border-radius:999px;background:#2F5BFF;box-shadow:0 0 0 4px rgba(47,91,255,.18);animation:travel 3.2s linear infinite}
+.wire.v::before{background:#6B4BF0;box-shadow:0 0 0 4px rgba(107,75,240,.18);animation-delay:1.4s}
+@keyframes sheen{from{background-position:0 0}to{background-position:40px 0}}
+.live{background-image:repeating-linear-gradient(115deg,rgba(255,255,255,.3) 0 10px,rgba(255,255,255,0) 10px 20px);background-size:40px 100%;animation:grow 1.1s .35s cubic-bezier(.2,.7,.2,1) both,sheen 1s linear infinite !important}
+@keyframes bob{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-5px);opacity:1}}
+.dot{width:7px;height:7px;border-radius:999px;background:#6B4BF0;animation:bob 1.2s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1.6s linear infinite}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="min-height: 1040px; background: #F5F6FB; color: #0B1020; font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 1.45; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 32px; background: #FFFFFF; border-bottom: 1px solid #E4E7F2">
+<div style="display: flex; align-items: center; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg aria-hidden="true" viewBox="0 0 64 64" style="width: 30px; height: 30px"><rect width="64" height="64" rx="16" fill="#2F5BFF"></rect><path d="M21 17v30M21 17h24M21 32h18M21 47h12" fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round"></path><circle cx="45" cy="17" r="5" fill="#FFFFFF"></circle><circle cx="39" cy="32" r="5" fill="#FFFFFF"></circle><circle cx="33" cy="47" r="5" fill="#7DF0DC"></circle></svg>
+<span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: -0.01em">Endgame</span>
+</div>
+<nav aria-label="Where you are" style="display: flex; align-items: center; gap: 8px; color: #535B70">
+<span style="color: #0B1020; font-weight: 500">FrostAura</span>
+<span aria-hidden="true">/</span>
+<span>Whole organisation</span>
+</nav>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+<div role="group" aria-label="Mode" style="display: flex; padding: 4px; border-radius: 12px; background: #EEF0F7">
+<button type="button" aria-pressed="true" style="min-height: 44px; padding: 0 16px; border: 0; border-radius: 9px; background: #FFFFFF; color: #0B1020; font: inherit; font-weight: 600; box-shadow: 0 1px 2px rgba(11,16,32,0.12)">Normal</button>
+<button type="button" aria-pressed="false" style="min-height: 44px; padding: 0 16px; border: 0; border-radius: 9px; background: transparent; color: #535B70; font: inherit">Technical</button>
+</div>
+<a href="Credits.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; border-radius: 12px; background: #E9FBF1; color: #0B1020">
+<span aria-hidden="true" class="pulse" style="width: 8px; height: 8px; border-radius: 999px; background: #12A15E"></span>
+<span style="font-weight: 600">18,420</span><span style="color: #0E6B42">credits left</span>
+</a>
+</div>
+</header>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap">
+
+<main style="flex: 999 1 720px; min-width: 0; padding: 28px 32px 40px; display: flex; flex-direction: column; gap: 24px">
+
+<section aria-label="Organisation" style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 28px 32px; border-radius: 24px; background: #2F5BFF; color: #FFFFFF; position: relative; overflow: hidden">
+<div aria-hidden="true" class="aura" style="right: 120px; top: -80px; width: 320px; height: 320px; background: #6B4BF0"></div>
+<div aria-hidden="true" class="aura" style="right: -60px; bottom: -140px; width: 300px; height: 300px; background: #0B8FA6; animation-delay: -5s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #DCE4FF">Organisation</span>
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 44px; line-height: 1; letter-spacing: -0.03em">FrostAura</h1>
+<span style="color: #EEF2FF">Mara is chief of staff · all apps healthy</span>
+</div>
+<div style="position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 28px">
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 28px">2</span><span style="color: #EEF2FF">divisions</span></div>
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 28px">4</span><span style="color: #EEF2FF">apps</span></div>
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 28px">5</span><span style="color: #EEF2FF">employees</span></div>
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 28px">1,580</span><span style="color: #EEF2FF">credits this month</span></div>
+<a href="Start.dc.html" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 14px; background: #FFFFFF; color: #1E3FCC; font-weight: 600">New idea</a>
+</div>
+</section>
+
+<section aria-label="Needs you" style="display: flex; flex-wrap: wrap; gap: 16px">
+<a href="Verdict.dc.html" style="flex: 1 1 280px; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border-radius: 18px; background: #FFF1EC; border: 1px solid #FFC9BA; color: #0B1020">
+<span style="align-self: flex-start; padding: 3px 10px; border-radius: 999px; background: #FFFFFF; color: #B42318; font-size: 12px; font-weight: 600">Verdict waiting</span>
+<span style="font-weight: 600; font-size: 15px">Research says do not build “Court ladder”</span>
+<span style="color: #5C2A1F">Read it, or overrule.</span>
+</a>
+<div style="flex: 1 1 280px; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border-radius: 18px; background: #F3EEFF; border: 1px solid #D9CCFF">
+<span style="align-self: flex-start; padding: 3px 10px; border-radius: 999px; background: #FFFFFF; color: #5B3FD6; font-size: 12px; font-weight: 600">Hire proposed</span>
+<span style="font-weight: 600; font-size: 15px">A support writer for Crusaders</span>
+<span style="color: #3F2E87">About 300 credits a month.</span>
+</div>
+</section>
+
+<section aria-label="Organisation chart" style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+<div style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #E4E7F2; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)">
+<div style="display: flex; align-items: center; gap: 14px">
+<span aria-hidden="true" style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #2F5BFF; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px">T</span>
+<div style="display: flex; flex-direction: column"><span style="font-size: 12px; color: #535B70">Division</span><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">Technologies</span></div>
+</div>
+<span style="padding: 4px 12px; border-radius: 999px; background: #EEF2FF; color: #1E3FCC; font-weight: 600">1,140 credits</span>
+</div>
+<div class="wire" style="margin-left: 39px; padding: 16px 0 0 24px; border-left: 2px solid #C6D2FF; display: flex; flex-direction: column; gap: 14px">
+
+<a href="App.dc.html" class="card" style="display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #E4E7F2; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05); color: #0B1020">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+<span style="font-weight: 600; font-size: 16px">Crusaders Squash Control</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="padding: 3px 10px; border-radius: 999px; background: #E9FBF1; color: #0E6B42; font-size: 12px; font-weight: 600">Healthy</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #EEF2FF; color: #1E3FCC; font-size: 12px; font-weight: 600">Always on</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #E3F8FB; color: #0B6E7F; font-size: 12px; font-weight: 600">Public</span>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 20px">412</span><span style="color: #535B70">visits today</span></div>
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 20px">640</span><span style="color: #535B70">credits this month</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: #F5F6FB; font-size: 13px"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: #0B8FA6; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">I</span>Idris · Engineer</span>
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: #F5F6FB; font-size: 13px"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: #C2410C; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">N</span>Noor · Security reviewer</span>
+</div>
+</a>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #E4E7F2; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+<span style="font-weight: 600; font-size: 16px">Public website</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="padding: 3px 10px; border-radius: 999px; background: #E9FBF1; color: #0E6B42; font-size: 12px; font-weight: 600">Healthy</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #EEF2FF; color: #1E3FCC; font-size: 12px; font-weight: 600">Always on</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #E3F8FB; color: #0B6E7F; font-size: 12px; font-weight: 600">Public</span>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 20px">96</span><span style="color: #535B70">visits today</span></div>
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 20px">120</span><span style="color: #535B70">credits this month</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: #F5F6FB; font-size: 13px"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: #B4237A; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">T</span>Theo · Designer</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 18px 20px; border-radius: 18px; background: #FFF8F5; border: 2px dashed #FFB6A3">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+<span style="font-weight: 600; font-size: 16px">Court ladder</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #FFE3DC; color: #B42318; font-size: 12px; font-weight: 600">Idea · paused at verdict</span>
+</div>
+<span style="color: #5C2A1F">Research finished. Waiting for your call.</span>
+</div>
+
+</div>
+</div>
+
+<div style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #E4E7F2; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)">
+<div style="display: flex; align-items: center; gap: 14px">
+<span aria-hidden="true" style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #6B4BF0; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px">L</span>
+<div style="display: flex; flex-direction: column"><span style="font-size: 12px; color: #535B70">Division</span><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">Labs</span></div>
+</div>
+<span style="padding: 4px 12px; border-radius: 999px; background: #F3EEFF; color: #5B3FD6; font-weight: 600">440 credits</span>
+</div>
+<div class="wire v" style="margin-left: 39px; padding: 16px 0 0 24px; border-left: 2px solid #D9CCFF; display: flex; flex-direction: column; gap: 14px">
+
+<div class="card" style="display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #E4E7F2; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+<span style="font-weight: 600; font-size: 16px">Reel</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="padding: 3px 10px; border-radius: 999px; background: #E9FBF1; color: #0E6B42; font-size: 12px; font-weight: 600">Healthy</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #EEF0F7; color: #434A5E; font-size: 12px; font-weight: 600">Asleep</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #F3EEFF; color: #5B3FD6; font-size: 12px; font-weight: 600">Shared with 3</span>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 20px">2 days</span><span style="color: #535B70">since last visit</span></div>
+<div style="display: flex; flex-direction: column"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 20px">40</span><span style="color: #535B70">credits this month</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<a href="Employee.dc.html" style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: #F5F6FB; font-size: 13px; color: #0B1020"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: #6B4BF0; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">M</span>Mara · Product researcher</a>
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px; border: 1px dashed #8D7BE8; color: #3F2E87; font-size: 13px"><span aria-hidden="true" class="spin" style="width: 12px; height: 12px; border-radius: 999px; border: 2px solid #D9CCFF; border-top-color: #6B4BF0"></span>3 contractors · competitor sweep</span>
+</div>
+</div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #E4E7F2; box-shadow: 0 1px 2px rgba(11,16,32,0.05), 0 10px 28px rgba(11,16,32,0.05)">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+<span style="font-weight: 600; font-size: 16px">Health trends</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="padding: 3px 10px; border-radius: 999px; background: #2F5BFF; color: #FFFFFF; font-size: 12px; font-weight: 600">Building</span>
+<span style="padding: 3px 10px; border-radius: 999px; background: #EEF0F7; color: #434A5E; font-size: 12px; font-weight: 600">Private</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px"><span style="font-weight: 500">Build, step 4 of 7</span><span style="color: #535B70">210 of an estimated 400 credits</span></div>
+<div role="img" aria-label="Build just over half done" style="height: 10px; border-radius: 999px; background: #E4E7F2"><div class="live" style="width: 55%; height: 10px; border-radius: 999px; background-color: #2F5BFF"></div></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: #F5F6FB; font-size: 13px"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: #0B8FA6; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">I</span>Idris · Engineer</span>
+</div>
+</div>
+
+</div>
+</div>
+
+</section>
+</main>
+
+<aside aria-label="Conversation" style="flex: 1 1 340px; min-width: 0; border-left: 1px solid #E4E7F2; background: #FFFFFF; display: flex; flex-direction: column">
+<div style="padding: 20px 24px; border-bottom: 1px solid #E4E7F2; display: flex; align-items: center; gap: 14px">
+<span aria-hidden="true" style="flex: none; width: 40px; height: 40px; border-radius: 12px; background: #2F5BFF; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px">F</span>
+<div style="display: flex; flex-direction: column">
+<span style="font-weight: 600">Talking to FrostAura</span>
+<span style="font-size: 12px; color: #535B70">Select a division, app or employee to narrow this.</span>
+</div>
+</div>
+<div style="flex: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+<p style="margin: 0; align-self: flex-end; max-width: 85%; padding: 10px 16px; border-radius: 18px 18px 4px 18px; background: #2F5BFF; color: #FFFFFF">What needs me today?</p>
+<div style="max-width: 92%; padding: 14px 16px; border-radius: 18px 18px 18px 4px; background: #F5F6FB; display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-weight: 600">Two things.</p>
+<p style="margin: 0">Mara finished the research on Court ladder and recommends not building it. Three products already cover it. <a href="Verdict.dc.html" style="font-weight: 600">Read the verdict</a></p>
+<p style="margin: 0">Crusaders has had 14 member questions this week with nobody assigned. I have drafted a hire for a support writer.</p>
+<p style="margin: 0; color: #0E6B42; font-size: 13px">Everything else is running inside its budget.</p>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; color: #535B70; font-size: 13px"><span aria-hidden="true" style="display: flex; gap: 4px"><span class="dot"></span><span class="dot" style="animation-delay: .15s"></span><span class="dot" style="animation-delay: .3s"></span></span>Idris is building Health trends</div>
+</div>
+<div style="padding: 16px 24px 24px; display: flex; flex-direction: column; gap: 8px">
+<label for="say" style="font-size: 12px; color: #535B70">Message FrostAura</label>
+<div style="display: flex; gap: 8px">
+<input id="say" type="text" placeholder="Ask, or tell it what to change" style="flex: 1; min-width: 0; min-height: 48px; padding: 0 16px; border: 1px solid #C9CEDF; border-radius: 14px; font: inherit; background: #FFFFFF; color: #0B1020">
+<button type="button" style="min-height: 48px; padding: 0 18px; border: 0; border-radius: 14px; background: #2F5BFF; color: #FFFFFF; font: inherit; font-weight: 600">Send</button>
+</div>
+</div>
+</aside>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

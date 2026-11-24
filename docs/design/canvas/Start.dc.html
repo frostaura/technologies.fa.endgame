@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Endgame start: name the organisation and describe an idea</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2447D6;text-decoration:none}a:hover{color:#1E3FCC}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes grow{from{width:0}}
+main>*>*{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+main>*>*:nth-child(2){animation-delay:.08s}main>*>*:nth-child(3){animation-delay:.16s}main>*>*:nth-child(4){animation-delay:.24s}main>*>*:nth-child(5){animation-delay:.32s}main>*>*:nth-child(6){animation-delay:.4s}
+aside li{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
+aside li:nth-child(1){animation-delay:.3s}aside li:nth-child(2){animation-delay:.42s}aside li:nth-child(3){animation-delay:.54s}aside li:nth-child(4){animation-delay:.66s}aside li:nth-child(5){animation-delay:.78s}aside li:nth-child(6){animation-delay:.9s}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(47,91,255,.5)}100%{box-shadow:0 0 0 12px rgba(47,91,255,0)}}
+aside li:first-child>span:first-child{animation:ring 1.8s ease-out infinite}
+input,textarea{transition:border-color .18s ease,box-shadow .18s ease}
+input:focus,textarea:focus{outline:none;border-color:#2F5BFF;box-shadow:0 0 0 4px rgba(47,91,255,.18)}
+a,button{transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
+button:hover,a[style*="min-height"]:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(47,91,255,.22)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="min-height: 1040px; background: #F5F6FB; color: #0B1020; font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 1.45; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 32px; background: #FFFFFF; border-bottom: 1px solid #E4E7F2">
+<span style="display: flex; align-items: center; gap: 10px"><svg aria-hidden="true" viewBox="0 0 64 64" style="width: 30px; height: 30px"><rect width="64" height="64" rx="16" fill="#2F5BFF"></rect><path d="M21 17v30M21 17h24M21 32h18M21 47h12" fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round"></path><circle cx="45" cy="17" r="5" fill="#FFFFFF"></circle><circle cx="39" cy="32" r="5" fill="#FFFFFF"></circle><circle cx="33" cy="47" r="5" fill="#7DF0DC"></circle></svg><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: -0.01em">Endgame</span></span>
+<a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 44px">Back to the org chart</a>
+</header>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap">
+
+<main style="flex: 999 1 620px; min-width: 0; padding: 56px 32px; display: flex; justify-content: center">
+<div style="width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 36px">
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em">What do you want to build?</h1>
+<p style="margin: 0; font-size: 16px; color: #3B4350">Describe it the way you would to a friend. Endgame researches it first, tells you plainly whether it is worth building, then builds and runs it.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="org" style="font-weight: 500">Your organisation</label>
+<input id="org" type="text" value="FrostAura" style="min-height: 48px; padding: 0 14px; border: 1px solid #B9C2CE; border-radius: 8px; font: inherit; font-size: 16px; color: #0A0F1A">
+<span style="font-size: 12px; color: #5A6270">Everything you make lives under this name. Its apps appear at endgame.frostaura.net/frostaura.</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="idea" style="font-weight: 500">The idea</label>
+<textarea id="idea" rows="5" style="padding: 12px 14px; border: 1px solid #B9C2CE; border-radius: 8px; font: inherit; font-size: 16px; line-height: 1.5; color: #0A0F1A; resize: vertical">A ladder for our squash club. Members challenge the person above them, book the court in the same step, and the ranking updates when the result goes in.</textarea>
+</div>
+
+<fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 10px">
+<legend style="padding: 0; margin-bottom: 10px; font-weight: 500">Anything it must respect? <span style="font-weight: 400; color: #5A6270">Optional</span></legend>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; background: #2F5BFF; color: #FFFFFF">Members sign in</span>
+<span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; background: #2F5BFF; color: #FFFFFF">Works on a phone</span>
+<span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #B9C2CE">Sends email</span>
+<span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #B9C2CE">Uses AI inside the app</span>
+<span style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #B9C2CE">Receives data from a device</span>
+</div>
+</fieldset>
+
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border: 1px solid #C6D2FF; border-radius: 18px; background: #EEF2FF">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px">
+<span style="font-weight: 600">Research comes first</span>
+<span>Estimated 60 credits</span>
+</div>
+<span style="color: #3B4350">You are charged for research only. Nothing is built until you have seen the verdict. If the estimate turns out wrong, you see by how much.</span>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+<a href="Verdict.dc.html" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 8px; background: #2F5BFF; color: #FFFFFF; font-weight: 500; font-size: 16px">Research this idea</a>
+<span style="color: #5A6270">Takes a few minutes. You can leave and come back.</span>
+</div>
+
+</div>
+</main>
+
+<aside aria-label="What happens next" style="flex: 1 1 340px; min-width: 0; border-left: 1px solid #E3E7EC; background: #FFFFFF; padding: 56px 32px; display: flex; flex-direction: column; gap: 24px">
+<h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px">What happens next</h2>
+<ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 20px">
+<li style="display: flex; gap: 14px"><span style="flex: none; width: 28px; height: 28px; border-radius: 999px; background: #2F5BFF; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">1</span><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Research</span><span style="color: #3B4350">Who already does this, what gap is left, who would want it.</span></div></li>
+<li style="display: flex; gap: 14px"><span style="flex: none; width: 28px; height: 28px; border-radius: 999px; border: 1px solid #8792A2; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">2</span><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Verdict</span><span style="color: #3B4350">Build, change, or do not build. You can overrule it.</span></div></li>
+<li style="display: flex; gap: 14px"><span style="flex: none; width: 28px; height: 28px; border-radius: 999px; border: 1px solid #8792A2; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">3</span><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">A home for it</span><span style="color: #3B4350">Endgame suggests a division and a name.</span></div></li>
+<li style="display: flex; gap: 14px"><span style="flex: none; width: 28px; height: 28px; border-radius: 999px; border: 1px solid #8792A2; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">4</span><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Hiring</span><span style="color: #3B4350">The people this needs are proposed, each with a cost.</span></div></li>
+<li style="display: flex; gap: 14px"><span style="flex: none; width: 28px; height: 28px; border-radius: 999px; border: 1px solid #8792A2; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">5</span><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Design, build, test, review</span><span style="color: #3B4350">On its own, inside your budget. Step in whenever you like.</span></div></li>
+<li style="display: flex; gap: 14px"><span style="flex: none; width: 28px; height: 28px; border-radius: 999px; border: 1px solid #8792A2; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">6</span><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Running, privately</span><span style="color: #3B4350">Live at its own address, visible only to you until you share it.</span></div></li>
+</ol>
+</aside>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
