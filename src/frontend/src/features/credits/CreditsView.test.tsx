@@ -1,0 +1,68 @@
+import { cleanup, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Credits } from "@/store/types";
+import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
+import { CreditsView } from "./CreditsView";
+
+const CREDITS: Credits = {
+  scope: "acme",
+  balance: 4321,
+  month: { spent: 300, ai: 200, hosting: 100 },
+  monthsLeftAtPace: 14.4,
+  budgets: [
+    { scope: "acme", name: "Acme", level: "organisation", depth: 0, spentCredits: 300, capCredits: 1000, appId: null },
+    { scope: "acme/tools", name: "Tools", level: "division", depth: 1, spentCredits: 250, capCredits: null, appId: null },
+    { scope: "acme/tools/ledger/web", name: "Ledger web", level: "app", depth: 3, spentCredits: 90, capCredits: 100, appId: "a1" },
+  ],
+  estimates: { pieces: 8, withinPercent: 11, under: 5, over: 3, largestMissPercent: 19 },
+  notCharged: { credits: 42, repairs: 3 },
+  overdraft: { frostauraLimit: 2000, ownLimit: null },
+  topUps: [{ at: "2026-11-01T00:00:00Z", credits: 5000, note: "Added by FrostAura" }],
+};
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe("CreditsView", () => {
+  it("shows a skeleton while loading", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": "pending" });
+    renderWithStore(<CreditsView />);
+    expect((await screen.findByText("Loading credits")).closest("[data-state]")?.getAttribute("data-state")).toBe("loading");
+  });
+
+  it("records a failed read rather than a zero balance", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": problem(500, "Ledger unavailable") });
+    renderWithStore(<CreditsView />);
+    const alert = await screen.findByText("Credits could not be loaded");
+    expect(alert.closest('[role="alert"]')?.textContent).toContain("Ledger unavailable (500)");
+    expect(screen.queryByText("Credits left")).toBeNull();
+  });
+
+  it("shows the balance, AI against hosting, budgets down the cascade, accuracy and what was not charged", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS) });
+    renderWithStore(<CreditsView />);
+    expect(await screen.findByRole("heading", { name: "4,321" })).toBeTruthy();
+    expect(screen.getByText("At this month’s pace, about 14 months.")).toBeTruthy();
+    expect(screen.getByText("On AI work").nextSibling?.textContent).toBe("200");
+    expect(screen.getByText("On hosting").nextSibling?.textContent).toBe("100");
+    const budgets = screen.getByRole("list", { name: "Budgets" });
+    expect(within(budgets).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(budgets).getByText("No cap here; the one above holds")).toBeTruthy();
+    expect(within(budgets).getByRole("link", { name: "Ledger web" }).getAttribute("href")).toBe("/apps/a1");
+    expect(screen.getByText("Within 11%")).toBeTruthy();
+    expect(screen.getByText("42 credits")).toBeTruthy();
+    expect(screen.getByText(/3 repairs where an employee got it wrong/)).toBeTruthy();
+    expect(screen.getByText("Not set")).toBeTruthy();
+  });
+
+  it("says when nothing has been scored or topped up yet", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json({ ...CREDITS, budgets: [], estimates: null, topUps: [], overdraft: null, monthsLeftAtPace: null }) });
+    renderWithStore(<CreditsView />);
+    expect(await screen.findByText(/no estimate has been scored yet/)).toBeTruthy();
+    expect(screen.getByText("No spending or caps anywhere in the tree yet.").dataset.state).toBe("empty");
+    expect(screen.getByText(/No top-ups yet/)).toBeTruthy();
+    expect(screen.getByText(/no pace to project/)).toBeTruthy();
+  });
+});
