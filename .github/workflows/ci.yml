@@ -43,8 +43,64 @@ jobs:
       - name: Build (warnings are errors)
         run: dotnet build src/backend/Endgame.slnx --nologo --no-restore
 
-      - name: Test
-        run: dotnet test src/backend/Endgame.Tests/Endgame.Tests.csproj --nologo --no-build
+      # The real-Docker hosting tests build three images and an app; they run in their own job
+      # (Hosting, below) with the time they need, and are skipped here — loudly, never silently.
+      - name: Test (real-Docker hosting tests skipped here; see the Hosting job)
+        env:
+          ENDGAME_SKIP_DOCKER_TESTS: "1"
+        run: |
+          echo "::notice title=Real-Docker tests skipped in this job::The Category=Docker hosting tests run in the 'Hosting (real Docker)' job."
+          dotnet test src/backend/Endgame.Tests/Endgame.Tests.csproj --nologo --no-build
+
+  hosting:
+    name: Hosting (real Docker)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26"
+
+      - name: Pack the app kit into the template (the template test needs it)
+        run: make appkit-vendor
+
+      - name: Real-Docker hosting tests (Dock, Edge and the egress proxy on the runner's engine)
+        run: dotnet test src/backend/Endgame.Tests/Endgame.Tests.csproj --nologo --filter "Category=Docker"
+
+  appkit:
+    name: App kit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26"
+
+      - name: Build (SDKs, template; warnings are errors)
+        run: make appkit-build
+      - name: Lint
+        run: make appkit-lint
+      - name: Test (against a throwaway PostgreSQL)
+        run: make appkit-test
+      - name: Install Chromium for the proof
+        working-directory: src/appkit/proof
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Both-addresses proof, in a real browser, against the kit's dev platform
+        run: make appkit-proof
 
   frontend:
     name: Frontend
@@ -122,6 +178,14 @@ jobs:
       - name: Parse the production stack file
         run: make prod-config
 
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26"
+
       - name: Bring the stack up and probe it through the edge
         # The runner's socket is root:docker; Dock joins that group, as it would on a Linux host.
         run: |
@@ -153,6 +217,10 @@ jobs:
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
 
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          global-json-file: global.json
+
       - name: Bring the stack up
         run: |
           cp .env.example .env
@@ -177,13 +245,51 @@ jobs:
         if: always()
         run: make docker-down
 
+  stack-acceptance:
+    name: Stack acceptance (make e2e-stack)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies and Chromium
+        run: |
+          (cd src/frontend && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium)
+          (cd src/appkit/proof && npm ci --no-audit --no-fund)
+
+      - name: The merged stack, end to end, on a fresh database (torn down afterwards)
+        run: |
+          cp .env.example .env
+          echo "DOCKER_SOCKET_GID=$(stat -c %g /var/run/docker.sock)" >> .env
+          make e2e-stack
+
+      - name: Upload Playwright artefacts
+        uses: actions/upload-artifact@v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: stack-acceptance
+          path: src/frontend/test-results/stack/
+          retention-days: 7
+          if-no-files-found: ignore
+
   # Off until Docker Hub credentials exist: set the repository variable PUBLISH_ENABLED=true and
   # the secrets DOCKERHUB_USERNAME / DOCKERHUB_TOKEN. While the variable is unset the job is
   # skipped, not failed. Every image gets an immutable sha-<commit> tag; :latest follows it.
   publish:
     name: Publish ${{ matrix.image }}
     if: vars.PUBLISH_ENABLED == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [backend, frontend, security, stack-smoke, e2e]
+    needs: [backend, hosting, appkit, frontend, security, stack-smoke, e2e, stack-acceptance]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -191,19 +297,28 @@ jobs:
       matrix:
         include:
           - image: control-plane
+            context: .
             dockerfile: src/backend/Dockerfile
             project: Endgame.ControlPlane
           - image: edge
+            context: .
             dockerfile: src/backend/Dockerfile
             project: Endgame.Edge
           - image: runner
+            context: .
             dockerfile: src/backend/Dockerfile
             project: Endgame.Runner
           - image: dock
+            context: .
             dockerfile: src/backend/Dockerfile
             project: Endgame.Dock
           - image: console
+            context: .
             dockerfile: src/frontend/Dockerfile
+            project: ""
+          - image: egress
+            context: src/egress
+            dockerfile: src/egress/Dockerfile
             project: ""
     steps:
       - uses: actions/checkout@v7.0.1
@@ -213,9 +328,21 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Dock's image carries the app kit's template, packed first (as `make up` does).
+      - uses: actions/setup-dotnet@v6.1.0
+        if: matrix.image == 'dock'
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v7.1.0
+        if: matrix.image == 'dock'
+        with:
+          node-version: "26"
+      - name: Pack the app kit into the template
+        if: matrix.image == 'dock'
+        run: make appkit-vendor
       - uses: docker/build-push-action@v7.4.0
         with:
-          context: .
+          context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
