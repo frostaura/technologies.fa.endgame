@@ -13,8 +13,14 @@
 | Both address shapes serve one image, with the right base, prefix and host; visitor-sent forwarded and `X-Endgame-*` headers never reach an app | `EdgePipelineTests` (path form, subdomain prefix, subdomain root) · `HostingIntegrationTests.The_app_is_served_at_both_address_shapes_from_one_image` |
 | An address without its trailing slash is answered `308` | `EdgePipelineTests.A_project_path_without_its_trailing_slash_is_redirected` · integration, both shapes |
 | `/internal/*` is never routed from outside; the control listener proxies nothing and is unreachable from apps | `EdgePipelineTests.Internal_paths_…`, `…control_listener_requires_the_service_token_and_proxies_nothing` · `An_app_cannot_reach_the_edges_control_listener_or_dock` |
-| `_platform/*` is never routed; `hooks/*` reach a private app; `_endgame/auth/*` is the edge's, with `returnTo` kept inside the app | `EdgePipelineTests` (three tests) · the template test |
-| Private and shared apps: no session → sign-in; outsider → 403; check unavailable → closed; member → app-scoped `X-Endgame-Session`, never the cookie | `EdgePipelineTests` (five tests) |
+| `_platform/*` is never routed; only declared `hooks/<name>` reach a private app; `_endgame/auth/*` is the edge's, with `returnTo` kept inside the app's two addresses | `EdgePipelineTests` (`Platform_callbacks…`, `Declared_webhooks_and_only_those…`, `The_sign_in_page_is_the_edges_own…`) · `AppAddressRulesTests` · the template test |
+| Private and shared apps: no session → sign-in; outsider → 403; check unavailable or missing → closed (Edge never decides alone); member → app-scoped `X-Endgame-Session`, never the cookie | `EdgePipelineTests` (six tests, incl. `Without_the_control_planes_access_check…`) |
+| Every `endgame.*` cookie, every client-sent `X-Endgame-*` header and every trace-context header is stripped before an app; the app roots its own traces | `EdgePipelineTests.The_path_form_strips…`, `No_trace_context_reaches_an_app…` · `AppAddressRulesTests.Every_platform_cookie…` |
+| On a subdomain, sign-in moves to the platform's host and returns by hand-off; a hand-off sets a host-only cookie once, then the app admits it; sign-out goes through the control plane | `EdgePipelineTests` (three tests) · `TEST-090` step 4 |
+| A schedule callback on the control listener wakes the app and forwards body and signature unchanged; unsigned → 400, no token → 401, never on the public side | `EdgePipelineTests.A_schedule_callback…` · `TEST-090` step 8 |
+| A spent budget and the overdraft limit each get their own paused page, never a wake | `EdgePipelineTests` (two tests) · `TEST-090` step 13 |
+| Hosting usage: Dock reports awake time, mean memory and storage, Edge the requests, each once per period under a stable id | `UsageLedgerTests` · `EdgePipelineTests.Requests_an_app_served…` · `TEST-090` step 11 |
+| The egress proxy finds a restarted peer again within seconds | `EgressConfigTests` · `TEST-090` (the control plane restarts between runs) |
 | One wake per app however many requests; a crash fails every waiter at once; the sweeper never stops an app serving; each app sleeps by its own setting | `AppRuntimeTests` · `Concurrent_requests_to_a_sleeping_app_share_one_wake` · `An_idle_app_sleeps_by_its_own_setting…` |
 | A crash gets the unavailable page within two seconds, is reported, and the app wakes again after the back-off | `A_crash_gets_the_unavailable_page_at_once_is_reported_and_recovers` |
 | Unavailable pages name no infrastructure and carry the mark | `UnavailablePageTests` |
@@ -41,8 +47,10 @@ Only the dedicated pool `10.214.0.0/16` is used for test subnets.
 
 ## Fixture variation
 
-- Remove the platform cookie name from `Edge:PlatformCookies` → the cookie assertion in the path
-  form test fails (the app sees `endgame_session`).
+- Narrow `AppRequestTransforms.IsPlatformCookie` to the console session alone → the path-form test
+  fails (the app sees `endgame.app.<id>` and `endgame.app_auth`).
+- Drop `AppForwarderHttpClientFactory` and the trace-header strip → `No_trace_context_reaches_an_app…`
+  fails (the app receives the edge's unsampled `traceparent`); checked on 2026-11-24.
 - Gate control endpoints by `Host` instead of the local port → the integration suite's route
   refreshes and crash pushes silently fall through to the console. This was a real defect, found
   by the real-Docker run (published ports rewrite `Host`) and fixed; the pipeline test now sends a

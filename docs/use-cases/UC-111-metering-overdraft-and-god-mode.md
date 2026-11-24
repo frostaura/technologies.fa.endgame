@@ -7,11 +7,13 @@
 | **Primary actor** | Dock; a FrostAura operator; the organisation's Owner |
 | **Scope** | Control plane `/internal/usage/hosting`, `/internal/routes`, `/api/credits`, `/api/cascade`, `/api/operator/organisations`, `/api/audit/operator-access`; the sweep |
 | **Cascade level** | `overdraft_limit` (operator, organisation) → `overdraft_own_limit` (Owner, organisation) → `overdraft_limit` below; `monthly_credits` budgets |
-| **Status** | Built (control-plane side); Dock does not send usage yet |
+| **Status** | Built — Dock and Edge report usage; the routing table pauses and Edge holds |
 
 ## Main flow
 
-1. Dock posts per-app usage samples (`awakeSeconds`, `memoryBytes`, `storageBytes`, `requests` over a period).
+1. Dock posts per-app usage samples (`awakeSeconds`, mean `memoryBytes`, the database's `storageBytes`)
+   and Edge posts the `requests` it forwarded, each every `UsageReportSeconds` with sample ids naming
+   the reporter, the app and the period.
    Each becomes one `hosting` ledger entry: US$ at the `Hosting` rates, converted by the one margin factor.
    The same `sampleId` is charged once.
 2. Hosting counts as spend everywhere: the balance, every monthly budget, the credits view (`month.hosting`)
@@ -39,4 +41,6 @@
 
 - The balance past the limit equals top-ups less what was spent, before and after time and the sweep.
 
-Tests: [`TEST-102`](../testing/TEST-102-platform-api.md) — `ControlPlaneDebtsTests`.
+Tests: [`TEST-102`](../testing/TEST-102-platform-api.md) — `ControlPlaneDebtsTests`;
+[`TEST-010`](../testing/TEST-010-hosting.md) — `UsageLedgerTests`, `EdgePipelineTests` (requests);
+[`TEST-090`](../testing/TEST-090-stack-acceptance.md) — usage as credits, the paused page and the top-up.

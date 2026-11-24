@@ -7,7 +7,7 @@
 | **Primary actor** | An app built on the kit (its token); Dock (issues it); Admin (sets secrets) |
 | **Scope** | Control plane `/platform/v1/*`, `/internal/apps/{id}/token`, `/api/secrets`; the scheduler, the e-mail dispatcher |
 | **Cascade level** | Secrets, budgets, `app_models.monthly_credits` and the overdraft resolve from the app upwards |
-| **Status** | Built (control-plane side) |
+| **Status** | Built — control plane, Dock (token at start), Edge (callbacks) |
 
 The contract is [`src/appkit/PLATFORM-API.md`](../../src/appkit/PLATFORM-API.md); the additions are in
 [`ARCH-004`](../architecture/ARCH-004-service-contracts.md).
@@ -52,4 +52,6 @@ The contract is [`src/appkit/PLATFORM-API.md`](../../src/appkit/PLATFORM-API.md)
 - The kit's own request shapes, sent to the real control plane, get the answers PLATFORM-API specifies; the
   callback signature verifies with the kit's algorithm.
 
-Tests: [`TEST-102`](../testing/TEST-102-platform-api.md) — `PlatformApiTests`, `PlatformUnitTests`.
+Tests: [`TEST-102`](../testing/TEST-102-platform-api.md) — `PlatformApiTests`, `PlatformUnitTests`;
+[`TEST-090`](../testing/TEST-090-stack-acceptance.md) — a secret, an e-mail, a schedule, a webhook and
+telemetry from inside a real app on the real stack.

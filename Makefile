@@ -138,10 +138,11 @@ STACK_COMPOSE = $(STACK_ENV) docker compose -f docker-compose.yml -f docker-comp
 stack-up: .env appkit-vendor
 	$(STACK_COMPOSE) up -d --build --wait
 
-# Everything the stack's Dock made is labelled endgame.dock=$(STACK_PROJECT); the app images it
-# loaded (app-<id>) are listed by the suite in $(STACK_STATE)/apps.
+# The stack's own images, volumes and network go with it; everything its Dock made is labelled
+# endgame.dock=$(STACK_PROJECT); the app images it loaded (app-<id>) are listed by the suite in
+# $(STACK_STATE)/apps.
 stack-down: .env
-	-$(STACK_COMPOSE) down -v --remove-orphans
+	-$(STACK_COMPOSE) down -v --remove-orphans --rmi local
 	-docker ps -aq --filter label=endgame.dock=$(STACK_PROJECT) | xargs docker rm -f -v
 	-docker network ls -q --filter label=endgame.dock=$(STACK_PROJECT) | xargs docker network rm
 	-docker images -q --filter label=endgame.dock=$(STACK_PROJECT) | xargs docker image rm -f

@@ -7,7 +7,7 @@
 | **Primary actor** | A visitor (member, end user, stranger); Admin (access and sharing); Edge |
 | **Scope** | Control plane `/internal/access/check`, `/internal/access/handoff`, `/api/app-auth/{appId}/*`, `/api/apps/{id}/shares`, `/api/apps/{id}/settings` |
 | **Cascade level** | `access` resolves down the cascade (default `private`); roles resolve down the cascade |
-| **Status** | Built (control-plane side); Edge's hand-off page owed |
+| **Status** | Built — control plane and Edge (identity pages, hand-off) |
 
 ## Main flow
 
@@ -23,7 +23,9 @@
 4. An Admin shares an app (`POST /api/apps/{id}/shares { email }`) and passes on the one-time code; the
    person registers at the app's sign-up page with a passkey, the address and the code.
 5. Signing in or up on the platform's host with a `returnTo` on the organisation subdomain returns a
-   one-time hand-off link; Edge redeems it there (`POST /internal/access/handoff`) and sets that host's own cookie.
+   one-time hand-off link; Edge redeems it there (`POST /internal/access/handoff`) and sets that host's own
+   cookie (host-only). Edge's sign-in page on a subdomain sends the visitor to the same page on the
+   platform's host first; a member already signed in there is handed straight back.
 
 ## Alternate and failure flows
 
@@ -46,4 +48,7 @@
 
 - Every decision above, and the open-redirect cases, hold against the real control plane with real passkeys.
 
-Tests: [`TEST-102`](../testing/TEST-102-platform-api.md) — `AppAccessTests`.
+Tests: [`TEST-102`](../testing/TEST-102-platform-api.md) — `AppAccessTests`, `PublicAddressTests`;
+[`TEST-010`](../testing/TEST-010-hosting.md) — Edge's side in `EdgePipelineTests`;
+[`TEST-090`](../testing/TEST-090-stack-acceptance.md) — private, member, hand-off, stranger and public
+through the real stack.

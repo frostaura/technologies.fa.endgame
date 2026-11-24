@@ -35,15 +35,16 @@ saying why not.
    ready yet. Neither is woken.
 4. For a private or shared app — and for a public one when the visitor carries a cookie — Edge asks
    the control plane (`POST /internal/access/check`) whether this session may open it; the answer,
-   with an app-scoped session token, is reused briefly for the same cookie. `POST <app>/hooks/<name>`
-   skips the check (the app kit verifies the signature). Until the endpoint exists, Edge falls back
-   to `GET /api/me`: a role on the app's scope or above admits.
+   with an app-scoped session token, is reused briefly for the same cookie. Edge never decides on its
+   own. `POST <app>/hooks/<name>` skips the check only for a name the app declared (the routing
+   table's `hooks`; the app kit verifies the signature).
 5. Edge counts the request in. If the app sleeps, Edge asks Dock to wake it — one wake shared by
    every concurrent request — then polls the app's `/health` on the app's own network.
 6. Edge strips the prefix, sets `X-Forwarded-Prefix`, `-Host`, `-Proto` and `-For` itself (anything
-   the visitor sent is dropped, and every client-sent `X-Endgame-*`), removes the platform's session
-   cookie, sets `X-Endgame-Session` to the app-scoped token — never the browser's cookie — and
-   forwards. A woken request carries `X-Endgame-Wake-Ms`.
+   the visitor sent is dropped, and every client-sent `X-Endgame-*`), removes every platform cookie
+   (`endgame.*`, the console session and every app session), sets `X-Endgame-Session` to the
+   app-scoped token — never the browser's cookie — and forwards. A woken request carries
+   `X-Endgame-Wake-Ms`. Edge counts the request towards the app's hosting usage.
 7. When the app has been idle for its own sleep setting with nothing in flight, Edge asks Dock to
    stop it, keeping the container for the next wake.
 
@@ -56,11 +57,15 @@ saying why not.
   budget; the visitor gets "could not start just now".
 - **A3 — Slow start.** The app is not healthy within the wake timeout: "taking longer than usual".
 - **A4 — Sign-in.** No session: `GET` is redirected to `<app>/_endgame/auth/sign-in?returnTo=…`
-  (or the address the control plane names), which sends the visitor on to the platform's sign-in
-  page; other methods get `401` with that address in `Location`.
+  (or the address the control plane names) — Edge's own page, driving the control plane's
+  `/api/app-auth/{appId}/*`; other methods get `401` with that address in `Location`. On the
+  organisation subdomain the page moves to the platform's host, where a member's session lives, and
+  the session comes back through `_endgame/auth/handoff` as the subdomain's own cookie (UC-110).
 - **A5 — Not shared with them.** A signed-in person without access: "You don't have access" (403).
-- **A6 — The control plane cannot answer the access check.** Private and shared apps are closed
-  (503), never opened.
+- **A6 — The control plane cannot answer the access check** (down, an error, no such endpoint).
+  Private and shared apps are closed (503), never opened.
+- **A7 — Paused.** At the overdraft limit, or with a monthly budget above the app spent, the holding
+  page says which; the app is not woken.
 
 ## Postconditions
 
@@ -80,7 +85,8 @@ saying why not.
 - Both address shapes serve the same image, with the right base, prefix and host.
 - Twenty concurrent requests to a sleeping app cause exactly one wake.
 - A crash turns the next request into the unavailable page within two seconds.
-- Ten measured wakes: median and worst first-byte times recorded in `TEST-010`.
+- Ten measured wakes: median and worst first-byte times recorded in `TEST-010`; three more through
+  the whole merged stack in `TEST-090`.
 
 ## Links
 
