@@ -1,39 +1,33 @@
 ---
 name: technologies-fa-endgame-watch
-description: "Debts owed after the first lane merges: dev sign-in tied to the Development environment, operator rights on unverified e-mail, zero credit margin, contract docs behind the code, console sections with no endpoint yet."
+description: "First real run: research works live, but the verdict page crashed blank and no end-to-end build has finished. Margin and hosting rates are placeholders. Passkeys, HTTPS, real mail and later CI jobs are unverified."
 type: watch
-last_verified: 2026-11-24
+last_verified: 2026-11-25
 ---
 
 # Known debts
 
-Found while merging and walking the first two build lanes on 2026-11-24. Each is owed, none is fixed.
+Found by merging the build lanes and by the first real run through the console on 2026-11-25. The
+first lanes' debts (operator rights, margin, service addresses, contract docs, missing console
+screens) were paid by later lanes; what is listed here is still owed.
 
-**Security and money**
-- **Operator (God-mode) rights go to any `frostaura.net` e-mail, and e-mails are not verified** — the
-  first person picks their own. Until e-mail is verified, operators must come from an explicit
-  list, not from the address someone typed.
-- **The credit margin defaults to zero.** The spec wants cost plus one fixed margin.
-- **The sweep that releases lapsed credit reservations has no test.**
-- **Shared and public app access is refused** by the control plane until Edge enforces it.
+**Found by the first real research run (being fixed in the factory and second console lanes)**
+- **The verdict page crashed to a blank screen**: the Runner wrote the verdict in one shape, the
+  console expected another, and nothing validated it. No route had an error boundary.
+- Normal mode showed raw contractor output labelled "Update", repeated the verdict three times,
+  and counted "0 actions taken".
+- Research strands were capped at two web searches each and reported low confidence.
+- **No real end-to-end factory build has finished.** The research half is proven; the build half is not.
 
-**Running the stack**
-- **The development sign-in needs the Development environment, and that environment makes services
-  look for each other on host ports.** Locally only the control plane runs in Development, through
-  an untracked compose override; its own status view then reports the other services unreachable.
-  Service addresses must come from explicit settings, not from the environment name.
-- The control plane's migration needs a superuser and assumes the tree tables are empty.
+**Founder's numbers still owed**
+- The credit margin is 1.0 (none); the hosting rates and the 500-credit monthly model cap per app
+  are placeholders (assumptions log, entry 15).
 
-**Docs behind the code**
-- `ARCH-004` does not yet carry what the control plane added: app addresses include the app's own
-  slug (`/org/division/project/app/`), the run-claim and employee endpoints, the estimate and
-  conversation-history endpoints, and the vocabulary the console uses for statuses.
-- `ARCH-001` still describes the scaffold's single status page and its empty data model.
-
-**Console**
-- Built against the contract only: no Employee screen, "ask about this app", version history,
-  hire proposals, invitations, overdraft change or top-up request, because no endpoint exists yet.
-- App telemetry and running cost arrive as null until something measures them; the console must
-  show that as "not measured yet", never as zero.
-- The phone header wraps to three rows; the app page is sparse on desktop.
-- Colour contrast is test-enforced only for the pairs the token tests list.
+**Not verified anywhere yet**
+- Passkey ceremonies in a real browser — every walk used the development sign-in.
+- Shared apps with invitation codes, end to end.
+- HTTPS, the Cloudflare tunnel, and anything applied to a real Cloudflare account.
+- A real SMTP server. Mail only ever reached the local catcher.
+- CI for the jobs added after the scaffold: they are written and syntax-checked, not run to green.
+- More than a handful of apps on the real stack, and waking after the host restarts.
+- One Runner test (`A_graceful_shutdown_…`) failed once in a full run: a timing race.
