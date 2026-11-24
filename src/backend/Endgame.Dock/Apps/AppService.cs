@@ -69,9 +69,10 @@ public sealed class AppService(
             var name = names.AppContainer(appId);
             var existing = await TryInspectAsync(name, cancellationToken);
             var previousCommit = existing?.LabelMap().TryGetValue(ResourceNames.CommitLabel, out var c) == true ? c : null;
-            var token = request.AppToken ?? ExistingToken(existing);
+            var token = request.AppToken ?? await reports.AppTokenAsync(appId, cancellationToken) ?? ExistingToken(existing)
+                ?? throw DockProblem.Unavailable("The control plane did not issue the app's platform token.");
             var limitsText = string.Create(CultureInfo.InvariantCulture, $"{limits.Cpus}/{limits.MemoryMb}/{limits.Pids}");
-            var tokenHash = token is null ? "" : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+            var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
             var current = existing is not null
                 && existing.Config?.Image == image
                 && existing.LabelMap().GetValueOrDefault(ResourceNames.TokenLabel, "") == tokenHash
@@ -92,22 +93,24 @@ public sealed class AppService(
                 labels[ResourceNames.TokenLabel] = tokenHash;
                 labels[LimitsLabel] = limitsText;
                 var proxy = $"http://{o.Peers.EgressAlias}:{o.Peers.EgressPort}";
+                // The app kit's contract (src/appkit/PLATFORM-API.md §1). The standard proxy
+                // variables are set too, for anything in the app that does not go through the kit.
                 var environment = new List<string>
                 {
-                    $"{AppEnvironment.AppId}={appId:D}",
-                    $"{AppEnvironment.OrganisationId}={request.OrganisationId:D}",
-                    $"{AppEnvironment.Commit}={commit}",
+                    $"{AppEnvironment.Database}={connection}",
                     $"{AppEnvironment.PlatformUrl}={o.PlatformUrlForApps}",
-                    $"{AppEnvironment.ConnectionString}={connection}",
+                    $"{AppEnvironment.AppToken}={token}",
+                    $"{AppEnvironment.EgressProxy}={proxy}",
+                    $"{AppEnvironment.AppId}={appId:D}",
                     $"ASPNETCORE_HTTP_PORTS={HostingConventions.AppPort}",
                     "DOTNET_EnableDiagnostics=0", // no diagnostics socket to write on a read-only root
                     $"HTTP_PROXY={proxy}",
                     $"HTTPS_PROXY={proxy}",
                     $"NO_PROXY={o.Peers.PostgresAlias},localhost,127.0.0.1",
                 };
-                if (token is not null)
+                if (o.TelemetryExport is { Length: > 0 } export)
                 {
-                    environment.Add($"{AppEnvironment.AppToken}={token}");
+                    environment.Add($"{AppEnvironment.TelemetryExport}={export}");
                 }
 
                 await docker.Containers.CreateContainerAsync(new CreateContainerParameters
@@ -128,8 +131,10 @@ public sealed class AppService(
             var status = await StatusAsync(appId, cancellationToken);
             if (previousCommit != commit)
             {
-                _ = reports.PublishedAsync(new AppPublished(appId, commit, image, time.GetUtcNow()), CancellationToken.None);
+                _ = reports.PublishedAsync(appId, commit, CancellationToken.None);
             }
+
+            _ = reports.StatusAsync(appId, AppRuntimeState.Running, CancellationToken.None);
 
             return status;
         }
@@ -152,6 +157,7 @@ public sealed class AppService(
             if (container.State?.Running != true)
             {
                 await StartContainerAsync(appId, runtime, name, cancellationToken);
+                _ = reports.StatusAsync(appId, AppRuntimeState.Running, CancellationToken.None);
             }
 
             return await StatusAsync(appId, cancellationToken);
@@ -176,6 +182,7 @@ public sealed class AppService(
             }
 
             await StopContainerAsync(runtime, name, cancellationToken);
+            _ = reports.StatusAsync(appId, AppRuntimeState.Sleeping, CancellationToken.None);
             return await StatusAsync(appId, cancellationToken);
         }
         finally

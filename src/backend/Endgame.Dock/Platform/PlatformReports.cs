@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using Endgame.Hosting.Contracts;
 using Microsoft.Extensions.Options;
 
@@ -14,13 +13,45 @@ public sealed class PlatformReports(IHttpClientFactory http, IOptions<DockOption
 {
     public const string ClientName = "platform";
 
-    public Task PublishedAsync(AppPublished report, CancellationToken cancellationToken) =>
-        SendAsync(options.Value.ControlPlaneUrl, $"/internal/apps/{report.AppId:D}/published", report, cancellationToken);
+    /// <summary>
+    /// The app's platform token from the control plane (<c>POST /internal/apps/{id}/token</c>), or
+    /// null when it could not be had — the caller then keeps the token the container already holds.
+    /// </summary>
+    public async Task<string?> AppTokenAsync(Guid appId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(options.Value.ControlPlaneUrl), $"/internal/apps/{appId:D}/token"));
+            request.Headers.Authorization = new AuthenticationHeaderValue(HostingConventions.ServiceTokenScheme, configuration[HostingConventions.ServiceTokenVariable]);
+            using var response = await http.CreateClient(ClientName).SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("The control plane answered {Status} for app {AppId}'s token.", (int)response.StatusCode, appId);
+                return null;
+            }
 
-    public Task StateChangedAsync(AppStateReport report, CancellationToken cancellationToken) =>
+            return (await response.Content.ReadFromJsonAsync<AppTokenResult>(cancellationToken))?.Token is { Length: > 0 } token ? token : null;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException && !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning("Could not get app {AppId}'s token: {Message}", appId, e.Message);
+            return null;
+        }
+    }
+
+    /// <summary>A new version is running: the commit its image was built from.</summary>
+    public Task PublishedAsync(Guid appId, string commit, CancellationToken cancellationToken) =>
+        SendAsync(options.Value.ControlPlaneUrl, $"/internal/apps/{appId:D}/published", new PublishedReport(commit), cancellationToken);
+
+    /// <summary>The control plane's view of the app moved: running, sleeping, stopped or failed.</summary>
+    public Task StatusAsync(Guid appId, string status, CancellationToken cancellationToken) =>
+        SendAsync(options.Value.ControlPlaneUrl, $"/internal/apps/{appId:D}/state", new ControlPlaneAppState(status), cancellationToken);
+
+    /// <summary>The app crashed: Edge first, so visitors get the page at once, then the control plane.</summary>
+    public Task CrashedAsync(AppStateReport report, CancellationToken cancellationToken) =>
         Task.WhenAll(
             SendAsync(options.Value.EdgeControlUrl, $"/internal/apps/{report.AppId:D}/state", report, cancellationToken),
-            SendAsync(options.Value.ControlPlaneUrl, $"/internal/apps/{report.AppId:D}/state", report, cancellationToken));
+            StatusAsync(report.AppId, ControlPlaneAppState.Failed, cancellationToken));
 
     private async Task SendAsync<T>(string baseUrl, string path, T body, CancellationToken cancellationToken)
     {

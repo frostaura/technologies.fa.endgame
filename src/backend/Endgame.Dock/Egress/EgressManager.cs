@@ -2,9 +2,8 @@ using System.Text;
 using Docker.DotNet;
 using Endgame.Dock.Engine;
 using Endgame.Dock.Policy;
-using Microsoft.Extensions.Options;
-
 using Endgame.Hosting.Contracts;
+using Microsoft.Extensions.Options;
 
 namespace Endgame.Dock.Egress;
 

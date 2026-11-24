@@ -12,6 +12,8 @@ public sealed class OpaqueNames(byte[] key)
 {
     public const string DatabasePrefix = "d_";
     public const string RolePrefix = "r_";
+    public const string TestRolePrefix = "t_";
+    public const string TestDatabasePrefix = "w_";
 
     public string Database(Guid appId) => DatabasePrefix + Hex("database", appId, 12);
 
@@ -20,11 +22,25 @@ public sealed class OpaqueNames(byte[] key)
     public string Password(Guid appId) =>
         Convert.ToBase64String(Mac("password", appId)).TrimEnd('=').Replace('+', 'A').Replace('/', 'B');
 
-    /// <summary>True for a name this scheme could have produced: lowercase hex after the prefix.</summary>
-    public static bool IsAppDatabase(string name) =>
-        name.StartsWith(DatabasePrefix, StringComparison.Ordinal)
-        && name.Length == DatabasePrefix.Length + 24
-        && name[DatabasePrefix.Length..].All(c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+    /// <summary>A workspace's test role: may create and drop databases of its own, nothing else.</summary>
+    public string TestRole(Guid runId) => TestRolePrefix + Hex("test-role", runId, 12);
+
+    /// <summary>The database a workspace's test role connects to first.</summary>
+    public string TestDatabase(Guid runId) => TestDatabasePrefix + Hex("test-database", runId, 12);
+
+    public string TestPassword(Guid runId) =>
+        Convert.ToBase64String(Mac("test-password", runId)).TrimEnd('=').Replace('+', 'A').Replace('/', 'B');
+
+    /// <summary>True for an app's or a workspace's database: never a platform database.</summary>
+    public static bool IsAppDatabase(string name) => HasOpaqueForm(name, DatabasePrefix) || HasOpaqueForm(name, TestDatabasePrefix);
+
+    /// <summary>True for a role name this scheme could have produced.</summary>
+    public static bool IsAppRole(string name) => HasOpaqueForm(name, RolePrefix) || HasOpaqueForm(name, TestRolePrefix);
+
+    private static bool HasOpaqueForm(string name, string prefix) =>
+        name.StartsWith(prefix, StringComparison.Ordinal)
+        && name.Length == prefix.Length + 24
+        && name[prefix.Length..].All(c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
 
     private string Hex(string purpose, Guid appId, int bytes) =>
         Convert.ToHexString(Mac(purpose, appId), 0, bytes).ToLowerInvariant();

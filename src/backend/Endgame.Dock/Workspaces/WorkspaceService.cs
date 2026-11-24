@@ -31,6 +31,7 @@ public sealed class WorkspaceService(
     ContainerFiles files,
     NetworkManager networks,
     EgressManager egress,
+    Apps.DatabaseProvisioner databases,
     RepositoryService repositories,
     WorkspaceImage image,
     ResourceNames names,
@@ -83,9 +84,21 @@ public sealed class WorkspaceService(
         var checkout = "";
         try
         {
-            var subnet = await networks.EnsureAsync(network, names.Labels(ResourceNames.WorkspaceNetworkKind, request.AppId, request.RunId), NetworkPeers.Egress, cancellationToken);
+            var peers = databases.Configured ? NetworkPeers.Egress | NetworkPeers.Postgres : NetworkPeers.Egress;
+            var subnet = await networks.EnsureAsync(network, names.Labels(ResourceNames.WorkspaceNetworkKind, request.AppId, request.RunId), peers, cancellationToken);
             await egress.SetAsync(network, subnet, o.PackageRegistries.Concat(allowed), platform: false, cancellationToken);
             var proxy = $"http://{o.Peers.EgressAlias}:{o.Peers.EgressPort}";
+            var environment = new List<string>
+            {
+                $"HTTP_PROXY={proxy}", $"HTTPS_PROXY={proxy}", $"http_proxy={proxy}", $"https_proxy={proxy}",
+                $"NO_PROXY=localhost,127.0.0.1,{o.Peers.PostgresAlias}", $"no_proxy=localhost,127.0.0.1,{o.Peers.PostgresAlias}",
+                $"{AppEnvironment.EgressProxy}={proxy}", "HOME=/home/app",
+            };
+            if (databases.Configured)
+            {
+                environment.Add($"{AppEnvironment.TestDatabase}={await databases.EnsureTestServerAsync(request.RunId, cancellationToken)}");
+            }
+
             await docker.Containers.CreateContainerAsync(new CreateContainerParameters
             {
                 Name = name,
@@ -93,7 +106,7 @@ public sealed class WorkspaceService(
                 User = User,
                 WorkingDir = WorkspacePaths.Root,
                 Cmd = ["sleep", "infinity"],
-                Env = [$"HTTP_PROXY={proxy}", $"HTTPS_PROXY={proxy}", $"http_proxy={proxy}", $"https_proxy={proxy}", "NO_PROXY=localhost,127.0.0.1", "HOME=/home/app"],
+                Env = environment,
                 Labels = labels,
                 StopTimeout = TimeSpan.FromSeconds(2),
                 HostConfig = Hardening.Workspace(limits, network),
@@ -341,6 +354,7 @@ public sealed class WorkspaceService(
         var network = names.WorkspaceNetwork(runId);
         await networks.RemoveAsync(network, cancellationToken);
         await egress.RemoveAsync(network, cancellationToken);
+        await databases.DropTestServerAsync(runId, cancellationToken);
         await leases.UpdateAsync(s => s.Leases.Remove(runId), cancellationToken);
         if (existed)
         {

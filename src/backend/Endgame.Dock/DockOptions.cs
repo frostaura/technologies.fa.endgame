@@ -56,6 +56,9 @@ public sealed class DockOptions
 
     public int PlatformPort { get; set; } = 8080;
 
+    /// <summary>Passed to apps as <c>ENDGAME_TELEMETRY_EXPORT</c> when set; <c>false</c> turns OTLP export off.</summary>
+    public string TelemetryExport { get; set; } = "";
+
     public ResourceLimits AppDefaults { get; set; } = new(1, 256, 128);
 
     public ResourceLimits AppMaxima { get; set; } = new(2, 1024, 512);
@@ -90,6 +93,8 @@ public sealed class DockOptions
         "registry.npmjs.org",
         "mcr.microsoft.com",
         "*.data.mcr.microsoft.com",
+        // Certificate revocation checks NuGet makes while verifying package signatures.
+        "*.digicert.com",
     ];
 
     /// <summary>Largest workspace bundle Dock will fetch back on commit.</summary>

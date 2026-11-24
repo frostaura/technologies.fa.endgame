@@ -78,18 +78,64 @@ public sealed class ContainerFiles(DockerClient docker)
         return buffer.ToArray();
     }
 
-    /// <summary>Copies one regular file out of the container to <paramref name="destination"/>.</summary>
+    /// <summary>
+    /// Copies one regular file out of the container to <paramref name="destination"/>. The Engine's
+    /// tar stream is spooled to disk whole before it is unpacked: reading a large entry straight off
+    /// the chunked response loses the connection part-way (measured with a 100 MB image archive).
+    /// </summary>
     public async Task<bool> CopyOutAsync(string container, string path, string destination, long maxBytes, CancellationToken cancellationToken)
     {
-        using var file = await OpenReadAsync(container, path, maxBytes, cancellationToken);
-        if (file is null)
+        ContainerArchiveResponse archive;
+        try
+        {
+            archive = await docker.Containers.GetArchiveFromContainerAsync(container, new ContainerPathStatParameters { Path = path }, false, cancellationToken);
+        }
+        catch (Exception e) when (EngineErrors.IsNotFound(e))
         {
             return false;
         }
 
-        await using var output = File.Create(destination);
-        await file.CopyToAsync(output, cancellationToken);
-        return true;
+        if (archive.Stream is null)
+        {
+            return false;
+        }
+
+        if (archive.Stat?.Size > maxBytes)
+        {
+            archive.Stream.Dispose();
+            throw new FileTooLargeException(archive.Stat.Size);
+        }
+
+        var spool = destination + ".tar";
+        try
+        {
+            await using (var raw = File.Create(spool))
+            await using (archive.Stream)
+            {
+                var buffer = new byte[16 * 1024];
+                int read;
+                while ((read = await archive.Stream.ReadAsync(buffer, cancellationToken)) > 0)
+                {
+                    await raw.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                }
+            }
+
+            await using var tar = File.OpenRead(spool);
+            await using var reader = new TarReader(tar);
+            var entry = await reader.GetNextEntryAsync(copyData: false, cancellationToken);
+            if (entry?.DataStream is null)
+            {
+                return false;
+            }
+
+            await using var output = File.Create(destination);
+            await entry.DataStream.CopyToAsync(output, cancellationToken);
+            return true;
+        }
+        finally
+        {
+            File.Delete(spool);
+        }
     }
 
     public async Task<Stream?> OpenReadAsync(string container, string path, long maxBytes, CancellationToken cancellationToken)

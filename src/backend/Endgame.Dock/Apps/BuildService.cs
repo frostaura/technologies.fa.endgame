@@ -92,10 +92,22 @@ public sealed class BuildService(
                     result.TimedOut ? "The build took too long and was stopped." : "The app did not build.", Tail(log));
             }
 
-            await using (var archive = await files.OpenReadAsync(container, ArchivePath, long.MaxValue, cancellationToken)
-                ?? throw new DockProblem(StatusCodes.Status422UnprocessableEntity, DockProblemCodes.BuildFailed, "The build produced no image.", Tail(log)))
+            // Copied to Dock's disk first: streaming one Engine response straight into another
+            // Engine request breaks the chunked upload part-way.
+            var archiveFile = repositories.TemporaryFile("image", ".tar.gz");
+            try
             {
+                if (!await files.CopyOutAsync(container, ArchivePath, archiveFile, long.MaxValue, cancellationToken))
+                {
+                    throw new DockProblem(StatusCodes.Status422UnprocessableEntity, DockProblemCodes.BuildFailed, "The build produced no image.", Tail(log));
+                }
+
+                await using var archive = File.OpenRead(archiveFile);
                 await docker.Images.LoadImageAsync(new ImageLoadParameters { Quiet = true }, archive, new Progress<JSONMessage>(), cancellationToken);
+            }
+            finally
+            {
+                RepositoryService.TryDelete(archiveFile);
             }
 
             if (!await ExistsAsync(image, cancellationToken))

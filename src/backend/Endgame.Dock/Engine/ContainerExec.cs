@@ -28,7 +28,7 @@ public sealed class ContainerExec(DockerClient docker)
         CancellationToken cancellationToken = default)
     {
         var seconds = Math.Max(1, (int)Math.Ceiling(timeout.TotalSeconds));
-        var command = new List<string> { "timeout", "--kill-after=3", seconds.ToString(CultureInfo.InvariantCulture) };
+        var command = new List<string> { "timeout", "-k", "3", seconds.ToString(CultureInfo.InvariantCulture) }; // short options: busybox (the proxy) and coreutils both take them
         command.AddRange(argv);
         var clock = Stopwatch.StartNew();
         var exec = await docker.Exec.CreateContainerExecAsync(container, new ContainerExecCreateParameters

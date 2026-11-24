@@ -82,7 +82,7 @@ public sealed class CrashWatcher(
             }
 
             logger.LogWarning("App {AppId} crashed (exit {Code}, out of memory: {Oom}).", appId, container.State?.ExitCode, container.State?.OOMKilled);
-            await reports.StateChangedAsync(new AppStateReport(appId, AppRuntimeState.Crashed, (int)(container.State?.ExitCode ?? -1), container.State?.OOMKilled == true, time.GetUtcNow()), cancellationToken);
+            await reports.CrashedAsync(new AppStateReport(appId, AppRuntimeState.Crashed, (int)(container.State?.ExitCode ?? -1), container.State?.OOMKilled == true, time.GetUtcNow()), cancellationToken);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {

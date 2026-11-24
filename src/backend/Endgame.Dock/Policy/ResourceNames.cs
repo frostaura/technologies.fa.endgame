@@ -28,7 +28,11 @@ public sealed class ResourceNames(string prefix, string instance)
     /// <summary>The value of <see cref="ManagedByLabel"/> on everything this Dock owns.</summary>
     public string Instance { get; } = instance;
 
-    public string AppContainer(Guid appId) => $"{Prefix}app-{appId:D}";
+    /// <summary>
+    /// <c>app-</c> and the id as 32 hex digits — the target the control plane's routing table
+    /// names (<c>http://app-&lt;id:N&gt;:8080</c>), so the two never disagree.
+    /// </summary>
+    public string AppContainer(Guid appId) => $"{Prefix}app-{appId:N}";
 
     public string AppNetwork(Guid appId) => $"{Prefix}appnet-{appId:D}";
 

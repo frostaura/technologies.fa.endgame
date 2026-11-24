@@ -63,6 +63,92 @@ public sealed class DatabaseProvisioner(IOptions<DockOptions> options, OpaqueNam
         return $"Host={host};Port=5432;Database={database};Username={role};Password={password};Maximum Pool Size={limit};Timeout=15";
     }
 
+    /// <summary>
+    /// A server where a workspace's tests may create and drop databases (PLATFORM-API §1,
+    /// <c>ENDGAME_TEST_DATABASE</c>): a role of the run's own with <c>CREATEDB</c> and nothing else,
+    /// and a first database to connect to. Removed with the workspace.
+    /// </summary>
+    public async Task<string> EnsureTestServerAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        if (!Configured)
+        {
+            throw DockProblem.Unavailable("No database server is configured for tests.");
+        }
+
+        var role = names.TestRole(runId);
+        var database = names.TestDatabase(runId);
+        var password = names.TestPassword(runId);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken);
+            await LockDownPlatformAsync(connection, cancellationToken);
+            await ExecAsync(connection, $"""
+                DO $$ BEGIN
+                  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{role}') THEN CREATE ROLE {role}; END IF;
+                END $$
+                """, cancellationToken);
+            await ExecAsync(connection, $"ALTER ROLE {role} WITH LOGIN CREATEDB NOSUPERUSER NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT CONNECTION LIMIT 20 PASSWORD '{password}'", cancellationToken);
+            if (!await ExistsAsync(connection, database, cancellationToken))
+            {
+                await ExecAsync(connection, $"CREATE DATABASE {database} OWNER {role}", cancellationToken);
+            }
+
+            await ExecAsync(connection, $"REVOKE ALL ON DATABASE {database} FROM PUBLIC", cancellationToken);
+        }
+        catch (NpgsqlException e)
+        {
+            throw DockProblem.Unavailable($"The database server refused the test role: {e.Message}");
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        return $"Host={options.Value.Peers.PostgresAlias};Port=5432;Database={database};Username={role};Password={password};Timeout=15";
+    }
+
+    /// <summary>Drops every database the workspace's tests made, its first database and its role.</summary>
+    public async Task DropTestServerAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        if (!Configured)
+        {
+            return;
+        }
+
+        var role = names.TestRole(runId);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken);
+            var owned = new List<string>();
+            await using (var list = new NpgsqlCommand("SELECT d.datname FROM pg_database d JOIN pg_roles r ON d.datdba = r.oid WHERE r.rolname = @role", connection))
+            {
+                list.Parameters.AddWithValue("role", role);
+                await using var reader = await list.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    owned.Add(reader.GetString(0));
+                }
+            }
+
+            foreach (var database in owned)
+            {
+                await ExecAsync(connection, $"DROP DATABASE IF EXISTS {QuoteIdentifier(database)} WITH (FORCE)", cancellationToken);
+            }
+
+            await ExecAsync(connection, $"DROP ROLE IF EXISTS {role}", cancellationToken);
+        }
+        catch (NpgsqlException e)
+        {
+            logger.LogWarning("Could not remove the test role of run {RunId}: {Message}", runId, e.Message);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     /// <summary>Revokes <c>CONNECT</c> from <c>PUBLIC</c> on every database that is not an app's.</summary>
     public async Task LockDownPlatformAsync(CancellationToken cancellationToken)
     {
@@ -91,8 +177,29 @@ public sealed class DatabaseProvisioner(IOptions<DockOptions> options, OpaqueNam
             }
         }
 
+        // Every role that is not an app's keeps its access by an explicit grant first — the
+        // control plane's own roles (endgame_app, endgame_system) connect through PUBLIC otherwise.
+        var platformRoles = new List<string>();
+        await using (var roles = new NpgsqlCommand("SELECT rolname FROM pg_roles WHERE rolname NOT LIKE 'pg\\_%'", connection))
+        await using (var reader = await roles.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var role = reader.GetString(0);
+                if (!OpaqueNames.IsAppRole(role))
+                {
+                    platformRoles.Add(role);
+                }
+            }
+        }
+
         foreach (var name in platform)
         {
+            foreach (var role in platformRoles)
+            {
+                await ExecAsync(connection, $"GRANT CONNECT ON DATABASE {QuoteIdentifier(name)} TO {QuoteIdentifier(role)}", cancellationToken);
+            }
+
             await ExecAsync(connection, $"REVOKE CONNECT ON DATABASE {QuoteIdentifier(name)} FROM PUBLIC", cancellationToken);
         }
     }
@@ -120,7 +227,10 @@ public sealed class DatabaseProvisioner(IOptions<DockOptions> options, OpaqueNam
     private static string QuoteIdentifier(string name) => "\"" + name.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
 }
 
-/// <summary>Locks the platform databases down once the server answers after Dock starts.</summary>
+/// <summary>
+/// Locks the platform databases down once the server answers after Dock starts, and again every
+/// half minute, so a role the control plane's migrations create later is granted its access.
+/// </summary>
 public sealed class PlatformDatabaseLockdown(DatabaseProvisioner provisioner, ILogger<PlatformDatabaseLockdown> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -130,13 +240,13 @@ public sealed class PlatformDatabaseLockdown(DatabaseProvisioner provisioner, IL
             try
             {
                 await provisioner.LockDownPlatformAsync(stoppingToken);
-                return;
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
             }
-            catch (Exception e) when (e is NpgsqlException or System.Net.Sockets.SocketException or TimeoutException)
+            catch (Exception e) when (e is not OperationCanceledException)
             {
-                if (attempt % 10 == 1)
+                if (attempt % 20 == 1)
                 {
-                    logger.LogWarning("The database server is not answering yet: {Message}", e.Message);
+                    logger.LogWarning("Locking the platform databases down failed: {Message}", e.Message);
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);

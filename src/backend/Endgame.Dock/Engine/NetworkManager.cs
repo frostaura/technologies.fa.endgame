@@ -1,9 +1,8 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Endgame.Dock.Policy;
-using Microsoft.Extensions.Options;
-
 using Endgame.Hosting.Contracts;
+using Microsoft.Extensions.Options;
 
 namespace Endgame.Dock.Engine;
 
@@ -135,7 +134,9 @@ public sealed class NetworkManager(DockerClient docker, IOptions<DockOptions> op
             await docker.Networks.ConnectNetworkAsync(network, new NetworkConnectParameters
             {
                 Container = container,
-                EndpointConfig = new EndpointSettings { Aliases = alias is null ? [] : [alias] },
+                // Never the peer's default gateway: an app network is internal, and a proxy or an
+                // edge whose default route moved onto one would lose the way out it exists for.
+                EndpointConfig = new EndpointSettings { Aliases = alias is null ? [] : [alias], GwPriority = -1000 },
             }, cancellationToken);
         }
         catch (DockerApiException e) when (e.StatusCode == System.Net.HttpStatusCode.Forbidden || (e.ResponseBody ?? "").Contains("already exists", StringComparison.OrdinalIgnoreCase))

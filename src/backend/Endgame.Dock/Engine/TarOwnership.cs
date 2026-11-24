@@ -22,8 +22,12 @@ public static class TarOwnership
                 Uid = uid,
                 Gid = uid,
                 ModificationTime = entry.ModificationTime,
-                DataStream = entry.DataStream,
             };
+            if (entry.DataStream is not null && copy.EntryType is TarEntryType.RegularFile)
+            {
+                copy.DataStream = entry.DataStream;
+            }
+
             if (entry.EntryType is TarEntryType.SymbolicLink or TarEntryType.HardLink)
             {
                 copy.LinkName = entry.LinkName;
