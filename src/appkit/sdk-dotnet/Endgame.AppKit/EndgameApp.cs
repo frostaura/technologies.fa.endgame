@@ -174,6 +174,8 @@ public static class EndgameApp
     private static void AddTelemetry(WebApplicationBuilder builder)
     {
         var services = builder.Services;
+        // The kit's own HttpClients log every request at Information; their failures surface as exceptions.
+        builder.Logging.AddFilter("System.Net.Http.HttpClient.Endgame", LogLevel.Warning);
         if (!builder.Environment.IsDevelopment())
         {
             builder.Logging.AddJsonConsole(o =>
