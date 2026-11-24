@@ -1,13 +1,23 @@
 namespace Endgame.Hosting.Contracts;
 
 /// <summary>
-/// <c>POST /internal/apps/{id}/published</c> on the control plane: Dock started a new version.
+/// <c>POST /internal/apps/{id}/published</c> on the control plane, its shape: Dock started a new
+/// version. The version is the commit the running image was built from.
 /// </summary>
-public sealed record AppPublished(Guid AppId, string Commit, string Image, DateTimeOffset At);
+public sealed record PublishedReport(string Version);
 
 /// <summary>
-/// <c>POST /internal/apps/{id}/state</c>, sent by Dock to the control plane and to Edge's control
-/// listener whenever an app's runtime state changes without being asked to — above all a crash.
+/// <c>POST /internal/apps/{id}/state</c> on the control plane, its shape: one of
+/// <c>building</c>, <c>running</c>, <c>sleeping</c>, <c>stopped</c> or <c>failed</c>.
+/// </summary>
+public sealed record ControlPlaneAppState(string Status)
+{
+    public const string Failed = "failed";
+}
+
+/// <summary>
+/// <c>POST /internal/apps/{id}/state</c> on Edge's control listener, sent by Dock whenever an app's
+/// runtime state changes without being asked to — above all a crash.
 /// </summary>
 /// <param name="AppId">The app.</param>
 /// <param name="State">One of <see cref="AppRuntimeState"/>.</param>
