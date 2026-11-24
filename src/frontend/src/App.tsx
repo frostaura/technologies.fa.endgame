@@ -8,10 +8,12 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetMeQuery } from "@/store/api";
 import { modeSet } from "@/store/uiSlice";
 import { AppView } from "@/features/apps/AppView";
+import { OperatorAccessView } from "@/features/audit/OperatorAccessView";
 import { SignInView } from "@/features/auth/SignInView";
 import { CreditsView } from "@/features/credits/CreditsView";
 import { HomeView } from "@/features/home/HomeView";
 import { RunView } from "@/features/runs/RunView";
+import { SecretsView } from "@/features/secrets/SecretsView";
 import { AppShell } from "@/features/shell/AppShell";
 import { StartView } from "@/features/start/StartView";
 import { SystemStatusView } from "@/features/status/SystemStatusView";
@@ -68,6 +70,10 @@ export function App() {
       return <AppView key={route.id} appId={route.id} />;
     case "credits":
       return <CreditsView />;
+    case "secrets":
+      return <SecretsView />;
+    case "operator-access":
+      return <OperatorAccessView />;
     case "system":
       return <SystemRoute />;
     default:

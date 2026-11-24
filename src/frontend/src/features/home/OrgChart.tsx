@@ -225,17 +225,22 @@ function AppRow({ app }: { app: TreeApp }) {
         <ChipRow chips={chips} />
       </div>
       <div className="flex flex-wrap gap-6">
-        <Figure value={app.visitsToday !== null ? formatNumber(app.visitsToday) : app.lastVisitAt ? timeAgo(app.lastVisitAt) : "None yet"} label={app.visitsToday !== null ? "visits today" : "last visit"} />
+        {/* Null visits means nothing has been measured yet: unknown, never zero. */}
+        <Figure
+          value={app.visitsToday !== null ? formatNumber(app.visitsToday) : app.lastVisitAt ? timeAgo(app.lastVisitAt) : "Not measured yet"}
+          label={app.visitsToday !== null || !app.lastVisitAt ? "visits today" : "last visit"}
+          muted={app.visitsToday === null && !app.lastVisitAt}
+        />
         <Figure value={formatNumber(app.spend.monthCredits)} label="credits this month" />
       </div>
     </li>
   );
 }
 
-function Figure({ value, label }: { value: string; label: string }) {
+function Figure({ value, label, muted = false }: { value: string; label: string; muted?: boolean }) {
   return (
     <div className="flex flex-col">
-      <span className="font-display text-xl font-semibold">{value}</span>
+      <span className={cn("font-display font-semibold", muted ? "text-base text-ink-muted" : "text-xl")}>{value}</span>
       <span className="text-ink-muted">{label}</span>
     </div>
   );

@@ -1,17 +1,36 @@
 /**
- * The console's reading of the control plane's public API (ARCH-004). Where ARCH-004 names an
- * endpoint but not its JSON, the shape here is the console's assumption, listed for the
- * control-plane lane in docs/use-cases/UC-001-console.md. Every field is camelCase JSON.
+ * The console's reading of the control plane's public API (ARCH-004), checked field by field
+ * against what the control plane returns (`src/backend/Endgame.Infrastructure/Tree/ConsoleViews.cs`,
+ * `Endgame.ControlPlane/Endpoints/*`). Where the two differed, the control plane won. Every field
+ * is camelCase JSON; GUIDs and timestamps arrive as strings, decimals as numbers.
  */
 
 // ---------------------------------------------------------------------------------------------
 // Session
 // ---------------------------------------------------------------------------------------------
 
+/** A role, from the least to the most. */
+export type MemberRole = "viewer" | "builder" | "admin" | "owner";
+
+export interface Membership {
+  id: string;
+  /** Path of slugs to where the role is held. */
+  scope: string;
+  level: "organisation" | "division" | "project" | "app";
+  role: MemberRole;
+  organisationId: string;
+  organisationSlug: string;
+  organisationName: string;
+}
+
 export interface Me {
   user: { id: string; displayName: string; email: string | null };
   /** Null on first run: signed in, no organisation named yet. */
   organisation: OrganisationRef | null;
+  /** A FrostAura operator (God mode). */
+  isOperator: boolean;
+  passkeys: number;
+  memberships: Membership[];
 }
 
 export interface OrganisationRef {
@@ -59,6 +78,7 @@ export interface TreeApp {
   access: AppAccess;
   /** How many people it is shared with; meaningful when access is "shared". */
   sharedWith: number;
+  /** Null until the app has reported anything: not measured, never zero. */
   visitsToday: number | null;
   lastVisitAt: string | null;
   spend: Spend;
@@ -103,6 +123,9 @@ export type NeedsYou =
   | { kind: "approval"; id: string; runId: string; approvalId: string; title: string; detail: string | null };
 
 export interface Tree {
+  generatedAt: string;
+  /** The signed-in person's role over the whole tree as shown; "none" on first run. */
+  viewerRole: MemberRole | "none";
   /** Null on first run. */
   organisation: (OrganisationRef & { summary: string | null; spend: Spend; workers: Worker[] }) | null;
   divisions: TreeDivision[];
@@ -181,6 +204,15 @@ export interface Run {
   ideaId: string | null;
   estimateCredits: number | null;
   spentCredits: number;
+  /** Set when the run is one employee's. */
+  employeeId: string | null;
+  /** Set when the run is a turn of a docked conversation. */
+  conversationId: string | null;
+  /** True once a budget on the run's chain was spent while it ran. */
+  budgetExhausted: boolean;
+  outcome: string | null;
+  summary: string | null;
+  createdAt: string;
 }
 
 export interface RunEvent {
@@ -195,6 +227,27 @@ export interface ConversationRequest {
   message: string;
   /** Set when the conversation is with one employee rather than a node. */
   employeeId?: string;
+  /** Continue a given conversation; by default the latest one at the scope is continued. */
+  conversationId?: string;
+}
+
+/** One message of a docked conversation, in the order it was written. */
+export interface ConversationMessage {
+  runId: string;
+  seq: number;
+  at: string;
+  /** "owner" for the owner's own messages; otherwise who answered. */
+  from: string;
+  text: string;
+}
+
+/** `GET /api/conversations?scope=&employeeId=`: oldest first, at most the last 200 messages. */
+export interface ConversationHistory {
+  scope: string;
+  /** Null when nothing has been said at this scope yet. */
+  conversationId: string | null;
+  employeeId: string | null;
+  messages: ConversationMessage[];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -208,22 +261,83 @@ export interface AppDetail {
   health: { state: AppHealth; summary: string };
   running: AppRunning;
   addresses: { path: string; subdomain: string | null };
-  telemetry: {
-    visitsToday: number;
-    requestsToday: number;
-    errorsToday: number;
-    latencyP50Ms: number | null;
-    latencyP95Ms: number | null;
-    lastVisitAt: string | null;
-  };
+  /** From the app's own telemetry (today is the UTC day). Null until it has measured anything. */
+  telemetry: AppTelemetry | null;
   cost: { monthCredits: number; capCredits: number | null };
   settings: { running: "sleep" | "always-on"; access: AppAccess };
-  /** Expected monthly credits for each running choice, so the choice is made with its price. */
+  /** Expected monthly credits for each running choice, from measured hosting. Null until measured. */
   runningCost: { sleep: number; alwaysOn: number } | null;
   sharedWith: number;
+  /** The app's own lifecycle word (draft, building, running, sleeping, failed, stopped, archived). */
+  status: string;
+  version: string | null;
+  publishedAt: string | null;
+  /** Minutes idle before it sleeps. */
+  idleMinutes: number;
 }
 
-export type AppSettingsUpdate = Partial<AppDetail["settings"]>;
+export interface AppTelemetry {
+  visitsToday: number;
+  requestsToday: number;
+  errorsToday: number;
+  latencyP50Ms: number | null;
+  latencyP95Ms: number | null;
+  lastVisitAt: string | null;
+}
+
+export type AppSettingsUpdate = Partial<AppDetail["settings"]> & { idleMinutes?: number };
+
+/** `GET /api/apps/{id}/shares`: an address the app is shared with. */
+export interface AppShare {
+  email: string;
+  invitedAt: string;
+  /** True once the person has registered with the app. */
+  registered: boolean;
+}
+
+/** `POST /api/apps/{id}/shares` → the one-time code, returned once and never again. */
+export interface AppShareCreated {
+  email: string;
+  invitationCode: string;
+  expiresAt: string;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Secrets — names and where they were set, never a value
+// ---------------------------------------------------------------------------------------------
+
+export type ScopeLevel = "organisation" | "division" | "project" | "app";
+
+export interface SecretName {
+  name: string;
+  setAtLevel: ScopeLevel;
+  setAtPath: string;
+  setAt: string;
+  /** True when it was set above this scope. */
+  inherited: boolean;
+  /** The paths of higher levels whose secret of the same name this one replaces. */
+  overrides: string[];
+}
+
+/** `GET /api/secrets?scope=` */
+export interface SecretList {
+  scope: string;
+  effective: SecretName[];
+  setBelow: { name: string; setAtPath: string }[];
+}
+
+// ---------------------------------------------------------------------------------------------
+// Operator access — God mode's audit trail, for the Owner
+// ---------------------------------------------------------------------------------------------
+
+export interface OperatorAction {
+  id: string;
+  at: string;
+  /** e.g. organisation.entered, organisation.provisioned, credits.top_up */
+  action: string;
+  operator: { id: string; email: string | null; displayName: string };
+  detail: Record<string, unknown> | null;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Credits
@@ -249,6 +363,10 @@ export interface Credits {
   notCharged: { credits: number; repairs: number };
   overdraft: { frostauraLimit: number; ownLimit: number | null } | null;
   topUps: { at: string; credits: number; note: string }[];
+  /** Credits reserved for work in flight across the organisation. */
+  heldCredits: number;
+  /** What can still be spent: the balance plus the overdraft limit. */
+  available: number;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -39,7 +39,14 @@ export function stubApi(routes: Record<string, Route>) {
   return { fetch, calls };
 }
 
-export const ME = { user: { id: "u1", displayName: "Owner", email: "o@example.test" }, organisation: { id: "o1", slug: "acme", name: "Acme" } };
+/** `GET /api/me` as the control plane writes it. */
+export const ME = {
+  user: { id: "u1", displayName: "Owner", email: "o@example.test" },
+  organisation: { id: "o1", slug: "acme", name: "Acme" },
+  isOperator: false,
+  passkeys: 1,
+  memberships: [{ id: "m1", scope: "acme", level: "organisation", role: "owner", organisationId: "o1", organisationSlug: "acme", organisationName: "Acme" }],
+};
 
 export function renderWithStore(ui: ReactElement) {
   const store = makeStore();

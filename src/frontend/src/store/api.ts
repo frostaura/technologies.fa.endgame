@@ -2,7 +2,9 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
   AppDetail,
   AppSettingsUpdate,
+  AppShare,
   AuthOptions,
+  ConversationHistory,
   ConversationRequest,
   CreateIdeaRequest,
   Credits,
@@ -10,8 +12,10 @@ import type {
   Idea,
   IdeaEstimate,
   Me,
+  OperatorAction,
   OrganisationRef,
   Run,
+  SecretList,
   SystemStatus,
   Tree,
 } from "./types";
@@ -29,7 +33,7 @@ export const API_BASE = `${origin}/api`;
 export const api = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({ baseUrl: API_BASE, credentials: "same-origin" }),
-  tagTypes: ["Me", "Tree", "Idea", "Run", "App", "Credits"],
+  tagTypes: ["Me", "Tree", "Idea", "Run", "App", "Credits", "Conversation", "Secrets", "Shares", "OperatorAccess"],
   endpoints: (build) => ({
     // Session -----------------------------------------------------------------------------
     getMe: build.query<Me, undefined>({ query: () => "me", providesTags: ["Me"] }),
@@ -111,6 +115,11 @@ export const api = createApi({
     startConversation: build.mutation<Run, ConversationRequest>({
       query: (body) => ({ url: "conversations", method: "POST", body }),
     }),
+    /** The conversation docked at a scope, so it survives a reload. Read once per scope; live replies stream on top. */
+    getConversation: build.query<ConversationHistory, { scope: string; employeeId?: string }>({
+      query: ({ scope, employeeId }) => `conversations?scope=${encodeURIComponent(scope)}${employeeId ? `&employeeId=${encodeURIComponent(employeeId)}` : ""}`,
+      providesTags: (_r, _e, { scope, employeeId }) => [{ type: "Conversation", id: employeeId ? `${scope}#${employeeId}` : scope }],
+    }),
 
     // Apps --------------------------------------------------------------------------------
     getApp: build.query<AppDetail, string>({ query: (id) => `apps/${encodeURIComponent(id)}`, providesTags: (_r, _e, id) => [{ type: "App", id }] }),
@@ -130,6 +139,60 @@ export const api = createApi({
           patch.undo();
         }
       },
+    }),
+
+    // Sharing: the list and removal. Inviting returns a one-time code, so it never passes through
+    // the store — see `store/sensitive.ts`.
+    getShares: build.query<AppShare[], string>({
+      query: (appId) => `apps/${encodeURIComponent(appId)}/shares`,
+      providesTags: (_r, _e, appId) => [{ type: "Shares", id: appId }],
+    }),
+    removeShare: build.mutation<null, { appId: string; email: string }>({
+      query: ({ appId, email }) => ({ url: `apps/${encodeURIComponent(appId)}/shares?email=${encodeURIComponent(email)}`, method: "DELETE" }),
+      async onQueryStarted({ appId, email }, { dispatch, queryFulfilled }) {
+        const patch = dispatch(
+          api.util.updateQueryData("getShares", appId, (shares) => {
+            const i = shares.findIndex((s) => s.email === email);
+            if (i >= 0) shares.splice(i, 1);
+          }),
+        );
+        try {
+          await queryFulfilled;
+          dispatch(api.util.invalidateTags([{ type: "App", id: appId }, "Tree"]));
+        } catch {
+          patch.undo();
+        }
+      },
+    }),
+
+    // Secrets: names and where each was set, never a value. Setting one is in `store/sensitive.ts`,
+    // so the value is never held in the store.
+    getSecrets: build.query<SecretList, string>({
+      query: (scope) => `secrets?scope=${encodeURIComponent(scope)}`,
+      providesTags: (_r, _e, scope) => [{ type: "Secrets", id: scope }],
+    }),
+    removeSecret: build.mutation<null, { scope: string; name: string }>({
+      query: ({ scope, name }) => ({ url: `secrets?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}`, method: "DELETE" }),
+      async onQueryStarted({ scope, name }, { dispatch, queryFulfilled }) {
+        const patch = dispatch(
+          api.util.updateQueryData("getSecrets", scope, (list) => {
+            list.effective = list.effective.filter((s) => !(s.name === name && s.setAtPath === scope));
+          }),
+        );
+        try {
+          await queryFulfilled;
+          // An inherited secret of the same name may apply again; every scope's list may change.
+          dispatch(api.util.invalidateTags(["Secrets"]));
+        } catch {
+          patch.undo();
+        }
+      },
+    }),
+
+    // Operator access ----------------------------------------------------------------------
+    getOperatorAccess: build.query<OperatorAction[], string>({
+      query: (organisation) => `audit/operator-access?organisation=${encodeURIComponent(organisation)}`,
+      providesTags: ["OperatorAccess"],
     }),
 
     // Credits -----------------------------------------------------------------------------
@@ -162,6 +225,12 @@ export const {
   useControlRunMutation,
   useAnswerApprovalMutation,
   useStartConversationMutation,
+  useGetConversationQuery,
+  useGetSharesQuery,
+  useRemoveShareMutation,
+  useGetSecretsQuery,
+  useRemoveSecretMutation,
+  useGetOperatorAccessQuery,
   useGetAppQuery,
   useUpdateAppSettingsMutation,
   useGetCreditsQuery,

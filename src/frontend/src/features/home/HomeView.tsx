@@ -9,7 +9,7 @@ import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { useGetTreeQuery } from "@/store/api";
+import { useGetMeQuery, useGetTreeQuery } from "@/store/api";
 import type { NeedsYou, Tree } from "@/store/types";
 import { selected, type Selection } from "@/store/uiSlice";
 import { AppShell, type Crumb } from "../shell/AppShell";
@@ -104,6 +104,8 @@ function Organisation({ tree, org, selection, onSelect }: { tree: Tree; org: Non
 
       <NeedsYouStrip items={tree.needsYou} />
 
+      <ManageLinks tree={tree} selection={selection ?? root} />
+
       {tree.divisions.length === 0 ? (
         <Empty icon="division" title={`${org.name} has nothing in it yet`} action={<Link href={paths.start()} className={buttonVariants({ size: "lg" })}>Describe your first idea</Link>}>
           Describe an idea and Endgame researches it, suggests a division and a name for it, and builds it once you agree.
@@ -112,6 +114,32 @@ function Organisation({ tree, org, selection, onSelect }: { tree: Tree; org: Non
         <OrgChart tree={tree} selection={selection} onSelect={onSelect} />
       )}
     </>
+  );
+}
+
+/**
+ * What an Admin or the Owner manages at the selected level: its secrets, and — for the Owner — the
+ * log of every time FrostAura entered. Both follow the selection, as the conversation does.
+ */
+function ManageLinks({ tree, selection }: { tree: Tree; selection: Selection }) {
+  const me = useGetMeQuery(undefined);
+  const role = tree.viewerRole;
+  const admin = role === "admin" || role === "owner" || me.data?.isOperator === true;
+  if (!admin) return null;
+  const node = selection.kind === "employee" ? { scope: selection.scope, name: selection.trail[selection.trail.length - 2] ?? "" } : { scope: selection.scope, name: selection.trail[selection.trail.length - 1] ?? "" };
+  return (
+    <nav aria-label="Manage" className={cn("flex flex-wrap gap-2", RISE, stagger(1))}>
+      <Link href={paths.secrets(node.scope)} className={buttonVariants({ variant: "soft" })}>
+        <Icon name="secrets" tinted className="size-4" />
+        Secrets for {node.name}
+      </Link>
+      {role === "owner" && (
+        <Link href={paths.operatorAccess()} className={buttonVariants({ variant: "soft" })}>
+          <Icon name="god-mode" tinted className="size-4" />
+          Operator access
+        </Link>
+      )}
+    </nav>
   );
 }
 
