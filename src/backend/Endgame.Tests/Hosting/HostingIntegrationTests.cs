@@ -505,8 +505,11 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
 
             using (var signIn = await path.GetAsync("/acme/apps/kit/web/_endgame/auth/sign-in?returnTo=%2Facme%2Fapps%2Fkit%2Fweb%2Fnotes%2Fnew"))
             {
-                Assert.Equal(HttpStatusCode.Redirect, signIn.StatusCode);
-                Assert.Contains("sign-in?returnTo=", signIn.Headers.Location!.OriginalString, StringComparison.Ordinal);
+                // The edge's own identity page, driving the control plane's /api/app-auth/{appId}.
+                Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+                var page = await signIn.Content.ReadAsStringAsync();
+                Assert.Contains($"\"appId\":\"{app:D}\"", page, StringComparison.Ordinal);
+                Assert.Contains("/acme/apps/kit/web/notes/new", page, StringComparison.Ordinal);
             }
 
             // Signed in, the edge hands the app an app-scoped session; the kit resolves it through the platform.
