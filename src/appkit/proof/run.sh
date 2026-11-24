@@ -9,6 +9,8 @@
 #
 # Every Docker resource is named test-appkit-* and is removed on exit, pass or fail. Nothing else
 # is touched. Ports are chosen free at run time on 127.0.0.1.
+#
+# The same browser test runs against the REAL Edge of a running stack instead: proof/edge.sh.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -63,7 +65,7 @@ docker run -d --name "$DB" --network "$NET_APP" --tmpfs /var/lib/postgresql/data
 
 docker run -d --name "$PLATFORM" --network "$NET_EDGE" \
   -p "127.0.0.1:$PLATFORM_PORT:8080" -p "127.0.0.1:$PATH_PORT:8082" -p "127.0.0.1:$HOST_PORT:8083" \
-  -e DEV_APP_URL="http://$APP:8080" -e DEV_PATH_PREFIX=/acme/labs/demo -e DEV_APP_TOKEN=dev-app-token \
+  -e DEV_APP_URL="http://$APP:8080" -e DEV_PATH_PREFIX=/acme/labs/demo/notes -e DEV_HOST_PREFIX=/labs/demo/notes -e DEV_APP_TOKEN=dev-app-token \
   "$PLATFORM_IMAGE" > /dev/null
 docker network connect "$NET_APP" "$PLATFORM"
 
@@ -81,13 +83,15 @@ docker run -d --name "$APP" --network "$NET_APP" \
 
 echo "proof: waiting for the app to report healthy through the edge…"
 for i in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:$HOST_PORT/health" 2> /dev/null | grep -q '"healthy"'; then break; fi
+  if curl -fsS "http://127.0.0.1:$HOST_PORT/labs/demo/notes/health" 2> /dev/null | grep -q '"healthy"'; then break; fi
   if [ "$(docker inspect -f '{{.State.Running}}' "$APP")" != "true" ]; then echo "proof: the app exited" >&2; exit 1; fi
   sleep 1
   [ "$i" -eq 60 ] && { echo "proof: the app never became healthy" >&2; exit 1; }
 done
 
-echo "proof: path form on :$PATH_PORT, subdomain root on :$HOST_PORT, platform on :$PLATFORM_PORT"
+echo "proof: path form on :$PATH_PORT, organisation subdomain on :$HOST_PORT, platform on :$PLATFORM_PORT"
 cd "$HERE"
 npm ci --no-audit --no-fund > /dev/null
-CI=1 PW_SCREENSHOTS="${PW_SCREENSHOTS:-}" PW_PORT="$PATH_PORT" PW_HOST_PORT="$HOST_PORT" PW_PLATFORM_PORT="$PLATFORM_PORT" npx playwright test
+CI=1 PW_SCREENSHOTS="${PW_SCREENSHOTS:-}" \
+  PW_PATH_URL="http://127.0.0.1:$PATH_PORT/acme/labs/demo/notes/" PW_HOST_URL="http://acme.localhost:$HOST_PORT/labs/demo/notes/" \
+  PW_PLATFORM_PORT="$PLATFORM_PORT" npx playwright test
