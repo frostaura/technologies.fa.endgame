@@ -65,6 +65,13 @@ public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITrans
                 headers.Remove(name);
             }
 
+            // The app roots its own traces (AppForwarderHttpClientFactory): a visitor's trace context,
+            // sampled or not, would otherwise decide whether the app records anything.
+            foreach (var name in ForwardedHeaders.TraceContext)
+            {
+                headers.Remove(name);
+            }
+
             if (prefix.Length > 0)
             {
                 var path = transform.Path.Value ?? "";

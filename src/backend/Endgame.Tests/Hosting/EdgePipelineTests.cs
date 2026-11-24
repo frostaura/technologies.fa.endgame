@@ -133,6 +133,27 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task No_trace_context_reaches_an_app_so_the_app_roots_and_samples_its_own_traces()
+    {
+        // Something listening makes the edge create (unsampled) activities, as logging does in a container.
+        using var listener = new System.Diagnostics.ActivityListener
+        {
+            ShouldListenTo = _ => true,
+            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _) => System.Diagnostics.ActivitySamplingResult.PropagationData,
+        };
+        System.Diagnostics.ActivitySource.AddActivityListener(listener);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/notes/web/api/whoami");
+        request.Headers.Add("traceparent", "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-00");
+        request.Headers.Add("tracestate", "vendor=forged");
+        var seen = await EchoAsync(request);
+        Assert.Equal("", seen.GetProperty("traceparent").GetString());
+        Assert.Equal("", seen.GetProperty("tracestate").GetString());
+
+        var plain = await EchoAsync(new HttpRequestMessage(HttpMethod.Get, "/acme/apps/notes/web/api/whoami"));
+        Assert.Equal("", plain.GetProperty("traceparent").GetString());
+    }
+
+    [Fact]
     public async Task The_subdomain_form_strips_the_apps_prefix_on_the_organisation_host()
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/apps/notes/web/api/whoami");
@@ -581,6 +602,8 @@ public sealed class EdgePipelineTests : IAsyncLifetime
             session = c.Request.Headers[HostingConventions.SessionHeader].ToString(),
             other = c.Request.Headers["X-Endgame-Anything"].ToString(),
             cookie = c.Request.Headers.Cookie.ToString(),
+            traceparent = c.Request.Headers["traceparent"].ToString(),
+            tracestate = c.Request.Headers["tracestate"].ToString(),
         }));
         await app.StartAsync();
         var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();

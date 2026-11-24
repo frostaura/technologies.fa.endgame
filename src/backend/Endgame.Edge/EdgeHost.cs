@@ -75,6 +75,7 @@ public static class EdgeHost
             .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
             .AddTransforms<AppRequestTransforms>();
         builder.Services.AddSingleton<IProxyConfigProvider>(appRoutes);
+        builder.Services.AddSingleton<Yarp.ReverseProxy.Forwarder.IForwarderHttpClientFactory, AppForwarderHttpClientFactory>();
 
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddHttpClient(DockBackend.DockClient, c => c.Timeout = TimeSpan.FromSeconds(30));
