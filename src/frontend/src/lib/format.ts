@@ -4,8 +4,9 @@ const LOCALE = "en-GB";
 
 /** Whole numbers, except small fractional amounts (a model call can cost 1.5 credits), kept to one decimal. */
 export function formatNumber(n: number): string {
-  if (!Number.isInteger(n) && Math.abs(n) < 10) return (Math.round(n * 10) / 10).toLocaleString(LOCALE);
-  return Math.round(n).toLocaleString(LOCALE);
+  const rounded = !Number.isInteger(n) && Math.abs(n) < 10 ? Math.round(n * 10) / 10 : Math.round(n);
+  // A tiny debt rounds to -0, which would read "-0 credits"; zero has no sign.
+  return (rounded === 0 ? 0 : rounded).toLocaleString(LOCALE);
 }
 
 export function formatCredits(n: number): string {

@@ -45,6 +45,17 @@ function stub(app: Response | "pending", extra = {}) {
 }
 
 describe("AppView", () => {
+  it("names the app's own organisation, not the person's first one", async () => {
+    const other = { ...APP, scope: "beta/tools/ledger/web" };
+    stub(json(other), {
+      "GET /api/me": json({ ...ME, memberships: [...ME.memberships, { id: "m2", scope: "beta", level: "organisation", role: "owner", organisationId: "o2", organisationSlug: "beta", organisationName: "Beta Works" }] }),
+    });
+    renderWithStore(<AppView appId="a1" />);
+    expect(await screen.findByText("Private: only people in Beta Works")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Where you are" }).textContent).toContain("Beta Works");
+    expect(screen.queryByText("Private: only people in Acme")).toBeNull();
+  });
+
   it("shows a skeleton while loading", () => {
     stub("pending");
     renderWithStore(<AppView appId="a1" />);

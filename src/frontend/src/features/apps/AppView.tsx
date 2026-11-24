@@ -25,7 +25,11 @@ export function AppView({ appId }: { appId: string }) {
   const app = view.kind === "loaded" ? view.data : null;
 
   const crumbs: Crumb[] = [];
-  const org = me.data?.organisation;
+  // The app's own organisation, from its scope: the person's first organisation may be another one.
+  const first = me.data?.organisation;
+  const appOrg = app?.scope.split("/")[0];
+  const member = me.data?.memberships.find((m) => m.organisationSlug === appOrg);
+  const org = first && (!appOrg || first.slug === appOrg) ? first : appOrg ? { name: member?.organisationName ?? appOrg, slug: appOrg } : null;
   if (org) crumbs.push({ label: org.name, href: paths.home() });
   if (app) {
     const names = namesFor(tree.data, app.scope);
@@ -68,7 +72,7 @@ function AppBody({ app }: { app: AppDetail }) {
       <div className={cn("flex flex-wrap items-start justify-between gap-5", RISE)}>
         <div className="flex min-w-0 flex-col gap-1.5">
           <h1 className="text-3xl font-semibold">{app.name}</h1>
-          <span className="break-all text-ink-body">
+          <span className="break-words text-ink-body">
             {app.addresses.subdomain ? (
               <>
                 {app.addresses.subdomain} · also at {app.addresses.path}
@@ -337,13 +341,13 @@ function AppSecrets({ scope }: { scope: string }) {
 
 function Tile({ index, label, value, note, valueClass, pulse = false }: { index: number; label: string; value: string; note: string; valueClass?: string; pulse?: boolean }) {
   return (
-    <div className={cn("flex flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0", RISE, stagger(index))}>
+    <div className={cn("flex min-w-0 flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0", RISE, stagger(index))}>
       <span className="text-ink-muted">{label}</span>
       <span className={cn("flex items-center gap-2.5 font-display text-2xl font-semibold", valueClass)}>
         {pulse && <span aria-hidden className="size-2.5 animate-pulse rounded-full bg-success motion-reduce:animate-none" />}
         {value}
       </span>
-      <span className="text-ink-body">{note}</span>
+      <span className="break-words text-ink-body">{note}</span>
     </div>
   );
 }
