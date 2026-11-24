@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The wire shapes of the hosting services' internal APIs (ARCH-004): Dock's API, the routing
+    table Edge reads from the control plane, and the reports Dock and Edge send. Records only — no
+    package, no Endgame project, so any service may reference it without inheriting a dependency.
+  -->
+</Project>

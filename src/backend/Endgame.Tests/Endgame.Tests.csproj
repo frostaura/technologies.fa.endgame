@@ -21,5 +21,21 @@
     <ProjectReference Include="../Endgame.Application/Endgame.Application.csproj" />
     <ProjectReference Include="../Endgame.Infrastructure/Endgame.Infrastructure.csproj" />
     <ProjectReference Include="../Endgame.ControlPlane/Endgame.ControlPlane.csproj" />
+    <ProjectReference Include="../Endgame.Edge/Endgame.Edge.csproj" />
+    <ProjectReference Include="../Endgame.Hosting.Contracts/Endgame.Hosting.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!--
+      Dock's pure policy, compiled in by file rather than by project reference: a reference to Dock
+      would carry the Docker client into the tests (ArchitectureTests). These files use neither.
+    -->
+    <Compile Include="../Endgame.Dock/Policy/*.cs" Link="Hosting/DockPolicy/%(Filename)%(Extension)" />
+    <Compile Include="../Endgame.Dock/Repositories/FilePaging.cs" Link="Hosting/DockPolicy/FilePaging.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The app the hosting integration tests build inside a container: never compiled here. -->
+    <Compile Remove="Hosting/Fixtures/**" />
+    <Content Remove="Hosting/Fixtures/**" />
+    <None Remove="Hosting/Fixtures/**" />
   </ItemGroup>
 </Project>
