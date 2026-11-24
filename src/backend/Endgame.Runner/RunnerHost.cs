@@ -30,13 +30,19 @@ public static class RunnerHost
         services.AddSingleton(TimeProvider.System);
         services.AddHttpClient("control-plane", c => Configure(c, options.ControlPlaneUrl, token, TimeSpan.FromMinutes(10)));
         services.AddHttpClient("dock", c => Configure(c, options.DockUrl, token, TimeSpan.FromMinutes(20)));
+        services.AddHttpClient("edge-control", c => Configure(c, options.EdgeControlUrl, token, TimeSpan.FromMinutes(2)));
         services.AddSingleton(sp => new ControlPlaneClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("control-plane")));
         services.AddSingleton(sp => new DockClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("dock")));
         services.AddSingleton<IModelClient>(sp => new GatewayModelClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("control-plane")));
         services.AddSingleton<IWorkspaceProvider>(sp => new DockWorkspaceProvider(sp.GetRequiredService<DockClient>()));
         services.AddSingleton(new AgentFactory(options));
         services.AddSingleton(new Estimator(options));
+        services.AddSingleton<IPreviewProbe>(sp => new EdgePreviewProbe(sp.GetRequiredService<IHttpClientFactory>().CreateClient("edge-control")));
         services.AddSingleton<IWorkflow, TaskWorkflow>();
+        services.AddSingleton<IWorkflow, ResearchWorkflow>();
+        services.AddSingleton<IWorkflow>(sp => new BuildWorkflow(sp.GetRequiredService<Estimator>(), sp.GetRequiredService<IPreviewProbe>()));
+        services.AddSingleton<IWorkflow, ConversationWorkflow>();
+        services.AddSingleton<IWorkflow, ReviewWorkflow>();
         services.AddSingleton(sp => new RunExecutor(
             sp.GetRequiredService<ControlPlaneClient>(),
             sp.GetRequiredService<IModelClient>(),

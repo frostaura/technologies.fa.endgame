@@ -24,7 +24,10 @@ public sealed class RunnerIntegrationTests(PostgresServer postgres) : IAsyncLife
 {
     private const string Scope = "frostaura/technologies/endgame/notes";
 
+    private readonly TaskCompletionSource hold = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private FakeOpenRouter openRouter = null!;
+    private int calls;
+    private int holdAt = int.MaxValue;
     private ControlPlaneApp app = null!;
     private HttpClient service = null!;
 
@@ -100,18 +103,13 @@ public sealed class RunnerIntegrationTests(PostgresServer postgres) : IAsyncLife
         var workspace = new FakeWorkspace().With("a.txt", "one\n");
         var provider = new SharedWorkspace(workspace);
 
+        // The third model call (after two tool results) is held in flight, and the process killed under it.
+        holdAt = 3;
         var first = Runner(provider);
         await first.StartAsync(CancellationToken.None);
-        await WaitForAsync(async () => (await EventsAsync(run)).Count(e => e["type"]!.GetValue<string>() == "tool.result") >= 2, "the first Runner to record two tool results");
-
-        // Hold the next model call in flight, then kill the process under it.
-        var gate = new TaskCompletionSource();
-        openRouter.Gate = gate;
-        var before = openRouter.Requests.Count;
-        await WaitForAsync(() => Task.FromResult(openRouter.Requests.Count > before), "a model call to be in flight");
+        await WaitForAsync(() => Task.FromResult(Volatile.Read(ref calls) >= 3), "the third model call to be in flight");
         await first.KillAsync();
-        openRouter.Gate = null;
-        gate.SetResult();
+        hold.SetResult();
         var killedAt = (await EventsAsync(run)).Count;
         Assert.Equal("running", (await RunAsync(run))["status"]!.GetValue<string>());
 
@@ -143,14 +141,13 @@ public sealed class RunnerIntegrationTests(PostgresServer postgres) : IAsyncLife
     {
         var run = await CreateRunAsync();
         var workspace = new FakeWorkspace().With("a.txt", "one\n");
-        var runner = Runner(new SharedWorkspace(workspace));
-        await runner.StartAsync(CancellationToken.None);
-        await WaitForAsync(async () => (await EventsAsync(run)).Any(e => e["type"]!.GetValue<string>() == "tool.result"), "a first step");
-
-        // Pause while a model call is in flight; the run stops at the next step boundary, after the
-        // lease keeper has learned of the pause from a renewal.
+        // Pause while the first model call is in flight; the run stops at the next step boundary, after
+        // the lease keeper has learned of the pause from a renewal.
         var gate = new TaskCompletionSource();
         openRouter.Gate = gate;
+        var runner = Runner(new SharedWorkspace(workspace));
+        await runner.StartAsync(CancellationToken.None);
+        await WaitForAsync(() => Task.FromResult(!openRouter.Requests.IsEmpty), "a model call to be in flight");
         var owner = await app.SignInAsync();
         await ControlPlaneApp.Ok(owner.PostAsync($"/api/runs/{run}/pause", null));
         await Task.Delay(1500);
@@ -158,6 +155,7 @@ public sealed class RunnerIntegrationTests(PostgresServer postgres) : IAsyncLife
         gate.SetResult();
         await WaitForAsync(() => Task.FromResult(runner.Active.Count == 0), "the Runner to let the paused run go");
         Assert.Equal("paused", (await RunAsync(run))["status"]!.GetValue<string>());
+        Assert.Single(await EventsAsync(run), e => e["type"]!.GetValue<string>() == "tool.result");
         await ControlPlaneApp.Ok(owner.PostAsync($"/api/runs/{run}/resume", null));
         await WaitForAsync(async () => (await RunAsync(run))["status"]!.GetValue<string>() == "succeeded", "the resumed run to finish", seconds: 60);
         await runner.StopAsync(CancellationToken.None);
@@ -232,8 +230,13 @@ public sealed class RunnerIntegrationTests(PostgresServer postgres) : IAsyncLife
     /// Answers like a model that reads the conversation: the next step follows from how many results it
     /// has had, and a call answered "interrupted" is made again. Streamed in OpenRouter's chunk shapes.
     /// </summary>
-    private static async Task Conversational(JsonObject request, HttpContext http)
+    private async Task Conversational(JsonObject request, HttpContext http)
     {
+        if (Interlocked.Increment(ref calls) == holdAt)
+        {
+            await hold.Task;
+        }
+
         (string Name, string Args)[] steps =
         [
             ("read_file", "{\"path\":\"a.txt\"}"),

@@ -9,6 +9,9 @@ public sealed class RunnerOptions
 
     public string DockUrl { get; set; } = "http://dock:8080";
 
+    /// <summary>Edge's control listener, which apps cannot reach: the evaluator's way into a private preview.</summary>
+    public string EdgeControlUrl { get; set; } = "http://edge:8081";
+
     /// <summary>Runs worked at once by this process.</summary>
     public int Concurrency { get; set; } = 2;
 
