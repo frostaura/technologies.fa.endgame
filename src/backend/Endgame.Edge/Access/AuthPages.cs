@@ -196,6 +196,9 @@ public sealed class AuthPages(IHttpClientFactory http, IOptions<EdgeOptions> opt
             returnTo,
             // A return to the organisation subdomain cannot carry this host's cookie: hand the session off.
             handoff = addresses.IsOnSubdomain(returnTo),
+            // A session already on this host (a member's, or this app's own visitor's) is handed off
+            // straight away; with none, the page never asks for a hand-off it would be refused.
+            signedIn = context.Request.Cookies.ContainsKey(PlatformCookies.MemberSession) || context.Request.Cookies.ContainsKey(PlatformCookies.AppSession(app.AppId)),
             signInUrl = $"{addresses.Home(shape)}{HostingConventions.AuthPath.TrimStart('/')}/{SignIn}?returnTo={Uri.EscapeDataString(returnTo)}",
             signUpUrl = $"{addresses.Home(shape)}{HostingConventions.AuthPath.TrimStart('/')}/{SignUp}?returnTo={Uri.EscapeDataString(returnTo)}",
         };

@@ -219,7 +219,7 @@ public static class AuthPage
             }
 
             // Already signed in on this host (a member, or this app's own visitor): carry the session on.
-            if (config.handoff) {
+            if (config.handoff && config.signedIn) {
               try { const { url } = await call(`${base}/handoff`, { returnTo: config.returnTo }); location.replace(url); return; }
               catch (error) { if (error.status !== 401) throw error; }
             }
