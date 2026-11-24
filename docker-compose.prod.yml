@@ -52,6 +52,8 @@ services:
       <<: *dotnet-env
       ConnectionStrings__Endgame: Host=postgres;Port=5432;Database=${POSTGRES_DB:-endgame};Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       Database__AutoMigrateOnStartup: "true"
+      # The only component holding the OpenRouter key (ARCH-004).
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,6 +89,9 @@ services:
   egress:
     image: frostaura/technologies.fa.endgame-egress:${ENDGAME_IMAGE_TAG:-latest}
     restart: unless-stopped
+    # IPv4 only: with an IPv6 address it cannot route, the proxy tries it first and gives up.
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: 1
     logging: *default-logging
 
   console:
