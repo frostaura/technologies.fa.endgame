@@ -324,12 +324,15 @@ test("11. hosting usage appears as credit entries", async () => {
   const page = await owner.newPage();
   await page.goto(`/apps/${story.probeApp}`);
   await expect(page.getByRole("heading", { name: "Notes" })).toBeVisible();
-  await page.screenshot({ path: path.join(STATE, "console-app-desktop.png"), fullPage: true });
+  await expect(page.getByText("Visits today")).toBeVisible();
+  const still = { fullPage: true, animations: "disabled" } as const;
+  await page.screenshot({ ...still, path: path.join(STATE, "console-app-desktop.png") });
   await page.setViewportSize({ width: 412, height: 915 });
-  await page.screenshot({ path: path.join(STATE, "console-app-phone.png"), fullPage: true });
-  await page.goto(`/credits`);
+  await page.screenshot({ ...still, path: path.join(STATE, "console-app-phone.png") });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.screenshot({ path: path.join(STATE, "console-credits-desktop.png"), fullPage: true });
+  await page.goto(`/credits`);
+  await expect(page.getByText("On hosting")).toBeVisible();
+  await page.screenshot({ ...still, path: path.join(STATE, "console-credits-desktop.png") });
   await page.close();
 });
 
