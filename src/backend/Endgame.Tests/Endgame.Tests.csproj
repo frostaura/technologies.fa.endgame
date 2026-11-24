@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Deliberately NOT Dock: a test project that referenced it would carry the Docker client too. -->
+    <ProjectReference Include="../Endgame.Domain/Endgame.Domain.csproj" />
+    <ProjectReference Include="../Endgame.Application/Endgame.Application.csproj" />
+    <ProjectReference Include="../Endgame.Infrastructure/Endgame.Infrastructure.csproj" />
+    <ProjectReference Include="../Endgame.ControlPlane/Endgame.ControlPlane.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="Endgame.Domain/Endgame.Domain.csproj" />
+    <Project Path="Endgame.Application/Endgame.Application.csproj" />
+    <Project Path="Endgame.Infrastructure/Endgame.Infrastructure.csproj" />
+    <Project Path="Endgame.ControlPlane/Endgame.ControlPlane.csproj" />
+    <Project Path="Endgame.Edge/Endgame.Edge.csproj" />
+    <Project Path="Endgame.Runner/Endgame.Runner.csproj" />
+    <Project Path="Endgame.Dock/Endgame.Dock.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="Endgame.Tests/Endgame.Tests.csproj" />
+  </Folder>
+</Solution>

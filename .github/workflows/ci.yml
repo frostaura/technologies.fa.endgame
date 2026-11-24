@@ -1,0 +1,227 @@
+name: CI
+
+# Push, pull request and manual dispatch only. No scheduled trigger, ever.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # This repository's dev Mac needs it (broken workload set); harmless on the runner, so the
+  # commands are identical in both places.
+  MSBuildEnableWorkloadResolver: "false"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore src/backend/Endgame.slnx
+
+      - name: Format check
+        run: dotnet format src/backend/Endgame.slnx --verify-no-changes --no-restore --verbosity minimal
+
+      - name: Build (warnings are errors)
+        run: dotnet build src/backend/Endgame.slnx --nologo --no-restore
+
+      - name: Test
+        run: dotnet test src/backend/Endgame.Tests/Endgame.Tests.csproj --nologo --no-build
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+      - name: Lint (zero warnings)
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Unit tests
+        run: npm run test -- --run
+
+  security:
+    name: Security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: npm audit gate (high and critical, expiring allowlist)
+        working-directory: src/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run audit:gate
+
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Vulnerable NuGet packages (direct and transitive)
+        run: |
+          set -euo pipefail
+          dotnet restore src/backend/Endgame.slnx
+          dotnet list src/backend/Endgame.slnx package --vulnerable --include-transitive --format json > vulnerable.json
+          node -e "
+            const report = JSON.parse(require('fs').readFileSync('vulnerable.json', 'utf8'));
+            const hits = [];
+            for (const project of report.projects ?? [])
+              for (const fw of project.frameworks ?? [])
+                for (const pkg of [...(fw.topLevelPackages ?? []), ...(fw.transitivePackages ?? [])])
+                  if ((pkg.vulnerabilities ?? []).length) hits.push(pkg.id + ' ' + pkg.resolvedVersion);
+            if (hits.length) { console.error('Vulnerable NuGet packages:\n' + hits.join('\n')); process.exit(1); }
+            console.log('No vulnerable NuGet packages.');
+          "
+
+  stack-smoke:
+    name: Stack smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Parse the production stack file
+        run: make prod-config
+
+      - name: Bring the stack up and probe it through the edge
+        # The runner's socket is root:docker; Dock joins that group, as it would on a Linux host.
+        run: |
+          cp .env.example .env
+          echo "DOCKER_SOCKET_GID=$(stat -c %g /var/run/docker.sock)" >> .env
+          make smoke
+
+      - name: Tear down
+        if: always()
+        run: make docker-down
+
+  e2e:
+    name: E2E smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies and Chromium
+        working-directory: src/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Bring the stack up
+        run: |
+          cp .env.example .env
+          echo "DOCKER_SOCKET_GID=$(stat -c %g /var/run/docker.sock)" >> .env
+          make up
+
+      - name: Playwright against the stack, through the edge
+        run: make e2e
+
+      - name: Upload Playwright artefacts
+        uses: actions/upload-artifact@v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright
+          path: |
+            src/frontend/test-results/
+            src/frontend/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Tear down
+        if: always()
+        run: make docker-down
+
+  # Off until Docker Hub credentials exist: set the repository variable PUBLISH_ENABLED=true and
+  # the secrets DOCKERHUB_USERNAME / DOCKERHUB_TOKEN. While the variable is unset the job is
+  # skipped, not failed. Every image gets an immutable sha-<commit> tag; :latest follows it.
+  publish:
+    name: Publish ${{ matrix.image }}
+    if: vars.PUBLISH_ENABLED == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend, security, stack-smoke, e2e]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: control-plane
+            dockerfile: src/backend/Dockerfile
+            project: Endgame.ControlPlane
+          - image: edge
+            dockerfile: src/backend/Dockerfile
+            project: Endgame.Edge
+          - image: runner
+            dockerfile: src/backend/Dockerfile
+            project: Endgame.Runner
+          - image: dock
+            dockerfile: src/backend/Dockerfile
+            project: Endgame.Dock
+          - image: console
+            dockerfile: src/frontend/Dockerfile
+            project: ""
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: docker/setup-qemu-action@v4.4.0
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/login-action@v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            PROJECT=${{ matrix.project }}
+            BUILD_SHA=${{ github.sha }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/technologies.fa.endgame-${{ matrix.image }}:sha-${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/technologies.fa.endgame-${{ matrix.image }}:latest

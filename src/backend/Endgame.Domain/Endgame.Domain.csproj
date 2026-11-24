@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The core. References nothing: no framework, no persistence, no other project. -->
+</Project>

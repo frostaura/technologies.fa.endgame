@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <!-- The only Docker Engine client in the solution, and Dock the only service given the socket. -->
+    <PackageReference Include="Docker.DotNet.Enhanced" />
+  </ItemGroup>
+</Project>

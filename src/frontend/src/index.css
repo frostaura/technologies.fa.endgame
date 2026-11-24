@@ -1,0 +1,39 @@
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/space-grotesk/index.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* No colour is declared here: the Tailwind plugin emits every variable from src/lib/tokens.ts. */
+@layer base {
+  html {
+    @apply bg-ground text-ink antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  body {
+    @apply min-h-screen bg-ground font-sans text-ink;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-ground;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

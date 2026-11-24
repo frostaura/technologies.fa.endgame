@@ -1,0 +1,22 @@
+# Every image builds from the repository root. Keep host build output, dependencies and secrets
+# out of the context: a stale bin/ or node_modules COPY'd over a clean restore breaks the build.
+.git
+.github
+.tmp
+.idea
+.vscode
+**/bin
+**/obj
+**/TestResults
+**/node_modules
+**/dist
+**/coverage
+**/playwright-report
+**/test-results
+**/*.tsbuildinfo
+**/.DS_Store
+.env
+.env.*
+!.env.example
+docs
+memory

@@ -1,0 +1,177 @@
+# Production stack — the Mac mini, behind a Cloudflare tunnel.
+#
+# Pulls the published images instead of building. WHICH RELEASE RUNS is one variable,
+# ENDGAME_IMAGE_TAG (an immutable sha-<commit> tag from CI); unset, it falls back to :latest.
+# Required values are `:?` so a stack missing one refuses to start instead of booting on a default:
+#   POSTGRES_PASSWORD, CLOUDFLARE_TUNNEL_TOKEN.
+#
+# Nothing is published to the host. Cloudflared runs inside this stack and reaches the edge by
+# service name; the edge is the only service it is pointed at.
+name: endgame
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-dotnet-service: &dotnet-service
+  restart: unless-stopped
+  logging: *default-logging
+  environment: &dotnet-env
+    ASPNETCORE_ENVIRONMENT: Production
+  healthcheck:
+    test: [ "CMD-SHELL", "curl --fail --silent http://127.0.0.1:8080/health > /dev/null || exit 1" ]
+    interval: 10s
+    timeout: 3s
+    retries: 12
+    start_period: 20s
+
+services:
+  postgres:
+    image: postgres:16.16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-endgame}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-endgame}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-endgame} -d ${POSTGRES_DB:-endgame}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  control-plane:
+    <<: *dotnet-service
+    image: frostaura/technologies.fa.endgame-control-plane:${ENDGAME_IMAGE_TAG:-latest}
+    environment:
+      <<: *dotnet-env
+      ConnectionStrings__Endgame: Host=postgres;Port=5432;Database=${POSTGRES_DB:-endgame};Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      Database__AutoMigrateOnStartup: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  runner:
+    <<: *dotnet-service
+    image: frostaura/technologies.fa.endgame-runner:${ENDGAME_IMAGE_TAG:-latest}
+
+  dock:
+    <<: *dotnet-service
+    image: frostaura/technologies.fa.endgame-dock:${ENDGAME_IMAGE_TAG:-latest}
+    # The ONLY service given the Docker socket.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
+
+  console:
+    image: frostaura/technologies.fa.endgame-console:${ENDGAME_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1" ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    logging: *default-logging
+
+  edge:
+    <<: *dotnet-service
+    image: frostaura/technologies.fa.endgame-edge:${ENDGAME_IMAGE_TAG:-latest}
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      console:
+        condition: service_healthy
+
+  # The public door. Pinned to a release, like every third-party image here, so a redeploy changes
+  # only what this repository changed. The tunnel's public hostname routes to http://edge:8080.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.11.2
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
+    depends_on:
+      edge:
+        condition: service_healthy
+    logging: *default-logging
+
+  # Nightly database backup to a host directory, kept BACKUP_KEEP_DAYS days and never fewer than
+  # BACKUP_KEEP_MIN copies. The encrypted offsite copy to Cloudflare storage is a later phase of
+  # the build plan; until it exists, this host directory is the only copy.
+  # The loop and the two commands it installs are inline because a Portainer stack has no files
+  # beside it. `$$` is compose's escape for a literal `$`.
+  backup:
+    image: postgres:16.16-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-endgame}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGDATABASE: ${POSTGRES_DB:-endgame}
+      BACKUP_HOUR_UTC: "${BACKUP_HOUR_UTC:-1}"
+      BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS:-14}"
+      BACKUP_KEEP_MIN: "${BACKUP_KEEP_MIN:-3}"
+    volumes:
+      - ${ENDGAME_BACKUP_DIR:-/var/backups/endgame}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Unhealthy once the newest dump is more than 26 hours old.
+      test: [ "CMD-SHELL", "find /backups -maxdepth 1 -name 'endgame-*.dump' -mmin -1560 | grep -q ." ]
+      interval: 5m
+      timeout: 10s
+      retries: 1
+      start_period: 10m
+    logging: *default-logging
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        set -eu
+        cat > /usr/local/bin/endgame-backup <<'SCRIPT'
+        #!/bin/sh
+        # endgame-backup [label] - a verified pg_dump into /backups, renamed into place only once readable.
+        set -eu
+        umask 077
+        label="$${1:-manual}"
+        case "$$label" in ""|*[!a-z0-9-]*) echo "backup: label is lower-case letters, digits and dashes" >&2; exit 2 ;; esac
+        name="endgame-$$label-$$(date -u +%Y%m%dT%H%M%SZ)"
+        part="/backups/.$$name.partial.dump"
+        trap 'rm -f "$$part"' EXIT
+        pg_dump --format=custom --compress=6 --file="$$part"
+        pg_restore --list "$$part" > /dev/null
+        mv "$$part" "/backups/$$name.dump"
+        trap - EXIT
+        echo "backup: wrote /backups/$$name.dump"
+        SCRIPT
+        cat > /usr/local/bin/endgame-prune <<'SCRIPT'
+        #!/bin/sh
+        # endgame-prune - deletes dumps older than BACKUP_KEEP_DAYS, never the newest BACKUP_KEEP_MIN.
+        set -eu
+        n=0
+        for f in $$(ls -1t /backups/endgame-*.dump 2> /dev/null); do
+          n=$$((n + 1))
+          if [ "$$n" -le "$${BACKUP_KEEP_MIN:-3}" ]; then continue; fi
+          if [ -n "$$(find "$$f" -mtime +"$${BACKUP_KEEP_DAYS:-14}")" ]; then rm -f "$$f"; echo "backup: pruned $$f"; fi
+        done
+        SCRIPT
+        chmod 755 /usr/local/bin/endgame-backup /usr/local/bin/endgame-prune
+        echo "backup: daily at $${BACKUP_HOUR_UTC}:00 UTC into /backups"
+        while :; do
+          today="$$(date -u +%Y%m%d)"
+          hour="$$(date -u +%H | sed 's/^0//')"
+          if ! ls /backups/endgame-daily-"$$today"T*.dump > /dev/null 2>&1; then
+            if [ "$${hour:-0}" -ge "$${BACKUP_HOUR_UTC}" ] || ! ls /backups/endgame-*.dump > /dev/null 2>&1; then
+              if endgame-backup daily; then endgame-prune; else echo "backup: FAILED - retrying in five minutes" >&2; fi
+            fi
+          fi
+          sleep 300
+        done
+
+volumes:
+  postgres_data:
