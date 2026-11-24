@@ -1,0 +1,28 @@
+# Scratch — never tracked
+.tmp/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# .NET
+[Bb]in/
+[Oo]bj/
+artifacts/
+*.user
+.vs/
+TestResults/
+coverage/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+playwright-report/
+test-results/
+
+# OS and editors
+.DS_Store
+.idea/
+*.swp
