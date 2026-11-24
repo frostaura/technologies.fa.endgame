@@ -1,99 +1,104 @@
-# ARCH-001 — System overview: the services as scaffolded
+# ARCH-001 — System overview: the services as built
 
 | Field | Value |
 | --- | --- |
 | **ID** | ARCH-001 |
 | **Title** | System overview |
-| **Status** | Current — describes the Phase 0 scaffold |
-| **Covers** | Every service in `docker-compose.yml` and `docker-compose.prod.yml`; the backend projects under `src/backend/`; the console under `src/frontend/` |
+| **Status** | Current — the control plane after its second pass, with Dock, Edge and the app kit merged |
+| **Covers** | Every service in `docker-compose.yml` and `docker-compose.prod.yml`; the backend projects under `src/backend/`; the console under `src/frontend/`; the app kit under `src/appkit/` |
 
 ## Context
 
 The build plan ([`../specs/endgame-build-plan.md`](../specs/endgame-build-plan.md), *What runs*)
-names eight services. This document records what each one **is in the code today** — an empty but
-real stack that builds, tests and comes up from `make up` — and the boundaries already enforced. It
-makes no claim about features of later phases; those are listed under *Not built yet*.
+names eight services. This document records what each one **is in the code**, and the boundaries
+enforced. Contracts between them are in [`ARCH-004`](ARCH-004-service-contracts.md); hosting rules
+in [`ARCH-005`](ARCH-005-hosting-apps.md); the model gateway in [`ARCH-003`](ARCH-003-model-gateway.md).
+What is deployed is in `MEMORY.md`.
 
-## The eight services
+## The services
 
-| # | Service | Built as | What it does today | Boundary |
+| # | Service | Built as | What it does | Boundary |
 | --- | --- | --- | --- | --- |
-| 1 | **Edge** | `Endgame.Edge` — ASP.NET Core + YARP | The single entry point. Routes `/api/*` to the control plane and every other path to the console. Answers its own `/health`. | The only service published to the host (`EDGE_HOST_PORT`, default 8095). In production, the only service the tunnel reaches. |
-| 2 | **Control plane** | `Endgame.ControlPlane` — ASP.NET Core over `Endgame.Application`, `Endgame.Infrastructure`, `Endgame.Domain` | `GET /api/system/status` (live health of every service), `/health`, the OpenAPI document at `/api/openapi/v1.json`. Applies EF Core migrations at start-up when `Database:AutoMigrateOnStartup` is true. | The only service with a database connection string. |
-| 3 | **Runner** | `Endgame.Runner` — minimal ASP.NET Core host | `/health` only. The agent harness will live here. | No database, no Docker, no published port. |
-| 4 | **Dock** | `Endgame.Dock` — minimal ASP.NET Core host + `Docker.DotNet.Enhanced` | `/health`, which asks the Docker Engine for its version and answers 503 if the engine does not reply. | **The only service given the Docker socket**, and the only project referencing a Docker client. |
-| 5 | **Console** | `src/frontend` — React, TypeScript, Redux Toolkit (RTK Query), Tailwind, shadcn/ui; served by unprivileged nginx | One page: the console shell and the *System status* view, polling `/api/system/status` every 10 s. nginx answers `/health`. | Static files only; never calls a service except through the edge. |
-| 6 | **PostgreSQL** | `postgres:16.16-alpine` | The platform database. Holds the cascade tree's four tables and the EF migrations history. | Published on `127.0.0.1:5446` in development only, for host tools. Not published in production. |
-| 7 | **Egress proxy** | — | **Not built.** | — |
-| 8 | **Tunnel and backup** | `cloudflare/cloudflared:2026.11.2` and a `postgres:16.16-alpine` backup loop | Production compose only. The tunnel carries public traffic to the edge by service name. Backup writes a verified `pg_dump` daily to a host directory with retention. | Neither runs in the development stack. The backup's offsite copy does not exist yet. |
+| 1 | **Edge** | `Endgame.Edge` — ASP.NET Core + YARP | The single entry point. `/api/*` to the control plane, apps at both address shapes (four segments: `/<org>/<division>/<project>/<app>/` and `<org>.<domain>/<division>/<project>/<app>/`), the console otherwise. Wakes sleeping apps through Dock, asks the control plane who may open an app, serves the holding page for paused apps. A control listener on `:8081` that apps cannot reach. | The only service published to the host. |
+| 2 | **Control plane** | `Endgame.ControlPlane` over `Endgame.Application`, `Endgame.Infrastructure`, `Endgame.Domain` | The tree and cascade, passkey sign-in, members and invitations, the credit ledger with reservations and hosting charges, the model gateway, runs, events, tasks, ideas and verdicts, conversations, God mode with its audit log, and the **platform API for apps**: app tokens, identity (members and app end users, access checks, hand-offs), the vault, the e-mail outbox and SMTP sender, the scheduler, webhook declarations, telemetry intake and its read side. A sweep releases lapsed reservations, requeues lapsed runs and prunes telemetry. | The only service with a database connection string, the OpenRouter key and the SMTP settings. |
+| 3 | **Runner** | `Endgame.Runner` | `/health`. The agent harness will live here. | No database, no Docker. |
+| 4 | **Dock** | `Endgame.Dock` + `Docker.DotNet.Enhanced` | Workspaces, repositories, builds, the app lifecycle (start, stop, wake), per-app networks, databases and egress rules. | **The only service given the Docker socket.** |
+| 5 | **Console** | `src/frontend` — React, TypeScript, Redux Toolkit, Tailwind, shadcn/ui; unprivileged nginx | Sign-in, the org chart home, start, run trace, verdict, app, credits. | Calls nothing except through Edge. |
+| 6 | **PostgreSQL** | `postgres:16.16-alpine` | The platform database, and each app's own database and role. | Development only: `127.0.0.1:5446`. |
+| 7 | **Egress proxy** | `src/egress` — squid | Every outbound call from apps and workspaces; default deny, per-app allow-lists from Dock. The platform API is reached through it. | Strips `X-Forwarded-For`. |
+| 8 | **Tunnel and backup** | `cloudflared` and a `pg_dump` loop | Production compose only. | The offsite copy does not exist yet. |
 
-## Request path
+## Request paths
 
 ```
-browser ──▶ edge :8080 ──/api/*──▶ control-plane :8080 ──▶ postgres :5432
-                │                        │
-                └──── everything else ──▶ console :8080
-                                         │ GET /health
-                                         ├──▶ control-plane, edge, runner, dock, console
-                                         └──▶ postgres (a real connection)
-dock :8080 ──unix socket──▶ Docker Engine
+browser ──▶ edge :8080 ──/api/*──────────────▶ control-plane :8080 ──▶ postgres
+                │──<app address>/*──(access check)──▶ app-<id> :8080
+                │──<app address>/_endgame/auth/*──▶ identity pages ──/api/app-auth/*──▶ control-plane
+                └──everything else──▶ console :8080
+app-<id> ──▶ egress :3128 ──/platform/v1/*──▶ control-plane      (app token)
+control-plane ──/internal/apps/{id}/platform/*──▶ edge :8081 ──▶ app-<id>/_platform/*   (signed)
+dock ──unix socket──▶ Docker Engine
 ```
-
-Inside the compose network every service listens on 8080 and is addressed by service name.
 
 ## Backend layering
 
 | Project | References | Holds |
 | --- | --- | --- |
-| `Endgame.Domain` | nothing | The cascade `Organisation → Division → Project → App`: id, name, slug, created-at, parent link. |
-| `Endgame.Application` | Domain | The port `IServiceHealthProbe` and the use case `GetSystemStatus`. |
-| `Endgame.Infrastructure` | Application, Domain | `EndgameDbContext`, the four mappings, the initial migration, and the probe adapters (`HttpHealthProbe`, `DatabaseHealthProbe`). |
-| `Endgame.ControlPlane` | Application, Infrastructure | The HTTP surface. |
-| `Endgame.Edge`, `Endgame.Runner`, `Endgame.Dock` | no Endgame project | Independent hosts. |
-| `Endgame.Tests` | Domain, Application, Infrastructure, ControlPlane — **not** Dock | Domain invariants, the status endpoint in process, and the architecture rules below. |
+| `Endgame.Domain` | nothing | The cascade tree, the resolver, roles, run vocabulary, credit kinds and the reservation formula, app access and actors, platform naming rules, the cron evaluator. |
+| `Endgame.Application` | Domain | The model gateway and its ports (ledger, provider, context), credit options (the one cost-to-credits conversion), the e-mail port, the status use case. |
+| `Endgame.Infrastructure` | Application, Domain | `EndgameDbContext`, tenancy (row-level security via `endgame_app` / `endgame_system`), the services above, the envelope vault, the OTLP decoder, the SMTP sender and the background workers. |
+| `Endgame.ControlPlane` | Application, Infrastructure | The HTTP surface: `/api`, `/api/app-auth`, `/internal`, `/platform/v1`. |
+| `Endgame.Hosting.Contracts` | nothing | The shapes Dock, Edge and the control plane exchange. |
+| `Endgame.Edge`, `Endgame.Dock` | Contracts | Independent hosts. |
+| `Endgame.Runner` | nothing | Independent host. |
+| `Endgame.Tests` | everything but Dock | Domain, control plane, hosting and architecture tests. |
 
-## Data — the cascade tree
+## Data
 
-Tables `organisations`, `divisions`, `projects`, `apps`, each with `id` (uuid, generated by the
-domain), `name` (≤ 200), `slug` (≤ 63) and `created_at` (UTC). Each child table has one required
-foreign key to its parent with `ON DELETE RESTRICT`; a slug is unique among its siblings, and an
-organisation's slug is unique everywhere. Nothing reads or writes these tables yet beyond the
-migration.
+The cascade tree (`organisations`, `divisions`, `projects`, `apps`); `memberships`; `cascade_entries`
+(budgets, rule sets, context, settings, and secrets sealed with envelope encryption); the workforce
+and the work (`employees`, `runs`, `run_events`, `tasks`, `approvals`, `ideas`, `conversations`); the
+one ledger (`credit_entries`) and `operator_actions`; Identity's tables (members only) and the
+data-protection key ring. The platform API adds `app_tokens`, `app_end_users`,
+`app_end_user_passkeys`, `app_sessions`, `app_handoffs`, `app_shares`, `app_schedules`,
+`app_webhooks`, `email_messages`, `telemetry_events`, `telemetry_spans`, `telemetry_metrics`,
+`telemetry_logs` and `hosting_samples`. Every one carries `organisation_id` under row-level security.
 
 ## Invariants and where they are enforced
 
 | Invariant | Enforced by |
 | --- | --- |
-| A slug is one DNS label: lower-case letters, digits, single inner hyphens, 1–63 characters. | `SlugRules` in the domain; column length in the migration; `CascadeTreeTests`. |
-| A child belongs to exactly one parent, fixed at creation. | Factory methods taking the parent; no public setter on the parent id; required foreign key; `CascadeTreeTests`. |
-| The domain references no other project and no package. | `ArchitectureTests.Domain_references_no_other_project_and_no_package` and the assembly-reference check. |
-| Only Dock references the Docker client, and no project references Dock. | `ArchitectureTests`, from the project files and their transitive project references. |
-| Only Dock is given the Docker socket. | The compose files: one `volumes` entry, on `dock`. Not mechanically tested. |
-| Every service runs as a non-root user. | .NET images run as `app` (uid 1654, asserted in the Dockerfile); the console runs `nginx-unprivileged`. |
-| The status report is healthy only when every service answered healthy. | `GetSystemStatus`; `SystemStatusEndpointTests`. |
-| A failed status read is never rendered as an empty list. | `toViewState` and `SystemStatusView` tests (loading, healthy, unhealthy, failed, stale). |
-| No colour literal outside the token layer. | `src/frontend/src/tokens.test.ts`; ESLint bans arbitrary Tailwind values. |
+| Every organisation's rows are visible only to it. | Row-level security on every tenant table (`TenancySql`); `DatabaseInvariantTests`. |
+| The ledger, the run log, operator actions and hosting samples are append-only. | Grants plus a statement trigger, binding the superuser too. |
+| Operators come from an explicit list; every entry into another organisation is logged for its Owner. | `AccessService` (`ENDGAME_OPERATORS`); `ControlPlaneDebtsTests`. |
+| Credits are reserved before a model call; caps are exact. | `CreditLedger.AdmitAsync` under the organisation's lock; `DatabaseInvariantTests`, `ModelGatewayTests`, `PlatformApiTests`. |
+| Overdraft carries no interest and no fees; at the limit work stops and apps pause. | Nothing accrues in the ledger; `TreeService.RoutesAsync`; `ControlPlaneDebtsTests`. |
+| Go-public is a human act. | `CascadeService` refuses `access: public` from an agent or a service; no internal route sets it; `AppAccessTests`. |
+| Secrets are never returned by a console read and are sealed at rest. | `EnvelopeVault`; `PlatformApiTests`. |
+| An end user belongs to one app and never reaches the console. | Separate tables and a passkey store confined to one app; `AppAccessTests`. |
+| Only Dock references the Docker client, and no project references Dock. | `ArchitectureTests`. |
+| No mail leaves unless SMTP is configured. | `SmtpEmailSender.IsConfigured`; tests use an in-test sink. |
 
 ## Decisions
 
 | Decision | Why | Alternatives rejected |
 | --- | --- | --- |
-| One Dockerfile for the four .NET services, chosen by `PROJECT`. | One hardened recipe (non-root, tini, curl healthcheck, `BUILD_SHA`) instead of four that drift. | A Dockerfile per service. |
-| The control plane probes itself over HTTP too. | Every row in the status report is measured the same way. | Reporting itself healthy by assertion. |
-| Dock answers 503 when the engine is unreachable. | Driving the engine is Dock's only job; without it Dock is not healthy. | Reporting engine reachability as a detail of a healthy service. |
-| Dock joins the socket's group (`DOCKER_SOCKET_GID`, 0 on Docker Desktop) rather than running as root. | Keeps the process non-root while it holds the one privileged capability. | Running Dock as root. |
-| The Console is in the status report although the brief named five services. | It is a running service with a health endpoint; leaving it out would hide a real failure. | Five rows only. |
-| The edge keeps its data-protection key ring in memory. | YARP brings in data protection; the edge has nothing to protect across restarts. | An unpersisted on-disk key ring that warns on every start. |
+| One Dockerfile for the .NET services, chosen by `PROJECT`. | One hardened recipe. | A Dockerfile per service. |
+| The control plane probes its peers from explicit addresses. | The environment name must not decide where peers are. | Per-environment address lists. |
+| App end users live in their own tables, verified by Identity's own passkey handler over a store confined to one app. | They are tenant data with no role, and must never become console users. | Rows in the members' `users` table. |
+| App tokens are derived (HMAC of a stored salt under a vault-derived key) and stored as a hash. | The control plane must sign callbacks with the token; the database alone must not yield it. | Storing the token, or an encrypted copy. |
+| A leased polling scheduler over `app_schedules`. | A page of code under the same row-level security; no second schema or package. | Quartz.NET with its PostgreSQL store. |
+| A hand-written OTLP reader. | The messages are stable and small; no code generator or package in the control plane. | Google.Protobuf and generated OTLP classes. |
+| Telemetry pruned by age, not partitioned. | Simple; volume on one machine is small. | Native partitions. |
 
 ## Not built yet
 
-Everything in the build plan beyond Phase 0, including: the egress proxy; the agent harness in
-the runner; app containers, sleep and wake in Dock and the edge; address routing by organisation
-path or subdomain; identity, vault, credits, model gateway, scheduler, telemetry and MCP in the
-control plane; any console screen other than system status; the offsite encrypted backup.
+The agent harness in the Runner; MCP; natural-language dashboards; version history and export; the
+offsite encrypted backup; Cloudflare automation; Edge's forwarding of platform callbacks and its
+hand-off page (owed by Edge).
 
 ## Links
 
 - Spec: [`../specs/endgame-spec.md`](../specs/endgame-spec.md)
 - Plan: [`../specs/endgame-build-plan.md`](../specs/endgame-build-plan.md)
-- Templates: [`ARCH-000-template.md`](ARCH-000-template.md), [`../use-cases/UC-000-template.md`](../use-cases/UC-000-template.md), [`../testing/TEST-000-template.md`](../testing/TEST-000-template.md)
+- Contracts: [`ARCH-004`](ARCH-004-service-contracts.md), [`../../src/appkit/PLATFORM-API.md`](../../src/appkit/PLATFORM-API.md)

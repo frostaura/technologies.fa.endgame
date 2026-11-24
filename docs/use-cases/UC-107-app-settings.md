@@ -4,9 +4,9 @@
 | --- | --- |
 | **ID** | UC-107 |
 | **Title** | Read an app's health, addresses and cost; set it to sleep when idle or stay always on |
-| **Primary actor** | Owner · Builder (change) · Viewer (read); Dock and the edge report state |
+| **Primary actor** | Owner · Admin (access) · Builder (running) · Viewer (read); Dock and the edge report state |
 | **Scope** | Control plane (`/api/apps/{id}`, `/api/apps/{id}/settings`, `/internal/apps/*`, `/internal/routes`) |
-| **Cascade level** | `sleep.mode` and `sleep.idle_minutes` inherit down the cascade; set here, they apply to this app |
+| **Cascade level** | `sleep.mode`, `sleep.idle_minutes` and `access` inherit down the cascade; set here, they apply to this app |
 | **Status** | Built (control-plane side) |
 
 ## Main flow
@@ -19,9 +19,13 @@
 
 ## Alternate and failure flows
 
-- **A1 — shared or public access.** 422 `access_unavailable`: sharing and public apps are not enforced by this
-  version, so they cannot be switched on (a setting nothing enforces would misstate who can open the app).
-- **A2 — telemetry and running cost.** `telemetry` and `runningCost` are null — not measured by the control plane yet, never invented zeros.
+- **A1 — access.** `private`, `shared` or `public` need the Admin role; `public` is refused (403 `human_only`)
+  to any agent or service — only a person signed in to the console can set it. The routing entry carries
+  `access`, and Edge's access check enforces it ([UC-110](UC-110-app-access-and-end-users.md)).
+- **A2 — telemetry and running cost.** Both come from measurements — the app's own telemetry and Dock's
+  hosting samples — and are null until something was measured, never invented zeros.
+- **A3 — paused.** When the organisation is past its overdraft limit, or a budget above the app is spent,
+  `running` is `paused` and the summary says which ([UC-111](UC-111-metering-overdraft-and-god-mode.md)).
 
 ## Rules this use case must honour
 
@@ -31,4 +35,4 @@
 
 - Both addresses are absolute; a running choice made on the app shows in its routes entry with the level that set it.
 
-Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `CascadeCreditsAndAppsTests`.
+Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `CascadeCreditsAndAppsTests`; [`TEST-102`](../testing/TEST-102-platform-api.md) — `AppAccessTests`, `PlatformApiTests`.
