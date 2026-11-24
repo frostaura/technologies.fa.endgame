@@ -72,13 +72,17 @@ public sealed record PublicRunView(
 
 public sealed record ResearchView(decimal EstimatedCredits, decimal SpentCredits, string? By);
 
-public sealed record DecisionView(string Choice, DateTimeOffset At, string By, bool Overruled, Guid? RunId);
+/// <param name="Via"><c>person</c> or <c>auto-mode</c>.</param>
+public sealed record DecisionView(string Choice, DateTimeOffset At, string By, bool Overruled, Guid? RunId, string Via);
 
 public sealed record OverruledView(Guid IdeaId, string Title, string Verdict, string Outcome);
 
 public sealed record VerdictRecordView(int Total, int Build, int Change, int DoNotBuild, IReadOnlyList<OverruledView> Overruled);
 
-/// <summary><c>GET /api/ideas/{id}</c>. <c>verdict</c> is the research's own verdict document, null until it is ready.</summary>
+/// <summary>
+/// <c>GET /api/ideas/{id}</c>. <c>verdict</c> is the research's own verdict document, null until it is ready.
+/// <c>redLine</c> names the red line the verdict found breached: no one can build over it.
+/// </summary>
 public sealed record PublicIdeaView(
     Guid Id,
     string Title,
@@ -90,7 +94,8 @@ public sealed record PublicIdeaView(
     ResearchView Research,
     JsonNode? Verdict,
     DecisionView? Decision,
-    VerdictRecordView Record);
+    VerdictRecordView Record,
+    string? RedLine);
 
 public sealed record IdeaEstimateView(decimal Credits, string Basis);
 
@@ -157,3 +162,6 @@ public sealed record ConversationMessageView(Guid RunId, long Seq, DateTimeOffse
 
 /// <summary><c>GET /api/conversations?scope=</c>: the messages of the conversation docked at a scope, oldest first.</summary>
 public sealed record ConversationHistoryView(string Scope, Guid? ConversationId, Guid? EmployeeId, IReadOnlyList<ConversationMessageView> Messages);
+
+/// <summary>One finished run's actual cost (<c>GET /internal/estimates/history</c>).</summary>
+public sealed record CostHistoryView(Guid RunId, DateTimeOffset FinishedAt, decimal Credits, int Steps);

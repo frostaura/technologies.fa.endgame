@@ -280,7 +280,8 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
     public Task<Position> PositionAsync(ResolvedScope scope, DateTimeOffset now, CancellationToken cancellationToken) =>
         PositionAsync(scope, null, now, cancellationToken);
 
-    private async Task<Position> PositionAsync(ResolvedScope scope, Guid? employeeId, DateTimeOffset now, CancellationToken cancellationToken)
+    /// <summary>The position for work at a scope, with the employee's own cap when it has one.</summary>
+    public async Task<Position> PositionAsync(ResolvedScope scope, Guid? employeeId, DateTimeOffset now, CancellationToken cancellationToken)
     {
         decimal topUps, settledAll;
         await using (var totals = await db.CommandAsync("""
@@ -365,6 +366,18 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
     public sealed record Position(decimal TopUps, decimal Balance, decimal HeldOrganisation, decimal OverdraftLimit, IReadOnlyList<BudgetLine> Budgets)
     {
         public BudgetLine? BindingBudget => Budgets.OrderBy(b => b.Headroom).FirstOrDefault();
+
+        /// <summary>
+        /// The most a new piece of work may still spend: the tightest monthly cap on the chain (and the
+        /// employee's), or the organisation's balance down to its overdraft limit, whichever is lower.
+        /// </summary>
+        public (decimal Credits, string BindingScope, string Binding) Headroom()
+        {
+            var available = Balance + OverdraftLimit;
+            return BindingBudget is { } budget && budget.Headroom <= available
+                ? (budget.Headroom, budget.Scope, "budget")
+                : (available, "organisation balance", "overdraft");
+        }
 
         public Refused? Refuse(decimal needed)
         {

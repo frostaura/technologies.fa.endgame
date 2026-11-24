@@ -77,6 +77,22 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
         return CascadeResolver.Resolve(kind, entries).Select(View).ToList();
     }
 
+    /// <summary>One key's effective value at a scope, or null when no level on the chain sets it.</summary>
+    public async Task<EffectiveValue?> EffectiveAsync(ResolvedScope scope, CascadeKind kind, string key, CancellationToken cancellationToken)
+    {
+        var entries = await ChainEntriesAsync(scope, kind, cancellationToken);
+        return CascadeResolver.ResolveKey(kind, key, entries) is { } effective ? View(effective) : null;
+    }
+
+    /// <summary>The autonomy that applies at a scope: <c>auto</c> unless a level on the chain set <c>checkpoints</c>.</summary>
+    public async Task<string> AutonomyAsync(ResolvedScope scope, CancellationToken cancellationToken) =>
+        Autonomy.ModeOf((await EffectiveAsync(scope, CascadeKind.Setting, Autonomy.Key, cancellationToken))?.Value);
+
+    /// <summary>Whether a checkpoint is on at a scope: autonomy is <c>checkpoints</c> and the checkpoint's setting is true.</summary>
+    public async Task<bool> CheckpointAsync(ResolvedScope scope, string checkpointKey, CancellationToken cancellationToken) =>
+        await AutonomyAsync(scope, cancellationToken) == Autonomy.Checkpoints
+        && (await EffectiveAsync(scope, CascadeKind.Setting, checkpointKey, cancellationToken))?.Value is JsonValue v && v.GetValueKind() == JsonValueKind.True;
+
     /// <summary>Every entry of a kind set at nodes beneath the scope (not on its chain).</summary>
     public async Task<IReadOnlyList<CascadeEntryRecord>> BelowAsync(ResolvedScope scope, CascadeKind kind, CancellationToken cancellationToken)
     {
@@ -101,7 +117,7 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
     };
 
     /// <summary>Sets one value at the scope's own node, replacing what was set there before.</summary>
-    public async Task<EffectiveValue> SetAsync(ResolvedScope scope, CascadeKind kind, string key, JsonNode? value, Guid setBy, Actor actor, CancellationToken cancellationToken)
+    public async Task<EffectiveValue> SetAsync(ResolvedScope scope, CascadeKind kind, string key, JsonNode? value, Guid? setBy, Actor actor, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);
         try
@@ -225,6 +241,27 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
                     throw EndgameProblem.Invalid($"An overdraft here may be tighter than the {inherited.ToString(CultureInfo.InvariantCulture)} credits inherited, never deeper.");
                 }
             }
+        }
+
+        if (kind == CascadeKind.Setting && key == Autonomy.Key
+            && (value is not JsonValue mode || mode.GetValueKind() != JsonValueKind.String || !Autonomy.Modes.Contains(mode.GetValue<string>())))
+        {
+            throw EndgameProblem.Invalid("autonomy is 'auto' (the workforce runs the lifecycle end to end) or 'checkpoints' (it stops where a checkpoint is set).");
+        }
+
+        if (kind == CascadeKind.Setting && Autonomy.CheckpointKeys.Contains(key) && value?.GetValueKind() is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            throw EndgameProblem.Invalid($"{key} is true or false.");
+        }
+
+        if (kind == CascadeKind.Setting && key == AgentSettings.WorkforceIdleDays && NumberOf(value) is not (>= 1 and <= 365))
+        {
+            throw EndgameProblem.Invalid($"{AgentSettings.WorkforceIdleDays} is a whole number of days from 1 to 365.");
+        }
+
+        if (kind == CascadeKind.RuleSet && Autonomy.RuleSetFaults(key, value) is { Count: > 0 } faults)
+        {
+            throw EndgameProblem.Invalid(string.Join(" ", faults));
         }
 
         if (kind == CascadeKind.Setting && key == CascadeKeys.SleepMode && value?.ToString() is not ("auto" or "always_on"))

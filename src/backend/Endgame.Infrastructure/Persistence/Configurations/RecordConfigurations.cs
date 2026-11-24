@@ -274,6 +274,8 @@ internal sealed class IdeaConfiguration : IEntityTypeConfiguration<IdeaRecord>
         builder.Property(i => i.DecisionNote).HasColumnName("decision_note");
         builder.Property(i => i.DecidedBy).HasColumnName("decided_by");
         builder.Property(i => i.DecidedAt).HasColumnName("decided_at");
+        builder.Property(i => i.DecidedVia).HasColumnName("decided_via").HasMaxLength(20);
+        builder.Property(i => i.RedLine).HasColumnName("red_line").HasMaxLength(300);
         builder.Property(i => i.ResearchRunId).HasColumnName("research_run_id");
         builder.Property(i => i.BuildRunId).HasColumnName("build_run_id");
         builder.Property(i => i.CreatedBy).HasColumnName("created_by");
@@ -283,6 +285,9 @@ internal sealed class IdeaConfiguration : IEntityTypeConfiguration<IdeaRecord>
         {
             t.HasCheckConstraint("ck_ideas_verdict", $"verdict IS NULL OR {Sql.In("verdict", Verdicts.All)}");
             t.HasCheckConstraint("ck_ideas_decision", $"decision IS NULL OR {Sql.In("decision", IdeaDecisions.All)}");
+            t.HasCheckConstraint("ck_ideas_decided_via", $"(decision IS NULL) = (decided_via IS NULL) AND (decided_via IS NULL OR {Sql.In("decided_via", IdeaDecisions.Via)})");
+            // A breached red line is never built over: the database refuses it as well as the service.
+            t.HasCheckConstraint("ck_ideas_red_line", "red_line IS NULL OR decision IS NULL OR decision IN ('change', 'drop')");
         });
         builder.HasOne<RunRecord>().WithMany()
             .HasForeignKey(i => new { i.OrganisationId, i.ResearchRunId })

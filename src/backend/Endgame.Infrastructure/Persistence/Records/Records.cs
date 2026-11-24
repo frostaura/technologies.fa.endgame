@@ -250,6 +250,12 @@ public sealed class IdeaRecord : IScopedRecord
 
     public Guid? DecidedBy { get; set; }
 
+    /// <summary><c>person</c> or <c>auto-mode</c>: who took the decision. Null before one.</summary>
+    public string? DecidedVia { get; set; }
+
+    /// <summary>The red line the verdict found breached, or null. No one may build over it, a person included.</summary>
+    public string? RedLine { get; set; }
+
     public DateTimeOffset? DecidedAt { get; set; }
 
     public Guid? ResearchRunId { get; set; }

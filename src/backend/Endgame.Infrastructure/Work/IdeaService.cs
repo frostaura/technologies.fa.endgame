@@ -35,11 +35,13 @@ public sealed record IdeaStarted(IdeaView Idea, RunView Run);
 /// the Runner does the research and reports the verdict; the owner decides. A "do not build" can only
 /// be built over by an explicit overrule, which the idea keeps on record.
 /// </summary>
-public sealed class IdeaService(EndgameDbContext db, TenantSession session, ScopeResolver scopes, RunService runs, TimeProvider clock)
+public sealed class IdeaService(EndgameDbContext db, TenantSession session, ScopeResolver scopes, RunService runs, Cascade.CascadeService cascade, TimeProvider clock)
 {
     public const int MaxTextLength = 20_000;
 
-    public async Task<IdeaStarted> CreateAsync(ResolvedScope scope, string text, IReadOnlyList<string>? constraints, decimal estimateCredits, Guid by, CancellationToken cancellationToken)
+    /// <param name="by">The person who described it; null when the conversation started it on the owner's confirmed word.</param>
+    /// <param name="via"><c>console</c> or <c>conversation</c>: where the idea was raised.</param>
+    public async Task<IdeaStarted> CreateAsync(ResolvedScope scope, string text, IReadOnlyList<string>? constraints, decimal estimateCredits, Guid? by, CancellationToken cancellationToken, string via = "console")
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (scope.Level > NodeLevel.Division)
@@ -69,7 +71,7 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
         db.Ideas.Add(idea);
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
-        var run = await StartResearchAsync(scope, idea, trimmed, idea.Constraints, null, by, cancellationToken);
+        var run = await StartResearchAsync(scope, idea, trimmed, idea.Constraints, null, by, cancellationToken, via);
         await runs.AppendAsync(scope.OrganisationId, run.Id, [new NewEvent("estimate.made", new JsonObject
         {
             ["credits"] = estimateCredits,
@@ -120,6 +122,12 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
         }
 
         verdict["outcome"] = outcome;
+        var redLine = RedLineOf(verdict);
+        if (redLine is not null && outcome != Verdicts.DoNotBuild)
+        {
+            throw EndgameProblem.Invalid("A verdict that records a breached red line is 'do-not-build'; no other outcome is possible.");
+        }
+
         var org = await OrganisationOfAsync(ideaId, cancellationToken);
         var document = verdict.ToJsonString();
         var changed = await db.Ideas.Where(i => i.OrganisationId == org && i.Id == ideaId && i.Status == IdeaStatuses.Researching)
@@ -127,7 +135,8 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
                 .SetProperty(i => i.Status, IdeaStatuses.AwaitingDecision)
                 .SetProperty(i => i.Verdict, outcome)
                 .SetProperty(i => i.VerdictSummary, summary)
-                .SetProperty(i => i.VerdictEvidenceJson, document), cancellationToken);
+                .SetProperty(i => i.VerdictEvidenceJson, document)
+                .SetProperty(i => i.RedLine, redLine), cancellationToken);
         if (changed == 0)
         {
             throw EndgameProblem.Conflict("A verdict can only be recorded for an idea that is being researched.");
@@ -136,8 +145,58 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
         return await GetAsync(org, ideaId, cancellationToken);
     }
 
+    /// <summary>
+    /// The breached red line a verdict records (<c>redLines { breached: true, line }</c>, as research
+    /// writes it, or <c>redLine</c>), or null. "unnamed" when it is breached but not named.
+    /// </summary>
+    public static string? RedLineOf(JsonObject verdict)
+    {
+        ArgumentNullException.ThrowIfNull(verdict);
+        foreach (var key in new[] { "redLines", "redLine" })
+        {
+            if (verdict[key] is JsonObject lines && lines["breached"]?.GetValueKind() == System.Text.Json.JsonValueKind.True)
+            {
+                var line = lines["line"]?.GetValueKind() == System.Text.Json.JsonValueKind.String ? lines["line"]!.GetValue<string>().Trim() : "";
+                return line.Length == 0 ? "unnamed" : line.Length > 300 ? line[..300] : line;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Auto-mode's decision after a verdict (the Runner, <c>by: "auto-mode"</c>): only <c>build</c>, only
+    /// on a build or change verdict, and only where the idea's autonomy is auto. A do-not-build always
+    /// waits for the owner.
+    /// </summary>
+    public async Task<(IdeaView Idea, RunView? Run)> DecideAutomaticallyAsync(Guid organisationId, Guid ideaId, string decision, CancellationToken cancellationToken)
+    {
+        if (decision != IdeaDecisions.Build)
+        {
+            throw new EndgameProblem(403, "owner_decision_required", "Only the owner can take that decision",
+                "Auto-mode may only build after a build or change verdict; change, overrule and drop are the owner's.");
+        }
+
+        var scope = await ScopeOfAsync(organisationId, ideaId, cancellationToken);
+        session.UseOrganisation(organisationId);
+        var idea = await db.Ideas.AsNoTracking().SingleAsync(i => i.OrganisationId == organisationId && i.Id == ideaId, cancellationToken);
+        if (idea.Status == IdeaStatuses.AwaitingDecision && idea.Verdict == Verdicts.DoNotBuild)
+        {
+            throw new EndgameProblem(409, "owner_decision_required", "A do-not-build waits for the owner",
+                "The verdict was do not build, which pauses auto-mode: the owner overrules it or drops the idea.");
+        }
+
+        if (await cascade.AutonomyAsync(scope, cancellationToken) != Domain.Cascade.Autonomy.Auto)
+        {
+            throw new EndgameProblem(409, "owner_decision_required", "Checkpoints are on here",
+                $"Autonomy at {scope.Path} is 'checkpoints', so the owner decides on the verdict.");
+        }
+
+        return await DecideAsync(organisationId, ideaId, decision, "Decided by auto-mode after the verdict.", null, cancellationToken, IdeaDecisions.ByAutoMode);
+    }
+
     /// <summary>The owner's decision on a verdict: build, change (research again), overrule a "do not build", or drop.</summary>
-    public async Task<(IdeaView Idea, RunView? Run)> DecideAsync(Guid organisationId, Guid ideaId, string decision, string? note, Guid by, CancellationToken cancellationToken)
+    public async Task<(IdeaView Idea, RunView? Run)> DecideAsync(Guid organisationId, Guid ideaId, string decision, string? note, Guid? by, CancellationToken cancellationToken, string via = IdeaDecisions.ByPerson)
     {
         if (!IdeaDecisions.All.Contains(decision))
         {
@@ -152,6 +211,15 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
             throw EndgameProblem.Conflict($"The idea is {idea.Status}; a decision follows a verdict.");
         }
 
+        if (idea.RedLine is { } line && decision is IdeaDecisions.Build or IdeaDecisions.Overrule)
+        {
+            // One of the conditions Endgame passed its governance gate on (CLAUDE.md rule 4): no one, a person included, builds over it.
+            var refused = new EndgameProblem(403, "red_line", "This idea crosses a red line",
+                $"The research found it crosses a red line ({line}). FrostAura never builds it, and no one can overrule that. Change the idea, or drop it.");
+            refused.Extensions["redLine"] = line;
+            throw refused;
+        }
+
         if (!IdeaDecisions.IsAllowed(decision, idea.Verdict))
         {
             throw EndgameProblem.Conflict(decision == IdeaDecisions.Build
@@ -164,6 +232,7 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
         idea.Decision = decision;
         idea.DecisionNote = note?.Trim();
         idea.DecidedBy = by;
+        idea.DecidedVia = via;
         idea.DecidedAt = clock.GetUtcNow();
         RunView? run = null;
         switch (decision)
@@ -181,6 +250,7 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
                     ["verdict"] = idea.Verdict,
                     ["overruled"] = idea.Overruled,
                     ["note"] = idea.DecisionNote,
+                    ["decidedBy"] = via,
                 })], null, by, cancellationToken);
                 await db.Ideas.Where(i => i.OrganisationId == organisationId && i.Id == ideaId)
                     .ExecuteUpdateAsync(s => s.SetProperty(i => i.BuildRunId, run.Id), cancellationToken);
@@ -190,6 +260,7 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
                 idea.Verdict = null;
                 idea.VerdictSummary = null;
                 idea.VerdictEvidenceJson = null;
+                idea.RedLine = null;
                 await db.SaveChangesAsync(cancellationToken);
                 db.ChangeTracker.Clear();
                 run = await StartResearchAsync(scope, idea, idea.Text, idea.Constraints, idea.DecisionNote, by, cancellationToken);
@@ -204,7 +275,7 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
         return (await GetAsync(organisationId, ideaId, cancellationToken), run);
     }
 
-    private async Task<RunView> StartResearchAsync(ResolvedScope scope, IdeaRecord idea, string text, string constraints, string? change, Guid by, CancellationToken cancellationToken)
+    private async Task<RunView> StartResearchAsync(ResolvedScope scope, IdeaRecord idea, string text, string constraints, string? change, Guid? by, CancellationToken cancellationToken, string via = "console")
     {
         var run = await runs.CreateAsync(scope, RunKinds.Research, $"Research: {Title(text)}", null, idea.Id, null, idea.ResearchRunId, by, cancellationToken);
         await runs.AppendAsync(scope.OrganisationId, run.Id, [new NewEvent(RunEventTypes.Message, new JsonObject
@@ -213,6 +284,7 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
             ["text"] = text,
             ["constraints"] = constraints,
             ["change"] = change,
+            ["via"] = via,
         })], null, by, cancellationToken);
         session.UseOrganisation(scope.OrganisationId);
         await db.Ideas.Where(i => i.OrganisationId == scope.OrganisationId && i.Id == idea.Id)

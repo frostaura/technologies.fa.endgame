@@ -121,6 +121,12 @@ public static class IdeaDecisions
 
     public static readonly IReadOnlyList<string> All = [Build, Change, Overrule, Drop];
 
+    /// <summary>Who decided: a person in the console, or auto-mode after a build verdict.</summary>
+    public const string ByPerson = "person";
+    public const string ByAutoMode = "auto-mode";
+
+    public static readonly IReadOnlyList<string> Via = [ByPerson, ByAutoMode];
+
     /// <summary>
     /// Which decisions a verdict allows. Building over a "do not build" takes an explicit overrule, so
     /// the project records that it was overruled; an overrule of a verdict that already said build is

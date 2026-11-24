@@ -1340,6 +1340,11 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("decided_by");
 
+                    b.Property<string>("DecidedVia")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("decided_via");
+
                     b.Property<string>("Decision")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
@@ -1364,6 +1369,11 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("uuid")
                         .HasColumnName("project_id");
+
+                    b.Property<string>("RedLine")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("red_line");
 
                     b.Property<decimal>("ResearchEstimateCredits")
                         .HasPrecision(20, 6)
@@ -1410,9 +1420,13 @@ namespace Endgame.Infrastructure.Persistence.Migrations
 
                     b.ToTable("ideas", null, t =>
                         {
+                            t.HasCheckConstraint("ck_ideas_decided_via", "(decision IS NULL) = (decided_via IS NULL) AND (decided_via IS NULL OR decided_via IN ('person', 'auto-mode'))");
+
                             t.HasCheckConstraint("ck_ideas_decision", "decision IS NULL OR decision IN ('build', 'change', 'overrule', 'drop')");
 
                             t.HasCheckConstraint("ck_ideas_path", "(app_id IS NULL OR project_id IS NOT NULL) AND (project_id IS NULL OR division_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_ideas_red_line", "red_line IS NULL OR decision IS NULL OR decision IN ('change', 'drop')");
 
                             t.HasCheckConstraint("ck_ideas_status", "status IN ('researching', 'awaiting_decision', 'building', 'dropped')");
 
