@@ -1,0 +1,206 @@
+using System.Text.Json.Nodes;
+using Endgame.Application.Common;
+using Endgame.Application.Gateway;
+using Endgame.Domain.Cascade;
+using Endgame.Domain.Tree;
+using Endgame.Infrastructure.Cascade;
+using Endgame.Infrastructure.Runs;
+using Endgame.Infrastructure.Tree;
+using Endgame.Infrastructure.Work;
+
+namespace Endgame.ControlPlane.Endpoints;
+
+public sealed record CreateRunRequest(string? Scope, string? Kind, string? Title, Guid? EmployeeId, Guid? IdeaId, Guid? ConversationId, Guid? ParentRunId);
+
+public sealed record ClaimRunRequest(string? Holder, int LeaseSeconds, IReadOnlyList<string>? Kinds);
+
+public sealed record LeaseRequest(string? Holder, int Seconds);
+
+public sealed record EventInput(string? Type, JsonObject? Payload);
+
+public sealed record AppendEventsRequest(string? LeaseHolder, IReadOnlyList<EventInput>? Events);
+
+public sealed record CheckoutRequest(Guid TaskId, Guid RunId, Guid? EmployeeId, string? ExpectedStatus, Guid? ExpectedHolderRunId);
+
+public sealed record CreateTaskRequest(string? Scope, Guid? RunId, Guid? ParentTaskId, string? Title, string? Description, decimal? EstimateCredits, IReadOnlyList<Guid>? DependsOn);
+
+public sealed record RaiseApprovalRequest(Guid RunId, string? Title, string? Detail);
+
+public sealed record PublishedRequest(string? Version);
+
+public sealed record AppStateRequest(string? Status);
+
+public sealed record HireRequest(string? Scope, string? Name, string? Role, string? JobDescription, decimal? MonthlyCreditLimit);
+
+public sealed record ScopeLevelView(string Level, Guid Id, string Slug, string Name, string Status, string Path);
+
+/// <summary><c>GET /internal/context</c>: the resolved cascade for a scope. Secrets are named, never valued.</summary>
+public sealed record ContextView(
+    string Scope,
+    IReadOnlyList<ScopeLevelView> Levels,
+    IReadOnlyList<EffectiveValue> Context,
+    IReadOnlyList<EffectiveValue> RuleSets,
+    IReadOnlyList<EffectiveValue> Budgets,
+    IReadOnlyList<EffectiveValue> Settings,
+    IReadOnlyList<EffectiveValue> Secrets,
+    IReadOnlyList<EffectiveValue> Permissions);
+
+/// <summary>The internal API (ARCH-004): for the Runner, Dock and the edge, behind the service token. Never routed by the edge.</summary>
+internal static class InternalEndpoints
+{
+    public static void MapInternal(this RouteGroupBuilder group)
+    {
+        group.MapPost("/model/chat", async (ChatRequest request, HttpContext http, ModelGateway gateway, CancellationToken ct) =>
+        {
+            if (!request.Stream)
+            {
+                var result = await gateway.CompleteAsync(request, ct);
+                http.Response.Headers["Endgame-Reservation-Id"] = result.Settlement.ReservationId.ToString();
+                http.Response.Headers["Endgame-Reserved-Credits"] = result.Settlement.ReservedCredits.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                http.Response.Headers["Endgame-Settled-Credits"] = result.Settlement.SettledCredits.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return Results.Content(result.Body, "application/json");
+            }
+
+            await gateway.StreamAsync(request,
+                async () =>
+                {
+                    http.Response.StatusCode = 200;
+                    http.Response.ContentType = "text/event-stream";
+                    http.Response.Headers.CacheControl = "no-cache";
+                    await http.Response.Body.FlushAsync(ct);
+                },
+                async line =>
+                {
+                    await http.Response.WriteAsync(line + "\n", ct);
+                    if (line.Length == 0)
+                    {
+                        await http.Response.Body.FlushAsync(ct);
+                    }
+                },
+                ct);
+            return Results.Empty;
+        })
+        .WithName("ModelChat")
+        .WithSummary("A model call through the gateway: routed by task type, reserved before sending, settled from the reply's own cost. 402 budget_exhausted is terminal; 422 ceiling_unreachable is not.");
+
+        group.MapPost("/runs", async (CreateRunRequest request, ScopeResolver scopes, RunService runs, CancellationToken ct) =>
+        {
+            var scope = await scopes.RequireAsync(request.Scope, ct);
+            var run = await runs.CreateAsync(scope, request.Kind ?? "", request.Title ?? "", request.EmployeeId, request.IdeaId, request.ConversationId, request.ParentRunId, null, ct);
+            return Results.Created($"/internal/runs/{run.Id}", run);
+        })
+        .WithName("CreateRun").WithSummary("Creates a queued run at a scope.").Produces<RunView>(201);
+
+        group.MapPost("/runs/claim", async (ClaimRunRequest request, RunService runs, CancellationToken ct) =>
+            await runs.ClaimNextAsync(request.Holder ?? "", TimeSpan.FromSeconds(request.LeaseSeconds), request.Kinds ?? [], ct) is { } run
+                ? Results.Ok(run)
+                : Results.NoContent())
+        .WithName("ClaimRun").WithSummary("Claims the oldest queued run (or one whose lease lapsed), across organisations, with one conditional update. 204 when there is none.").Produces<RunView>();
+
+        group.MapGet("/runs/{id:guid}", async (Guid id, RunService runs, CancellationToken ct) =>
+        {
+            var (run, scope) = await runs.RequireAsync(id, ct);
+            return Results.Ok(RunService.View(run, scope.Path.ToString()));
+        })
+        .WithName("GetRunInternal").WithSummary("A run, with its lease.").Produces<RunView>();
+
+        group.MapGet("/runs/{id:guid}/events", async (Guid id, long? after, int? limit, RunService runs, CancellationToken ct) =>
+        {
+            var (run, _) = await runs.RequireAsync(id, ct);
+            return Results.Ok(await runs.ReadEventsAsync(run.OrganisationId, id, after ?? 0, limit ?? RunService.MaxEventsPerRead, ct));
+        })
+        .WithName("ReadRunEvents").WithSummary("A page of a run's log after a sequence number (at most 500), for replay.").Produces<IReadOnlyList<RunEventView>>();
+
+        group.MapPost("/runs/{id:guid}/events", async (Guid id, AppendEventsRequest request, RunService runs, CancellationToken ct) =>
+        {
+            var (run, _) = await runs.RequireAsync(id, ct);
+            var events = (request.Events ?? []).Select(e => new NewEvent(e.Type ?? "", e.Payload)).ToList();
+            return Results.Ok(await runs.AppendAsync(run.OrganisationId, id, events, request.LeaseHolder, null, ct));
+        })
+        .WithName("AppendRunEvents").WithSummary("Appends events; the control plane assigns gapless sequence numbers. Lifecycle events move the run's status in the same transaction.").Produces<IReadOnlyList<RunEventView>>();
+
+        group.MapPost("/runs/{id:guid}/lease", async (Guid id, LeaseRequest request, RunService runs, CancellationToken ct) =>
+        {
+            var (run, _) = await runs.RequireAsync(id, ct);
+            return Results.Ok(await runs.LeaseAsync(run.OrganisationId, id, request.Holder ?? "", TimeSpan.FromSeconds(request.Seconds), ct));
+        })
+        .WithName("LeaseRun").WithSummary("Takes or renews a run's lease. The answer carries the run's status, so a holder learns it was paused or cancelled.").Produces<RunView>();
+
+        group.MapPost("/tasks/checkout", async (CheckoutRequest request, TaskService tasks, CancellationToken ct) =>
+        {
+            var claimed = await tasks.CheckoutAsync(request.TaskId, request.RunId, request.EmployeeId, request.ExpectedStatus ?? "", request.ExpectedHolderRunId, ct);
+            if (claimed is not null)
+            {
+                return Results.Ok(claimed);
+            }
+
+            var org = await tasks.OrganisationOfAsync(request.TaskId, ct);
+            throw TaskService.Conflict(await tasks.GetAsync(org, request.TaskId, ct), "conflict: the task's status or holder was not what you expected, or its dependencies are not done.");
+        })
+        .WithName("CheckoutTask").WithSummary("Claims a task with one conditional update on its expected status and holder. 409 conflict carries the task as it is.").Produces<TaskView>();
+
+        group.MapPost("/tasks", async (CreateTaskRequest request, ScopeResolver scopes, TaskService tasks, CancellationToken ct) =>
+        {
+            var scope = await scopes.RequireAsync(request.Scope, ct);
+            var task = await tasks.CreateAsync(scope, request.RunId, request.ParentTaskId, request.Title ?? "", request.Description, request.EstimateCredits, request.DependsOn, ct);
+            return Results.Created($"/internal/tasks/{task.Id}", task);
+        })
+        .WithName("CreateTask").WithSummary("Adds a task to the graph.").Produces<TaskView>(201);
+
+        group.MapPatch("/tasks/{id:guid}", async (Guid id, TaskPatch patch, TaskService tasks, CancellationToken ct) =>
+            Results.Ok(await tasks.UpdateAsync(id, patch, ct)))
+        .WithName("UpdateTask").WithSummary("Changes a task; finishing one clears its holder and is logged on the holder's run. expectedStatus makes it conditional.").Produces<TaskView>();
+
+        group.MapGet("/context", async (string? scope, ScopeResolver scopes, CascadeService cascade, CancellationToken ct) =>
+        {
+            var resolved = await scopes.RequireAsync(scope, ct);
+            return Results.Ok(new ContextView(
+                resolved.Path.ToString(),
+                resolved.Nodes.Select(n => new ScopeLevelView(n.Level.ToWire(), n.Id, n.Slug, n.Name, n.Status, n.Path)).ToList(),
+                await cascade.ResolveAsync(resolved, CascadeKind.Context, ct),
+                await cascade.ResolveAsync(resolved, CascadeKind.RuleSet, ct),
+                await cascade.ResolveAsync(resolved, CascadeKind.Budget, ct),
+                await cascade.ResolveAsync(resolved, CascadeKind.Setting, ct),
+                await cascade.ResolveAsync(resolved, CascadeKind.Secret, ct),
+                await cascade.ResolveAsync(resolved, CascadeKind.Permission, ct)));
+        })
+        .WithName("GetContext").WithSummary("The resolved cascade for a scope: context, rule sets, budgets, settings, secret names and roles, each with the level that set it.").Produces<ContextView>();
+
+        group.MapPost("/approvals", async (RaiseApprovalRequest request, ApprovalService approvals, CancellationToken ct) =>
+            Results.Created("/internal/approvals", await approvals.RaiseAsync(request.RunId, request.Title ?? "", request.Detail, ct)))
+        .WithName("RaiseApproval").WithSummary("Raises a checkpoint; the run waits until someone with rights answers it.").Produces<ApprovalView>(201);
+
+        group.MapGet("/routes", async (TreeService tree, CancellationToken ct) => Results.Ok(await tree.RoutesAsync(ct)))
+            .WithName("GetRoutes").WithSummary("The edge's routing table: every app's addresses, container target and sleep state.").Produces<RoutingTable>();
+
+        group.MapPost("/apps/{id:guid}/published", async (Guid id, PublishedRequest request, ScopeResolver scopes, TreeService tree, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
+            return Results.Ok(await tree.PublishedAsync(scope, request.Version ?? "", ct));
+        })
+        .WithName("AppPublished").WithSummary("Dock reports a new running version of an app.").Produces<NodeView>();
+
+        group.MapPost("/apps/{id:guid}/state", async (Guid id, AppStateRequest request, ScopeResolver scopes, TreeService tree, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
+            return Results.Ok(await tree.AppStateAsync(scope, request.Status ?? "", ct));
+        })
+        .WithName("AppState").WithSummary("Dock or the edge report that an app is building, running, sleeping, stopped or failed.").Produces<NodeView>();
+
+        group.MapPost("/ideas/{id:guid}/verdict", async (Guid id, JsonObject verdict, IdeaService ideas, CancellationToken ct) =>
+            Results.Ok(await ideas.RecordVerdictAsync(id, verdict, ct)))
+        .WithName("RecordVerdict").WithSummary("The Runner reports research's verdict document (outcome build | change | do-not-build, headline, summary, existing, gap, demand, wouldChange, method).").Produces<IdeaView>();
+
+        group.MapPost("/employees", async (HireRequest request, ScopeResolver scopes, EmployeeService employees, CancellationToken ct) =>
+        {
+            var scope = await scopes.RequireAsync(request.Scope, ct);
+            var employee = await employees.HireAsync(scope, request.Name ?? "", request.Role ?? "", request.JobDescription, request.MonthlyCreditLimit, ct);
+            return Results.Created($"/internal/employees/{employee.Id}", employee);
+        })
+        .WithName("HireEmployee").WithSummary("Records an employee at a node, with its own monthly credit cap.").Produces<EmployeeView>(201);
+
+        group.MapGet("/employees", async (string? scope, ScopeResolver scopes, EmployeeService employees, CancellationToken ct) =>
+            Results.Ok(await employees.ListAsync(await scopes.RequireAsync(scope, ct), ct)))
+        .WithName("ListEmployees").WithSummary("Employees at the scope and beneath it.").Produces<IReadOnlyList<EmployeeView>>();
+    }
+}

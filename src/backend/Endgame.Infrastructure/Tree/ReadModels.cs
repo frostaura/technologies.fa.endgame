@@ -1,0 +1,537 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Endgame.Application.Common;
+using Endgame.Domain.Access;
+using Endgame.Domain.Cascade;
+using Endgame.Domain.Runs;
+using Endgame.Domain.Tree;
+using Endgame.Infrastructure.Cascade;
+using Endgame.Infrastructure.Credits;
+using Endgame.Infrastructure.Persistence;
+using Endgame.Infrastructure.Persistence.Records;
+using Endgame.Infrastructure.Tenancy;
+using Microsoft.EntityFrameworkCore;
+using static Endgame.Infrastructure.Persistence.Db;
+
+namespace Endgame.Infrastructure.Tree;
+
+/// <summary>
+/// The public API's reads, projected from the records into the console's contract. Every number is
+/// derived from its source of truth (the ledger, the run log, the tree) at read time; where the
+/// control plane does not measure something yet, the field is null rather than an invented zero.
+/// </summary>
+public sealed class ReadModels(EndgameDbContext db, TenantSession session, ScopeResolver scopes, CascadeService cascade, CreditLedger ledger, TreeService tree, TimeProvider clock)
+{
+    public const decimal EstimateTolerance = 0.10m;
+
+    // ---------------------------------------------------------------- runs
+
+    public static string RunStatus(string status) => status switch
+    {
+        RunStatuses.WaitingApproval => "waiting",
+        RunStatuses.Succeeded => "finished",
+        _ => status,
+    };
+
+    public static string RunKind(string kind) => kind is RunKinds.Task or RunKinds.Review ? "factory" : kind;
+
+    public async Task<PublicRunView> RunAsync(Guid organisationId, Guid runId, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        var run = await db.Runs.AsNoTracking().SingleOrDefaultAsync(r => r.OrganisationId == organisationId && r.Id == runId, cancellationToken)
+            ?? throw EndgameProblem.NotFound("The run");
+        var scope = await scopes.ForRowAsync(run.OrganisationId, run.DivisionId, run.ProjectId, run.AppId, cancellationToken);
+        var (estimates, spent) = await RunCostsAsync(organisationId, [runId], cancellationToken);
+        return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId));
+    }
+
+    private static PublicRunView Run(RunRecord r, string scope, decimal? estimate, decimal spent) => new(
+        r.Id, RunKind(r.Kind), r.Title, scope, RunStatus(r.Status), r.StartedAt ?? r.CreatedAt, r.FinishedAt, r.LastSeq, r.IdeaId,
+        estimate, spent, r.EmployeeId, r.ConversationId, r.BudgetExhaustedAt is not null, r.Outcome, r.Summary, r.CreatedAt);
+
+    /// <summary>Each run's latest estimate (from <c>estimate.made</c>) and its settled, billable spend.</summary>
+    private async Task<(Dictionary<Guid, decimal> Estimates, Dictionary<Guid, decimal> Spent)> RunCostsAsync(Guid organisationId, Guid[] runIds, CancellationToken cancellationToken)
+    {
+        var estimates = new Dictionary<Guid, decimal>();
+        var spent = new Dictionary<Guid, decimal>();
+        if (runIds.Length == 0)
+        {
+            return (estimates, spent);
+        }
+
+        await using (var command = await db.CommandAsync("""
+            SELECT DISTINCT ON (run_id) run_id, (payload ->> 'credits')::numeric
+            FROM run_events
+            WHERE organisation_id = @org AND run_id = ANY(@runs) AND type = 'estimate.made' AND jsonb_typeof(payload -> 'credits') = 'number'
+            ORDER BY run_id, seq DESC
+            """, cancellationToken, P("org", organisationId), new Npgsql.NpgsqlParameter("runs", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Uuid) { Value = runIds }))
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                estimates[reader.GetGuid(0)] = reader.GetDecimal(1);
+            }
+        }
+
+        await using (var command = await db.CommandAsync("""
+            SELECT run_id, SUM(amount) FROM credit_entries
+            WHERE organisation_id = @org AND run_id = ANY(@runs) AND kind = 'settlement' AND billable
+            GROUP BY run_id
+            """, cancellationToken, P("org", organisationId), new Npgsql.NpgsqlParameter("runs", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Uuid) { Value = runIds }))
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                spent[reader.GetGuid(0)] = reader.GetDecimal(1);
+            }
+        }
+
+        return (estimates, spent);
+    }
+
+    // ---------------------------------------------------------------- the tree
+
+    /// <summary>
+    /// The organisation as one document for the org chart. A member whose roles sit lower in the tree
+    /// sees the branches they hold and the path down to them.
+    /// </summary>
+    public async Task<TreeView> TreeAsync(Guid organisationId, IReadOnlyList<RoleGrant> grants, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(grants);
+        session.UseOrganisation(organisationId);
+        var organisation = await db.Organisations.AsNoTracking().SingleOrDefaultAsync(o => o.Id == organisationId, cancellationToken)
+            ?? throw EndgameProblem.NotFound("The organisation");
+        var divisions = await db.Divisions.AsNoTracking().Where(d => d.OrganisationId == organisationId).OrderBy(d => d.Name).ToListAsync(cancellationToken);
+        var projects = await db.Projects.AsNoTracking().Where(p => p.OrganisationId == organisationId).OrderBy(p => p.Name).ToListAsync(cancellationToken);
+        var apps = await db.Apps.AsNoTracking().Where(a => a.OrganisationId == organisationId).OrderBy(a => a.Name).ToListAsync(cancellationToken);
+        var employees = await db.Employees.AsNoTracking().Where(e => e.OrganisationId == organisationId && e.Status != EmployeeStatuses.Released).OrderBy(e => e.Name).ToListAsync(cancellationToken);
+        var liveRuns = await db.Runs.AsNoTracking()
+            .Where(r => r.OrganisationId == organisationId && r.Status != RunStatuses.Succeeded && r.Status != RunStatuses.Failed && r.Status != RunStatuses.Cancelled)
+            .OrderByDescending(r => r.CreatedAt).ToListAsync(cancellationToken);
+        var lastProjectRuns = await db.Runs.AsNoTracking()
+            .Where(r => r.OrganisationId == organisationId && r.ProjectId != null)
+            .GroupBy(r => r.ProjectId)
+            .Select(g => g.OrderByDescending(r => r.CreatedAt).First())
+            .ToListAsync(cancellationToken);
+        var spend = await ledger.SpendThisMonthByNodeAsync(organisationId, cancellationToken);
+        var sleepModes = await db.CascadeEntries.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && e.Kind == "setting" && e.Key == CascadeKeys.SleepMode).ToListAsync(cancellationToken);
+        var tasks = await db.Tasks.AsNoTracking()
+            .Where(t => t.OrganisationId == organisationId && t.RunId != null && liveRuns.Select(r => r.Id).Contains(t.RunId.Value))
+            .Select(t => new { t.RunId, t.Status }).ToListAsync(cancellationToken);
+        var (estimates, runSpend) = await RunCostsAsync(organisationId, liveRuns.Select(r => r.Id).ToArray(), cancellationToken);
+
+        var everything = grants.Any(g => g.Level == NodeLevel.Organisation);
+        var visible = grants.Select(g => g.NodeId).ToHashSet();
+        bool Visible(Guid id, params Guid[] ancestors) => everything || visible.Contains(id) || ancestors.Any(visible.Contains);
+        var runTitles = liveRuns.ToDictionary(r => r.Id, r => r.Title);
+
+        IReadOnlyList<WorkerView> Workers(Guid? division, Guid? project, Guid? app) => employees
+            .Where(e => e.DivisionId == division && e.ProjectId == project && e.AppId == app)
+            .Select(e => new WorkerView(e.Id, e.Name, e.Role, "employee", e.CurrentRunId is { } run && runTitles.TryGetValue(run, out var title) ? title : null))
+            .ToList();
+
+        SpendView Spend(Func<(Guid? DivisionId, Guid? ProjectId, Guid? AppId, Guid? EmployeeId, decimal Credits), bool> where) => new(spend.Where(where).Sum(s => s.Credits));
+
+        var divisionViews = new List<DivisionNodeView>();
+        foreach (var d in divisions)
+        {
+            var dProjects = projects.Where(p => p.DivisionId == d.Id).ToList();
+            var dApps = apps.Where(a => dProjects.Any(p => p.Id == a.ProjectId)).ToList();
+            if (!Visible(d.Id) && !dProjects.Any(p => visible.Contains(p.Id)) && !dApps.Any(a => visible.Contains(a.Id)))
+            {
+                continue;
+            }
+
+            var projectViews = new List<ProjectNodeView>();
+            foreach (var p in dProjects)
+            {
+                var pApps = apps.Where(a => a.ProjectId == p.Id).ToList();
+                if (!Visible(p.Id, d.Id) && !pApps.Any(a => visible.Contains(a.Id)))
+                {
+                    continue;
+                }
+
+                var appViews = pApps.Where(a => Visible(a.Id, d.Id, p.Id)).Select(a =>
+                {
+                    var mode = CascadeResolver.ResolveKey(CascadeKind.Setting, CascadeKeys.SleepMode, sleepModes
+                        .Where(e => (e.DivisionId == null || e.DivisionId == d.Id) && (e.ProjectId == null || e.ProjectId == p.Id) && (e.AppId == null || e.AppId == a.Id))
+                        .Select(e => new CascadeEntry(CascadeKind.Setting, e.Key, e.ValueJson, e.Level(), e.NodeId(), "", e.SetAt)));
+                    var alwaysOn = mode is not null && JsonNode.Parse(mode.Entry.ValueJson)?.ToString() == "always_on";
+                    return new AppNodeView(a.Id, a.Slug, a.Name, AppHealth(a.Status), AppRunning(a.Status, alwaysOn), "private", 0, null, null,
+                        Spend(s => s.AppId == a.Id), Workers(d.Id, p.Id, a.Id));
+                }).ToList();
+
+                var active = liveRuns.FirstOrDefault(r => r.ProjectId == p.Id && r.Kind != RunKinds.Conversation);
+                var last = lastProjectRuns.FirstOrDefault(r => r.ProjectId == p.Id);
+                var (stage, note) = ProjectStage(p, active, last, pApps);
+                ProgressView? progress = null;
+                if (active is not null)
+                {
+                    var runTasks = tasks.Where(t => t.RunId == active.Id).ToList();
+                    progress = new ProgressView(active.Id, active.Title, runTasks.Count(t => t.Status == TaskStatuses.Done), runTasks.Count,
+                        runSpend.GetValueOrDefault(active.Id), estimates.TryGetValue(active.Id, out var estimate) ? estimate : null);
+                }
+
+                projectViews.Add(new ProjectNodeView(p.Id, p.Slug, p.Name, stage, (active ?? last)?.IdeaId, note, progress,
+                    Spend(s => s.ProjectId == p.Id), Workers(d.Id, p.Id, null), appViews));
+            }
+
+            divisionViews.Add(new DivisionNodeView(d.Id, d.Slug, d.Name, Spend(s => s.DivisionId == d.Id), Workers(d.Id, null, null), projectViews));
+        }
+
+        var shownApps = divisionViews.Sum(d => d.Projects.Sum(p => p.Apps.Count));
+        var shownProjects = divisionViews.Sum(d => d.Projects.Count);
+        var summary = $"{Count(divisionViews.Count, "division")} · {Count(shownProjects, "project")} · {Count(shownApps, "app")} · {Count(employees.Count, "employee")}";
+        var root = new OrganisationNodeView(organisation.Id, organisation.Slug, organisation.Name, summary,
+            everything ? Spend(_ => true) : new SpendView(divisionViews.Sum(v => v.Spend.MonthCredits)),
+            everything ? Workers(null, null, null) : []);
+        var needs = await NeedsYouAsync(organisationId, everything, visible, cancellationToken);
+        var viewer = RoleResolver.Resolve(grants)?.Role.ToWire() ?? "none";
+        return new TreeView(clock.GetUtcNow(), viewer, root, divisionViews, needs);
+    }
+
+    public TreeView FirstRun() => new(clock.GetUtcNow(), "none", null, [], []);
+
+    private async Task<IReadOnlyList<object>> NeedsYouAsync(Guid organisationId, bool everything, HashSet<Guid> visible, CancellationToken cancellationToken)
+    {
+        var ideas = await db.Ideas.AsNoTracking()
+            .Where(i => i.OrganisationId == organisationId && i.Status == IdeaStatuses.AwaitingDecision)
+            .OrderBy(i => i.CreatedAt).ToListAsync(cancellationToken);
+        var approvals = await (from a in db.Approvals.AsNoTracking()
+                               join r in db.Runs.AsNoTracking() on new { a.OrganisationId, Id = a.RunId } equals new { r.OrganisationId, r.Id }
+                               where a.OrganisationId == organisationId && a.Status == ApprovalStatuses.Pending
+                               orderby a.RequestedAt
+                               select new { Approval = a, r.DivisionId, r.ProjectId, r.AppId }).ToListAsync(cancellationToken);
+        bool Sees(IScopedRecord row) => everything || new[] { row.DivisionId, row.ProjectId, row.AppId }.Any(id => id is { } x && visible.Contains(x));
+        var needs = new List<object>();
+        needs.AddRange(ideas.Where(Sees).Select(i => new VerdictNeed("verdict", i.Id, i.Id, IdeaTitle(i.Text), i.Verdict!, i.VerdictSummary)));
+        needs.AddRange(approvals
+            .Where(a => everything || new[] { a.DivisionId, a.ProjectId, a.AppId }.Any(id => id is { } x && visible.Contains(x)))
+            .Select(a => new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, a.Approval.Title, a.Approval.Detail.Length == 0 ? null : a.Approval.Detail)));
+        return needs;
+    }
+
+    private static (string Stage, string? Note) ProjectStage(Project project, RunRecord? active, RunRecord? last, IReadOnlyList<App> apps)
+    {
+        if (project.Status == NodeStatuses.Archived)
+        {
+            return ("paused", "Archived.");
+        }
+
+        if (active is not null)
+        {
+            var stage = active.Kind switch
+            {
+                RunKinds.Research => "researching",
+                RunKinds.Review => "reviewing",
+                _ => "building",
+            };
+            return active.Status switch
+            {
+                RunStatuses.Paused => ("paused", "Work here is paused."),
+                RunStatuses.WaitingApproval => (stage, "Waiting for your approval."),
+                _ => (stage, null),
+            };
+        }
+
+        if (apps.Any(a => a.Status is NodeStatuses.Running or NodeStatuses.Sleeping))
+        {
+            return ("live", null);
+        }
+
+        return last?.Status == RunStatuses.Failed ? ("planning", "The last piece of work failed.") : ("planning", null);
+    }
+
+    public static string AppHealth(string status) => status switch
+    {
+        NodeStatuses.Running or NodeStatuses.Sleeping => "healthy",
+        NodeStatuses.Failed => "down",
+        _ => "unknown",
+    };
+
+    public static string AppRunning(string status, bool alwaysOn) => status switch
+    {
+        NodeStatuses.Sleeping => "asleep",
+        NodeStatuses.Running => alwaysOn ? "always-on" : "awake",
+        NodeStatuses.Draft or NodeStatuses.Building => "starting",
+        _ => "paused",
+    };
+
+    private static string Count(int n, string noun) => $"{n} {noun}{(n == 1 ? "" : "s")}";
+
+    public static string IdeaTitle(string text)
+    {
+        var line = text.Split('\n', 2)[0].Trim();
+        return line.Length <= 120 ? line : line[..117] + "...";
+    }
+
+    // ---------------------------------------------------------------- ideas
+
+    public async Task<PublicIdeaView> IdeaAsync(Guid organisationId, Guid ideaId, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        var idea = await db.Ideas.AsNoTracking().SingleOrDefaultAsync(i => i.OrganisationId == organisationId && i.Id == ideaId, cancellationToken)
+            ?? throw EndgameProblem.NotFound("The idea");
+        var researchRuns = await db.Runs.AsNoTracking().Where(r => r.OrganisationId == organisationId && r.IdeaId == ideaId && r.Kind == RunKinds.Research)
+            .OrderByDescending(r => r.CreatedAt).ToListAsync(cancellationToken);
+        var (_, spent) = await RunCostsAsync(organisationId, researchRuns.Select(r => r.Id).ToArray(), cancellationToken);
+        var latest = researchRuns.FirstOrDefault();
+        var by = latest?.EmployeeId is { } employee
+            ? await db.Employees.AsNoTracking().Where(e => e.OrganisationId == organisationId && e.Id == employee).Select(e => e.Name).SingleOrDefaultAsync(cancellationToken)
+            : null;
+        var status = idea.Status switch
+        {
+            IdeaStatuses.Researching when latest is not null && latest.Status is RunStatuses.Failed or RunStatuses.Cancelled => "failed",
+            IdeaStatuses.Researching => "researching",
+            IdeaStatuses.AwaitingDecision => "verdict",
+            _ => "decided",
+        };
+        DecisionView? decision = null;
+        if (idea.Decision is not null && idea.DecidedAt is { } at)
+        {
+            var decider = idea.DecidedBy is { } user ? await db.Users.AsNoTracking().Where(u => u.Id == user).Select(u => u.DisplayName).SingleOrDefaultAsync(cancellationToken) : null;
+            var follow = idea.Decision switch
+            {
+                IdeaDecisions.Build or IdeaDecisions.Overrule => idea.BuildRunId,
+                IdeaDecisions.Change => idea.ResearchRunId,
+                _ => null,
+            };
+            decision = new DecisionView(idea.Decision, at, decider ?? "", idea.Overruled, follow);
+        }
+
+        string? placed = null;
+        if (idea.BuildRunId is { } build && await db.Runs.AsNoTracking().SingleOrDefaultAsync(r => r.OrganisationId == organisationId && r.Id == build, cancellationToken) is { ProjectId: not null } buildRun)
+        {
+            placed = (await scopes.ForRowAsync(organisationId, buildRun.DivisionId, buildRun.ProjectId, buildRun.AppId, cancellationToken)).Path.ToString();
+        }
+
+        session.UseOrganisation(organisationId);
+        return new PublicIdeaView(
+            idea.Id, IdeaTitle(idea.Text), idea.Text, SplitConstraints(idea.Constraints), status, idea.ResearchRunId ?? Guid.Empty, placed,
+            new ResearchView(idea.ResearchEstimateCredits, spent.Values.Sum(), by),
+            idea.Verdict is null || idea.VerdictEvidenceJson is null ? null : JsonNode.Parse(idea.VerdictEvidenceJson),
+            decision,
+            await VerdictRecordAsync(organisationId, cancellationToken));
+    }
+
+    public static IReadOnlyList<string> SplitConstraints(string constraints) =>
+        constraints.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>How often the research said no, and how the overruled ones turned out (spec: a verdict that never says no is a fault).</summary>
+    private async Task<VerdictRecordView> VerdictRecordAsync(Guid organisationId, CancellationToken cancellationToken)
+    {
+        var decided = await db.Ideas.AsNoTracking().Where(i => i.OrganisationId == organisationId && i.Verdict != null)
+            .Select(i => new { i.Id, i.Text, i.Verdict, i.Overruled, i.BuildRunId }).ToListAsync(cancellationToken);
+        var overruled = new List<OverruledView>();
+        foreach (var idea in decided.Where(i => i.Overruled))
+        {
+            var outcome = idea.BuildRunId is { } run
+                ? await db.Runs.AsNoTracking().Where(r => r.OrganisationId == organisationId && r.Id == run).Select(r => r.Status).SingleOrDefaultAsync(cancellationToken)
+                : null;
+            overruled.Add(new OverruledView(idea.Id, IdeaTitle(idea.Text), idea.Verdict!, outcome is null ? "not started" : RunStatus(outcome)));
+        }
+
+        return new VerdictRecordView(decided.Count, decided.Count(i => i.Verdict == Verdicts.Build), decided.Count(i => i.Verdict == Verdicts.Change),
+            decided.Count(i => i.Verdict == Verdicts.DoNotBuild), overruled);
+    }
+
+    // ---------------------------------------------------------------- apps
+
+    public async Task<PublicAppView> AppAsync(ResolvedScope scope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var app = await db.Apps.AsNoTracking().SingleAsync(a => a.OrganisationId == scope.OrganisationId && a.Id == scope.AppId, cancellationToken);
+        var entries = await cascade.ChainEntriesAsync(scope, null, cancellationToken);
+        var mode = CascadeResolver.ResolveKey(CascadeKind.Setting, CascadeKeys.SleepMode, entries);
+        var idle = CascadeResolver.ResolveKey(CascadeKind.Setting, CascadeKeys.SleepIdleMinutes, entries);
+        var cap = CascadeResolver.ResolveKey(CascadeKind.Budget, CascadeKeys.MonthlyCredits, entries);
+        var alwaysOn = mode is not null && JsonNode.Parse(mode.Entry.ValueJson)?.ToString() == "always_on";
+        var spent = (await ledger.SpendThisMonthByNodeAsync(scope.OrganisationId, cancellationToken)).Where(s => s.AppId == app.Id).Sum(s => s.Credits);
+        var addresses = tree.Addresses(scope.Path);
+        var health = AppHealth(app.Status);
+        var summary = app.Status switch
+        {
+            NodeStatuses.Running => app.CurrentVersion is null ? "Running." : $"Running version {app.CurrentVersion}.",
+            NodeStatuses.Sleeping => "Asleep; it wakes on the next visit.",
+            NodeStatuses.Failed => "It stopped working and needs attention.",
+            NodeStatuses.Draft => "Not published yet.",
+            NodeStatuses.Building => "Being built.",
+            NodeStatuses.Stopped => "Stopped.",
+            _ => "Archived.",
+        };
+        return new PublicAppView(app.Id, app.Name, scope.Path.ToString(), new HealthView(health, summary), AppRunning(app.Status, alwaysOn),
+            new AppAddressesView(addresses.Path, addresses.Subdomain), null,
+            new CostView(spent, cap is null ? null : CascadeService.NumberOf(JsonNode.Parse(cap.Entry.ValueJson))),
+            new AppSettingsView(alwaysOn ? "always-on" : "sleep", "private"), null, 0, app.Status, app.CurrentVersion, app.PublishedAt,
+            idle is null ? TreeService.DefaultIdleMinutes : (int)(CascadeService.NumberOf(JsonNode.Parse(idle.Entry.ValueJson)) ?? TreeService.DefaultIdleMinutes));
+    }
+
+    // ---------------------------------------------------------------- credits
+
+    public async Task<CreditsView> CreditsAsync(ResolvedScope scope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var org = scope.OrganisationId;
+        var now = clock.GetUtcNow();
+        var month = CreditLedger.MonthStart(now);
+        var position = await ledger.PositionAsync(scope, now, cancellationToken);
+
+        decimal spent, ai, notCharged;
+        long repairs;
+        await using (var command = await db.CommandAsync("""
+            SELECT COALESCE(SUM(amount) FILTER (WHERE billable), 0),
+                   COALESCE(SUM(amount) FILTER (WHERE billable AND task_type IS NOT NULL), 0),
+                   COALESCE(SUM(amount) FILTER (WHERE NOT billable), 0),
+                   COUNT(*) FILTER (WHERE NOT billable)
+            FROM credit_entries
+            WHERE organisation_id = @org AND kind = 'settlement' AND created_at >= @month
+              AND (@division IS NULL OR division_id = @division) AND (@project IS NULL OR project_id = @project) AND (@app IS NULL OR app_id = @app)
+            """, cancellationToken, P("org", org), P("month", month), P("division", scope.DivisionId), P("project", scope.ProjectId), P("app", scope.AppId)))
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            await reader.ReadAsync(cancellationToken);
+            spent = reader.GetDecimal(0);
+            ai = reader.GetDecimal(1);
+            notCharged = reader.GetDecimal(2);
+            repairs = reader.GetInt64(3);
+        }
+
+        // Pace: this month's organisation-wide spend so far, stretched to a month.
+        var orgMonth = (await ledger.SpendThisMonthByNodeAsync(org, cancellationToken)).Sum(s => s.Credits);
+        var elapsedDays = Math.Max((decimal)(now - month).TotalDays, 1m / 24m);
+        decimal? monthsLeft = orgMonth <= 0 ? null : position.Balance <= 0 ? 0m : decimal.Round(position.Balance / (orgMonth / elapsedDays * 30m), 1);
+
+        var budgets = await BudgetLinesAsync(scope, month, cancellationToken);
+        var estimates = await EstimatesAsync(scope, cancellationToken);
+        var settings = await cascade.ChainEntriesAsync(scope, CascadeKind.Setting, cancellationToken);
+        var overdrafts = settings.Where(e => e.Key == CascadeKeys.OverdraftLimit).ToList();
+        var frostaura = overdrafts.Where(e => e.Level == NodeLevel.Organisation).Select(e => CascadeService.NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m).DefaultIfEmpty(0m).Single();
+        var own = overdrafts.Where(e => e.Level > NodeLevel.Organisation).Select(e => CascadeService.NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m).DefaultIfEmpty(-1m).Min();
+        var topUps = await db.CreditEntries.AsNoTracking().Where(e => e.OrganisationId == org && e.Kind == "top_up")
+            .OrderByDescending(e => e.CreatedAt).Take(50)
+            .Select(e => new TopUpView(e.CreatedAt, e.Amount, e.Note ?? "")).ToListAsync(cancellationToken);
+        return new CreditsView(scope.Path.ToString(), position.Balance, new MonthView(spent, ai, spent - ai), monthsLeft, budgets, estimates,
+            new NotChargedView(notCharged, repairs), new OverdraftView(frostaura, own < 0 ? null : own), topUps,
+            position.HeldOrganisation, position.Balance + position.OverdraftLimit);
+    }
+
+    /// <summary>Every node at and beneath the scope, in tree order, with its own cap and this month's spend; employees with a cap follow their node.</summary>
+    private async Task<IReadOnlyList<BudgetLineView>> BudgetLinesAsync(ResolvedScope scope, DateTimeOffset month, CancellationToken cancellationToken)
+    {
+        var org = scope.OrganisationId;
+        var spend = await ledger.SpendThisMonthByNodeAsync(org, cancellationToken);
+        var caps = await db.CascadeEntries.AsNoTracking().Where(e => e.OrganisationId == org && e.Kind == "budget" && e.Key == CascadeKeys.MonthlyCredits).ToListAsync(cancellationToken);
+        var employees = await db.Employees.AsNoTracking().Where(e => e.OrganisationId == org && e.MonthlyCreditLimit != null && e.Status != EmployeeStatuses.Released).ToListAsync(cancellationToken);
+        var divisions = await db.Divisions.AsNoTracking().Where(d => d.OrganisationId == org && (scope.DivisionId == null || d.Id == scope.DivisionId)).OrderBy(d => d.Name).ToListAsync(cancellationToken);
+        var projects = await db.Projects.AsNoTracking().Where(p => p.OrganisationId == org && (scope.ProjectId == null || p.Id == scope.ProjectId)).OrderBy(p => p.Name).ToListAsync(cancellationToken);
+        var apps = await db.Apps.AsNoTracking().Where(a => a.OrganisationId == org && (scope.AppId == null || a.Id == scope.AppId)).OrderBy(a => a.Name).ToListAsync(cancellationToken);
+        _ = month;
+        var lines = new List<BudgetLineView>();
+        var top = (int)scope.Level;
+
+        decimal? Cap(Guid? d, Guid? p, Guid? a) => caps.FirstOrDefault(c => c.DivisionId == d && c.ProjectId == p && c.AppId == a) is { } c ? CascadeService.NumberOf(JsonNode.Parse(c.ValueJson)) : null;
+
+        void Add(string path, string name, NodeLevel level, decimal spent, decimal? cap, Guid? appId, Guid? d, Guid? p, Guid? a)
+        {
+            lines.Add(new BudgetLineView(path, name, level.ToWire(), (int)level - top, spent, cap, appId));
+            foreach (var e in employees.Where(e => e.DivisionId == d && e.ProjectId == p && e.AppId == a).OrderBy(e => e.Name))
+            {
+                lines.Add(new BudgetLineView(path, e.Name, "employee", (int)level - top + 1, spend.Where(s => s.EmployeeId == e.Id).Sum(s => s.Credits), e.MonthlyCreditLimit, null));
+            }
+        }
+
+        var orgNode = scope.Nodes[0];
+        if (scope.Level == NodeLevel.Organisation)
+        {
+            Add(orgNode.Path, orgNode.Name, NodeLevel.Organisation, spend.Sum(s => s.Credits), Cap(null, null, null), null, null, null, null);
+        }
+
+        foreach (var d in divisions)
+        {
+            var dPath = $"{orgNode.Slug}/{d.Slug}";
+            if (scope.Level <= NodeLevel.Division)
+            {
+                Add(dPath, d.Name, NodeLevel.Division, spend.Where(s => s.DivisionId == d.Id).Sum(s => s.Credits), Cap(d.Id, null, null), null, d.Id, null, null);
+            }
+
+            foreach (var p in projects.Where(p => p.DivisionId == d.Id))
+            {
+                var pPath = $"{dPath}/{p.Slug}";
+                if (scope.Level <= NodeLevel.Project)
+                {
+                    Add(pPath, p.Name, NodeLevel.Project, spend.Where(s => s.ProjectId == p.Id).Sum(s => s.Credits), Cap(d.Id, p.Id, null), null, d.Id, p.Id, null);
+                }
+
+                foreach (var a in apps.Where(a => a.ProjectId == p.Id))
+                {
+                    Add($"{pPath}/{a.Slug}", a.Name, NodeLevel.App, spend.Where(s => s.AppId == a.Id).Sum(s => s.Credits), Cap(d.Id, p.Id, a.Id), a.Id, d.Id, p.Id, a.Id);
+                }
+            }
+        }
+
+        return lines;
+    }
+
+    /// <summary>Estimates scored against what the work cost (<c>estimate.scored { estimated, actual }</c>), in the scope. Null before any was scored.</summary>
+    private async Task<EstimatesView?> EstimatesAsync(ResolvedScope scope, CancellationToken cancellationToken)
+    {
+        await using var command = await db.CommandAsync("""
+            SELECT (e.payload ->> 'estimated')::numeric, (e.payload ->> 'actual')::numeric
+            FROM run_events e
+            JOIN runs r ON r.organisation_id = e.organisation_id AND r.id = e.run_id
+            WHERE e.organisation_id = @org AND e.type = 'estimate.scored'
+              AND jsonb_typeof(e.payload -> 'estimated') = 'number' AND jsonb_typeof(e.payload -> 'actual') = 'number'
+              AND (@division IS NULL OR r.division_id = @division) AND (@project IS NULL OR r.project_id = @project) AND (@app IS NULL OR r.app_id = @app)
+            """, cancellationToken, P("org", scope.OrganisationId), P("division", scope.DivisionId), P("project", scope.ProjectId), P("app", scope.AppId));
+        var pieces = new List<(decimal Estimated, decimal Actual)>();
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                pieces.Add((reader.GetDecimal(0), reader.GetDecimal(1)));
+            }
+        }
+
+        if (pieces.Count == 0)
+        {
+            return null;
+        }
+
+        static decimal Miss((decimal Estimated, decimal Actual) p) => p.Estimated == 0 ? (p.Actual == 0 ? 0 : 1) : Math.Abs(p.Actual - p.Estimated) / p.Estimated;
+        var within = pieces.Count(p => Miss(p) <= EstimateTolerance);
+        return new EstimatesView(pieces.Count, decimal.Round(100m * within / pieces.Count, 1),
+            pieces.Count(p => p.Actual < p.Estimated && Miss(p) > EstimateTolerance), pieces.Count(p => p.Actual > p.Estimated && Miss(p) > EstimateTolerance),
+            decimal.Round(pieces.Max(Miss) * 100m, 1));
+    }
+
+    // ---------------------------------------------------------------- conversations
+
+    public const int MaxConversationMessages = 200;
+
+    public async Task<ConversationHistoryView> ConversationAsync(ResolvedScope scope, Guid? employeeId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var conversation = await db.Conversations.AsNoTracking()
+            .Where(c => c.OrganisationId == scope.OrganisationId && c.DivisionId == scope.DivisionId && c.ProjectId == scope.ProjectId && c.AppId == scope.AppId && c.EmployeeId == employeeId)
+            .OrderByDescending(c => c.CreatedAt).FirstOrDefaultAsync(cancellationToken);
+        if (conversation is null)
+        {
+            return new ConversationHistoryView(scope.Path.ToString(), null, employeeId, []);
+        }
+
+        var rows = await (from e in db.RunEvents.AsNoTracking()
+                          join r in db.Runs.AsNoTracking() on new { e.OrganisationId, Id = e.RunId } equals new { r.OrganisationId, r.Id }
+                          where e.OrganisationId == scope.OrganisationId && r.ConversationId == conversation.Id && e.Type == RunEventTypes.Message
+                          orderby e.At descending, e.Seq descending
+                          select new { e.RunId, e.Seq, e.At, e.PayloadJson }).Take(MaxConversationMessages).ToListAsync(cancellationToken);
+        var messages = rows.AsEnumerable().Reverse().Select(m =>
+        {
+            var payload = JsonNode.Parse(m.PayloadJson);
+            return new ConversationMessageView(m.RunId, m.Seq, m.At, Text(payload?["from"]) ?? "employee", Text(payload?["text"]) ?? "");
+        }).ToList();
+        return new ConversationHistoryView(scope.Path.ToString(), conversation.Id, employeeId, messages);
+    }
+
+    private static string? Text(JsonNode? node) => node is JsonValue v && v.GetValueKind() == JsonValueKind.String ? v.GetValue<string>() : null;
+}

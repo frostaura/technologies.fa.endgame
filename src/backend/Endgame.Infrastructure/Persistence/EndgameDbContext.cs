@@ -1,11 +1,41 @@
 using Endgame.Domain.Tree;
+using Endgame.Infrastructure.Identity;
+using Endgame.Infrastructure.Persistence.Records;
+using Endgame.Infrastructure.Tenancy;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Endgame.Infrastructure.Persistence;
 
-/// <summary>The platform's own database: the cascade tree, and in later phases everything that hangs off it.</summary>
-public sealed class EndgameDbContext(DbContextOptions<EndgameDbContext> options) : DbContext(options)
+/// <summary>
+/// The platform's own database: the cascade tree and everything that hangs off it, the people who
+/// sign in (ASP.NET Core Identity, passkeys only), and the data-protection key ring that keeps their
+/// cookies valid across restarts.
+/// </summary>
+/// <remarks>
+/// Identity maps the passkey table only when the application's <c>IdentityOptions</c> ask for schema
+/// version 3, which it reads from the context's application service provider — see
+/// <see cref="IdentityStoreOptions"/>.
+/// </remarks>
+public sealed class EndgameDbContext : IdentityUserContext<EndgameUser, Guid>, IDataProtectionKeyContext
 {
+    /// <summary>For migrations and design time: no tenant session, connections run as the connecting role.</summary>
+    public EndgameDbContext(DbContextOptions<EndgameDbContext> options)
+        : base(options)
+    {
+    }
+
+    /// <summary>For the running platform: raw commands apply the tenant session as EF's own do.</summary>
+    public EndgameDbContext(DbContextOptions<EndgameDbContext> options, TenantSession tenant)
+        : base(options)
+    {
+        Tenant = tenant;
+    }
+
+    internal TenantSession? Tenant { get; }
+
     public DbSet<Organisation> Organisations => Set<Organisation>();
 
     public DbSet<Division> Divisions => Set<Division>();
@@ -14,6 +44,54 @@ public sealed class EndgameDbContext(DbContextOptions<EndgameDbContext> options)
 
     public DbSet<App> Apps => Set<App>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+    public DbSet<MembershipRecord> Memberships => Set<MembershipRecord>();
+
+    public DbSet<CascadeEntryRecord> CascadeEntries => Set<CascadeEntryRecord>();
+
+    public DbSet<EmployeeRecord> Employees => Set<EmployeeRecord>();
+
+    public DbSet<RunRecord> Runs => Set<RunRecord>();
+
+    public DbSet<RunEventRecord> RunEvents => Set<RunEventRecord>();
+
+    public DbSet<TaskRecord> Tasks => Set<TaskRecord>();
+
+    public DbSet<ApprovalRecord> Approvals => Set<ApprovalRecord>();
+
+    public DbSet<IdeaRecord> Ideas => Set<IdeaRecord>();
+
+    public DbSet<ConversationRecord> Conversations => Set<ConversationRecord>();
+
+    public DbSet<CreditEntryRecord> CreditEntries => Set<CreditEntryRecord>();
+
+    public DbSet<OperatorActionRecord> OperatorActions => Set<OperatorActionRecord>();
+
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<EndgameUser>(b =>
+        {
+            b.ToTable("users");
+            b.Property(u => u.DisplayName).HasColumnName("display_name").HasMaxLength(EndgameUser.MaxDisplayNameLength);
+            b.Property(u => u.CreatedAt).HasColumnName("created_at");
+            b.Property(u => u.InvitationCodeHash).HasColumnName("invitation_code_hash").HasMaxLength(64);
+            b.Property(u => u.InvitationExpiresAt).HasColumnName("invitation_expires_at");
+        });
+        modelBuilder.Entity<IdentityUserClaim<Guid>>().ToTable("user_claims");
+        modelBuilder.Entity<IdentityUserLogin<Guid>>().ToTable("user_logins");
+        modelBuilder.Entity<IdentityUserToken<Guid>>().ToTable("user_tokens");
+        // Mapped by the base only when the Identity store options ask for schema version 3 (passkeys);
+        // IdentityStoreOptions.Apply is what every host and the design-time factory call to ask for it.
+        modelBuilder.Entity<IdentityUserPasskey<Guid>>().ToTable("user_passkeys");
+        modelBuilder.Entity<DataProtectionKey>().ToTable("data_protection_keys");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(EndgameDbContext).Assembly);
+    }
+}
+
+/// <summary>The one place the Identity schema version is chosen: version 3 stores passkeys.</summary>
+public static class IdentityStoreOptions
+{
+    public static void Apply(IdentityOptions options) => options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
 }
