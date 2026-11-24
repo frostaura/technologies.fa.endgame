@@ -3,6 +3,11 @@
     <ProjectReference Include="../Endgame.Harness/Endgame.Harness.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The agents' prompts and the builders' skills ship inside the assembly, never beside it. -->
+    <EmbeddedResource Include="Prompts/*.md" />
+    <EmbeddedResource Include="Skills/*.md" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="Endgame.Tests" />
   </ItemGroup>
 </Project>
