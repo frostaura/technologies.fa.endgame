@@ -8,6 +8,7 @@
     <Project Path="Endgame.Runner/Endgame.Runner.csproj" />
     <Project Path="Endgame.Dock/Endgame.Dock.csproj" />
     <Project Path="Endgame.Hosting.Contracts/Endgame.Hosting.Contracts.csproj" />
+    <Project Path="Endgame.Harness/Endgame.Harness.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="Endgame.Tests/Endgame.Tests.csproj" />

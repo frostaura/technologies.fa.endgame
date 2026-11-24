@@ -23,6 +23,8 @@
     <ProjectReference Include="../Endgame.ControlPlane/Endgame.ControlPlane.csproj" />
     <ProjectReference Include="../Endgame.Edge/Endgame.Edge.csproj" />
     <ProjectReference Include="../Endgame.Hosting.Contracts/Endgame.Hosting.Contracts.csproj" />
+    <ProjectReference Include="../Endgame.Harness/Endgame.Harness.csproj" />
+    <ProjectReference Include="../Endgame.Runner/Endgame.Runner.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!--
