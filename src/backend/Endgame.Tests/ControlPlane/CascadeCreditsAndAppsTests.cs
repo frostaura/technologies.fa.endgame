@@ -28,15 +28,16 @@ public sealed class CascadeCreditsAndAppsTests(PostgresServer postgres) : IAsync
     public async Task The_resolver_returns_the_effective_value_and_the_level_that_set_it()
     {
         await owner.SetAsync("frostaura", "context", "house-style", "Plain English.");
-        await owner.SetAsync("frostaura", "rule_set", "build", new { signOff = true });
-        await owner.SetAsync("frostaura/technologies/squash", "rule_set", "build", new { signOff = false });
+        await owner.SetAsync("frostaura", "rule_set", "build", new { ask = new[] { "commit" } });
+        await owner.SetAsync("frostaura/technologies/squash", "rule_set", "build", new { ask = Array.Empty<string>(), deny = new[] { "run(git push*)" } });
         await owner.SetAsync("frostaura/technologies", "secret", "SMTP_PASSWORD", "hunter2");
 
         var rules = (await ControlPlaneApp.Ok(owner.GetAsync("/api/cascade?scope=frostaura/technologies/squash/bookings&kind=rule_set"))).AsArray();
         var build = Assert.Single(rules)!;
         Assert.Equal("project", build["setAtLevel"]!.GetValue<string>());
         Assert.Equal("frostaura/technologies/squash", build["setAtPath"]!.GetValue<string>());
-        Assert.False(build["value"]!["signOff"]!.GetValue<bool>());
+        Assert.Empty(build["value"]!["ask"]!.AsArray());
+        Assert.Equal("run(git push*)", build["value"]!["deny"]![0]!.GetValue<string>());
         Assert.Equal(["frostaura"], build["overrides"]!.AsArray().Select(o => o!.GetValue<string>()));
 
         var context = await ControlPlaneApp.Ok(service.GetAsync("/internal/context?scope=frostaura/technologies/squash/bookings"));

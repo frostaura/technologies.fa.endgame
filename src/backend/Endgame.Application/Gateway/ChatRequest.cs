@@ -35,8 +35,14 @@ public sealed class ChatRequest
     /// <summary>Optional: the same key twice reserves once.</summary>
     public string? IdempotencyKey { get; set; }
 
-    /// <summary>Optional sampling temperature, 0 to 2. Left to the model when absent.</summary>
+    /// <summary>Optional sampling temperature, 0 to 2. Left to the model when absent, and not sent to a model that does not take one.</summary>
     public double? Temperature { get; set; }
+
+    /// <summary>
+    /// Optional: the providers to try, in order, sent upstream as <c>provider.order</c>. The harness
+    /// pins the provider of a run's first reply (ARCH-006), so caching and tool-call behaviour hold.
+    /// </summary>
+    public List<string>? ProviderOrder { get; set; }
 
     /// <summary>
     /// Set by the platform API for an app's own calls, never read from a request body: the most the

@@ -116,6 +116,48 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
         return View(run, scope.Path.ToString());
     }
 
+    public const int MaxRunsPerList = 200;
+
+    /// <summary>Runs at the scope and beneath it, newest first: the conversation's view of what is happening.</summary>
+    public async Task<IReadOnlyList<RunView>> ListAsync(ResolvedScope scope, string? kind, string? status, int limit, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (kind is not null && !RunKinds.All.Contains(kind))
+        {
+            throw EndgameProblem.Invalid($"'{kind}' is not a kind of run: use {string.Join(", ", RunKinds.All)}.");
+        }
+
+        if (status is not null && !RunStatuses.All.Contains(status))
+        {
+            throw EndgameProblem.Invalid($"'{status}' is not a run status: use {string.Join(", ", RunStatuses.All)}.");
+        }
+
+        var rows = await db.Runs.AsNoTracking()
+            .Where(r => r.OrganisationId == scope.OrganisationId)
+            .Where(r => scope.DivisionId == null || r.DivisionId == scope.DivisionId)
+            .Where(r => scope.ProjectId == null || r.ProjectId == scope.ProjectId)
+            .Where(r => scope.AppId == null || r.AppId == scope.AppId)
+            .Where(r => kind == null || r.Kind == kind)
+            .Where(r => status == null || r.Status == status)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(Math.Clamp(limit, 1, MaxRunsPerList))
+            .ToListAsync(cancellationToken);
+        var paths = new Dictionary<(Guid?, Guid?, Guid?), string>();
+        var views = new List<RunView>();
+        foreach (var row in rows)
+        {
+            if (!paths.TryGetValue((row.DivisionId, row.ProjectId, row.AppId), out var path))
+            {
+                path = (await scopes.ForRowAsync(row.OrganisationId, row.DivisionId, row.ProjectId, row.AppId, cancellationToken)).Path.ToString();
+                paths[(row.DivisionId, row.ProjectId, row.AppId)] = path;
+            }
+
+            views.Add(View(row, path));
+        }
+
+        return views;
+    }
+
     public async Task<IReadOnlyList<RunEventView>> ReadEventsAsync(Guid organisationId, Guid runId, long afterSeq, int limit, CancellationToken cancellationToken)
     {
         session.UseOrganisation(organisationId);
@@ -408,15 +450,13 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
                         .SetProperty(r => r.LeaseExpiresAt, (DateTimeOffset?)null), cancellationToken);
                 if (employeeId is { } worker)
                 {
-                    var succeeded = outcome == RunStatuses.Succeeded ? 1 : 0;
+                    // The employee's state moves in the same transaction; its track record is derived from the runs themselves.
                     await db.Employees.Where(x => x.OrganisationId == org && x.Id == worker)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(x => x.Status, x => x.Status == EmployeeStatuses.Released || x.Status == EmployeeStatuses.Paused ? x.Status : EmployeeStatuses.Idle)
                             .SetProperty(x => x.CurrentRunId, (Guid?)null)
                             .SetProperty(x => x.LastRunId, run)
-                            .SetProperty(x => x.LastActiveAt, now)
-                            .SetProperty(x => x.RunsFinished, x => x.RunsFinished + 1)
-                            .SetProperty(x => x.RunsSucceeded, x => x.RunsSucceeded + succeeded), cancellationToken);
+                            .SetProperty(x => x.LastActiveAt, now), cancellationToken);
                 }
 
                 await ledger.ReleaseOpenForRunAsync(org, run, $"run {outcome}", cancellationToken);

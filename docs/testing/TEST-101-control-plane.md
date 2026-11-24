@@ -3,12 +3,12 @@
 | Field | Value |
 | --- | --- |
 | **ID** | TEST-101 |
-| **Covers** | UC-101 to UC-108 · ARCH-002 · ARCH-003 · ARCH-004 (control-plane side) |
+| **Covers** | UC-101 to UC-115 · ARCH-002 · ARCH-003 · ARCH-004 (control-plane side) |
 | **Status** | Current |
 
 ## What must be true
 
-The acceptance statements of UC-101 to UC-108. The ones with the most weight, and where each is proved:
+The acceptance statements of UC-101 to UC-115. The ones with the most weight, and where each is proved:
 
 | Statement | Test |
 | --- | --- |
@@ -23,6 +23,11 @@ The acceptance statements of UC-101 to UC-108. The ones with the most weight, an
 | The gateway follows ARCH-003 | `ModelGatewayTests` (ceiling, reasoning, clamp, routing, settlement, streaming, errors, budget, repair), `RoutingTableTests` |
 | The OpenAPI document lists every public endpoint | `OpenApiContractTests` |
 | The console's JSON shapes are met | `ConsoleContractTests` (every key in lane-console `types.ts`) |
+| The Runner's own client works against every endpoint it needs | `RunnerContractTests` (`ControlPlaneClient`, `GatewayModelClient` and the conversation's tools, in process): each building tier with `provider.order` and only supported parameters; placement 201 then 200; headroom; cost history in one organisation; estimate accuracy per employee and organisation; the conversation's reads and actions; auto-mode's decision; the red line; autonomy and rule sets parsed by the harness |
+| No one builds over a breached red line | `RunnerContractTests.A_breached_red_line_cannot_be_overruled_by_anyone_a_person_included`, and the check constraint `ck_ideas_red_line` |
+| The track record is derived, never counted | `WorkforceTests.The_track_record_is_derived_from_runs_their_logs_and_the_ledger` |
+| Every organisation-scoped table forces row-level security | `WorkforceTests.Every_organisation_scoped_table_forces_row_level_security` (every table with `organisation_id`) |
+| The memory change log is append-only | `WorkforceTests.Memory_is_written_after_a_task…` (a DELETE as the owner is refused) |
 
 ## Tests
 
@@ -31,6 +36,8 @@ The acceptance statements of UC-101 to UC-108. The ones with the most weight, an
 | Unit | `src/backend/Endgame.Tests/Domain/` | Slugs, statuses, scope paths, the cascade resolver, role resolution, the reservation formula, decision rules |
 | Unit | `ControlPlane/RoutingTableTests.cs` | The shipped routing table validates; faults are caught; reservation is at the sent ceiling |
 | Integration | `ControlPlane/*Tests.cs` with `WebApplicationFactory` | The real control plane on a freshly migrated database; only OpenRouter replaced |
+| Integration | `ControlPlane/WorkforceTests.cs` | The standing security reviewer; hire proposals, auto-mode within budget, one proposal per need, edit/accept/decline, checkpoints; the derived track record; memory written, read per scope, reviewed and curated; reassign, release, rehire; contractors, their caps and promotion; idle flag and auto-release; the ontology |
+| Integration | `ControlPlane/RunnerContractTests.cs` | Section A of the third pass through the Runner's real client classes |
 | Live (opt-in) | `ControlPlane/LiveModelTests.cs` | Every routed model id exists on OpenRouter; one real call settles at or under its reservation |
 
 **Fixtures** (`src/backend/Endgame.Tests/Fixtures/`):
@@ -50,7 +57,7 @@ Live: `ENDGAME_LIVE_MODEL_TESTS=1 OPENROUTER_API_KEY=… dotnet test … --filte
 
 ## Fixture variation
 
-Reasoned from each test's setup; the passkey-origin and development-sign-in rows are exercised by the suite itself, the others were not each re-run with the field changed.
+Reasoned from each test's setup; the passkey-origin, development-sign-in, auto-hire, promotion, idle-release and red-line rows are exercised by the suite itself (both sides of each are asserted), the others were not each re-run with the field changed.
 
 | Test | The one field that, changed, makes it fail |
 | --- | --- |
@@ -61,6 +68,10 @@ Reasoned from each test's setup; the passkey-origin and development-sign-in rows
 | Takeover from a dead holder | Without the `run.finished` of the holder, the takeover is a 409 |
 | Development sign-in | Each `InlineData` row is one changed field (environment or flag) of the passing configuration |
 | Passkey origin | `originOverride` set: rejected; unset: accepted |
+| Auto-hire within budget | `expectedMonthlyCredits` 5 → 10 under a 3-credit division budget: the proposal waits instead of being hired |
+| Promotion | Two contractors in the role instead of three: no proposal is raised |
+| Idle release | The project's autonomy `auto` → `checkpoints`: the sweep releases no one and the flag waits in needsYou |
+| Red line | `redLines.breached` true → false: the overrule is accepted |
 
 ## Against the running system
 

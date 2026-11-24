@@ -86,6 +86,8 @@ public sealed class TreeService(
             GrantedBy = owner,
             GrantedAt = clock.GetUtcNow(),
         });
+        // The one standing hire every organisation has from its creation (spec, Workforce).
+        db.Employees.Add(Work.EmployeeService.SecurityReviewer(organisation.Id, clock.GetUtcNow()));
         await SaveAsync(cancellationToken);
         if (transaction is not null)
         {
@@ -128,6 +130,53 @@ public sealed class TreeService(
         await SaveAsync(cancellationToken);
         db.ChangeTracker.Clear();
         return View(node, $"{parent.Path}/{node.Slug}");
+    }
+
+    /// <summary>
+    /// The factory's placement: the child of <paramref name="parent"/> with this slug, created when
+    /// there is none. Created is false when it already existed (also when a concurrent placement won).
+    /// </summary>
+    public async Task<(NodeView Node, bool Created)> EnsureChildAsync(ResolvedScope parent, NodeLevel level, string name, string slug, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(parent);
+        if (parent.Level != level - 1)
+        {
+            throw EndgameProblem.Invalid($"A {level.ToWire()} is created under a {(level - 1).ToWire()}; '{parent.Path}' is a {parent.Level.ToWire()}.");
+        }
+
+        var wanted = (slug ?? "").Trim().ToLowerInvariant();
+        if (await FindChildAsync(parent, level, wanted, cancellationToken) is { } existing)
+        {
+            return (existing, false);
+        }
+
+        try
+        {
+            return (await CreateChildAsync(parent, name, wanted, cancellationToken), true);
+        }
+        catch (EndgameProblem problem) when (problem.Status == 409)
+        {
+            // A concurrent placement created it first.
+            var raced = await FindChildAsync(parent, level, wanted, cancellationToken);
+            if (raced is null)
+            {
+                throw;
+            }
+
+            return (raced, false);
+        }
+    }
+
+    private async Task<NodeView?> FindChildAsync(ResolvedScope parent, NodeLevel level, string slug, CancellationToken cancellationToken)
+    {
+        TreeNode? node = level switch
+        {
+            NodeLevel.Division => await db.Divisions.AsNoTracking().SingleOrDefaultAsync(d => d.OrganisationId == parent.OrganisationId && d.Slug == slug, cancellationToken),
+            NodeLevel.Project => await db.Projects.AsNoTracking().SingleOrDefaultAsync(p => p.OrganisationId == parent.OrganisationId && p.DivisionId == parent.DivisionId && p.Slug == slug, cancellationToken),
+            NodeLevel.App => await db.Apps.AsNoTracking().SingleOrDefaultAsync(a => a.OrganisationId == parent.OrganisationId && a.ProjectId == parent.ProjectId && a.Slug == slug, cancellationToken),
+            _ => throw EndgameProblem.Invalid("Placement creates a division, a project or an app."),
+        };
+        return node is null ? null : View(node, $"{parent.Path}/{node.Slug}");
     }
 
     public async Task<NodeView> UpdateAsync(ResolvedScope scope, string? name, string? status, CancellationToken cancellationToken)

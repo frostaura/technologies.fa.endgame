@@ -280,7 +280,8 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
     public Task<Position> PositionAsync(ResolvedScope scope, DateTimeOffset now, CancellationToken cancellationToken) =>
         PositionAsync(scope, null, now, cancellationToken);
 
-    private async Task<Position> PositionAsync(ResolvedScope scope, Guid? employeeId, DateTimeOffset now, CancellationToken cancellationToken)
+    /// <summary>The position for work at a scope, with the employee's own cap when it has one.</summary>
+    public async Task<Position> PositionAsync(ResolvedScope scope, Guid? employeeId, DateTimeOffset now, CancellationToken cancellationToken)
     {
         decimal topUps, settledAll;
         await using (var totals = await db.CommandAsync("""
@@ -318,9 +319,27 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
         }
 
         if (employeeId is { } employee
-            && await db.Employees.AsNoTracking().Where(e => e.OrganisationId == scope.OrganisationId && e.Id == employee).Select(e => new { e.Name, e.MonthlyCreditLimit }).SingleOrDefaultAsync(cancellationToken) is { MonthlyCreditLimit: { } employeeLimit } worker)
+            && await db.Employees.AsNoTracking().Where(e => e.OrganisationId == scope.OrganisationId && e.Id == employee).Select(e => new { e.Id, e.Name, e.MonthlyCreditLimit, e.BriefedById }).SingleOrDefaultAsync(cancellationToken) is { } worker)
         {
-            budgets.Add(new BudgetLine($"employee:{worker.Name}", "employee", employeeLimit, spend[4], held.Where(h => h.Employee == employee).Sum(h => h.Amount)));
+            // An employee's cap covers the contractors it briefs; a contractor is held to its own cap and to its briefer's.
+            var capped = new List<(Guid Id, string Name, decimal Limit)>();
+            if (worker.MonthlyCreditLimit is { } own)
+            {
+                capped.Add((worker.Id, worker.Name, own));
+            }
+
+            if (worker.BriefedById is { } briefer
+                && await db.Employees.AsNoTracking().Where(e => e.OrganisationId == scope.OrganisationId && e.Id == briefer).Select(e => new { e.Id, e.Name, e.MonthlyCreditLimit }).SingleOrDefaultAsync(cancellationToken) is { MonthlyCreditLimit: { } theirs } boss)
+            {
+                capped.Add((boss.Id, boss.Name, theirs));
+            }
+
+            foreach (var (id, name, limit) in capped)
+            {
+                var team = await db.Employees.AsNoTracking().Where(e => e.OrganisationId == scope.OrganisationId && (e.Id == id || e.BriefedById == id)).Select(e => e.Id).ToListAsync(cancellationToken);
+                budgets.Add(new BudgetLine($"employee:{name}", "employee", limit, await EmployeeMonthSpendAsync(scope.OrganisationId, team, now, cancellationToken),
+                    held.Where(h => h.Employee is { } e && team.Contains(e)).Sum(h => h.Amount)));
+            }
         }
 
         var heldAll = held.Sum(h => h.Amount);
@@ -334,6 +353,15 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
         NodeLevel.Project => project == scope.ProjectId,
         _ => app == scope.AppId,
     };
+
+    private async Task<decimal> EmployeeMonthSpendAsync(Guid organisationId, List<Guid> employees, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var command = await db.CommandAsync("""
+            SELECT COALESCE(SUM(amount), 0) FROM credit_entries
+            WHERE organisation_id = @org AND employee_id = ANY(@employees) AND kind IN ('settlement', 'hosting') AND billable AND created_at >= @month
+            """, cancellationToken, P("org", organisationId), new Npgsql.NpgsqlParameter("employees", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Uuid) { Value = employees.ToArray() }, P("month", MonthStart(now)));
+        return (decimal)(await command.ExecuteScalarAsync(cancellationToken) ?? 0m);
+    }
 
     /// <summary>This month's billable spend at each level of the chain, plus the employee's: [org, division, project, app, employee].</summary>
     private async Task<decimal[]> MonthSpendOnChainAsync(ResolvedScope scope, Guid? employeeId, DateTimeOffset now, CancellationToken cancellationToken)
@@ -365,6 +393,18 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
     public sealed record Position(decimal TopUps, decimal Balance, decimal HeldOrganisation, decimal OverdraftLimit, IReadOnlyList<BudgetLine> Budgets)
     {
         public BudgetLine? BindingBudget => Budgets.OrderBy(b => b.Headroom).FirstOrDefault();
+
+        /// <summary>
+        /// The most a new piece of work may still spend: the tightest monthly cap on the chain (and the
+        /// employee's), or the organisation's balance down to its overdraft limit, whichever is lower.
+        /// </summary>
+        public (decimal Credits, string BindingScope, string Binding) Headroom()
+        {
+            var available = Balance + OverdraftLimit;
+            return BindingBudget is { } budget && budget.Headroom <= available
+                ? (budget.Headroom, budget.Scope, "budget")
+                : (available, "organisation balance", "overdraft");
+        }
 
         public Refused? Refuse(decimal needed)
         {

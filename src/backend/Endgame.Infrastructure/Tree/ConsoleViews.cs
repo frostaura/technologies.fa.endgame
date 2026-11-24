@@ -7,7 +7,13 @@ namespace Endgame.Infrastructure.Tree;
 
 public sealed record SpendView(decimal MonthCredits);
 
-public sealed record WorkerView(Guid Id, string Name, string Role, string Kind, string? Activity);
+/// <summary>Someone working at a node: an employee, or a contractor while it works.</summary>
+/// <param name="Kind"><c>employee</c> or <c>contractor</c>.</param>
+/// <param name="Activity">What it is doing now: its run's title (or a contractor's brief); "Paused"; null when idle.</param>
+/// <param name="Status"><c>idle</c>, <c>working</c> or <c>paused</c>.</param>
+/// <param name="Idle">True when it has had no work for longer than <c>workforce.idle_days</c>.</param>
+/// <param name="BriefedBy">A contractor's briefing employee.</param>
+public sealed record WorkerView(Guid Id, string Name, string Role, string Kind, string? Activity, string Status, bool Idle, string? Standing, Guid? BriefedBy);
 
 public sealed record OrganisationNodeView(Guid Id, string Slug, string Name, string? Summary, SpendView Spend, IReadOnlyList<WorkerView> Workers);
 
@@ -47,6 +53,12 @@ public sealed record VerdictNeed(string Kind, Guid Id, Guid IdeaId, string Title
 
 public sealed record ApprovalNeed(string Kind, Guid Id, Guid RunId, Guid ApprovalId, string Title, string? Detail);
 
+/// <summary>A hire proposal waiting for the owner: over budget, or the hire checkpoint is on.</summary>
+public sealed record HireNeed(string Kind, Guid Id, Guid HireId, string Title, string? Detail, string Scope, decimal ExpectedMonthlyCredits);
+
+/// <summary>An employee with nothing to do: release it (its memory is kept) or give it work.</summary>
+public sealed record IdleNeed(string Kind, Guid Id, Guid EmployeeId, string Title, string? Detail);
+
 /// <summary><c>GET /api/tree</c>. <c>organisation</c> is null on first run.</summary>
 public sealed record TreeView(DateTimeOffset GeneratedAt, string ViewerRole, OrganisationNodeView? Organisation, IReadOnlyList<DivisionNodeView> Divisions, IReadOnlyList<object> NeedsYou);
 
@@ -72,13 +84,17 @@ public sealed record PublicRunView(
 
 public sealed record ResearchView(decimal EstimatedCredits, decimal SpentCredits, string? By);
 
-public sealed record DecisionView(string Choice, DateTimeOffset At, string By, bool Overruled, Guid? RunId);
+/// <param name="Via"><c>person</c> or <c>auto-mode</c>.</param>
+public sealed record DecisionView(string Choice, DateTimeOffset At, string By, bool Overruled, Guid? RunId, string Via);
 
 public sealed record OverruledView(Guid IdeaId, string Title, string Verdict, string Outcome);
 
 public sealed record VerdictRecordView(int Total, int Build, int Change, int DoNotBuild, IReadOnlyList<OverruledView> Overruled);
 
-/// <summary><c>GET /api/ideas/{id}</c>. <c>verdict</c> is the research's own verdict document, null until it is ready.</summary>
+/// <summary>
+/// <c>GET /api/ideas/{id}</c>. <c>verdict</c> is the research's own verdict document, null until it is ready.
+/// <c>redLine</c> names the red line the verdict found breached: no one can build over it.
+/// </summary>
 public sealed record PublicIdeaView(
     Guid Id,
     string Title,
@@ -90,7 +106,8 @@ public sealed record PublicIdeaView(
     ResearchView Research,
     JsonNode? Verdict,
     DecisionView? Decision,
-    VerdictRecordView Record);
+    VerdictRecordView Record,
+    string? RedLine);
 
 public sealed record IdeaEstimateView(decimal Credits, string Basis);
 
@@ -157,3 +174,6 @@ public sealed record ConversationMessageView(Guid RunId, long Seq, DateTimeOffse
 
 /// <summary><c>GET /api/conversations?scope=</c>: the messages of the conversation docked at a scope, oldest first.</summary>
 public sealed record ConversationHistoryView(string Scope, Guid? ConversationId, Guid? EmployeeId, IReadOnlyList<ConversationMessageView> Messages);
+
+/// <summary>One finished run's actual cost (<c>GET /internal/estimates/history</c>).</summary>
+public sealed record CostHistoryView(Guid RunId, DateTimeOffset FinishedAt, decimal Credits, int Steps);

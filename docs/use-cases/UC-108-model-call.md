@@ -11,9 +11,12 @@
 
 ## Main flow
 
-1. The Runner posts `{ taskType, scope, runId?, employeeId?, messages, tools?, toolChoice?, responseFormat?, limits { maxTokens? }, stream, repair, idempotencyKey? }` with the service token.
+1. The Runner posts `{ taskType, scope, runId?, employeeId?, messages, tools?, toolChoice?, responseFormat?, limits { maxTokens? }, stream, repair, idempotencyKey?, providerOrder? }` with the service token. `providerOrder` (the provider the run pinned) goes upstream as `provider.order`.
 2. The route for the task type fixes the models (validated catalogue only), the price ceiling, sort, explicit
-   reasoning, the output clamp, parallel tool calls, any web search, and the most one call may cost.
+   reasoning, the output clamp, parallel tool calls, any web search, and the most one call may cost. Reasoning,
+   temperature, tool choice, parallel tool calls and a response format are sent only when every model on the route
+   lists them (the catalogue's `SupportedParameters`; Sonnet takes no temperature). Building runs on `build`,
+   escalating to `build-t1`, `build-t2`, `build-t3` (DeepSeek V4.1 Flash, Qwen 3.7 Plus, GLM 5.2, Claude Sonnet 5.5).
 3. The worst case is reserved under lock (UC-103) and the same ceiling is sent as `provider.max_price`, with
    `require_parameters`, `usage.include` and the clamped `max_tokens`. `model.requested { callId, model, reservedCredits, ... }` is logged.
 4. The reply is passed through untouched (tool-call ids opaque); non-streamed, with `Endgame-Reservation-Id`,
@@ -35,4 +38,4 @@
 
 - See TEST-101: request shape, settlement, streaming, mid-stream error, error-in-200, ceiling refusal, budget exhaustion, repair, concurrency; one opt-in live call.
 
-Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `ModelGatewayTests`, `RoutingTableTests`, `LiveModelTests`.
+Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `ModelGatewayTests`, `RoutingTableTests`, `RunnerContractTests` (each tier through the Runner's own client), `LiveModelTests`.

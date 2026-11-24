@@ -50,7 +50,11 @@ public sealed class CascadeEntryRecord : IScopedRecord
     public DateTimeOffset SetAt { get; set; }
 }
 
-/// <summary>A standing member of the agent workforce, placed at one node.</summary>
+/// <summary>
+/// A member of the agent workforce, placed at one node: an employee (lasting, with a job description)
+/// or a contractor (briefed by an employee for a burst). Its track record is derived from runs and the
+/// ledger at read time, never kept here as counters (ARCH-002).
+/// </summary>
 public sealed class EmployeeRecord : IScopedRecord
 {
     public Guid OrganisationId { get; set; }
@@ -63,26 +67,51 @@ public sealed class EmployeeRecord : IScopedRecord
 
     public Guid? AppId { get; set; }
 
+    /// <summary><c>employee</c> or <c>contractor</c>.</summary>
+    public string Kind { get; set; } = "employee";
+
     public string Name { get; set; } = "";
 
     public string Role { get; set; } = "";
 
+    /// <summary>The job description's mandate: what this employee is for.</summary>
     public string JobDescription { get; set; } = "";
+
+    /// <summary>The tools it may use (harness tool names).</summary>
+    public string[] Tools { get; set; } = [];
+
+    /// <summary>The platform services it may use (identity, models, secrets, email, schedules, webhooks, telemetry).</summary>
+    public string[] Services { get; set; } = [];
+
+    /// <summary>The routing table's task type its work is billed at by default, for example <c>build</c> or <c>build-t1</c>.</summary>
+    public string? ModelTier { get; set; }
 
     public string Status { get; set; } = "";
 
     /// <summary>The employee's own cap, in credits per calendar month. Null when the cascade above it is the only limit.</summary>
     public decimal? MonthlyCreditLimit { get; set; }
 
-    public int RunsFinished { get; set; }
+    /// <summary>Its manager on the org chart: another employee. Null at the top of its node.</summary>
+    public Guid? ReportsToId { get; set; }
 
-    public int RunsSucceeded { get; set; }
+    /// <summary>A contractor's briefing employee; null for an employee.</summary>
+    public Guid? BriefedById { get; set; }
+
+    /// <summary>A contractor's brief, and the run it works in.</summary>
+    public string? Brief { get; set; }
+
+    public Guid? BriefRunId { get; set; }
+
+    /// <summary>A standing hire's role (<c>security-reviewer</c>): one per organisation, never released.</summary>
+    public string? Standing { get; set; }
 
     public Guid? CurrentRunId { get; set; }
 
     public Guid? LastRunId { get; set; }
 
     public DateTimeOffset? LastActiveAt { get; set; }
+
+    public DateTimeOffset? ReleasedAt { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 }
@@ -249,6 +278,12 @@ public sealed class IdeaRecord : IScopedRecord
     public string? DecisionNote { get; set; }
 
     public Guid? DecidedBy { get; set; }
+
+    /// <summary><c>person</c> or <c>auto-mode</c>: who took the decision. Null before one.</summary>
+    public string? DecidedVia { get; set; }
+
+    /// <summary>The red line the verdict found breached, or null. No one may build over it, a person included.</summary>
+    public string? RedLine { get; set; }
 
     public DateTimeOffset? DecidedAt { get; set; }
 

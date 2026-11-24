@@ -17,6 +17,10 @@
 2. The Runner replies as `message { from, text }` events on that run; the console streams them.
 3. `GET /api/conversations?scope=&employeeId=` → `{ scope, conversationId | null, employeeId, messages[] { runId, seq, at, from, text } }`, oldest first, at most the last 200.
 
+4. What the assistant reads and does goes through the internal API: `GET /internal/context`, `/internal/employees`,
+   `/internal/tasks`, `/internal/runs`, `/internal/credits` (each at the scope and beneath it), `POST /internal/ideas` and
+   `PUT /internal/cascade` — the latter for an allow-list of settings only (UC-114), never who may open an app.
+
 ## Alternate and failure flows
 
 - **A1 — a conversation id from another scope.** 409; start one here.
@@ -26,4 +30,4 @@
 
 - Messages from both sides, across several runs, read back in order; another scope has its own conversation.
 
-Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `IdeasAndConversationsTests`.
+Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `IdeasAndConversationsTests`; the assistant's tools against the real endpoints in `RunnerContractTests`.

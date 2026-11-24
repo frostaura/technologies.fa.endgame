@@ -132,9 +132,21 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         bool Visible(Guid id, params Guid[] ancestors) => everything || visible.Contains(id) || ancestors.Any(visible.Contains);
         var runTitles = liveRuns.ToDictionary(r => r.Id, r => r.Title);
 
+        var idleDays = await db.CascadeEntries.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && e.Kind == "setting" && e.Key == AgentSettings.WorkforceIdleDays).ToListAsync(cancellationToken);
+        var now = clock.GetUtcNow();
+        var idle = employees.ToDictionary(e => e.Id, e => Work.WorkforceRules.Idle(e, idleDays, now));
+        string? Activity(EmployeeRecord e) => e.Status switch
+        {
+            EmployeeStatuses.Paused => "Paused",
+            _ when e.CurrentRunId is { } run && runTitles.TryGetValue(run, out var title) => title,
+            _ when e.Kind == Domain.Workforce.EmployeeKinds.Contractor => e.Brief is { Length: > 120 } brief ? brief[..117] + "..." : e.Brief,
+            _ => null,
+        };
+
         IReadOnlyList<WorkerView> Workers(Guid? division, Guid? project, Guid? app) => employees
             .Where(e => e.DivisionId == division && e.ProjectId == project && e.AppId == app)
-            .Select(e => new WorkerView(e.Id, e.Name, e.Role, "employee", e.CurrentRunId is { } run && runTitles.TryGetValue(run, out var title) ? title : null))
+            .Select(e => new WorkerView(e.Id, e.Name, e.Role, e.Kind, Activity(e), e.Status, idle[e.Id].Flagged, e.Standing, e.BriefedById))
             .ToList();
 
         SpendView Spend(Func<(Guid? DivisionId, Guid? ProjectId, Guid? AppId, Guid? EmployeeId, decimal Credits), bool> where) => new(spend.Where(where).Sum(s => s.Credits));
@@ -191,11 +203,12 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
 
         var shownApps = divisionViews.Sum(d => d.Projects.Sum(p => p.Apps.Count));
         var shownProjects = divisionViews.Sum(d => d.Projects.Count);
-        var summary = $"{Count(divisionViews.Count, "division")} · {Count(shownProjects, "project")} · {Count(shownApps, "app")} · {Count(employees.Count, "employee")}";
+        var summary = $"{Count(divisionViews.Count, "division")} · {Count(shownProjects, "project")} · {Count(shownApps, "app")} · {Count(employees.Count(e => e.Kind == Domain.Workforce.EmployeeKinds.Employee), "employee")}";
         var root = new OrganisationNodeView(organisation.Id, organisation.Slug, organisation.Name, summary,
             everything ? Spend(_ => true) : new SpendView(divisionViews.Sum(v => v.Spend.MonthCredits)),
             everything ? Workers(null, null, null) : []);
         var needs = await NeedsYouAsync(organisationId, everything, visible, cancellationToken);
+        needs = [.. needs, .. await WorkforceNeedsAsync(organisationId, everything, visible, employees.Where(e => idle[e.Id].Flagged).ToList(), idle, cancellationToken)];
         var viewer = RoleResolver.Resolve(grants)?.Role.ToWire() ?? "none";
         return new TreeView(clock.GetUtcNow(), viewer, root, divisionViews, needs);
     }
@@ -218,6 +231,26 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         needs.AddRange(approvals
             .Where(a => everything || new[] { a.DivisionId, a.ProjectId, a.AppId }.Any(id => id is { } x && visible.Contains(x)))
             .Select(a => new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, a.Approval.Title, a.Approval.Detail.Length == 0 ? null : a.Approval.Detail)));
+        return needs;
+    }
+
+    /// <summary>Hire proposals waiting for a decision, and employees flagged idle, in what the viewer can see.</summary>
+    private async Task<IReadOnlyList<object>> WorkforceNeedsAsync(Guid organisationId, bool everything, HashSet<Guid> visible, IReadOnlyList<EmployeeRecord> idleEmployees, IReadOnlyDictionary<Guid, Work.IdleView> idle, CancellationToken cancellationToken)
+    {
+        bool Sees(IScopedRecord row) => everything || new[] { row.DivisionId, row.ProjectId, row.AppId }.Any(id => id is { } x && visible.Contains(x));
+        var proposals = await db.HireProposals.AsNoTracking()
+            .Where(h => h.OrganisationId == organisationId && h.Status == Domain.Workforce.HireStatuses.Proposed)
+            .OrderBy(h => h.CreatedAt).ToListAsync(cancellationToken);
+        var needs = new List<object>();
+        foreach (var h in proposals.Where(Sees))
+        {
+            var path = (await scopes.ForRowAsync(h.OrganisationId, h.DivisionId, h.ProjectId, h.AppId, cancellationToken)).Path.ToString();
+            needs.Add(new HireNeed("hire", h.Id, h.Id, $"Hire {h.Name} as {h.Role}?", h.Reason, path, h.ExpectedMonthlyCredits));
+        }
+
+        session.UseOrganisation(organisationId);
+        needs.AddRange(idleEmployees.Where(Sees).Select(e => new IdleNeed("idle", e.Id, e.Id, $"{e.Name} has had no work for over {idle[e.Id].AfterDays} days",
+            "Release them to stop paying for an idle workforce: their memory is kept, so a rehire starts where they left off.")));
         return needs;
     }
 
@@ -312,7 +345,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                 IdeaDecisions.Change => idea.ResearchRunId,
                 _ => null,
             };
-            decision = new DecisionView(idea.Decision, at, decider ?? "", idea.Overruled, follow);
+            decision = new DecisionView(idea.Decision, at, idea.DecidedVia == IdeaDecisions.ByAutoMode ? "auto-mode" : decider ?? "", idea.Overruled, follow, idea.DecidedVia ?? IdeaDecisions.ByPerson);
         }
 
         string? placed = null;
@@ -327,7 +360,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             new ResearchView(idea.ResearchEstimateCredits, spent.Values.Sum(), by),
             idea.Verdict is null || idea.VerdictEvidenceJson is null ? null : JsonNode.Parse(idea.VerdictEvidenceJson),
             decision,
-            await VerdictRecordAsync(organisationId, cancellationToken));
+            await VerdictRecordAsync(organisationId, cancellationToken),
+            idea.RedLine);
     }
 
     public static IReadOnlyList<string> SplitConstraints(string constraints) =>
@@ -439,7 +473,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         decimal? monthsLeft = orgMonth <= 0 ? null : position.Balance <= 0 ? 0m : decimal.Round(position.Balance / (orgMonth / elapsedDays * 30m), 1);
 
         var budgets = await BudgetLinesAsync(scope, month, cancellationToken);
-        var estimates = await EstimatesAsync(scope, cancellationToken);
+        var estimates = await EstimatesAsync(scope, cancellationToken, null);
         var settings = await cascade.ChainEntriesAsync(scope, CascadeKind.Setting, cancellationToken);
         var frostaura = CascadeService.OperatorOverdraft(settings);
         var own = settings.Where(e => (e.Key == CascadeKeys.OverdraftOwnLimit && e.Level == NodeLevel.Organisation) || (e.Key == CascadeKeys.OverdraftLimit && e.Level > NodeLevel.Organisation))
@@ -509,17 +543,27 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         return lines;
     }
 
-    /// <summary>Estimates scored against what the work cost (<c>estimate.scored { estimated, actual }</c>), in the scope. Null before any was scored.</summary>
-    private async Task<EstimatesView?> EstimatesAsync(ResolvedScope scope, CancellationToken cancellationToken)
+    /// <summary>
+    /// Estimates scored against what the work cost, in the scope (and for one employee when given): the
+    /// Runner's <c>estimate.scored { expectedCredits, actualCredits }</c>, and the older
+    /// <c>{ estimated, actual }</c>. Null before any was scored.
+    /// </summary>
+    public async Task<EstimatesView?> EstimatesAsync(ResolvedScope scope, CancellationToken cancellationToken, Guid? employeeId = null)
     {
+        ArgumentNullException.ThrowIfNull(scope);
         await using var command = await db.CommandAsync("""
-            SELECT (e.payload ->> 'estimated')::numeric, (e.payload ->> 'actual')::numeric
-            FROM run_events e
-            JOIN runs r ON r.organisation_id = e.organisation_id AND r.id = e.run_id
-            WHERE e.organisation_id = @org AND e.type = 'estimate.scored'
-              AND jsonb_typeof(e.payload -> 'estimated') = 'number' AND jsonb_typeof(e.payload -> 'actual') = 'number'
-              AND (@division IS NULL OR r.division_id = @division) AND (@project IS NULL OR r.project_id = @project) AND (@app IS NULL OR r.app_id = @app)
-            """, cancellationToken, P("org", scope.OrganisationId), P("division", scope.DivisionId), P("project", scope.ProjectId), P("app", scope.AppId));
+            SELECT x.estimated, x.actual FROM (
+                SELECT CASE WHEN jsonb_typeof(e.payload -> 'expectedCredits') = 'number' THEN (e.payload ->> 'expectedCredits')::numeric
+                            WHEN jsonb_typeof(e.payload -> 'estimated') = 'number' THEN (e.payload ->> 'estimated')::numeric END AS estimated,
+                       CASE WHEN jsonb_typeof(e.payload -> 'actualCredits') = 'number' THEN (e.payload ->> 'actualCredits')::numeric
+                            WHEN jsonb_typeof(e.payload -> 'actual') = 'number' THEN (e.payload ->> 'actual')::numeric END AS actual
+                FROM run_events e
+                JOIN runs r ON r.organisation_id = e.organisation_id AND r.id = e.run_id
+                WHERE e.organisation_id = @org AND e.type = 'estimate.scored'
+                  AND (@division IS NULL OR r.division_id = @division) AND (@project IS NULL OR r.project_id = @project) AND (@app IS NULL OR r.app_id = @app)
+                  AND (@employee IS NULL OR r.employee_id = @employee)) x
+            WHERE x.estimated IS NOT NULL AND x.actual IS NOT NULL
+            """, cancellationToken, P("org", scope.OrganisationId), P("division", scope.DivisionId), P("project", scope.ProjectId), P("app", scope.AppId), P("employee", employeeId));
         var pieces = new List<(decimal Estimated, decimal Actual)>();
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
@@ -540,6 +584,35 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             pieces.Count(p => p.Actual < p.Estimated && Miss(p) > EstimateTolerance), pieces.Count(p => p.Actual > p.Estimated && Miss(p) > EstimateTolerance),
             decimal.Round(pieces.Max(Miss) * 100m, 1));
     }
+
+    /// <summary>
+    /// What finished runs of a kind actually cost, newest first, in one organisation only (tenant data is
+    /// never used across organisations): billable settlements per run and its model calls.
+    /// </summary>
+    public async Task<IReadOnlyList<CostHistoryView>> CostHistoryAsync(Guid organisationId, string kind, int limit, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        await using var command = await db.CommandAsync("""
+            SELECT r.id, r.finished_at,
+                   COALESCE((SELECT SUM(c.amount) FROM credit_entries c
+                             WHERE c.organisation_id = r.organisation_id AND c.run_id = r.id AND c.kind = 'settlement' AND c.billable), 0),
+                   (SELECT COUNT(*) FROM run_events e WHERE e.organisation_id = r.organisation_id AND e.run_id = r.id AND e.type = 'model.replied')
+            FROM runs r
+            WHERE r.organisation_id = @org AND r.kind = @kind AND r.status = 'succeeded'
+            ORDER BY r.finished_at DESC
+            LIMIT @limit
+            """, cancellationToken, P("org", organisationId), P("kind", kind), P("limit", Math.Clamp(limit, 1, MaxCostHistory)));
+        var rows = new List<CostHistoryView>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CostHistoryView(reader.GetGuid(0), reader.GetFieldValue<DateTimeOffset>(1), reader.GetDecimal(2), (int)reader.GetInt64(3)));
+        }
+
+        return rows;
+    }
+
+    public const int MaxCostHistory = 200;
 
     // ---------------------------------------------------------------- conversations
 

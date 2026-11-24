@@ -112,9 +112,10 @@ public sealed class RunsAndTasksTests(PostgresServer postgres) : IAsyncLifetime
         var employeeId = hired["id"]!.GetValue<string>();
         var run = await RunAsync(employeeId);
         await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/runs/{run}/lease", new { holder = "runner", seconds = 60 }));
-        var working = (await ControlPlaneApp.Ok(service.GetAsync("/internal/employees?scope=frostaura"))).AsArray().Single()!;
+        var working = (await ControlPlaneApp.Ok(service.GetAsync("/internal/employees?scope=frostaura/technologies"))).AsArray().Single()!;
         Assert.Equal("working", working["status"]!.GetValue<string>());
-        Assert.Equal(run, working["currentRunId"]!.GetValue<string>());
+        Assert.Equal(run, working["currentRun"]!["id"]!.GetValue<string>());
+        Assert.Equal("Build it", working["currentRun"]!["title"]!.GetValue<string>());
 
         var tree = await ControlPlaneApp.Ok(owner.GetAsync("/api/tree"));
         var worker = tree["divisions"]![0]!["workers"]![0]!;
@@ -123,11 +124,14 @@ public sealed class RunsAndTasksTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal("Build it", worker["activity"]!.GetValue<string>());
 
         await AppendAsync(run, "run.finished", new { outcome = "succeeded", summary = "Done", totals = new { credits = 0 } }, "runner");
-        var idle = (await ControlPlaneApp.Ok(service.GetAsync("/internal/employees?scope=frostaura"))).AsArray().Single()!;
+        var idle = (await ControlPlaneApp.Ok(service.GetAsync("/internal/employees?scope=frostaura/technologies"))).AsArray().Single()!;
         Assert.Equal("idle", idle["status"]!.GetValue<string>());
-        Assert.Equal(1, idle["runsFinished"]!.GetValue<int>());
-        Assert.Equal(1, idle["runsSucceeded"]!.GetValue<int>());
+        Assert.Null(idle["currentRun"]);
         Assert.Equal(run, idle["lastRunId"]!.GetValue<string>());
+        // The track record is derived from the run itself, never a counter on the employee.
+        var record = await ControlPlaneApp.Ok(service.GetAsync($"/internal/employees/{employeeId}"));
+        Assert.Equal(1, record["trackRecord"]!["runs"]!["finished"]!.GetValue<int>());
+        Assert.Equal(1, record["trackRecord"]!["runs"]!["succeeded"]!.GetValue<int>());
         var finished = await ControlPlaneApp.Ok(owner.GetAsync($"/api/runs/{run}"));
         Assert.Equal("finished", finished["status"]!.GetValue<string>());
     }

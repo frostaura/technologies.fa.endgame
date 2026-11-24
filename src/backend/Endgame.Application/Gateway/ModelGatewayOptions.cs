@@ -59,6 +59,11 @@ public sealed partial class ModelGatewayOptions
             {
                 faults.Add($"Model '{id}' needs a positive MaxOutputTokens (its provider's limit).");
             }
+
+            if (model.SupportedParameters.Count == 0)
+            {
+                faults.Add($"Model '{id}' must list its SupportedParameters (OpenRouter's supported_parameters): only those are ever sent.");
+            }
         }
 
         if (Routes.Count == 0)
@@ -126,12 +131,22 @@ public sealed partial class ModelGatewayOptions
     }
 }
 
-/// <summary>One validated model id and the most output any of its providers will produce.</summary>
+/// <summary>One validated model id, the most output any of its providers will produce, and the parameters it accepts.</summary>
 public sealed class ModelEntry
 {
     public int MaxOutputTokens { get; set; }
 
     public int ContextLength { get; set; }
+
+    /// <summary>
+    /// OpenRouter's <c>supported_parameters</c> for the model. The gateway sends an optional
+    /// parameter (reasoning, temperature, tool choice, parallel tool calls, response format) only
+    /// when every model on the route lists it: with <c>require_parameters</c> on, a parameter a model
+    /// lacks makes the call fail (ARCH-006).
+    /// </summary>
+    public List<string> SupportedParameters { get; set; } = [];
+
+    public bool Supports(string parameter) => SupportedParameters.Contains(parameter, StringComparer.Ordinal);
 }
 
 public sealed class ModelRoute
