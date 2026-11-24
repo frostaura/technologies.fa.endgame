@@ -1,7 +1,7 @@
 # ARCH-004 — Service contracts
 
-The interfaces between Endgame's services, as built by the two control-plane passes, the Dock and
-Edge lane and the app kit. A lane may add to its own service freely; it changes a contract here
+The interfaces between Endgame's services, as built by the three control-plane passes, the Dock and
+Edge lane, the Runner lane and the app kit. A lane may add to its own service freely; it changes a contract here
 only by editing this file first. The app-facing half is fixed field for field in
 [`src/appkit/PLATFORM-API.md`](../../src/appkit/PLATFORM-API.md); the shared hosting types are in
 `src/backend/Endgame.Hosting.Contracts`. What runs where is in `MEMORY.md`.
@@ -56,8 +56,10 @@ the control plane owns the database schema and migrations.
 | App | `draft`, `building`, `running`, `sleeping`, `stopped`, `failed`, `archived` | `running`: `asleep`, `awake`, `always-on`, `starting`, `paused`; `health`: `healthy`, `degraded`, `down`, `unknown` |
 | Run | `queued`, `running`, `paused`, `waiting_approval`, `succeeded`, `failed`, `cancelled` | `queued`, `running`, `waiting`, `paused`, `finished`, `failed`, `cancelled` |
 | Task | `todo`, `in_progress`, `blocked`, `done`, `failed`, `cancelled` | same |
-| Employee | `idle`, `working`, `paused`, `released` | same |
-| Idea | `researching`, `awaiting_decision`, `building`, `dropped` | `researching`, `verdict`, `decided`, `failed` |
+| Employee | `idle`, `working`, `paused`, `released`; kind `employee` or `contractor`; `standing` `security-reviewer` or null | same, plus `idle.flagged` (no work for longer than setting `workforce.idle_days`, default 14) |
+| Hire proposal | `proposed`, `accepted`, `declined`; trigger `division`, `stage`, `recurring`, `promotion`, `owner` | same |
+| Memory entry | kind `fact`, `practice`, `preference`, `lesson`; change actions `added`, `corrected`, `merged`, `removed`, `archived`, `restored`, `reviewed` by `employee`, `person`, `review`, `platform` | same |
+| Idea | `researching`, `awaiting_decision`, `building`, `dropped`; a decision is `via` `person` or `auto-mode`; `red_line` names a breached red line | `researching`, `verdict`, `decided`, `failed` |
 | App access | `private`, `shared`, `public` (setting `access`) | same |
 | E-mail | `queued`, `sending`, `sent`, `failed` | — |
 
@@ -81,10 +83,36 @@ minutes (`degraded` when more than one response in twenty failed).
 | Apps | `GET /api/apps/{id}` (health, running, addresses, `telemetry { visitsToday, requestsToday, errorsToday, latencyP50Ms, latencyP95Ms, lastVisitAt }` or null before anything was measured, cost, settings, `runningCost { sleep, alwaysOn }` or null, `sharedWith`); `POST /api/apps/{id}/settings { running?, access?, idleMinutes? }` (access needs Admin; `public` only from a person) |
 | Sharing | `GET /api/apps/{id}/shares`, `POST /api/apps/{id}/shares { email }` → `{ email, invitationCode, expiresAt }` (code shown once), `DELETE /api/apps/{id}/shares?email=` |
 | Conversation | `POST /api/conversations { scope, message, employeeId?, conversationId? }` → a run; `GET /api/conversations?scope=&employeeId=` |
+| Autonomy | `GET /api/autonomy?scope=` → `{ scope, autonomy: auto|checkpoints, autonomySetAtPath, checkpoints: { start, plan, hire: { on, setAtPath } }, ruleSets: [{ stage, deny[], ask[], allow[], checkpoints[], setAtPath, overrides[] }], stages[] }` (Viewer); `PUT /api/autonomy { scope, autonomy?, checkpoints?: { start?, plan?, hire? } }`, `DELETE /api/autonomy?scope=&key=`, `PUT /api/autonomy/rule-sets { scope, stage, deny?, ask?, allow?, checkpoints? }`, `DELETE /api/autonomy/rule-sets?scope=&stage=` (Admin and above; each answers the view) |
+| Workforce | `GET /api/employees?scope=&includeReleased=&kind=` → `[Employee]`; `GET /api/employees/{id}` → `{ employee, trackRecord, contractors[], reports[] }`; `GET …/{id}/track-record`; `PATCH …/{id} { name?, role?, jobDescription?, reportsTo?, clearReportsTo?, clearMonthlyCreditLimit?, status?: paused|idle }`, `POST …/{id}/reassign { scope, reportsTo? }`, `POST …/{id}/release`, `POST …/{id}/rehire { scope? }` (Admin); `GET /api/employees/recurring-roles?scope=` |
+| Memory | `GET /api/employees/{id}/memory?scope=&includeArchived=` → `[MemoryEntry]`; `GET …/memory/changes?limit=`; `POST …/memory { title, body, kind, scope? }`, `PATCH …/memory/{entryId} { title?, body?, kind? }`, `DELETE …/memory/{entryId}?why=`, `POST …/{id}/reviews` → the queued `review` run (Builder) |
+| Hires | `GET /api/hires?scope=&status=`, `GET /api/hires/{id}` → `Hire`; `POST /api/hires { scope, name, role, jobDescription, reportsTo?, expectedMonthlyCredits, reason, needKey?, trigger? }`, `PATCH /api/hires/{id}`, `POST /api/hires/{id}/accept { note? }`, `POST /api/hires/{id}/decline { note? }` (Admin) |
+| Ontology | `GET /api/ontology?scope=&view=all|org-chart|data-flow` → `{ scope, generatedAt, nodes: [{ id, type, name, scope, status, attributes }], edges: [{ from, to, type, label }], views }` |
 | God mode | `GET /api/operator/organisations` (operators); `GET /api/audit/operator-access?organisation=` (the Owner only) → `[{ id, at, action, operator { id, email, displayName }, detail }]` |
 | System | `GET /api/system/status`, `GET /api/openapi/v1.json` |
 
 Errors are problem details with a stable `code`. A failed read is distinguishable from an empty one.
+
+The workforce's shapes, field for field:
+
+- **Employee** `{ id, kind, name, role, status, standing, scope, reportsTo: { id, name } | null, briefedBy: { id, name } | null,
+  jobDescription: { mandate, scope, tools[], services[], monthlyCreditLimit, modelTier }, idle: { flagged, since, afterDays },
+  currentRun: { id, title } | null, lastRunId, lastActiveAt, createdAt, releasedAt, memoryEntries, brief }`. `services` are
+  `identity`, `models`, `secrets`, `email`, `schedules`, `webhooks`, `telemetry`; `modelTier` is a routing-table task type.
+- **TrackRecord** `{ employeeId, work: { accepted, sentBack, acceptedPercent }, runs: { finished, succeeded, failed, cancelled },
+  repairsNotCharged: { credits, calls }, cost: { toDateCredits, monthCredits }, contractors: { engaged, working, toDateCredits, monthCredits },
+  estimates: { pieces, withinPercent, under, over, largestMissPercent } | null }` — derived on read: `accepted` is evaluations
+  passed plus finished runs never evaluated, `sentBack` evaluations failed; cost is billable settlements and hosting with the
+  employee's id.
+- **Hire** `{ id, status, trigger, needKey, scope, reason, name, role, jobDescription, reportsTo, expectedMonthlyCredits, withinBudget,
+  headroomCredits, contractorRole, raisedBy: person|runner, raisedByRunId, decision: { via, by, at, note } | null, employeeId, createdAt }`.
+- **MemoryEntry** `{ id, employeeId, scope, title, body, kind, sourceRunId, createdAt, updatedAt, lastReviewedAt, archived }`;
+  **MemoryChange** `{ id, memoryId, action, by, userId, runId, detail, at }`.
+- `GET /api/tree` workers are `{ id, name, role, kind, activity, status, idle, standing, briefedBy }` — employees and contractors
+  while they work; `needsYou[]` adds `{ kind: "hire", id, hireId, title, detail, scope, expectedMonthlyCredits }` and
+  `{ kind: "idle", id, employeeId, title, detail }`.
+- An idea's `GET /api/ideas/{id}` adds `redLine` and `decision.via`. Building or overruling over a breached red line is
+  `403 red_line`, for a person too.
 
 ## Control plane — app identity pages (`/api/app-auth/{appId}`, no member auth)
 
@@ -106,13 +134,25 @@ form; anything else is 400 `invalid_return_to`. When it points at the subdomain 
 
 | Endpoint | Contract |
 | --- | --- |
-| `POST /internal/model/chat` | Task type, scope, run, employee, messages, tools, limits. Routes by task type, reserves in the transaction that admits, sends the price ceiling, settles from the reply. `402 budget_exhausted` (terminal for the run) or `402 overdraft_limit` (terminal until a top-up); `422 ceiling_unreachable`. |
+| `POST /internal/model/chat` | Task type, scope, run, employee, messages, tools, limits, `providerOrder[]` (sent as `provider.order`). Routes by task type, reserves in the transaction that admits, sends the price ceiling, settles from the reply. Optional parameters (reasoning, temperature, tool choice, parallel tool calls, response format) are sent only when every model on the route lists them in its catalogue `SupportedParameters`. `402 budget_exhausted` (terminal for the run) or `402 overdraft_limit` (terminal until a top-up); `422 ceiling_unreachable`. Building tiers: `build`, `build-t1`, `build-t2`, `build-t3`. |
+| `POST /internal/tree/nodes { parent, level, name, slug }` | Placement: `201 { id, level, slug, name, path, status, createdAt }`, or `200` with the node that already has that slug. |
+| `GET /internal/credits/headroom?scope=&employeeId=` | `{ scope, headroomCredits, bindingScope, binding: budget|overdraft, balance, overdraftLimit }`: the tightest monthly cap on the chain (and the employee's, which covers its contractors), or the balance down to the overdraft limit. |
+| `GET /internal/estimates/history?taskType=<run kind>&scope=&limit=` | `[{ runId, finishedAt, credits, steps }]`: billable actuals of succeeded runs of that kind in the scope's organisation, newest first. `scope` is required (`400 scope_required`): history never crosses organisations. |
+| `GET /internal/estimates/accuracy?scope=&employeeId=` | `{ scope, employeeId, estimates }` from `estimate.scored`. |
+| `GET /internal/tasks?scope=&status=&limit=`, `GET /internal/runs?scope=&kind=&status=&limit=`, `GET /internal/credits?scope=` | The conversation's reads: the same shapes as the public reads. |
+| `POST /internal/ideas { scope, text, constraints[] }` | `201 { idea, run, estimate }`: research on the owner's confirmed word, proposed to the division (or organisation) the scope sits in. |
+| `PUT /internal/cascade { scope, kind: "setting", key, value }` | An agent changes one allow-listed setting: `autonomy`, `checkpoint.start`, `checkpoint.plan`, `checkpoint.hire`, `sleep.mode`, `sleep.idle_minutes`, `workforce.idle_days`; anything else `403 setting_not_allowed`. Never `access`. |
+| `POST /internal/ideas/{id}/decision { decision: "build", by: "auto-mode" }` | Auto-mode builds after a build or change verdict where autonomy is auto → `{ idea, run }`. A do-not-build or checkpoints is `409 owner_decision_required`; any other decision `403`; a red line `403 red_line`. |
 | `POST /internal/runs`, `POST /internal/runs/claim`, `GET /internal/runs/{id}`, `GET`/`POST /internal/runs/{id}/events`, `POST /internal/runs/{id}/lease` | Runs, their log (gapless sequence numbers) and leases. |
 | `POST /internal/tasks`, `POST /internal/tasks/checkout`, `PATCH /internal/tasks/{id}` | The task graph; checkout is one conditional update. |
 | `GET /internal/context?scope=` | The resolved cascade: levels, context, rule sets, budgets, settings, secret names, roles. |
 | `POST /internal/approvals` | A checkpoint the run waits on. |
 | `POST /internal/ideas/{id}/verdict` | Research's verdict document. |
-| `POST`/`GET /internal/employees` | Hire; list at and beneath a scope. |
+| `POST /internal/employees { scope, name, role, mandate?, tools?, services?, monthlyCreditLimit?, modelTier?, reportsTo? }`, `GET /internal/employees?scope=&includeReleased=&kind=`, `GET /internal/employees/{id}` | The factory's direct hire; the workforce at and beneath a scope; one employee's detail (as the public shapes). |
+| `POST /internal/hires { scope, trigger, needKey, reason, name, role, jobDescription, reportsTo?, expectedMonthlyCredits, contractorRole?, runId? }` | A need from the ontology → `201 { hire, created: true }`, or `200` with the live proposal for the same `needKey`. Accepted at once when within budget and the hire checkpoint is off. |
+| `GET /internal/employees/{id}/memory?scope=`, `POST …/memory { runId?, entries: [{ title, body, kind, scope? }] }`, `POST …/memory/review { runId?, merged: [{ from[], title, body, kind? }], removed: [{ id, why }], corrected: [{ id, title?, body?, kind?, why }] }` | Memory for a run (at, above or beneath the scope; at most 200); written after a task; a review's result. |
+| `POST /internal/contractors { scope, briefedBy, role, name?, brief, runId?, monthlyCreditLimit? }`, `POST /internal/contractors/{id}/finish { runId?, learned[] }` | A contractor while it works; done → `{ contractor, learned, promotion }` (a hire raised when the role recurred). |
+| `GET /internal/ontology?scope=&view=`, `GET /internal/employees/recurring-roles?scope=` | The graph, and recurring contractor roles, for the Runner's hiring triggers. |
 | `GET /internal/routes` | `{ generatedAt, routes: [{ appId, organisationId, scope, pathBase, host, hostPathBase, target, status, sleeping, sleep { mode, idleMinutes, modeSetAt, idleSetAt }, version, access, paused, pausedReason, hooks }] }`. `access` is `private`/`shared`/`public`; `paused` is true when the organisation's settled balance is past its overdraft limit (`pausedReason: overdraft_limit`) or a monthly budget on the app's chain is spent (`budget_exhausted`); `hooks` lists declared webhook names. |
 | `POST /internal/access/check { appId, cookie, path }` | → `{ decision: allow | sign-in | deny, sessionToken, signInUrl, reason }`. `cookie` is the request's whole `Cookie` header; `sessionToken` is app-scoped (`egs_…`, 15 minutes) and never a cookie value; `signInUrl` is null (Edge uses the app's own sign-in page). |
 | `POST /internal/access/handoff { appId, code }` | → `{ cookieName, cookieValue, expiresAt, returnTo }` for Edge to set on the subdomain host, or `410 handoff_invalid` (unknown, used, or older than a minute). |
@@ -160,7 +200,9 @@ One append-only table, `run_events (organisation_id, run_id, seq, type, at, payl
 assigned by the control plane and gapless per run. Types: `run.started`, `run.paused`,
 `run.resumed`, `run.finished`, `model.requested`, `model.replied`, `approval.requested`,
 `approval.answered`, `task.created`, `task.claimed`, `task.done`, `task.failed`, `message`, plus the
-plan, tool, sub-agent, evaluation and estimate types the harness writes.
+plan, tool, sub-agent, evaluation and estimate types the harness writes. `model.requested` and
+`model.replied` carry the `employeeId` the call is charged to, and every ledger line carries it too.
+`estimate.scored` is `{ expectedCredits, actualCredits, nonBillableCredits, modelCalls }` (older `{ estimated, actual }` is read too).
 
 ## Credits
 
@@ -171,7 +213,8 @@ every budget. Cost becomes credits in one place, `CreditOptions.ToCredits`: US$ 
 writes its release. Repair work is recorded with `billable = false`. The overdraft is the
 operator's limit for the organisation (`overdraft_limit` at the organisation), narrowed by the
 organisation's own (`overdraft_own_limit`) and by any `overdraft_limit` lower on the chain; it never
-carries interest or fees.
+carries interest or fees. An employee's own monthly cap counts what the contractors it briefs spend, and a
+contractor is held to its own cap and its briefer's.
 
 ## The app kit
 

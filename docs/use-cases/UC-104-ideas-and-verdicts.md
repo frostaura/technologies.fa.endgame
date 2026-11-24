@@ -4,8 +4,8 @@
 | --- | --- |
 | **ID** | UC-104 |
 | **Title** | See the research estimate, start research, and build, change, overrule or drop on the verdict |
-| **Primary actor** | Owner · Builder; the Runner (employee) reports the verdict |
-| **Scope** | Control plane (`/api/ideas*`, `/internal/ideas/{id}/verdict`); research itself runs in the Runner |
+| **Primary actor** | Owner · Builder; the Runner (employee) reports the verdict, and decides for auto-mode after a build verdict |
+| **Scope** | Control plane (`/api/ideas*`, `/internal/ideas`, `/internal/ideas/{id}/verdict`, `/internal/ideas/{id}/decision`); research itself runs in the Runner |
 | **Cascade level** | Organisation or division |
 | **Status** | Built (control-plane side) |
 
@@ -25,7 +25,12 @@ decides what happens after a verdict that is allowed to say no.
    (`outcome` build | change | do-not-build, `headline`, `summary`, `existing[]`, `gap[]`, `demand`, `wouldChange`, `method`).
 4. The idea appears in `GET /api/tree` → `needsYou[]` as `{ kind: "verdict", ... }`.
 5. `POST /api/ideas/{id}/decision { choice, note? }` → the updated `Idea`. `build` or `overrule` queues a build
-   run (`decision.runId`); `change` runs the research again; `drop` ends it.
+   run (`decision.runId`); `change` runs the research again; `drop` ends it. `decision.via` is `person`.
+6. **Auto-mode.** After a build or change verdict, where autonomy at the idea's scope is auto, the Runner calls
+   `POST /internal/ideas/{id}/decision { decision: "build", by: "auto-mode" }` → `{ idea, run }`; `decision.via` and
+   `decision.by` read `auto-mode`.
+7. The conversation may start research on the owner's confirmed word: `POST /internal/ideas { scope, text, constraints[] }`
+   → `{ idea, run, estimate }`, proposed to the division the scope sits in.
 
 ## Alternate and failure flows
 
@@ -34,10 +39,14 @@ decides what happens after a verdict that is allowed to say no.
 - **A2 — deciding before a verdict.** 409.
 - **A3 — no research route configured.** 503 `estimate_unavailable`; research cannot start.
 - **A4 — no organisation yet.** `POST /api/ideas` is 409 `no_organisation`.
+- **A5 — a breached red line.** A verdict whose `redLines { breached: true, line }` is recorded as the idea's `redLine`;
+  `build` and `overrule` are then `403 red_line` for everyone, a person included (CLAUDE.md rule 4); `change` and `drop`
+  remain. A verdict that names a breached red line and says anything but do-not-build is `400`.
+- **A6 — auto-mode on a do-not-build, or where checkpoints are on.** `409 owner_decision_required`: the owner decides.
 
 ## Postconditions
 
-- `ideas` row with `research_estimate_credits`; research and build runs linked by `idea_id`.
+- `ideas` row with `research_estimate_credits`, `decided_via` and `red_line`; research and build runs linked by `idea_id`.
 
 ## Rules this use case must honour
 
@@ -47,7 +56,7 @@ decides what happens after a verdict that is allowed to say no.
 
 - The idea → verdict → overrule path, its record and its `needsYou` entry, as above; `change` and `drop` as above.
 
-Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `IdeasAndConversationsTests`.
+Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `IdeasAndConversationsTests`, `RunnerContractTests` (auto-mode, red line, the conversation's idea).
 
 ## Links
 

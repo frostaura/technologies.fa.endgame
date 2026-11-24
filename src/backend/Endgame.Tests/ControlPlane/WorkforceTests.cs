@@ -379,6 +379,11 @@ public sealed class WorkforceTests(PostgresServer postgres) : IAsyncLifetime
                 learned = new[] { new { title = $"Rival {i}", body = $"Rival {i} charges per court hour.", kind = "fact" } },
             }));
             Assert.Equal("released", last["contractor"]!["status"]!.GetValue<string>());
+            if (i < 2)
+            {
+                Assert.Null(last["promotion"]); // two in the role are not yet a recurring role
+            }
+
             Assert.Equal(Project, last["learned"]![0]!["scope"]!.GetValue<string>());
         }
 

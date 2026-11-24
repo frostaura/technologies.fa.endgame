@@ -75,9 +75,11 @@ a delegated survey and one repair round — not yet for large repositories or lo
 
 ## Against the running system
 
-The Runner has not been run inside `make up` against Dock and the control plane together: the factory's build stage
-needs the control-plane and Edge endpoints listed in the lane's report (tree nodes, app tokens, credits headroom,
-estimate history, the preview probe), which do not exist yet. What runs for real: the harness on real models (the
+The Runner has not been run inside `make up` against Dock and the control plane together. The control-plane endpoints
+the factory needs now exist and are driven through the Runner's own client in `ControlPlane/RunnerContractTests`
+(TEST-101): placement, app tokens, credit headroom, estimate history (which needs the run's `scope` — the client does not
+send it yet, so estimates fall back to the priors), the conversation's reads and actions, and auto-mode's decision. Edge's
+preview probe is still owed. What runs for real: the harness on real models (the
 benchmark), the Runner against the real control plane and database (`RunnerIntegrationTests`), and the tools against
 the real Dock (`DockWorkspaceTests`).
 
