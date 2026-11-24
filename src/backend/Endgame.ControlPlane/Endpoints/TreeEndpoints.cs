@@ -1,0 +1,245 @@
+using System.Security.Claims;
+using System.Text.Json.Nodes;
+using Endgame.Application.Common;
+using Endgame.Domain.Access;
+using Endgame.Domain.Cascade;
+using Endgame.Domain.Tree;
+using Endgame.Infrastructure.Access;
+using Endgame.Infrastructure.Cascade;
+using Endgame.Infrastructure.Credits;
+using Endgame.Infrastructure.Identity;
+using Endgame.Infrastructure.Persistence;
+using Endgame.Infrastructure.Persistence.Records;
+using Endgame.Infrastructure.Tree;
+using Microsoft.AspNetCore.Identity;
+
+namespace Endgame.ControlPlane.Endpoints;
+
+public sealed record CreateOrganisationRequest(string? Name, string? Slug, string? OwnerEmail, string? OwnerDisplayName);
+
+/// <param name="OwnerInvitationCode">Returned once, when the Owner is new and has no passkey yet.</param>
+public sealed record OrganisationCreated(Guid Id, string Slug, string Name, string OwnerEmail, string? OwnerInvitationCode, DateTimeOffset? InvitationExpiresAt);
+
+public sealed record CreateNodeRequest(string? Parent, string? Name, string? Slug);
+
+public sealed record UpdateNodeRequest(string? Name, string? Status);
+
+public sealed record CascadeSetRequest(string? Scope, string? Kind, string? Key, JsonNode? Value);
+
+public sealed record GrantRequest(string? Scope, string? Email, string? DisplayName, string? Role);
+
+public sealed record TopUpRequest(string? Organisation, decimal Credits, string? Note, string? IdempotencyKey);
+
+/// <summary>The tree (ARCH-004, <i>Tree</i>), the cascade's values, members and credits.</summary>
+internal static class TreeEndpoints
+{
+    public static void MapTree(this RouteGroupBuilder api)
+    {
+        api.MapGet("/tree", async (string? organisation, ClaimsPrincipal principal, AccessService access, ReadModels reads, CancellationToken ct) =>
+        {
+            var me = principal.Id();
+            var memberships = await access.MembershipsOfAsync(me, ct);
+            if (memberships.Count == 0 && organisation is null)
+            {
+                // First run, or a person not yet given a role: a real, empty answer.
+                return Results.Ok(reads.FirstRun());
+            }
+
+            var chosen = (organisation is null ? memberships.FirstOrDefault() : memberships.FirstOrDefault(m => m.OrganisationSlug == organisation))
+                ?? throw EndgameProblem.NotFound($"The organisation '{organisation}'");
+            var grants = await access.GrantsInOrganisationAsync(me, chosen.OrganisationId, ct);
+            return Results.Ok(await reads.TreeAsync(chosen.OrganisationId, grants, ct));
+        })
+        .WithTags("Tree").WithName("GetTree")
+        .WithSummary("The whole organisation as one document for the org chart: every node's status, this month's spend, who works on it, and what needs you. organisation is null on first run.")
+        .Produces<TreeView>();
+
+        var organisations = api.MapGroup("/organisations").WithTags("Tree");
+        organisations.MapPost("", async (CreateOrganisationRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access,
+            AccountService accounts, TreeService tree, EndgameDbContext db, TimeProvider clock, CancellationToken ct) =>
+        {
+            var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
+            var named = AccountService.ValidateOrganisation(new NewOrganisation(request.Name ?? "", request.Slug ?? ""));
+            if (await accounts.IsFirstRunAsync(ct))
+            {
+                // First run: whoever is signed in names the first organisation and becomes its Owner.
+                var first = await accounts.CreateFirstOrganisationAsync(named, me.Id, ct);
+                return Results.Created($"/api/organisations/{first.Id}", new OrganisationCreated(first.Id, first.Slug, first.Name, me.Email!, null, null));
+            }
+
+            if (!access.IsOperator(me))
+            {
+                throw EndgameProblem.Forbidden("Organisations are provisioned by FrostAura; there is no self-serve sign-up.");
+            }
+
+            var owner = request.OwnerEmail is null ? me : await accounts.FindOrCreateAsync(AccountService.NormaliseEmail(request.OwnerEmail), request.OwnerDisplayName, ct);
+            var created = await tree.CreateOrganisationAsync(named.Name, named.Slug, owner.Id, ct);
+            db.OperatorActions.Add(new OperatorActionRecord
+            {
+                Id = Guid.NewGuid(),
+                OrganisationId = created.Id,
+                OperatorUserId = me.Id,
+                Action = "organisation.provisioned",
+                DetailJson = new JsonObject { ["ownerUserId"] = owner.Id.ToString() }.ToJsonString(),
+                At = clock.GetUtcNow(),
+            });
+            await db.SaveChangesAsync(ct);
+            var (code, expires) = owner.Id == me.Id ? ((string?)null, (DateTimeOffset?)null) : await accounts.IssueInvitationIfNeededAsync(owner);
+            return Results.Created($"/api/organisations/{created.Id}", new OrganisationCreated(created.Id, created.Slug, created.Name, owner.Email!, code, expires));
+        })
+        .WithName("CreateOrganisation")
+        .WithSummary("On first run, the signed-in person names the first organisation and becomes its Owner; after that, FrostAura operators provision organisations.")
+        .Produces<OrganisationCreated>(201);
+        MapNodeChanges(organisations, NodeLevel.Organisation, MemberRole.Owner, MemberRole.Owner);
+
+        foreach (var (route, level, createRole, changeRole, deleteRole) in new[]
+                 {
+                     ("/divisions", NodeLevel.Division, MemberRole.Admin, MemberRole.Admin, MemberRole.Admin),
+                     ("/projects", NodeLevel.Project, MemberRole.Builder, MemberRole.Builder, MemberRole.Admin),
+                     ("/apps", NodeLevel.App, MemberRole.Builder, MemberRole.Builder, MemberRole.Admin),
+                 })
+        {
+            var group = api.MapGroup(route).WithTags("Tree");
+            group.MapPost("", async (CreateNodeRequest request, ClaimsPrincipal principal, AccessService access, TreeService tree, CancellationToken ct) =>
+            {
+                var (parent, _) = await access.RequireAsync(principal.Id(), request.Parent, createRole, ct);
+                if (parent.Level != level - 1)
+                {
+                    throw EndgameProblem.Invalid($"A {level.ToWire()} is created under a {(level - 1).ToWire()}; '{parent.Path}' is a {parent.Level.ToWire()}.");
+                }
+
+                var node = await tree.CreateChildAsync(parent, request.Name ?? "", request.Slug ?? "", ct);
+                return Results.Created($"/api{route}/{node.Id}", node);
+            })
+            .WithName($"Create{level}").WithSummary($"Creates a {level.ToWire()} under its parent scope.").Produces<NodeView>(201);
+            MapNodeChanges(group, level, changeRole, deleteRole);
+        }
+
+        var cascade = api.MapGroup("/cascade").WithTags("Cascade");
+        cascade.MapGet("", async (string? scope, string? kind, ClaimsPrincipal principal, AccessService access, CascadeService values, CancellationToken ct) =>
+        {
+            var parsed = Kind(kind);
+            var (resolved, _) = await access.RequireAsync(principal.Id(), scope, parsed is CascadeKind.Permission or CascadeKind.Secret ? MemberRole.Admin : MemberRole.Viewer, ct);
+            return Results.Ok(await values.ResolveAsync(resolved, parsed, ct));
+        })
+        .WithName("ResolveCascade").WithSummary("The effective values of one kind at a scope, each with the level that set it.").Produces<IReadOnlyList<EffectiveValue>>();
+        cascade.MapPut("", async (CascadeSetRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, CascadeService values, CancellationToken ct) =>
+        {
+            var parsed = Kind(request.Kind);
+            var key = request.Key ?? "";
+            var (resolved, _) = await access.RequireAsync(principal.Id(), request.Scope, CascadeService.RoleToSet(parsed, key), ct);
+            var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
+            return Results.Ok(await values.SetAsync(resolved, parsed, key, request.Value, me.Id, access.IsOperator(me), ct));
+        })
+        .WithName("SetCascadeValue").WithSummary("Sets a budget, rule set, context, setting or secret at a scope; it applies beneath unless narrowed.").Produces<EffectiveValue>();
+        cascade.MapDelete("", async (string? scope, string? kind, string? key, ClaimsPrincipal principal, AccessService access, CascadeService values, CancellationToken ct) =>
+        {
+            var parsed = Kind(kind);
+            var (resolved, _) = await access.RequireAsync(principal.Id(), scope, CascadeService.RoleToSet(parsed, key ?? ""), ct);
+            return await values.RemoveAsync(resolved, parsed, key ?? "", ct) ? Results.NoContent() : Problems.From(EndgameProblem.NotFound($"A {kind} '{key}' set at '{scope}'"));
+        })
+        .WithName("RemoveCascadeValue").WithSummary("Removes a value set at a scope; what is inherited applies again.");
+
+        var members = api.MapGroup("/members").WithTags("Members");
+        members.MapGet("", async (string? scope, ClaimsPrincipal principal, AccessService access, AccountService accounts, CancellationToken ct) =>
+        {
+            var (resolved, _) = await access.RequireAsync(principal.Id(), scope, MemberRole.Admin, ct);
+            return Results.Ok(await accounts.MembersAsync(resolved, ct));
+        })
+        .WithName("ListMembers").WithSummary("Everyone holding a role at the scope or beneath it.").Produces<IReadOnlyList<MemberView>>();
+        members.MapPost("", async (GrantRequest request, ClaimsPrincipal principal, AccessService access, AccountService accounts, CancellationToken ct) =>
+        {
+            var role = Role(request.Role);
+            var (resolved, mine) = await access.RequireAsync(principal.Id(), request.Scope, MemberRole.Admin, ct);
+            return Results.Ok(await accounts.GrantAsync(resolved, mine, request.Email ?? "", request.DisplayName, role, principal.Id(), ct));
+        })
+        .WithName("GrantRole").WithSummary("Grants a role at a scope; a new person gets a one-time invitation code to register a passkey with.").Produces<Invitation>();
+        members.MapDelete("/{membershipId:guid}", async (Guid membershipId, ClaimsPrincipal principal, AccessService access, AccountService accounts, ScopeResolver scopes, CancellationToken ct) =>
+        {
+            var (_, membership) = await accounts.MembershipAsync(membershipId, ct);
+            var scope = await scopes.ForRowAsync(membership.OrganisationId, membership.DivisionId, membership.ProjectId, membership.AppId, ct);
+            await access.RequireAsync(principal.Id(), scope, membership.Role == MemberRole.Admin.ToWire() ? MemberRole.Owner : MemberRole.Admin, ct);
+            await accounts.RevokeAsync(membership, ct);
+            return Results.NoContent();
+        })
+        .WithName("RevokeRole").WithSummary("Revokes one role grant.");
+
+        var credits = api.MapGroup("/credits").WithTags("Credits");
+        credits.MapGet("", async (string? scope, ClaimsPrincipal principal, AccessService access, ReadModels reads, CancellationToken ct) =>
+        {
+            var (resolved, _) = await access.RequireAsync(principal.Id(), scope, MemberRole.Viewer, ct);
+            return Results.Ok(await reads.CreditsAsync(resolved, ct));
+        })
+        .WithName("GetCredits").WithSummary("Balance, this month's spend, budgets down the cascade in tree order, estimate accuracy, what was not charged, overdraft and top-ups.").Produces<CreditsView>();
+        credits.MapPost("/top-ups", async (TopUpRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, ScopeResolver scopes, CreditLedger ledger, CancellationToken ct) =>
+        {
+            var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
+            if (!access.IsOperator(me))
+            {
+                throw EndgameProblem.Forbidden("Credits are topped up by FrostAura (manual top-ups; there is no payment gateway).");
+            }
+
+            var organisation = await scopes.RequireAsync(request.Organisation, ct);
+            if (organisation.Level != NodeLevel.Organisation)
+            {
+                throw EndgameProblem.Invalid("Top-ups are made to an organisation.");
+            }
+
+            var entry = await ledger.TopUpAsync(organisation.OrganisationId, request.Credits, request.Note, me.Id, request.IdempotencyKey, ct);
+            return Results.Ok(new { entry.Id, entry.Amount, entry.CreatedAt, Organisation = organisation.Path.ToString() });
+        })
+        .WithName("TopUpCredits").WithSummary("Adds credits to an organisation (FrostAura operators only; logged for the Owner to read).");
+    }
+
+    private static void MapNodeChanges(RouteGroupBuilder group, NodeLevel level, MemberRole changeRole, MemberRole deleteRole)
+    {
+        group.MapPatch("/{id:guid}", async (Guid id, UpdateNodeRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, ScopeResolver scopes, TreeService tree, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(level, id, ct) ?? throw EndgameProblem.NotFound($"The {level.ToWire()}");
+            await access.RequireAsync(principal.Id(), scope, changeRole, ct);
+            if (level == NodeLevel.Organisation && request.Status is not null)
+            {
+                var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
+                if (!access.IsOperator(me))
+                {
+                    throw EndgameProblem.Forbidden("An organisation is suspended or reinstated by FrostAura.");
+                }
+            }
+
+            return Results.Ok(await tree.UpdateAsync(scope, request.Name, request.Status, ct));
+        })
+        .WithName($"Update{level}").WithSummary($"Renames a {level.ToWire()} or changes its status.").Produces<NodeView>();
+        group.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, TreeService tree, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(level, id, ct) ?? throw EndgameProblem.NotFound($"The {level.ToWire()}");
+            await access.RequireAsync(principal.Id(), scope, deleteRole, ct);
+            await tree.DeleteAsync(scope, ct);
+            return Results.NoContent();
+        })
+        .WithName($"Delete{level}").WithSummary($"Deletes a {level.ToWire()} with nothing attached; anything with history is archived instead.");
+    }
+
+    public static CascadeKind Kind(string? kind)
+    {
+        try
+        {
+            return CascadeKinds.FromWire(kind);
+        }
+        catch (Endgame.Domain.DomainException ex)
+        {
+            throw EndgameProblem.Invalid(ex.Message);
+        }
+    }
+
+    private static MemberRole Role(string? role)
+    {
+        try
+        {
+            return MemberRoles.FromWire(role);
+        }
+        catch (Endgame.Domain.DomainException ex)
+        {
+            throw EndgameProblem.Invalid(ex.Message);
+        }
+    }
+}

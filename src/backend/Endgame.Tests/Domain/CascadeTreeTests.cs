@@ -11,7 +11,7 @@ public sealed class CascadeTreeTests
     [InlineData("frostaura")]
     [InlineData("technologies")]
     [InlineData("squash-control-system")]
-    [InlineData("a")]
+    [InlineData("ab")]
     [InlineData("app2")]
     public void Accepts_dns_label_slugs(string slug) => Assert.True(SlugRules.IsValid(slug));
 
@@ -26,6 +26,7 @@ public sealed class CascadeTreeTests
     [InlineData("dot.ted")]
     [InlineData("spa ce")]
     [InlineData("ünïcode")]
+    [InlineData("a")]
     public void Rejects_slugs_that_are_not_one_dns_label(string slug)
     {
         Assert.False(SlugRules.IsValid(slug));
@@ -33,10 +34,35 @@ public sealed class CascadeTreeTests
     }
 
     [Fact]
-    public void A_slug_is_at_most_63_characters()
+    public void A_slug_is_2_to_40_characters()
     {
-        Assert.True(SlugRules.IsValid(new string('a', 63)));
-        Assert.False(SlugRules.IsValid(new string('a', 64)));
+        Assert.True(SlugRules.IsValid(new string('a', 40)));
+        Assert.False(SlugRules.IsValid(new string('a', 41)));
+        Assert.False(SlugRules.IsValid("a"));
+    }
+
+    [Theory]
+    [InlineData("www")]
+    [InlineData("api")]
+    [InlineData("endgame")]
+    public void An_organisation_cannot_take_a_reserved_subdomain(string slug)
+    {
+        Assert.Throws<DomainException>(() => Organisation.Create("X", slug, Now));
+        Assert.Equal(slug, Division.Create(Organisation.Create("FrostAura", "frostaura", Now), "X", slug, Now).Slug);
+    }
+
+    [Fact]
+    public void Every_node_carries_its_organisation_and_a_constrained_status()
+    {
+        var organisation = Organisation.Create("FrostAura", "frostaura", Now);
+        var app = App.Create(Project.Create(Division.Create(organisation, "T", "tt", Now), "P", "pp", Now), "A", "aa", Now);
+        Assert.Equal(organisation.Id, organisation.OrganisationId);
+        Assert.Equal(organisation.Id, app.OrganisationId);
+        Assert.Equal("draft", app.Status);
+        Assert.Throws<DomainException>(() => app.ChangeStatus("archivedd"));
+        app.Published("v1", Now);
+        Assert.Equal("running", app.Status);
+        Assert.Throws<DomainException>(() => organisation.ChangeStatus("running"));
     }
 
     [Theory]
