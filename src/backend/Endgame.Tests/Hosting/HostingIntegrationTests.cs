@@ -316,7 +316,6 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
         var median = (timings[4] + timings[5]) / 2;
         var line = $"WAKE first byte over 10 wakes: median {median:F0} ms, worst {timings[^1]:F0} ms, best {timings[0]:F0} ms; all: {string.Join(", ", timings.Select(t => t.ToString("F0", CultureInfo.InvariantCulture)))}";
         output.WriteLine(line);
-        await File.WriteAllTextAsync(Path.Combine(env.RepositoryRoot, ".tmp", "wake-times.txt"), line + "\n");
         Assert.True(timings[^1] < 5000, line);
     }
 
