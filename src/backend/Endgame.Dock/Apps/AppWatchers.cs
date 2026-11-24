@@ -93,9 +93,10 @@ public sealed class CrashWatcher(
 
 /// <summary>
 /// Samples the memory every running app really uses (ARCH-005: budget by real use, not limits).
-/// Page cache the kernel can reclaim is not counted.
+/// Page cache the kernel can reclaim is not counted. Each sample also feeds the hosting usage
+/// ledger: the time between two samples is awake time for every app found running.
 /// </summary>
-public sealed class MemorySampler(DockerClient docker, AppRuntimeRegistry registry, ResourceNames names, IOptions<DockOptions> options, ILogger<MemorySampler> logger) : BackgroundService
+public sealed class MemorySampler(DockerClient docker, AppRuntimeRegistry registry, ResourceNames names, UsageLedger ledger, IOptions<DockOptions> options, ILogger<MemorySampler> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -127,7 +128,7 @@ public sealed class MemorySampler(DockerClient docker, AppRuntimeRegistry regist
                 },
             },
         }, cancellationToken);
-        var seen = new HashSet<Guid>();
+        var seen = new Dictionary<Guid, long>();
         foreach (var container in running)
         {
             if (!container.LabelMap().TryGetValue(ResourceNames.AppLabel, out var app) || !Guid.TryParse(app, out var appId))
@@ -156,12 +157,13 @@ public sealed class MemorySampler(DockerClient docker, AppRuntimeRegistry regist
                 Volatile.Write(ref runtime.PeakMemoryBytes, usage);
             }
 
-            seen.Add(appId);
+            seen[appId] = usage;
         }
 
+        ledger.Tick(seen);
         foreach (var (appId, runtime) in registry.All)
         {
-            if (!seen.Contains(appId))
+            if (!seen.ContainsKey(appId))
             {
                 Volatile.Write(ref runtime.LastMemoryBytes, 0);
             }

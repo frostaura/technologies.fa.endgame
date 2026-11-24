@@ -83,6 +83,9 @@ public sealed class DockOptions
 
     public int MemorySampleSeconds { get; set; } = 10;
 
+    /// <summary>How often hosting usage (awake time, memory, storage) is reported to the control plane. Zero turns it off.</summary>
+    public int UsageReportSeconds { get; set; } = 300;
+
     public int BuildTimeoutSeconds { get; set; } = 900;
 
     /// <summary>Hosts every workspace and build may reach: the package registries.</summary>
