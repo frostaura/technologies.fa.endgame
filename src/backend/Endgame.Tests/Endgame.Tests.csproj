@@ -40,4 +40,12 @@
     <Content Remove="Hosting/Fixtures/**" />
     <None Remove="Hosting/Fixtures/**" />
   </ItemGroup>
+  <!--
+    Every referenced service ships an appsettings.json and all land in this one output directory, so which
+    survives depends on copy order (Edge's did, failing RoutingTableTests). The control plane's is the one
+    its tests read: copy it last.
+  -->
+  <Target Name="UseTheControlPlanesSettings" AfterTargets="CopyFilesToOutputDirectory">
+    <Copy SourceFiles="../Endgame.ControlPlane/appsettings.json" DestinationFolder="$(OutDir)" SkipUnchangedFiles="false" />
+  </Target>
 </Project>

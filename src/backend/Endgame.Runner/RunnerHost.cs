@@ -15,6 +15,12 @@ public static class RunnerHost
     public static WebApplication Create(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+
+        // The Runner's settings file is runner.json, not appsettings.json: the test project references the
+        // Runner beside the control plane, and two appsettings.json files would overwrite each other in its
+        // output. Inserted first, so the environment and the command line still override it.
+        var defaults = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("runner.json", optional: false).Build();
+        builder.Configuration.Sources.Insert(0, new Microsoft.Extensions.Configuration.ChainedConfigurationSource { Configuration = defaults, ShouldDisposeConfiguration = true });
         AddRunner(builder.Services, builder.Configuration);
         var app = builder.Build();
         var revision = app.Configuration["BUILD_SHA"] is { Length: > 0 } sha ? sha : "unknown";
