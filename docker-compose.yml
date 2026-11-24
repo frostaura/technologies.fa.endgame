@@ -12,6 +12,8 @@ x-dotnet-service: &dotnet-service
   restart: always
   environment: &dotnet-env
     ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+    # Every internal API call between services carries this (ARCH-004).
+    ENDGAME_SERVICE_TOKEN: ${ENDGAME_SERVICE_TOKEN:?ENDGAME_SERVICE_TOKEN is required (copy .env.example to .env)}
   healthcheck:
     test: [ "CMD-SHELL", "curl --fail --silent http://127.0.0.1:8080/health > /dev/null || exit 1" ]
     interval: 5s
@@ -65,11 +67,32 @@ services:
       context: .
       dockerfile: src/backend/Dockerfile
       args: { PROJECT: Endgame.Dock }
+    environment:
+      <<: *dotnet-env
+      Dock__SecretKey: ${DOCK_SECRET_KEY:?DOCK_SECRET_KEY is required (copy .env.example to .env)}
+      Dock__PostgresAdmin: Host=postgres;Port=5432;Database=postgres;Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD}
+      Dock__Peers__Edge: endgame-edge-1
+      Dock__Peers__Postgres: endgame-postgres-1
+      Dock__Peers__Egress: endgame-egress-1
+      Dock__AppMemoryBudgetMb: ${DOCK_APP_MEMORY_BUDGET_MB:-4096}
     # The ONLY service given the Docker socket (CLAUDE.md rule 5). Never copy these two keys elsewhere.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - dock_data:/data
     group_add:
       - "${DOCKER_SOCKET_GID:-0}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      egress:
+        condition: service_healthy
+
+  # Default-deny forward proxy: the only way out for apps, workspaces and builds. Dock writes its
+  # per-network allow-lists through the Engine API; it shares no volume or network with Dock.
+  egress:
+    build:
+      context: src/egress
+    restart: always
 
   console:
     build:
@@ -88,6 +111,9 @@ services:
       context: .
       dockerfile: src/backend/Dockerfile
       args: { PROJECT: Endgame.Edge }
+    environment:
+      <<: *dotnet-env
+      Edge__PlatformOrigin: http://localhost:${EDGE_HOST_PORT:-8095}
     ports:
       - "${EDGE_HOST_PORT:-8095}:8080"
     depends_on:
@@ -98,3 +124,5 @@ services:
 
 volumes:
   postgres_data:
+  # Every app's repository and Dock's small state. Code history: backed up with the database.
+  dock_data:
