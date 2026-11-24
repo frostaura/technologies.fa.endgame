@@ -106,6 +106,7 @@ members.MapTree();
 members.MapWork();
 members.MapPlatformConsole();
 members.MapAutonomy();
+members.MapWorkforce();
 
 // The platform API for apps (src/appkit/PLATFORM-API.md): the app token, never a member's cookie.
 app.MapGroup("/platform/v1")
@@ -121,6 +122,10 @@ app.MapGroup("/internal")
     .AddEndpointFilter<ServiceTokenFilter>()
     .WithTags("Internal")
     .MapFactoryInternal();
+app.MapGroup("/internal")
+    .AddEndpointFilter<ServiceTokenFilter>()
+    .WithTags("Internal")
+    .MapWorkforceInternal();
 
 app.Run();
 

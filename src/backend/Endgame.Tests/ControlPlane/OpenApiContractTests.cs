@@ -38,6 +38,14 @@ public sealed class OpenApiContractTests(PostgresServer postgres)
         ("get", "/api/cascade"), ("put", "/api/cascade"), ("delete", "/api/cascade"),
         ("get", "/api/members"), ("post", "/api/members"), ("delete", "/api/members/{membershipId}"),
         ("post", "/api/credits/top-ups"),
+        ("get", "/api/autonomy"), ("put", "/api/autonomy"), ("delete", "/api/autonomy"),
+        ("put", "/api/autonomy/rule-sets"), ("delete", "/api/autonomy/rule-sets"),
+        ("get", "/api/employees"), ("get", "/api/employees/recurring-roles"), ("get", "/api/employees/{id}"), ("patch", "/api/employees/{id}"),
+        ("get", "/api/employees/{id}/track-record"), ("post", "/api/employees/{id}/reassign"), ("post", "/api/employees/{id}/release"), ("post", "/api/employees/{id}/rehire"),
+        ("get", "/api/employees/{id}/memory"), ("post", "/api/employees/{id}/memory"), ("patch", "/api/employees/{id}/memory/{entryId}"), ("delete", "/api/employees/{id}/memory/{entryId}"),
+        ("get", "/api/employees/{id}/memory/changes"), ("post", "/api/employees/{id}/reviews"),
+        ("get", "/api/hires"), ("post", "/api/hires"), ("get", "/api/hires/{id}"), ("patch", "/api/hires/{id}"), ("post", "/api/hires/{id}/accept"), ("post", "/api/hires/{id}/decline"),
+        ("get", "/api/ontology"),
     ];
 
     [Fact]

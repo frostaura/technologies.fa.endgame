@@ -132,9 +132,21 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         bool Visible(Guid id, params Guid[] ancestors) => everything || visible.Contains(id) || ancestors.Any(visible.Contains);
         var runTitles = liveRuns.ToDictionary(r => r.Id, r => r.Title);
 
+        var idleDays = await db.CascadeEntries.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && e.Kind == "setting" && e.Key == AgentSettings.WorkforceIdleDays).ToListAsync(cancellationToken);
+        var now = clock.GetUtcNow();
+        var idle = employees.ToDictionary(e => e.Id, e => Work.WorkforceRules.Idle(e, idleDays, now));
+        string? Activity(EmployeeRecord e) => e.Status switch
+        {
+            EmployeeStatuses.Paused => "Paused",
+            _ when e.CurrentRunId is { } run && runTitles.TryGetValue(run, out var title) => title,
+            _ when e.Kind == Domain.Workforce.EmployeeKinds.Contractor => e.Brief is { Length: > 120 } brief ? brief[..117] + "..." : e.Brief,
+            _ => null,
+        };
+
         IReadOnlyList<WorkerView> Workers(Guid? division, Guid? project, Guid? app) => employees
             .Where(e => e.DivisionId == division && e.ProjectId == project && e.AppId == app)
-            .Select(e => new WorkerView(e.Id, e.Name, e.Role, "employee", e.CurrentRunId is { } run && runTitles.TryGetValue(run, out var title) ? title : null))
+            .Select(e => new WorkerView(e.Id, e.Name, e.Role, e.Kind, Activity(e), e.Status, idle[e.Id].Flagged, e.Standing, e.BriefedById))
             .ToList();
 
         SpendView Spend(Func<(Guid? DivisionId, Guid? ProjectId, Guid? AppId, Guid? EmployeeId, decimal Credits), bool> where) => new(spend.Where(where).Sum(s => s.Credits));
@@ -191,11 +203,12 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
 
         var shownApps = divisionViews.Sum(d => d.Projects.Sum(p => p.Apps.Count));
         var shownProjects = divisionViews.Sum(d => d.Projects.Count);
-        var summary = $"{Count(divisionViews.Count, "division")} · {Count(shownProjects, "project")} · {Count(shownApps, "app")} · {Count(employees.Count, "employee")}";
+        var summary = $"{Count(divisionViews.Count, "division")} · {Count(shownProjects, "project")} · {Count(shownApps, "app")} · {Count(employees.Count(e => e.Kind == Domain.Workforce.EmployeeKinds.Employee), "employee")}";
         var root = new OrganisationNodeView(organisation.Id, organisation.Slug, organisation.Name, summary,
             everything ? Spend(_ => true) : new SpendView(divisionViews.Sum(v => v.Spend.MonthCredits)),
             everything ? Workers(null, null, null) : []);
         var needs = await NeedsYouAsync(organisationId, everything, visible, cancellationToken);
+        needs = [.. needs, .. await WorkforceNeedsAsync(organisationId, everything, visible, employees.Where(e => idle[e.Id].Flagged).ToList(), idle, cancellationToken)];
         var viewer = RoleResolver.Resolve(grants)?.Role.ToWire() ?? "none";
         return new TreeView(clock.GetUtcNow(), viewer, root, divisionViews, needs);
     }
@@ -218,6 +231,26 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         needs.AddRange(approvals
             .Where(a => everything || new[] { a.DivisionId, a.ProjectId, a.AppId }.Any(id => id is { } x && visible.Contains(x)))
             .Select(a => new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, a.Approval.Title, a.Approval.Detail.Length == 0 ? null : a.Approval.Detail)));
+        return needs;
+    }
+
+    /// <summary>Hire proposals waiting for a decision, and employees flagged idle, in what the viewer can see.</summary>
+    private async Task<IReadOnlyList<object>> WorkforceNeedsAsync(Guid organisationId, bool everything, HashSet<Guid> visible, IReadOnlyList<EmployeeRecord> idleEmployees, IReadOnlyDictionary<Guid, Work.IdleView> idle, CancellationToken cancellationToken)
+    {
+        bool Sees(IScopedRecord row) => everything || new[] { row.DivisionId, row.ProjectId, row.AppId }.Any(id => id is { } x && visible.Contains(x));
+        var proposals = await db.HireProposals.AsNoTracking()
+            .Where(h => h.OrganisationId == organisationId && h.Status == Domain.Workforce.HireStatuses.Proposed)
+            .OrderBy(h => h.CreatedAt).ToListAsync(cancellationToken);
+        var needs = new List<object>();
+        foreach (var h in proposals.Where(Sees))
+        {
+            var path = (await scopes.ForRowAsync(h.OrganisationId, h.DivisionId, h.ProjectId, h.AppId, cancellationToken)).Path.ToString();
+            needs.Add(new HireNeed("hire", h.Id, h.Id, $"Hire {h.Name} as {h.Role}?", h.Reason, path, h.ExpectedMonthlyCredits));
+        }
+
+        session.UseOrganisation(organisationId);
+        needs.AddRange(idleEmployees.Where(Sees).Select(e => new IdleNeed("idle", e.Id, e.Id, $"{e.Name} has had no work for over {idle[e.Id].AfterDays} days",
+            "Release them to stop paying for an idle workforce: their memory is kept, so a rehire starts where they left off.")));
         return needs;
     }
 

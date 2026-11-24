@@ -3,6 +3,7 @@ using Endgame.Domain.Cascade;
 using Endgame.Domain.Credits;
 using Endgame.Domain.Runs;
 using Endgame.Domain.Tree;
+using Endgame.Domain.Workforce;
 using Endgame.Infrastructure.Identity;
 using Endgame.Infrastructure.Persistence.Records;
 using Microsoft.EntityFrameworkCore;
@@ -95,19 +96,169 @@ internal sealed class EmployeeConfiguration : IEntityTypeConfiguration<EmployeeR
         builder.HasAlternateKey(e => new { e.OrganisationId, e.Id });
         builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedNever();
         builder.MapScope("employees");
+        builder.Property(e => e.Kind).HasColumnName("kind").HasMaxLength(20).HasDefaultValue(EmployeeKinds.Employee);
         builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(200);
         builder.Property(e => e.Role).HasColumnName("role").HasMaxLength(200);
         builder.Property(e => e.JobDescription).HasColumnName("job_description");
+        builder.Property(e => e.Tools).HasColumnName("tools").HasDefaultValueSql("'{}'::text[]");
+        builder.Property(e => e.Services).HasColumnName("services").HasDefaultValueSql("'{}'::text[]");
+        builder.Property(e => e.ModelTier).HasColumnName("model_tier").HasMaxLength(60);
         builder.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
         builder.Property(e => e.MonthlyCreditLimit).HasColumnName("monthly_credit_limit").HasPrecision(20, 6);
-        builder.Property(e => e.RunsFinished).HasColumnName("runs_finished");
-        builder.Property(e => e.RunsSucceeded).HasColumnName("runs_succeeded");
+        builder.Property(e => e.ReportsToId).HasColumnName("reports_to");
+        builder.Property(e => e.BriefedById).HasColumnName("briefed_by");
+        builder.Property(e => e.Brief).HasColumnName("brief");
+        builder.Property(e => e.BriefRunId).HasColumnName("brief_run_id");
+        builder.Property(e => e.Standing).HasColumnName("standing").HasMaxLength(40);
         builder.Property(e => e.CurrentRunId).HasColumnName("current_run_id");
         builder.Property(e => e.LastRunId).HasColumnName("last_run_id");
         builder.Property(e => e.LastActiveAt).HasColumnName("last_active_at");
+        builder.Property(e => e.ReleasedAt).HasColumnName("released_at");
         builder.Property(e => e.CreatedAt).HasColumnName("created_at");
         builder.Status("employees", "status", EmployeeStatuses.All);
-        builder.ToTable(t => t.HasCheckConstraint("ck_employees_limit", "monthly_credit_limit IS NULL OR monthly_credit_limit >= 0"));
+        builder.Status("employees", "kind", EmployeeKinds.All);
+        builder.ToTable(t =>
+        {
+            t.HasCheckConstraint("ck_employees_limit", "monthly_credit_limit IS NULL OR monthly_credit_limit >= 0");
+            t.HasCheckConstraint("ck_employees_contractor", "(kind = 'contractor') = (briefed_by IS NOT NULL)");
+            t.HasCheckConstraint("ck_employees_released", "(status = 'released') = (released_at IS NOT NULL)");
+            t.HasCheckConstraint("ck_employees_standing", $"standing IS NULL OR (kind = 'employee' AND {Sql.In("standing", StandingRoles.All)})");
+            t.HasCheckConstraint("ck_employees_not_self", "reports_to IS NULL OR reports_to <> id");
+        });
+        builder.HasOne<EmployeeRecord>().WithMany()
+            .HasForeignKey(e => new { e.OrganisationId, e.ReportsToId })
+            .HasPrincipalKey(e => new { e.OrganisationId, e.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<EmployeeRecord>().WithMany()
+            .HasForeignKey(e => new { e.OrganisationId, e.BriefedById })
+            .HasPrincipalKey(e => new { e.OrganisationId, e.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<RunRecord>().WithMany()
+            .HasForeignKey(e => new { e.OrganisationId, e.BriefRunId })
+            .HasPrincipalKey(r => new { r.OrganisationId, r.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.OrganisationId, e.Standing }).IsUnique().HasFilter("standing IS NOT NULL");
+        builder.HasIndex(e => new { e.OrganisationId, e.BriefedById });
+    }
+}
+
+internal sealed class HireProposalConfiguration : IEntityTypeConfiguration<HireProposalRecord>
+{
+    public void Configure(EntityTypeBuilder<HireProposalRecord> builder)
+    {
+        builder.ToTable("hire_proposals");
+        builder.HasKey(h => h.Id);
+        builder.HasAlternateKey(h => new { h.OrganisationId, h.Id });
+        builder.Property(h => h.Id).HasColumnName("id").ValueGeneratedNever();
+        builder.MapScope("hire_proposals");
+        builder.Property(h => h.Status).HasColumnName("status").HasMaxLength(20);
+        builder.Property(h => h.Trigger).HasColumnName("trigger").HasMaxLength(20);
+        builder.Property(h => h.NeedKey).HasColumnName("need_key").HasMaxLength(200);
+        builder.Property(h => h.Reason).HasColumnName("reason");
+        builder.Property(h => h.Name).HasColumnName("name").HasMaxLength(200);
+        builder.Property(h => h.Role).HasColumnName("role").HasMaxLength(200);
+        builder.Property(h => h.Mandate).HasColumnName("mandate");
+        builder.Property(h => h.Tools).HasColumnName("tools");
+        builder.Property(h => h.Services).HasColumnName("services");
+        builder.Property(h => h.MonthlyCreditLimit).HasColumnName("monthly_credit_limit").HasPrecision(20, 6);
+        builder.Property(h => h.ModelTier).HasColumnName("model_tier").HasMaxLength(60);
+        builder.Property(h => h.ReportsToId).HasColumnName("reports_to");
+        builder.Property(h => h.ExpectedMonthlyCredits).HasColumnName("expected_monthly_credits").HasPrecision(20, 6);
+        builder.Property(h => h.ContractorRole).HasColumnName("contractor_role").HasMaxLength(200);
+        builder.Property(h => h.RaisedByUserId).HasColumnName("raised_by_user_id");
+        builder.Property(h => h.RaisedByRunId).HasColumnName("raised_by_run_id");
+        builder.Property(h => h.DecidedVia).HasColumnName("decided_via").HasMaxLength(20);
+        builder.Property(h => h.DecidedBy).HasColumnName("decided_by");
+        builder.Property(h => h.DecidedAt).HasColumnName("decided_at");
+        builder.Property(h => h.DecisionNote).HasColumnName("decision_note");
+        builder.Property(h => h.EmployeeId).HasColumnName("employee_id");
+        builder.Property(h => h.CreatedAt).HasColumnName("created_at");
+        builder.Property(h => h.UpdatedAt).HasColumnName("updated_at");
+        builder.Status("hire_proposals", "status", HireStatuses.All);
+        builder.Status("hire_proposals", "trigger", HireTriggers.All);
+        builder.ToTable(t =>
+        {
+            t.HasCheckConstraint("ck_hire_proposals_decided", $"(status = 'proposed') = (decided_at IS NULL) AND (decided_via IS NULL OR {Sql.In("decided_via", IdeaDecisions.Via)}) AND (status = 'proposed') = (decided_via IS NULL)");
+            t.HasCheckConstraint("ck_hire_proposals_employee", "(status = 'accepted') = (employee_id IS NOT NULL)");
+            t.HasCheckConstraint("ck_hire_proposals_credits", "expected_monthly_credits >= 0 AND (monthly_credit_limit IS NULL OR monthly_credit_limit >= 0)");
+        });
+        builder.HasOne<EmployeeRecord>().WithMany()
+            .HasForeignKey(h => new { h.OrganisationId, h.EmployeeId })
+            .HasPrincipalKey(e => new { e.OrganisationId, e.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<EmployeeRecord>().WithMany()
+            .HasForeignKey(h => new { h.OrganisationId, h.ReportsToId })
+            .HasPrincipalKey(e => new { e.OrganisationId, e.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<RunRecord>().WithMany()
+            .HasForeignKey(h => new { h.OrganisationId, h.RaisedByRunId })
+            .HasPrincipalKey(r => new { r.OrganisationId, r.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<EndgameUser>().WithMany().HasForeignKey(h => h.RaisedByUserId).OnDelete(DeleteBehavior.SetNull);
+        // One live proposal (or hire) per need: raising the same need again finds it.
+        builder.HasIndex(h => new { h.OrganisationId, h.NeedKey }).IsUnique().HasFilter("need_key IS NOT NULL AND status <> 'declined'");
+        builder.HasIndex(h => new { h.OrganisationId, h.Status });
+    }
+}
+
+internal sealed class EmployeeMemoryConfiguration : IEntityTypeConfiguration<EmployeeMemoryRecord>
+{
+    public void Configure(EntityTypeBuilder<EmployeeMemoryRecord> builder)
+    {
+        builder.ToTable("employee_memories");
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.Id).HasColumnName("id").ValueGeneratedNever();
+        builder.MapScope("employee_memories");
+        builder.Property(m => m.EmployeeId).HasColumnName("employee_id");
+        builder.Property(m => m.Title).HasColumnName("title").HasMaxLength(WorkforceLimits.MaxMemoryTitle);
+        builder.Property(m => m.Body).HasColumnName("body");
+        builder.Property(m => m.Kind).HasColumnName("kind").HasMaxLength(20);
+        builder.Property(m => m.SourceRunId).HasColumnName("source_run_id");
+        builder.Property(m => m.CreatedAt).HasColumnName("created_at");
+        builder.Property(m => m.UpdatedAt).HasColumnName("updated_at");
+        builder.Property(m => m.LastReviewedAt).HasColumnName("last_reviewed_at");
+        builder.Property(m => m.ArchivedAt).HasColumnName("archived_at");
+        builder.Status("employee_memories", "kind", MemoryKinds.All);
+        builder.ToTable(t => t.HasCheckConstraint("ck_employee_memories_body", $"length(body) BETWEEN 1 AND {WorkforceLimits.MaxMemoryBody} AND length(title) >= 1"));
+        builder.HasOne<EmployeeRecord>().WithMany()
+            .HasForeignKey(m => new { m.OrganisationId, m.EmployeeId })
+            .HasPrincipalKey(e => new { e.OrganisationId, e.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<RunRecord>().WithMany()
+            .HasForeignKey(m => new { m.OrganisationId, m.SourceRunId })
+            .HasPrincipalKey(r => new { r.OrganisationId, r.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(m => new { m.OrganisationId, m.EmployeeId, m.ArchivedAt });
+    }
+}
+
+internal sealed class EmployeeMemoryChangeConfiguration : IEntityTypeConfiguration<EmployeeMemoryChangeRecord>
+{
+    public void Configure(EntityTypeBuilder<EmployeeMemoryChangeRecord> builder)
+    {
+        builder.ToTable("employee_memory_changes");
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Id).HasColumnName("id").ValueGeneratedNever();
+        builder.Property(c => c.OrganisationId).HasColumnName("organisation_id");
+        builder.Property(c => c.EmployeeId).HasColumnName("employee_id");
+        builder.Property(c => c.MemoryId).HasColumnName("memory_id");
+        builder.Property(c => c.Action).HasColumnName("action").HasMaxLength(20);
+        builder.Property(c => c.By).HasColumnName("by").HasMaxLength(20);
+        builder.Property(c => c.UserId).HasColumnName("user_id");
+        builder.Property(c => c.RunId).HasColumnName("run_id");
+        builder.Property(c => c.DetailJson).HasColumnName("detail").HasColumnType("jsonb");
+        builder.Property(c => c.At).HasColumnName("at");
+        builder.Status("employee_memory_changes", "action", MemoryActions.All);
+        builder.Status("employee_memory_changes", "by", MemoryActors.All);
+        builder.HasOne<EmployeeRecord>().WithMany()
+            .HasForeignKey(c => new { c.OrganisationId, c.EmployeeId })
+            .HasPrincipalKey(e => new { e.OrganisationId, e.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<RunRecord>().WithMany()
+            .HasForeignKey(c => new { c.OrganisationId, c.RunId })
+            .HasPrincipalKey(r => new { r.OrganisationId, r.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(c => new { c.OrganisationId, c.EmployeeId, c.At });
     }
 }
 

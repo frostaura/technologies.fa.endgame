@@ -73,6 +73,9 @@ public static class DependencyInjection
         services.AddScoped<IdeaService>();
         services.AddScoped<ConversationService>();
         services.AddScoped<EmployeeService>();
+        services.AddScoped<MemoryService>();
+        services.AddScoped<HireService>();
+        services.AddScoped<OntologyService>();
         services.AddScoped<AccountService>();
         services.AddScoped<IGatewayContext, GatewayContext>();
         services.AddSingleton<LeaseSweep>();

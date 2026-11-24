@@ -77,6 +77,8 @@ public sealed class TreeService(
             GrantedBy = owner,
             GrantedAt = clock.GetUtcNow(),
         });
+        // The one standing hire every organisation has from its creation (spec, Workforce).
+        db.Employees.Add(Work.EmployeeService.SecurityReviewer(organisation.Id, clock.GetUtcNow()));
         await SaveAsync(cancellationToken);
         if (transaction is not null)
         {

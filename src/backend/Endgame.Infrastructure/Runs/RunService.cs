@@ -450,15 +450,13 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
                         .SetProperty(r => r.LeaseExpiresAt, (DateTimeOffset?)null), cancellationToken);
                 if (employeeId is { } worker)
                 {
-                    var succeeded = outcome == RunStatuses.Succeeded ? 1 : 0;
+                    // The employee's state moves in the same transaction; its track record is derived from the runs themselves.
                     await db.Employees.Where(x => x.OrganisationId == org && x.Id == worker)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(x => x.Status, x => x.Status == EmployeeStatuses.Released || x.Status == EmployeeStatuses.Paused ? x.Status : EmployeeStatuses.Idle)
                             .SetProperty(x => x.CurrentRunId, (Guid?)null)
                             .SetProperty(x => x.LastRunId, run)
-                            .SetProperty(x => x.LastActiveAt, now)
-                            .SetProperty(x => x.RunsFinished, x => x.RunsFinished + 1)
-                            .SetProperty(x => x.RunsSucceeded, x => x.RunsSucceeded + succeeded), cancellationToken);
+                            .SetProperty(x => x.LastActiveAt, now), cancellationToken);
                 }
 
                 await ledger.ReleaseOpenForRunAsync(org, run, $"run {outcome}", cancellationToken);

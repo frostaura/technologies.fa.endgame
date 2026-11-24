@@ -23,15 +23,17 @@ public sealed class SweepOptions
 }
 
 /// <summary>What one sweep did.</summary>
-public sealed record SweepResult(int ReservationsReleased, int RunsRequeued, int TasksReleased, int TelemetryPruned);
+/// <param name="EmployeesReleased">Idle employees released where autonomy is auto (an idle workforce is never paid for).</param>
+public sealed record SweepResult(int ReservationsReleased, int RunsRequeued, int TasksReleased, int TelemetryPruned, int EmployeesReleased = 0);
 
 /// <summary>
 /// The platform's housekeeping, every <see cref="SweepOptions.IntervalSeconds"/> (ARCH-002: leaked
 /// holds release themselves). It writes an explicit release for every credit reservation that lapsed
 /// with its lease — the hold already stopped counting when it lapsed; this makes the ledger say so —
 /// puts every running run whose lease lapsed back in the queue with no holder (the Runner claims it
-/// again and replays its log), releases the tasks such a run held, and prunes telemetry past its
-/// retention. A failed pass is retried on the next tick. It never charges anything: an overdraft
+/// again and replays its log), releases the tasks such a run held, prunes telemetry past its
+/// retention, and releases employees flagged idle where autonomy is auto (their memory archived, never
+/// deleted). A failed pass is retried on the next tick. It never charges anything: an overdraft
 /// carries no interest and no fees (CLAUDE.md rule 3).
 /// </summary>
 public sealed class LeaseSweep(IServiceScopeFactory scopes, IOptions<SweepOptions> options, ILogger<LeaseSweep> logger, TimeProvider clock) : BackgroundService
@@ -49,10 +51,10 @@ public sealed class LeaseSweep(IServiceScopeFactory scopes, IOptions<SweepOption
             try
             {
                 var result = await SweepOnceAsync(stoppingToken);
-                if (result.ReservationsReleased + result.RunsRequeued + result.TasksReleased > 0)
+                if (result.ReservationsReleased + result.RunsRequeued + result.TasksReleased + result.EmployeesReleased > 0)
                 {
-                    logger.LogInformation("Sweep: released {Reservations} lapsed reservation(s), requeued {Runs} run(s) and released {Tasks} task(s) whose lease lapsed.",
-                        result.ReservationsReleased, result.RunsRequeued, result.TasksReleased);
+                    logger.LogInformation("Sweep: released {Reservations} lapsed reservation(s), requeued {Runs} run(s), released {Tasks} task(s) whose lease lapsed and {Employees} idle employee(s).",
+                        result.ReservationsReleased, result.RunsRequeued, result.TasksReleased, result.EmployeesReleased);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -70,7 +72,8 @@ public sealed class LeaseSweep(IServiceScopeFactory scopes, IOptions<SweepOption
         var released = await services.GetRequiredService<CreditLedger>().ReleaseLapsedAsync(grace, cancellationToken);
         var (runs, tasks) = await RequeueLapsedRunsAsync(services, grace, cancellationToken);
         var pruned = await services.GetRequiredService<TelemetryService>().PruneAsync(cancellationToken);
-        return new SweepResult(released, runs, tasks, pruned);
+        var idle = await services.GetRequiredService<Work.EmployeeService>().ReleaseIdleAsync(cancellationToken);
+        return new SweepResult(released, runs, tasks, pruned, idle);
     }
 
     private async Task<(int Runs, int Tasks)> RequeueLapsedRunsAsync(IServiceProvider services, TimeSpan grace, CancellationToken cancellationToken)

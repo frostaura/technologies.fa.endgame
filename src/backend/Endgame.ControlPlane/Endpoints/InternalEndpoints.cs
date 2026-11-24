@@ -35,8 +35,6 @@ public sealed record AppTokenResult(string Token);
 
 public sealed record HandoffRedeemRequest(Guid AppId, string? Code);
 
-public sealed record HireRequest(string? Scope, string? Name, string? Role, string? JobDescription, decimal? MonthlyCreditLimit);
-
 public sealed record ScopeLevelView(string Level, Guid Id, string Slug, string Name, string Status, string Path);
 
 /// <summary><c>GET /internal/context</c>: the resolved cascade for a scope. Secrets are named, never valued.</summary>
@@ -217,17 +215,5 @@ internal static class InternalEndpoints
         group.MapPost("/ideas/{id:guid}/verdict", async (Guid id, JsonObject verdict, IdeaService ideas, CancellationToken ct) =>
             Results.Ok(await ideas.RecordVerdictAsync(id, verdict, ct)))
         .WithName("RecordVerdict").WithSummary("The Runner reports research's verdict document (outcome build | change | do-not-build, headline, summary, existing, gap, demand, wouldChange, method).").Produces<IdeaView>();
-
-        group.MapPost("/employees", async (HireRequest request, ScopeResolver scopes, EmployeeService employees, CancellationToken ct) =>
-        {
-            var scope = await scopes.RequireAsync(request.Scope, ct);
-            var employee = await employees.HireAsync(scope, request.Name ?? "", request.Role ?? "", request.JobDescription, request.MonthlyCreditLimit, ct);
-            return Results.Created($"/internal/employees/{employee.Id}", employee);
-        })
-        .WithName("HireEmployee").WithSummary("Records an employee at a node, with its own monthly credit cap.").Produces<EmployeeView>(201);
-
-        group.MapGet("/employees", async (string? scope, ScopeResolver scopes, EmployeeService employees, CancellationToken ct) =>
-            Results.Ok(await employees.ListAsync(await scopes.RequireAsync(scope, ct), ct)))
-        .WithName("ListEmployees").WithSummary("Employees at the scope and beneath it.").Produces<IReadOnlyList<EmployeeView>>();
     }
 }

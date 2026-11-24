@@ -1138,6 +1138,150 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmployeeMemoryChangeRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("action");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<string>("By")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("by");
+
+                    b.Property<string>("DetailJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("detail");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employee_id");
+
+                    b.Property<Guid?>("MemoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("memory_id");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "RunId");
+
+                    b.HasIndex("OrganisationId", "EmployeeId", "At");
+
+                    b.ToTable("employee_memory_changes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_employee_memory_changes_action", "action IN ('added', 'corrected', 'merged', 'removed', 'archived', 'restored', 'reviewed')");
+
+                            t.HasCheckConstraint("ck_employee_memory_changes_by", "by IN ('employee', 'person', 'review', 'platform')");
+                        });
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmployeeMemoryRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archived_at");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DivisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("division_id");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employee_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset?>("LastReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_reviewed_at");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid?>("SourceRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_run_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "SourceRunId");
+
+                    b.HasIndex("OrganisationId", "DivisionId", "ProjectId");
+
+                    b.HasIndex("OrganisationId", "EmployeeId", "ArchivedAt");
+
+                    b.HasIndex("OrganisationId", "ProjectId", "AppId");
+
+                    b.ToTable("employee_memories", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_employee_memories_body", "length(body) BETWEEN 1 AND 4000 AND length(title) >= 1");
+
+                            t.HasCheckConstraint("ck_employee_memories_kind", "kind IN ('fact', 'practice', 'preference', 'lesson')");
+
+                            t.HasCheckConstraint("ck_employee_memories_path", "(app_id IS NULL OR project_id IS NOT NULL) AND (project_id IS NULL OR division_id IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1147,6 +1291,18 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("AppId")
                         .HasColumnType("uuid")
                         .HasColumnName("app_id");
+
+                    b.Property<string>("Brief")
+                        .HasColumnType("text")
+                        .HasColumnName("brief");
+
+                    b.Property<Guid?>("BriefRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("brief_run_id");
+
+                    b.Property<Guid?>("BriefedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("briefed_by");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1165,6 +1321,14 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("job_description");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("employee")
+                        .HasColumnName("kind");
+
                     b.Property<DateTimeOffset?>("LastActiveAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_active_at");
@@ -1172,6 +1336,11 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("LastRunId")
                         .HasColumnType("uuid")
                         .HasColumnName("last_run_id");
+
+                    b.Property<string>("ModelTier")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("model_tier");
 
                     b.Property<decimal?>("MonthlyCreditLimit")
                         .HasPrecision(20, 6)
@@ -1192,19 +1361,31 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("project_id");
 
+                    b.Property<DateTimeOffset?>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("released_at");
+
+                    b.Property<Guid?>("ReportsToId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reports_to");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("role");
 
-                    b.Property<int>("RunsFinished")
-                        .HasColumnType("integer")
-                        .HasColumnName("runs_finished");
+                    b.PrimitiveCollection<string[]>("Services")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("services")
+                        .HasDefaultValueSql("'{}'::text[]");
 
-                    b.Property<int>("RunsSucceeded")
-                        .HasColumnType("integer")
-                        .HasColumnName("runs_succeeded");
+                    b.Property<string>("Standing")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("standing");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1212,7 +1393,24 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("status");
 
+                    b.PrimitiveCollection<string[]>("Tools")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("tools")
+                        .HasDefaultValueSql("'{}'::text[]");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "BriefRunId");
+
+                    b.HasIndex("OrganisationId", "BriefedById");
+
+                    b.HasIndex("OrganisationId", "ReportsToId");
+
+                    b.HasIndex("OrganisationId", "Standing")
+                        .IsUnique()
+                        .HasFilter("standing IS NOT NULL");
 
                     b.HasIndex("OrganisationId", "DivisionId", "ProjectId");
 
@@ -1220,11 +1418,191 @@ namespace Endgame.Infrastructure.Persistence.Migrations
 
                     b.ToTable("employees", null, t =>
                         {
+                            t.HasCheckConstraint("ck_employees_contractor", "(kind = 'contractor') = (briefed_by IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_employees_kind", "kind IN ('employee', 'contractor')");
+
                             t.HasCheckConstraint("ck_employees_limit", "monthly_credit_limit IS NULL OR monthly_credit_limit >= 0");
+
+                            t.HasCheckConstraint("ck_employees_not_self", "reports_to IS NULL OR reports_to <> id");
 
                             t.HasCheckConstraint("ck_employees_path", "(app_id IS NULL OR project_id IS NOT NULL) AND (project_id IS NULL OR division_id IS NOT NULL)");
 
+                            t.HasCheckConstraint("ck_employees_released", "(status = 'released') = (released_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_employees_standing", "standing IS NULL OR (kind = 'employee' AND standing IN ('security-reviewer'))");
+
                             t.HasCheckConstraint("ck_employees_status", "status IN ('idle', 'working', 'paused', 'released')");
+                        });
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.HireProposalRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<string>("ContractorRole")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("contractor_role");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("DecidedVia")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("decided_via");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("text")
+                        .HasColumnName("decision_note");
+
+                    b.Property<Guid?>("DivisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("division_id");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employee_id");
+
+                    b.Property<decimal>("ExpectedMonthlyCredits")
+                        .HasPrecision(20, 6)
+                        .HasColumnType("numeric(20,6)")
+                        .HasColumnName("expected_monthly_credits");
+
+                    b.Property<string>("Mandate")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("mandate");
+
+                    b.Property<string>("ModelTier")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("model_tier");
+
+                    b.Property<decimal?>("MonthlyCreditLimit")
+                        .HasPrecision(20, 6)
+                        .HasColumnType("numeric(20,6)")
+                        .HasColumnName("monthly_credit_limit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NeedKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("need_key");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid?>("RaisedByRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("raised_by_run_id");
+
+                    b.Property<Guid?>("RaisedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("raised_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid?>("ReportsToId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reports_to");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("role");
+
+                    b.PrimitiveCollection<string[]>("Services")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("services");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.PrimitiveCollection<string[]>("Tools")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("tools");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("trigger");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("OrganisationId", "Id");
+
+                    b.HasIndex("RaisedByUserId");
+
+                    b.HasIndex("OrganisationId", "EmployeeId");
+
+                    b.HasIndex("OrganisationId", "NeedKey")
+                        .IsUnique()
+                        .HasFilter("need_key IS NOT NULL AND status <> 'declined'");
+
+                    b.HasIndex("OrganisationId", "RaisedByRunId");
+
+                    b.HasIndex("OrganisationId", "ReportsToId");
+
+                    b.HasIndex("OrganisationId", "Status");
+
+                    b.HasIndex("OrganisationId", "DivisionId", "ProjectId");
+
+                    b.HasIndex("OrganisationId", "ProjectId", "AppId");
+
+                    b.ToTable("hire_proposals", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_hire_proposals_credits", "expected_monthly_credits >= 0 AND (monthly_credit_limit IS NULL OR monthly_credit_limit >= 0)");
+
+                            t.HasCheckConstraint("ck_hire_proposals_decided", "(status = 'proposed') = (decided_at IS NULL) AND (decided_via IS NULL OR decided_via IN ('person', 'auto-mode')) AND (status = 'proposed') = (decided_via IS NULL)");
+
+                            t.HasCheckConstraint("ck_hire_proposals_employee", "(status = 'accepted') = (employee_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_hire_proposals_path", "(app_id IS NULL OR project_id IS NOT NULL) AND (project_id IS NULL OR division_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_hire_proposals_status", "status IN ('proposed', 'accepted', 'declined')");
+
+                            t.HasCheckConstraint("ck_hire_proposals_trigger", "trigger IN ('division', 'stage', 'recurring', 'promotion', 'owner')");
                         });
                 });
 
@@ -2422,7 +2800,23 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", b =>
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmployeeMemoryChangeRecord", b =>
+                {
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "EmployeeId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.RunRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "RunId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmployeeMemoryRecord", b =>
                 {
                     b.HasOne("Endgame.Domain.Tree.Organisation", null)
                         .WithMany()
@@ -2433,6 +2827,114 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                     b.HasOne("Endgame.Domain.Tree.Division", null)
                         .WithMany()
                         .HasForeignKey("OrganisationId", "DivisionId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "EmployeeId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.RunRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "SourceRunId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Domain.Tree.Project", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "DivisionId", "ProjectId")
+                        .HasPrincipalKey("OrganisationId", "DivisionId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "ProjectId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.RunRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "BriefRunId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "BriefedById")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Domain.Tree.Division", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "DivisionId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "ReportsToId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Domain.Tree.Project", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "DivisionId", "ProjectId")
+                        .HasPrincipalKey("OrganisationId", "DivisionId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "ProjectId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.HireProposalRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Identity.EndgameUser", null)
+                        .WithMany()
+                        .HasForeignKey("RaisedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Endgame.Domain.Tree.Division", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "DivisionId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "EmployeeId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.RunRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "RaisedByRunId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "ReportsToId")
                         .HasPrincipalKey("OrganisationId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
 

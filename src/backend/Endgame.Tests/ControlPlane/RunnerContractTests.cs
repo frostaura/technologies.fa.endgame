@@ -212,6 +212,7 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
     {
         var run = await RunAsync();
         await runner.CreateTaskAsync("frostaura/technologies/squash", run, "Wire the bookings page", null, 1m, null, CancellationToken.None);
+        await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/employees", new { scope = "frostaura/technologies/squash", name = "Ada", role = "Builder" }));
         var tool = new ReadOrganisationTool(runner, "frostaura/technologies");
         var outcome = await tool.ExecuteAsync(new ToolCall("c1", tool.Name, new JsonObject { ["what"] = what }, null!), CancellationToken.None);
         Assert.False(outcome.IsError, outcome.Content);
@@ -228,7 +229,7 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
                 Assert.Equal(100m, read["balance"]!.GetValue<decimal>());
                 break;
             case "workforce":
-                Assert.IsType<JsonArray>(read);
+                Assert.Equal("Ada", Assert.Single(read.AsArray())!["name"]!.GetValue<string>());
                 break;
             default:
                 Assert.Equal("frostaura/technologies", read["scope"]!.GetValue<string>());

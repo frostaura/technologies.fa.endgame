@@ -7,7 +7,13 @@ namespace Endgame.Infrastructure.Tree;
 
 public sealed record SpendView(decimal MonthCredits);
 
-public sealed record WorkerView(Guid Id, string Name, string Role, string Kind, string? Activity);
+/// <summary>Someone working at a node: an employee, or a contractor while it works.</summary>
+/// <param name="Kind"><c>employee</c> or <c>contractor</c>.</param>
+/// <param name="Activity">What it is doing now: its run's title (or a contractor's brief); "Paused"; null when idle.</param>
+/// <param name="Status"><c>idle</c>, <c>working</c> or <c>paused</c>.</param>
+/// <param name="Idle">True when it has had no work for longer than <c>workforce.idle_days</c>.</param>
+/// <param name="BriefedBy">A contractor's briefing employee.</param>
+public sealed record WorkerView(Guid Id, string Name, string Role, string Kind, string? Activity, string Status, bool Idle, string? Standing, Guid? BriefedBy);
 
 public sealed record OrganisationNodeView(Guid Id, string Slug, string Name, string? Summary, SpendView Spend, IReadOnlyList<WorkerView> Workers);
 
@@ -46,6 +52,12 @@ public sealed record AppNodeView(
 public sealed record VerdictNeed(string Kind, Guid Id, Guid IdeaId, string Title, string Verdict, string? Detail);
 
 public sealed record ApprovalNeed(string Kind, Guid Id, Guid RunId, Guid ApprovalId, string Title, string? Detail);
+
+/// <summary>A hire proposal waiting for the owner: over budget, or the hire checkpoint is on.</summary>
+public sealed record HireNeed(string Kind, Guid Id, Guid HireId, string Title, string? Detail, string Scope, decimal ExpectedMonthlyCredits);
+
+/// <summary>An employee with nothing to do: release it (its memory is kept) or give it work.</summary>
+public sealed record IdleNeed(string Kind, Guid Id, Guid EmployeeId, string Title, string? Detail);
 
 /// <summary><c>GET /api/tree</c>. <c>organisation</c> is null on first run.</summary>
 public sealed record TreeView(DateTimeOffset GeneratedAt, string ViewerRole, OrganisationNodeView? Organisation, IReadOnlyList<DivisionNodeView> Divisions, IReadOnlyList<object> NeedsYou);

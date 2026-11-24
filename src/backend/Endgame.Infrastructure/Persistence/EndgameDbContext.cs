@@ -50,6 +50,12 @@ public sealed class EndgameDbContext : IdentityUserContext<EndgameUser, Guid>, I
 
     public DbSet<EmployeeRecord> Employees => Set<EmployeeRecord>();
 
+    public DbSet<HireProposalRecord> HireProposals => Set<HireProposalRecord>();
+
+    public DbSet<EmployeeMemoryRecord> EmployeeMemories => Set<EmployeeMemoryRecord>();
+
+    public DbSet<EmployeeMemoryChangeRecord> EmployeeMemoryChanges => Set<EmployeeMemoryChangeRecord>();
+
     public DbSet<RunRecord> Runs => Set<RunRecord>();
 
     public DbSet<RunEventRecord> RunEvents => Set<RunEventRecord>();
