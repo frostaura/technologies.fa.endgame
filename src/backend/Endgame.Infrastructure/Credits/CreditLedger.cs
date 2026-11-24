@@ -28,7 +28,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
     /// is still in the future: it expires with the run's lease, and a leaked hold releases itself.
     /// </summary>
     private const string HeldReservations = """
-        SELECT r.amount, r.division_id, r.project_id, r.app_id, r.employee_id
+        SELECT r.amount, r.division_id, r.project_id, r.app_id, r.employee_id, r.task_type
         FROM credit_entries r
         LEFT JOIN runs run ON run.organisation_id = r.organisation_id AND run.id = r.run_id
         WHERE r.organisation_id = @org AND r.kind = 'reservation' AND r.billable
@@ -58,7 +58,8 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
         if (request.Billable)
         {
             var position = await PositionAsync(scope, a.EmployeeId, now, cancellationToken);
-            var refusal = position.Refuse(request.Credits);
+            var refusal = position.Refuse(request.Credits)
+                ?? (request.AppMonthlyCap is { } cap && a.AppId is { } app ? await RefuseOverAppModelCapAsync(a.OrganisationId, app, cap, request.Credits, now, cancellationToken) : null);
             if (refusal is not null)
             {
                 await transaction.RollbackAsync(cancellationToken);
@@ -185,7 +186,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
         await using var command = await db.CommandAsync("""
             SELECT division_id, project_id, app_id, employee_id, SUM(amount) AS credits
             FROM credit_entries
-            WHERE organisation_id = @org AND kind = 'settlement' AND billable AND created_at >= @month
+            WHERE organisation_id = @org AND kind IN ('settlement', 'hosting') AND billable AND created_at >= @month
             GROUP BY division_id, project_id, app_id, employee_id
             """, cancellationToken, P("org", organisationId), P("month", MonthStart(clock.GetUtcNow())));
         var rows = new List<(Guid?, Guid?, Guid?, Guid?, decimal)>();
@@ -196,6 +197,61 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// The app's own model allowance: this month's settled app model calls (task types <c>app.*</c>)
+    /// plus what is held for them, plus this call, against the cap. Inside the admission transaction.
+    /// </summary>
+    private async Task<Refused?> RefuseOverAppModelCapAsync(Guid organisationId, Guid appId, decimal cap, decimal needed, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var command = await db.CommandAsync($"""
+            SELECT COALESCE((SELECT SUM(amount) FROM credit_entries
+                             WHERE organisation_id = @org AND app_id = @app AND kind = 'settlement' AND billable AND task_type LIKE 'app.%' AND created_at >= @month), 0)
+                 + COALESCE((SELECT SUM(h.amount) FROM ({HeldReservations}) h WHERE h.app_id = @app AND h.task_type LIKE 'app.%'), 0)
+            """, cancellationToken, P("org", organisationId), P("app", appId), P("month", MonthStart(now)), P("now", now));
+        var used = (decimal)(await command.ExecuteScalarAsync(cancellationToken) ?? 0m);
+        var headroom = cap - used;
+        return headroom < needed
+            ? new Refused(
+                $"The app's own model calls have {headroom.ToString("0.######", CultureInfo.InvariantCulture)} credits left of their {cap.ToString("0.######", CultureInfo.InvariantCulture)} this month; this call needs up to {needed.ToString("0.######", CultureInfo.InvariantCulture)}.",
+                "app models", headroom, needed)
+            : null;
+    }
+
+    /// <summary>Records one hosting charge (Dock's usage sample), attributed to the app's whole path. Never refused: hosting is metered after the fact.</summary>
+    public CreditEntryRecord HostingEntry(ResolvedScope app, decimal credits, decimal costUsd, string sampleId, string note) => new()
+    {
+        Id = Guid.NewGuid(),
+        OrganisationId = app.OrganisationId,
+        Kind = CreditEntryKinds.Hosting,
+        Amount = credits,
+        DivisionId = app.DivisionId,
+        ProjectId = app.ProjectId,
+        AppId = app.AppId,
+        Billable = true,
+        CostUsd = costUsd,
+        IdempotencyKey = Truncate("hosting:" + sampleId, 200),
+        Note = Truncate(note, 500),
+        CreatedAt = clock.GetUtcNow(),
+    };
+
+    /// <summary>Every organisation's settled balance (top-ups less billable spend, holds not counted). Runs as the platform.</summary>
+    public async Task<IReadOnlyDictionary<Guid, decimal>> SettledBalancesAsync(CancellationToken cancellationToken)
+    {
+        await using var command = await db.CommandAsync("""
+            SELECT organisation_id,
+                   COALESCE(SUM(amount) FILTER (WHERE kind = 'top_up'), 0) - COALESCE(SUM(amount) FILTER (WHERE kind IN ('settlement', 'hosting') AND billable), 0)
+            FROM credit_entries GROUP BY organisation_id
+            """, cancellationToken);
+        var balances = new Dictionary<Guid, decimal>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            balances[reader.GetGuid(0)] = reader.GetDecimal(1);
+        }
+
+        return balances;
     }
 
     public static DateTimeOffset MonthStart(DateTimeOffset now) => new(now.UtcDateTime.Year, now.UtcDateTime.Month, 1, 0, 0, 0, TimeSpan.Zero);
@@ -229,7 +285,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
         decimal topUps, settledAll;
         await using (var totals = await db.CommandAsync("""
             SELECT COALESCE(SUM(amount) FILTER (WHERE kind = 'top_up'), 0),
-                   COALESCE(SUM(amount) FILTER (WHERE kind = 'settlement' AND billable), 0)
+                   COALESCE(SUM(amount) FILTER (WHERE kind IN ('settlement', 'hosting') AND billable), 0)
             FROM credit_entries WHERE organisation_id = @org
             """, cancellationToken, P("org", scope.OrganisationId)))
         await using (var reader = await totals.ExecuteReaderAsync(cancellationToken))
@@ -251,10 +307,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
 
         var spend = await MonthSpendOnChainAsync(scope, employeeId, now, cancellationToken);
         var entries = await cascade.ChainEntriesAsync(scope, null, cancellationToken);
-        var overdraft = entries.Where(e => e.Kind == CascadeKind.Setting && e.Key == CascadeKeys.OverdraftLimit)
-            .Select(e => CascadeService.NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m)
-            .DefaultIfEmpty(0m)
-            .Min();
+        var overdraft = CascadeService.EffectiveOverdraft(entries.Where(e => e.Kind == CascadeKind.Setting));
 
         var budgets = new List<BudgetLine>();
         foreach (var entry in entries.Where(e => e.Kind == CascadeKind.Budget && e.Key == CascadeKeys.MonthlyCredits).OrderBy(e => e.Level))
@@ -292,7 +345,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
                    COALESCE(SUM(amount) FILTER (WHERE app_id = @app), 0),
                    COALESCE(SUM(amount) FILTER (WHERE employee_id = @employee), 0)
             FROM credit_entries
-            WHERE organisation_id = @org AND kind = 'settlement' AND billable AND created_at >= @month
+            WHERE organisation_id = @org AND kind IN ('settlement', 'hosting') AND billable AND created_at >= @month
             """, cancellationToken,
             P("division", scope.DivisionId), P("project", scope.ProjectId), P("app", scope.AppId), P("employee", employeeId),
             P("org", scope.OrganisationId), P("month", MonthStart(now)));
@@ -328,8 +381,8 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
             var available = Balance + OverdraftLimit;
             return available < needed
                 ? new Refused(
-                    $"The organisation has {available.ToString("0.######", CultureInfo.InvariantCulture)} credits available including its overdraft; this call needs up to {needed.ToString("0.######", CultureInfo.InvariantCulture)}.",
-                    "organisation balance", available, needed)
+                    $"The organisation has {available.ToString("0.######", CultureInfo.InvariantCulture)} credits available including its overdraft of {OverdraftLimit.ToString("0.######", CultureInfo.InvariantCulture)}; this call needs up to {needed.ToString("0.######", CultureInfo.InvariantCulture)}.",
+                    "organisation balance", available, needed, Refusals.OverdraftLimit)
                 : null;
         }
     }

@@ -1,8 +1,12 @@
 using Endgame.Infrastructure.Credits;
+using Endgame.Infrastructure.Persistence;
+using Endgame.Infrastructure.Platform;
+using Endgame.Infrastructure.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using static Endgame.Infrastructure.Persistence.Db;
 
 namespace Endgame.Infrastructure.Sweeps;
 
@@ -14,16 +18,23 @@ public sealed class SweepOptions
 
     public int IntervalSeconds { get; set; } = 30;
 
-    /// <summary>How long past its lease a reservation waits before a release is written for it.</summary>
+    /// <summary>How long past its lease a reservation, or a run, waits before the sweep acts on it.</summary>
     public int ReleaseGraceSeconds { get; set; } = 120;
 }
 
+/// <summary>What one sweep did.</summary>
+public sealed record SweepResult(int ReservationsReleased, int RunsRequeued, int TasksReleased, int TelemetryPruned);
+
 /// <summary>
-/// Writes an explicit release for every reservation that lapsed with its run's lease (ARCH-002: leaked
-/// holds release themselves). The hold already stopped counting the moment the lease lapsed; this makes
-/// the ledger say so. Deferred is never final: a failed pass is retried on the next tick.
+/// The platform's housekeeping, every <see cref="SweepOptions.IntervalSeconds"/> (ARCH-002: leaked
+/// holds release themselves). It writes an explicit release for every credit reservation that lapsed
+/// with its lease — the hold already stopped counting when it lapsed; this makes the ledger say so —
+/// puts every running run whose lease lapsed back in the queue with no holder (the Runner claims it
+/// again and replays its log), releases the tasks such a run held, and prunes telemetry past its
+/// retention. A failed pass is retried on the next tick. It never charges anything: an overdraft
+/// carries no interest and no fees (CLAUDE.md rule 3).
 /// </summary>
-public sealed class LeaseSweep(IServiceScopeFactory scopes, IOptions<SweepOptions> options, ILogger<LeaseSweep> logger) : BackgroundService
+public sealed class LeaseSweep(IServiceScopeFactory scopes, IOptions<SweepOptions> options, ILogger<LeaseSweep> logger, TimeProvider clock) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -37,18 +48,58 @@ public sealed class LeaseSweep(IServiceScopeFactory scopes, IOptions<SweepOption
         {
             try
             {
-                await using var scope = scopes.CreateAsyncScope();
-                var ledger = scope.ServiceProvider.GetRequiredService<CreditLedger>();
-                var released = await ledger.ReleaseLapsedAsync(TimeSpan.FromSeconds(options.Value.ReleaseGraceSeconds), stoppingToken);
-                if (released > 0)
+                var result = await SweepOnceAsync(stoppingToken);
+                if (result.ReservationsReleased + result.RunsRequeued + result.TasksReleased > 0)
                 {
-                    logger.LogInformation("Released {Count} lapsed credit reservation(s).", released);
+                    logger.LogInformation("Sweep: released {Reservations} lapsed reservation(s), requeued {Runs} run(s) and released {Tasks} task(s) whose lease lapsed.",
+                        result.ReservationsReleased, result.RunsRequeued, result.TasksReleased);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogWarning(ex, "The lease sweep failed; it runs again on the next tick.");
+                logger.LogWarning(ex, "The sweep failed; it runs again on the next tick.");
             }
         }
+    }
+
+    public async Task<SweepResult> SweepOnceAsync(CancellationToken cancellationToken)
+    {
+        var grace = TimeSpan.FromSeconds(options.Value.ReleaseGraceSeconds);
+        await using var scope = scopes.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var released = await services.GetRequiredService<CreditLedger>().ReleaseLapsedAsync(grace, cancellationToken);
+        var (runs, tasks) = await RequeueLapsedRunsAsync(services, grace, cancellationToken);
+        var pruned = await services.GetRequiredService<TelemetryService>().PruneAsync(cancellationToken);
+        return new SweepResult(released, runs, tasks, pruned);
+    }
+
+    private async Task<(int Runs, int Tasks)> RequeueLapsedRunsAsync(IServiceProvider services, TimeSpan grace, CancellationToken cancellationToken)
+    {
+        var db = services.GetRequiredService<EndgameDbContext>();
+        services.GetRequiredService<TenantSession>().UseSystem();
+        var cutoff = clock.GetUtcNow() - grace;
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await using var runs = await db.CommandAsync("""
+            WITH lapsed AS (
+                UPDATE runs SET status = 'queued', lease_holder = NULL, lease_expires_at = NULL
+                WHERE status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at < @cutoff
+                RETURNING organisation_id, id
+            ), freed AS (
+                UPDATE tasks t SET status = 'todo', holder_run_id = NULL, holder_employee_id = NULL, claimed_at = NULL, updated_at = @now
+                FROM lapsed WHERE t.organisation_id = lapsed.organisation_id AND t.holder_run_id = lapsed.id AND t.status = 'in_progress'
+                RETURNING t.id
+            )
+            SELECT (SELECT COUNT(*) FROM lapsed), (SELECT COUNT(*) FROM freed)
+            """, cancellationToken, P("cutoff", cutoff), P("now", clock.GetUtcNow()));
+        int requeued, freedTasks;
+        await using (var reader = await runs.ExecuteReaderAsync(cancellationToken))
+        {
+            await reader.ReadAsync(cancellationToken);
+            requeued = (int)reader.GetInt64(0);
+            freedTasks = (int)reader.GetInt64(1);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return (requeued, freedTasks);
     }
 }

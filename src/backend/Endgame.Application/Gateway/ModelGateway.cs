@@ -248,6 +248,16 @@ public sealed class ModelGateway(
             body["response_format"] = request.ResponseFormat.DeepClone();
         }
 
+        if (request.Temperature is { } temperature)
+        {
+            if (double.IsNaN(temperature) || temperature < 0 || temperature > 2)
+            {
+                throw EndgameProblem.Invalid("temperature is a number from 0 to 2.");
+            }
+
+            body["temperature"] = temperature;
+        }
+
         return new PreparedCall(body, maxTokens, promptTokens, worstUsd, credits.ToCreditsCeiling(worstUsd));
     }
 
@@ -279,12 +289,14 @@ public sealed class ModelGateway(
         var billable = !request.Repair;
         var expiresAt = clock.GetUtcNow().AddMinutes(credits.ReservationMinutes);
         var admission = await ledger.AdmitAsync(
-            new ReservationRequest(attribution, request.TaskType, string.Join(",", route.Models), prepared.ReservedCredits, prepared.WorstCaseUsd, billable, expiresAt, request.IdempotencyKey),
+            new ReservationRequest(attribution, request.TaskType, string.Join(",", route.Models), prepared.ReservedCredits, prepared.WorstCaseUsd, billable, expiresAt, request.IdempotencyKey, request.AppMonthlyCap),
             cancellationToken);
 
         if (admission is Refused refused)
         {
-            if (attribution.RunId is { } runId)
+            // A budget refusal ends the run's spending for good. The overdraft limit does not: a
+            // top-up restores everything at once (spec, Overdraft), so the run may resume after one.
+            if (attribution.RunId is { } runId && refused.Code == Refusals.BudgetExhausted)
             {
                 await context.MarkBudgetExhaustedAsync(attribution.OrganisationId, runId, CancellationToken.None);
             }
@@ -314,8 +326,12 @@ public sealed class ModelGateway(
 
     public static EndgameProblem BudgetExhausted(Refused refused)
     {
-        var problem = new EndgameProblem(402, "budget_exhausted", "The budget is exhausted",
-            $"{refused.Reason} This is terminal for the run: do not retry it.");
+        ArgumentNullException.ThrowIfNull(refused);
+        var problem = refused.Code == Refusals.OverdraftLimit
+            ? new EndgameProblem(402, Refusals.OverdraftLimit, "The overdraft limit is reached",
+                $"{refused.Reason} Work stops until the organisation is topped up; do not retry it.")
+            : new EndgameProblem(402, Refusals.BudgetExhausted, "The budget is exhausted",
+                $"{refused.Reason} This is terminal for the run: do not retry it.");
         problem.Extensions["terminal"] = true;
         problem.Extensions["bindingScope"] = refused.BindingScope;
         problem.Extensions["headroomCredits"] = refused.Headroom;

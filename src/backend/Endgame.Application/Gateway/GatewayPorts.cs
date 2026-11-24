@@ -21,14 +21,25 @@ public sealed record ReservationRequest(
     decimal WorstCaseUsd,
     bool Billable,
     DateTimeOffset ExpiresAt,
-    string? IdempotencyKey);
+    string? IdempotencyKey,
+    decimal? AppMonthlyCap = null);
 
 public abstract record Admission;
 
 public sealed record Admitted(Guid ReservationId, decimal Credits) : Admission;
 
-/// <summary>The call does not fit. <paramref name="BindingScope"/> says which cap refused it.</summary>
-public sealed record Refused(string Reason, string BindingScope, decimal Headroom, decimal Needed) : Admission;
+/// <summary>
+/// The call does not fit. <paramref name="BindingScope"/> says which cap refused it; <paramref name="Code"/>
+/// is <see cref="Refusals.BudgetExhausted"/> for a budget or <see cref="Refusals.OverdraftLimit"/> when the
+/// organisation's balance has reached its overdraft limit. Both are terminal.
+/// </summary>
+public sealed record Refused(string Reason, string BindingScope, decimal Headroom, decimal Needed, string Code = Refusals.BudgetExhausted) : Admission;
+
+public static class Refusals
+{
+    public const string BudgetExhausted = "budget_exhausted";
+    public const string OverdraftLimit = "overdraft_limit";
+}
 
 public sealed record Settlement(Guid OrganisationId, Guid ReservationId, decimal Credits, decimal CostUsd, string? Model, string? GenerationId, string? Note);
 

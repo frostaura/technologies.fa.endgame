@@ -17,6 +17,10 @@ namespace Endgame.Tests.Fixtures;
 public sealed class ControlPlaneApp : IAsyncDisposable
 {
     public const string ServiceToken = "test-service-token";
+    public const string Operators = "owner@frostaura.net, dean@frostaura.net";
+
+    /// <summary>A fixed 32-byte vault master key for tests only (base64).</summary>
+    public const string VaultKey = "dGVzdC12YXVsdC1tYXN0ZXIta2V5LTMyLWJ5dGVzISE=";
     public static readonly Uri BaseAddress = new("https://localhost");
 
     private readonly WebApplicationFactory<Program> factory;
@@ -36,7 +40,8 @@ public sealed class ControlPlaneApp : IAsyncDisposable
         FakeOpenRouter? openRouter = null,
         string environment = "Development",
         bool developmentSignIn = true,
-        IReadOnlyDictionary<string, string?>? settings = null)
+        IReadOnlyDictionary<string, string?>? settings = null,
+        Action<IServiceCollection>? services = null)
     {
         ArgumentNullException.ThrowIfNull(postgres);
         var connection = await postgres.CreateDatabaseAsync();
@@ -52,9 +57,22 @@ public sealed class ControlPlaneApp : IAsyncDisposable
             builder.UseSetting("OPENROUTER_API_KEY", FakeOpenRouter.Key);
             builder.UseSetting("ModelGateway:BaseUrl", openRouter?.BaseUrl ?? "http://127.0.0.1:1");
             builder.UseSetting("ModelGateway:GenerationLookupSeconds", "3");
+            // God mode comes from an explicit list only; these two are operators, dev@frostaura.net is not.
+            builder.UseSetting("ENDGAME_OPERATORS", Operators);
+            builder.UseSetting("ENDGAME_VAULT_MASTER_KEY", VaultKey);
+            // No peer is reachable from a test: nothing is pushed to Edge, nothing is mailed, nothing is scheduled.
+            builder.UseSetting("Services:EdgeControl", "");
+            builder.UseSetting("Smtp:Host", "");
+            builder.UseSetting("Scheduler:Enabled", "false");
+            builder.UseSetting("Email:DispatchEnabled", "false");
             foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
             {
                 builder.UseSetting(key, value);
+            }
+
+            if (services is not null)
+            {
+                builder.ConfigureServices(services);
             }
         });
         var app = new ControlPlaneApp(factory, connection);

@@ -11,13 +11,27 @@ using Microsoft.Extensions.Options;
 
 namespace Endgame.Infrastructure.Access;
 
-/// <summary>Bound from <c>Operators</c>: who may act as FrostAura across organisations (God mode).</summary>
+/// <summary>
+/// Who may act as FrostAura across organisations (God mode): an explicit list of e-mail addresses
+/// and nothing else, from <c>ENDGAME_OPERATORS</c> (comma-, semicolon- or space-separated) and/or
+/// <c>Operators:Emails</c>. No address is an operator by its domain: e-mail is not verified, so
+/// anyone could type one.
+/// </summary>
 public sealed class OperatorOptions
 {
     public const string SectionName = "Operators";
+    public const string Variable = "ENDGAME_OPERATORS";
 
-    /// <summary>Accounts on these e-mail domains are FrostAura operators (spec, <i>God mode</i>).</summary>
-    public List<string> EmailDomains { get; set; } = ["frostaura.net"];
+    public List<string> Emails { get; set; } = [];
+
+    /// <summary>How long one operator's entry into one organisation counts as the same visit in the audit log.</summary>
+    public int EntryLogWindowMinutes { get; set; } = 10;
+
+    public IReadOnlySet<string> All(string? variable) =>
+        Emails.Concat((variable ?? "").Split([',', ';', ' ', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(e => e.Trim().ToLowerInvariant())
+            .Where(e => e.Length > 0)
+            .ToHashSet(StringComparer.Ordinal);
 }
 
 /// <summary>
@@ -25,8 +39,14 @@ public sealed class OperatorOptions
 /// on the chain from the organisation down to it, except that the organisation's Owner may do
 /// everything (<see cref="RoleResolver"/>). Every public endpoint asks here before it acts.
 /// </summary>
-public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, TenantSession session, IOptions<OperatorOptions> operators)
+public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, TenantSession session, IOptions<OperatorOptions> operators,
+    Microsoft.Extensions.Configuration.IConfiguration configuration, TimeProvider clock)
 {
+    public const string EntryAction = "organisation.entered";
+
+    private IReadOnlySet<string>? operatorEmails;
+    private readonly Dictionary<Guid, bool> operatorById = [];
+
     /// <summary>The grants on the chain of <paramref name="scope"/> for one person.</summary>
     public async Task<IReadOnlyList<RoleGrant>> GrantsOnChainAsync(Guid userId, ResolvedScope scope, CancellationToken cancellationToken)
     {
@@ -56,6 +76,7 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
     public async Task<MemberRole> RequireAsync(Guid userId, ResolvedScope scope, MemberRole required, CancellationToken cancellationToken)
     {
         var grant = await EffectiveRoleAsync(userId, scope, cancellationToken)
+            ?? await OperatorEntryAsync(userId, scope, cancellationToken)
             ?? throw EndgameProblem.NotFound($"The scope '{scope.Path}'");
         return grant.Role.Allows(required)
             ? grant.Role
@@ -97,9 +118,58 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
     public bool IsOperator(EndgameUser user)
     {
         ArgumentNullException.ThrowIfNull(user);
-        var email = user.Email ?? user.UserName ?? "";
-        var at = email.LastIndexOf('@');
-        return at > 0 && operators.Value.EmailDomains.Contains(email[(at + 1)..].ToLowerInvariant(), StringComparer.Ordinal);
+        return IsOperatorEmail(user.Email);
+    }
+
+    public bool IsOperatorEmail(string? email)
+    {
+        operatorEmails ??= operators.Value.All(configuration[OperatorOptions.Variable]);
+        return email is { Length: > 0 } && operatorEmails.Contains(email.Trim().ToLowerInvariant());
+    }
+
+    public async Task<bool> IsOperatorAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        if (!operatorById.TryGetValue(userId, out var isOperator))
+        {
+            var email = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Email).SingleOrDefaultAsync(cancellationToken);
+            operatorById[userId] = isOperator = IsOperatorEmail(email);
+        }
+
+        return isOperator;
+    }
+
+    /// <summary>
+    /// God mode (spec): an operator with no role in the organisation enters it as an Admin — never as
+    /// its Owner — and the entry is written to the organisation's operator log, which its Owner reads
+    /// (CLAUDE.md rule 1). Repeated requests within the log window count as one entry. Null for
+    /// anyone who is not an operator.
+    /// </summary>
+    public async Task<RoleGrant?> OperatorEntryAsync(Guid userId, ResolvedScope scope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (!await IsOperatorAsync(userId, cancellationToken))
+        {
+            return null;
+        }
+
+        await RecordEntryAsync(userId, scope.OrganisationId, scope.Path.ToString(), cancellationToken);
+        return new RoleGrant(userId, MemberRole.Admin, NodeLevel.Organisation, scope.OrganisationId, scope.Nodes[0].Path);
+    }
+
+    /// <summary>Writes one <c>organisation.entered</c> row unless this operator entered this organisation within the window.</summary>
+    public async Task RecordEntryAsync(Guid operatorId, Guid organisationId, string scope, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        var now = clock.GetUtcNow();
+        await using var command = await db.CommandAsync("""
+            INSERT INTO operator_actions (id, organisation_id, operator_user_id, action, detail, at)
+            SELECT gen_random_uuid(), @org, @operator, @action, jsonb_build_object('scope', @scope::text), @now
+            WHERE NOT EXISTS (SELECT 1 FROM operator_actions
+                              WHERE organisation_id = @org AND operator_user_id = @operator AND action = @action AND at > @since)
+            """, cancellationToken,
+            Db.P("org", organisationId), Db.P("operator", operatorId), Db.P("action", EntryAction), Db.P("scope", scope),
+            Db.P("now", now), Db.P("since", now.AddMinutes(-Math.Max(0, operators.Value.EntryLogWindowMinutes))));
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }
 

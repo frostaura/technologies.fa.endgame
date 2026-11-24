@@ -140,7 +140,7 @@ public sealed class DatabaseInvariantTests(PostgresServer postgres) : IAsyncLife
         {
             var resolved = await scope.ServiceProvider.GetRequiredService<ScopeResolver>().RequireAsync("frostaura/technologies", CancellationToken.None);
             var cascade = scope.ServiceProvider.GetRequiredService<Endgame.Infrastructure.Cascade.CascadeService>();
-            await cascade.SetAsync(resolved, Endgame.Domain.Cascade.CascadeKind.Budget, "monthly_credits", System.Text.Json.Nodes.JsonValue.Create((each * fits) + 0.01m), Guid.NewGuid(), false, CancellationToken.None);
+            await cascade.SetAsync(resolved, Endgame.Domain.Cascade.CascadeKind.Budget, "monthly_credits", System.Text.Json.Nodes.JsonValue.Create((each * fits) + 0.01m), Guid.NewGuid(), Endgame.Domain.Platform.Actor.Member, CancellationToken.None);
         }
 
         using var start = new ManualResetEventSlim(false);

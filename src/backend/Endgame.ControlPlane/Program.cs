@@ -99,9 +99,18 @@ api.MapGet("/system/status", async (GetSystemStatus query, CancellationToken can
 api.MapAuth(app.Environment, app.Configuration);
 api.MapDevLoginIfEnabled(app.Environment, app.Configuration);
 
+api.MapAppAuth(app.Environment, app.Configuration);
+
 var members = api.MapGroup("").RequireAuthorization();
 members.MapTree();
 members.MapWork();
+members.MapPlatformConsole();
+
+// The platform API for apps (src/appkit/PLATFORM-API.md): the app token, never a member's cookie.
+app.MapGroup("/platform/v1")
+    .AddEndpointFilter<AppTokenFilter>()
+    .WithTags("Platform")
+    .MapPlatformApi();
 
 app.MapGroup("/internal")
     .AddEndpointFilter<ServiceTokenFilter>()

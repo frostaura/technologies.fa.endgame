@@ -20,7 +20,8 @@ namespace Endgame.Infrastructure.Tree;
 /// derived from its source of truth (the ledger, the run log, the tree) at read time; where the
 /// control plane does not measure something yet, the field is null rather than an invented zero.
 /// </summary>
-public sealed class ReadModels(EndgameDbContext db, TenantSession session, ScopeResolver scopes, CascadeService cascade, CreditLedger ledger, TreeService tree, TimeProvider clock)
+public sealed class ReadModels(EndgameDbContext db, TenantSession session, ScopeResolver scopes, CascadeService cascade, CreditLedger ledger, TreeService tree, TimeProvider clock,
+    Platform.TelemetryService telemetry, Platform.HostingMeter hosting)
 {
     public const decimal EstimateTolerance = 0.10m;
 
@@ -120,6 +121,11 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             .Where(t => t.OrganisationId == organisationId && t.RunId != null && liveRuns.Select(r => r.Id).Contains(t.RunId.Value))
             .Select(t => new { t.RunId, t.Status }).ToListAsync(cancellationToken);
         var (estimates, runSpend) = await RunCostsAsync(organisationId, liveRuns.Select(r => r.Id).ToArray(), cancellationToken);
+        var measured = await telemetry.SummariesAsync(organisationId, null, cancellationToken);
+        var shares = (await db.AppShares.AsNoTracking().Where(x => x.OrganisationId == organisationId).GroupBy(x => x.AppId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken))
+            .ToDictionary(x => x.Key, x => x.Count);
+        var routes = (await tree.RoutesAsync(cancellationToken)).Routes.Where(r => r.OrganisationId == organisationId).ToDictionary(r => r.AppId);
+        session.UseOrganisation(organisationId);
 
         var everything = grants.Any(g => g.Level == NodeLevel.Organisation);
         var visible = grants.Select(g => g.NodeId).ToHashSet();
@@ -158,7 +164,10 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                         .Where(e => (e.DivisionId == null || e.DivisionId == d.Id) && (e.ProjectId == null || e.ProjectId == p.Id) && (e.AppId == null || e.AppId == a.Id))
                         .Select(e => new CascadeEntry(CascadeKind.Setting, e.Key, e.ValueJson, e.Level(), e.NodeId(), "", e.SetAt)));
                     var alwaysOn = mode is not null && JsonNode.Parse(mode.Entry.ValueJson)?.ToString() == "always_on";
-                    return new AppNodeView(a.Id, a.Slug, a.Name, AppHealth(a.Status), AppRunning(a.Status, alwaysOn), "private", 0, null, null,
+                    var route = routes.GetValueOrDefault(a.Id);
+                    var summary = measured.GetValueOrDefault(a.Id);
+                    return new AppNodeView(a.Id, a.Slug, a.Name, AppHealth(a.Status, summary), route?.Paused == true ? "paused" : AppRunning(a.Status, alwaysOn),
+                        route?.Access ?? Domain.Platform.AppAccess.Private, shares.GetValueOrDefault(a.Id), summary is null ? null : (int)Math.Min(int.MaxValue, summary.VisitsToday), summary?.LastVisitAt,
                         Spend(s => s.AppId == a.Id), Workers(d.Id, p.Id, a.Id));
                 }).ToList();
 
@@ -243,10 +252,16 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         return last?.Status == RunStatuses.Failed ? ("planning", "The last piece of work failed.") : ("planning", null);
     }
 
-    public static string AppHealth(string status) => status switch
+    /// <summary>
+    /// An app's health: down when it failed; otherwise what its own telemetry measured over the last
+    /// fifteen minutes (degraded when more than one response in twenty failed); healthy for a running
+    /// or sleeping app that has not reported yet; unknown before it runs.
+    /// </summary>
+    public static string AppHealth(string status, Platform.AppTelemetrySummary? measured = null) => status switch
     {
-        NodeStatuses.Running or NodeStatuses.Sleeping => "healthy",
         NodeStatuses.Failed => "down",
+        NodeStatuses.Running or NodeStatuses.Sleeping when measured is not null => measured.Health,
+        NodeStatuses.Running or NodeStatuses.Sleeping => "healthy",
         _ => "unknown",
     };
 
@@ -346,12 +361,23 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var mode = CascadeResolver.ResolveKey(CascadeKind.Setting, CascadeKeys.SleepMode, entries);
         var idle = CascadeResolver.ResolveKey(CascadeKind.Setting, CascadeKeys.SleepIdleMinutes, entries);
         var cap = CascadeResolver.ResolveKey(CascadeKind.Budget, CascadeKeys.MonthlyCredits, entries);
+        var accessEntry = CascadeResolver.ResolveKey(CascadeKind.Setting, CascadeKeys.Access, entries);
+        var access = accessEntry is not null && JsonNode.Parse(accessEntry.Entry.ValueJson) is JsonValue av && av.GetValueKind() == JsonValueKind.String ? av.GetValue<string>() : Domain.Platform.AppAccess.Private;
         var alwaysOn = mode is not null && JsonNode.Parse(mode.Entry.ValueJson)?.ToString() == "always_on";
         var spent = (await ledger.SpendThisMonthByNodeAsync(scope.OrganisationId, cancellationToken)).Where(s => s.AppId == app.Id).Sum(s => s.Credits);
+        var measured = (await telemetry.SummariesAsync(scope.OrganisationId, app.Id, cancellationToken)).GetValueOrDefault(app.Id);
+        var sharedWith = await db.AppShares.AsNoTracking().CountAsync(x => x.OrganisationId == scope.OrganisationId && x.AppId == app.Id, cancellationToken);
+        var runningCost = await hosting.RunningCostAsync(scope.OrganisationId, app.Id, cancellationToken);
+        var route = (await tree.RoutesAsync(cancellationToken)).Routes.FirstOrDefault(r => r.AppId == app.Id);
+        session.UseOrganisation(scope.OrganisationId);
         var addresses = tree.Addresses(scope.Path);
-        var health = AppHealth(app.Status);
+        var health = AppHealth(app.Status, measured);
         var summary = app.Status switch
         {
+            _ when route?.Paused == true => route.PausedReason == Application.Gateway.Refusals.OverdraftLimit
+                ? "Paused: the organisation reached its overdraft limit. A top-up restores it at once."
+                : "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it.",
+            NodeStatuses.Running when health == "degraded" => $"Running, but {measured!.RecentErrors} of the last {measured.RecentRequests} responses failed.",
             NodeStatuses.Running => app.CurrentVersion is null ? "Running." : $"Running version {app.CurrentVersion}.",
             NodeStatuses.Sleeping => "Asleep; it wakes on the next visit.",
             NodeStatuses.Failed => "It stopped working and needs attention.",
@@ -360,10 +386,20 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             NodeStatuses.Stopped => "Stopped.",
             _ => "Archived.",
         };
-        return new PublicAppView(app.Id, app.Name, scope.Path.ToString(), new HealthView(health, summary), AppRunning(app.Status, alwaysOn),
-            new AppAddressesView(addresses.Path, addresses.Subdomain), null,
+        JsonNode? telemetryView = measured is null ? null : new JsonObject
+        {
+            ["visitsToday"] = measured.VisitsToday,
+            ["requestsToday"] = measured.RequestsToday,
+            ["errorsToday"] = measured.ErrorsToday,
+            ["latencyP50Ms"] = measured.LatencyP50Ms,
+            ["latencyP95Ms"] = measured.LatencyP95Ms,
+            ["lastVisitAt"] = measured.LastVisitAt,
+        };
+        JsonNode? runningCostView = runningCost is { } rc ? new JsonObject { ["sleep"] = rc.Sleep, ["alwaysOn"] = rc.AlwaysOn } : null;
+        return new PublicAppView(app.Id, app.Name, scope.Path.ToString(), new HealthView(health, summary), route?.Paused == true ? "paused" : AppRunning(app.Status, alwaysOn),
+            new AppAddressesView(addresses.Path, addresses.Subdomain), telemetryView,
             new CostView(spent, cap is null ? null : CascadeService.NumberOf(JsonNode.Parse(cap.Entry.ValueJson))),
-            new AppSettingsView(alwaysOn ? "always-on" : "sleep", "private"), null, 0, app.Status, app.CurrentVersion, app.PublishedAt,
+            new AppSettingsView(alwaysOn ? "always-on" : "sleep", access), runningCostView, sharedWith, app.Status, app.CurrentVersion, app.PublishedAt,
             idle is null ? TreeService.DefaultIdleMinutes : (int)(CascadeService.NumberOf(JsonNode.Parse(idle.Entry.ValueJson)) ?? TreeService.DefaultIdleMinutes));
     }
 
@@ -381,11 +417,11 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         long repairs;
         await using (var command = await db.CommandAsync("""
             SELECT COALESCE(SUM(amount) FILTER (WHERE billable), 0),
-                   COALESCE(SUM(amount) FILTER (WHERE billable AND task_type IS NOT NULL), 0),
+                   COALESCE(SUM(amount) FILTER (WHERE billable AND kind = 'settlement'), 0),
                    COALESCE(SUM(amount) FILTER (WHERE NOT billable), 0),
                    COUNT(*) FILTER (WHERE NOT billable)
             FROM credit_entries
-            WHERE organisation_id = @org AND kind = 'settlement' AND created_at >= @month
+            WHERE organisation_id = @org AND kind IN ('settlement', 'hosting') AND created_at >= @month
               AND (@division IS NULL OR division_id = @division) AND (@project IS NULL OR project_id = @project) AND (@app IS NULL OR app_id = @app)
             """, cancellationToken, P("org", org), P("month", month), P("division", scope.DivisionId), P("project", scope.ProjectId), P("app", scope.AppId)))
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
@@ -405,9 +441,9 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var budgets = await BudgetLinesAsync(scope, month, cancellationToken);
         var estimates = await EstimatesAsync(scope, cancellationToken);
         var settings = await cascade.ChainEntriesAsync(scope, CascadeKind.Setting, cancellationToken);
-        var overdrafts = settings.Where(e => e.Key == CascadeKeys.OverdraftLimit).ToList();
-        var frostaura = overdrafts.Where(e => e.Level == NodeLevel.Organisation).Select(e => CascadeService.NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m).DefaultIfEmpty(0m).Single();
-        var own = overdrafts.Where(e => e.Level > NodeLevel.Organisation).Select(e => CascadeService.NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m).DefaultIfEmpty(-1m).Min();
+        var frostaura = CascadeService.OperatorOverdraft(settings);
+        var own = settings.Where(e => (e.Key == CascadeKeys.OverdraftOwnLimit && e.Level == NodeLevel.Organisation) || (e.Key == CascadeKeys.OverdraftLimit && e.Level > NodeLevel.Organisation))
+            .Select(e => CascadeService.NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m).DefaultIfEmpty(-1m).Min();
         var topUps = await db.CreditEntries.AsNoTracking().Where(e => e.OrganisationId == org && e.Kind == "top_up")
             .OrderByDescending(e => e.CreatedAt).Take(50)
             .Select(e => new TopUpView(e.CreatedAt, e.Amount, e.Note ?? "")).ToListAsync(cancellationToken);

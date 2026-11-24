@@ -68,6 +68,32 @@ public sealed class EndgameDbContext : IdentityUserContext<EndgameUser, Guid>, I
 
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
+    public DbSet<AppTokenRecord> AppTokens => Set<AppTokenRecord>();
+
+    public DbSet<AppEndUserRecord> AppEndUsers => Set<AppEndUserRecord>();
+
+    public DbSet<AppEndUserPasskeyRecord> AppEndUserPasskeys => Set<AppEndUserPasskeyRecord>();
+
+    public DbSet<AppSessionRecord> AppSessions => Set<AppSessionRecord>();
+
+    public DbSet<AppShareRecord> AppShares => Set<AppShareRecord>();
+
+    public DbSet<AppScheduleRecord> AppSchedules => Set<AppScheduleRecord>();
+
+    public DbSet<AppWebhookRecord> AppWebhooks => Set<AppWebhookRecord>();
+
+    public DbSet<EmailMessageRecord> EmailMessages => Set<EmailMessageRecord>();
+
+    public DbSet<TelemetryEventRecord> TelemetryEvents => Set<TelemetryEventRecord>();
+
+    public DbSet<TelemetrySpanRecord> TelemetrySpans => Set<TelemetrySpanRecord>();
+
+    public DbSet<TelemetryMetricRecord> TelemetryMetrics => Set<TelemetryMetricRecord>();
+
+    public DbSet<TelemetryLogRecord> TelemetryLogs => Set<TelemetryLogRecord>();
+
+    public DbSet<HostingSampleRecord> HostingSamples => Set<HostingSampleRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

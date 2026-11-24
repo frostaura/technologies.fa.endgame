@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Endgame.Application.Gateway;
 
@@ -33,6 +34,16 @@ public sealed class ChatRequest
 
     /// <summary>Optional: the same key twice reserves once.</summary>
     public string? IdempotencyKey { get; set; }
+
+    /// <summary>Optional sampling temperature, 0 to 2. Left to the model when absent.</summary>
+    public double? Temperature { get; set; }
+
+    /// <summary>
+    /// Set by the platform API for an app's own calls, never read from a request body: the most the
+    /// app's model calls may spend this calendar month. Checked in the same transaction that admits.
+    /// </summary>
+    [JsonIgnore]
+    public decimal? AppMonthlyCap { get; set; }
 }
 
 public sealed class ChatLimits

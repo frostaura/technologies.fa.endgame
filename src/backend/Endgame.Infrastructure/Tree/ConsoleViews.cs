@@ -27,7 +27,9 @@ public sealed record ProjectNodeView(
     IReadOnlyList<WorkerView> Workers,
     IReadOnlyList<AppNodeView> Apps);
 
-/// <param name="VisitsToday">Null: telemetry intake is not part of the control plane yet, so the count is unknown, not zero.</param>
+/// <param name="Access">private, shared or public, resolved down the cascade.</param>
+/// <param name="SharedWith">How many addresses the app is shared with.</param>
+/// <param name="VisitsToday">Page visits today (UTC) from the app's own telemetry. Null until the app has reported anything: unknown, never zero.</param>
 public sealed record AppNodeView(
     Guid Id,
     string Slug,
@@ -100,8 +102,14 @@ public sealed record CostView(decimal MonthCredits, decimal? CapCredits);
 
 public sealed record AppSettingsView(string Running, string Access);
 
-/// <param name="Telemetry">Null: the control plane has no telemetry intake yet (see the report); never zeros that were not measured.</param>
-/// <param name="RunningCost">Null: hosting is not metered yet, so the price of each running choice is not known.</param>
+/// <param name="Telemetry">
+/// From the app's own telemetry: <c>{ visitsToday, requestsToday, errorsToday, latencyP50Ms, latencyP95Ms, lastVisitAt }</c>
+/// (today is the UTC day). Null only while the app has measured nothing yet — never zeros that were not measured.
+/// </param>
+/// <param name="RunningCost">
+/// Expected monthly credits for each running choice, <c>{ sleep, alwaysOn }</c>, from the app's measured hosting over the
+/// last seven days. Null until Dock has reported any.
+/// </param>
 public sealed record PublicAppView(
     Guid Id,
     string Name,
