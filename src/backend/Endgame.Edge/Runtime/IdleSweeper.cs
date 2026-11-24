@@ -24,8 +24,7 @@ public sealed class IdleSweeper(AppRegistry registry, IAppBackend backend, IOpti
         var slept = 0;
         foreach (var app in registry.All)
         {
-            var policy = app.Route.Sleep;
-            if (!app.Awake || policy.AlwaysOn || app.InFlight > 0 || app.Idle < TimeSpan.FromSeconds(policy.IdleSeconds))
+            if (!app.Awake || app.Route.IdleAfter is not { } idleAfter || app.InFlight > 0 || app.Idle < idleAfter)
             {
                 continue;
             }

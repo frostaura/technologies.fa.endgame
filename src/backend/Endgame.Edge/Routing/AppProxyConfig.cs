@@ -5,10 +5,10 @@ using Yarp.ReverseProxy.Forwarder;
 namespace Endgame.Edge.Routing;
 
 /// <summary>
-/// Turns a routing snapshot into proxy routes. Each app gets one cluster and up to two kinds of
-/// route: the path form <c>/org/division/project/…</c> and one route per subdomain-form host.
-/// Host routes outrank everything, so <c>acme.example/api/…</c> is the app's own API; path routes
-/// outrank the platform's static <c>/api</c> and console routes.
+/// Turns a routing snapshot into proxy routes. Each app gets one cluster and two routes: the path
+/// form <c>/org/division/project/app/…</c> on any host, and <c>/division/project/app/…</c> on its
+/// organisation's subdomain. Host routes outrank everything; path routes outrank the platform's
+/// static <c>/api</c> and console routes.
 /// </summary>
 public static class AppProxyConfig
 {
@@ -28,27 +28,22 @@ public static class AppProxyConfig
         foreach (var app in snapshot.Apps)
         {
             var cluster = ClusterId(app.AppId);
-            var prefix = RouteSnapshot.PrefixOf(app);
             routes.Add(new RouteConfig
             {
                 RouteId = $"app-{app.AppId:D}-path",
                 ClusterId = cluster,
                 Order = PathRouteOrder,
-                Match = new RouteMatch { Path = prefix + "/{**rest}" },
-                Metadata = new Dictionary<string, string> { [AppIdKey] = app.AppId.ToString("D"), [ShapeKey] = PathShape, [PrefixKey] = prefix },
+                Match = new RouteMatch { Path = app.PathPrefix + "/{**rest}" },
+                Metadata = new Dictionary<string, string> { [AppIdKey] = app.AppId.ToString("D"), [ShapeKey] = PathShape, [PrefixKey] = app.PathPrefix },
             });
-            for (var i = 0; i < app.Hosts.Count; i++)
+            routes.Add(new RouteConfig
             {
-                routes.Add(new RouteConfig
-                {
-                    RouteId = $"app-{app.AppId:D}-host-{i}",
-                    ClusterId = cluster,
-                    Order = HostRouteOrder,
-                    Match = new RouteMatch { Hosts = [app.Hosts[i]], Path = "/{**rest}" },
-                    Metadata = new Dictionary<string, string> { [AppIdKey] = app.AppId.ToString("D"), [ShapeKey] = HostShape, [PrefixKey] = "" },
-                });
-            }
-
+                RouteId = $"app-{app.AppId:D}-host",
+                ClusterId = cluster,
+                Order = HostRouteOrder,
+                Match = new RouteMatch { Hosts = [app.Host], Path = app.HostPrefix + "/{**rest}" },
+                Metadata = new Dictionary<string, string> { [AppIdKey] = app.AppId.ToString("D"), [ShapeKey] = HostShape, [PrefixKey] = app.HostPrefix },
+            });
             clusters.Add(new ClusterConfig
             {
                 ClusterId = cluster,
@@ -78,6 +73,5 @@ public static class ForwardedHeaders
         "X-Forwarded-Host",
         HostingConventions.ForwardedPrefixHeader,
         "X-Real-IP",
-        HostingConventions.UserIdHeader,
     ];
 }

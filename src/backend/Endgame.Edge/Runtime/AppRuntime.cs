@@ -1,3 +1,4 @@
+using Endgame.Edge.Routing;
 using Endgame.Hosting.Contracts;
 
 namespace Endgame.Edge.Runtime;
@@ -18,7 +19,7 @@ public enum WakeOutcome
 /// last activity, and the single wake every concurrent request to a sleeping app shares. Start and
 /// stop share one lock, so a wake arriving mid-sleep waits for the stop to finish and then wakes.
 /// </summary>
-public sealed class AppRuntime(AppRoute route, TimeProvider time)
+public sealed class AppRuntime(EdgeApp route, TimeProvider time)
 {
     private readonly Lock gate = new();
     private readonly SemaphoreSlim lifecycle = new(1, 1);
@@ -32,7 +33,7 @@ public sealed class AppRuntime(AppRoute route, TimeProvider time)
     private int sleeps;
     private long lastWakeMs;
 
-    public AppRoute Route { get; set; } = route;
+    public EdgeApp Route { get; set; } = route;
 
     public bool Awake => awake;
 

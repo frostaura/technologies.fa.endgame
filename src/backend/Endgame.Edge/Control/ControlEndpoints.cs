@@ -13,9 +13,11 @@ namespace Endgame.Edge.Control;
 /// </summary>
 public static class ControlEndpoints
 {
-    public static void MapEdgeControl(this IEndpointRouteBuilder app, int controlPort)
+    public static void MapEdgeControl(this IEndpointRouteBuilder app)
     {
-        var control = app.MapGroup("/internal").RequireHost($"*:{controlPort}").AddEndpointFilter<ServiceTokenFilter>();
+        // Which listener a request arrived on is checked by the edge's first middleware (the local
+        // port, never the Host header, which a published port rewrites); these carry the marker it looks for.
+        var control = app.MapGroup("/internal").WithMetadata(new ControlEndpoint()).AddEndpointFilter<ServiceTokenFilter>();
 
         control.MapPost("/routes/refresh", async (RouteTableSource routes, CancellationToken ct) =>
         {
@@ -48,8 +50,9 @@ public static class ControlEndpoints
         control.MapGet("/apps", (AppRegistry registry) => registry.All.Select(a => new
         {
             a.Route.AppId,
-            prefix = RouteSnapshot.PrefixOf(a.Route),
-            a.Route.Hosts,
+            prefix = a.Route.PathPrefix,
+            a.Route.Host,
+            a.Route.HostPrefix,
             a.Awake,
             a.Crashed,
             a.InFlight,
@@ -70,6 +73,9 @@ public static class ControlEndpoints
         });
     }
 }
+
+/// <summary>Marks an endpoint of the control interface.</summary>
+public sealed class ControlEndpoint;
 
 /// <summary><c>Authorization: Bearer $ENDGAME_SERVICE_TOKEN</c>, compared in constant time.</summary>
 public sealed class ServiceTokenFilter(IConfiguration configuration) : IEndpointFilter

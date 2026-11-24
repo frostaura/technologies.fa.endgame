@@ -13,7 +13,7 @@ namespace Endgame.Edge.Routing;
 /// </summary>
 public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITransformProvider
 {
-    public const string UserItem = "endgame.user";
+    public const string SessionItem = "endgame.session";
 
     public void ValidateRoute(TransformRouteValidationContext context)
     {
@@ -27,6 +27,23 @@ public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITrans
     {
         if (context.Route.Metadata is not { } metadata || !metadata.TryGetValue(AppProxyConfig.AppIdKey, out _))
         {
+            // The platform's own routes keep YARP's forwarded headers (passkey sign-in needs
+            // X-Forwarded-Host and -Proto, and Origin passes through untouched); behind the tunnel
+            // the scheme visitors used replaces the one the edge saw.
+            if (options.Value.PublicScheme is { Length: > 0 } publicScheme)
+            {
+                context.UseDefaultForwarders = false;
+                context.AddXForwardedFor();
+                context.AddXForwardedHost();
+                context.AddXForwardedPrefix();
+                context.AddRequestTransform(transform =>
+                {
+                    transform.ProxyRequest.Headers.Remove("X-Forwarded-Proto");
+                    transform.ProxyRequest.Headers.TryAddWithoutValidation("X-Forwarded-Proto", publicScheme);
+                    return ValueTask.CompletedTask;
+                });
+            }
+
             return;
         }
 
@@ -39,6 +56,11 @@ public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITrans
             var request = transform.HttpContext.Request;
             var headers = transform.ProxyRequest.Headers;
             foreach (var name in ForwardedHeaders.Stripped)
+            {
+                headers.Remove(name);
+            }
+
+            foreach (var name in headers.Select(h => h.Key).Where(k => k.StartsWith(HostingConventions.PlatformHeaderPrefix, StringComparison.OrdinalIgnoreCase)).ToList())
             {
                 headers.Remove(name);
             }
@@ -58,9 +80,9 @@ public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITrans
                 headers.TryAddWithoutValidation("X-Forwarded-For", remote.ToString());
             }
 
-            if (transform.HttpContext.Items.TryGetValue(UserItem, out var user) && user is Guid userId)
+            if (transform.HttpContext.Items.TryGetValue(SessionItem, out var session) && session is string token)
             {
-                headers.TryAddWithoutValidation(HostingConventions.UserIdHeader, userId.ToString("D"));
+                headers.TryAddWithoutValidation(HostingConventions.SessionHeader, token);
             }
 
             if (request.Headers.Cookie.Count > 0)

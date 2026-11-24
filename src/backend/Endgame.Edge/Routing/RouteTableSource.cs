@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using Endgame.Edge.Runtime;
 using Endgame.Hosting.Contracts;
 using Microsoft.Extensions.Options;
@@ -64,12 +63,12 @@ public sealed class RouteTableSource(
             etag = response.Headers.ETag?.ToString();
             LastSuccess = DateTimeOffset.UtcNow;
             LastError = null;
-            if (Loaded && table.Version == Current.Version && table.Version.Length > 0)
+            if (Loaded && RouteSnapshot.VersionOf(table) == Current.Version)
             {
                 return Current;
             }
 
-            Apply(RouteSnapshot.From(table, options.Value.ReservedSegments));
+            Apply(RouteSnapshot.From(table, options.Value.ReservedSegments, options.Value.SecondsPerIdleMinute));
             return Current;
         }
         finally

@@ -6,7 +6,6 @@ using Endgame.Edge.Runtime;
 using Endgame.Hosting.Contracts;
 using Microsoft.Extensions.Options;
 using Yarp.ReverseProxy.Forwarder;
-using Yarp.ReverseProxy.Model;
 
 namespace Endgame.Edge.Routing;
 
@@ -15,7 +14,7 @@ namespace Endgame.Edge.Routing;
 /// app available, may this visitor open it, is it awake — waking it if not — and, if the app
 /// fails underneath the request, the unavailable page instead of a bare error.
 /// </summary>
-public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGate access, IOptions<EdgeOptions> options, ILogger<AppGate> logger)
+public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGate access, AuthPages auth, IOptions<EdgeOptions> options, ILogger<AppGate> logger)
 {
     public async Task InvokeAsync(HttpContext context, Func<Task> next)
     {
@@ -45,16 +44,38 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
                 return;
         }
 
-        var decision = await access.CheckAsync(app.Route, context, context.RequestAborted);
-        if (!decision.Allowed)
+        var prefix = route.Metadata?.GetValueOrDefault(AppProxyConfig.PrefixKey) ?? "";
+        var path = context.Request.Path.Value ?? "/";
+        var inApp = path.Length > prefix.Length ? path[prefix.Length..] : "/";
+        var appAddress = context.Request.PathBase + prefix;
+        if (StartsWithSegment(inApp, HostingConventions.PlatformCallbackPath))
         {
-            await RefuseAsync(context, decision, mark);
+            // Platform-to-app callbacks come from the control plane directly, never through here.
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
 
-        if (decision.UserId is { } userId)
+        if (StartsWithSegment(inApp, HostingConventions.AuthPath))
         {
-            context.Items[AppRequestTransforms.UserItem] = userId;
+            await auth.HandleAsync(context, app.Route, appAddress, inApp[HostingConventions.AuthPath.Length..]);
+            return;
+        }
+
+        // Declared webhooks reach even a private app: the app kit verifies their signature.
+        var isHook = HttpMethods.IsPost(context.Request.Method) && StartsWithSegment(inApp, HostingConventions.HooksPath);
+        if (!isHook)
+        {
+            var decision = await access.CheckAsync(app.Route, context, inApp + context.Request.QueryString, context.RequestAborted);
+            if (!decision.Allowed)
+            {
+                await RefuseAsync(context, decision, appAddress, inApp, mark);
+                return;
+            }
+
+            if (decision.SessionToken is { Length: > 0 } session)
+            {
+                context.Items[AppRequestTransforms.SessionItem] = session;
+            }
         }
 
         app.Enter();
@@ -93,16 +114,20 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
         }
     }
 
-    private async Task RefuseAsync(HttpContext context, AccessDecision decision, string? mark)
+    private static bool StartsWithSegment(string path, string segment) =>
+        path.StartsWith(segment, StringComparison.OrdinalIgnoreCase)
+        && (path.Length == segment.Length || path[segment.Length] == '/');
+
+    private static async Task RefuseAsync(HttpContext context, AccessDecision decision, string appAddress, string inApp, string? mark)
     {
-        switch (decision.Outcome)
+        switch (decision.Decision)
         {
-            case AccessOutcome.SignInRequired:
+            case AccessDecisions.SignIn:
                 var request = context.Request;
-                var original = request.PathBase + request.Path + request.QueryString;
+                var original = appAddress + inApp + request.QueryString;
                 var target = decision.SignInUrl is { Length: > 0 } url
                     ? url
-                    : $"{options.Value.SignInPath}?returnTo={Uri.EscapeDataString(original)}";
+                    : $"{appAddress}{HostingConventions.AuthPath}/sign-in?returnTo={Uri.EscapeDataString(original)}";
                 if (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method))
                 {
                     context.Response.Redirect(target, permanent: false);
@@ -114,7 +139,7 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
                 }
 
                 return;
-            case AccessOutcome.Forbidden:
+            case AccessDecisions.Deny:
                 await UnavailablePage.WriteAsync(context, Unavailable.Forbidden, mark);
                 return;
             default:

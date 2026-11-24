@@ -33,6 +33,12 @@ public sealed class EdgeOptions
     /// <summary>After a crash, how long the unavailable page is served before a wake is tried again.</summary>
     public int CrashBackoffSeconds { get; set; } = 15;
 
+    /// <summary>
+    /// The length of one minute of an app's idle setting, in seconds: 60, except in tests, which
+    /// compress time rather than wait out a real minute.
+    /// </summary>
+    public int SecondsPerIdleMinute { get; set; } = 60;
+
     /// <summary>How often idle apps are looked for.</summary>
     public int IdleSweepMilliseconds { get; set; } = 1000;
 
@@ -48,8 +54,11 @@ public sealed class EdgeOptions
     /// <summary>The console's origin, for links from pages served on organisation subdomains.</summary>
     public string PlatformOrigin { get; set; } = "";
 
-    /// <summary>Where a visitor signs in when the control plane names nowhere else.</summary>
+    /// <summary>The platform's sign-in page, relative to <see cref="PlatformOrigin"/>.</summary>
     public string SignInPath { get; set; } = "/sign-in";
+
+    /// <summary>The platform's sign-up page, relative to <see cref="PlatformOrigin"/>.</summary>
+    public string SignUpPath { get; set; } = "/sign-up";
 
     /// <summary>The platform's own cookies: never forwarded to an app, which shares the console's origin on the path form.</summary>
     public List<string> PlatformCookies { get; set; } = ["endgame_session"];
