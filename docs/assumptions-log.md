@@ -15,6 +15,8 @@ what was assumed, why, and how to reverse it. Product decisions he made himself 
 | 7 | **Email is built behind one interface and sent to a local mail catcher in development.** No mail leaves the machine. | Who sends production email is an open founder question; real sends from an unattended run risk his sending reputation. | Point the interface at the chosen sender. |
 | 8 | **This laptop is the host.** The stack runs on its Docker. | **Confirmed by the founder on 2026-11-24:** "for all intents and purposes this is the mac mini", and all Docker work on it is allowed. | Deploy elsewhere with the production compose file. |
 | 9 | **Model spend caps for the spikes: US$12 for the harness benchmark and US$2 for the OpenRouter capability checks**, each enforced by the spike itself before every call. | Enough to measure four or five model tiers on six tasks three times; small enough to be an acceptable surprise. | Lower the caps in the spike briefs, or stop the runs. |
+| 10 | **One hidden app entry now exists on the OpenRouter account**, created by the attribution headers the capability spike sent (origin `endgame-spike.frostaura.invalid`). Nothing else on the account was created or changed; the spike spent about US$0.02. | OpenRouter creates the entry on first use of those headers; it was not avoidable while testing attribution. | Remove it in the OpenRouter dashboard if unwanted. |
+| 11 | **Endgame routes models itself; the Jev router is not the limit.** | The spike showed Jev treats a model list as a preference and ignored ours, so it cannot enforce a price ceiling. The spec named Jev as the intended router; this sharpens that, it does not drop it. | Revisit if OpenRouter makes the list a hard restriction. |
 
 ## Founder replies
 
