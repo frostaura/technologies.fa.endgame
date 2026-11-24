@@ -27,6 +27,9 @@ public sealed class ModelGateway(
 
     private const int MaxErrorText = 500;
 
+    /// <summary>The most providers a call may name in <c>providerOrder</c>.</summary>
+    public const int MaxProviderOrder = 10;
+
     /// <summary>A non-streamed call.</summary>
     public async Task<ChatResult> CompleteAsync(ChatRequest request, CancellationToken cancellationToken)
     {
@@ -208,24 +211,43 @@ public sealed class ModelGateway(
             maxPrice["request"] = route.MaxRequestUsd;
         }
 
+        // Only what every model on the route accepts is sent (ARCH-006): require_parameters is on, so
+        // one parameter a model lacks would leave no provider to serve the call.
+        bool All(string parameter) => route.Models.All(m => options.Models[m].Supports(parameter));
+        var provider = new JsonObject
+        {
+            ["max_price"] = maxPrice,
+            ["sort"] = route.Sort,
+            ["require_parameters"] = true,
+            ["allow_fallbacks"] = true,
+        };
+        if (request.ProviderOrder is { Count: > 0 } order)
+        {
+            if (order.Count > MaxProviderOrder || order.Any(p => string.IsNullOrWhiteSpace(p) || p.Length > 100))
+            {
+                throw EndgameProblem.Invalid($"providerOrder is a list of 1 to {MaxProviderOrder} provider names.");
+            }
+
+            provider["order"] = new JsonArray(order.Select(p => (JsonNode)JsonValue.Create(p.Trim())!).ToArray());
+        }
+
         var body = new JsonObject
         {
             ["model"] = route.Models[0],
             ["messages"] = messages.DeepClone(),
             ["max_tokens"] = maxTokens,
-            ["reasoning"] = route.Reasoning == "off"
-                ? new JsonObject { ["enabled"] = false }
-                : new JsonObject { ["effort"] = route.Reasoning },
-            ["provider"] = new JsonObject
-            {
-                ["max_price"] = maxPrice,
-                ["sort"] = route.Sort,
-                ["require_parameters"] = true,
-                ["allow_fallbacks"] = true,
-            },
+            ["provider"] = provider,
             ["usage"] = new JsonObject { ["include"] = true },
             ["stream"] = stream,
         };
+        if (All("reasoning"))
+        {
+            // Rule 5: always explicit where the model reasons at all.
+            body["reasoning"] = route.Reasoning == "off"
+                ? new JsonObject { ["enabled"] = false }
+                : new JsonObject { ["effort"] = route.Reasoning };
+        }
+
         if (route.Models.Count > 1)
         {
             body["models"] = new JsonArray(route.Models.Select(m => (JsonNode)JsonValue.Create(m)!).ToArray());
@@ -234,17 +256,25 @@ public sealed class ModelGateway(
         if (tools.Count > 0)
         {
             body["tools"] = tools;
-            // Rule 9: never assume parallel tool calls; the route says whether they are allowed.
-            body["parallel_tool_calls"] = route.ParallelToolCalls;
+            // Rule 9: never assume parallel tool calls; the route says whether they are allowed, where the models take the setting.
+            if (All("parallel_tool_calls"))
+            {
+                body["parallel_tool_calls"] = route.ParallelToolCalls;
+            }
         }
 
-        if (request.ToolChoice is not null)
+        if (request.ToolChoice is not null && All("tool_choice"))
         {
             body["tool_choice"] = request.ToolChoice.DeepClone();
         }
 
         if (request.ResponseFormat is not null)
         {
+            if (!All("response_format"))
+            {
+                throw EndgameProblem.Invalid("This task type's models do not take a response format; ask for the shape in the prompt instead.");
+            }
+
             body["response_format"] = request.ResponseFormat.DeepClone();
         }
 
@@ -255,7 +285,10 @@ public sealed class ModelGateway(
                 throw EndgameProblem.Invalid("temperature is a number from 0 to 2.");
             }
 
-            body["temperature"] = temperature;
+            if (All("temperature"))
+            {
+                body["temperature"] = temperature;
+            }
         }
 
         return new PreparedCall(body, maxTokens, promptTokens, worstUsd, credits.ToCreditsCeiling(worstUsd));
@@ -380,6 +413,7 @@ public sealed class ModelGateway(
                 ["settledCredits"] = settled,
                 ["billable"] = call.Billable,
                 ["costFromProvider"] = fromProvider,
+                ["employeeId"] = call.Attribution.EmployeeId?.ToString(),
                 ["finishReason"] = facts.FinishReason,
                 ["error"] = facts.Error?.DeepClone(),
             }, CancellationToken.None);
