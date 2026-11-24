@@ -210,7 +210,7 @@ public sealed class GatewayModelClient(HttpClient http, bool stream = true) : IM
     private static decimal Header(HttpResponseMessage response, string name) =>
         response.Headers.TryGetValues(name, out var values) && decimal.TryParse(values.FirstOrDefault(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : 0m;
 
-    internal static JsonNode? TryParse(string text)
+    public static JsonNode? TryParse(string text)
     {
         try
         {

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The harness benchmark (the build plan's part 13): real build tasks run through the real harness
+    against a model tier, with an in-process stand-in for the control plane's gateway that forwards to
+    OpenRouter under a spend cap enforced before every call. A developer tool: it drives workspace
+    containers with the Docker CLI itself, which no Endgame service may do (only Dock touches Docker).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Endgame.Harness/Endgame.Harness.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The fixture app and the task set run inside the workspace container; they are never compiled here. -->
+    <Compile Remove="Fixtures/**" />
+    <None Remove="Fixtures/**" />
+    <Content Remove="Fixtures/**" />
+  </ItemGroup>
+</Project>

@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Endgame.Domain.Runs;
 using Endgame.Harness.Events;
 using Endgame.Harness.Kernel;
+using Endgame.Harness.Model;
 using Endgame.Runner.Agents;
 using Endgame.Runner.Execution;
 
@@ -82,7 +83,19 @@ public sealed class ResearchWorkflow : IWorkflow
 
         var applied = VerdictRules.Apply(verdict, research, strands.Count);
         await run.Journal.OnceAsync("verdict", () => Task.FromResult(applied.DeepClone().AsObject()), cancellationToken);
-        await run.ControlPlane.RecordVerdictAsync(ideaId, applied, cancellationToken);
+        if (!run.Journal.Done("verdict.recorded"))
+        {
+            try
+            {
+                await run.ControlPlane.RecordVerdictAsync(ideaId, applied, cancellationToken);
+            }
+            catch (ServiceProblemException e) when (e.Status == System.Net.HttpStatusCode.Conflict)
+            {
+                // Recorded before a crash, and the idea has moved on: the verdict stands.
+            }
+
+            await run.Journal.RecordAsync("verdict.recorded", new JsonObject(), cancellationToken);
+        }
         var outcome = Json.Str(applied, "outcome");
         var headline = Json.Str(applied, "headline") ?? "";
         var message = outcome switch

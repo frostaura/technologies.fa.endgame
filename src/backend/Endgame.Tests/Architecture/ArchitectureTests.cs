@@ -24,7 +24,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void Every_project_in_the_solution_was_found() =>
         Assert.Equal(
-            ["Endgame.Application", "Endgame.ControlPlane", "Endgame.Dock", "Endgame.Domain", "Endgame.Edge", "Endgame.Harness", "Endgame.Hosting.Contracts", "Endgame.Infrastructure", "Endgame.Runner", "Endgame.Tests"],
+            ["Endgame.Application", "Endgame.ControlPlane", "Endgame.Dock", "Endgame.Domain", "Endgame.Edge", "Endgame.Harness", "Endgame.Harness.Bench", "Endgame.Hosting.Contracts", "Endgame.Infrastructure", "Endgame.Runner", "Endgame.Tests"],
             Projects.Keys.Order(StringComparer.Ordinal));
 
     [Fact]
