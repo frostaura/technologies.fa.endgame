@@ -1,16 +1,27 @@
-# Production stack — the Mac mini, behind a Cloudflare tunnel.
+# Production stack — the file pasted into Portainer (docs/architecture/ARCH-008).
 #
 # Pulls the published images instead of building. WHICH RELEASE RUNS is one variable,
 # ENDGAME_IMAGE_TAG (an immutable sha-<commit> tag from CI); unset, it falls back to :latest.
-# Required values are `:?` so a stack missing one refuses to start instead of booting on a default:
-#   POSTGRES_PASSWORD, CLOUDFLARE_TUNNEL_TOKEN, ENDGAME_SERVICE_TOKEN, DOCK_SECRET_KEY,
-#   OPENROUTER_API_KEY, ENDGAME_VAULT_MASTER_KEY, ENDGAME_OPERATORS, ENDGAME_BACKUP_KEY.
+# Every variable is listed, with what it is for, in .env.production.example — paste that into the
+# stack's environment and fill it in. Required values are `:?`, so a stack missing one refuses to
+# start instead of booting on a default:
+#   POSTGRES_PASSWORD, ENDGAME_SERVICE_TOKEN, DOCK_SECRET_KEY, OPENROUTER_API_KEY,
+#   ENDGAME_VAULT_MASTER_KEY, ENDGAME_OPERATORS, ENDGAME_BACKUP_KEY.
+#
+# THE GATEWAY IS THE EDGE, and it is the only service published to the host
+# (ENDGAME_GATEWAY_PORT, default 8095). The console, the control plane, the runner, Dock, the
+# database and every hosted app are reachable only through it. Point the Cloudflare tunnel at
+# http://<this host>:<ENDGAME_GATEWAY_PORT>, for both endgame.<zone> and *.<zone>; or run the tunnel
+# inside this stack by setting COMPOSE_PROFILES=tunnel and CLOUDFLARE_TUNNEL_TOKEN, in which case
+# its public hostnames route to http://edge:8080.
+#
+# THE STACK'S NAME MATTERS. Dock finds the edge, the database and the egress proxy by container
+# name, <stack>-edge-1 and so on. Name the Portainer stack `endgame`, or set ENDGAME_STACK_NAME to
+# whatever it is called.
 #
 # The development sign-in can never be on here: every service is Production and the control
-# plane's ENDGAME_DEV_LOGIN is the literal "false", not a variable. There is no mail catcher.
-#
-# Nothing is published to the host. Cloudflared runs inside this stack and reaches the edge by
-# service name; the edge is the only service it is pointed at.
+# plane's ENDGAME_DEV_LOGIN is the literal "false", not a variable. There is no mail catcher: with
+# no SMTP_HOST set, nothing is sent and invitations are handed over as links.
 name: endgame
 
 x-logging: &default-logging
@@ -51,7 +62,7 @@ services:
 
   control-plane:
     <<: *dotnet-service
-    image: frostaura/technologies.fa.endgame-control-plane:${ENDGAME_IMAGE_TAG:-latest}
+    image: ${ENDGAME_IMAGE_NAMESPACE:-frostaura}/technologies.fa.endgame-control-plane:${ENDGAME_IMAGE_TAG:-latest}
     environment:
       <<: *dotnet-env
       ConnectionStrings__Endgame: Host=postgres;Port=5432;Database=${POSTGRES_DB:-endgame};Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -65,26 +76,39 @@ services:
       ENDGAME_OPERATORS: ${ENDGAME_OPERATORS:?ENDGAME_OPERATORS is required}
       # Never a variable: production cannot enable the development sign-in.
       ENDGAME_DEV_LOGIN: "false"
+      # The addresses apps are given: https://<console host>/<org>/... and https://<org>.<zone>/...
+      Addresses__PathHost: ${ENDGAME_CONSOLE_HOST:-endgame.frostaura.net}
+      Addresses__OrganisationDomain: ${ENDGAME_ZONE:-frostaura.net}
+      # Outgoing mail (invitations, shares, what apps send). No host: nothing is sent.
+      Smtp__Host: ${SMTP_HOST:-}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__Username: ${SMTP_USERNAME:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__From: ${SMTP_FROM:-}
+      Smtp__StartTls: ${SMTP_STARTTLS:-true}
     depends_on:
       postgres:
         condition: service_healthy
 
   runner:
     <<: *dotnet-service
-    image: frostaura/technologies.fa.endgame-runner:${ENDGAME_IMAGE_TAG:-latest}
+    image: ${ENDGAME_IMAGE_NAMESPACE:-frostaura}/technologies.fa.endgame-runner:${ENDGAME_IMAGE_TAG:-latest}
 
   dock:
     <<: *dotnet-service
-    image: frostaura/technologies.fa.endgame-dock:${ENDGAME_IMAGE_TAG:-latest}
+    image: ${ENDGAME_IMAGE_NAMESPACE:-frostaura}/technologies.fa.endgame-dock:${ENDGAME_IMAGE_TAG:-latest}
     environment:
       <<: *dotnet-env
       Dock__SecretKey: ${DOCK_SECRET_KEY:?DOCK_SECRET_KEY is required}
       Dock__PostgresAdmin: Host=postgres;Port=5432;Database=postgres;Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      Dock__Peers__Edge: endgame-edge-1
-      Dock__Peers__Postgres: endgame-postgres-1
-      Dock__Peers__Egress: endgame-egress-1
+      # Dock finds its peers by container name: <stack>-<service>-1.
+      Dock__Peers__Edge: ${ENDGAME_STACK_NAME:-endgame}-edge-1
+      Dock__Peers__Postgres: ${ENDGAME_STACK_NAME:-endgame}-postgres-1
+      Dock__Peers__Egress: ${ENDGAME_STACK_NAME:-endgame}-egress-1
+      Dock__Instance: ${ENDGAME_STACK_NAME:-endgame}
+      Dock__SubnetPool: ${DOCK_SUBNET_POOL:-10.213.0.0/16}
       Dock__AppMemoryBudgetMb: ${DOCK_APP_MEMORY_BUDGET_MB:-4096}
-      Dock__Instance: endgame
+      Dock__UsageReportSeconds: ${ENDGAME_USAGE_REPORT_SECONDS:-300}
     # The ONLY service given the Docker socket.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -99,7 +123,7 @@ services:
 
   # Default-deny forward proxy: the only way out for apps, workspaces and builds.
   egress:
-    image: frostaura/technologies.fa.endgame-egress:${ENDGAME_IMAGE_TAG:-latest}
+    image: ${ENDGAME_IMAGE_NAMESPACE:-frostaura}/technologies.fa.endgame-egress:${ENDGAME_IMAGE_TAG:-latest}
     restart: unless-stopped
     # IPv4 only: with an IPv6 address it cannot route, the proxy tries it first and gives up.
     sysctls:
@@ -107,7 +131,7 @@ services:
     logging: *default-logging
 
   console:
-    image: frostaura/technologies.fa.endgame-console:${ENDGAME_IMAGE_TAG:-latest}
+    image: ${ENDGAME_IMAGE_NAMESPACE:-frostaura}/technologies.fa.endgame-console:${ENDGAME_IMAGE_TAG:-latest}
     restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1" ]
@@ -118,26 +142,33 @@ services:
 
   edge:
     <<: *dotnet-service
-    image: frostaura/technologies.fa.endgame-edge:${ENDGAME_IMAGE_TAG:-latest}
+    image: ${ENDGAME_IMAGE_NAMESPACE:-frostaura}/technologies.fa.endgame-edge:${ENDGAME_IMAGE_TAG:-latest}
     environment:
       <<: *dotnet-env
       # Behind the tunnel the edge sees plain HTTP; visitors used HTTPS.
       Edge__PublicScheme: https
-      Edge__PlatformOrigin: ${ENDGAME_PUBLIC_ORIGIN:-https://endgame.frostaura.net}
+      Edge__PlatformOrigin: https://${ENDGAME_CONSOLE_HOST:-endgame.frostaura.net}
+      Edge__AppSubnetPools__0: ${DOCK_SUBNET_POOL:-10.213.0.0/16}
+      Edge__UsageReportSeconds: ${ENDGAME_USAGE_REPORT_SECONDS:-300}
+    # The gateway: the one port this stack publishes. Everything else is reached through it.
+    ports:
+      - "${ENDGAME_GATEWAY_PORT:-8095}:8080"
     depends_on:
       control-plane:
         condition: service_healthy
       console:
         condition: service_healthy
 
-  # The public door. Pinned to a release, like every third-party image here, so a redeploy changes
-  # only what this repository changed. The tunnel's public hostname routes to http://edge:8080.
+  # Optional: the tunnel inside this stack (COMPOSE_PROFILES=tunnel). Left off, an existing tunnel on
+  # the host is pointed at the gateway port instead. Pinned to a release, like every third-party
+  # image here, so a redeploy changes only what this repository changed.
   cloudflared:
+    profiles: [ "tunnel" ]
     image: cloudflare/cloudflared:2026.11.2
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
     depends_on:
       edge:
         condition: service_healthy
@@ -151,7 +182,7 @@ services:
   # no backups. Nothing is published to the host.
   ops:
     <<: *dotnet-service
-    image: frostaura/technologies.fa.endgame-ops:${ENDGAME_IMAGE_TAG:-latest}
+    image: ${ENDGAME_IMAGE_NAMESPACE:-frostaura}/technologies.fa.endgame-ops:${ENDGAME_IMAGE_TAG:-latest}
     environment:
       <<: *dotnet-env
       # 32 random bytes, hex or base64. Keep a copy off this machine: no archive opens without it.
@@ -165,6 +196,7 @@ services:
       Ops__Backup__HourUtc: ${BACKUP_HOUR_UTC:-1}
       Ops__Backup__KeepDaily: ${ENDGAME_BACKUP_KEEP_DAILY:-7}
       Ops__Backup__KeepWeekly: ${ENDGAME_BACKUP_KEEP_WEEKLY:-4}
+      Ops__Backup__ScheduleEnabled: ${ENDGAME_BACKUP_SCHEDULE:-true}
       Ops__Cloudflare__ApiToken: ${CLOUDFLARE_API_TOKEN:-}
       Ops__Cloudflare__AccountId: ${CLOUDFLARE_ACCOUNT_ID:-}
       Ops__Cloudflare__ZoneId: ${CLOUDFLARE_ZONE_ID:-}

@@ -101,7 +101,7 @@ smoke: up
 # Parse the production stack file with throwaway values for its required variables, and prove it
 # can never turn the development sign-in on, whatever the environment says, and that it refuses to
 # parse without the backup key (the ops service is the stack's only backup).
-PROD_CHECK_ENV = POSTGRES_PASSWORD=config-check CLOUDFLARE_TUNNEL_TOKEN=config-check ENDGAME_SERVICE_TOKEN=config-check \
+PROD_CHECK_ENV = POSTGRES_PASSWORD=config-check ENDGAME_SERVICE_TOKEN=config-check \
 	DOCK_SECRET_KEY=config-check OPENROUTER_API_KEY=config-check ENDGAME_VAULT_MASTER_KEY=config-check ENDGAME_OPERATORS=config-check \
 	ENDGAME_BACKUP_KEY=config-check
 

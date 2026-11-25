@@ -29,3 +29,4 @@ test-results/
 
 # Browser-session artefacts (Playwright MCP walkthroughs)
 .playwright-mcp/
+!.env.production.example

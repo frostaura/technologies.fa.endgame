@@ -33,9 +33,16 @@ what was assumed, why, and how to reverse it. Product decisions he made himself 
 | 25 | **The Crusaders acceptance test is a fresh court-booking app described in a paragraph, not a port of the real Crusaders product**, and it has no payments: an admin adds minute packages by hand. | The spec keeps payments for app end users out of the first version, and the real product also drives court hardware and biometric devices that the factory cannot be given. | Run the factory against the real product's specification when payments and the hardware bridge exist. |
 | 26 | **A branch named `build/final` is pushed to the public repository so CI can run on it.** Until then only `main` had been pushed. | CI had never gone green for the jobs added after the scaffold, and GitHub's runners are the only place to prove them. Nothing is merged or deployed by it, and the publish job stays switched off. | Delete the branch on GitHub. |
 | 27 | **Up to US$6 more of model spend is allowed for the last defect fixes**, stopped at US$5. Spend before this lane was about US$9.20 in total. | Two of the defects (asking about an app, and the factory's browser proof) can only be proven with real models. | Lower the cap or stop the lane. |
+| 28 | **The publish job now runs on every push to `main`** (it was switched off behind a repository variable), pushing under the `frostaura` Docker Hub namespace unless the variable `DOCKERHUB_NAMESPACE` says otherwise. | The founder asked for the whole stack on Docker Hub and said he would add the secrets, expecting only the push to fail until then. `frostaura` is the namespace the production stack pulls from; a mismatch between the two is the commonest reason a redeploy changes nothing. | Set `DOCKERHUB_NAMESPACE` and the stack's `ENDGAME_IMAGE_NAMESPACE` to the same other name. |
+| 29 | **The Portainer redeploy job exists but stays off until `DEPLOY_ENABLED=true`**, as in Reel. | It needs the stack's id, and the stack cannot exist before the first images do. | Create the stack, add the four `PORTAINER_*` secrets, set the variable (`ARCH-008`). |
+| 30 | **The gateway is the existing Edge service, published on one host port (8095); the tunnel inside the stack is now optional** (`COMPOSE_PROFILES=tunnel`) and no longer required. | Edge already fronts the console, the API and every hosted app, so a second gateway would only add a hop. The founder's other stacks are reached by a tunnel already on the host pointed at a gateway port; requiring a second tunnel token would have stopped the stack starting. | Set the profile and the token to run the tunnel inside the stack. |
 
 ## Founder replies
 
 - **2026-11-24** — shown the held items and the two assumptions flagged for him (use of his
   OpenRouter key; the red-lines reading of God mode), he replied "You assume correct". Entries 1
   and 5 are treated as confirmed. Entry 8 was confirmed in the same message.
+- **2026-11-25** — asked for everything merged to `main`, CI green, and the whole stack published
+  to Docker Hub for Portainer on the Mac mini behind one gateway, with every setting documented.
+  He will add the CI secrets himself; public images are fine for now. Entry 26's "publish stays
+  off" is superseded by entry 28.

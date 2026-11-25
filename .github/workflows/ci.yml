@@ -313,55 +313,40 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Off until Docker Hub credentials exist: set the repository variable PUBLISH_ENABLED=true and
-  # the secrets DOCKERHUB_USERNAME / DOCKERHUB_TOKEN. While the variable is unset the job is
-  # skipped, not failed. Every image gets an immutable sha-<commit> tag; :latest follows it.
+  # ============================================================================================
+  # Publish — on a push to main, after every gate above. Seven images, each built natively for
+  # amd64 and arm64 (the .NET SDK is not run under emulation), pushed to Docker Hub by digest and
+  # joined into one multi-arch tag: an immutable sha-<commit>, and :latest following it.
+  #
+  # Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN. The namespace the images are pushed under is the
+  # repository variable DOCKERHUB_NAMESPACE, or `frostaura` — the same default the production stack
+  # pulls from (ENDGAME_IMAGE_NAMESPACE). Each image is BUILT before the login, so without the
+  # secrets a job fails at "Log in to Docker Hub" and nowhere earlier.
+  # ============================================================================================
   publish:
-    name: Publish ${{ matrix.image }}
-    if: vars.PUBLISH_ENABLED == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Publish ${{ matrix.image }} (${{ matrix.arch }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [backend, hosting, appkit, ops, frontend, security, stack-smoke, e2e, stack-acceptance]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    env:
+      REPOSITORY: ${{ vars.DOCKERHUB_NAMESPACE || 'frostaura' }}/technologies.fa.endgame-${{ matrix.image }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
+        arch: [amd64, arm64]
+        image: [control-plane, edge, runner, dock, console, egress, ops]
         include:
-          - image: control-plane
-            context: .
-            dockerfile: src/backend/Dockerfile
-            project: Endgame.ControlPlane
-          - image: edge
-            context: .
-            dockerfile: src/backend/Dockerfile
-            project: Endgame.Edge
-          - image: runner
-            context: .
-            dockerfile: src/backend/Dockerfile
-            project: Endgame.Runner
-          - image: dock
-            context: .
-            dockerfile: src/backend/Dockerfile
-            project: Endgame.Dock
-          - image: console
-            context: .
-            dockerfile: src/frontend/Dockerfile
-            project: ""
-          - image: egress
-            context: src/egress
-            dockerfile: src/egress/Dockerfile
-            project: ""
-          - image: ops
-            context: .
-            dockerfile: src/ops/Dockerfile
-            project: ""
+          - { image: control-plane, context: ., dockerfile: src/backend/Dockerfile, project: Endgame.ControlPlane }
+          - { image: edge, context: ., dockerfile: src/backend/Dockerfile, project: Endgame.Edge }
+          - { image: runner, context: ., dockerfile: src/backend/Dockerfile, project: Endgame.Runner }
+          - { image: dock, context: ., dockerfile: src/backend/Dockerfile, project: Endgame.Dock }
+          - { image: console, context: ., dockerfile: src/frontend/Dockerfile, project: "" }
+          - { image: egress, context: src/egress, dockerfile: src/egress/Dockerfile, project: "" }
+          - { image: ops, context: ., dockerfile: src/ops/Dockerfile, project: "" }
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: docker/setup-qemu-action@v4.4.0
       - uses: docker/setup-buildx-action@v4.4.1
-      - uses: docker/login-action@v4.8.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       # Dock's image carries the app kit's template, packed first (as `make up` does).
       - uses: actions/setup-dotnet@v6.1.0
         if: matrix.image == 'dock'
@@ -374,15 +359,107 @@ jobs:
       - name: Pack the app kit into the template
         if: matrix.image == 'dock'
         run: make appkit-vendor
-      - uses: docker/build-push-action@v7.4.0
+      - name: Build
+        uses: docker/build-push-action@v7.4.0
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
-          push: true
+          platforms: linux/${{ matrix.arch }}
+          push: false
           build-args: |
             PROJECT=${{ matrix.project }}
             BUILD_SHA=${{ github.sha }}
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/technologies.fa.endgame-${{ matrix.image }}:sha-${{ github.sha }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/technologies.fa.endgame-${{ matrix.image }}:latest
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # The same build again, answered from the builder's cache; only the push is new.
+      - name: Push
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          provenance: false
+          build-args: |
+            PROJECT=${{ matrix.project }}
+            BUILD_SHA=${{ github.sha }}
+          tags: ${{ env.REPOSITORY }}:sha-${{ github.sha }}-${{ matrix.arch }}
+
+  publish-manifest:
+    name: Tag ${{ matrix.image }} (multi-arch)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      REPOSITORY: ${{ vars.DOCKERHUB_NAMESPACE || 'frostaura' }}/technologies.fa.endgame-${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [control-plane, edge, runner, dock, console, egress, ops]
+    steps:
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/login-action@v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Join both architectures under sha-<commit> and latest
+        run: |
+          docker buildx imagetools create \
+            --tag "${REPOSITORY}:sha-${GITHUB_SHA}" \
+            --tag "${REPOSITORY}:latest" \
+            "${REPOSITORY}:sha-${GITHUB_SHA}-amd64" \
+            "${REPOSITORY}:sha-${GITHUB_SHA}-arm64"
+
+  # ============================================================================================
+  # Redeploy — ask Portainer to pull the new images and redeploy the stack it already holds.
+  # Off until the stack exists: create it first (docs/architecture/ARCH-008), then set the secrets
+  # PORTAINER_URL, PORTAINER_TOKEN, PORTAINER_ENDPOINT_ID and PORTAINER_STACK_ID and the repository
+  # variable DEPLOY_ENABLED=true. While the variable is unset the job is skipped, not failed.
+  # The stack file and its environment are sent back exactly as Portainer holds them: a redeploy
+  # moves images and nothing else.
+  # ============================================================================================
+  deploy:
+    name: Redeploy on Portainer
+    if: vars.DEPLOY_ENABLED == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [publish-manifest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Pull the new images and redeploy the stack
+        env:
+          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
+          PORTAINER_ENDPOINT_ID: ${{ secrets.PORTAINER_ENDPOINT_ID }}
+          PORTAINER_STACK_ID: ${{ secrets.PORTAINER_STACK_ID }}
+        run: |
+          set -euo pipefail
+          : "${PORTAINER_URL:?secret PORTAINER_URL is required}"
+          : "${PORTAINER_TOKEN:?secret PORTAINER_TOKEN is required}"
+          : "${PORTAINER_ENDPOINT_ID:?secret PORTAINER_ENDPOINT_ID is required}"
+          : "${PORTAINER_STACK_ID:?secret PORTAINER_STACK_ID is required}"
+          api="${PORTAINER_URL%/}/api"
+          work="$(mktemp -d)"
+
+          curl -fsSL -H "X-API-Key: ${PORTAINER_TOKEN}" "${api}/stacks/${PORTAINER_STACK_ID}/file" \
+            | jq -r '.StackFileContent' > "${work}/stack.yml"
+          curl -fsSL -H "X-API-Key: ${PORTAINER_TOKEN}" "${api}/stacks/${PORTAINER_STACK_ID}" \
+            | jq -c '.Env // []' > "${work}/env.json"
+          test -s "${work}/stack.yml" || { echo "Portainer returned an empty stack file" >&2; exit 1; }
+
+          jq -n --rawfile file "${work}/stack.yml" --slurpfile env "${work}/env.json" \
+            '{stackFileContent: $file, env: $env[0], prune: false, pullImage: true}' > "${work}/body.json"
+
+          status=$(curl -sS -o "${work}/response.json" -w "%{http_code}" \
+            -X PUT "${api}/stacks/${PORTAINER_STACK_ID}?endpointId=${PORTAINER_ENDPOINT_ID}" \
+            -H "X-API-Key: ${PORTAINER_TOKEN}" -H "Content-Type: application/json" \
+            --data-binary "@${work}/body.json")
+          if [ "${status}" != "200" ]; then
+            # Portainer's own message, never the request (which carries the stack's environment).
+            echo "Portainer refused the redeploy (HTTP ${status}): $(jq -r '.message // .details // "no message"' "${work}/response.json")" >&2
+            exit 1
+          fi
+          echo "Portainer accepted the redeploy."
