@@ -5,7 +5,9 @@ namespace Endgame.Tests.ControlPlane;
 
 /// <summary>
 /// The final defects lane's control-plane fixes, each held on the real control plane and a real
-/// PostgreSQL: God mode logs one entry per visit, not per read.
+/// PostgreSQL: God mode logs one entry per visit, not per read; operator top-ups carry the display
+/// name; identity shows for every app people sign in to; an app counts its end users; its running
+/// cost is its own measured use at today's prices; the credits view lists the narrower overdrafts.
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class FinalDefectsTests(PostgresServer postgres) : IAsyncLifetime
