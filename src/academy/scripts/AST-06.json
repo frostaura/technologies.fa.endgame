@@ -147,9 +147,15 @@
                 "content": [
                   {
                     "type": "text",
-                    "text": "{\"status\": 400, \"code\": \"app_error\", \"title\": \"The app refused the call\", \"detail\": \"…\"}"
+                    "text": "…"
                   }
                 ],
+                "structuredContent": {
+                  "status": 400,
+                  "code": "app_error",
+                  "title": "The app refused the call",
+                  "detail": "…"
+                },
                 "isError": true
               }
             }

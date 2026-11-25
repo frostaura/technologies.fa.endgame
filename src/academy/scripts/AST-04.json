@@ -52,9 +52,15 @@
             "content": [
               {
                 "type": "text",
-                "text": "{\"status\": 404, \"code\": \"not_found\", \"title\": \"Not found\", \"detail\": \"The scope 'quayside' was not found, or you cannot see it.\"}"
+                "text": "…"
               }
             ],
+            "structuredContent": {
+              "status": 404,
+              "code": "not_found",
+              "title": "Not found",
+              "detail": "The scope 'quayside' was not found, or you cannot see it."
+            },
             "isError": true
           }
         }
@@ -89,9 +95,15 @@
             "content": [
               {
                 "type": "text",
-                "text": "{\"status\": 403, \"code\": \"forbidden\", \"title\": \"Forbidden\", \"detail\": \"This needs the admin role at 'northwind'; this access token acts as a builder at most.\"}"
+                "text": "…"
               }
             ],
+            "structuredContent": {
+              "status": 403,
+              "code": "forbidden",
+              "title": "Forbidden",
+              "detail": "This needs the admin role at 'northwind'; this access token acts as a builder at most."
+            },
             "isError": true
           }
         }
@@ -126,9 +138,15 @@
             "content": [
               {
                 "type": "text",
-                "text": "{\"status\": 404, \"code\": \"not_found\", \"title\": \"Not found\", \"detail\": \"The scope 'northfield' was not found, or you cannot see it.\"}"
+                "text": "…"
               }
             ],
+            "structuredContent": {
+              "status": 404,
+              "code": "not_found",
+              "title": "Not found",
+              "detail": "The scope 'northfield' was not found, or you cannot see it."
+            },
             "isError": true
           }
         }
@@ -164,9 +182,15 @@
             "content": [
               {
                 "type": "text",
-                "text": "{\"status\": 403, \"code\": \"human_only\", \"title\": \"Only a person can make an app public\", \"detail\": \"Making an app public is a human act; an agent or a service can never set it.\"}"
+                "text": "…"
               }
             ],
+            "structuredContent": {
+              "status": 403,
+              "code": "human_only",
+              "title": "Only a person can make an app public",
+              "detail": "Making an app public is a human act; an agent or a service can never set it."
+            },
             "isError": true
           }
         }
@@ -236,9 +260,15 @@
             "content": [
               {
                 "type": "text",
-                "text": "{\"status\": 403, \"code\": \"forbidden\", \"title\": \"Forbidden\", \"detail\": \"This needs the owner role at 'northwind'; this access token acts as a admin at most.\"}"
+                "text": "…"
               }
             ],
+            "structuredContent": {
+              "status": 403,
+              "code": "forbidden",
+              "title": "Forbidden",
+              "detail": "This needs the owner role at 'northwind'; this access token acts as a admin at most."
+            },
             "isError": true
           }
         }
@@ -274,9 +304,16 @@
             "content": [
               {
                 "type": "text",
-                "text": "{\"status\": 403, \"code\": \"red_line\", \"title\": \"This idea crosses a red line\", \"detail\": \"The research found it crosses a red line (surveillance). FrostAura never builds it, and no one can overrule that. Change the idea, or drop it.\", \"redLine\": \"surveillance\"}"
+                "text": "…"
               }
             ],
+            "structuredContent": {
+              "status": 403,
+              "code": "red_line",
+              "title": "This idea crosses a red line",
+              "detail": "The research found it crosses a red line (surveillance). FrostAura never builds it, and no one can overrule that. Change the idea, or drop it.",
+              "redLine": "surveillance"
+            },
             "isError": true
           }
         }
