@@ -228,6 +228,11 @@ public static class Replay
         state.PromptTokens += Json.Int(accounting, "promptTokens") ?? 0;
         state.CompletionTokens += Json.Int(accounting, "completionTokens") ?? 0;
         state.CachedTokens += Json.Int(accounting, "cachedTokens") ?? 0;
+        state.Searches += Json.Int(accounting, "searches") ?? 0;
+        foreach (var url in Json.Strings(accounting, "citations").Where(u => !state.Citations.Contains(u, StringComparer.Ordinal)))
+        {
+            state.Citations.Add(url);
+        }
         if (Json.Str(accounting, "model") is { Length: > 0 } model)
         {
             state.LastModel = model;

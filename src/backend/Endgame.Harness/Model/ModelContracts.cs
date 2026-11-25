@@ -41,7 +41,14 @@ public sealed record ModelReply(
     long CachedTokens,
     decimal ReservedCredits,
     decimal SettledCredits,
-    bool Billable);
+    bool Billable)
+{
+    /// <summary>Server-side web searches the call made (OpenRouter's <c>usage.server_tool_use_details.web_search_requests</c>).</summary>
+    public int Searches { get; init; }
+
+    /// <summary>The addresses the reply cited (its <c>url_citation</c> annotations), in order, each once.</summary>
+    public IReadOnlyList<string> Citations { get; init; } = [];
+}
 
 /// <summary>Why a model call failed, which decides whether it is retried.</summary>
 public enum ModelFailure

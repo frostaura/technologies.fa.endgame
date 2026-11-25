@@ -461,6 +461,8 @@ public sealed class AgentLoop
         ["cachedTokens"] = reply.CachedTokens,
         ["settledCredits"] = reply.SettledCredits,
         ["finishReason"] = reply.FinishReason,
+        ["searches"] = reply.Searches,
+        ["citations"] = Json.Array(reply.Citations.Take(40)),
     };
 
     private static bool IsWrite(string name) => name is "edit_file" or "write_file";

@@ -124,6 +124,12 @@ public sealed class AgentState
 
     public long CachedTokens { get; set; }
 
+    /// <summary>Server-side web searches this agent's calls made, as the provider reported them.</summary>
+    public int Searches { get; set; }
+
+    /// <summary>The addresses its replies cited, each once, in order.</summary>
+    public List<string> Citations { get; } = [];
+
     /// <summary>The provider that served the run's first reply; every later call asks for it first (ARCH-006).</summary>
     public string? PinnedProvider { get; set; }
 

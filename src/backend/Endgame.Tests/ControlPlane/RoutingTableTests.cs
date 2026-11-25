@@ -63,6 +63,34 @@ public sealed class RoutingTableTests
     }
 
     [Fact]
+    public void A_research_call_sets_its_own_search_budget_within_the_route_and_may_switch_search_off()
+    {
+        // The first real run starved research at the route's two searches a call; the Runner now sizes the
+        // budget per strand from the estimate, and the judge, which weighs what was found, searches nothing.
+        var options = Shipped();
+        var credits = new CreditOptions { CreditsPerUsd = 100m };
+        var route = options.Routes["research"];
+        Assert.True(route.WebSearch!.MaxUses >= 8, "the research route must allow a strand its 6 to 8 searches");
+        ChatRequest Request(int? searches) => new()
+        {
+            TaskType = "research",
+            Messages = [new JsonObject { ["role"] = "user", ["content"] = "Research it." }],
+            Limits = new ChatLimits { MaxSearches = searches },
+        };
+        PreparedCall Prepare(int? searches) => ModelGateway.Prepare(options, credits, Request(searches), route, stream: false);
+
+        var seven = Prepare(7);
+        Assert.Equal(7, seven.Body["tools"]![0]!["parameters"]!["max_uses"]!.GetValue<int>());
+        var none = Prepare(0);
+        Assert.False(none.Body.ContainsKey("tools"));
+        Assert.True(none.ReservedCredits < seven.ReservedCredits, "a call that cannot search reserves no search fees");
+        Assert.Equal(route.WebSearch.MaxUses, Prepare(500).Body["tools"]![0]!["parameters"]!["max_uses"]!.GetValue<int>());
+        Assert.Equal(route.WebSearch.MaxUses, Prepare(null).Body["tools"]![0]!["parameters"]!["max_uses"]!.GetValue<int>());
+        Assert.True(Prepare(500).WorstCaseUsd <= route.MaxCallUsd);
+        Assert.Throws<Endgame.Application.Common.EndgameProblem>(() => Prepare(-1));
+    }
+
+    [Fact]
     public void The_building_tiers_route_cheapest_first_to_the_benchmarked_models_each_under_its_own_ceiling()
     {
         var options = Shipped();

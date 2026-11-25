@@ -167,6 +167,9 @@ public sealed class GatewayModelClient(HttpClient http, bool stream = true) : IM
         }
 
         var usage = reply["usage"] as JsonObject;
+        var citations = new List<string>();
+        StreamAssembler.Cite(citations, message["annotations"] as JsonArray);
+        message.Remove("annotations");
         var result = new ModelReply(
             message.DeepClone().AsObject(),
             choice["finish_reason"]?.GetValue<string>(),
@@ -177,7 +180,11 @@ public sealed class GatewayModelClient(HttpClient http, bool stream = true) : IM
             Long(usage?["prompt_tokens_details"]?["cached_tokens"]),
             reserved,
             settled,
-            true);
+            true)
+        {
+            Searches = StreamAssembler.SearchesOf(usage),
+            Citations = citations,
+        };
         return StreamAssembler.IsEmpty(result.Message)
             ? throw new ModelCallException(ModelFailure.EmptyReply, "The model replied with nothing: no text and no tool call.", settled)
             : result;
@@ -246,6 +253,8 @@ public sealed class StreamAssembler
     private string? error;
     private bool settledSeen;
     private bool billable = true;
+    private int searches;
+    private readonly List<string> citations = [];
 
     public decimal ReservedCredits { get; private set; }
 
@@ -270,6 +279,7 @@ public sealed class StreamAssembler
             prompt = GatewayModelClient.Long(usage["prompt_tokens"]);
             completion = GatewayModelClient.Long(usage["completion_tokens"]);
             cached = GatewayModelClient.Long(usage["prompt_tokens_details"]?["cached_tokens"]);
+            searches = Math.Max(searches, SearchesOf(usage));
         }
 
         if ((chunk["choices"] as JsonArray)?.FirstOrDefault() is not JsonObject choice)
@@ -287,6 +297,7 @@ public sealed class StreamAssembler
             return;
         }
 
+        Cite(citations, delta["annotations"] as JsonArray);
         if (delta["content"] is JsonValue c && c.TryGetValue<string>(out var text))
         {
             sawContent = true;
@@ -412,7 +423,29 @@ public sealed class StreamAssembler
         }
 
         _ = settledSeen;
-        return new ModelReply(message, finish, model, provider, prompt, completion, cached, ReservedCredits, SettledCredits, billable);
+        return new ModelReply(message, finish, model, provider, prompt, completion, cached, ReservedCredits, SettledCredits, billable)
+        {
+            Searches = searches,
+            Citations = citations.ToList(),
+        };
+    }
+
+    /// <summary>Web searches a reply's usage reports; 0 when it reports none.</summary>
+    public static int SearchesOf(JsonObject? usage) =>
+        usage?["server_tool_use_details"]?["web_search_requests"] is JsonValue v && v.TryGetValue<int>(out var n) && n > 0 ? n : 0;
+
+    /// <summary>Adds each <c>url_citation</c> address once. Annotations are kept out of the message, which goes back to the model verbatim.</summary>
+    public static void Cite(List<string> into, JsonArray? annotations)
+    {
+        ArgumentNullException.ThrowIfNull(into);
+        foreach (var annotation in (annotations ?? []).OfType<JsonObject>())
+        {
+            var url = annotation["url_citation"]?["url"] ?? annotation["url"];
+            if (url is JsonValue u && u.TryGetValue<string>(out var address) && address.Length is > 0 and <= 500 && !into.Contains(address, StringComparer.Ordinal) && into.Count < 100)
+            {
+                into.Add(address);
+            }
+        }
     }
 
     internal static bool IsEmpty(JsonObject message) =>

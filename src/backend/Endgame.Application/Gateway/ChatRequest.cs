@@ -56,6 +56,12 @@ public sealed class ChatLimits
 {
     /// <summary>The most output the caller wants. Clamped to the route's and every model's maximum.</summary>
     public int? MaxTokens { get; set; }
+
+    /// <summary>
+    /// On a route with web search: the most searches this call may make, 0 for none. Clamped to the route's
+    /// own <c>MaxUses</c>, and reserved for exactly as asked. Absent: the route's maximum.
+    /// </summary>
+    public int? MaxSearches { get; set; }
 }
 
 /// <summary>What the gateway knows about a call once it has settled.</summary>
