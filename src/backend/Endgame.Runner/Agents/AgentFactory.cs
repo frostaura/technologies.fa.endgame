@@ -30,6 +30,8 @@ public sealed class AgentFactory(RunnerOptions options)
         ]),
         Permissions = Policy(run, "build", ["edit_file", "write_file", "run", "commit", "tasks"]),
         Repair = repair,
+        // A whole feature across entity, migration, endpoints, screens and tests: the first live build needed more than 50.
+        Limits = new AgentLimits { MaxSteps = 70 },
         StopHooks =
         [
             new VerifyAfterEditStopHook(),
@@ -107,7 +109,8 @@ public sealed class AgentFactory(RunnerOptions options)
             EmployeeId = id,
             SystemPrompt = agent.SystemPrompt.TrimEnd() + remember + memory,
             Tools = canRemember ? agent.Tools.With(new RememberTool(run.ControlPlane, id, run.Run.Id, scope ?? run.Run.Scope)) : agent.Tools,
-            AuthorName = OutputText.Truncate($"Endgame employee {id:N}", 30),
+            // A plain name Dock accepts as a commit author: no brackets, no line breaks, never a truncation marker.
+            AuthorName = $"Endgame employee {id.ToString("N")[..8]}",
             AuthorEmail = $"{id:N}@{run.Options.AuthorDomain}",
         };
     }

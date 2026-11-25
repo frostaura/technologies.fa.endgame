@@ -349,6 +349,9 @@ public sealed class WorkflowTests
         Assert.Contains(cp.Addresses, a => a.StartsWith($"GET /internal/employees/{engineer["employeeId"]}/memory?scope=frostaura%2Ftechnologies%2Frecipe-box-for-families", StringComparison.Ordinal));
         AssertMessagesAreForPeople(cp);
         Assert.DoesNotContain(cp.Events, e => e.Type == "message" && e.Payload["milestone"]?.GetValue<string>() == "finished");
+        // Commits are authored by the engineer under a name Dock accepts (the first live build failed on a truncated one).
+        Assert.All(ws.CommitAuthors.Where(a => !a.StartsWith("Endgame factory", StringComparison.Ordinal)), a => Assert.Matches(@"^Endgame employee [0-9a-f]{8}$", a));
+        Assert.Contains(ws.CommitAuthors, a => a.StartsWith("Endgame employee", StringComparison.Ordinal));
         var accepted = cp.Payload("plan.accepted")!;
         Assert.Equal(["A recipes API", "A recipes page with four states"], accepted["items"]!.AsArray().Select(i => i!["text"]!.GetValue<string>()));
     }

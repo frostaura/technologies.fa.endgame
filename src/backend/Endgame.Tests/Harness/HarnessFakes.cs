@@ -93,6 +93,9 @@ public sealed class FakeWorkspace : IWorkspace
 
     public List<string> CommitMessages { get; } = [];
 
+    /// <summary>Who each commit was authored by, with Dock's own rule applied: no angle brackets or line breaks.</summary>
+    public List<string> CommitAuthors { get; } = [];
+
     /// <summary>Shell lines and argument vectors the interpreter does not know go here.</summary>
     public Func<WorkspaceCommand, WorkspaceExec> Shell { get; set; } = _ => Ok("");
 
@@ -156,6 +159,12 @@ public sealed class FakeWorkspace : IWorkspace
 
     public Task<WorkspaceCommit> CommitAsync(string message, string authorName, string authorEmail, CancellationToken cancellationToken)
     {
+        if (authorName.Length == 0 || authorName.IndexOfAny(['<', '>', '\n', '\r']) >= 0)
+        {
+            throw new WorkspaceException("An author name is required, without angle brackets or line breaks.", "bad_request");
+        }
+
+        CommitAuthors.Add(authorName);
         CommitMessages.Add(message);
         return Task.FromResult(new WorkspaceCommit($"c{CommitMessages.Count:D3}0000000000000000", true));
     }
