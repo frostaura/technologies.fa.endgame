@@ -31,6 +31,11 @@
           "click": {
             "text": "Send"
           }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
         }
       ],
       "highlight": {
@@ -67,13 +72,23 @@
         },
         {
           "wait": {
-            "text": "Approved"
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "Done. The change applies here"
           }
         }
       ],
       "highlight": {
-        "text": "Approved. The work carries on from here.",
-        "note": "Approved: the setting is written, marked as set by an agent."
+        "text": "Done. The change applies here",
+        "note": "Approved: the setting is written at Learning, marked as set by an agent."
       }
     }
   ]

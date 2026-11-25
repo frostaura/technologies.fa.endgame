@@ -29,6 +29,11 @@
           "click": {
             "text": "Send"
           }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
         }
       ],
       "highlight": {

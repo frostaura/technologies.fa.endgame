@@ -200,8 +200,8 @@
             }
           ],
           "highlight": {
-            "text": "This app is already being worked on",
-            "note": "One build or change of an app at a time."
+            "text": "The change was not started",
+            "note": "One build or change of an app at a time: this one is already being changed."
           }
         }
       ]

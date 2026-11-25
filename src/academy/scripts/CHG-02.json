@@ -21,6 +21,11 @@
           "click": {
             "text": "Send"
           }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
         }
       ],
       "highlight": {
@@ -53,6 +58,11 @@
         {
           "click": {
             "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
           }
         },
         {
@@ -97,6 +107,11 @@
               }
             },
             {
+              "wait": {
+                "text": "Working on it"
+              }
+            },
+            {
               "clock": {
                 "seek": "conversation:approval"
               }
@@ -109,6 +124,11 @@
             {
               "click": {
                 "text": "Decline"
+              }
+            },
+            {
+              "wait": {
+                "text": "Working on it"
               }
             },
             {

@@ -67,4 +67,12 @@ describe("the factory's scenarios", () => {
     expect(w.approvals.some((a) => a.runId === IDS.runBuildReadingList && a.title === "Let the agent change part of the app?")).toBe(true);
     expect(r?.events.find((e) => e.type === "tool.denied")?.payload.reason).toBe("Denied by the build rule set set at northwind/learning ('edit_file(docs/decisions.md)').");
   });
+
+  it("holds live work at the overdraft limit without failing it, and draws no project for an idea not yet built", () => {
+    const w = world("at-overdraft-limit");
+    expect(run(w, IDS.runBuildReadingList)?.run.status).toBe("paused");
+    expect(run(w, IDS.runResearchTides)?.run.status).toBe("paused");
+    const quiet = world("default");
+    expect(quiet.nodes.some((n) => n.ideaId === IDS.ideaAllergen || n.ideaId === IDS.ideaTides)).toBe(false);
+  });
 });

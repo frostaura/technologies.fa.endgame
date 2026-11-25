@@ -38,12 +38,14 @@
           }
         },
         {
-          "press": "Enter"
+          "click": {
+            "selector": "li[data-stage='build'] fieldset:nth-of-type(2) span > button"
+          }
         }
       ],
       "highlight": {
-        "text": "tool or tool(pattern)",
-        "note": "In technical mode a rule is typed as tool or tool(pattern); here, ask before the app’s description changes."
+        "selector": "li[data-stage='build'] fieldset:nth-of-type(2)",
+        "note": "In technical mode a rule is typed as tool or tool(pattern): here, ask before the app’s description changes."
       }
     },
     {
@@ -57,13 +59,13 @@
         },
         {
           "wait": {
-            "text": "Set here"
+            "text": "Replaces the rules set at"
           }
         }
       ],
       "highlight": {
-        "text": "Save for Learning",
-        "note": "Save: every agent’s permission check at that stage now asks first."
+        "text": "edit_file(docs/app.md)",
+        "note": "Saved for Learning: from now on that step of a build here waits for your sign-off."
       }
     }
   ],
@@ -122,13 +124,15 @@
             {
               "type": {
                 "into": {
-                  "selector": "li[data-stage='build'] fieldset input"
+                  "selector": "li[data-stage='build'] fieldset:nth-of-type(1) input"
                 },
                 "text": "Edit Files!"
               }
             },
             {
-              "press": "Enter"
+              "click": {
+                "selector": "li[data-stage='build'] fieldset:nth-of-type(1) span > button"
+              }
             },
             {
               "click": {
@@ -143,7 +147,7 @@
           ],
           "highlight": {
             "text": "The rules were not saved",
-            "note": "A rule that is not tool or tool(pattern) is refused; the rules stay as they were."
+            "note": "A rule that is not tool or tool(pattern) is refused, and the rules stay as they were."
           }
         }
       ]

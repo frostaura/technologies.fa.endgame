@@ -23,6 +23,11 @@
           }
         },
         {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
           "clock": {
             "seek": "conversation:replied"
           }

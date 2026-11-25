@@ -41,17 +41,7 @@
           "click": {
             "text": "Research it again with this change"
           }
-        }
-      ],
-      "highlight": {
-        "text": "Research it again with this change",
-        "note": "Send it."
-      }
-    },
-    {
-      "step": 4,
-      "kind": "demo",
-      "act": [
+        },
         {
           "wait": {
             "text": "Research:"
@@ -60,7 +50,22 @@
       ],
       "highlight": {
         "text": "Step by step",
-        "note": "The idea is researched again; you are taken to the new run."
+        "note": "Sent: the idea goes back to research, and you are taken to the new run."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Research started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research · Research started",
+        "note": "The note reaches research as the owner’s change after the last verdict."
       }
     },
     {

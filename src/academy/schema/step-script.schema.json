@@ -228,9 +228,15 @@
           ],
           "properties": {
             "seek": {
-              "type": [
-                "number",
-                "string"
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[a-z]+:[a-z0-9-]+$"
+                }
               ],
               "description": "Script milliseconds to move every live run forward by, or a named moment such as \"research:verdict\" (ARCH-009)."
             }

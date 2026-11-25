@@ -331,6 +331,8 @@ defineScript("research", (world, run) => {
     const rl = story.verdict.redLines as { breached?: boolean; line?: string } | undefined;
     i.redLine = rl?.breached ? (rl.line ?? "a red line") : null;
     i.status = "verdict";
+    // A new verdict clears the decision taken on the last one; it is kept under "Earlier decisions" (VERD-07).
+    i.decision = null;
     i.research.spentCredits = run.run.spentCredits;
     const project = w.nodes.find((n) => n.ideaId === i.id);
     if (project) setStage(w, project.path, "verdict", "Research finished. Waiting for your call.");
@@ -738,12 +740,19 @@ function carriedFrom(world: World, retryOf: unknown): { planCarried: boolean; ca
 defineScript("build", (world, run) => {
   const p = run.playback?.params ?? {};
   const idea = world.ideas.find((i) => i.id === p.ideaId);
-  const existingProject = world.nodes.find((n) => n.ideaId === idea?.id && n.level === "project");
   const base: Story = storyFor(idea?.text ?? "", typeof p.story === "string" ? p.story : null);
-  const story: Story = existingProject ? { ...base, name: existingProject.name } : base;
   const org = orgOf(run.run.scope);
-  const divisionPath = existingProject ? existingProject.path.split("/").slice(0, 2).join("/") : `${org}/${story.division.slug}`;
-  const projectPath = existingProject?.path ?? `${divisionPath}/${story.project}`;
+  // `BuildWorkflow.PlaceAsync`: the idea's own division if it was proposed to one, otherwise the verdict's proposed home;
+  // a run that carries on from an earlier attempt is already placed. Read from the idea, never from the tree the run changes.
+  const placement = ((idea?.verdict ?? {}) as { placement?: { division?: string; project?: string; name?: string } }).placement;
+  const researchedAt = world.runs.find((r) => r.run.id === idea?.runId)?.run.scope ?? "";
+  const placedAt = run.run.scope.split("/").length >= 3 ? run.run.scope.split("/").slice(0, 3).join("/") : null;
+  const divisionSlug = placedAt?.split("/")[1] ?? (researchedAt.split("/").length === 2 ? researchedAt.split("/")[1] : null) ?? placement?.division ?? base.division.slug;
+  const divisionPath = `${org}/${divisionSlug}`;
+  const projectPath = placedAt ?? `${divisionPath}/${placement?.project ?? base.project}`;
+  const existingProject = node(world, projectPath);
+  const divisionName = node(world, divisionPath)?.name ?? (divisionSlug === base.division.slug ? base.division.name : divisionSlug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "));
+  const story: Story = { ...base, name: existingProject?.name ?? placement?.name ?? base.name, division: { slug: divisionSlug, name: divisionName } };
   const appPath = `${projectPath}/web`;
   // Placement is said once, from the world before it: a division this run created is still new when its steps are rebuilt.
   const placed = run.events.find((e) => e.type === "message" && e.payload.kind === "workflow.step" && e.payload.step === "placement")?.payload.data as { divisionCreated?: boolean } | undefined;
@@ -777,7 +786,7 @@ defineScript("build", (world, run) => {
   if (!p.retryOf) {
     s.wait(500).event("message", {
       from: "builder",
-      text: divisionExists || existingProject ? `${story.name} will live in ${node(world, divisionPath)?.name ?? story.division.name}, as the project ${story.name}.` : `${story.name} will live in a new division, ${story.division.name}, as the project ${story.name}.`,
+      text: divisionExists ? `${story.name} will live in ${story.division.name}, as the project ${story.name}.` : `${story.name} will live in a new division, ${story.division.name}, as the project ${story.name}.`,
       title: "Placed",
       milestone: "placed",
     });
@@ -1076,7 +1085,11 @@ function answer(world: World, scope: string, q: string, who: Employee | undefine
     return ["I cannot do that from here: I can read what is going on, start researching an idea, ask for a change to an app, try stopped work again and change a few settings, each with your yes.", "Making an app public, budgets, secrets, hiring and the shape of the tree are done by a person on their own screens."];
   }
   if (who && /(who are you|what do you do|your job|remember|what do you know)/.test(q)) {
-    const memory = world.memory.filter((m) => m.employeeId === who.id && !m.archived).slice(0, 2);
+    // What it remembers about what was asked, first: its curated memory is its context (TALK-05).
+    const words = q.split(/[^a-z]+/).filter((w) => w.length > 3).map((w) => w.replace(/s$/, ""));
+    const mine = world.memory.filter((m) => m.employeeId === who.id && !m.archived);
+    const about = mine.filter((m) => words.some((w) => `${m.title} ${m.body}`.toLowerCase().includes(w)));
+    const memory = (about.length ? about : mine).slice(0, 2);
     return [`I'm ${who.name}, the ${who.role.toLowerCase()} for ${name}. ${who.jobDescription.mandate}`, memory.length ? `What I keep in mind: ${memory.map((m) => m.body).join(" ")}` : "Ask me about my work, or tell me what to change."];
   }
   if (/spen|cost|credit|money|budget/.test(q)) {

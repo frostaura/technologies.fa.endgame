@@ -55,17 +55,41 @@
     {
       "step": 6,
       "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        },
+        {
+          "wait": {
+            "text": "Check:"
+          }
+        }
+      ],
       "highlight": {
-        "text": "The files and tests behind each part are in technical mode.",
-        "note": "Files and tests are technical detail."
+        "text": "Check:",
+        "note": "Files, tests and the check behind each part are technical detail: technical mode shows them."
       }
     },
     {
       "step": 7,
       "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Normal"
+          }
+        },
+        {
+          "wait": {
+            "text": "The builder · The plan"
+          }
+        }
+      ],
       "highlight": {
         "text": "The builder · The plan",
-        "note": "The builder says the plan in one message."
+        "note": "Back in normal mode, the builder says the plan in one message."
       }
     }
   ]

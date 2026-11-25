@@ -13,10 +13,15 @@
           "click": {
             "text": "Build it with this change"
           }
+        },
+        {
+          "wait": {
+            "text": "Build:"
+          }
         }
       ],
       "highlight": {
-        "text": "Build it with this change",
+        "text": "Step by step",
         "note": "Accept research’s change and have it built in — or build your own words as described."
       }
     },

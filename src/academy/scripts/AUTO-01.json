@@ -34,7 +34,7 @@
             "into": {
               "text": "Level"
             },
-            "value": "Operations"
+            "value": "northwind/operations"
           }
         },
         {
@@ -57,13 +57,18 @@
             "into": {
               "text": "Level"
             },
-            "value": "— — Stock Counter"
+            "value": "northwind/operations/stock-counter"
+          }
+        },
+        {
+          "wait": {
+            "text": "Inherited from Operations"
           }
         }
       ],
       "highlight": {
-        "text": "Inherited from",
-        "note": "Each value says where it was set."
+        "text": "Inherited from Operations",
+        "note": "Each value says where it was set: Stock Counter inherits from Operations."
       }
     },
     {

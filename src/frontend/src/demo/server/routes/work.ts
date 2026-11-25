@@ -146,7 +146,8 @@ area("WorkEndpoints", {
       const text = note ? `${i.text}\n\nThe change: ${note}` : i.text;
       const r = startResearch(world, i.id, orgOf(scope) === scope ? scope : scope.split("/").slice(0, 2).join("/"), text, i.constraints, "console", null, note);
       i.runId = r.run.id;
-      i.decision = null;
+      // The change stays the decision until the new verdict lands (`ReadModels`: a change follows its research run), then it is kept in the history.
+      i.decision = { choice, at, by: u.displayName, overruled: false, runId: r.run.id, via: "person" };
       i.history = [...(i.history ?? []), { verdict: before.outcome, headline: before.headline ?? null, choice: "change", note, by: u.displayName, at, runId: r.run.id }];
       if (project) setStage(world, project.path, "researching", "Research is under way.");
     } else {

@@ -23,6 +23,11 @@
           }
         },
         {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
           "clock": {
             "seek": "conversation:approval"
           }
@@ -67,18 +72,23 @@
         },
         {
           "wait": {
-            "text": "Approved"
+            "text": "Working on it"
           }
         },
         {
           "clock": {
             "seek": "conversation:replied"
           }
+        },
+        {
+          "wait": {
+            "text": "The change has started"
+          }
         }
       ],
       "highlight": {
-        "text": "Approved. The work carries on from here.",
-        "note": "Answered where you asked; the reply follows."
+        "text": "The change has started",
+        "note": "Answered where you asked; the reply follows, and the change’s run starts."
       }
     }
   ]

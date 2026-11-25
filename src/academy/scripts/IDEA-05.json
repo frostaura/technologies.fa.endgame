@@ -21,10 +21,15 @@
           "click": {
             "text": "Send"
           }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
         }
       ],
       "highlight": {
-        "text": "Ask, or tell it what to change",
+        "text": "Talking to Northwind",
         "note": "The conversation docked beside the org chart, talking to all of Northwind."
       }
     },
@@ -57,22 +62,14 @@
         },
         {
           "wait": {
-            "text": "Approved."
+            "text": "Working on it"
           }
-        }
-      ],
-      "highlight": {
-        "text": "Approve",
-        "note": "Approve it in the dock (or on the run page)."
-      }
-    },
-    {
-      "step": 4,
-      "kind": "demo",
-      "clock": {
-        "seek": "conversation:replied"
-      },
-      "act": [
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
         {
           "wait": {
             "text": "Research has started"
@@ -81,22 +78,43 @@
       ],
       "highlight": {
         "text": "Research has started",
-        "note": "The idea is recorded at the division research suggests, with its own estimate."
+        "note": "Approved in the dock: the idea is recorded, with its own estimate, and the reply says so."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:started"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "researching an idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "researching an idea",
+        "note": "Research is queued: Wren and three contractors start on it, and its verdict will wait on the home strip."
       }
     },
     {
       "step": 5,
       "kind": "demo",
+      "clock": {
+        "seek": "research:finished"
+      },
       "act": [
         {
           "wait": {
-            "text": "Researching"
+            "text": "Verdict waiting"
           }
         }
       ],
       "highlight": {
-        "text": "Researching",
-        "note": "The idea now shows on the org chart, being researched."
+        "text": "Verdict waiting",
+        "note": "When research ends, the verdict waits for you on the home strip."
       }
     }
   ],
@@ -125,6 +143,11 @@
               }
             },
             {
+              "wait": {
+                "text": "Working on it"
+              }
+            },
+            {
               "clock": {
                 "seek": "conversation:approval"
               }
@@ -150,6 +173,11 @@
               }
             },
             {
+              "wait": {
+                "text": "Working on it"
+              }
+            },
+            {
               "clock": {
                 "seek": "conversation:replied"
               }
@@ -161,8 +189,8 @@
             }
           ],
           "highlight": {
-            "text": "Declined. It was not done; the work continues without it.",
-            "note": "Declined: the call is refused and the assistant says it did not start it."
+            "text": "I have not started it",
+            "note": "Declined: the call is refused, and the assistant says plainly it did not start it."
           }
         }
       ]

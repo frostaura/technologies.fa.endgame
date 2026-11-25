@@ -57,28 +57,21 @@
         },
         {
           "wait": {
-            "text": "Approved"
-          }
-        }
-      ],
-      "highlight": {
-        "text": "Approved. The work carries on from here.",
-        "note": "Approve."
-      }
-    },
-    {
-      "step": 5,
-      "kind": "demo",
-      "act": [
-        {
-          "wait": {
             "text": "Agreed"
           }
         }
       ],
       "highlight": {
+        "text": "Agreed",
+        "note": "Approved: the plan is agreed and the work carries on."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
         "text": "You answered",
-        "note": "The answer is logged with your note, and the work goes on."
+        "note": "The answer is logged, with the note given back to the work."
       }
     }
   ],
@@ -122,14 +115,19 @@
               }
             },
             {
+              "clock": {
+                "seek": 20000
+              }
+            },
+            {
               "wait": {
-                "text": "Declined"
+                "text": "refused by your rules"
               }
             }
           ],
           "highlight": {
-            "text": "Declined. It was not done; the work continues without it.",
-            "note": "Declined: only that step is skipped."
+            "text": "refused by your rules",
+            "note": "Declined: only that step is skipped, and the work goes on without it."
           }
         }
       ]

@@ -31,6 +31,11 @@
           "click": {
             "text": "Send"
           }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
         }
       ],
       "highlight": {
@@ -63,6 +68,11 @@
         {
           "click": {
             "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
           }
         },
         {

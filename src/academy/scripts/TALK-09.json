@@ -23,6 +23,11 @@
           }
         },
         {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
           "clock": {
             "seek": "conversation:approval"
           }
@@ -47,18 +52,23 @@
         },
         {
           "wait": {
-            "text": "Declined"
+            "text": "Working on it"
           }
         },
         {
           "clock": {
             "seek": "conversation:replied"
           }
+        },
+        {
+          "wait": {
+            "text": "Left as it was."
+          }
         }
       ],
       "highlight": {
-        "text": "Declined. It was not done; the work continues without it.",
-        "note": "A note, then Decline: nothing is done, and it says so."
+        "text": "Left as it was.",
+        "note": "A note, then Decline: nothing is done, the note goes back, and the reply says so."
       }
     }
   ]

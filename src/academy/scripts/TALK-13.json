@@ -30,7 +30,7 @@
       ],
       "highlight": {
         "text": "Not sent:",
-        "note": "A Viewer can read but not send: kept, with why, and “Send again”."
+        "note": "A Viewer can read but not send: the message is kept, with why, and “Send again”."
       }
     }
   ]

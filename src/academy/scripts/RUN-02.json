@@ -75,23 +75,18 @@
           "step": 1,
           "kind": "demo",
           "clock": {
-            "seek": "build:part-3"
+            "seek": "build:security-review"
           },
           "act": [
             {
-              "clock": {
-                "seek": 20000
-              }
-            },
-            {
               "wait": {
-                "text": "An action was refused by your rules"
+                "text": "refused by your rules"
               }
             }
           ],
           "highlight": {
-            "text": "An action was refused by your rules",
-            "note": "A stage rule refused one step: it was not carried out, and the work goes on."
+            "text": "refused by your rules",
+            "note": "A stage rule refused one step: counted, said as “An action was refused by your rules”, and the work goes on."
           }
         }
       ]

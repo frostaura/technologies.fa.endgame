@@ -41,17 +41,7 @@
           "click": {
             "text": "Research this idea"
           }
-        }
-      ],
-      "highlight": {
-        "text": "Research this idea",
-        "note": "Taken into research."
-      }
-    },
-    {
-      "step": 4,
-      "kind": "demo",
-      "act": [
+        },
         {
           "wait": {
             "text": "Research in progress"
@@ -60,7 +50,15 @@
       ],
       "highlight": {
         "text": "Research in progress",
-        "note": "You land on the new idea’s page while it is researched."
+        "note": "Taken into research: you land on the new idea’s page."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Watch the research",
+        "note": "The idea is researched like any other."
       }
     }
   ]

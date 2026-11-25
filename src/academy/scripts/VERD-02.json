@@ -21,8 +21,8 @@
         }
       ],
       "highlight": {
-        "text": "Verdict waiting",
-        "note": "A verdict waiting on the home strip, the org chart or a notification leads to the idea’s page."
+        "text": "Research by",
+        "note": "A “Verdict waiting” card on the home strip (or the chart, or a notification) opens the idea’s own page."
       }
     },
     {

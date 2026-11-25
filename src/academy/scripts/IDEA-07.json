@@ -49,7 +49,7 @@
         }
       ],
       "highlight": {
-        "text": "See what it costs",
+        "text": "At most",
         "note": "The cost first."
       }
     },
@@ -69,8 +69,8 @@
         }
       ],
       "highlight": {
-        "text": "Suggest ideas",
-        "note": "At most a few credits; then start it."
+        "text": "Watch it work",
+        "note": "Then start it: the page checks for new suggestions while Endgame reads what Northwind holds."
       }
     },
     {

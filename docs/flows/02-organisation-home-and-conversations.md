@@ -889,7 +889,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   3. Home's "needs you" strip gains an "Approval needed" card too, and within the sweep interval a notification.
   4. Press **"Approve"** (TALK-17). The idea is recorded (at the division, or at the division above for a project or app scope) with its research estimate, and research is queued.
   5. The assistant replies in the dock, for example confirming research has started.
-- **You know it worked when:** the reply confirms it, and a "Researching" card or run appears, then a "Verdict waiting" card once research ends.
+- **You know it worked when:** the reply confirms it, the org chart shows the researcher "researching an idea", and a "Verdict waiting" card appears once research ends.
 - **Variations and refusals:**
   - Declined: TALK-09.
   - The idea is refused (for example a red line, or no credits): the tool reports "The idea could not be started ({status}): …" and the assistant must say it did not happen.
@@ -1429,4 +1429,4 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
     - UC-102 and UC-001 describe `needsYou` as "verdicts and approvals" only; hires and idle employees are also sent.
     - UC-001 says selecting "a node or an employee" scopes the conversation; apps cannot be selected.
     - MCP lacks mark-read for notifications and delete for nodes.
-14. **The academy's demo world has research projects the product never draws.** Northwind's demo tree carries project cards for ideas at a verdict or in research ("Idea · paused at verdict", "Researching"), which the real tree never sends (ORG-09). The academy's scripts do not point at them.
+14. ~~**The academy's demo world has research projects the product never draws.**~~ Fixed: ideas in research or at a verdict are no longer drawn on the demo's chart; they wait on the home strip, as in the product (ORG-09).

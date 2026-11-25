@@ -31,6 +31,11 @@
           "click": {
             "text": "Send"
           }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
         }
       ],
       "highlight": {
@@ -64,16 +69,11 @@
           "click": {
             "text": "Approve"
           }
-        },
-        {
-          "wait": {
-            "text": "Approved"
-          }
         }
       ],
       "highlight": {
-        "text": "Approved. The work carries on from here.",
-        "note": "Approved: set at this level, by an agent."
+        "text": "Talking to Learning",
+        "note": "Approved in the dock: set at Learning and beneath it, marked as set by an agent."
       }
     },
     {
