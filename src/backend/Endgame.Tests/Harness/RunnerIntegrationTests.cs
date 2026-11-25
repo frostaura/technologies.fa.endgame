@@ -168,14 +168,15 @@ public sealed class RunnerIntegrationTests(PostgresServer postgres) : IAsyncLife
         var run = await CreateRunAsync();
         var workspace = new FakeWorkspace().With("a.txt", "one\n");
         var provider = new SharedWorkspace(workspace);
+        // The second model call is held in flight, so the stop always lands mid-run: a gate set after the
+        // first step raced the run to its end (it failed once in a full run).
+        holdAt = 2;
         var first = Runner(provider);
         await first.StartAsync(CancellationToken.None);
-        await WaitForAsync(async () => (await EventsAsync(run)).Any(e => e["type"]!.GetValue<string>() == "tool.result"), "a first step");
-        var gate = new TaskCompletionSource();
-        openRouter.Gate = gate;
+        await WaitForAsync(() => Task.FromResult(Volatile.Read(ref calls) >= 2), "the second model call to be in flight");
+        Assert.Contains(await EventsAsync(run), e => e["type"]!.GetValue<string>() == "tool.result");
         var stopping = first.StopAsync(CancellationToken.None);
-        openRouter.Gate = null;
-        gate.SetResult();
+        hold.SetResult();
         await stopping;
         var held = await RunAsync(run);
         Assert.Equal("running", held["status"]!.GetValue<string>());
