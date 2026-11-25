@@ -23,7 +23,9 @@ right thing is the easy thing and a wrong thing fails loudly at build or start w
 
 1. Dock creates the app's repository from `src/appkit/template/` (with `vendor/`).
 2. The builder reads `AGENTS.md`, adds features on the `api` group with operation ids and
-   descriptions, pages that keep loading / failed / empty / loaded distinct, and migrations.
+   descriptions, pages that keep loading / failed / empty / loaded distinct and carry the kit's
+   test ids (`page-<view>`, `<entity>-item`, `new-<entity>`, `save-<entity>`, …), a navigation test
+   for each link between pages, and migrations.
 3. `make lint` and `make test` pass with zero warnings.
 4. Dock builds the image with `dotnet publish /t:PublishContainer` and runs it.
 5. Edge serves the same container at `/<org>/<division>/<project>/` and at `<org>`'s subdomain.
@@ -37,6 +39,8 @@ right thing is the easy thing and a wrong thing fails loudly at build or start w
 - **A4 — missing environment:** the app does not start; one message lists every missing variable.
 - **A5 — credit budget spent:** model calls throw `EndgameBudgetExhaustedException`; unhandled, the API answers `402` with `code: budget_exhausted`.
 - **A6 — failed read:** the front end shows a failure with "Try again", never the empty state.
+- **A7 — a write changes what other reads on screen show:** every mounted `useApiQuery` re-reads after the write succeeds, keeping its data shown meanwhile; a failed re-read shows as failed.
+- **A8 — page reads the address from `window.location`:** ESLint (`endgame/no-location-read`) fails, naming the router hook to use; such a page would not appear when a link routes to it.
 
 ## Postconditions
 
