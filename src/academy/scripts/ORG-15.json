@@ -1,0 +1,61 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-15",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "PATCH",
+      "path": "/api/organisations/6f1c2a40-3b7e-4d2a-9c11-5e8f0a7d2b31",
+      "body": {
+        "status": "suspended"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "6f1c2a40-3b7e-4d2a-9c11-5e8f0a7d2b31",
+          "level": "organisation",
+          "slug": "northwind",
+          "name": "Northwind",
+          "path": "northwind",
+          "status": "suspended",
+          "createdAt": "2026-09-24T10:12:00+00:00"
+        }
+      },
+      "note": "An operator, inside the organisation, suspends it. Its apps drop out of the routing table at once. The id and dates are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "Anyone but an operator is refused",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "PATCH",
+          "path": "/api/organisations/6f1c2a40-3b7e-4d2a-9c11-5e8f0a7d2b31",
+          "body": {
+            "status": "suspended"
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/forbidden",
+              "title": "Forbidden",
+              "status": 403,
+              "detail": "An organisation is suspended or reinstated by FrostAura.",
+              "code": "forbidden"
+            }
+          },
+          "note": "Even the Owner cannot suspend their own organisation: that is FrostAura's act."
+        }
+      ]
+    }
+  ]
+}

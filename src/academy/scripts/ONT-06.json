@@ -1,0 +1,39 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ONT-06",
+  "persona": "owner",
+  "scenario": "ontology-unreachable",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Who works on what"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The organisation graph could not be loaded",
+        "note": "A failed read says so, and never draws an empty graph."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "[data-state='failed'] button"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Key",
+        "note": "Try again reads it, and the graph is drawn."
+      }
+    }
+  ]
+}

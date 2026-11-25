@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-13",
+  "persona": "owner",
+  "scenario": "tree-refresh-fails",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label='Organisation chart']",
+        "note": "Home loaded. While the tab is in focus it reads the tree again every 15 seconds."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": 15000
+      },
+      "act": [
+        {
+          "wait": {
+            "selector": "[data-state='stale']"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "[data-state='stale']",
+        "note": "The next refresh cannot reach the control plane: a notice says so, and the chart below stays as it was."
+      }
+    }
+  ]
+}

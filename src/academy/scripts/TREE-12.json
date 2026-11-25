@@ -1,0 +1,68 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-12",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/tree?scope=northwind/technologies",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='What Technologies is']",
+        "note": "Each entry says where it was set — Said here, or From Northwind — and when."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Said beneath Technologies']",
+        "note": "Said differently beneath it: Rules, said only for Court booking."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "li[data-context='purpose'] button"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "What it says"
+            },
+            "text": "Technologies builds the club's own apps: court booking first, then the café."
+          }
+        },
+        {
+          "click": {
+            "text": "Save it"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "li[data-context='purpose']",
+        "note": "Said differently here: Purpose is now Said here, and replaces what Northwind says."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Remove it; Northwind's applies again"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "li[data-context='purpose']",
+        "note": "Removed: Northwind's Purpose applies again, From Northwind."
+      }
+    }
+  ]
+}

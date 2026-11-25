@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-05",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label='Needs you']",
+        "note": "Under the band: one card for each thing waiting on someone — a badge, a headline and one line."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Hire Lark as data analyst?"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Hire Lark",
+        "note": "A card leads to where you act on it: here, the hire proposal."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Nothing waiting",
+      "persona": "owner",
+      "scenario": "empty-organisation",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Nothing needs you right now",
+            "note": "With nothing waiting, the strip says so, naming exactly the four kinds it checks."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Someone granted one division sees only its needs",
+      "persona": "division-admin",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "section[aria-label='Needs you']",
+            "note": "Ines, an Admin of Technologies, sees only what waits on Technologies."
+          }
+        }
+      ]
+    }
+  ]
+}

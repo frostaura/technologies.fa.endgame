@@ -1,0 +1,47 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ONT-01",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "[role='tablist'][aria-label='View']",
+        "note": "Above the chart, three ways to read the same organisation. The chart is the default."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Who works on what"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Key",
+        "note": "Who works on what: who is responsible for what, and who reports to whom."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "How data flows"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Key",
+        "note": "How data flows: what each app relies on, and what travels in and out."
+      }
+    }
+  ]
+}

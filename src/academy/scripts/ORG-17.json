@@ -1,0 +1,40 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-17",
+  "persona": "operator",
+  "scenario": "operator-no-organisation",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "[aria-label='God mode']",
+        "note": "A coral God-mode band sits above the header on every screen."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "You run Endgame for FrostAura. Every organisation is one step away.",
+        "note": "Home is the God-mode panel: list them, set one up, top one up or enter it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "main a"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Every organisation",
+        "note": "Every organisation opens the God-mode list (OP-01)."
+      }
+    }
+  ]
+}

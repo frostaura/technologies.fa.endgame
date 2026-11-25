@@ -1,0 +1,103 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-04",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/tree?scope=northwind/operations/gift-cards",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label='Project: Gift Cards']",
+        "note": "Gift Cards is a project with nothing in it yet."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add an app"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "A new app in Gift Cards",
+        "note": "Add an app opens the form."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+            },
+            "text": "Gift Card Shop"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "form[aria-label^='Add a'] input[aria-describedby]",
+        "note": "Its address: northwind/operations/gift-cards/gift-card-shop."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add the app"
+          }
+        },
+        {
+          "wait": {
+            "text": "Its address: northwind/operations/gift-cards/gift-card-shop"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The app’s page",
+        "note": "The app is made and chosen, with a link to its page. It is a draft: nothing is built yet."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "The app’s page"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Not published yet.",
+        "note": "Its page says so. Building it is the factory's work."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An app is the deepest level",
+      "persona": "owner",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind/technologies/court-booking/web",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "section[aria-label='App: Court booking']",
+            "note": "An app has no “What is in it”: nothing is added beneath an app."
+          }
+        }
+      ]
+    }
+  ]
+}

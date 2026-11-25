@@ -1,0 +1,104 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-03",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Manage Operations"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "section[aria-label='Division: Operations']",
+        "note": "The division's Manage link opens Manage with Operations chosen."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add a project"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "A new project in Operations",
+        "note": "Add a project opens the form."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+            },
+            "text": "Loyalty Stamps"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "form[aria-label^='Add a'] input[aria-describedby]",
+        "note": "The address fills itself: northwind/operations/loyalty-stamps."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add the project"
+          }
+        },
+        {
+          "wait": {
+            "text": "Its address: northwind/operations/loyalty-stamps"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "nav[aria-label='Every part of the organisation'] button[aria-current='true']",
+        "note": "Loyalty Stamps is made, under Operations, and chosen."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "selector": "article[aria-label='Loyalty Stamps']",
+        "note": "On the chart it is a card in Operations with the stage Planning."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Viewer reads who may",
+      "persona": "viewer",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind/operations",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "A Builder or above adds a project here.",
+            "note": "Priya is a Viewer: she reads who may add a project."
+          }
+        }
+      ]
+    }
+  ]
+}

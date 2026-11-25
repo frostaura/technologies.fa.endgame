@@ -1,0 +1,75 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "NOTE-08",
+  "persona": "owner",
+  "scenario": "notifications-unreachable",
+  "start": "/notifications",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Your notifications could not be loaded",
+        "note": "A failed read is never shown as “nothing”."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "[data-state='failed'] button"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "li[data-notification]",
+        "note": "Try again reads it, and the feed appears."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A later refresh fails",
+      "persona": "owner",
+      "scenario": "notifications-refresh-fails",
+      "start": "/notifications",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "selector": "li[data-notification]"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "ul[aria-label='Notifications']",
+            "note": "The feed loaded."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "clock": {
+            "seek": 1000
+          },
+          "act": [
+            {
+              "wait": {
+                "selector": "[data-state='stale']"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "[data-state='stale']",
+            "note": "The next refresh fails: the last good feed stays, under a notice that says so."
+          }
+        }
+      ]
+    }
+  ]
+}

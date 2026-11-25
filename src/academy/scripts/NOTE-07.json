@@ -1,0 +1,43 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "NOTE-07",
+  "persona": "builder",
+  "scenario": "quiet",
+  "start": "/notifications",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Nothing needs you",
+        "note": "An empty feed means nothing needs you, not that it failed."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Owners and Admins are told about what their grant covers; others see an empty feed.",
+        "note": "Lena is a Builder: her feed is always empty."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Before an organisation is named",
+      "persona": "first-run",
+      "scenario": "default",
+      "start": "/notifications",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "There are no notifications until your organisation is named",
+            "note": "Kit has no organisation yet, so there is nothing to be told about."
+          }
+        }
+      ]
+    }
+  ]
+}

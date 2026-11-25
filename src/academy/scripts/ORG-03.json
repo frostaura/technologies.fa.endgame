@@ -1,0 +1,82 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-03",
+  "persona": "no-role",
+  "scenario": "default",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/tree",
+      "response": {
+        "status": 200,
+        "body": {
+          "generatedAt": "2026-11-25T09:30:00Z",
+          "viewerRole": "none",
+          "organisation": null,
+          "divisions": [],
+          "needsYou": [],
+          "firstRun": false
+        }
+      },
+      "note": "No organisation for Sol, and firstRun is false: organisations already exist, so Sol may not name one."
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Organisations are set up by FrostAura",
+        "note": "Instead of Start: organisations are provisioned by FrostAura. There is no self-sign-up."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "The start screen says the same",
+      "persona": "no-role",
+      "scenario": "default",
+      "start": "/start",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Organisations are set up by FrostAura",
+            "note": "Typing /start gives the same answer: an idea lives in an organisation, and Sol holds no role in one."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Naming one through the API is refused",
+      "persona": "no-role",
+      "scenario": "default",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/api/organisations",
+          "body": {
+            "name": "Harbourside",
+            "slug": "harbourside"
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/forbidden",
+              "title": "Forbidden",
+              "status": 403,
+              "detail": "Organisations are provisioned by FrostAura; there is no self-serve sign-up.",
+              "code": "forbidden"
+            }
+          },
+          "note": "The control plane refuses it whatever asks."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-08",
+  "persona": "owner",
+  "scenario": "default",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Technologies",
+        "note": "Each division is a column, with a letter badge in its own colour: blue, then violet, then teal."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Learning",
+        "note": "“Division” and its name. Divisions are ordered by name."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "361 credits",
+        "note": "This month's spend in Technologies, summed from everything beneath it."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Odile · Division lead",
+        "note": "The division's own employees, as chips."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Club Reading List",
+        "note": "A wire runs down to its projects; while work goes on beneath Learning, a dot travels down it."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A division with no projects yet",
+      "persona": "owner",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind&add=1",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "A new division in Northwind"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+                },
+                "text": "Field Trips"
+              }
+            },
+            {
+              "click": {
+                "text": "Add the division"
+              }
+            },
+            {
+              "wait": {
+                "text": "Its address: northwind/field-trips"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "nav[aria-label='Every part of the organisation'] button[aria-current='true']",
+            "note": "A new division is added on Manage (TREE-02)."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "goto": "/",
+          "highlight": {
+            "text": "No projects in Field Trips yet.",
+            "note": "On the chart it is a column with nothing in it yet."
+          }
+        }
+      ]
+    },
+    {
+      "title": "An archived division is drawn archived",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "[data-archived]",
+            "note": "Events is archived: a dashed header with the badge Archived. Its apps are not served."
+          }
+        }
+      ]
+    }
+  ]
+}

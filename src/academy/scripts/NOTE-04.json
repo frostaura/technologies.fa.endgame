@@ -1,0 +1,40 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "NOTE-04",
+  "persona": "owner",
+  "scenario": "budget-spent",
+  "start": "/notifications",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Shift Rota stopped working"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Shift Rota",
+        "note": "A notice about an app opens the app. Following an unread one marks it read."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/notifications",
+      "act": [
+        {
+          "click": {
+            "text": "Technologies reached its monthly budget"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "main",
+        "note": "A budget notice with no record of its own leads to Credits."
+      }
+    }
+  ]
+}

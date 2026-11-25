@@ -1,0 +1,97 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SYS-04",
+  "persona": "owner",
+  "scenario": "status-unreachable",
+  "start": "/system",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "System status could not be loaded",
+        "note": "The first check could not reach the control plane: nothing below is known."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Try again"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "ul[aria-label='Services']",
+        "note": "Try again checks, and the services appear."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A later check fails",
+      "persona": "owner",
+      "scenario": "status-refresh-fails",
+      "start": "/system",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Technical"
+              }
+            },
+            {
+              "wait": {
+                "selector": "ul[aria-label='Services']"
+              }
+            },
+            {
+              "click": {
+                "text": "Check again"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "[data-state='stale']",
+            "note": "The last good results stay, marked as from the last check that succeeded."
+          }
+        }
+      ]
+    },
+    {
+      "title": "The control plane reports no services",
+      "persona": "owner",
+      "scenario": "status-no-services",
+      "start": "/system",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "That is a fault, not a quiet system.",
+            "note": "Zero services is a fault, said plainly, never a healthy system."
+          }
+        }
+      ]
+    }
+  ]
+}

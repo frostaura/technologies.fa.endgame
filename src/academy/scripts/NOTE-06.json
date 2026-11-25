@@ -1,0 +1,24 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "NOTE-06",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/notifications",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Mark all read"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Nothing unread.",
+        "note": "Everything turns read at once, and the bell loses its badge."
+      }
+    }
+  ]
+}

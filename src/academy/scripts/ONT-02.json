@@ -1,0 +1,64 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ONT-02",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Who works on what"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "#chart-panel",
+        "note": "The graph is drawn from the organisation as it is now; while it loads, a skeleton says “Drawing the organisation”."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Key",
+        "note": "The key lists the kinds of line drawn — Holds, Works on, Reports to — and when the graph was made."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "#chart-panel",
+        "note": "Left to right: the organisation, its divisions, projects and apps; then the people and contractors working on them, and secrets by name."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "selector": "#chart-panel",
+        "note": "Each card says what it is — Division, App, Employee — and “working” while it works."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "selector": "#chart-panel",
+        "note": "On a wide screen, hovering a line names it: “Kasper works on Court booking”."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "selector": "#chart-panel",
+        "note": "On a wide screen the drawing is dragged to move around; the page never scrolls sideways."
+      }
+    }
+  ]
+}
