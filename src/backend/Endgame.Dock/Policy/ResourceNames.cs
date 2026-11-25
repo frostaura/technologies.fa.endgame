@@ -1,3 +1,5 @@
+using Endgame.Hosting.Contracts;
+
 namespace Endgame.Dock.Policy;
 
 /// <summary>
@@ -17,6 +19,7 @@ public sealed class ResourceNames(string prefix, string instance)
     public const string LeaseLabel = "endgame.lease-expires";
 
     public const string AppKind = "app";
+    public const string AppPreviewKind = "app-preview";
     public const string AppNetworkKind = "app-network";
     public const string WorkspaceKind = "workspace";
     public const string WorkspaceNetworkKind = "workspace-network";
@@ -33,6 +36,9 @@ public sealed class ResourceNames(string prefix, string instance)
     /// names (<c>http://app-&lt;id:N&gt;:8080</c>), so the two never disagree.
     /// </summary>
     public string AppContainer(Guid appId) => $"{Prefix}app-{appId:N}";
+
+    /// <summary>The app's preview instance, on the app's own network: the evaluator's, with a throwaway database.</summary>
+    public string AppPreviewContainer(Guid appId) => AppContainer(appId) + HostingConventions.PreviewSuffix;
 
     public string AppNetwork(Guid appId) => $"{Prefix}appnet-{appId:D}";
 

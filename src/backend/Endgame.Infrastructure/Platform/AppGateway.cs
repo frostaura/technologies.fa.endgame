@@ -107,10 +107,10 @@ public sealed class AppGateway(IHttpClientFactory http, IOptions<ServiceAddresse
     }
 
     /// <summary>A declared webhook called as its device would, with the header the platform computed (the evaluator's signed test).</summary>
-    public Task<AppCallResult> CallHookAsync(Guid appId, string name, string header, string value, string body, CancellationToken cancellationToken) =>
-        SendAsync(appId, HttpMethod.Post, $"hooks/{name}", new StringContent(body, Encoding.UTF8, "application/json"), null, cancellationToken, (header, value));
+    public Task<AppCallResult> CallHookAsync(Guid appId, string name, string header, string value, string body, CancellationToken cancellationToken, bool preview = false) =>
+        SendAsync(appId, HttpMethod.Post, $"hooks/{name}", new StringContent(body, Encoding.UTF8, "application/json"), null, cancellationToken, (header, value), preview);
 
-    private async Task<AppCallResult> SendAsync(Guid appId, HttpMethod method, string relative, HttpContent? content, string? sessionToken, CancellationToken cancellationToken, (string Name, string Value)? extra = null)
+    private async Task<AppCallResult> SendAsync(Guid appId, HttpMethod method, string relative, HttpContent? content, string? sessionToken, CancellationToken cancellationToken, (string Name, string Value)? extra = null, bool preview = false)
     {
         var o = options.Value;
         Uri target;
@@ -126,7 +126,7 @@ public sealed class AppGateway(IHttpClientFactory http, IOptions<ServiceAddresse
         }
         else
         {
-            target = new Uri($"http://app-{appId:N}:{HostingConventions.AppPort}/{relative}");
+            target = new Uri($"http://app-{appId:N}{(preview ? HostingConventions.PreviewSuffix : "")}:{HostingConventions.AppPort}/{relative}");
         }
 
         using var request = new HttpRequestMessage(method, target) { Content = content };
@@ -138,6 +138,11 @@ public sealed class AppGateway(IHttpClientFactory http, IOptions<ServiceAddresse
         if (sessionToken is not null)
         {
             request.Headers.TryAddWithoutValidation(HostingConventions.SessionHeader, sessionToken);
+        }
+
+        if (preview && viaEdge)
+        {
+            request.Headers.TryAddWithoutValidation(HostingConventions.PreviewHeader, "1");
         }
 
         if (extra is { } header)

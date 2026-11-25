@@ -459,6 +459,9 @@ public sealed class FakeDock : HttpMessageHandler
 
     public List<JsonObject> Starts { get; } = [];
 
+    /// <summary>The evaluator's previews started (<c>POST /internal/apps/{id}/preview</c>).</summary>
+    public List<JsonObject> Previews { get; } = [];
+
     public bool FailBuild { get; set; }
 
     public DockClient Client() => new(new HttpClient(this) { BaseAddress = new Uri("http://dock") });
@@ -474,6 +477,17 @@ public sealed class FakeDock : HttpMessageHandler
             return FailBuild
                 ? Json(new JsonObject { ["code"] = "build_failed", ["detail"] = "error CS1002: ; expected" }, HttpStatusCode.UnprocessableEntity)
                 : Json(new JsonObject { ["appId"] = appId, ["commit"] = "c0010000", ["image"] = $"app-{appId}:c001", ["durationMs"] = 6000, ["logTail"] = "Build succeeded." });
+        }
+
+        if (path.EndsWith("/preview", StringComparison.Ordinal) && request.Method == HttpMethod.Post)
+        {
+            Previews.Add(body!.AsObject());
+            return Json(Status(appId));
+        }
+
+        if (path.EndsWith("/preview", StringComparison.Ordinal) && request.Method == HttpMethod.Delete)
+        {
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
         }
 
         if (path.EndsWith("/start", StringComparison.Ordinal))

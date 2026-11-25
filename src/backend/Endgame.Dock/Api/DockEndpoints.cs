@@ -49,6 +49,13 @@ public static class DockEndpoints
         // Apps
         api.MapPost("/apps/{id:guid}/build", (Guid id, BuildRequest? body, BuildService builds, CancellationToken ct) => builds.BuildAsync(id, body ?? new BuildRequest(null), ct));
         api.MapPost("/apps/{id:guid}/start", (Guid id, StartAppRequest body, AppService apps, CancellationToken ct) => apps.StartAsync(id, body, ct));
+        // The evaluator's preview: the image on the app's network with a throwaway database of its own; destroyed after evaluation.
+        api.MapPost("/apps/{id:guid}/preview", (Guid id, StartAppRequest body, AppService apps, CancellationToken ct) => apps.StartPreviewAsync(id, body, ct));
+        api.MapDelete("/apps/{id:guid}/preview", async (Guid id, AppService apps, CancellationToken ct) =>
+        {
+            await apps.RemovePreviewAsync(id, ct);
+            return Results.NoContent();
+        });
         api.MapPost("/apps/{id:guid}/stop", (Guid id, AppService apps, CancellationToken ct) => apps.StopAsync(id, ct));
         api.MapPost("/apps/{id:guid}/wake", (Guid id, AppService apps, CancellationToken ct) => apps.WakeAsync(id, ct));
         api.MapGet("/apps/{id:guid}", (Guid id, AppService apps, CancellationToken ct) => apps.StatusAsync(id, ct));

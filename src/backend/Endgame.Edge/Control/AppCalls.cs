@@ -48,7 +48,9 @@ public static class AppCalls
             return Refuse(context, StatusCodes.Status404NotFound, "The edge routes no such app.", "not_found");
         }
 
-        if (app.Route.Availability != AppAvailability.Available)
+        // The evaluator's preview is called before the app is published, and is never woken: it runs while it is evaluated.
+        var preview = PreviewProbe.IsPreview(context.Request);
+        if (app.Route.Availability == AppAvailability.Paused || (!preview && app.Route.Availability != AppAvailability.Available))
         {
             return Refuse(context, StatusCodes.Status409Conflict, $"The app is {app.Route.Availability}; it is not called.", app.Route.Availability == AppAvailability.Paused ? "app_paused" : "app_unpublished");
         }
@@ -64,7 +66,7 @@ public static class AppCalls
         app.Enter();
         try
         {
-            if (!app.Awake)
+            if (!preview && !app.Awake)
             {
                 var outcome = await app.EnsureAwakeAsync(backend, TimeSpan.FromSeconds(options.Value.WakeTimeoutSeconds), cancellationToken);
                 if (outcome != WakeOutcome.Awake)
@@ -73,7 +75,7 @@ public static class AppCalls
                 }
             }
 
-            var target = new Uri(new Uri(app.Route.Target.TrimEnd('/') + "/"), relative + context.Request.QueryString.Value);
+            var target = new Uri(new Uri(PreviewProbe.TargetOf(app.Route.Target, preview).TrimEnd('/') + "/"), relative + context.Request.QueryString.Value);
             using var forward = new HttpRequestMessage(new HttpMethod(context.Request.Method), target);
             forward.Headers.TryAddWithoutValidation(HostingConventions.ForwardedPrefixHeader, app.Route.PathPrefix);
             var origin = Uri.TryCreate(options.Value.PlatformOrigin, UriKind.Absolute, out var o) ? o : null;
@@ -114,8 +116,12 @@ public static class AppCalls
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
             {
-                app.MarkAsleep();
-                logger.LogWarning("A call could not reach app {AppId}: {Message}", id, e.Message);
+                if (!preview)
+                {
+                    app.MarkAsleep();
+                }
+
+                logger.LogWarning("A call could not reach app {AppId}{Preview}: {Message}", id, preview ? "'s preview" : "", e.Message);
                 return Refuse(context, StatusCodes.Status502BadGateway, "The app did not answer.", "app_unreachable");
             }
 

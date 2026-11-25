@@ -18,6 +18,18 @@ public static class HostingConventions
     /// <summary>The app-scoped session token of the admitted visitor; the app resolves it through the platform API.</summary>
     public const string SessionHeader = "X-Endgame-Session";
 
+    /// <summary>
+    /// On Edge's control listener only (the evaluator's calls and probes): <c>1</c> sends the request to the app's
+    /// preview instance (<c>app-&lt;id:N&gt;-pv</c>, its own throwaway database) instead of the app.
+    /// </summary>
+    public const string PreviewHeader = "X-Endgame-Preview";
+
+    /// <summary>
+    /// What a preview instance's container name adds to the app's (the routing table's target host). Short, because a
+    /// host name label is at most 63 characters and the app's is already 36 (more behind a test stack's prefix).
+    /// </summary>
+    public const string PreviewSuffix = "-pv";
+
     /// <summary>On an answer from Edge's control listener: Edge itself refused the call (its code), so the body is not the app's.</summary>
     public const string RefusalHeader = "X-Endgame-Refusal";
 

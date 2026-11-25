@@ -357,8 +357,43 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         }
     }
 
-    /// <summary>The preview, then a separate evaluator with its own context; a build that fails is a failed evaluation without one.</summary>
+    /// <summary>
+    /// The preview, then a separate evaluator with its own context; a build that fails is a failed evaluation without one. The
+    /// preview is the evaluated image with a throwaway database of its own, destroyed when the evaluation ends, so nothing the
+    /// evaluator's test members do ever reaches the app that is published.
+    /// </summary>
     private async Task<JsonObject?> EvaluateAsync(RunContext run, PlanContract plan, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await EvaluateOnPreviewAsync(run, plan, item, round, tier, workspace, appId, crew, cancellationToken);
+        }
+        finally
+        {
+            await RemovePreviewAsync(run, appId);
+        }
+    }
+
+    private static async Task RemovePreviewAsync(RunContext run, Guid appId)
+    {
+        if (run.Dock is not { } dock)
+        {
+            return;
+        }
+
+        try
+        {
+            // Not the run's token: a cancelled or suspended run still takes its preview and the test data down.
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+            await dock.RemovePreviewAsync(appId, timeout.Token);
+        }
+        catch (Exception e) when (e is WorkspaceException or HttpRequestException or OperationCanceledException)
+        {
+            // Dock replaces any earlier preview when the next one starts, and drops its database then.
+        }
+    }
+
+    private async Task<JsonObject?> EvaluateOnPreviewAsync(RunContext run, PlanContract plan, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, CancellationToken cancellationToken)
     {
         string? previewNote = null;
         ITool? probe = null;
@@ -369,7 +404,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             {
                 var image = await dock.BuildAsync(appId, null, cancellationToken);
                 var token = await run.ControlPlane.MintAppTokenAsync(appId, cancellationToken);
-                await dock.StartAsync(appId, new StartAppRequest(run.OrganisationId, image.Image, token, null, null), cancellationToken);
+                await dock.StartPreviewAsync(appId, new StartAppRequest(run.OrganisationId, image.Image, token, null, null), cancellationToken);
                 probe = preview is null ? null : new CheckPreviewTool(preview, appId);
                 callApp = caller is null ? null : new CallAppTool(caller, appId);
                 previewNote = caller is null ? "The app is running, but this Runner has no way to call it signed in; no requirement can be shown working, so the item fails." : null;

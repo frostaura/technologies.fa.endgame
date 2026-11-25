@@ -15,7 +15,8 @@ namespace Endgame.Infrastructure.Platform;
 
 public sealed record SentEmailView(IReadOnlyList<string> To, string Subject, string Text, string Status, DateTimeOffset CreatedAt);
 
-public sealed record WebhookTestRequest(string? Name, string? Header, string? Scheme, string? SecretName, string? Prefix, string? Body);
+/// <param name="Preview">True when the call goes to the app's preview instance (the evaluator's, before publishing).</param>
+public sealed record WebhookTestRequest(string? Name, string? Header, string? Scheme, string? SecretName, string? Prefix, string? Body, bool? Preview = null);
 
 public sealed record WebhookTestResult(int Status, string? ContentType, string Body, bool Truncated, bool SecretCreated, string SecretName);
 
@@ -80,7 +81,7 @@ public sealed partial class EvaluatorAids(EndgameDbContext db, TenantSession ses
         var value = request.Scheme == "shared-token"
             ? secret
             : (request.Prefix ?? "") + Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(body)));
-        var answer = await gateway.CallHookAsync(app.AppId!.Value, name, header, value, body, cancellationToken);
+        var answer = await gateway.CallHookAsync(app.AppId!.Value, name, header, value, body, cancellationToken, preview: request.Preview == true);
         return new WebhookTestResult(answer.Status, answer.ContentType, answer.Text, answer.Truncated, created, secretName);
     }
 

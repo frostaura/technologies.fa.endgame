@@ -92,27 +92,7 @@ public sealed class AppService(
                 labels[ResourceNames.OrganisationLabel] = request.OrganisationId.ToString("D");
                 labels[ResourceNames.TokenLabel] = tokenHash;
                 labels[LimitsLabel] = limitsText;
-                var proxy = $"http://{o.Peers.EgressAlias}:{o.Peers.EgressPort}";
-                // The app kit's contract (src/appkit/PLATFORM-API.md §1). The standard proxy
-                // variables are set too, for anything in the app that does not go through the kit.
-                var environment = new List<string>
-                {
-                    $"{AppEnvironment.Database}={connection}",
-                    $"{AppEnvironment.PlatformUrl}={o.PlatformUrlForApps}",
-                    $"{AppEnvironment.AppToken}={token}",
-                    $"{AppEnvironment.EgressProxy}={proxy}",
-                    $"{AppEnvironment.AppId}={appId:D}",
-                    $"ASPNETCORE_HTTP_PORTS={HostingConventions.AppPort}",
-                    "DOTNET_EnableDiagnostics=0", // no diagnostics socket to write on a read-only root
-                    $"HTTP_PROXY={proxy}",
-                    $"HTTPS_PROXY={proxy}",
-                    $"NO_PROXY={o.Peers.PostgresAlias},localhost,127.0.0.1",
-                };
-                if (o.TelemetryExport is { Length: > 0 } export)
-                {
-                    environment.Add($"{AppEnvironment.TelemetryExport}={export}");
-                }
-
+                var environment = Environment(appId, connection, token, o.TelemetryExport is { Length: > 0 } export ? export : null);
                 await docker.Containers.CreateContainerAsync(new CreateContainerParameters
                 {
                     Name = name,
@@ -141,6 +121,113 @@ public sealed class AppService(
         finally
         {
             runtime.Lifecycle.Release();
+        }
+    }
+
+    /// <summary>
+    /// The app's preview instance (ARCH-006, <i>Checking the work</i>): the image being evaluated, on the app's own network
+    /// beside the app, with a database of its own made afresh — so the evaluator's test records never reach the app. Any
+    /// earlier preview is replaced. It sends no telemetry (the app's measurements stay the app's own), reports no state and is
+    /// never published, sampled or charged as the app; <see cref="RemovePreviewAsync"/> destroys it with its database.
+    /// </summary>
+    public async Task<AppStatus> StartPreviewAsync(Guid appId, StartAppRequest request, CancellationToken cancellationToken)
+    {
+        if (appId == Guid.Empty || request.OrganisationId == Guid.Empty)
+        {
+            throw DockProblem.Invalid("An app id and an organisation id are required.");
+        }
+
+        var runtime = registry.For(appId);
+        await runtime.Lifecycle.WaitAsync(cancellationToken);
+        try
+        {
+            var image = await ResolveImageAsync(appId, request.Image, cancellationToken);
+            var o = options.Value;
+            var limits = LimitsPolicy.Resolve(request.Limits, o.AppDefaults, o.AppMaxima);
+            var network = names.AppNetwork(appId);
+            var subnet = await networks.EnsureAsync(network, names.Labels(ResourceNames.AppNetworkKind, appId), NetworkPeers.Edge | NetworkPeers.Postgres | NetworkPeers.Egress, cancellationToken);
+            await egress.SetAsync(network, subnet, await egress.HostsAsync(network, cancellationToken), platform: true, cancellationToken);
+            var name = names.AppPreviewContainer(appId);
+            await RemoveContainerAsync(name, cancellationToken);
+            var connection = await databases.EnsurePreviewAsync(appId, cancellationToken);
+            var token = request.AppToken ?? await reports.AppTokenAsync(appId, cancellationToken)
+                ?? throw DockProblem.Unavailable("The control plane did not issue the app's platform token.");
+            var labels = names.Labels(ResourceNames.AppPreviewKind, appId);
+            labels[ResourceNames.CommitLabel] = image[(image.LastIndexOf(':') + 1)..];
+            labels[ResourceNames.OrganisationLabel] = request.OrganisationId.ToString("D");
+            await docker.Containers.CreateContainerAsync(new CreateContainerParameters
+            {
+                Name = name,
+                Image = image,
+                User = User,
+                Env = Environment(appId, connection, token, "false"),
+                Labels = labels,
+                StopTimeout = TimeSpan.FromSeconds(10),
+                HostConfig = Hardening.App(limits, network),
+                NetworkingConfig = new NetworkingConfig { EndpointsConfig = new Dictionary<string, EndpointSettings> { [network] = new() } },
+            }, cancellationToken);
+            await wakes.RunAsync(() => docker.Containers.StartContainerAsync(name, new ContainerStartParameters(), cancellationToken), cancellationToken);
+            logger.LogInformation("Preview of app {AppId} started.", appId);
+            var started = await TryInspectAsync(name, cancellationToken);
+            return new AppStatus(appId, started?.State?.Running == true ? AppRuntimeState.Running : AppRuntimeState.Crashed, image, labels[ResourceNames.CommitLabel],
+                $"http://{name}:{HostingConventions.AppPort}", subnet.ToString(), ParseTime(started?.State?.StartedAt), null, null, false, null, limits);
+        }
+        finally
+        {
+            runtime.Lifecycle.Release();
+        }
+    }
+
+    /// <summary>Destroys the preview instance and drops its database. Nothing of it is kept.</summary>
+    public async Task RemovePreviewAsync(Guid appId, CancellationToken cancellationToken)
+    {
+        var runtime = registry.For(appId);
+        await runtime.Lifecycle.WaitAsync(cancellationToken);
+        try
+        {
+            await RemoveContainerAsync(names.AppPreviewContainer(appId), cancellationToken);
+            await databases.DropPreviewAsync(appId, cancellationToken);
+        }
+        finally
+        {
+            runtime.Lifecycle.Release();
+        }
+    }
+
+    /// <summary>The app kit's contract (src/appkit/PLATFORM-API.md §1). The standard proxy variables are set too, for anything in the app that does not go through the kit.</summary>
+    private List<string> Environment(Guid appId, string connection, string token, string? telemetryExport)
+    {
+        var o = options.Value;
+        var proxy = $"http://{o.Peers.EgressAlias}:{o.Peers.EgressPort}";
+        var environment = new List<string>
+        {
+            $"{AppEnvironment.Database}={connection}",
+            $"{AppEnvironment.PlatformUrl}={o.PlatformUrlForApps}",
+            $"{AppEnvironment.AppToken}={token}",
+            $"{AppEnvironment.EgressProxy}={proxy}",
+            $"{AppEnvironment.AppId}={appId:D}",
+            $"ASPNETCORE_HTTP_PORTS={HostingConventions.AppPort}",
+            "DOTNET_EnableDiagnostics=0", // no diagnostics socket to write on a read-only root
+            $"HTTP_PROXY={proxy}",
+            $"HTTPS_PROXY={proxy}",
+            $"NO_PROXY={o.Peers.PostgresAlias},localhost,127.0.0.1",
+        };
+        if (telemetryExport is not null)
+        {
+            environment.Add($"{AppEnvironment.TelemetryExport}={telemetryExport}");
+        }
+
+        return environment;
+    }
+
+    private async Task RemoveContainerAsync(string name, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await docker.Containers.RemoveContainerAsync(name, new ContainerRemoveParameters { Force = true }, cancellationToken);
+        }
+        catch (Exception e) when (EngineErrors.IsNotFound(e))
+        {
         }
     }
 
@@ -221,13 +308,8 @@ public sealed class AppService(
         try
         {
             runtime.StopRequestedAt = time.GetUtcNow();
-            try
-            {
-                await docker.Containers.RemoveContainerAsync(names.AppContainer(appId), new ContainerRemoveParameters { Force = true }, cancellationToken);
-            }
-            catch (Exception e) when (EngineErrors.IsNotFound(e))
-            {
-            }
+            await RemoveContainerAsync(names.AppContainer(appId), cancellationToken);
+            await RemoveContainerAsync(names.AppPreviewContainer(appId), cancellationToken);
 
             var network = names.AppNetwork(appId);
             await networks.RemoveAsync(network, cancellationToken);

@@ -59,8 +59,67 @@ public sealed class DatabaseProvisioner(IOptions<DockOptions> options, OpaqueNam
             gate.Release();
         }
 
-        var host = options.Value.Peers.PostgresAlias;
-        return $"Host={host};Port=5432;Database={database};Username={role};Password={password};Maximum Pool Size={limit};Timeout=15";
+        return ConnectionString(appId, database);
+    }
+
+    /// <summary>What the app is given for one of its databases: its own role, password and connection cap.</summary>
+    private string ConnectionString(Guid appId, string database) =>
+        $"Host={options.Value.Peers.PostgresAlias};Port=5432;Database={database};Username={names.Role(appId)};Password={names.Password(appId)};Maximum Pool Size={Math.Max(1, options.Value.AppConnectionLimit)};Timeout=15";
+
+    /// <summary>
+    /// The preview instance's database (ARCH-006, <i>Checking the work</i>): made afresh — any earlier one is dropped
+    /// first — owned by the app's own role, so the preview reaches what the app would and nothing more, and never the
+    /// app's own database. The evaluator's test records live here and are dropped with it.
+    /// </summary>
+    public async Task<string> EnsurePreviewAsync(Guid appId, CancellationToken cancellationToken)
+    {
+        // The role (and its password and connection cap) is the app's: provisioning it is idempotent.
+        _ = await EnsureAsync(appId, cancellationToken);
+        var database = names.PreviewDatabase(appId);
+        var role = names.Role(appId);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken);
+            await ExecAsync(connection, $"DROP DATABASE IF EXISTS {database} WITH (FORCE)", cancellationToken);
+            await ExecAsync(connection, $"CREATE DATABASE {database} OWNER {role}", cancellationToken);
+            await ExecAsync(connection, $"REVOKE ALL ON DATABASE {database} FROM PUBLIC", cancellationToken);
+            await ExecAsync(connection, $"GRANT CONNECT, TEMPORARY ON DATABASE {database} TO {role}", cancellationToken);
+        }
+        catch (NpgsqlException e)
+        {
+            throw DockProblem.Unavailable($"The database server refused the preview's database: {e.Message}");
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        return ConnectionString(appId, database);
+    }
+
+    /// <summary>Drops the preview's database, and every record the evaluation wrote with it.</summary>
+    public async Task DropPreviewAsync(Guid appId, CancellationToken cancellationToken)
+    {
+        if (!Configured)
+        {
+            return;
+        }
+
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken);
+            await ExecAsync(connection, $"DROP DATABASE IF EXISTS {names.PreviewDatabase(appId)} WITH (FORCE)", cancellationToken);
+        }
+        catch (NpgsqlException e)
+        {
+            throw DockProblem.Unavailable($"The database server refused to drop the preview's database: {e.Message}");
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     /// <summary>

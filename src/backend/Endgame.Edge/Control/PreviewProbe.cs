@@ -29,9 +29,11 @@ public static class PreviewProbe
 
     private static readonly string[] Methods = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
-    public static async Task<IResult> ProbeAsync(Guid id, ProbeRequest request, AppRegistry registry, RouteTableSource routes, IAppBackend backend,
+    public static async Task<IResult> ProbeAsync(Guid id, ProbeRequest request, HttpContext context, AppRegistry registry, RouteTableSource routes, IAppBackend backend,
         IHttpClientFactory http, IOptions<EdgeOptions> options, ILoggerFactory loggers, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        var preview = IsPreview(context.Request);
         ArgumentNullException.ThrowIfNull(request);
         var method = (request.Method ?? "GET").Trim().ToUpperInvariant();
         if (!Methods.Contains(method))
@@ -73,7 +75,7 @@ public static class PreviewProbe
         app.Enter();
         try
         {
-            if (!app.Awake)
+            if (!preview && !app.Awake)
             {
                 var outcome = await app.EnsureAwakeAsync(backend, TimeSpan.FromSeconds(options.Value.WakeTimeoutSeconds), cancellationToken);
                 if (outcome != WakeOutcome.Awake)
@@ -82,7 +84,7 @@ public static class PreviewProbe
                 }
             }
 
-            using var forward = new HttpRequestMessage(new HttpMethod(method), new Uri(new Uri(app.Route.Target.TrimEnd('/') + "/"), path));
+            using var forward = new HttpRequestMessage(new HttpMethod(method), new Uri(new Uri(TargetOf(app.Route.Target, preview).TrimEnd('/') + "/"), path));
             forward.Headers.TryAddWithoutValidation(HostingConventions.ForwardedPrefixHeader, app.Route.PathPrefix);
             var origin = Uri.TryCreate(options.Value.PlatformOrigin, UriKind.Absolute, out var o) ? o : null;
             forward.Headers.TryAddWithoutValidation("X-Forwarded-Host", origin?.Authority ?? "localhost");
@@ -106,8 +108,12 @@ public static class PreviewProbe
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
             {
-                app.MarkAsleep();
-                logger.LogWarning("A probe could not reach app {AppId}: {Message}", id, e.Message);
+                if (!preview)
+                {
+                    app.MarkAsleep();
+                }
+
+                logger.LogWarning("A probe could not reach app {AppId}{Preview}: {Message}", id, preview ? "'s preview" : "", e.Message);
                 return Results.Problem(statusCode: StatusCodes.Status502BadGateway, title: "The app did not answer.");
             }
         }
@@ -115,6 +121,26 @@ public static class PreviewProbe
         {
             app.Leave();
         }
+    }
+
+    /// <summary>The evaluator's request names the preview (<see cref="HostingConventions.PreviewHeader"/>), on the control listener only.</summary>
+    public static bool IsPreview(HttpRequest request) =>
+        string.Equals(request.Headers[HostingConventions.PreviewHeader].ToString(), "1", StringComparison.Ordinal);
+
+    /// <summary>
+    /// The routing table's target, or the app's preview instance beside it (<c>app-&lt;id:N&gt;-pv</c> on the same
+    /// network): never woken, never marked asleep, and reachable before the app is published.
+    /// </summary>
+    public static string TargetOf(string target, bool preview)
+    {
+        if (!preview)
+        {
+            return target;
+        }
+
+        var uri = new UriBuilder(target);
+        uri.Host += HostingConventions.PreviewSuffix;
+        return uri.Uri.ToString();
     }
 
     private static bool IsText(MediaTypeHeaderValue? type) =>

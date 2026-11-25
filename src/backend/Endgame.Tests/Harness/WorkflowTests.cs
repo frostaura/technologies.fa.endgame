@@ -348,6 +348,29 @@ public sealed class WorkflowTests
     }
 
     [Fact]
+    public async Task The_evaluator_works_on_a_preview_with_its_own_data_and_the_app_is_published_clean()
+    {
+        // The evaluator's test members wrote into the app's own database ("Added by Test member (member-a)" in a published
+        // reading list): every evaluation now runs against a preview with a throwaway database, destroyed afterwards, and the
+        // app itself is started only once, to publish it, after the last preview is gone.
+        var (cp, ws, dock) = BuildRun();
+        await RunBuildAsync(cp, new Factory().Model(), ws, dock);
+
+        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+        var app = cp.Nodes.Single(n => n["level"]!.GetValue<string>() == "app")["id"]!.GetValue<string>();
+        var lifecycle = dock.Calls.Where(c => c.Contains($"/internal/apps/{app}/", StringComparison.Ordinal) && !c.EndsWith("/build", StringComparison.Ordinal)).ToList();
+        var evaluations = cp.Types.Count(t => t is "evaluation.passed" or "evaluation.failed");
+        Assert.Equal(evaluations, lifecycle.Count(c => c == $"POST /internal/apps/{app}/preview"));
+        Assert.Equal(evaluations, lifecycle.Count(c => c == $"DELETE /internal/apps/{app}/preview"));
+        Assert.Equal($"POST /internal/apps/{app}/start", Assert.Single(lifecycle, c => c.EndsWith("/start", StringComparison.Ordinal)));
+        Assert.Equal($"POST /internal/apps/{app}/start", lifecycle[^1]);
+        for (var i = 0; i < lifecycle.Count - 1; i += 2)
+        {
+            Assert.Equal(($"POST /internal/apps/{app}/preview", $"DELETE /internal/apps/{app}/preview"), (lifecycle[i], lifecycle[i + 1]));
+        }
+    }
+
+    [Fact]
     public async Task Build_places_plans_builds_each_feature_with_a_sceptical_evaluator_reviews_and_publishes_privately()
     {
         var (cp, ws, dock) = BuildRun();
@@ -381,8 +404,10 @@ public sealed class WorkflowTests
             Assert.DoesNotContain(c.Tools!, t => t!["function"]!["name"]!.GetValue<string>() is "edit_file" or "write_file" or "commit"));
         // Reviewed, then started privately: Dock's start carries no visibility, and nothing made the app public.
         Assert.Equal(1, factory.Reviews);
-        Assert.Equal(3, dock.Starts.Count);
-        Assert.All(dock.Starts, s => Assert.Null(s["visibility"]));
+        // Each of the two features evaluated on a preview of its own; the app itself started once, to publish it.
+        Assert.Equal(2, dock.Previews.Count);
+        Assert.Single(dock.Starts);
+        Assert.All(dock.Starts.Concat(dock.Previews), s => Assert.Null(s["visibility"]));
         Assert.Contains("running privately", cp.Payload("message")!["text"]!.GetValue<string>(), StringComparison.Ordinal);
 
         // The project entering its build and its evaluation hired an engineer and a QA engineer; the work is theirs,
@@ -519,8 +544,9 @@ public sealed class WorkflowTests
         Assert.Contains("Publishing is blocked by the security review", cp.Run["summary"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.Equal(2, factory.Reviews);
         Assert.Contains(cp.Events, e => e.Payload["agent"]?.GetValue<string>() == "builder-security-repair");
-        // Two items built and previewed, never published.
-        Assert.Equal(2, dock.Starts.Count);
+        // Two items built and previewed, never published: the app itself never started.
+        Assert.Equal(2, dock.Previews.Count);
+        Assert.Empty(dock.Starts);
     }
 
     [Fact]
