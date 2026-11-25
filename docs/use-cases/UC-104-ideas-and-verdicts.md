@@ -60,6 +60,12 @@ decides what happens after a verdict that is allowed to say no.
 
 Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `IdeasAndConversationsTests`, `RunnerContractTests` (auto-mode, red line, the conversation's idea).
 
+## In the console
+
+The start screen sends the chosen `scope` (the organisation or a division) with both `POST /api/ideas/estimate`
+and `POST /api/ideas`, so the estimate shown is the one recorded; it refuses below Builder with the reason, and
+says what the autonomy at that scope will do after the verdict.
+
 ## Links
 
 - Spec *Layer 2 — the factory* · ARCH-004 *Ideas* · UC-001 (console) for the screens.

@@ -17,6 +17,13 @@
    the edge reads `GET /internal/routes` — every app's `pathBase` (`/<org>/<division>/<project>/<app>/`), `host`
    (`<org>.<domain>`), `hostPathBase`, `target` (`http://app-<id:N>:8080`), status, sleep setting and version.
 
+## In the console
+
+- Idle minutes (1–1,440) are set under *Running* (Builder). The app's own cap and AI allowance
+  (`app_models.monthly_credits`) are set in *What it may spend* (Admin). Running is a Builder's, who may open it
+  an Admin's; below those roles the choices are shown disabled with who changes them, and sharing and secrets are
+  not read. Renaming, archiving and deleting the app is in *The app itself*.
+
 ## Alternate and failure flows
 
 - **A1 — access.** `private`, `shared` or `public` need the Admin role; `public` is refused (403 `human_only`)

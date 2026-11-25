@@ -43,6 +43,14 @@ path, and the bill is the ledger, line by line.
    margin, hosting rates, the default per-app model allowance. A change applies to the next charge and
    is audited.
 
+## In the console
+
+- An Admin sets, changes and removes a monthly cap on any row of *Budgets* (`PUT/DELETE /api/cascade`, budget
+  `monthly_credits`; an employee's on its record); a removal says which cap then holds, or that none does.
+- The Owner removes their own overdraft limit, and an Admin a part's tighter one (`DELETE /api/cascade`, setting
+  `overdraft_own_limit` / `overdraft_limit`).
+- An employee's row carries `employeeId` and counts its contractors' spend, as its cap does.
+
 ## Alternate and failure flows
 
 - **A1 — a cap would be exceeded.** The call is refused 402 `budget_exhausted`, `terminal: true`, naming the

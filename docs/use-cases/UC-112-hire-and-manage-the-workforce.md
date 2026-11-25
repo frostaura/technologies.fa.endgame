@@ -79,3 +79,12 @@ researcher and finished with what they learned.
 ## Links
 
 - Spec, *Workforce* · ARCH-002 · ARCH-004 *Workforce* · UC-113 (memory) · UC-115 (ontology).
+
+## In the console
+
+- An employee's whole job — name, role, mandate, tools, services, thinking power, budget, manager — is edited on its
+  record; reassigning keeps or sets the manager; a released employee is rehired where it was or elsewhere, and
+  hiring lists the people let go.
+- A hire is asked for by hand (trigger `owner`). A proposal's edit clears its budget (`clearMonthlyCreditLimit`)
+  and refuses an empty reason. Proposing a recurring role sends `contractorRole`, and the control plane derives
+  the same need key it uses itself (`promotion:<node>:<role>`), so one need is one proposal.

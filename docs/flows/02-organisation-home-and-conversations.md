@@ -309,20 +309,16 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Covered by tests:** `HomeView.test.tsx` covers the failed first load; no home-specific stale test found.
 
 ### ORG-14 Rename the organisation
-- **Who:** Owner.
-- **Starts at:** API only: `PATCH /api/organisations/{id} {name}`.
-- **Needs:** the Owner role at the organisation; the organisation's id, which is in the `GET /api/tree` answer.
-- **Level:** Developer · **Learn first:** ORG-04 · **What you learn:** only the Owner renames the organisation.
-- **Steps:** send the request. The answer is the node view with the new name. The next tree read shows it.
-- **You know it worked when:** the band shows the new name after the next refresh.
-- **Variations and refusals:**
-  - An empty name: "A name cannot be empty."
-  - Over 200 characters: "A name is at most 200 characters."
-  - The slug (the address) cannot be changed by any route.
-  - MCP `node_update` refuses organisations with "An organisation is renamed by its Owner at the console." **Finding:** the console has no such control.
-- **Where:** `TreeEndpoints.MapNodeChanges`, `TreeService.UpdateAsync`.
-- **Reachable from:** API only. Endpoint with no screen.
-- **Covered by tests:** `AuthorizationMatrixTests` (roles); no rename-specific test for organisations found.
+- **Who:** the Owner.
+- **Starts at:** `/tree?scope={org}`, panel **"Its name"**. Also `PATCH /api/organisations/{id} {name}`.
+- **Needs:** Owner.
+- **Level:** Core · **Learn first:** TREE-13 · **What you learn:** the organisation's name can change; its address (and every app's) does not.
+- **Steps:** as TREE-06: type the name, press **"Save the name"**; "It is called {name} now." The header, breadcrumb and chart follow.
+- **You know it worked when:** the organisation band shows the new name.
+- **Variations and refusals:** anyone but the Owner reads "The Owner renames the organisation." Suspending or reinstating is FrostAura's (ORG-15).
+- **Where:** `NodeControls.tsx` (RenameNode, level organisation); `TreeEndpoints.MapNodeChanges`.
+- **Reachable from:** UI; API.
+- **Covered by tests:** `ManageView.test.tsx` ("tells a Viewer who may change each thing…"); `TreeEndpointTests`.
 
 ### ORG-15 Suspend or reinstate an organisation
 - **Who:** FrostAura operator.
@@ -402,7 +398,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 
 ## TREE: divisions, projects and apps as nodes
 
-**What is and is not possible.** In the console you can read nodes (ORG-08 to ORG-10). Nodes are created by the factory or by API/MCP. Renaming and archiving are API/MCP only; deleting is API only; moving is not possible at all. Context and other cascade values are API/MCP only from this screen. Other screens set autonomy, rule sets, budgets, secrets and app settings (other readers).
+**What is and is not possible.** The console reads nodes on the org chart (ORG-08 to ORG-10) and manages them on **"Manage"** (`/tree?scope=`): create, rename, describe, archive, reactivate and delete. The factory also creates them when it places a built idea (TREE-01). Moving is not possible by any route (TREE-10). Other screens set autonomy, rule sets, budgets, secrets and app settings.
 
 The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_set`, `context`, `setting`.
 - A value set at a node applies to everything beneath it unless something lower narrows or overrides it.
@@ -434,49 +430,47 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 
 ### TREE-02 Create a division directly
 - **Who:** Admin or Owner at the organisation.
-- **Starts at:** API `POST /api/divisions {parent: "{org}", name, slug}`, or MCP `node_create {level: "division", parent, name, slug}`.
-- **Needs:** Admin.
-- **Level:** Developer · **Learn first:** TREE-01 · **What you learn:** a node's slug becomes part of every address beneath it.
-- **Steps:** send it. The answer is 201 with `{id, level, slug, name, path, status: "active", createdAt}`. Home shows an empty column, "No projects in {name} yet.", on its next refresh.
-- **You know it worked when:** the new column appears on home.
+- **Starts at:** the org chart's **"Add a division"** tile (Admins only), which opens `/tree?scope={org}&add=1`; or `/tree`, the organisation selected, **"Add a division"**. Also API `POST /api/divisions {parent, name, slug}` and MCP `node_create`.
+- **Needs:** Admin at the organisation.
+- **Level:** Core · **Learn first:** ORG-07, TREE-13 · **What you learn:** a node's address is made from its name once, when it is made, and never changes.
+- **Steps:**
+  1. The form "A new division in {Org}" opens with **"Name"** and **"Its address"**.
+  2. Type the name. "Its address" fills itself from it (`Field Operations` → `field-operations`); the hint reads "{org}/{slug}. It cannot be changed once it is made." You may change the address before pressing the button.
+  3. Press **"Add the division"**. The new division is selected in the outline, and the org chart shows its column ("No projects in {name} yet.") on its next refresh.
+- **You know it worked when:** the division appears in "Every part of the organisation" and is selected.
 - **Variations and refusals:**
-  - Bad slug: "'{slug}' is not a valid slug: use 2-40 lower-case letters, digits and single hyphens, starting and ending with a letter or digit."
-  - Sibling clash: 409 "A sibling already uses that slug."
-  - Wrong parent level: "A division is created under a organisation; '{path}' is a project."
-  - Empty name: "A name cannot be empty."
-  - No role: 404. Too low a role: 403 "This needs the admin role at '{path}'; you are a builder there (set at …)."
-  - **The console has no form for this.** The conversation cannot do it either (no tool).
-- **Where:** `TreeEndpoints` (group `/divisions`), `Mcp/ControlPlaneTools.cs` (`node_create`), `TreeService.CreateChildAsync`.
-- **Reachable from:** API / MCP only.
-- **Covered by tests:**
-  - `acceptance.spec.ts`: "2. the organisation, a division, a project and two apps, through the API"
-  - `CascadeCreditsAndAppsTests.The_tree_refuses_bad_slugs_duplicate_siblings_and_deleting_what_has_children`
-  - `McpTests.The_control_plane_tools_do_what_the_console_does_under_the_same_rules`
-  - `AuthorizationMatrixTests`
+  - An address that is not one: "Use 2 to 40 lower-case letters, digits and single hyphens, starting and ending with a letter or digit." The button stays disabled.
+  - Over 200 characters: "A name is at most 200 characters."
+  - Server refusals are shown as "The division was not made: {reason} Nothing changed.", for example 409 "A sibling already uses that slug."
+  - **"Not now"** closes the form.
+  - Below Admin the panel reads "An Admin or above adds a division here." and the chart shows no tile.
+- **Where:** `features/tree/ManageView.tsx`, `NodeControls.tsx` (CreateChild); `home/OrgChart.tsx`; `TreeEndpoints` `/divisions`; `TreeService.CreateChildAsync`.
+- **Reachable from:** UI; API; MCP.
+- **Covered by tests:** `ManageView.test.tsx` ("adds a division with its address made from the name…", "refuses an address that is not one…"); `OrgChart.test.tsx`; `tests-e2e/manage.spec.ts` ("an Admin adds a division from the chart…"); `CascadeCreditsAndAppsTests.The_tree_refuses_bad_slugs_duplicate_siblings_and_deleting_what_has_children`; `AuthorizationMatrixTests`.
 
 ### TREE-03 Create a project directly
 - **Who:** Builder or above at the division.
-- **Starts at:** API `POST /api/projects {parent: "{org}/{division}", name, slug}` or MCP `node_create {level: "project", …}`.
+- **Starts at:** `/tree`, the division selected, **"Add a project"**. Also API `POST /api/projects` and MCP `node_create`.
 - **Needs:** Builder at the division.
-- **Level:** Developer · **Learn first:** TREE-02 · **What you learn:** a project is always under exactly one division.
-- **Steps:** as TREE-02. Home shows a project card with the stage chip "Planning" and no apps.
-- **You know it worked when:** a "Planning" card appears in the division.
-- **Variations and refusals:** as TREE-02, with role Builder. Created by placement in TREE-01. No console form.
+- **Level:** Core · **Learn first:** TREE-02 · **What you learn:** a project is always under exactly one division.
+- **Steps:** as TREE-02, with the form "A new project in {Division}" and **"Add the project"**. On the chart it shows as a card with the stage chip "Planning".
+- **You know it worked when:** the project is selected in the outline and appears under "What is in it" of its division.
+- **Variations and refusals:** as TREE-02. Below Builder: "A Builder or above adds a project here."
 - **Where:** as TREE-02 (group `/projects`).
-- **Reachable from:** API / MCP only.
-- **Covered by tests:** `acceptance.spec.ts` step 2; `AuthorizationMatrixTests`.
+- **Reachable from:** UI; API; MCP.
+- **Covered by tests:** `ManageView.test.tsx`; `acceptance.spec.ts` step 2; `AuthorizationMatrixTests`.
 
 ### TREE-04 Create an app node directly
 - **Who:** Builder or above at the project.
-- **Starts at:** API `POST /api/apps {parent: "{org}/{division}/{project}", name, slug}` or MCP `node_create {level: "app", …}`.
+- **Starts at:** `/tree`, the project selected, **"Add an app"**. Also API `POST /api/apps` and MCP `node_create`.
 - **Needs:** Builder at the project.
-- **Level:** Developer · **Learn first:** TREE-03 · **What you learn:** an app node exists before anything is built into it, and it is the deepest level.
-- **Steps:** as TREE-02. The app starts with status `draft`. Home shows it as "Waking" with "Health unknown" until hosting reports a state.
-- **You know it worked when:** an app row appears in the project card.
-- **Variations and refusals:** below an app: "An app is the deepest level; nothing is created beneath it." Created by placement in TREE-01. Building it is the factory's work (other reader).
+- **Level:** Advanced · **Learn first:** TREE-03 · **What you learn:** an app node exists before anything is built into it, and it is the deepest level.
+- **Steps:** as TREE-02, with "A new app in {Project}" and **"Add the app"**. The app starts as a draft; its page says "Not published yet." Building it is the factory's work.
+- **You know it worked when:** the app is selected in the outline with **"The app's page"** link.
+- **Variations and refusals:** an app has no "What is in it" and nothing is added beneath it. Below Builder: "A Builder or above adds an app here."
 - **Where:** as TREE-02 (group `/apps`).
-- **Reachable from:** API / MCP only.
-- **Covered by tests:** `acceptance.spec.ts` steps 2–3.
+- **Reachable from:** UI; API; MCP.
+- **Covered by tests:** `acceptance.spec.ts` steps 2–3; `ManageView.test.tsx` (role rules).
 
 ### TREE-05 Put new work into an existing division
 - **Who:** Builder or above.
@@ -493,122 +487,129 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Covered by tests:** `RunnerContractTests.The_conversation_starts_an_idea_and_changes_only_the_settings_an_agent_may`.
 
 ### TREE-06 Rename a division, project or app
-- **Who:**
-  - API: Admin for a division; Builder for a project or app.
-  - MCP `node_update`: Admin for a division; Builder for a project or app.
-- **Starts at:** `PATCH /api/{divisions|projects|apps}/{id} {name}`, or MCP `node_update {scope, name}`.
-- **Needs:** the role above; the node's id (API) or path (MCP).
-- **Level:** Developer · **Learn first:** TREE-02 · **What you learn:** the display name can change; the slug (address) never does.
-- **Steps:** send it. The answer is the node. Home shows the new name on the next refresh.
-- **You know it worked when:** the chart shows the new name.
-- **Variations and refusals:** empty or over-long names refused as in ORG-14. No console control; the conversation cannot.
-- **Where:** `TreeEndpoints.MapNodeChanges`, `ControlPlaneTools` `node_update`.
-- **Reachable from:** API / MCP only.
-- **Covered by tests:** `CascadeCreditsAndAppsTests` (the archive request also renames to "Tech").
+- **Who:** Admin for a division; Builder for a project or app.
+- **Starts at:** `/tree?scope={path}`, panel **"Its name"**; for an app also its page, **"The app itself"** (APP-13). Also `PATCH /api/{divisions|projects|apps}/{id} {name}` and MCP `node_update`.
+- **Needs:** the role above.
+- **Level:** Core · **Learn first:** TREE-02 · **What you learn:** the display name can change; the address never does.
+- **Steps:**
+  1. The field **"Name"** holds the current name, with the hint "Its address stays {slug}: an address never changes once it is made."
+  2. Type the new name and press **"Save the name"**. The outline shows it at once and "It is called {name} now." appears.
+- **You know it worked when:** the outline, the chart and the breadcrumb show the new name.
+- **Variations and refusals:**
+  - Empty: "A name cannot be empty."; over 200 characters refused the same way.
+  - Refused by the server: "The name was not changed: {reason} It is back to {old name}." and the old name returns.
+  - Below the role: "An Admin or above renames a division." / "A Builder or above renames a project."
+- **Where:** `features/tree/NodeControls.tsx` (RenameNode); `TreeEndpoints.MapNodeChanges`; `ControlPlaneTools` `node_update`.
+- **Reachable from:** UI; API; MCP.
+- **Covered by tests:** `ManageView.test.tsx` ("renames at once and puts the old name back…"); `tests-e2e/manage.spec.ts` ("renames a project…"); `CascadeCreditsAndAppsTests`.
 
 ### TREE-07 Archive or reactivate a division or project
 - **Who:** Admin (division) or Builder (project).
-- **Starts at:** `PATCH /api/{divisions|projects}/{id} {status: "archived" | "active"}`, or MCP `node_update {scope, status}`.
+- **Starts at:** `/tree?scope={path}`, panel **"Archive or delete"**. Also `PATCH … {status}` and MCP `node_update`.
 - **Needs:** the role above.
-- **Level:** Advanced · **Learn first:** TREE-06 · **What you learn:** anything with history is archived rather than deleted.
-- **Steps:** send it. An archived project shows on home with the "Paused" chip and the note "Archived." An archived division shows unchanged.
-- **You know it worked when:** a project card reads "Archived.".
+- **Level:** Core · **Learn first:** TREE-06 · **What you learn:** anything with history is archived rather than deleted, and can come back.
+- **Steps:**
+  1. Press **"Archive {name}"**. The confirmation reads "Archive {name}?" and "It is marked archived and keeps its history, spending and people. Its apps are not archived with it: archive each one to stop it being served."
+  2. Press **"Yes, archive {name}"** ("Keep it active" cancels). "{name} is archived. Nothing in it was deleted." appears; the outline and the org chart draw it with the badge "Archived" (a dashed card).
+  3. To bring it back, press **"Reactivate {name}"**: "{name} is active again."
+- **You know it worked when:** the badge "Archived" shows, or goes.
 - **Variations and refusals:**
-  - Divisions and projects only accept "active" or "archived".
-  - **Finding:** archiving a division or project does not stop its apps from being routed. Only the app's own status and the organisation's status are checked (`TreeService.RoutesAsync`).
-  - No console control.
-- **Where:** `TreeService.UpdateAsync`, `NodeStatuses`, `ReadModels.ProjectStage`.
-- **Reachable from:** API / MCP only.
-- **Covered by tests:** `CascadeCreditsAndAppsTests.The_tree_refuses_bad_slugs_duplicate_siblings_and_deleting_what_has_children`.
+  - Refused: "{name} was not archived: {reason} It is as it was."
+  - **Archiving a division or project does not stop its apps being served** (only the app's own status and the organisation's are routed on), which the confirmation says.
+  - The chart reads the status from the tree answer; an older control plane that sends none draws every node as active.
+- **Where:** `NodeControls.tsx` (ArchiveNode); `treeManage.ts` (`statusOf`); `OrgChart.tsx`; `TreeService.UpdateAsync`.
+- **Reachable from:** UI; API; MCP.
+- **Covered by tests:** `ManageView.test.tsx` ("reactivates an archived division…"); `OrgChart.test.tsx`; `tests-e2e/manage.spec.ts`; `CascadeCreditsAndAppsTests`.
 
 ### TREE-08 Archive an app, or set an app's status by hand
-- **Who:** Builder at the app (API); Builder (MCP `node_update`).
-- **Starts at:** `PATCH /api/apps/{id} {status}`.
+- **Who:** Builder at the app.
+- **Starts at:** `/tree?scope={app path}` or the app's page (**"The app itself"**), **"Archive {name}"**. API `PATCH /api/apps/{id} {status}`.
 - **Needs:** Builder.
-- **Level:** Developer · **Learn first:** TREE-07 · **What you learn:** an archived app leaves the routing table.
-- **Steps:** send `status: "archived"`. The app drops out of the edge's routing table. On home it reads "Paused" and "Health unknown".
-- **You know it worked when:** the app row's chip reads "Paused" and its address stops serving.
-- **Variations and refusals:** an app's status may be any of draft, building, running, sleeping, stopped, failed or archived. **Finding:** the public endpoint lets a Builder set "running" or "failed" by hand, though MCP's description says an app's status "is reported by hosting". No console control.
-- **Where:** as TREE-06; `TreeService.RoutesAsync`.
-- **Reachable from:** API / MCP only.
-- **Covered by tests:** none found for app archiving.
+- **Level:** Core · **Learn first:** TREE-07 · **What you learn:** an archived app leaves the routing table; its code and data stay.
+- **Steps:**
+  1. Press **"Archive {name}"**. The confirmation says "It stops being served at its address. Its code, data and history are kept, and reactivating it brings it back."
+  2. Confirm. The chart's app row shows the single chip "Archived".
+  3. **"Reactivate {name}"** sets it to sleeping when it has been published (it wakes on its next visit), or back to a draft when it never was.
+- **You know it worked when:** the row reads "Archived", or after reactivating its health and running chips return.
+- **Variations and refusals:** the API still lets a Builder set any status by hand ("running", "failed"); the console only archives and reactivates.
+- **Where:** `NodeControls.tsx` (ArchiveNode, `reactivatedStatus`); `TreeService.RoutesAsync`.
+- **Reachable from:** UI; API; MCP.
+- **Covered by tests:** `OrgChart.test.tsx`; `ManageView.test.tsx`.
 
 ### TREE-09 Delete a division, project or app
 - **Who:** Admin.
-- **Starts at:** `DELETE /api/{divisions|projects|apps}/{id}`.
+- **Starts at:** `/tree?scope={path}` or the app's page, **"Delete {name}"**. API `DELETE /api/{divisions|projects|apps}/{id}`.
 - **Needs:** Admin; nothing attached to the node.
-- **Level:** Developer · **Learn first:** TREE-07 · **What you learn:** only an untouched node can be deleted; everything else is archived.
-- **Steps:** send it. The values and grants set on the node are removed with it. 204.
-- **You know it worked when:** the node disappears from the chart.
-- **Variations and refusals:** children, runs or credit entries give 409 "'{path}' still has children, work or credit history attached. Archive it instead (status: archived)." MCP has no delete tool. No console control.
-- **Where:** `TreeService.DeleteAsync`.
-- **Reachable from:** API only.
-- **Covered by tests:** `CascadeCreditsAndAppsTests.The_tree_refuses_…_deleting_what_has_children`.
+- **Level:** Advanced · **Learn first:** TREE-07 · **What you learn:** only an untouched node can be deleted; everything else is archived.
+- **Steps:**
+  1. Press **"Delete {name}"**. The confirmation reads "This cannot be undone. Only a {level} with nothing in it, no work and no spending can be deleted; the settings and roles set on it go with it."
+  2. Press **"Yes, delete {name}"** ("Keep it" cancels). The node leaves the outline and its parent is selected.
+- **You know it worked when:** the node is gone from the outline and the chart.
+- **Variations and refusals:**
+  - Children, runs or credit entries: the server's 409 is shown as it came — "{name} was not deleted: '{path}' still has children, work or credit history attached. Archive it instead (status: archived)." — with the button **"Archive it instead"**, which archives it: "{name} is archived instead. Nothing in it was deleted."
+  - Below Admin: "An Admin or above deletes a {level} with nothing in it." MCP has no delete tool.
+- **Where:** `NodeControls.tsx` (DeleteNode); `TreeService.DeleteAsync`.
+- **Reachable from:** UI; API.
+- **Covered by tests:** `ManageView.test.tsx` ("shows the refusal to delete what has history, and archives it instead"); `tests-e2e/manage.spec.ts`; `CascadeCreditsAndAppsTests`.
 
 ### TREE-10 Move a division, project or app
 - **Who:** —
 - **Starts at:** —
 - **Needs:** —
 - **Level:** — · **Learn first:** — · **What you learn:** —
-- **Steps:** **Not supported by any route.** No endpoint, MCP tool or conversation tool changes a node's parent, and no slug can change. Only employees can be reassigned (workforce reader).
+- **Steps:** **Not supported by any route, on purpose.** A node's address is its parent's address plus its own slug, and every app's two addresses, every grant, secret, budget and setting are keyed by that path; moving one changes every address beneath it. No endpoint, MCP tool or screen changes a node's parent, and the console does not imitate one. Employees can be reassigned (EMP-02).
 - **You know it worked when:** —
-- **Variations and refusals:** —
+- **Variations and refusals:** to put work elsewhere, create the new node (TREE-02 to TREE-04) and archive the old one (TREE-07).
 - **Where:** —
 - **Reachable from:** nowhere.
 - **Covered by tests:** —
 
-### TREE-11 Describe a level: set context that its work inherits
-- **Who:** Builder or above at the node.
-- **Starts at:** API `PUT /api/cascade {scope, kind: "context", key, value}`, or MCP `cascade_set`.
-- **Needs:** Builder.
-- **Level:** Advanced · **Learn first:** TREE-12 · **What you learn:** context set at a level is read by everything beneath it unless a lower level replaces the same key.
-- **Steps:** send a key (lower-case letters, digits, dots, hyphens and underscores, up to 200 characters) and a JSON value. The answer is the effective value with the level that set it. The conversation's `read_organisation` "overview" reads context through `GET /internal/context`, and the factory's agents receive the resolved levels.
-- **You know it worked when:** `GET /api/cascade?scope=…&kind=context` lists it with that level.
-- **Variations and refusals:**
-  - Bad key: "'{key}' is not a cascade key: use 1-200 lower-case letters, digits, dots, hyphens and underscores."
-  - There is no description field on any node; context entries are the only way to describe one.
-  - **No console screen sets context.** The conversation cannot set it: context is not on the agent allow-list.
-- **Where:** `TreeEndpoints` `/cascade`; `CascadeService.RoleToSet`, `SetAsync`; `CascadeKinds`.
-- **Reachable from:** API / MCP only.
-- **Covered by tests:** `RunnerContractTests.The_conversation_reads_the_organisation_through_its_own_tool`. No context-specific set/inherit test found by name.
-
-### TREE-12 Read what applies at a level, and remove a value set there
-- **Who:**
-  - Read: Viewer (Admin for `secret` and `permission`).
-  - Remove: the same role as setting.
-- **Starts at:** `GET /api/cascade?scope=&kind=` / `DELETE /api/cascade?scope=&kind=&key=`; MCP `cascade_get`, `cascade_remove`.
-- **Needs:** a role at the scope.
-- **Level:** Advanced · **Learn first:** ORG-07 · **What you learn:** each value says the level that set it, and removing one brings the inherited value back.
+### TREE-11 Describe a level: say what it is, for its work to read
+- **Who:** read: anyone with a role there; add, change, remove: Builder or above.
+- **Starts at:** `/tree?scope={path}`, the side panel **"What this is"**. Also API `PUT /api/cascade {scope, kind: "context", key, value}` and MCP `cascade_set`.
+- **Needs:** Builder to write.
+- **Level:** Core · **Learn first:** TREE-12 · **What you learn:** what you say at a level is read by everything beneath it unless a lower level says it differently.
 - **Steps:**
-  1. Read: a list of effective values, each with the level and path that set it, and what it overrides.
-  2. Remove: 204. The inherited value now applies.
-- **You know it worked when:** a fresh read shows the value set at the higher level.
-- **Variations and refusals:** removing something not set there gives 404 "A {kind} '{key}' set at '{scope}'". Some kinds have their own console screens (secrets, autonomy, budgets, app settings; other readers). Context does not.
-- **Where:** `TreeEndpoints` `/cascade`; `CascadeService`.
-- **Reachable from:** API / MCP (context and settings); UI for specific kinds via other screens.
-- **Covered by tests:** `PlatformApiTests.Secrets_cascade_are_sealed_at_rest_and_the_console_only_ever_sees_names`; `RunnerContractTests.Autonomy_and_stage_rule_sets_resolve_down_the_cascade_and_reach_the_runner`.
+  1. The panel reads "What {name} is, said once. Everything beneath it reads this, unless a lower level says it differently."
+  2. Press **"Say something about {name}"**. Fill **"What it is about"** (hint "For example: Purpose, Audience, House style.") and **"What it says"**, then **"Add it"**. It shows at once with the badge "Said here".
+  3. An entry inherited from above shows "From {level name}"; **"Say it differently here"** replaces it at this level. An entry said here offers **"Change"** and **"Remove it"**.
+- **You know it worked when:** the entry is listed with "Said here".
+- **Variations and refusals:**
+  - Empty: "Nothing is said about {name} yet, here or above it." (at the organisation: "Nothing is said about {name} yet.").
+  - Refused: "{Label} was not saved: {reason} What was said before is back." and the entry goes back.
+  - The label becomes the key (`Purpose` → `purpose`); technical mode shows the key itself.
+  - Below Builder: "A Builder or above changes what is said here."
+  - Failed read: "What this is could not be loaded".
+- **Where:** `features/tree/ContextPanel.tsx`; `TreeEndpoints` `/cascade`; `CascadeService`.
+- **Reachable from:** UI; API; MCP. The conversation cannot set it.
+- **Covered by tests:** `ManageView.test.tsx` ("describes a level…", "adds what a level is at once, and takes it back…"); `tests-e2e/manage.spec.ts`; `CascadeCreditsAndAppsTests`.
 
-### TREE-13 Manage a division from the console: what is actually there
-- **Who:** depends on the link.
-- **Starts at:** `/`, select the division.
+### TREE-12 Read what applies at a level and what a lower level replaces, and remove a value set there
+- **Who:** read: Viewer (Admin for secrets); remove: the role that sets it.
+- **Starts at:** `/tree?scope={path}`, "What this is" and **"Said differently beneath it"**. Also `GET /api/cascade?scope=&kind=`, `GET /api/cascade/below?scope=&kind=`, `DELETE /api/cascade?scope=&kind=&key=`; MCP `cascade_get`, `cascade_remove`.
+- **Needs:** a role at the scope.
+- **Level:** Core · **Learn first:** ORG-07 · **What you learn:** each value says which level set it, and removing one brings the inherited one back.
+- **Steps:**
+  1. Each entry says "Said here" or "From {level}", when it was set, and for one said here "Replaces what {level} says".
+  2. "Said differently beneath it" lists what lower levels set, each with "{level} replaces it" (it replaces an entry that applies here) or "Only for {level}".
+  3. **"Remove it"** (or "Remove it; {level}'s applies again") removes the entry set here; the inherited one shows again.
+- **You know it worked when:** after removing, the entry from above is listed with "From {level}".
+- **Variations and refusals:** "Nothing beneath {name} replaces or adds to this." · "What lower levels say could not be loaded" · removal refused: "It was not removed: {reason} It is still said here." `/cascade/below` refuses `permission` (roles are listed by `/api/members`) and never returns a secret's value.
+- **Where:** `ContextPanel.tsx`; `TreeEndpoints` `/cascade`, `/cascade/below`; `CascadeService.BelowAsync`.
+- **Reachable from:** UI (context; other kinds on their own screens); API; MCP.
+- **Covered by tests:** `ManageView.test.tsx`; `CascadeCreditsAndAppsTests.What_a_lower_level_sets_is_listed_with_where_it_was_set_and_a_secret_value_never`; `AuthorizationMatrixTests`.
+
+### TREE-13 Manage a division from the console
+- **Who:** depends on the control.
+- **Starts at:** `/`, the division's **"Manage"** link on its header (also on each project card), which opens `/tree?scope={path}`.
 - **Needs:** a division.
-- **Level:** Core · **Learn first:** ORG-06, ORG-07 · **What you learn:** a division is managed through the screens that take it as their level, not through a division page.
-- **Steps:** with the division selected, the person can:
-  - talk to it (TALK-02);
-  - set its autonomy ("Autonomy for {division}");
-  - see its hiring ("Hiring");
-  - ask for ideas from it ("Ideas from your portfolio");
-  - manage its people ("People", Admin);
-  - manage its secrets ("Secrets for {division}", Admin).
-
-  Budgets and narrower overdrafts are set on `/credits` (credits reader).
-
-  Nothing in the console renames, archives, deletes or moves it. There is no division page and no division settings form.
-- **You know it worked when:** each linked screen opens already scoped to the division.
-- **Variations and refusals:** none further.
-- **Where:** `HomeView.tsx` (`ManageLinks`).
+- **Level:** Core · **Learn first:** ORG-06, ORG-07 · **What you learn:** everything about one level is managed from the page that takes it as its level.
+- **Steps:** on `/tree` the outline "Every part of the organisation" lists the organisation, its divisions, projects and apps (archived ones marked "Archived"). With a node selected the panel shows its level and parent, "Its address: {path}", the badge "Active" or "Archived", and: "Its name" (TREE-06), "What is in it" with **"Add a {level}"** (TREE-02 to TREE-04), "Archive or delete" (TREE-07 to TREE-09), and the side panel "What this is" (TREE-11). Autonomy, hiring, people and secrets stay on their own screens (ORG-06); budgets on `/credits`.
+- **You know it worked when:** the panel shows the node chosen.
+- **Variations and refusals:** each control is shown only to the role that may use it; anyone else reads who may. Loading draws skeletons; a failed read says "The organisation could not be loaded" with **"Try again"**; with no organisation: "There is no organisation to manage yet".
+- **Where:** `features/tree/ManageView.tsx`; `home/OrgChart.tsx`.
 - **Reachable from:** UI.
-- **Covered by tests:** see ORG-06.
+- **Covered by tests:** `ManageView.test.tsx`; `OrgChart.test.tsx`; `tests-e2e/manage.spec.ts`.
 
 ---
 

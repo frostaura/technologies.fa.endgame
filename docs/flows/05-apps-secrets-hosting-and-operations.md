@@ -95,30 +95,29 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Variations and refusals:**
   - With fewer than 24 measured hours in 14 days, each choice reads "Not enough history yet to say what it costs a month." The footer reads "Not enough history yet. Nothing measured yet. An estimate needs at least 24 hours…", or "Only <h> hours measured so far…".
   - On refusal the radio rolls back and an alert reads "The change was not saved: <reason> The setting is back to what it was."
-  - A Viewer sees the controls enabled. Picking one is refused with 403 and rolls back. The UI does not hide the controls by role.
+  - Below Builder the choices are shown, disabled, with "A Builder or above changes how it runs."
   - An unknown `running` value gets "running is 'sleep' or 'always-on'."
 - **Where:** `AppView.tsx` (Settings); `api.ts` `updateAppSettings`; `POST /api/apps/{id}/settings` (Builder); `CascadeService.SetAsync`; `AppServices.RunningCostAsync`
 - **Reachable from:** UI; API; MCP `app_settings` (`running`)
 - **Covered by tests:** `AppView.test.tsx` ("switches running at once…", "rolls a refused change back…", "gives each running choice its monthly figure…"); `tests-e2e/console.spec.ts` "the app shows both addresses and telemetry, and its running setting changes" and "a refused setting is rolled back…"; `AppSettingsTests`; `FinalDefectsTests` (running cost)
 
 ### APP-05 Set how many idle minutes pass before the app sleeps
-- **Who:** Builder or above
-- **Starts at:** `POST /api/apps/{id}/settings { idleMinutes }`, or MCP `app_settings`
-- **Needs:** an app
-- **Level:** Advanced
-- **Learn first:** APP-04, HOST-07
-- **What you learn:** the sleep delay is a cascade setting, with a default of 15 minutes.
-- **You know it worked when:** the reply's `idleMinutes` shows the new value. In technical mode, "Underneath" shows "Sleeps after <n> idle minutes".
+- **Who:** Builder or above.
+- **Starts at:** the "Running" fieldset on the app page, while "Sleeps when unused" is chosen. Also `POST /api/apps/{id}/settings { idleMinutes }` and MCP `app_settings`.
+- **Needs:** Builder.
+- **Level:** Core · **Learn first:** APP-04 · **What you learn:** a sleeping app costs least, and how soon it sleeps is yours to choose.
 - **Steps:**
-  1. The caller sends a whole number from 1 to 1440.
-  2. It is stored as `sleep.idle_minutes` at the app, and the edge's routes are refreshed.
-  3. The idle sweeper then uses the new value.
+  1. Under the running choices, **"Sleeps after this many idle minutes"** holds the current value, with "From 1 to 1,440 (a day)."
+  2. Type a number and press **"Save"**. "It sleeps after <n> idle minutes now." appears.
+- **You know it worked when:** the message shows, and "Underneath" in technical mode reads the new value.
 - **Variations and refusals:**
-  - Outside the range: "sleep.idle_minutes is a whole number from 1 to 1440."
-  - An empty body: "Send running ('sleep' or 'always-on'), access, idleMinutes, or a combination."
-- **Where:** `WorkEndpoints.cs`; `ControlPlaneTools.cs` `app_settings`; Edge `Runtime/IdleSweeper.cs`
-- **Reachable from:** API and MCP only. The console sends no `idleMinutes`; it only displays the value under "Underneath". This is a finding.
-- **Covered by tests:** `AppSettingsTests.An_apps_idle_minutes_are_set_from_the_settings_endpoint_and_reach_the_routing_table`, `Idle_minutes_outside_one_to_1440_are_refused`; `AppRuntimeTests.The_idle_sweeper_honours_each_apps_own_setting`
+  - Locally: "A whole number of minutes, from 1 to 1,440." and the button stays disabled. The server: "sleep.idle_minutes is a whole number from 1 to 1440."
+  - Refused: "It was not changed: <reason> It still sleeps after <n> idle minutes." and the value goes back.
+  - Below Builder: "It sleeps after <n> idle minutes. A Builder or above changes it."
+  - Always on: the field is not shown.
+- **Where:** `features/apps/AppManage.tsx` (IdleMinutes); `WorkEndpoints` `/apps/{id}/settings`.
+- **Reachable from:** UI; API; MCP.
+- **Covered by tests:** `AppManage.test.tsx` ("changes the idle minutes at once…", "refuses idle minutes outside…"); `tests-e2e/manage.spec.ts`; `AppSettingsTests`.
 
 ### APP-06 Make the app private or shared
 - **Who:** Admin or above, or an operator
@@ -136,7 +135,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   2. The person picks Private or Shared. The choice is saved at once through `POST /api/apps/{id}/settings { access }`.
   3. The edge's routes are refreshed. From the next request, Edge's access check applies the new setting (KIT-01 to KIT-07).
 - **Variations and refusals:**
-  - A Builder or Viewer sees the controls, but the change is refused with 403, rolled back, and the alert "The change was not saved: …" appears.
+  - Below Admin the choices are shown, disabled, with "An Admin or the Owner chooses who can open it."
   - Picking the current value does nothing.
   - An unknown value gets "access is 'private', 'shared' or 'public'."
 - **Where:** `AppView.tsx` (Settings, chooseAccess); `POST /api/apps/{id}/settings` (Admin when `access` is sent)
@@ -202,7 +201,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   2. The person can follow "Manage secrets" to `/secrets?scope=<app scope>` (SEC-01).
 - **Variations and refusals:**
   - When none apply: "No secrets apply to it. Add one, and the app can read it by name."
-  - A Builder or Viewer is refused with 403 and sees "The secrets could not be loaded" with a retry. The card does not explain that it needs the Admin role.
+  - Below Admin the names are not asked for; the card reads "An Admin or the Owner sees which secrets it is given, and adds or changes them." "What it uses" leaves out its secrets the same way.
 - **Where:** `AppView.tsx` (AppSecrets); `GET /api/secrets` (Admin)
 - **Reachable from:** UI
 - **Covered by tests:** `AppView.test.tsx` "lists the secrets the app can read by name, never a value…"
@@ -224,71 +223,72 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Covered by tests:** `AppBreadth.test.tsx` "shows what the app is underneath only in technical mode…"
 
 ### APP-11 Set an app's own monthly credit cap
-- **Who:** Admin or above
-- **Starts at:** `PUT /api/cascade { scope, kind: "budget", key: "monthly_credits", value }`, or MCP `budget_set { scope, monthlyCredits }`
-- **Needs:** an app
-- **Level:** Advanced
-- **Learn first:** APP-02, credits and budgets (another reader's area)
-- **What you learn:** a cap set on the app narrows the one inherited from above, and spending past it pauses the app.
-- **You know it worked when:** the Cost this month tile on the app page reads "Cap <credits>".
+- **Who:** Admin or above. Anyone reads it.
+- **Starts at:** the app page's side panel **"What it may spend"**, card **"Its monthly cap"** ("All it spends a month, hosting and AI together. Work and visits stop at it until it is raised or the month turns."). Also its row on `/credits` (CRED-03).
+- **Needs:** Admin.
+- **Level:** Core · **Learn first:** CRED-03 · **What you learn:** an app can be held to its own cap, inside whatever holds the levels above it.
 - **Steps:**
-  1. The caller sets the cap at the app's scope. The edge's routes are refreshed.
-  2. The app page's cost tile shows "Cap <n>".
-  3. Once spending reaches the cap, the app is paused (HOST-03) and its model calls are refused with 402 `budget_exhausted`.
-- **Variations and refusals:**
-  - A Builder or Viewer is refused with 403.
-  - Removing the cap (`DELETE /api/cascade?scope&kind=budget&key=monthly_credits`, or MCP `cascade_remove`) brings back whatever is inherited.
-- **Where:** `TreeEndpoints.cs` `/cascade`; `ControlPlaneTools.cs` `budget_set`
-- **Reachable from:** API and MCP only. **The app page shows the cap but has no control to set it**, and `api.ts` has no call to `/cascade` at all.
-- **Covered by tests:** `CascadeCreditsAndAppsTests`; `McpTests.The_control_plane_tools_do_what_the_console_does_under_the_same_rules`
+  1. The card says what holds it: "<n> credits a month, set on <App>", "<n> credits a month, from <Level>", or "No cap on it or above it: only the organisation's balance and overdraft hold it."
+  2. Press **"Set one for <App>"** (or **"Change it"**), type into "Credits a month", press **"Save"**: "<App> may spend <n> credits a month here."
+  3. **"Remove it"** removes its own; the card then says which cap applies.
+- **You know it worked when:** the card and the "Cost this month" tile ("Its own cap: <n> credits a month", "No cap of its own; <Level>'s <n> credits applies", or "No cap on it or above it") agree.
+- **Variations and refusals:** "Type a number of credits." · refused: "It was not saved: <reason> It is as it was." · failed read: "Its cap could not be loaded". Below Admin: "An Admin or the Owner sets these."
+- **Where:** `AppManage.tsx` (AppSpending), `appModel.ts` (`capNote`); `PUT/DELETE /api/cascade` (budget `monthly_credits`).
+- **Reachable from:** UI; API; MCP `budget_set`.
+- **Covered by tests:** `AppManage.test.tsx` ("the cap note…", "says where its cap comes from…"); `tests-e2e/manage.spec.ts`.
 
 ### APP-12 Set an app's own AI allowance
-- **Who:** Admin or above
-- **Starts at:** `PUT /api/cascade { scope, kind: "setting", key: "app_models.monthly_credits", value }`, or MCP `cascade_set`
-- **Needs:** an app
-- **Level:** Advanced
-- **Learn first:** KIT-13
-- **What you learn:** an app's own model calls have a monthly allowance apart from the budget. The default is 500 credits.
-- **You know it worked when:** the app's next model call above the new allowance is refused (KIT-13). Nothing in the console shows the setting.
-- **Steps:**
-  1. The caller sets the value at the app or above it.
-  2. From then on, each model call the app makes is admitted against it in the same transaction that reserves the credits.
-- **Variations and refusals:** not verified from code that a Builder is refused. `RoleToSet` falls to Admin for this key.
-- **Where:** `AppServices.cs` `AppModelService`; `CreditLedger.RefuseOverAppModelCapAsync`; `PlatformOptions.DefaultMonthlyCredits = 500`
-- **Reachable from:** API and MCP only, with no screen.
-- **Covered by tests:** `PlatformApiTests.Models_go_through_the_same_gateway_on_an_app_safe_route_charged_to_the_app_and_held_to_its_cap`
+- **Who:** Admin or above. Anyone reads it.
+- **Starts at:** "What it may spend", card **"Its AI allowance"** ("What the app's own AI may spend a month. Once used, its AI answers stop until the month turns; the rest of the app keeps working.").
+- **Needs:** Admin.
+- **Level:** Advanced · **Learn first:** APP-11, KIT-13 · **What you learn:** an app's own AI has a limit of its own, apart from the work done on it.
+- **Steps:** as APP-11, for the setting `app_models.monthly_credits`. With none set: "None is set on it or above it, so FrostAura's standard allowance applies."
+- **You know it worked when:** the card reads "<n> credits a month, set on <App>".
+- **Variations and refusals:** as APP-11; failed read: "Its AI allowance could not be loaded".
+- **Where:** `AppManage.tsx`; `PUT/DELETE /api/cascade` (setting `app_models.monthly_credits`).
+- **Reachable from:** UI; API; MCP `cascade_set`.
+- **Covered by tests:** `AppManage.test.tsx` ("lets an Admin set the app's own AI allowance"); `tests-e2e/manage.spec.ts`; `ModelGatewayTests` (the allowance).
 
 ### APP-13 Rename or archive an app
-- **Who:** Builder or above
-- **Starts at:** `PATCH /api/apps/{id} { name?, status? }`, or MCP `node_update { scope, name?, status? }`
-- **Needs:** an app
-- **Level:** Advanced
-- **Learn first:** APP-01
-- **What you learn:** an app's name and status are tree properties.
-- **You know it worked when:** the reply carries the new name or status, and the breadcrumb and heading show the new name.
-- **Steps:**
-  1. The caller sends the change.
-  2. An archived app is answered by Edge's access check as "no such app" (denied), and its health summary reads "Archived.".
-- **Variations and refusals:** which statuses an app may move to is enforced by `NodeStatuses.Require`. The MCP description says an app's status "is reported by hosting". Which manual statuses are accepted is not verified from code.
-- **Where:** `TreeEndpoints.cs` MapNodeChanges; `ControlPlaneTools.cs` `node_update`
-- **Reachable from:** API and MCP only, with no console control.
-- **Covered by tests:** `TreeEndpointTests` (general)
+- **Who:** Builder or above.
+- **Starts at:** the app page's side panel **"The app itself"**, or `/tree` (TREE-06, TREE-08).
+- **Needs:** Builder.
+- **Level:** Core · **Learn first:** TREE-06 · **What you learn:** an app's name can change; its addresses do not; archiving keeps everything.
+- **Steps:** "Name" and **"Save the name"** as TREE-06; **"Archive <App>"** and **"Reactivate <App>"** as TREE-08. **"Manage it with the rest of the organisation"** opens `/tree` at the app.
+- **You know it worked when:** the heading shows the new name, or the app reads archived.
+- **Variations and refusals:** below Builder: "A Builder or above renames or archives it."
+- **Where:** `AppManage.tsx` (AppItself), `features/tree/NodeControls.tsx`.
+- **Reachable from:** UI; API `PATCH /api/apps/{id}`; MCP `node_update`.
+- **Covered by tests:** `ManageView.test.tsx`; `AppManage.test.tsx`.
 
 ### APP-14 Delete an app
-- **Who:** Admin or above
-- **Starts at:** `DELETE /api/apps/{id}`
-- **Needs:** an app
-- **Level:** Advanced
-- **Learn first:** APP-13
-- **What you learn:** only an app with nothing attached can be deleted; anything with history must be archived.
-- **You know it worked when:** the call returns 204.
+- **Who:** Admin or above.
+- **Starts at:** "The app itself", **"Delete <App>"**; or `/tree` (TREE-09).
+- **Needs:** Admin; nothing attached (no work, spend or history).
+- **Level:** Advanced · **Learn first:** TREE-09 · **What you learn:** an app that has run is archived, not deleted.
+- **Steps:** as TREE-09. Once deleted the org chart opens.
+- **You know it worked when:** the app is gone from the chart.
+- **Variations and refusals:** the 409 is shown with **"Archive it instead"**. MCP has no delete tool.
+- **Where:** `AppManage.tsx`, `NodeControls.tsx` (DeleteNode); `DELETE /api/apps/{id}`.
+- **Reachable from:** UI; API.
+- **Covered by tests:** `ManageView.test.tsx` (delete refused, archive instead).
+
+### APP-15 Rebuild and restart an app
+- **Who:** Builder or above.
+- **Starts at:** the app page when it has stopped — "<App> stopped working." or "<App> is stopped." with "Rebuilding builds its newest version again and starts it. Nothing in its history changes." — or after a restore whose rebuild failed (VER-02). **"Rebuild and restart"**.
+- **Needs:** Builder; at least one version.
+- **Level:** Core · **Learn first:** VER-01 · **What you learn:** a stopped or failed app is brought back by building its newest version again, not by changing it.
 - **Steps:**
-  1. The caller sends the delete.
-  2. The app is deleted only if it has no children, no work and no credit history.
-- **Variations and refusals:** otherwise 409 "'<path>' still has children, work or credit history attached. Archive it instead (status: archived)."
-- **Where:** `TreeEndpoints.cs`; `TreeService.DeleteAsync`
-- **Reachable from:** API only. There is no MCP tool and no screen.
-- **Covered by tests:** `TreeEndpointTests` (general)
+  1. Press **"Rebuild and restart"**. "Building its newest version again, then starting it. It is unavailable for a moment." shows while it works.
+  2. "<App> is rebuilt and running again." The history and who may open it are unchanged.
+- **You know it worked when:** the message shows and the health tile reads running.
+- **Variations and refusals:**
+  - It could not be built or started: "<App> could not be rebuilt. Its last version stays as it is; ask the builder to look." (technical mode shows the build error).
+  - Nothing ever built: 409 "Nothing has been built for this app yet, so there is no version to publish again."
+  - Below Builder the panel is not shown; the API refuses with 403.
+- **Where:** `AppManage.tsx` (RebuildAndRestart), `AppView.tsx`, `History.tsx`; `POST /api/apps/{id}/republish`; `AppVersionService.RepublishAsync`.
+- **Reachable from:** UI; API. No MCP tool.
+- **Covered by tests:** `AppManage.test.tsx` ("is offered when the app stopped working…", "says plainly when it could not be rebuilt"); `tests-e2e/manage.spec.ts`; `VersionsAndExportTests.Rebuild_and_restart_publishes_the_newest_version_again_without_touching_history_or_access`; `AuthorizationMatrixTests`.
 
 ## ASK — asking about an app, and the dashboard
 
@@ -469,7 +469,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   5. Dock makes a new commit by the person. A public app is set to private, then the app is rebuilt, given a fresh token and started.
   6. The result reads "The earlier version is back and running.", plus "It was public, so it is private now. Make it public again once you have looked at it." when that applies. "Done" closes it.
 - **Variations and refusals:**
-  - The rebuild fails: "The earlier version is back, but it is not running yet." with "It could not be rebuilt. Try publishing it again, or ask the builder to look." Technical mode shows the build error instead.
+  - The rebuild fails: "The earlier version is back, but it is not running yet." with "It could not be rebuilt and started. Rebuild it again below, or ask the builder to look." (technical mode shows the build error) and **"Rebuild and restart"** (APP-15).
   - The restore is refused: "That version was not brought back: <reason> Nothing changed."
   - A bad commit id: "Name the version by its commit id."
   - A Viewer sees no "Bring back".
@@ -525,7 +525,8 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Steps:** the card shows the "Loading who it is shared with" skeleton, then lists each address with its badge and a "Stop sharing" button.
 - **Variations and refusals:**
   - An empty list: "Not shared with anyone yet. Invite someone below; they register at the app with the code you give them."
-  - A failed read: "Who it is shared with could not be loaded" with a retry. A Builder or Viewer always lands here, because the list needs Admin.
+  - A failed read: "Who it is shared with could not be loaded" with a retry.
+  - Below Admin the list is not asked for: the card reads "<App> is shared with <n> people." (or "…is shared, with nobody yet.") and "An Admin or the Owner sees who, invites people and stops sharing."
 - **Where:** `AppView.tsx` (Sharing); `GET /api/apps/{id}/shares` (Admin)
 - **Reachable from:** UI and API. There is no MCP tool.
 - **Covered by tests:** `AppView.test.tsx` ("…lists who a shared app is shared with", "shows a refused share list as a failure…", "says plainly when a shared app has nobody on its list yet")
@@ -548,7 +549,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - A refusal: "<email> was not invited: <reason> Nothing changed." and the address is removed from the list.
   - The copy fails: "The code could not be copied; select it and copy it by hand."
   - Inviting an address again issues a fresh code. The old one stops working and the list is not duplicated.
-  - The server's `emailed` flag is not shown, so the page always says "Give them this code", even when the code was e-mailed. This is a finding.
+  - When a mail server sent it, the note reads "<email> is invited, and the code was e-mailed to them. If it does not arrive, give them this code; …"; otherwise "<email> is invited. No e-mail was sent, so give them this code; …".
   - The share endpoint does not check that access is Shared. Not verified what an invitation does on a private app; KIT-03 refuses sign-up there.
 - **Where:** `AppView.tsx` (Sharing, InvitationCode); `store/sensitive.ts` `shareApp`; `POST /api/apps/{id}/shares` (Admin); `AppIdentityService.ShareAsync`; `InvitationMailer`
 - **Reachable from:** UI and API
@@ -1678,15 +1679,15 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 
 ## Gaps and oddities found
 
-1. **No console control for an app's budget cap.** The app page shows the cap, but nothing in `api.ts` calls `/api/cascade`, so caps can be set only by API or MCP (`budget_set`).
-2. **No console control for an app's AI allowance** (`app_models.monthly_credits`, default 500 credits). It is never shown anywhere.
-3. **No console control for idle minutes.** The settings endpoint and MCP accept it (1 to 1440); the console only displays it under "Underneath".
-4. **Rename, archive and delete an app** exist only as `PATCH` and `DELETE /api/apps/{id}` and MCP `node_update`. There is no screen, and no MCP delete.
+1. ~~No console control for an app's budget cap~~ — fixed (APP-11). The app page shows the cap, but nothing in `api.ts` calls `/api/cascade`, so caps can be set only by API or MCP (`budget_set`).
+2. ~~No console control for an app's AI allowance~~ — fixed (APP-12). Formerly: (`app_models.monthly_credits`, default 500 credits). It is never shown anywhere.
+3. ~~No console control for idle minutes~~ — fixed (APP-05). Formerly: The settings endpoint and MCP accept it (1 to 1440); the console only displays it under "Underneath".
+4. ~~Rename, archive and delete an app have no screen~~ — fixed (APP-13, APP-14). There is still no MCP delete. Formerly: exist only as `PATCH` and `DELETE /api/apps/{id}` and MCP `node_update`. There is no screen, and no MCP delete.
 5. **No user-facing way to pause or stop an app.** Paused, stopped and failed are set only by the system or by hosting.
-6. **"Try publishing it again"** after a failed restore names an action that has no control on the app page.
-7. **The share reply's `emailed` flag is ignored.** The page always says "Give them this code", even when the code was e-mailed.
-8. **Role gating is missing on the app page.** The Running and "Who can open it" radios show to Viewers and Builders, who then hit a refusal and rollback. The Sharing list and both Secrets panels show a load failure to non-Admins rather than saying the Admin role is needed.
-9. **The cap note misleads.** "No cap of its own; the one above applies" appears when no level has a cap at all, because `capCredits` is resolved through the whole cascade.
+6. ~~"Try publishing it again" names an action with no control~~ — fixed: "Rebuild and restart" (APP-15). Formerly: after a failed restore names an action that has no control on the app page.
+7. ~~The share reply's `emailed` flag is ignored~~ — fixed (SHR-03). Formerly: The page always says "Give them this code", even when the code was e-mailed.
+8. ~~Role gating is missing on the app page~~ — fixed (APP-04, APP-06, APP-09, SHR-02). Formerly: The Running and "Who can open it" radios show to Viewers and Builders, who then hit a refusal and rollback. The Sharing list and both Secrets panels show a load failure to non-Admins rather than saying the Admin role is needed.
+9. ~~The cap note misleads~~ — fixed: it says whose cap applies, or that none does (APP-11). Formerly: "No cap of its own; the one above applies" appears when no level has a cap at all, because `capCredits` is resolved through the whole cascade.
 10. **Sharing has no MCP tools** (no list, invite or remove). The dashboard has no MCP tools. Asking over MCP (`app_ask`) has no estimate step, although rule 11 says an estimate is shown first.
 11. **The MCP `app_settings` schema offers `public`**, which is always refused (`human_only`). Its own description says "private or shared".
 12. **The share endpoint accepts invitations whatever the access setting.** The console shows the invite form only when the app is Shared. Not verified what such a share does once the app is switched to Shared.
