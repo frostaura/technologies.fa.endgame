@@ -384,6 +384,26 @@ public sealed class PlatformApiTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_previews_email_is_held_and_shown_as_held_and_its_token_leaves_the_apps_own_alone()
+    {
+        // The evaluator's preview of an unpublished build: its own token, which does not replace the app's.
+        var preview = (await ControlPlaneApp.Ok(service.PostAsync($"/internal/apps/{appId}/token?preview=true", null)))["token"]!.GetValue<string>();
+        await ControlPlaneApp.Expect(await Kit(preview).PostAsJsonAsync("/platform/v1/email", new { to = new[] { "member@example.com" }, subject = "Test booking", text = "A test." }), HttpStatusCode.Accepted);
+
+        var dispatcher = app.Services.GetRequiredService<EmailDispatcher>();
+        Assert.Equal(0, await dispatcher.DispatchOnceAsync(CancellationToken.None));
+        Assert.Empty(smtp.Messages);
+        var shown = Assert.Single((await ControlPlaneApp.Ok(service.GetAsync($"/internal/apps/{appId}/emails"))).AsArray())!;
+        Assert.Equal("held", shown["status"]!.GetValue<string>());
+        Assert.Equal("Test booking", shown["subject"]!.GetValue<string>());
+
+        // The app's own token still works, and its mail is still delivered.
+        await ControlPlaneApp.Expect(await Kit().PostAsJsonAsync("/platform/v1/email", new { to = new[] { "member@example.com" }, subject = "Real booking", text = "Court 2." }), HttpStatusCode.Accepted);
+        Assert.Equal(1, await dispatcher.DispatchOnceAsync(CancellationToken.None));
+        Assert.Contains("Real booking", Assert.Single(smtp.Messages).Data, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Schedules_are_declared_called_back_signed_through_edge_and_webhooks_reach_the_routing_table()
     {
         var declared = await ControlPlaneApp.Ok(Kit().PutAsJsonAsync("/platform/v1/schedules", new

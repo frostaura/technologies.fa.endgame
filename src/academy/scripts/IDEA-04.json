@@ -28,7 +28,7 @@
       ],
       "highlight": {
         "text": "Endgame · Waiting for budget",
-        "note": "Learning has 5 credits left this month, less than the 12 estimated: in auto-mode the run pauses before any work."
+        "note": "Learning has 5 credits left this month, less than the 12 estimated: the run pauses before any work."
       }
     },
     {
@@ -54,38 +54,27 @@
   ],
   "variations": [
     {
-      "title": "In checkpoints mode an over-budget start does not pause",
+      "title": "In checkpoints mode the budget still waits",
       "persona": "owner",
-      "scenario": "s3-budget-runs-out",
+      "scenario": "s3-checkpoints-waiting-for-budget",
       "start": "/runs/{run}",
       "steps": [
         {
           "step": 1,
           "kind": "demo",
           "clock": {
-            "seek": "build:part-1"
-          },
-          "highlight": {
-            "text": "Step by step",
-            "note": "Learning is in checkpoints mode with almost no budget left: the build starts anyway."
-          }
-        },
-        {
-          "step": 2,
-          "kind": "demo",
-          "clock": {
-            "seek": "build:part-3"
+            "seek": 3000
           },
           "act": [
             {
               "wait": {
-                "text": "The credit budget ran out"
+                "text": "Waiting for budget"
               }
             }
           ],
           "highlight": {
-            "text": "The credit budget ran out, so this work stopped.",
-            "note": "It is the gateway’s hold before each call that stops it when the credits run out."
+            "text": "Endgame · Waiting for budget",
+            "note": "Learning is in checkpoints mode with 5 credits left: the budget is the limit that is always on, so the run pauses before any work."
           }
         }
       ]

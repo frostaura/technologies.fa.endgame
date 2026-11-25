@@ -151,13 +151,13 @@ internal static class TreeEndpoints
                 var (parent, _) = await access.RequireAsync(principal.Id(), request.Parent, createRole, ct);
                 if (parent.Level != level - 1)
                 {
-                    throw EndgameProblem.Invalid($"A {level.ToWire()} is created under a {(level - 1).ToWire()}; '{parent.Path}' is a {parent.Level.ToWire()}.");
+                    throw EndgameProblem.Invalid($"{NodeLevels.Capitalised(level.WithArticle())} is created under {(level - 1).WithArticle()}; '{parent.Path}' is {parent.Level.WithArticle()}.");
                 }
 
                 var node = await tree.CreateChildAsync(parent, request.Name ?? "", request.Slug ?? "", ct);
                 return Results.Created($"/api{route}/{node.Id}", node);
             })
-            .WithName($"Create{level}").WithSummary($"Creates a {level.ToWire()} under its parent scope.").Produces<NodeView>(201);
+            .WithName($"Create{level}").WithSummary($"Creates {level.WithArticle()} under its parent scope.").Produces<NodeView>(201);
             MapNodeChanges(group, level, changeRole, deleteRole);
         }
 
@@ -294,14 +294,26 @@ internal static class TreeEndpoints
             EdgeNotifier edge, CancellationToken ct) =>
         {
             var scope = await scopes.FindNodeAsync(level, id, ct) ?? throw EndgameProblem.NotFound($"The {level.ToWire()}");
-            await access.RequireAsync(principal.Id(), scope, changeRole, ct);
             if (level == NodeLevel.Organisation && request.Status is not null)
             {
+                // Only FrostAura changes an organisation's status (OP-11). God mode makes an operator an Admin
+                // there, so the role check is Admin — reached by entering it, and logged — and then the operator
+                // check refuses everyone else, its own Owner and Admins included. Renaming still needs the Owner.
+                await access.RequireAsync(principal.Id(), scope, MemberRole.Admin, ct);
                 var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
                 if (!access.IsOperator(me))
                 {
                     throw EndgameProblem.Forbidden("An organisation is suspended or reinstated by FrostAura.");
                 }
+
+                if (request.Name is not null)
+                {
+                    await access.RequireAsync(principal.Id(), scope, changeRole, ct);
+                }
+            }
+            else
+            {
+                await access.RequireAsync(principal.Id(), scope, changeRole, ct);
             }
 
             var updated = await tree.UpdateAsync(scope, request.Name, request.Status, ct);
@@ -313,7 +325,7 @@ internal static class TreeEndpoints
 
             return Results.Ok(updated);
         })
-        .WithName($"Update{level}").WithSummary($"Renames a {level.ToWire()} or changes its status.").Produces<NodeView>();
+        .WithName($"Update{level}").WithSummary($"Renames {level.WithArticle()} or changes its status.").Produces<NodeView>();
         group.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, TreeService tree, CancellationToken ct) =>
         {
             var scope = await scopes.FindNodeAsync(level, id, ct) ?? throw EndgameProblem.NotFound($"The {level.ToWire()}");
@@ -321,7 +333,7 @@ internal static class TreeEndpoints
             await tree.DeleteAsync(scope, ct);
             return Results.NoContent();
         })
-        .WithName($"Delete{level}").WithSummary($"Deletes a {level.ToWire()} with nothing attached; anything with history is archived instead.");
+        .WithName($"Delete{level}").WithSummary($"Deletes {level.WithArticle()} with nothing attached; anything with history is archived instead.");
     }
 
     public static CascadeKind Kind(string? kind)

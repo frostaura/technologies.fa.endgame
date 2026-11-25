@@ -139,6 +139,7 @@
         "s3-checkpoints",
         "s3-start-checkpoint",
         "s3-waiting-for-budget",
+        "s3-checkpoints-waiting-for-budget",
         "s3-budget-runs-out",
         "s3-change-running",
         "s3-change-failed",

@@ -19,7 +19,7 @@ internal sealed class OperatorActionLog : IEndpointFilter
     /// <summary>What each change is called in the log. Anything not named here is described by its summary.</summary>
     private static readonly Dictionary<string, string> Titles = new(StringComparer.Ordinal)
     {
-        ["UpdateOrganisation"] = "Renamed the organisation",
+        ["UpdateOrganisation"] = "Renamed, suspended or reinstated the organisation",
         ["CreateDivision"] = "Added a division",
         ["UpdateDivision"] = "Changed a division",
         ["DeleteDivision"] = "Deleted a division",
@@ -62,6 +62,7 @@ internal sealed class OperatorActionLog : IEndpointFilter
         ["UpdateEmployee"] = "Changed an employee",
         ["ReassignEmployee"] = "Moved an employee",
         ["ReleaseEmployee"] = "Let an employee go",
+        ["StopContractor"] = "Stopped a contractor",
         ["RehireEmployee"] = "Rehired an employee",
         ["AddMemory"] = "Added to an employee's memory",
         ["CorrectMemory"] = "Corrected an employee's memory",

@@ -25,6 +25,9 @@ public sealed class AppTokenRecord
 
     /// <summary>Null while it is the current token; set to a short grace period when a newer one is issued.</summary>
     public DateTimeOffset? ValidUntil { get; set; }
+
+    /// <summary>The token of the app's preview (an unpublished build under check): its e-mail is held, never sent.</summary>
+    public bool Preview { get; set; }
 }
 
 /// <summary>A person registered to use one app. No role in the organisation; never reaches the console or another app.</summary>

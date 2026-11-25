@@ -80,6 +80,10 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
 
         public required Func<Task<Guid>> FreshEmployee { get; init; }
 
+        public required Func<Task<Guid>> FreshContractor { get; init; }
+
+        public required Func<Task<string>> FreshEmptyProjectPath { get; init; }
+
         public required Func<Task<Guid>> FreshMembership { get; init; }
 
         public required Func<Guid, Task<Guid>> FreshMemory { get; init; }
@@ -216,6 +220,10 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
                 return (run, Guid.Parse(approval["id"]!.GetValue<string>()));
             },
             FreshEmployee = Employee,
+            FreshContractor = async () =>
+                Guid.Parse((await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/contractors", new { scope = $"{org}/{division}", briefedBy = await Employee(), role = Unique("Analyst"), brief = "Count the courts." })))["id"]!.GetValue<string>()),
+            FreshEmptyProjectPath = async () =>
+                (await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/projects", new { parent = $"{org}/{division}", name = "x", slug = Unique("xx") })))["path"]!.GetValue<string>(),
             FreshMembership = async () =>
                 Guid.Parse((await ControlPlaneApp.Ok(owner.PostAsJsonAsync("/api/members", new { scope = project, email = $"{Unique("m")}@example.com", role = "viewer" })))["member"]!["membershipId"]!.GetValue<string>()),
             FreshMemory = async employee =>
@@ -366,6 +374,7 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         new("PATCH", "/api/employees/{id:guid}", MemberRole.Admin, Level.Branch, s => R($"/api/employees/{s.EmployeeId}", new { role = "Builder" })),
         new("POST", "/api/employees/{id:guid}/reassign", MemberRole.Admin, Level.Branch, async s => new Req($"/api/employees/{await s.FreshEmployee()}/reassign", new { scope = s.Project })),
         new("POST", "/api/employees/{id:guid}/release", MemberRole.Admin, Level.Branch, async s => new Req($"/api/employees/{await s.FreshEmployee()}/release")),
+        new("POST", "/api/employees/{id:guid}/stop", MemberRole.Admin, Level.Branch, async s => new Req($"/api/employees/{await s.FreshContractor()}/stop")),
         new("POST", "/api/employees/{id:guid}/rehire", MemberRole.Admin, Level.Branch, s => R($"/api/employees/{s.EmployeeId}/rehire")),
         new("GET", "/api/employees/{id:guid}/memory", MemberRole.Viewer, Level.Branch, s => R($"/api/employees/{s.EmployeeId}/memory")),
         new("POST", "/api/employees/{id:guid}/memory", MemberRole.Builder, Level.Branch, s => R($"/api/employees/{s.EmployeeId}/memory", new { title = $"t{Guid.NewGuid():N}", body = "b", kind = "fact" })),
@@ -512,6 +521,12 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         "employee_get" => new { id = s.EmployeeId },
         "employee_update" => new { id = s.EmployeeId, role = "Builder" },
         "employee_release" => new { id = await s.FreshEmployee() },
+        "contractor_stop" => new { id = await s.FreshContractor() },
+        "memory_read" => new { id = s.EmployeeId },
+        "memory_add" => new { id = s.EmployeeId, title = $"t{Guid.NewGuid():N}", body = "b", kind = "fact" },
+        "memory_correct" => new { id = s.EmployeeId, entryId = await s.FreshMemory(s.EmployeeId), body = "corrected" },
+        "memory_forget" => new { id = s.EmployeeId, entryId = await s.FreshMemory(s.EmployeeId), why = "stale" },
+        "node_delete" => new { scope = await s.FreshEmptyProjectPath() },
         "hires_list" => new { scope = s.Division },
         "hire_raise" => new { scope = s.Division, name = "N", role = $"r{Guid.NewGuid():N}", mandate = "M", reason = "Why", expectedMonthlyCredits = 1_000_000 },
         "hire_decide" => new { id = await s.FreshHire(), decision = "decline" },

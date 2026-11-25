@@ -82,7 +82,7 @@ describe("the control plane's rules", () => {
     expect(detail(await call(as("owner"), "POST", "credits/top-ups", { organisation: ORG, credits: 10, note: "", idempotencyKey: "a" }))).toBe("Credits are topped up by FrostAura (manual top-ups; there is no payment gateway).");
     const op = as("operator");
     expect((await call(op, "POST", "credits/top-ups", { organisation: ORG, credits: 10, note: "x", idempotencyKey: "a" })).status).toBe(200);
-    expect(detail(await call(op, "GET", `audit/operator-access?organisation=${ORG}`))).toBe(`This needs the owner role at '${ORG}'; you are a admin there (set at ${ORG}).`);
+    expect(detail(await call(op, "GET", `audit/operator-access?organisation=${ORG}`))).toBe(`This needs the owner role at '${ORG}'; you are an admin there (set at ${ORG}).`);
   });
 
   it("records God-mode entries where the Owner reads them", async () => {
@@ -214,7 +214,7 @@ describe("lane B's control plane: managing the tree, the cascade, republishing, 
     expect(made.status).toBe(201);
     const id = (made.body as { id: string }).id;
     expect(detail(await call(w, "POST", "projects", { parent: `${ORG}/operations`, name: "Again", slug: "lost-property" }))).toBe("A sibling already uses that slug.");
-    expect(detail(await call(w, "POST", "apps", { parent: `${ORG}/operations`, name: "X", slug: "xx" }))).toBe(`A app is created under a project; '${ORG}/operations' is a division.`);
+    expect(detail(await call(w, "POST", "apps", { parent: `${ORG}/operations`, name: "X", slug: "xx" }))).toBe(`An app is created under a project; '${ORG}/operations' is a division.`);
     expect(((await call(w, "PATCH", `projects/${id}`, { name: "Lost and Found" })).body as { name: string }).name).toBe("Lost and Found");
     expect(((await call(w, "PATCH", `projects/${id}`, { status: "archived" })).body as { status: string }).status).toBe("archived");
     expect(detail(await call(w, "PATCH", `projects/${id}`, { status: "gone" }))).toBe("'gone' is not a status a project can have: use active, archived.");

@@ -118,8 +118,8 @@ public sealed class RunExecutor(
 
     /// <summary>
     /// Before work starts: an estimate in the log (the control plane makes research's), then the
-    /// gate. In auto-mode work whose estimate would break a budget does not begin: the run pauses,
-    /// saying why. With a start checkpoint set, the owner approves the estimate first.
+    /// gate. In every autonomy mode work whose estimate would break a budget does not begin: the run
+    /// pauses, saying why. With a start checkpoint set, the owner then approves the estimate.
     /// </summary>
     private async Task<WorkflowOutcome?> GateAsync(RunContext ctx, CancellationToken cancellationToken)
     {
@@ -150,16 +150,14 @@ public sealed class RunExecutor(
 
         if (headroom is { } room && expected > room)
         {
+            // The budget is the limit that is always on: in every autonomy mode, work that would break it waits (IDEA-04).
             var text = string.Create(CultureInfo.InvariantCulture, $"This work is estimated at {expected} credits, more than the {room} left in its budget, so it has not started. Raise the budget or top up, then resume it.");
-            if (autonomy == "auto")
-            {
-                await ctx.Sink.AppendAsync(
-                [
-                    new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["title"] = "Waiting for budget", ["code"] = "estimate_over_budget", ["text"] = text, ["estimate"] = expected, ["headroom"] = room }),
-                    new RunEvent(RunEventTypes.RunPaused, new JsonObject { ["by"] = "runner", ["reason"] = "estimate_over_budget" }),
-                ], cancellationToken);
-                return WorkflowOutcome.Suspend("estimate over budget");
-            }
+            await ctx.Sink.AppendAsync(
+            [
+                new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["title"] = "Waiting for budget", ["code"] = "estimate_over_budget", ["text"] = text, ["estimate"] = expected, ["headroom"] = room }),
+                new RunEvent(RunEventTypes.RunPaused, new JsonObject { ["by"] = "runner", ["reason"] = "estimate_over_budget" }),
+            ], cancellationToken);
+            return WorkflowOutcome.Suspend("estimate over budget");
         }
 
         if (autonomy == "checkpoints" && ctx.Setting("checkpoint.start")?.GetValueKind() == System.Text.Json.JsonValueKind.True)

@@ -6,7 +6,7 @@ import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { estimateHeadline } from "@/lib/estimates";
-import { formatCredits, formatNumber, plural, timeAgo } from "@/lib/format";
+import { formatCredits, formatNumber, plural, possessive, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf, type ViewState } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -122,8 +122,10 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
   const { employee, trackRecord } = detail;
   const job = employee.jobDescription;
   const released = employee.status === "released";
-  const status = STATUS[employee.status];
-  const kindWord = employee.kind === "contractor" ? "Contractor" : "Employee";
+  const contractor = employee.kind === "contractor";
+  // A contractor is not let go: it finishes its brief, or a person stops it (EMP-07).
+  const status = contractor && released ? { label: "Finished", tone: STATUS.released.tone } : STATUS[employee.status];
+  const kindWord = contractor ? "Contractor" : "Employee";
 
   return (
     <>
@@ -139,7 +141,8 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
               {employee.idle.flagged && !released && <Badge tone="attention">Nothing to do for {plural(employee.idle.afterDays, "day")}</Badge>}
             </div>
             <span className="text-ink-body">
-              {employee.role} · {kindWord} · {released && employee.releasedAt ? `Let go ${timeAgo(employee.releasedAt)}` : `Hired ${timeAgo(employee.createdAt)}`}
+              {employee.role} · {kindWord} ·{" "}
+              {released && employee.releasedAt ? `${contractor ? "Finished" : "Let go"} ${timeAgo(employee.releasedAt)}` : `${contractor ? "Briefed" : "Hired"} ${timeAgo(employee.createdAt)}`}
               {employee.reportsTo && ` · Reports to ${employee.reportsTo.name}`}
             </span>
             {employee.currentRun && (
@@ -150,6 +153,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
           </div>
         </div>
         {employee.kind === "employee" && can.admin && <EmployeeActions employee={employee} tree={tree} />}
+        {contractor && can.admin && !released && <ContractorActions employee={employee} />}
       </div>
 
       <section aria-label="Track record" className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-4", RISE, stagger(1))}>
@@ -181,7 +185,15 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
           <JobRow label="Works at">{scopeName(tree, job.scope || employee.scope)} and everything beneath it</JobRow>
           <JobRow label="May use">{job.tools.length > 0 ? job.tools.map((t) => toolLabel(t, mode)).join(", ") : "Nothing beyond reading what it is given"}</JobRow>
           <JobRow label="Services">{job.services.length > 0 ? job.services.map((x) => serviceLabel(x, mode)).join(", ") : "None of the platform's services"}</JobRow>
-          <JobRow label="Budget">{job.monthlyCreditLimit !== null ? `${formatCredits(job.monthlyCreditLimit)} a month, including the contractors it briefs` : "No cap of its own; the one above holds"}</JobRow>
+          <JobRow label="Budget">
+            {contractor
+              ? job.monthlyCreditLimit !== null
+                ? `${formatCredits(job.monthlyCreditLimit)} a month of its own${employee.briefedBy ? `, inside ${possessive(employee.briefedBy.name)} budget` : ""}`
+                : `No cap of its own; ${employee.briefedBy ? `${possessive(employee.briefedBy.name)} budget` : "the one above"} holds`
+              : job.monthlyCreditLimit !== null
+                ? `${formatCredits(job.monthlyCreditLimit)} a month, including the contractors it briefs`
+                : "No cap of its own; the one above holds"}
+          </JobRow>
           <JobRow label="Thinking power">{tierLabel(job.modelTier, mode)}</JobRow>
           {mode === "technical" && <JobRow label="Identifier">{employee.id}</JobRow>}
         </dl>
@@ -463,6 +475,89 @@ function EditJob({ employee, managers, onDone, onError }: { employee: Employee; 
         </p>
       )}
     </form>
+  );
+}
+
+/**
+ * Stopping and capping a contractor (EMP-07). Stopping finishes it at once: the model gateway refuses its next call, so it
+ * stops at its next step, what it did is kept, and the work that briefed it carries on without it. A cap holds it to a
+ * number of credits a month, inside its briefer's own.
+ */
+function ContractorActions({ employee }: { employee: Employee }) {
+  const [update, updating] = useUpdateEmployeeMutation();
+  const [act, acting] = useEmployeeActionMutation();
+  const [open, setOpen] = useState<"cap" | "stop" | null>(null);
+  const [cap, setCap] = useState(employee.jobDescription.monthlyCreditLimit?.toString() ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const busy = updating.isLoading || acting.isLoading;
+  const toggle = (panel: "cap" | "stop") => setOpen((x) => (x === panel ? null : panel));
+
+  const run = async (work: () => Promise<unknown>, what: string) => {
+    setError(null);
+    try {
+      await work();
+      setOpen(null);
+    } catch (e) {
+      setError(`Could not ${what}: ${describeError(e as never)}`);
+    }
+  };
+
+  const saveCap = (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = cap.trim();
+    const n = Number(trimmed);
+    if (trimmed !== "" && (!Number.isFinite(n) || n < 0)) {
+      setError("A cap is a number of credits a month, or empty for none of its own.");
+      return;
+    }
+    void run(() => update({ id: employee.id, patch: trimmed === "" ? { clearMonthlyCreditLimit: true } : { jobDescription: { monthlyCreditLimit: n } } }).unwrap(), "change the cap");
+  };
+
+  return (
+    <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
+      <div className="flex flex-wrap gap-2.5">
+        <Button variant="outline" aria-expanded={open === "cap"} onClick={() => toggle("cap")} disabled={busy}>
+          Cap its spending
+        </Button>
+        <Button variant="soft" aria-expanded={open === "stop"} onClick={() => toggle("stop")} disabled={busy}>
+          Stop this contractor
+        </Button>
+      </div>
+
+      {open === "cap" && (
+        <form aria-label="Cap its spending" onSubmit={saveCap} className="flex w-full flex-col gap-2 rounded-md border bg-surface p-4 sm:w-dock">
+          <label htmlFor="contractor-cap" className="font-medium">
+            Credits a month, at most
+          </label>
+          <input id="contractor-cap" inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
+          <span className="text-sm text-ink-muted">
+            Held before each of its calls, so it is never passed{employee.briefedBy ? `; ${possessive(employee.briefedBy.name)} own budget still holds too` : ""}. Leave it empty for no cap of its own.
+          </span>
+          <Button type="submit" className="self-start" disabled={busy}>
+            Save the cap
+          </Button>
+        </form>
+      )}
+
+      {open === "stop" && (
+        <div role="group" aria-label="Confirm stopping" className="flex w-full flex-col gap-2 rounded-md border border-attention-line bg-attention-tint p-4 sm:w-dock">
+          <p className="font-medium text-attention-text">Stop {employee.name}?</p>
+          <p className="text-sm text-ink">
+            It makes no more calls from its next step. What it has done is kept, and the work that briefed it carries on without it. A stopped contractor cannot be started again.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => void run(() => act({ id: employee.id, action: "stop" }).unwrap(), "stop it")} disabled={busy}>
+              Yes, stop it
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setOpen(null)}>
+              Keep it working
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {error && <ActionError text={error} />}
+    </div>
   );
 }
 

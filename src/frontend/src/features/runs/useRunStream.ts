@@ -36,6 +36,20 @@ export const EVENT_TYPES = [
 
 const MAX_ATTEMPTS = 6;
 
+/**
+ * Events are stored in batches, at most this often. A long run replays thousands of events the moment
+ * its page opens; stored one by one, each would redraw the whole page (RUN-02).
+ */
+export const BATCH_MS = 50;
+
+/** Every live follower's flush, so a test can store what is waiting without waiting for the batch. */
+const flushes = new Set<() => void>();
+
+/** TEST ONLY in practice: stores every event still waiting for its batch, in every followed run. */
+export function flushRunStreams() {
+  for (const f of [...flushes]) f();
+}
+
 /** Parse one server-sent event. `id:` carries the sequence number when the body omits it. */
 export function parseEvent(data: string, lastEventId: string, fallbackType: string): RunEvent | null {
   try {
@@ -60,12 +74,27 @@ export function followRun(runId: string, dispatch: AppDispatch, getState: () => 
   let timer: ReturnType<typeof setTimeout> | null = null;
   let attempts = 0;
   let stopped = false;
+  let pending: RunEvent[] = [];
+  let batch: ReturnType<typeof setTimeout> | null = null;
 
-  const held = () => getState().runs[runId]?.events ?? [];
+  const flush = () => {
+    if (batch) clearTimeout(batch);
+    batch = null;
+    if (pending.length === 0) return;
+    const events = pending;
+    pending = [];
+    dispatch(eventsReceived({ runId, events }));
+  };
+
+  const held = () => {
+    flush();
+    return getState().runs[runId]?.events ?? [];
+  };
 
   const finished = () => held().some((e) => e.type === "run.finished");
 
   const close = () => {
+    flush();
     source?.close();
     source = null;
     if (timer) clearTimeout(timer);
@@ -84,7 +113,8 @@ export function followRun(runId: string, dispatch: AppDispatch, getState: () => 
       const event = parseEvent(message.data, message.lastEventId, message.type === "message" ? "message" : message.type);
       if (!event) return;
       attempts = 0;
-      dispatch(eventsReceived({ runId, events: [event] }));
+      pending.push(event);
+      batch ??= setTimeout(flush, BATCH_MS);
       if (event.type === "run.finished") {
         stopped = true;
         close();
@@ -116,10 +146,12 @@ export function followRun(runId: string, dispatch: AppDispatch, getState: () => 
     };
   };
 
+  flushes.add(flush);
   connect();
   return () => {
     stopped = true;
     close();
+    flushes.delete(flush);
   };
 }
 

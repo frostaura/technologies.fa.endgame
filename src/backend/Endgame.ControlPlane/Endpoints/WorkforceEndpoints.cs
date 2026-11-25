@@ -193,6 +193,13 @@ internal static class WorkforceEndpoints
         })
         .WithName("ReleaseEmployee").WithSummary("Lets an employee go: off the chart and the bill, its memory archived so a rehire starts warm. A standing hire is never released (409 standing_hire).").Produces<EmployeeView>();
 
+        employees.MapPost("/{id:guid}/stop", async (Guid id, ClaimsPrincipal principal, AccessService access, EmployeeService service, CancellationToken ct) =>
+        {
+            var contractor = await RequireAsync(id, principal, access, service, MemberRole.Admin, ct);
+            return Results.Ok(await service.StopContractorAsync(contractor.OrganisationId, id, ct));
+        })
+        .WithName("StopContractor").WithSummary("Stops a contractor at once (Admin and above): it makes no more model calls, what it did is kept, and the work that briefed it carries on without it. Its cap is set with PATCH like an employee's.").Produces<EmployeeView>();
+
         employees.MapPost("/{id:guid}/rehire", async (Guid id, HttpRequest http, ClaimsPrincipal principal, AccessService access, EmployeeService service, CancellationToken ct) =>
         {
             var request = await OptionalAsync<RehireRequest>(http, ct);

@@ -9,6 +9,17 @@ import type { RunEvent, RunStatus } from "@/store/types";
 
 export function mergeEvents(current: readonly RunEvent[], incoming: readonly RunEvent[]): RunEvent[] {
   if (incoming.length === 0) return current as RunEvent[];
+  // The usual case, a live stream: every new event follows the last one held, in order.
+  let last = lastSeq(current);
+  let inOrder = true;
+  for (const e of incoming) {
+    if (!Number.isInteger(e.seq) || e.seq <= last) {
+      inOrder = false;
+      break;
+    }
+    last = e.seq;
+  }
+  if (inOrder) return [...current, ...incoming];
   const bySeq = new Map<number, RunEvent>();
   for (const e of current) bySeq.set(e.seq, e);
   let changed = false;
@@ -146,7 +157,11 @@ export interface DerivedRun {
   notCharged: number;
   /** Parts an earlier attempt built and checked, kept by this one (a try again). */
   carried: string[];
-  /** Credits settled by finished model calls. */
+  /**
+   * Credits charged for finished model calls: the billable settlements, counted as the ledger counts
+   * them, so it is the same figure as the run's own cost (`spentCredits`). A repair of the work's own
+   * mistake settles too, but is never billed, so it is not in it.
+   */
   settledCredits: number;
   /** Credits held for model calls still in flight. */
   reservedCredits: number;
@@ -246,7 +261,7 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
       }
       case "model.replied": {
         run.modelCalls += 1;
-        run.settledCredits += num(p, "settledCredits") ?? 0;
+        if (p.billable !== false) run.settledCredits += num(p, "settledCredits") ?? 0;
         const callId = str(p, "callId");
         if (callId) openReservations.delete(callId);
         else anonymousReservation = Math.max(0, anonymousReservation - (num(p, "reservedCredits") ?? anonymousReservation));

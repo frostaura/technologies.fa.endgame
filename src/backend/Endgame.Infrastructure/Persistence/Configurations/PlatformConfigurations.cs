@@ -35,6 +35,7 @@ internal sealed class AppTokenConfiguration : IEntityTypeConfiguration<AppTokenR
         builder.Property(t => t.TokenHash).HasColumnName("token_hash").HasMaxLength(64);
         builder.Property(t => t.CreatedAt).HasColumnName("created_at");
         builder.Property(t => t.ValidUntil).HasColumnName("valid_until");
+        builder.Property(t => t.Preview).HasColumnName("preview");
         builder.HasIndex(t => t.TokenHash).IsUnique();
         builder.HasIndex(t => new { t.OrganisationId, t.AppId, t.CreatedAt });
     }
@@ -167,7 +168,8 @@ internal sealed class AppWebhookConfiguration : IEntityTypeConfiguration<AppWebh
 
 internal sealed class EmailMessageConfiguration : IEntityTypeConfiguration<EmailMessageRecord>
 {
-    public static readonly IReadOnlyList<string> Statuses = ["queued", "sending", "sent", "failed"];
+    /// <summary><c>held</c>: sent by an app's preview, kept to be read and never delivered.</summary>
+    public static readonly IReadOnlyList<string> Statuses = ["queued", "sending", "sent", "failed", "held"];
 
     public void Configure(EntityTypeBuilder<EmailMessageRecord> builder)
     {

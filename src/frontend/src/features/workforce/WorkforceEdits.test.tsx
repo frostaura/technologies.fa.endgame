@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MEMORY, MEMORY_CHANGES, employeeDetailFixture, employeeFixture, hireFixture } from "@/test/fixtures";
+import { JOB, MEMORY, MEMORY_CHANGES, employeeDetailFixture, employeeFixture, hireFixture } from "@/test/fixtures";
 import { FakeEventSource, ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { EmployeeView } from "./EmployeeView";
 import { HireView } from "./HireView";
@@ -104,6 +104,32 @@ describe("an employee's whole job", () => {
     expect(changes.textContent).toContain("Corrected at a review: Three contractors, not six");
     expect(changes.textContent).toContain("“Out of date”");
     expect(changes.textContent).toContain("Added by the employee: Proof before building");
+  });
+
+  it("stops a contractor after confirming, and caps what it may spend", async () => {
+    const contractor = employeeFixture({ id: "c1", kind: "contractor", name: "Data contractor", role: "Data contractor", status: "working", brief: "Count the courts.", briefedBy: { id: "e1", name: "Odile" }, jobDescription: { ...JOB, monthlyCreditLimit: null } });
+    const detail = { ...employeeDetailFixture(), employee: contractor, contractors: [] };
+    const api = stub({
+      "GET /api/employees/c1": json(detail),
+      "GET /api/employees/c1/memory": json([]),
+      "GET /api/employees/c1/memory/changes": json([]),
+      "PATCH /api/employees/c1": json({ ...contractor, jobDescription: { ...JOB, monthlyCreditLimit: 25 } }),
+      "POST /api/employees/c1/stop": json({ ...contractor, status: "released", releasedAt: "2026-11-25T10:00:00Z" }),
+    });
+    renderWithStore(<EmployeeView employeeId="c1" />);
+    expect(await screen.findByText("No cap of its own; Odile’s budget holds")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Let go" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cap its spending" }));
+    fireEvent.change(screen.getByLabelText("Credits a month, at most"), { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the cap" }));
+    await waitFor(() => expect(api.calls.find((c) => c.method === "PATCH")?.body).toEqual({ jobDescription: { monthlyCreditLimit: 25 } }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop this contractor" }));
+    const confirm = screen.getByRole("group", { name: "Confirm stopping" });
+    expect(confirm.textContent).toContain("It makes no more calls from its next step.");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Yes, stop it" }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path === "/api/employees/c1/stop")).toBe(true));
   });
 
   it("records a failed read of the memory's history, never an empty one", async () => {

@@ -4,14 +4,14 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 
 **Read from the code, not from the other docs.** On 2026-11-25 five readers each took one area and read the screens, the endpoints, the assistant tools, the edge, the app kit and the Makefile end to end. Where a flow could not be settled from code it says *not verified from code*. Nothing was run to produce it, so a flow's steps are what the code does, not a recording of a session.
 
-**326 flows** in five files:
+**327 flows** in five files:
 
 | File | Covers | Flows |
 | --- | --- | --- |
 | [Identity and access](01-identity-and-access.md) | Signing in, people and roles, AI-assistant keys and MCP, opening apps as a member or end user, the shell. | 48 |
 | [The organisation, home and conversations](02-organisation-home-and-conversations.md) | The home screen, the tree of divisions, projects and apps, the two graph views, conversations, notifications, system status. | 77 |
 | [The factory](03-the-factory.md) | From an idea to a running app: ideas, research and the verdict, runs, plan, build, check, review, publish, autonomy and rule sets, changing an app. | 62 |
-| [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) | Hiring, employees and contractors, employee memory, credits, budgets and the overdraft, the operator's screens. | 45 |
+| [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) | Hiring, employees and contractors, employee memory, credits, budgets and the overdraft, the operator's screens. | 46 |
 | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) | The app page, asking about an app, versions and export, sharing, secrets, what a hosted app can use, sleep and wake, running the platform. | 94 |
 
 ## How to read a flow
@@ -119,7 +119,7 @@ What every person needs on day one: signing in, reading the home screen, startin
 | HOST-01 | A sleeping app wakes on a visit | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | HOST-06 | Reach an app at either of its two addresses | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Core — 141 flows, 131 with a screen
+### Core — 142 flows, 132 with a screen
 
 Running an organisation day to day: people, hiring, credits, the app page, secrets, notifications, autonomy.
 
@@ -228,6 +228,7 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | EMP-08 | Talk to an employee | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | EMP-09 | Rehire a former employee | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | EMP-10 | Change an employee's name, role, mandate, tools, services, thinking power or manager | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
+| EMP-11 | Stop or cap a contractor | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-01 | Read what an employee remembers | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-02 | Add something an employee should know | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-03 | Correct a memory entry | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
@@ -407,7 +408,7 @@ Flows that do not exist yet or are purely automatic.
 
 | Reached by | Flows |
 | --- | --- |
-| Screen | 251 |
+| Screen | 252 |
 | API or assistant only | 24 |
 | Command line | 30 |
 | Automatic | 19 |
@@ -453,5 +454,5 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 
 ### What an AI assistant cannot do that the console can
 
-Sharing an app, keys, marking notifications read, top-up requests, the operator log, an employee's memory, the app dashboard, dismissing a suggestion. Export, the overdraft and top-ups are absent on purpose. (AST-07 to AST-16.)
+Sharing an app, keys, marking notifications read, top-up requests, the operator log, the app dashboard, dismissing a suggestion. Export, the overdraft and top-ups are absent on purpose. (AST-07 to AST-16.)
 

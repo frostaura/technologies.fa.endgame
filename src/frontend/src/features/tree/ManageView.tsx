@@ -153,7 +153,7 @@ function NodePanel({ node, nodes, role, tree, onSelect, startAdding }: { node: M
           {may("rename", node.level, role) ? (
             <RenameNode level={managed ?? "organisation"} id={node.id} name={node.name} slug={node.slug} tree={tree} />
           ) : (
-            <p className="text-sm text-ink-muted">{capital(whoMay("rename", node.level))} renames {node.level === "organisation" ? "the organisation" : `a ${node.level}`}.</p>
+            <p className="text-sm text-ink-muted">{capital(whoMay("rename", node.level))} renames {node.level === "organisation" ? "the organisation" : `${article(node.level)} ${node.level}`}.</p>
           )}
         </div>
 

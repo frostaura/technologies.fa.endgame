@@ -20,6 +20,13 @@ public static class NodeLevels
         _ => throw new DomainException($"Unknown level {level}."),
     };
 
+    /// <summary>The level with its article, as a sentence says it: "an organisation", "a division", "a project", "an app".</summary>
+    public static string WithArticle(this NodeLevel level) =>
+        level is NodeLevel.Organisation or NodeLevel.App ? $"an {level.ToWire()}" : $"a {level.ToWire()}";
+
+    /// <summary>A sentence's first word: "An app is created …".</summary>
+    public static string Capitalised(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+
     public static NodeLevel FromWire(string value) => value switch
     {
         "organisation" => NodeLevel.Organisation,
@@ -65,5 +72,5 @@ public static class NodeStatuses
     public static string Require(NodeLevel level, string? status) =>
         status is not null && For(level).Contains(status)
             ? status
-            : throw new DomainException($"'{status}' is not a status a {level.ToWire()} can have: use {string.Join(", ", For(level))}.");
+            : throw new DomainException($"'{status}' is not a status {level.WithArticle()} can have: use {string.Join(", ", For(level))}.");
 }

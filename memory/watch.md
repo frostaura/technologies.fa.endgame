@@ -41,3 +41,14 @@ keeping it across a reload.
 - CI for the jobs added after the scaffold: they are written and syntax-checked, not run to green.
 - More than a handful of apps on the real stack, and waking after the host restarts.
 - One Runner test (`A_graceful_shutdown_…`) failed once in a full run: a timing race.
+
+# In flight on 2026-11-25 (delete when landed)
+
+- `main` has the five script lanes and sweep Y merged; README track tables are generated
+  (`make academy-readme`). Pages publishes; CI's only expected failure is the Docker Hub login.
+- Two lanes are unmerged in worktrees under `~/src/endgame-wt/`: `lane-sweep-x` (branch
+  `build/sweep-x`: eleven small product defects) and `lane-visual` (`build/visual`: what four
+  reviewers found in the 1,078 step pictures: captions covering their target, rings off screen,
+  text highlights matching the wrong element, skeletons captured, one stand-in hosted app page).
+- Still owed after they merge: one full gate run and `make site` plus `make academy-e2e` on
+  `main`, the orchestrator's own Chrome walk of every flow, then the memory close-out.

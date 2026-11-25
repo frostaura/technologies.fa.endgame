@@ -7,6 +7,7 @@ import { newId, user, type World } from "./world";
  * endpoint that changes something adds its title here.
  */
 const TITLES: Record<string, string> = {
+  "PATCH organisations/{id}": "Renamed, suspended or reinstated the organisation",
   "POST members": "Gave someone a role",
   "PATCH members/{membershipId}": "Changed someone's role",
   "DELETE members/{membershipId}": "Removed someone's role",
@@ -36,6 +37,7 @@ const TITLES: Record<string, string> = {
   "PATCH hires/{id}": "Changed a hire proposal",
   "POST hires": "Asked for a hire",
   "PATCH employees/{id}": "Changed an employee",
+  "POST employees/{id}/stop": "Stopped a contractor",
   "POST employees/{id}/reassign": "Moved an employee",
   "POST employees/{id}/release": "Let an employee go",
   "POST employees/{id}/rehire": "Rehired an employee",

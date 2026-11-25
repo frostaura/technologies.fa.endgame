@@ -40,7 +40,8 @@ async function walk(page: Page, start: string) {
   // Home → a new idea → its research, played to the verdict.
   await page.getByRole("link", { name: "New idea" }).first().click();
   await page.locator("textarea").first().fill("A members' locker booking app for the club: book a locker for a session and get its code on your phone.");
-  await expect(page.getByText(/credits/).first()).toBeVisible();
+  // In the page, not the demo strip's scenario menu, whose options name credits too.
+  await expect(page.getByRole("main").getByText(/credits/).first()).toBeVisible();
   await page.getByRole("button", { name: /Research this idea/ }).click();
   await expect(page.getByText("Research started").first()).toBeVisible({ timeout: 20_000 });
   await demo(page, "clock", { seek: 120_000 });

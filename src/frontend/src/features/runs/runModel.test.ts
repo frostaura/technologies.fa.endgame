@@ -47,6 +47,9 @@ describe("deriveRun", () => {
   it("settles credits from replies and holds reservations only while calls are in flight", () => {
     const inFlight = deriveRun([e(1, "model.requested", { callId: "k1", reservedCredits: 4 }), e(2, "model.requested", { callId: "k2", reservedCredits: 6 }), e(3, "model.replied", { callId: "k1", settledCredits: 1.5 })]);
     expect(inFlight.settledCredits).toBe(1.5);
+    // A repair of the work's own mistake settles but is never billed: what was spent is what the ledger charged.
+    const repaired = deriveRun([e(1, "model.replied", { callId: "a", settledCredits: 2 }), e(2, "model.replied", { callId: "b", settledCredits: 0.5, billable: false })]);
+    expect(repaired.settledCredits).toBe(2);
     expect(inFlight.reservedCredits).toBe(6);
     expect(inFlight.modelCalls).toBe(1);
     const finished = deriveRun([e(1, "model.requested", { callId: "k1", reservedCredits: 4 }), e(2, "run.finished", { outcome: "succeeded" })]);

@@ -293,10 +293,10 @@ public sealed class ControlPlaneClient(HttpClient http)
         return new NodeInfo(Guid.Parse(Json.Str(node, "id")!), Json.Str(node, "path") ?? $"{parent}/{slug}", Json.Str(node, "name") ?? name, Json.Str(node, "slug") ?? slug, created);
     }
 
-    /// <summary>Proposed: <c>POST /internal/apps/{id}/token</c> → {token}: the app token Dock injects at start.</summary>
-    public async Task<string> MintAppTokenAsync(Guid appId, CancellationToken cancellationToken)
+    /// <summary><c>POST /internal/apps/{id}/token</c> → {token}: the app token Dock injects at start; <paramref name="preview"/> mints the preview's own, whose e-mail is held.</summary>
+    public async Task<string> MintAppTokenAsync(Guid appId, CancellationToken cancellationToken, bool preview = false)
     {
-        using var response = await Http.PostAsync($"/internal/apps/{appId:D}/token", null, cancellationToken);
+        using var response = await Http.PostAsync($"/internal/apps/{appId:D}/token{(preview ? "?preview=true" : "")}", null, cancellationToken);
         return Json.Str(await ReadAsync<JsonObject>(response, cancellationToken), "token") ?? throw new InvalidOperationException("The control plane minted no token.");
     }
 

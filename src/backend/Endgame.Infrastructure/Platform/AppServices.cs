@@ -128,7 +128,10 @@ public sealed class AppSecretService(CascadeService cascade)
 
 public sealed record AppEmailRequest(IReadOnlyList<string>? To, string? Subject, string? Text, string? Html, string? ReplyTo);
 
-/// <summary>E-mail from apps (PLATFORM-API §3.4): validated, queued in the outbox, delivered by <see cref="EmailDispatcher"/>.</summary>
+/// <summary>
+/// E-mail from apps (PLATFORM-API §3.4): validated, queued in the outbox, delivered by <see cref="EmailDispatcher"/>. A
+/// preview's mail (an unpublished build under check) is validated the same way and held: kept to be read, never sent.
+/// </summary>
 public sealed class AppEmailService(EndgameDbContext db, TenantSession session, IOptions<EmailOptions> options, TimeProvider clock)
 {
     public const int MaxTextBytes = 256 * 1024;
@@ -174,7 +177,7 @@ public sealed class AppEmailService(EndgameDbContext db, TenantSession session, 
             TextBody = request.Text,
             HtmlBody = request.Html,
             ReplyTo = replyTo,
-            Status = "queued",
+            Status = caller.Preview ? EmailStatuses.Held : EmailStatuses.Queued,
             NextAttemptAt = now,
             CreatedAt = now,
         });
@@ -184,6 +187,14 @@ public sealed class AppEmailService(EndgameDbContext db, TenantSession session, 
     }
 
     public static string EmailId(Guid id) => "eml_" + id.ToString("N");
+}
+
+public static class EmailStatuses
+{
+    public const string Queued = "queued";
+
+    /// <summary>Sent by an app's preview: kept for the evaluator to read, never delivered.</summary>
+    public const string Held = "held";
 }
 
 // ------------------------------------------------------------------------------------ schedules and webhooks

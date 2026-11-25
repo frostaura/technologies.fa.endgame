@@ -69,6 +69,9 @@ public sealed class FakeControlPlane : HttpMessageHandler
 
     public decimal? Headroom { get; set; }
 
+    /// <summary>When set, each headroom read takes the next figure (the last one repeats), so a test can let the start gate pass and the plan's gate find less.</summary>
+    public Queue<decimal>? HeadroomReads { get; set; }
+
     public List<decimal> History { get; } = [];
 
     /// <summary>How the owner answers each approval; null leaves it pending.</summary>
@@ -177,7 +180,7 @@ public sealed class FakeControlPlane : HttpMessageHandler
                 ("POST", var p) when p.StartsWith("/internal/ideas/", StringComparison.Ordinal) && p.EndsWith("/verdict", StringComparison.Ordinal) => RecordVerdict(body!.AsObject()),
                 ("POST", "/internal/tree/nodes") => Node(body!.AsObject()),
                 ("POST", var p) when p.StartsWith("/internal/apps/", StringComparison.Ordinal) && p.EndsWith("/token", StringComparison.Ordinal) => Json(new JsonObject { ["token"] = "app-token-for-test" }),
-                ("GET", "/internal/credits/headroom") => Headroom is { } h ? Json(new JsonObject { ["headroomCredits"] = h }) : Problem(HttpStatusCode.NotFound, "not_found", "No such endpoint."),
+                ("GET", "/internal/credits/headroom") => (HeadroomReads is { Count: > 0 } reads ? (Headroom = reads.Count > 1 ? reads.Dequeue() : reads.Peek()) : Headroom) is { } h ? Json(new JsonObject { ["headroomCredits"] = h }) : Problem(HttpStatusCode.NotFound, "not_found", "No such endpoint."),
                 ("GET", "/internal/estimates/history") => Json(new JsonArray(History.Select(c => (JsonNode)new JsonObject { ["credits"] = c }).ToArray())),
                 ("GET", "/internal/employees") => Json(Staff()),
                 ("POST", "/internal/hires") => Hire(body!.AsObject()),
