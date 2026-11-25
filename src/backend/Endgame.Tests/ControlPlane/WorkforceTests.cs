@@ -172,6 +172,10 @@ public sealed class WorkforceTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal("Grace Hopper", edited["name"]!.GetValue<string>());
         Assert.True(edited["withinBudget"]!.GetValue<bool>());
         Assert.Equal("Build the bookings app.", edited["jobDescription"]!["mandate"]!.GetValue<string>());
+        Assert.Equal(2m, edited["jobDescription"]!["monthlyCreditLimit"]!.GetValue<decimal>());
+        var cleared = await ControlPlaneApp.Ok(owner.PatchAsJsonAsync($"/api/hires/{id}", new { clearMonthlyCreditLimit = true }));
+        Assert.Null(cleared["jobDescription"]!["monthlyCreditLimit"]);
+        Assert.Equal("Grace Hopper", cleared["name"]!.GetValue<string>());
 
         var accepted = await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/hires/{id}/accept", new { note = "Go." }));
         Assert.Equal("accepted", accepted["status"]!.GetValue<string>());
@@ -393,6 +397,20 @@ public sealed class WorkforceTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal("Competitor researcher", promotion["contractorRole"]!.GetValue<string>());
         Assert.Equal("accepted", promotion["status"]!.GetValue<string>());
         Assert.Equal(ada.ToString(), promotion["reportsTo"]!["id"]!.GetValue<string>());
+
+        // A person proposing the same recurring role from the hiring screen raises the same need, not a second one.
+        var byPerson = await ControlPlaneApp.Ok(owner.PostAsJsonAsync("/api/hires", new
+        {
+            scope = Project,
+            trigger = "promotion",
+            contractorRole = "competitor researcher",
+            reason = "It keeps coming back.",
+            name = "Rival watcher",
+            role = "Competitor researcher",
+            expectedMonthlyCredits = 1m,
+        }));
+        Assert.Equal(promotion["id"]!.GetValue<string>(), byPerson["id"]!.GetValue<string>());
+        Assert.Equal(promotion["needKey"]!.GetValue<string>(), byPerson["needKey"]!.GetValue<string>());
 
         // What the contractors learned is the briefer's now, and they are off the chart.
         Assert.Equal(3, (await ControlPlaneApp.Ok(owner.GetAsync($"/api/employees/{ada}/memory"))).AsArray().Count);

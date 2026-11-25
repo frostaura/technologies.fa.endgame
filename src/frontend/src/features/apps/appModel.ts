@@ -1,5 +1,6 @@
+import { formatCredits } from "@/lib/format";
 import { plainOrNull } from "@/lib/plain";
-import type { AppVersion } from "@/store/types";
+import type { AppDetail, AppVersion, CascadeValue } from "@/store/types";
 
 /**
  * A version's first line as the owner reads it: a plan item's id prefix ("frontend-books: …") is
@@ -14,3 +15,20 @@ export function versionTitle(v: AppVersion, technical: boolean): string {
   const sentence = stripped ? `${stripped.charAt(0).toUpperCase()}${stripped.slice(1)}` : "";
   return plainOrNull(sentence) ?? `A change by ${v.author.name}`;
 }
+
+export const CAP_KEY = "monthly_credits";
+export const ALLOWANCE_KEY = "app_models.monthly_credits";
+
+/** A cascade value that is a number of credits, or null. */
+export const numberOf = (v: CascadeValue | undefined) => (typeof v?.value === "number" ? v.value : null);
+const number = numberOf;
+
+/** The "Cost this month" tile's note: the app's own cap, a cap set above it and where, or none anywhere. */
+export function capNote(app: AppDetail, budgets: CascadeValue[] | undefined, nameOf: (path: string) => string): string {
+  const cap = budgets?.find((v) => v.key === CAP_KEY);
+  if (budgets === undefined) return app.cost.capCredits !== null ? `Cap ${formatCredits(app.cost.capCredits)}` : "No cap on it or above it";
+  if (!cap || number(cap) === null) return "No cap on it or above it";
+  if (cap.setAtPath === app.scope) return `Its own cap: ${formatCredits(number(cap) ?? 0)} a month`;
+  return `No cap of its own; ${nameOf(cap.setAtPath)}'s ${formatCredits(number(cap) ?? 0)} applies`;
+}
+

@@ -101,6 +101,39 @@ public sealed class AppVersionService(
     }
 
     /// <summary>
+    /// Builds the app's newest version again and restarts it, for when publishing it failed (after a
+    /// restore, or a build) or the app stopped. Nothing in the history and nothing about who may open
+    /// it changes.
+    /// </summary>
+    public async Task<RestoreResult> RepublishAsync(ResolvedScope app, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        var appId = app.AppId!.Value;
+        var log = await dock.LogAsync(appId, 0, 1, cancellationToken);
+        var newest = log.Commits.FirstOrDefault()
+            ?? throw EndgameProblem.Conflict("Nothing has been built for this app yet, so there is no version to publish again.");
+
+        string? error = null;
+        var published = false;
+        try
+        {
+            var image = await dock.BuildAsync(appId, newest.Id, cancellationToken);
+            var token = await tokens.IssueAsync(app, cancellationToken);
+            await dock.StartAsync(appId, new StartAppRequest(app.OrganisationId, image.Image, token, null, null), cancellationToken);
+            published = true;
+        }
+        catch (EndgameProblem p) when (p.Status >= 400)
+        {
+            error = p.Detail ?? p.Title;
+        }
+
+        session.UseOrganisation(app.OrganisationId);
+        var live = await db.Apps.AsNoTracking().Where(a => a.OrganisationId == app.OrganisationId && a.Id == appId).Select(a => a.CurrentVersion).SingleOrDefaultAsync(cancellationToken);
+        var authors = await AuthorsAsync(app.OrganisationId, [newest], cancellationToken);
+        return new RestoreResult(new AppVersionView(newest.Id, newest.Message.Trim(), newest.At, authors[newest.Id], published || IsLive(newest.Id, live)), published, false, error);
+    }
+
+    /// <summary>
     /// One archive the organisation can take anywhere (spec): the code with its whole history, the
     /// app's own database, what the platform holds for it (end users, shares, schedules, webhooks,
     /// custom events), and a manifest. Written as a gzipped tar to <paramref name="output"/>.

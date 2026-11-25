@@ -5,7 +5,10 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/Icon";
 import { Skeleton } from "@/components/states";
 import { describeError } from "@/lib/queryState";
+import { navigate } from "@/lib/router";
+import { useAppDispatch } from "@/store";
 import {
+  api,
   useDevelopmentSignInMutation,
   useGetAuthOptionsQuery,
   usePasskeyLoginCompleteMutation,
@@ -14,6 +17,7 @@ import {
   usePasskeyRegisterOptionsMutation,
 } from "@/store/api";
 import { registerOptionsWithInvitation } from "@/store/sensitive";
+import { rememberReturnTo, takeReturnTo } from "./returnTo";
 import { assertionJson, describePasskeyError, passkeysSupported, registrationJson, toCreationOptions, toRequestOptions } from "./webauthn";
 
 const LEADS: { icon: "organisation" | "credits" | "verdict" | "secrets"; title: string; text: string }[] = [
@@ -51,12 +55,21 @@ export function SignInView() {
   const emailId = useId();
   const codeId = useId();
   const supported = passkeysSupported();
+  const dispatch = useAppDispatch();
+  // Read as the screen first draws: the console replaces the address with /sign-in straight after.
+  const [returnTo] = useState(rememberReturnTo);
 
   const run = async (kind: Exclude<Busy, null>, work: () => Promise<void>) => {
     setBusy(kind);
     setError(null);
     try {
       await work();
+      const next = takeReturnTo(returnTo);
+      if (next) {
+        // The session is read again first, so the console waits for it instead of sending the person back to sign in.
+        void dispatch(api.endpoints.getMe.initiate(undefined, { forceRefetch: true, subscribe: false }));
+        navigate(next, { replace: true });
+      }
     } catch (e) {
       if (e instanceof Refused) setError(e.message);
       else setError(e && typeof e === "object" && "status" in e ? describeError(e as never) : describePasskeyError(e));

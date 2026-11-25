@@ -70,3 +70,9 @@ Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `SignInTests`, `De
 ## Links
 
 - Spec *Shared services* (identity), *Who it is for* · ARCH-004 *Session* · Microsoft Learn, *Enable WebAuthn passkeys* (ASP.NET Core 10).
+
+## In the console
+
+- *Your account* (`/account`) shows the passkey count with **Add another passkey** (registration while signed in
+  adds to the caller's own account), every role held in every organisation, and the organisation switcher.
+- After signing in the console opens the address first asked for (a console path only, used once).

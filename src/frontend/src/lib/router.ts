@@ -74,6 +74,8 @@ export type Route =
   | { name: "notifications" }
   | { name: "suggestions" }
   | { name: "operator" }
+  | { name: "tree" }
+  | { name: "account" }
   | { name: "not-found" };
 
 const id = "([A-Za-z0-9_-]{1,80})";
@@ -97,6 +99,8 @@ const table: [RegExp, (m: RegExpMatchArray) => Route][] = [
   [/^\/notifications\/?$/, () => ({ name: "notifications" })],
   [/^\/suggestions\/?$/, () => ({ name: "suggestions" })],
   [/^\/operator\/?$/, () => ({ name: "operator" })],
+  [/^\/tree\/?$/, () => ({ name: "tree" })],
+  [/^\/account\/?$/, () => ({ name: "account" })],
 ];
 
 export function matchRoute(pathname: string): Route {
@@ -136,4 +140,8 @@ export const paths = {
   operator: () => "/operator",
   /** The org chart of an organisation an operator entered in God mode. */
   homeOf: (organisation: string) => `/?organisation=${encodeURIComponent(organisation)}`,
+  /** Managing the organisation's divisions, projects and apps, at a scope; an operator names the organisation entered. */
+  manage: (scope: string, organisation?: string) => `/tree?scope=${encodeURIComponent(scope)}${organisation ? `&organisation=${encodeURIComponent(organisation)}` : ""}`,
+  /** Your account: passkeys, and your roles in each organisation. */
+  account: () => "/account",
 };

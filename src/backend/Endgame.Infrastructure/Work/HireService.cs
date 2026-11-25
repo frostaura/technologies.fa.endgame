@@ -82,6 +82,12 @@ public sealed class HireService(
         }
 
         var needKey = input.NeedKey?.Trim();
+        if (needKey is null && trigger == HireTriggers.Promotion && input.ContractorRole?.Trim() is { Length: > 0 } recurringRole)
+        {
+            // A person proposing a recurring role raises the same need the system raises when a contractor finishes.
+            needKey = PromotionNeedKey(scope, recurringRole);
+        }
+
         if (needKey is { Length: 0 or > 200 })
         {
             throw EndgameProblem.Invalid("needKey is 1 to 200 characters, the same each time the same need is raised.");
@@ -203,8 +209,19 @@ public sealed class HireService(
         return views;
     }
 
-    /// <summary>The owner edits a proposal before deciding: any field of the drafted job description, the expected cost or the reason.</summary>
-    public async Task<HireView> EditAsync(Guid organisationId, Guid hireId, HireInput edit, bool clearReportsTo, CancellationToken cancellationToken)
+    /// <summary>The one need key for "this contractor role keeps recurring here", whoever raises it.</summary>
+    public static string PromotionNeedKey(ResolvedScope at, string contractorRole)
+    {
+        ArgumentNullException.ThrowIfNull(at);
+        ArgumentNullException.ThrowIfNull(contractorRole);
+        return $"promotion:{at.NodeId:N}:{contractorRole.Trim().ToLowerInvariant()}";
+    }
+
+    /// <summary>
+    /// The owner edits a proposal before deciding: any field of the drafted job description, the expected cost or the reason.
+    /// <paramref name="clearMonthlyCreditLimit"/> removes the budget the proposal carried, so the hire would have none of its own.
+    /// </summary>
+    public async Task<HireView> EditAsync(Guid organisationId, Guid hireId, HireInput edit, bool clearReportsTo, CancellationToken cancellationToken, bool clearMonthlyCreditLimit = false)
     {
         ArgumentNullException.ThrowIfNull(edit);
         var row = await RequireAsync(organisationId, hireId, tracking: true, cancellationToken);
@@ -215,7 +232,8 @@ public sealed class HireService(
 
         var scope = await scopes.ForRowAsync(row.OrganisationId, row.DivisionId, row.ProjectId, row.AppId, cancellationToken);
         var job = edit.JobDescription;
-        var merged = new JobDescriptionInput(job?.Mandate ?? row.Mandate, job?.Tools ?? row.Tools, job?.Services ?? row.Services, job?.MonthlyCreditLimit ?? row.MonthlyCreditLimit, job?.ModelTier ?? row.ModelTier);
+        var merged = new JobDescriptionInput(job?.Mandate ?? row.Mandate, job?.Tools ?? row.Tools, job?.Services ?? row.Services,
+            clearMonthlyCreditLimit ? null : job?.MonthlyCreditLimit ?? row.MonthlyCreditLimit, job?.ModelTier ?? row.ModelTier);
         var reportsTo = clearReportsTo ? null : edit.ReportsTo ?? row.ReportsToId;
         var draft = employees.NewEmployee(scope, edit.Name ?? row.Name, edit.Role ?? row.Role, merged, reportsTo);
         await employees.RequireManagerAsync(organisationId, draft.Id, reportsTo, cancellationToken);
@@ -324,7 +342,7 @@ public sealed class HireService(
             var briefer = await employees.GetAsync(organisationId, contractor.BriefedById!.Value, cancellationToken);
             var raised = await RaiseAsync(at, new HireInput(
                 HireTriggers.Promotion,
-                $"promotion:{at.NodeId:N}:{contractor.Role.ToLowerInvariant()}",
+                PromotionNeedKey(at, contractor.Role),
                 $"{recurring.Contractors} {contractor.Role} contractors were briefed here in the last {recurring.WindowDays} days, costing {recurring.CostCredits:0.##} credits. Standing work is cheaper, and better remembered, done by an employee.",
                 contractor.Role,
                 contractor.Role,

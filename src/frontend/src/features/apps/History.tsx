@@ -9,6 +9,7 @@ import { paths } from "@/lib/router";
 import { useAppSelector } from "@/store";
 import { useGetVersionsQuery, useRestoreVersionMutation } from "@/store/api";
 import type { AppDetail, AppVersion, RestoreResult } from "@/store/types";
+import { RebuildAndRestart } from "./AppManage";
 import { versionTitle } from "./appModel";
 
 const PAGE = 10;
@@ -62,7 +63,7 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
           {problem}
         </p>
       )}
-      {result && <Restored result={result} technical={technical} onDone={() => setResult(null)} />}
+      {result && <Restored app={app} result={result} technical={technical} canRestore={canRestore} onDone={() => setResult(null)} />}
       {view.kind === "loading" && (
         <Loading label="Loading the history" className="flex flex-col gap-2">
           <Skeleton className="h-14 rounded-sm" />
@@ -146,12 +147,13 @@ function ConfirmRestore({ app, onConfirm, onCancel }: { app: AppDetail; onConfir
   );
 }
 
-function Restored({ result, technical, onDone }: { result: RestoreResult; technical: boolean; onDone: () => void }) {
+function Restored({ app, result, technical, canRestore, onDone }: { app: AppDetail; result: RestoreResult; technical: boolean; canRestore: boolean; onDone: () => void }) {
   return (
     <div role="status" className={result.published ? "flex flex-col gap-2 rounded-sm border border-success-text bg-success-tint px-4 py-3" : "flex flex-col gap-2 rounded-sm border border-attention-line bg-attention-tint px-4 py-3"}>
       <p className="font-semibold">{result.published ? "The earlier version is back and running." : "The earlier version is back, but it is not running yet."}</p>
       {result.madePrivate && <p>It was public, so it is private now. Make it public again once you have looked at it.</p>}
-      {!result.published && result.publishError && <p className="text-attention-deep">{technical ? result.publishError : "It could not be rebuilt. Try publishing it again, or ask the builder to look."}</p>}
+      {!result.published && <p className="text-attention-deep">{technical && result.publishError ? result.publishError : "It could not be rebuilt and started. Rebuild it again below, or ask the builder to look."}</p>}
+      {!result.published && canRestore && <RebuildAndRestart app={app} />}
       <Button size="sm" variant="ghost" className="self-start" onClick={onDone}>
         Done
       </Button>

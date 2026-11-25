@@ -28,6 +28,7 @@ const APP: AppDetail = {
 };
 const SECRETS = { scope: APP.scope, effective: [{ name: "MAIL_KEY", setAtLevel: "organisation", setAtPath: "acme", setAt: "2026-11-01T00:00:00Z", inherited: true, overrides: [] }], setBelow: [] };
 const VIEWER = { ...ME, memberships: [{ ...ME.memberships[0], role: "viewer" }] };
+const VIEWER_TREE = { generatedAt: "t", viewerRole: "viewer", organisation: null, divisions: [], needsYou: [] };
 
 afterEach(() => {
   cleanup();
@@ -47,6 +48,7 @@ function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {})
     "GET /api/ontology": json(ONTOLOGY_APP),
     "GET /api/apps/a1/dashboard": json([]),
     "GET /api/apps/a1/versions": json(VERSIONS),
+    "GET /api/cascade": json([]),
     ...extra,
   });
 }
@@ -126,7 +128,7 @@ describe("asking about an app", () => {
   });
 
   it("offers estimates but not asking to a Viewer", async () => {
-    stub({ "GET /api/me": json(VIEWER), "POST /api/apps/a1/ask/estimate": json(ASK_ESTIMATE) });
+    stub({ "GET /api/me": json(VIEWER), "GET /api/tree": json(VIEWER_TREE), "POST /api/apps/a1/ask/estimate": json(ASK_ESTIMATE) });
     renderWithStore(<AppView appId="a1" />);
     fireEvent.change(await screen.findByLabelText("Ask about this app"), { target: { value: "Visits?" } });
     fireEvent.click(screen.getByRole("button", { name: "See what it costs" }));
@@ -245,7 +247,7 @@ describe("what it uses, and taking it away", () => {
   });
 
   it("tells anyone but the Owner that only the Owner can download it", async () => {
-    stub({ "GET /api/me": json(VIEWER) });
+    stub({ "GET /api/me": json(VIEWER), "GET /api/tree": json(VIEWER_TREE) });
     renderWithStore(<AppView appId="a1" />);
     expect(await screen.findByText("Only the Owner can download it.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Download everything" })).toBeNull();

@@ -260,6 +260,8 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
 
         // The cascade, members, credits
         new("GET", "/api/cascade", MemberRole.Viewer, Level.Branch, s => R($"/api/cascade?scope={s.Division}&kind=budget")),
+        new("GET", "/api/cascade/below", MemberRole.Viewer, Level.Branch, s => R($"/api/cascade/below?scope={s.Division}&kind=context")),
+        new("GET", "/api/cascade/below", MemberRole.Admin, Level.Branch, s => R($"/api/cascade/below?scope={s.Division}&kind=secret")),
         new("GET", "/api/cascade", MemberRole.Admin, Level.Branch, s => R($"/api/cascade?scope={s.Division}&kind=secret")),
         new("PUT", "/api/cascade", MemberRole.Admin, Level.Branch, s => R("/api/cascade", new { scope = s.Division, kind = "budget", key = "monthly_credits", value = 1000 })),
         new("PUT", "/api/cascade", MemberRole.Builder, Level.Branch, s => R("/api/cascade", new { scope = s.Division, kind = "context", key = "tone", value = "plain" })),
@@ -324,6 +326,7 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         new("DELETE", "/api/apps/{id:guid}/dashboard/{questionId:guid}", MemberRole.Builder, Level.Branch, async s => new Req($"/api/apps/{s.AppId}/dashboard/{await s.FreshQuestion()}")),
         new("GET", "/api/apps/{id:guid}/versions", MemberRole.Viewer, Level.Branch, s => R($"/api/apps/{s.AppId}/versions")),
         new("POST", "/api/apps/{id:guid}/versions/{commit}/restore", MemberRole.Builder, Level.Branch, s => R($"/api/apps/{s.AppId}/versions/abcdef1234/restore")),
+        new("POST", "/api/apps/{id:guid}/republish", MemberRole.Builder, Level.Branch, s => R($"/api/apps/{s.AppId}/republish")),
         new("GET", "/api/apps/{id:guid}/export", MemberRole.Owner, Level.Branch, s => R($"/api/apps/{s.AppId}/export")),
 
         // Secrets

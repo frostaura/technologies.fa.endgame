@@ -998,3 +998,151 @@ export const {
   useGetPricingQuery,
   useSetPricingMutation,
 } = api;
+
+// Managing the tree, the cascade's values and an app's republish ----------------------------------
+// Injected rather than inlined, so each part of the console adds its endpoints without touching the rest.
+
+/** The argument a screen reads the tree with: the organisation's slug, or nothing for the person's own. */
+export type TreeArg = string | undefined;
+
+const PLURAL: Record<import("./types").ManagedLevel, string> = { division: "divisions", project: "projects", app: "apps" };
+
+const withCascade = api.enhanceEndpoints({ addTagTypes: ["Cascade"] });
+
+export const manageApi = withCascade.injectEndpoints({
+  endpoints: (build) => ({
+    /** The effective values of one kind at a scope, each with the level that set it. */
+    getCascade: build.query<import("./types").CascadeValue[], { scope: string; kind: import("./types").CascadeKind }>({
+      query: ({ scope, kind }) => `cascade?scope=${encodeURIComponent(scope)}&kind=${encodeURIComponent(kind)}`,
+      providesTags: (_r, _e, { scope, kind }) => [{ type: "Cascade", id: `${kind}@${scope}` }],
+      extraOptions: guarded(g.cascadeValuesGuard, "what applies here"),
+    }),
+    /** What levels beneath a scope set, each with where: what a lower level replaces or adds. */
+    getCascadeBelow: build.query<import("./types").CascadeValue[], { scope: string; kind: import("./types").CascadeKind }>({
+      query: ({ scope, kind }) => `cascade/below?scope=${encodeURIComponent(scope)}&kind=${encodeURIComponent(kind)}`,
+      providesTags: ["Cascade"],
+      extraOptions: guarded(g.cascadeValuesGuard, "what lower levels set"),
+    }),
+    /** Sets a value at the scope's own level. Context is optimistic on the list it belongs to. */
+    setCascade: build.mutation<import("./types").CascadeValue, { scope: string; kind: import("./types").CascadeKind; key: string; value: unknown }>({
+      query: (body) => ({ url: "cascade", method: "PUT", body }),
+      extraOptions: guarded(g.cascadeValueGuard, "the saved value"),
+      async onQueryStarted({ scope, kind, key, value }, { dispatch, queryFulfilled }) {
+        const level = (["organisation", "division", "project", "app"] as const)[Math.max(0, scope.split("/").length - 1)] ?? "app";
+        const undo = dispatch(
+          manageApi.util.updateQueryData("getCascade", { scope, kind }, (list) => {
+            const i = list.findIndex((v) => v.key === key);
+            const overrides = i >= 0 && list[i]?.setAtPath !== scope ? [list[i]?.setAtPath ?? ""] : (list[i]?.overrides ?? []);
+            const next = { kind, key, value, setAtLevel: level, setAtPath: scope, setAt: new Date().toISOString(), overrides };
+            if (i >= 0) list[i] = next;
+            else list.push(next);
+          }),
+        );
+        try {
+          await queryFulfilled;
+          dispatch(withCascade.util.invalidateTags(["Cascade", "Credits", "App", "Tree"]));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+    /** Removes the value set at the scope's own level; the inherited one applies again. */
+    removeCascade: build.mutation<null, { scope: string; kind: import("./types").CascadeKind; key: string }>({
+      query: ({ scope, kind, key }) => ({ url: `cascade?scope=${encodeURIComponent(scope)}&kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}`, method: "DELETE" }),
+      async onQueryStarted({ scope, kind, key }, { dispatch, queryFulfilled }) {
+        const undo = dispatch(manageApi.util.updateQueryData("getCascade", { scope, kind }, (list) => list.filter((v) => !(v.key === key && v.setAtPath === scope))));
+        try {
+          await queryFulfilled;
+          dispatch(withCascade.util.invalidateTags(["Cascade", "Credits", "App", "Tree"]));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+    createNode: build.mutation<import("./types").TreeNode, { level: import("./types").ManagedLevel; parent: string; name: string; slug: string }>({
+      query: ({ level, ...body }) => ({ url: PLURAL[level], method: "POST", body }),
+      extraOptions: guarded(g.treeNodeGuard, "the new part"),
+      invalidatesTags: ["Tree", "Credits", "Ontology"],
+    }),
+    /** Renames, archives or reactivates a node: shown at once on the tree it was read with, and put back if refused. */
+    updateNode: build.mutation<import("./types").TreeNode, { level: import("./types").ManagedLevel | "organisation"; id: string; name?: string; status?: string; tree?: TreeArg }>({
+      query: ({ level, id, name, status }) => ({
+        url: `${level === "organisation" ? "organisations" : PLURAL[level]}/${encodeURIComponent(id)}`,
+        method: "PATCH",
+        body: { ...(name !== undefined ? { name } : {}), ...(status !== undefined ? { status } : {}) },
+      }),
+      extraOptions: guarded(g.treeNodeGuard, "the changed part"),
+      async onQueryStarted({ id, name, status }, { dispatch, getState, queryFulfilled }) {
+        // Every tree read on screen shows it (the person's own and an entered or chosen organisation's).
+        const undos = api.util.selectCachedArgsForQuery(getState() as never, "getTree").map((arg) => dispatch(
+          api.util.updateQueryData("getTree", arg, (t) => {
+            const patch = (n: { id: string; name: string }) => {
+              if (n.id !== id) return;
+              if (name !== undefined) n.name = name;
+              if (status !== undefined) {
+                (n as { status?: string }).status = status;
+                (n as { archived?: boolean }).archived = status === "archived";
+              }
+            };
+            if (t.organisation) patch(t.organisation);
+            for (const d of t.divisions) {
+              patch(d);
+              for (const p of d.projects) {
+                patch(p);
+                for (const a of p.apps) patch(a);
+              }
+            }
+          }),
+        ));
+        try {
+          await queryFulfilled;
+          dispatch(api.util.invalidateTags(["Tree", "App", "Credits", "Me", "Ontology"]));
+        } catch {
+          for (const undo of undos) undo.undo();
+        }
+      },
+    }),
+    deleteNode: build.mutation<null, { level: import("./types").ManagedLevel; id: string }>({
+      query: ({ level, id }) => ({ url: `${PLURAL[level]}/${encodeURIComponent(id)}`, method: "DELETE" }),
+      invalidatesTags: ["Tree", "Credits", "Ontology"],
+    }),
+    /** Builds the app's newest version again and restarts it. */
+    republishApp: build.mutation<import("./types").RestoreResult, string>({
+      query: (appId) => ({ url: `apps/${encodeURIComponent(appId)}/republish`, method: "POST" }),
+      extraOptions: guarded(g.restoreGuard, "the restart"),
+      invalidatesTags: (_r, _e, appId) => [{ type: "Versions", id: appId }, { type: "App", id: appId }, "Tree"],
+    }),
+    /** Moves an employee, keeping or setting who it reports to (left out, it reports to nobody). */
+    reassignEmployee: build.mutation<Employee, { id: string; scope: string; reportsTo: string | null }>({
+      query: ({ id, scope, reportsTo }) => ({ url: `employees/${encodeURIComponent(id)}/reassign`, method: "POST", body: { scope, ...(reportsTo ? { reportsTo } : {}) } }),
+      extraOptions: guarded(g.employeeGuard, "the employee"),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Employee", id }, "Employee", "Tree", "Ontology", "Memory"],
+    }),
+    /** Brings a released employee back, where it was or somewhere else, with its memory. */
+    rehireEmployee: build.mutation<Employee, { id: string; scope?: string }>({
+      query: ({ id, scope }) => ({ url: `employees/${encodeURIComponent(id)}/rehire`, method: "POST", body: scope ? { scope } : {} }),
+      extraOptions: guarded(g.employeeGuard, "the employee"),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Employee", id }, "Employee", "Tree", "Ontology", "Memory"],
+    }),
+    /** An employee's whole record, released ones included, to list who was let go. */
+    getEmployeesWithReleased: build.query<Employee[], string>({
+      query: (scope) => `employees?scope=${encodeURIComponent(scope)}&includeReleased=true`,
+      providesTags: ["Employee"],
+      extraOptions: guarded(g.employeesGuard, "the workforce"),
+    }),
+  }),
+});
+
+export const {
+  useGetCascadeQuery,
+  useGetCascadeBelowQuery,
+  useSetCascadeMutation,
+  useRemoveCascadeMutation,
+  useCreateNodeMutation,
+  useUpdateNodeMutation,
+  useDeleteNodeMutation,
+  useRepublishAppMutation,
+  useGetEmployeesWithReleasedQuery,
+  useReassignEmployeeMutation,
+  useRehireEmployeeMutation,
+} = manageApi;

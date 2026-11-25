@@ -1,6 +1,8 @@
 import { arr, bool, dict, nullable, num, obj, oneOf, record, str, unknownValue, withDefault, type Guard } from "@/lib/guards";
 import { normaliseVerdict } from "@/features/verdict/verdictModel";
 import type {
+  CascadeValue,
+  TreeNode,
   AccessToken,
   AccessTokenCreated,
   AppVersion,
@@ -183,6 +185,7 @@ export const creditsGuard: Guard<Credits> = obj<Credits>({
       spentCredits: num,
       capCredits: nn,
       appId: ns,
+      employeeId: withDefault(ns, null) as Guard<string | null | undefined>,
     }),
   ),
   estimates: nullable(estimates),
@@ -661,3 +664,17 @@ export const provisionedGuard: Guard<OrganisationProvisioned> = obj<Organisation
   nameCheck: withDefault(nullable(obj<NonNullable<OrganisationProvisioned["nameCheck"]>>({ slug: s, source: s, note: ns })), null),
   screening: withDefault(nullable(obj<NonNullable<OrganisationProvisioned["screening"]>>({ method: oneOf(["model", "manual"] as const), result: oneOf(["clear"] as const), reason: s })), null),
 });
+
+// Managing the tree and the cascade -----------------------------------------------------------
+
+export const treeNodeGuard: Guard<TreeNode> = obj<TreeNode>({ id: s, level, slug: s, name: s, path: s, status: s, createdAt: s });
+export const cascadeValueGuard: Guard<CascadeValue> = obj<CascadeValue>({
+  kind: s,
+  key: s,
+  value: unknownValue,
+  setAtLevel: level,
+  setAtPath: s,
+  setAt: withDefault(s, ""),
+  overrides: withDefault(arr(s), []),
+});
+export const cascadeValuesGuard: Guard<CascadeValue[]> = arr(cascadeValueGuard);

@@ -69,7 +69,7 @@ describe("AssistantsView", () => {
     stub(json(TOKENS));
     renderWithStore(<AssistantsView />);
     expect(await screen.findByText(`${window.location.origin}/mcp`)).toBeTruthy();
-    expect(within(screen.getByRole("list", { name: "App addresses" })).getByText(`${window.location.origin}/mcp/apps/a1`)).toBeTruthy();
+    expect(within(await screen.findByRole("list", { name: "App addresses" })).getByText(`${window.location.origin}/mcp/apps/a1`)).toBeTruthy();
   });
 
   it("makes a key no higher than the person's role and shows it once, never in the store", async () => {

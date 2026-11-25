@@ -55,18 +55,18 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   1. The person clicks **"Sign in with a passkey"**. The button reads **"Waiting for your device…"**.
   2. The console asks the server for options without an e-mail, so the device offers any Endgame passkey. The server deliberately answers an unknown e-mail exactly as it answers none, so accounts cannot be probed.
   3. The person chooses a key and approves. The server verifies the assertion, records the passkey's use and signs them in.
-  4. The console leaves `/sign-in` for `/` and shows the org chart of the first organisation the person belongs to.
-- **You know it worked when:** the org chart and the header with **"Sign out"** appear at `/`.
+  4. The console opens the address the person first asked for (a signed-out visit to `/credits` lands on `/credits`), or `/` when they came to `/sign-in` directly. It shows the organisation they chose last on this device (ID-10's switcher), or the first one they belong to.
+- **You know it worked when:** the screen first asked for, or the org chart, appears with **"Sign out"** in the header.
 - **Variations and refusals:**
   - Unknown or unverifiable passkey: 401, "That passkey could not be verified." Credential made for another origin: rejected.
   - Prompt closed: "The passkey prompt was closed or timed out. Nothing was changed."
   - No key chosen: "No passkey was chosen."
   - Unsupported browser: the same alert as in ID-01.
-  - The person always lands on `/`, never on the address they first asked for (see gaps).
-  - Someone with roles in two organisations always opens the first one, ordered by organisation-level grants first. There is no organisation switcher.
-- **Where:** `SignInView.tsx`. `POST /api/auth/passkey/login/options`, `POST /api/auth/passkey/login/complete`. `App.tsx` redirect logic.
+  - Only a console address is kept: never another site, never `/sign-in` itself; it is used once.
+  - Someone with roles in two organisations switches between them on "Your account" (ID-09).
+- **Where:** `SignInView.tsx`, `features/auth/returnTo.ts`. `POST /api/auth/passkey/login/options`, `POST /api/auth/passkey/login/complete`. `App.tsx` redirect logic.
 - **Reachable from:** UI
-- **Covered by tests:** `SignInTests` (`A_passkey_answered_for_another_origin_is_rejected`, `An_unknown_passkey_cannot_sign_in`, the first-person test); `tests-e2e/console.spec.ts`.
+- **Covered by tests:** `SignInTests` (`A_passkey_answered_for_another_origin_is_rejected`, `An_unknown_passkey_cannot_sign_in`, the first-person test); `AccountView.test.tsx` ("landing where you were going…"); `tests-e2e/console.spec.ts`; `tests-e2e/manage.spec.ts` ("after signing in, you land on the address you first asked for").
 
 ### ID-03 Use the development sign-in
 - **Who:** developer or tester
@@ -162,33 +162,40 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 
 ### ID-08 Add another passkey to your own account
 - **Who:** any signed-in person
-- **Starts at:** API only
-- **Needs:** signed in
-- **Level:** Advanced
+- **Starts at:** "Your account" (`/account`), **"Add another passkey"**
+- **Needs:** signed in; a browser that can make passkeys
+- **Level:** Core
 - **Learn first:** ID-02
-- **What you learn:** one account can hold several passkeys.
+- **What you learn:** one account can hold several passkeys, so losing one device never locks you out.
 - **Steps:**
-  1. A signed-in person calls the registration options endpoint. The server treats the request as adding a key to the caller's account, whatever body is sent.
-  2. They complete the registration. The passkey is stored and they are signed in again.
-- **You know it worked when:** the passkey count in `/api/me` goes up. No screen shows it.
-- **Variations and refusals:** the same attestation refusals as ID-01.
-- **Where:** `AuthEndpoints.cs` (the "add" kind).
-- **Reachable from:** **API only. No screen exists.** The console cannot be used, because it sends the visitor to `/` when signed in.
-- **Covered by tests:** none found.
+  1. "Your passkeys" reads "<n> passkeys can sign you in. Add one on each device you use, so losing one never locks you out."
+  2. Press **"Add another passkey"**; it reads "Waiting for your device…". Approve on the device.
+  3. "The new passkey is saved. Either one signs you in now." The count goes up.
+- **You know it worked when:** the count is one higher and the saved message shows.
+- **Variations and refusals:**
+  - The device declines or times out: "No passkey was added: <reason>".
+  - A browser without passkeys: "This browser cannot make passkeys. Open Endgame in a current browser on a device with a screen lock." and the button is disabled.
+  - The same attestation refusals as ID-01. Signed in, the server adds the key to the caller's own account whatever body is sent.
+- **Where:** `features/account/AccountView.tsx`; `AuthEndpoints.cs` (the "add" kind).
+- **Reachable from:** UI; API.
+- **Covered by tests:** `AccountView.test.tsx` ("adds another passkey with this device…"); `tests-e2e/manage.spec.ts` ("shows your passkeys…").
 
-### ID-09 See who you are and every role you hold
-- **Who:** any signed-in person or tool
-- **Starts at:** `GET /api/me`
+### ID-09 See who you are and every role you hold, and switch organisation
+- **Who:** any signed-in person
+- **Starts at:** "Your account" (`/account`). Also `GET /api/me`.
 - **Needs:** signed in
-- **Level:** Developer
+- **Level:** Foundation
 - **Learn first:** ID-02
-- **What you learn:** one answer lists the person, their first organisation, whether they are an operator, their passkey count and every grant they hold.
-- **Steps:** call it. The answer has the user, the organisation (null before the first one exists), whether they are an operator, the number of passkeys, and every membership with scope, level and role.
-- **You know it worked when:** a 200 with those fields comes back. Signed out it answers 401 `unauthenticated`.
-- **Variations and refusals:** none found.
-- **Where:** `AuthEndpoints.MeAsync`.
-- **Reachable from:** API (the console uses it implicitly; no screen shows the memberships list)
-- **Covered by tests:** `SignInTests`.
+- **What you learn:** your roles are grants at places in the tree, possibly in more than one organisation, and the console works in one of them at a time.
+- **Steps:**
+  1. The page shows your name, e-mail and, for an operator, "FrostAura operator".
+  2. "Your roles" lists each organisation, with "Working in it now" on the active one, and each grant: "<Role> of the whole organisation" or "<Role> of a division, <path>", with what that role may do. An Admin or Owner sees "People in <Org>".
+  3. In more than one organisation: "You belong to <n> organisations. The console shows one at a time." and **"Working in"**. Choosing another opens its org chart; every screen then reads that organisation. The choice is kept on this device.
+- **You know it worked when:** "Working in it now" moves to the organisation chosen.
+- **Variations and refusals:** no role yet: "You hold no role in any organisation yet. Whoever invited you grants one." (an operator: "As an operator you enter organisations from Every organisation."). Failed read: "Your account could not be loaded". An operator inside an organisation in God mode has no switcher; the entered organisation applies.
+- **Where:** `features/account/AccountView.tsx`, `OrganisationSwitcher.tsx`; `lib/useActiveOrganisation.ts`; `AuthEndpoints.MeAsync`.
+- **Reachable from:** UI; API. The header carries the same switcher once the shell mounts it.
+- **Covered by tests:** `AccountView.test.tsx`; `tests-e2e/manage.spec.ts`; `SignInTests`.
 
 ### ID-10 Read the operator access log
 - **Who:** owner
@@ -466,7 +473,7 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 - **Learn first:** AST-02
 - **What you learn:** you can see when each key was last used, and shut one out at once.
 - **Steps:**
-  1. Each row shows the name, "{Role} · made {date} · ends/ended {date}" (or "· never ends"), "Last used {time ago}" or "Never used", and a badge: **"Active"**, **"Expired"** or **"Revoked"**. Technical mode adds the prefix and id.
+  1. Each row shows the name, "{Role} in {Organisation} · made {date} · ends/ended {date}" (or "· never ends"), "Last used {time ago}" or "Never used", and a badge: **"Active"**, **"Expired"** or **"Revoked"**. Technical mode adds the prefix and id.
   2. The person clicks **"Revoke"**. A confirmation shows: "The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in.", with **"Revoke it"** and **"Keep it"**.
   3. They click **"Revoke it"**. The badge becomes **"Revoked"** at once, and the key's next call gets 401.
 - **You know it worked when:** the badge reads **"Revoked"** and **"Revoke"** has gone.
@@ -998,12 +1005,12 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
    - The control plane supports it (`SignInTests`).
    - The same blocks the Owner of an organisation an operator provisions.
 2. **Fixed:** changing the role of someone with no passkey no longer issues a new code (PPL-06).
-3. **Fixed:** the console resolves a role as the server does — the tree carries each node's effective role, and `lib/roles.ts` `roleAt` takes the deepest grant (PPL-01). Screens outside People, Autonomy and home still call `roleAt` or read the tree's single `viewerRole` (Credits, App, Suggestions, Hire, Employee); they now get the server's rule from `roleAt`, but should read `effectiveRole` for the node.
+3. **Fixed:** the console resolves a role as the server does — the tree carries each node's effective role, and `lib/roles.ts` `roleAt` takes the deepest grant (PPL-01); the screens read `effectiveRole` for the node.
 4. **Fixed:** People below the organisation lists the Owner and grants set above, as "Set at {node}" (PPL-01).
-5. **Add-another-passkey exists only in the API.** The passkey count in `/api/me` is never shown, and UC-101 lists the feature as built.
-6. **After sign-in the console always lands on `/`.** The address you asked for is lost.
-7. **One organisation per person in the console.** It opens the first membership and has no switcher.
-8. **The AI assistants list shows keys from every organisation** without naming which organisation each belongs to.
+5. ~~Add-another-passkey exists only in the API~~ — fixed (ID-08). Formerly: The passkey count in `/api/me` is never shown, and UC-101 lists the feature as built.
+6. ~~After sign-in the console always lands on `/`~~ — fixed (ID-02). Formerly: The address you asked for is lost.
+7. ~~One organisation per person in the console~~ — fixed on "Your account" (ID-09); the header switcher waits for the shell to mount it. Formerly: It opens the first membership and has no switcher.
+8. ~~The AI assistants list shows keys from every organisation without naming which~~ — fixed (AST-03).
 9. **MCP does not match "anything possible in the UI is possible over MCP":**
    - no tools for sharing an app, keys, notification read marks, top-up requests, the operator log, employee memory or the dashboard;
    - `member_invite` returns the code to the assistant (it now also e-mails it, as the console does, when a mail server is configured);

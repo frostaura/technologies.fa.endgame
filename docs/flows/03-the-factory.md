@@ -22,7 +22,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   1. The page heading reads "What do you want to build?", with the line "Describe it the way you would to a friend. Endgame researches it first, tells you plainly whether it is worth building, then builds and runs it."
   2. Type a name into **"Your organisation"**. The hint underneath reads "Everything you make lives under this name. Its apps appear at {host}/{slug}." (it shows `your-name` until you type).
   3. Type the idea into **"The idea"**. Optionally tap any of the one-tap constraints under **"Anything it must respect? Optional"**: "Members sign in", "Works on a phone", "Sends email", "Uses AI inside the app", "Receives data from a device". Each one toggles on and off. You can also type into **"Anything else, in your own words"**.
-  4. Once the idea is at least 12 characters, the **"Research comes first"** panel asks for an estimate after a 0.5-second pause. It shows a loading bar, then "Estimated {credits}" and the line "You are charged for research only. Nothing is built until you have seen the verdict. If the estimate turns out wrong, you see by how much." followed by the basis.
+  4. Once the idea is at least 12 characters, the **"Research comes first"** panel asks for an estimate after a 0.5-second pause. It shows a loading bar, then "Estimated {credits}" and the line "You are charged for research only now. If the verdict is to build, it is built on its own, inside the budget, with its own estimate first. If the estimate turns out wrong, you see by how much." followed by the basis (a new organisation is in auto-mode until someone sets checkpoints).
   5. Press **"Research this idea"**. While it works the button reads "Starting research…". The organisation is created first (`POST /api/organisations`), then the idea (`POST /api/ideas`).
   6. You are taken to the research run at `/runs/{id}` (RUN-01).
 - **You know it worked when:** the run page opens with the title "Research: {first line of the idea}" and the badge "Waiting to start" or "Working". The breadcrumb now names your organisation.
@@ -39,24 +39,26 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Covered by tests:** `StartView.test.tsx` ("names the organisation on first run…"); `tests-e2e/console.spec.ts` ("first run: name the organisation, see the estimate, research…"); `IdeasAndConversationsTests.The_estimate_is_free_and_works_before_an_organisation_exists`.
 
 ### IDEA-02 Describe a new idea in an existing organisation
-- **Who:** Builder or above at the organisation.
+- **Who:** Builder or above at the organisation or at the division it goes to.
 - **Starts at:** the home hero's **"New idea"** button, or the empty organisation's **"Describe your first idea"**. Both open `/start`.
 - **Needs:** an organisation.
 - **Level:** Foundation. **Learn first:** IDEA-01.
-- **What you learn:** every idea is researched first, and its estimate is shown before anything is charged.
+- **What you learn:** every idea is researched first, for the place you choose, and its estimate is shown before anything is charged.
 - **Steps:**
-  1. The breadcrumb shows "{Org} › New idea". There is no organisation field.
-  2. Type the idea, pick constraints, and wait for "Estimated {credits}".
-  3. Press **"Research this idea"** and the run page opens.
-  4. To leave instead, use the link **"Back to the org chart"**.
-- **You know it worked when:** the run page "Research: …" opens and, on the org chart, the idea appears as being researched.
+  1. The breadcrumb shows "{Org} › New idea".
+  2. **"Where it goes"** offers "The whole of {Org}" and each active division where you may start work. The hint reads "Endgame suggests a division for it once it is researched." or, for a division, "It is researched for {Division}, and built there if it is built."
+  3. Type the idea, pick constraints, and wait for "Estimated {credits}". The estimate is asked for that place, so the figure shown is the figure the run records.
+  4. "What happens next" says what will actually happen at that place: in auto-mode "Build, change, or do not build. A build or change verdict goes ahead on its own; a do-not-build waits for you, and you can overrule it." and "The people this needs are hired as they are needed, inside the budget; one that does not fit waits for you."; in checkpoints mode "Nothing is built until you decide; you can overrule it.", plus "It waits for your word once its estimate is known." or "The plan waits for you to agree it first." for each checkpoint that is on. The line under the estimate reads "You are charged for research only now. If the verdict is to build, it is built on its own, inside the budget, with its own estimate first." in auto-mode, and "You are charged for research only. Nothing is built until you have seen the verdict and decided." in checkpoints mode.
+  5. Press **"Research this idea"** and the run page opens.
+- **You know it worked when:** the run page "Research: …" opens; built, the project appears in the division chosen.
 - **Variations and refusals:**
-  - **No division can be chosen here.** The console never sends `scope`, so the idea always goes to your first organisation. Proposing to a division is API/MCP/conversation only.
-  - A Viewer still sees the button and the form. On submit the server refuses with 403 and the page says "Research did not start: … Nothing was charged." No role check on screen.
-  - **The estimate shown can differ from the one recorded.** The estimate request sends no scope, so it uses the general starting figure. Creating the idea re-estimates from the organisation's own history (`ResearchEstimator.ResearchAsync(organisationId…)`). The run log's "Estimated the cost" can therefore differ from the figure on this page.
-- **Where:** `StartView.tsx`; `POST /api/ideas`.
+  - Someone below Builder everywhere sees "Only a Builder or above starts an idea" and "You are a {Role} in {Org}, and no division gives you more. An Admin or the Owner can make you a Builder; until then, you can follow everything that is being built." instead of the form.
+  - The divisions cannot be read: "The divisions could not be loaded, so for now it can only go to the whole organisation."
+  - What happens next cannot be read: "What happens next could not be worked out" with **"Try again"**.
+  - "Research did not start: … Nothing was charged." on a refusal.
+- **Where:** `StartView.tsx`, `startModel.ts`; `POST /api/ideas/estimate {scope}`, `POST /api/ideas {scope}`, `GET /api/autonomy?scope=`.
 - **Reachable from:** UI.
-- **Covered by tests:** `StartView.test.tsx` (all five tests); `IdeasAndConversationsTests.An_idea_queues_research…`.
+- **Covered by tests:** `StartView.test.tsx` (including "sends the chosen division with both the estimate and the idea…", "tells someone below Builder why…", "what happens next"); `tests-e2e/manage.spec.ts` ("the estimate and the idea name the division chosen", "a Viewer is told why…"); `IdeasAndConversationsTests.An_idea_queues_research…`.
 
 ### IDEA-03 Read the research estimate before starting
 - **Who:** anyone, even before an organisation exists (the endpoint allows anonymous calls).
@@ -409,7 +411,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - Checkpoints mode: 409; "Endgame · Waiting for your decision": "The verdict waits for you: build it, change it or drop it. Autonomy at … is 'checkpoints'…".
   - Red line: "It will not be built".
   - **On a "change" verdict auto-mode builds the original wording**; the change is not applied.
-  - **The start screen's promise "Nothing is built until you have seen the verdict" is untrue in auto-mode.**
+  - The start screen says what auto-mode will do at the place chosen (IDEA-02).
 - **Where:** `ResearchWorkflow.cs`; `FactoryEndpoints` `DecideIdeaAutomatically`; `IdeaService.DecideAutomaticallyAsync`.
 - **Reachable from:** internal only (no person calls it).
 - **Covered by tests:** `WorkflowTests.With_checkpoints_on_a_build_verdict_waits_for_the_owner`, `…No_evidence_of_demand_turns_a_build_into_do_not_build_which_waits_for_the_owner`.
@@ -731,7 +733,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Variations and refusals:**
   - A failed raise: "Endgame · A hire could not be raised" / "…The work goes ahead without one."
   - The work never stops for a hire; it is unattributed until the hire is accepted.
-  - The start screen says "The people this needs are proposed, each with a cost", which is not true in auto-mode.
+  - The start screen says how hires happen at the place chosen: in auto-mode "hired as they are needed, inside the budget"; with the hire checkpoint on, "proposed with a cost, and waits for you" (IDEA-02).
 - **Where:** `Workforce.HireAsync`; `HireService` (auto-accept); `POST /internal/hires`.
 - **Reachable from:** UI for deciding (another reader); MCP `hire_decide`.
 - **Covered by tests:** `WorkflowTests.A_new_division_and_a_recurring_job_raise_their_hires…`; `WorkforceTests.A_need_within_budget_is_hired_at_once…`, `…Over_budget_or_at_a_hire_checkpoint…`.
@@ -1105,9 +1107,9 @@ This is another reader's area (app settings, sharing, going public): `POST /api/
 4. **The change never reaches the build** (VERD-06, VERD-07, VERD-11). The note and the suggested change go to research only, and the build plans from the original text. Auto-mode builds "change" verdicts as written.
 5. **"Asks you first" denies instead of asking** (AUTO-05), and a rule set's `checkpoints` list is API/MCP only.
 6. **The checkpoints mode skips the budget pause** at the start and at the plan (IDEA-04, BLD-05). Only auto-mode pauses.
-7. **The console cannot target a division** (IDEA-02). The start screen never sends `scope`; API, MCP and the conversation can.
-8. **The estimate shown can differ from the one recorded.** The start screen and "Take this idea" estimate without a scope, while creation uses the organisation's history.
-9. **Some start-screen copy is untrue in auto-mode.** "Nothing is built until you have seen the verdict" and "The people this needs are proposed" both are; auto-mode builds and hires on its own.
+7. ~~The console cannot target a division~~ — fixed (IDEA-02). Formerly: The start screen never sends `scope`; API, MCP and the conversation can.
+8. ~~The estimate shown can differ from the one recorded~~ — fixed: both name the same place (IDEA-02). Formerly: The start screen and "Take this idea" estimate without a scope, while creation uses the organisation's history.
+9. ~~Some start-screen copy is untrue in auto-mode~~ — fixed: the steps follow the autonomy at the place chosen (IDEA-02). Formerly: "Nothing is built until you have seen the verdict" and "The people this needs are proposed" both are; auto-mode builds and hires on its own.
 10. **Some fields are written but never shown.**
     - The run page never shows what was not charged, or the `budgetExhausted` flag.
     - "Change it: {label}", "Estimated {n}" under "What would change the verdict", and the method rows "Argued" and "Briefed" never render, because the Runner does not write those fields.
@@ -1119,5 +1121,5 @@ This is another reader's area (app settings, sharing, going public): `POST /api/
 13. **Doc mismatches.** The spec's design stage (icons, brand assets) does not exist (BLD-12). The spec says a person can "step in and change anything at any point"; in code, a person can only pause, cancel, approve or reject, and has no way to edit a plan or a placement.
 14. **Smaller permission and refusal oddities.**
     - The conversation lets a Builder change autonomy and checkpoints, which the autonomy page reserves for Admins (AUTO-07).
-    - A Viewer sees "New idea" and the full form, and is refused only on submit.
+    - ~~A Viewer sees the full form and is refused only on submit~~ — fixed (IDEA-02); the home screen's "New idea" button is still shown to a Viewer.
     - An auto-mode decision other than "build" returns 403, while UC-104 lists every auto-mode refusal as 409.

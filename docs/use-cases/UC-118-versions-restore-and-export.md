@@ -32,6 +32,12 @@ version restorable, the whole app downloadable by its Owner at no cost.
 - **A3 — hosting does not answer.** `502 dock_unavailable`.
 - **A4 — not the Owner.** Export is `403`, an operator in God mode included.
 
+## Rebuild and restart
+
+`POST /api/apps/{id}/republish` (Builder) builds the newest version again and starts it — after a restore whose
+publish failed, or when the app stopped — answering the restore's shape. Nothing in the history and nothing
+about who may open it changes; nothing built yet is 409.
+
 ## Rules this use case must honour
 
 - Go-public is a human act (rule 10). Normal mode names no infrastructure (rule 12): the console says "version", not "commit".

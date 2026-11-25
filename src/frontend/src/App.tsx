@@ -30,6 +30,8 @@ const AssistantsView = lazy(() => import("@/features/assistants/AssistantsView")
 const NotificationsView = lazy(() => import("@/features/notifications/NotificationsView").then((x) => ({ default: x.NotificationsView })));
 const SuggestionsView = lazy(() => import("@/features/suggestions/SuggestionsView").then((x) => ({ default: x.SuggestionsView })));
 const OperatorView = lazy(() => import("@/features/operator/OperatorView").then((x) => ({ default: x.OperatorView })));
+const ManageView = lazy(() => import("@/features/tree/ManageView").then((x) => ({ default: x.ManageView })));
+const AccountView = lazy(() => import("@/features/account/AccountView").then((x) => ({ default: x.AccountView })));
 
 /** The session decides what renders: signed out is the sign-in screen, never a broken console. */
 export function App() {
@@ -127,6 +129,10 @@ function Screen({ route }: { route: Route }) {
       return <SuggestionsView />;
     case "operator":
       return <OperatorView />;
+    case "tree":
+      return <ManageView />;
+    case "account":
+      return <AccountView />;
     default:
       return <NotFound />;
   }

@@ -172,6 +172,8 @@ export interface IdeaEstimate {
 export interface CreateIdeaRequest {
   text: string;
   constraints: string[];
+  /** Where the idea goes: the organisation, or one division. The estimate and the idea name the same one. */
+  scope?: string;
 }
 
 /** A product research found that already does this, with what it does and where that was read. */
@@ -401,6 +403,8 @@ export interface AppShareCreated {
   email: string;
   invitationCode: string;
   expiresAt: string;
+  /** The code was e-mailed too (only when a mail server is configured). */
+  emailed?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -452,6 +456,8 @@ export interface BudgetLine {
   spentCredits: number;
   capCredits: number | null;
   appId: string | null;
+  /** On an employee's row: the employee, whose cap is set on its record. Its spend counts the contractors it briefs. */
+  employeeId?: string | null;
 }
 
 export interface Credits {
@@ -647,6 +653,10 @@ export interface HireEdit {
   role?: string;
   jobDescription?: JobDescriptionInput;
   expectedMonthlyCredits?: number;
+  reportsTo?: string;
+  clearReportsTo?: boolean;
+  /** Removes the budget the proposal carried: the hire would have none of its own. */
+  clearMonthlyCreditLimit?: boolean;
 }
 
 export interface HireProposalRequest {
@@ -658,6 +668,9 @@ export interface HireProposalRequest {
   expectedMonthlyCredits: number;
   trigger?: HireTrigger;
   needKey?: string;
+  reportsTo?: string;
+  /** For a promotion: the contractor role that keeps recurring. The server derives the need key from it. */
+  contractorRole?: string;
 }
 
 /** `GET /api/employees/recurring-roles?scope=`: a contractor role that keeps coming back. */
@@ -1049,3 +1062,37 @@ export interface ManualScreening {
   decision: "clear" | "breach";
   reason: string;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Managing the tree and the cascade — `POST/PATCH/DELETE /api/{divisions|projects|apps}`,
+// `PATCH /api/organisations/{id}`, `GET/PUT/DELETE /api/cascade`, `POST /api/apps/{id}/republish`
+// ---------------------------------------------------------------------------------------------
+
+/** The kinds of value the cascade carries. */
+export type CascadeKind = "permission" | "secret" | "budget" | "rule_set" | "context" | "setting";
+
+/** One effective value at a scope, with the level that set it and the higher levels it replaces. */
+export interface CascadeValue {
+  kind: string;
+  key: string;
+  value: unknown;
+  setAtLevel: ScopeLevel;
+  setAtPath: string;
+  setAt: string;
+  overrides: string[];
+}
+
+/** A node as the tree endpoints answer: `{id, level, slug, name, path, status, createdAt}`. */
+export interface TreeNode {
+  id: string;
+  level: ScopeLevel;
+  slug: string;
+  name: string;
+  path: string;
+  /** `active` or `archived` for a division or project; an app's own lifecycle word. */
+  status: string;
+  createdAt: string;
+}
+
+/** The levels a person creates, renames, archives and deletes; the organisation is renamed only. */
+export type ManagedLevel = "division" | "project" | "app";

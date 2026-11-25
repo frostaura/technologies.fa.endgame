@@ -135,6 +135,23 @@ and credit.
     Workflow steps are bookkeeping and are left out, except a hire no plain message announced.
     Needs-you cards and notifications are a headline and one line; the verdict's hero is the headline and a
     short summary, the full reasoning behind a button.
+24. **Manage** (`/tree?scope=`): every division, project and app as one outline, archived ones marked; for the
+    one chosen its name (renamed, never its address), what is in it and **Add a division / project / app** with
+    the address made from the name and editable until it is made, archive and reactivate, delete with the
+    server's refusal shown and archiving offered, and *What this is* — the context said there, inherited, and
+    said differently beneath it. The org chart links each division and project to it, draws archived nodes as
+    archived and gives an Admin **Add a division**. Moving is not offered: no route changes a node's parent.
+25. **Caps and limits**: on `/credits` an Admin sets, changes and removes any row's monthly cap (an employee's on
+    its record, counting its contractors), each removal saying which cap then holds; the Owner removes their own
+    overdraft limit and an Admin a part's tighter one. The app page sets its own cap and AI allowance and its idle
+    minutes, renames, archives or deletes it, and offers **Rebuild and restart** when it stopped; its running,
+    access, sharing and secrets follow the role, saying who changes each.
+26. **Start, the workforce and your account**: the start screen chooses the organisation or a division and sends
+    that scope with the estimate and the idea, refuses below Builder with the reason, and says what the autonomy
+    there will do. Employees' whole job is editable; reassigning keeps or sets the manager; released employees
+    are listed and rehired anywhere; a hire is asked for by hand. **Your account** (`/account`) lists passkeys
+    with **Add another passkey**, every role, and the organisation switcher; after signing in the console opens
+    the address first asked for. Every screen reads the active organisation (`lib/useActiveOrganisation.ts`).
 
 ## Alternate and failure flows
 
@@ -195,7 +212,7 @@ is camelCase, errors are problem details. What the console relies on beyond ARCH
 An employee's full run history reads its tasks and its current and last runs; `GET /api/runs?employeeId=`
 now exists and is not used yet. An app's end-user count ("sign-in · 214 members" in the design) has no field
 in `GET /api/apps/{id}`, so *what it uses* says "Sign-in" without a count. The per-node overdraft limits a
-narrower limit sets are not in `GET /api/credits`, so the page confirms a change but cannot list them.
+narrower limit sets are listed in `GET /api/credits` (`overdraft.limits`) and can be removed on the page.
 
 ## Acceptance
 

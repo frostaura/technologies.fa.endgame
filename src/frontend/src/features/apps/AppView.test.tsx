@@ -45,7 +45,7 @@ const SHARED: AppDetail = { ...APP, settings: { running: "sleep", access: "share
 const SHARES = [{ email: "ann@example.test", invitedAt: "2026-11-20T00:00:00Z", registered: true }];
 
 function stub(app: Response | "pending", extra = {}) {
-  return stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/tree": json(TREE), "GET /api/apps/a1": app, "GET /api/secrets": json(SECRETS), ...extra });
+  return stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/tree": json(TREE), "GET /api/apps/a1": app, "GET /api/secrets": json(SECRETS), "GET /api/cascade": json([]), ...extra });
 }
 
 describe("AppView", () => {

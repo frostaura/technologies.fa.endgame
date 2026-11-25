@@ -112,6 +112,23 @@ public sealed class VersionsAndExportTests(PostgresServer postgres) : IAsyncLife
     }
 
     [Fact]
+    public async Task Rebuild_and_restart_publishes_the_newest_version_again_without_touching_history_or_access()
+    {
+        await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/apps/{appId}/settings", new { access = "public" }));
+        await ControlPlaneApp.Ok(owner.PostAsJsonAsync("/api/members", new { scope = "frostaura/products", email = "viewer@example.com", role = "viewer" }));
+        var viewer = await app.SignInAsync("viewer@example.com");
+        await ControlPlaneApp.Expect(await viewer.PostAsync($"/api/apps/{appId}/republish", null), HttpStatusCode.Forbidden);
+
+        var result = await ControlPlaneApp.Ok(owner.PostAsync($"/api/apps/{appId}/republish", null));
+        Assert.True(result["published"]!.GetValue<bool>());
+        Assert.False(result["madePrivate"]!.GetValue<bool>());
+        Assert.Equal("c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3", result["version"]!["commit"]!.GetValue<string>());
+        Assert.Equal(["build c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3", "start endgame-app:abc token:True"], calls);
+        Assert.Null(restored);
+        Assert.Equal("public", (await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{appId}")))["settings"]!["access"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Only_the_owner_exports_and_the_archive_holds_code_history_data_and_platform_records()
     {
         await ControlPlaneApp.Ok(owner.PostAsJsonAsync("/api/members", new { scope = "frostaura", email = "admin@example.com", role = "admin" }));

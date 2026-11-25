@@ -12,15 +12,19 @@ import { randomBytes } from "node:crypto";
 const now = () => new Date().toISOString();
 import { scenario, type MockState, type ScenarioName, type MockEvent } from "./fixtures.ts";
 import { handleBreadth } from "./breadth.ts";
+import { applyApp, applyCaps, applyTree, handleManage, resetManage } from "./manage.ts";
 
 const port = Number(process.argv[2] ?? 5591);
 let state: MockState = scenario("populated");
 /** The Owner's own overdraft limit, once set through the console. */
 let ownLimit: number | null = null;
+/** The Owner removed their own limit through the console. */
+let ownRemoved = false;
 /** Narrower limits set through PUT /api/credits/overdraft below the organisation, by scope. */
 const narrower = new Map<string, number>();
 function withLimits(c: { overdraft: { ownLimit: number | null; limits?: unknown[] } | null }) {
   if (ownLimit !== null && c.overdraft) c.overdraft.ownLimit = ownLimit;
+  else if (ownRemoved && c.overdraft) c.overdraft.ownLimit = null;
   if (c.overdraft && narrower.size > 0) {
     c.overdraft.limits = [...narrower].sort(([a], [b]) => a.localeCompare(b)).map(([scope, credits]) => ({
       scope,
@@ -212,9 +216,15 @@ const server = createServer(async (req, res) => {
   if (path === "/__mock/scenario" && method === "POST") {
     state = scenario(((body as { name?: string } | null)?.name ?? "populated") as ScenarioName);
     ownLimit = null;
+    ownRemoved = false;
     narrower.clear();
+    resetManage();
     requests.length = 0;
     return send(res, 204);
+  }
+  if (path === "/__mock/manage") {
+    await handleManage(req, res, path, method, url, body, () => applyTree(state.tree() as never), send, problem);
+    return;
   }
   if (path === "/__mock/requests") return send(res, 200, requests);
 
@@ -265,6 +275,21 @@ const server = createServer(async (req, res) => {
 
   if (!state.signedIn) return problem(res, 401, "Not signed in");
 
+  // The overdraft limits are kept here, not in the cascade store: removing one clears it here.
+  if (path === "/api/cascade" && method === "DELETE" && url.searchParams.get("kind") === "setting") {
+    const key = url.searchParams.get("key");
+    const scope = url.searchParams.get("scope") ?? "";
+    if (key === "overdraft_own_limit") {
+      ownLimit = null;
+      ownRemoved = true;
+      return send(res, 204);
+    }
+    if (key === "overdraft_limit" && narrower.delete(scope)) return send(res, 204);
+  }
+
+  // Managing the tree and the cascade, and an app's rebuild (tests-e2e/mock-api/manage.ts).
+  if (await handleManage(req, res, path, method, url, body, () => applyTree(state.tree() as never), send, problem)) return;
+
   // The breadth endpoints: ask, versions, people, assistants, notifications, suggestions, top-ups, God mode.
   {
     const ctx = {
@@ -298,10 +323,10 @@ const server = createServer(async (req, res) => {
     const entered = url.searchParams.get("organisation");
     const org = entered ? state.breadth.operatorOrgs.find((o) => o.slug === entered) : undefined;
     if (entered && org) {
-      const tree = state.tree() as { organisation: Record<string, unknown> | null };
+      const tree = applyTree(state.tree() as never) as unknown as { organisation: Record<string, unknown> | null };
       return send(res, 200, { ...tree, viewerRole: "admin", organisation: { summary: null, spend: { monthCredits: 0 }, workers: [], ...tree.organisation, id: org.id, slug: org.slug, name: org.name, role: "admin" } });
     }
-    return send(res, 200, state.tree());
+    return send(res, 200, applyTree(state.tree() as never));
   }
   if (path === "/api/organisations" && method === "POST") {
     const b = body as { name: string; slug: string };
@@ -421,7 +446,7 @@ const server = createServer(async (req, res) => {
   m = path.match(/^\/api\/apps\/([^/]+)$/);
   if (m) {
     const app = state.apps[m[1] as string];
-    return app ? send(res, 200, app) : problem(res, 404, "App not found");
+    return app ? send(res, 200, applyApp(app as never)) : problem(res, 404, "App not found");
   }
   m = path.match(/^\/api\/apps\/([^/]+)\/settings$/);
   if (m && method === "POST") {
@@ -510,11 +535,15 @@ const server = createServer(async (req, res) => {
     if (!d) return problem(res, 404, "Not found", "No such employee.");
     if (method === "GET") return send(res, 200, d);
     if (method === "PATCH") {
-      const b = (body ?? {}) as { status?: string; clearMonthlyCreditLimit?: boolean; jobDescription?: { monthlyCreditLimit?: number } };
+      const b = (body ?? {}) as { status?: string; name?: string; role?: string; reportsTo?: string; clearReportsTo?: boolean; clearMonthlyCreditLimit?: boolean; jobDescription?: Record<string, unknown> };
       if (b.status) d.employee.status = b.status;
+      if (b.name) d.employee.name = b.name;
+      if (b.role) d.employee.role = b.role;
+      if (b.clearReportsTo) d.employee.reportsTo = null;
+      if (b.reportsTo) d.employee.reportsTo = { id: b.reportsTo, name: String(state.employees[b.reportsTo]?.employee.name ?? b.reportsTo) };
       const jd = d.employee.jobDescription as Record<string, unknown>;
       if (b.clearMonthlyCreditLimit) jd.monthlyCreditLimit = null;
-      if (b.jobDescription?.monthlyCreditLimit !== undefined) jd.monthlyCreditLimit = b.jobDescription.monthlyCreditLimit;
+      Object.assign(jd, b.jobDescription ?? {});
       return send(res, 200, d.employee);
     }
   }
@@ -581,8 +610,9 @@ const server = createServer(async (req, res) => {
     if (!hire) return problem(res, 404, "Not found", "No such hire proposal.");
     if (method === "GET") return send(res, 200, hire);
     if (method === "PATCH") {
-      const b = body as Record<string, unknown> & { jobDescription?: Record<string, unknown> };
-      Object.assign(hire, { ...b, jobDescription: { ...(hire.jobDescription as object), ...(b.jobDescription ?? {}) } });
+      const { clearMonthlyCreditLimit, clearReportsTo, ...b } = body as Record<string, unknown> & { jobDescription?: Record<string, unknown> };
+      Object.assign(hire, { ...b, jobDescription: { ...(hire.jobDescription as object), ...(b.jobDescription ?? {}), ...(clearMonthlyCreditLimit ? { monthlyCreditLimit: null } : {}) } });
+      if (clearReportsTo) hire.reportsTo = null;
       return send(res, 200, hire);
     }
     if (method === "POST") {
@@ -641,7 +671,7 @@ const server = createServer(async (req, res) => {
   // Credits ------------------------------------------------------------------------------
   if (path === "/api/credits") {
     if (state.failCredits) return problem(res, 500, "Credits could not be read");
-    return send(res, 200, withLimits(state.credits() as { overdraft: { ownLimit: number | null } | null }));
+    return send(res, 200, applyCaps(withLimits(state.credits() as { overdraft: { ownLimit: number | null } | null }) as never));
   }
 
   // System -------------------------------------------------------------------------------

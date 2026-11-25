@@ -159,7 +159,9 @@ public sealed record PublicAppView(
     DateTimeOffset? PublishedAt,
     int IdleMinutes);
 
-public sealed record BudgetLineView(string Scope, string Name, string Level, int Depth, decimal SpentCredits, decimal? CapCredits, Guid? AppId);
+/// <param name="EmployeeId">On an employee's row: the employee, whose cap is set on its own record.</param>
+/// <param name="SpentCredits">On an employee's row: its own spend and that of the contractors it briefs, which its cap also covers.</param>
+public sealed record BudgetLineView(string Scope, string Name, string Level, int Depth, decimal SpentCredits, decimal? CapCredits, Guid? AppId, Guid? EmployeeId = null);
 
 public sealed record MonthView(decimal Spent, decimal Ai, decimal Hosting);
 

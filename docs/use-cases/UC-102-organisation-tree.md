@@ -45,6 +45,10 @@ rule sets, context, settings, secrets and roles that apply beneath it.
    `workers`), `divisions[].projects[].apps[]` — every node with status words the console reads, this
    month's spend from the ledger, and its employees — plus `needsYou[]` (verdicts and approvals waiting).
 
+7. `GET /api/cascade/below?scope=&kind=` lists what levels beneath a scope set, each with where (Viewer;
+   Admin for secrets, whose values are never returned; `permission` is refused). The console's *Manage*
+   screen (`/tree`, UC-001 step 24) does all of the above for divisions, projects, apps and context.
+
 ## Alternate and failure flows
 
 - **A1 — invalid slug or status.** 400 `invalid_request`, saying which rule.
@@ -53,6 +57,7 @@ rule sets, context, settings, secrets and roles that apply beneath it.
 - **A4 — no role at a scope.** 404 (the tree's shape is not disclosed); a role too low there is 403, naming the role held and where it was set.
 - **A5 — first run.** `GET /api/tree` is 200 with `organisation: null`, empty `divisions` and `needsYou` — empty because it is empty — and `firstRun: true`. Someone with no role after the first organisation exists gets `firstRun: false`: organisations are provisioned by FrostAura.
 - **A6 — archived.** An archived division or project keeps its history and is marked `archived` in the tree; none of its apps is served until it is reactivated.
+- **A7 — moving a node.** Not offered by any route: a node's path is part of every address, grant and value beneath it.
 - **A6 — a deeper overdraft.** An organisation's overdraft is set by an operator; lower levels may only tighten it (400 otherwise).
 
 ## Postconditions
