@@ -120,6 +120,11 @@ and credit.
 23. **Normal mode in the run view** prints no `:`-separated key, id, model or file: plan items read their
     plain `text` (an older plan whose `text` names files reads as its place in the plan, the detail in
     technical mode), hires read from their people, and the factory's agents are named for what they did.
+    It reads the wiring lane's shapes too: a plan's `requirements` ("What you asked for") and `leftOut`
+    ("Left out, on purpose") are shown, items' `detail`, `check` and `covers` only in technical mode; an
+    evaluation's plain `summary` is shown, its `evidence` technical; an approval's `title` is asked, its
+    `detail` technical; a task's `title`; a technical `run.finished` summary gives way to the closing message.
+    Workflow steps are bookkeeping and are left out, except a hire no plain message announced.
     Needs-you cards and notifications are a headline and one line; the verdict's hero is the headline and a
     short summary, the full reasoning behind a button.
 

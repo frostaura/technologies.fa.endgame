@@ -82,6 +82,9 @@ function RunBody({ run }: { run: Run }) {
   // While a control request is in flight the optimistic status wins; afterwards the log does.
   const status: RunStatus = controlState.isLoading ? run.status : (derived.status ?? run.status);
   const terminal = isTerminal(status);
+  // run.finished's summary may be technical (ARCH-004); normal mode says the closing message instead.
+  const lastPlain = [...derived.messages].reverse().find((m) => m.from !== "owner" && plainOrNull(m.text))?.text ?? null;
+  const outcome = mode === "technical" ? derived.finishedSummary : (plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null));
   const estimate = derived.estimateCredits ?? run.estimateCredits;
   const spent = Math.max(derived.settledCredits, run.spentCredits);
 
@@ -105,6 +108,12 @@ function RunBody({ run }: { run: Run }) {
           </div>
           <h1 className="text-3xl font-semibold">{run.title}</h1>
           <span className="text-ink-body">Started {formatTime(run.startedAt)}</span>
+          {mode === "technical" && (
+            <code className="break-all font-mono text-xs text-ink-muted">
+              {run.kind} run {run.id} · scope {run.scope}
+              {run.employeeId ? ` · employee ${run.employeeId}` : ""} · last event #{run.lastSeq}
+            </code>
+          )}
         </div>
         {!terminal && (
           <div className="flex flex-wrap items-center gap-2">
@@ -170,10 +179,10 @@ function RunBody({ run }: { run: Run }) {
 
       {derived.plan && <PlanPanel plan={derived.plan} mode={mode} />}
 
-      {derived.finishedSummary && (
+      {outcome && (
         <section className="rounded-md border bg-surface p-5 shadow-card">
           <h2 className="mb-2 text-lg font-semibold">Outcome</h2>
-          <p className="whitespace-pre-line text-ink-body">{derived.finishedSummary}</p>
+          <p className="whitespace-pre-line text-ink-body">{outcome}</p>
         </section>
       )}
 
@@ -234,6 +243,7 @@ function Approvals({ runId, approvals }: { runId: string; approvals: DerivedAppr
 }
 
 function ApprovalCard({ runId, approval }: { runId: string; approval: DerivedApproval }) {
+  const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const [answer, state] = useAnswerApprovalMutation();
   const [optimistic, setOptimistic] = useState<"approve" | "reject" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -255,7 +265,7 @@ function ApprovalCard({ runId, approval }: { runId: string; approval: DerivedApp
         Needs you
       </Badge>
       <p className="text-base font-semibold">{approval.question}</p>
-      {approval.detail && <p className="text-attention-deep">{approval.detail}</p>}
+      {technical && approval.detail && <p className="break-words font-mono text-xs text-attention-deep">{approval.detail}</p>}
       {optimistic ? (
         <p role="status" className="font-medium text-ink">
           {optimistic === "approve" ? "Approved." : "Declined."} {state.isLoading ? "Sending…" : "The work carries on from here."}
@@ -297,12 +307,22 @@ function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
         </span>
       </div>
       {(technical ? plan.summary : plainOrNull(plan.summary)) && <p className="text-ink-body">{plan.summary}</p>}
+      {plan.requirements.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <h3 className="font-display text-base font-semibold">What you asked for</h3>
+          <ul aria-label="What you asked for" className="flex list-disc flex-col gap-1 pl-5 text-ink-body">
+            {plan.requirements.map((r) => (
+              <li key={r.id}>{technical ? `${r.id} · ${r.text}` : r.text}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {plan.items.length > 0 && (
         <ol aria-label="Parts of the plan" className="flex flex-col divide-y">
           {plan.items.map((item) => {
             const label = planItemLabel(plan, item.id, mode) ?? item.id;
-            const check = technical ? item.check : plainOrNull(item.check);
-            const evidence = technical ? item.evidence : plainOrNull(item.evidence);
+            const check = technical ? item.check : null;
+            const evidence = technical ? item.evidence : null;
             return (
               <li key={item.id} data-item={item.id} className="flex flex-col gap-1 py-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -314,12 +334,26 @@ function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
                   )}
                 </div>
                 {technical && item.detail && <p className="whitespace-pre-line break-words text-sm text-ink-body">{item.detail}</p>}
+                {technical && item.covers.length > 0 && <span className="text-sm text-ink-muted">Covers {item.covers.join(", ")}</span>}
+                {!technical && plainOrNull(item.outcome) && <span className="break-words text-sm text-ink-body">{item.outcome}</span>}
                 {check && <span className="break-words text-sm text-ink-muted">{technical ? `Check: ${check}` : `How it is checked: ${check}`}</span>}
                 {evidence && <span className="break-words text-sm text-ink-body">{evidence}</span>}
               </li>
             );
           })}
         </ol>
+      )}
+      {plan.leftOut.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-xs bg-attention-wash px-4 py-3">
+          <h3 className="font-display text-base font-semibold">Left out, on purpose</h3>
+          <ul aria-label="Left out" className="flex flex-col gap-1.5">
+            {plan.leftOut.map((l, i) => (
+              <li key={`${l.requirement}-${i}`} className="text-ink-body">
+                <span className="font-medium text-ink">{l.text}</span> {l.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {!technical && plan.items.some((i) => i.plain === null) && (
         <p className="text-sm text-ink-muted">The files and tests behind each part are in technical mode.</p>

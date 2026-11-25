@@ -34,6 +34,7 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   const tree = useGetTreeQuery(undefined);
   const me = useGetMeQuery(undefined);
   const idea = view.kind === "loaded" ? view.data : null;
+  const technical = useAppSelector((s) => s.ui.mode) === "technical";
 
   const crumbs: Crumb[] = [];
   const org = me.data?.organisation;
@@ -69,6 +70,13 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
           <p className="text-ink-muted">
             Research{view.data.research.by ? ` by ${view.data.research.by}` : ""} · {formatNumber(view.data.research.spentCredits)} credits, estimated {formatNumber(view.data.research.estimatedCredits)}
           </p>
+          {technical && (
+            <code className="break-all font-mono text-xs text-ink-muted">
+              idea {view.data.id} · research run {view.data.runId} · status {view.data.status}
+              {view.data.scope ? ` · scope ${view.data.scope}` : ""}
+              {view.data.redLine ? ` · red line ${view.data.redLine}` : ""}
+            </code>
+          )}
           {view.data.verdict ? (
             <ErrorBoundary name="The verdict">
               <VerdictBody idea={view.data} verdict={view.data.verdict} />

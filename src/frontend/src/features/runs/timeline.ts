@@ -179,7 +179,7 @@ function article(role: string): string {
  * check, a security review, a hire the runner announced) or when it has no plain wording. A raw key
  * such as `hire:stage:research:frostaura` is never printed.
  */
-export function workflowStepTitle(step: string, p: Record<string, unknown>, announced: ReadonlySet<string>): string | null {
+export function workflowStepTitle(step: string, p: Record<string, unknown>, announced: ReadonlySet<string>, said: readonly string[] = []): string | null {
   const data = p.data && typeof p.data === "object" && !Array.isArray(p.data) ? (p.data as Record<string, unknown>) : {};
   const given = plainOrNull(str(p, "title")) ?? plainOrNull(str(data, "title"));
   const [head, ...rest] = step.split(":");
@@ -188,6 +188,8 @@ export function workflowStepTitle(step: string, p: Record<string, unknown>, anno
     if (announced.has(`hired:${rest.join(":")}`) || announced.has(step)) return null;
     if (given) return given;
     const name = str(data, "name");
+    // Newer runners tell each hire as a plain message with no milestone: the person's name is in it.
+    if (name && said.some((line) => line.includes(name.toLowerCase()))) return null;
     const role = str(data, "role");
     if (!name || !role) return null;
     const status = str(data, "status");
@@ -369,9 +371,11 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
   const said = new Set<string>();
   const milestones = new Set<string>();
   const announced = new Set<string>();
+  const plainLines: string[] = [];
   for (const e of events) {
     const mark = e.type === "message" ? str(e.payload ?? {}, "milestone") : null;
     if (mark) announced.add(mark);
+    if (e.type === "message" && !str(e.payload ?? {}, "kind") && str(e.payload ?? {}, "from") !== "owner") plainLines.push(`${str(e.payload ?? {}, "title") ?? ""} ${str(e.payload ?? {}, "text") ?? ""}`.toLowerCase());
   }
   let modelCalls = 0;
   let replies = 0;
@@ -520,7 +524,10 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
         }
         if (kind === "workflow.step") {
           const name = str(p, "step") ?? "";
-          const title = workflowStepTitle(name, p, announced);
+          // Workflow steps are bookkeeping (ARCH-004): only a hire nothing else announced is told from its people.
+          const head = name.split(":")[0];
+          if (head !== "hire" && head !== "contractor" && head !== "promotion") continue;
+          const title = workflowStepTitle(name, p, announced, plainLines);
           if (!title || milestones.has(`step:${title}`) || [...groups.values()].some((g) => g.group.title === title)) continue;
           milestones.add(`step:${title}`);
           push(owner, { seq: e.seq, at: e.at, tone: "factory", icon: name.startsWith("hire") ? "employee" : "plan", title, detail: null, credits: null, raw: null });

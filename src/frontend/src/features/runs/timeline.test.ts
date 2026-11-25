@@ -42,8 +42,9 @@ describe("buildTimeline — normal mode", () => {
     const t = buildTimeline(researchLog(), "normal");
     const lines = flat(t.items);
     expect(lines[0]).toBe("You: A pager for small teams.");
-    expect(lines).toContain("Checked the estimate against your budget");
-    expect(lines).toContain("Recorded the verdict");
+    // Workflow steps are the harness's bookkeeping (ARCH-004): normal mode leaves them out.
+    expect(lines).not.toContain("Checked the estimate against your budget");
+    expect(lines).not.toContain("Recorded the verdict");
     // The same verdict line was written twice (by research and by the runner): it is said once.
     expect(lines.filter((l) => l.includes("Verdict: do not build")).length).toBe(1);
     const g = groups(t.items);

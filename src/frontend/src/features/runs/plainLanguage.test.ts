@@ -96,3 +96,43 @@ describe("workflow steps", () => {
     expect(workflowStepTitle("estimate.gate", {}, none)).toBe("Checked the estimate against your budget");
   });
 });
+
+describe("the newer run-log shapes (ARCH-004, the wiring lane)", () => {
+  const at = "2026-11-25T03:00:00Z";
+  const log: RunEvent[] = [
+    { seq: 1, type: "message", at, payload: { kind: "workflow.step", step: "hire:stage:build:acme/tools", data: { name: "Theo", role: "Software engineer", status: "accepted" } } },
+    { seq: 2, type: "message", at, payload: { from: "runner", title: "Hired Theo", text: "Theo joins as a software engineer, at up to 1500 credits a month." } },
+    {
+      seq: 3,
+      type: "plan.proposed",
+      at,
+      payload: {
+        summary: "Three parts, each checked in the running app.",
+        requirements: [{ id: "r1", text: "Members sign in" }],
+        items: [{ id: "books", text: "Keep the club's books", detail: "api/Books/Book.cs and BooksEndpoints.cs", check: "make test", covers: ["r1"] }],
+        leftOut: [{ requirement: "r2", text: "Reminders by e-mail", reason: "Left for later: it needs a schedule the club has not asked for yet." }],
+      },
+    },
+    { seq: 4, type: "evaluation.passed", at, payload: { item: "books", text: "Keep the club's books", summary: "Checked and working: Keep the club's books (1 of 1 of your requirements shown working in the running app).", evidence: "GET /api/books returned 200", tier: "build" } },
+    { seq: 5, type: "approval.requested", at, payload: { approvalId: "a1", title: "Accept this plan?", detail: "rule plan.checkpoint; tool propose_plan" } },
+  ];
+
+  it("tells a hire once, from the runner's plain message, never from its key", () => {
+    const text = lines(buildTimeline(log, "normal").items).join("\n");
+    expect(text.match(/Theo/g)?.length).toBe(2);
+    expect(text).not.toContain("Theo joined as");
+    expect(text).not.toMatch(/hire:stage/);
+  });
+
+  it("reads requirements, items, what was left out, and an evaluation's plain summary", () => {
+    const derived = deriveRun(log);
+    expect(derived.plan?.requirements).toEqual([{ id: "r1", text: "Members sign in" }]);
+    expect(derived.plan?.leftOut[0]?.text).toBe("Reminders by e-mail");
+    expect(derived.plan?.items[0]).toMatchObject({ plain: "Keep the club's books", detail: "api/Books/Book.cs and BooksEndpoints.cs", covers: ["r1"], result: "passed" });
+    const normal = lines(buildTimeline(log, "normal", (id) => planItemLabel(derived.plan, id, "normal")).items);
+    expect(normal).toContain("Checked and passed: Keep the club's books");
+    expect(normal.join("\n")).toContain("1 of 1 of your requirements shown working");
+    expect(normal.join("\n")).not.toContain("GET /api/books");
+    expect(derived.approvals[0]?.question).toBe("Accept this plan?");
+  });
+});
