@@ -40,7 +40,9 @@ and credit.
    own steps folded beneath it, tool and model work summarised ("Read 4 files", "Ran the tests — 12
    passed"), and actions counted as ARCH-004 counts them (tool calls plus contractors briefed). It never
    shows a payload, a model, a tool's arguments or the rule that decided; technical mode (header toggle,
-   remembered) shows every event raw, still grouped under its sub-agent.
+   remembered) shows every event raw, still grouped under its sub-agent. When a **research** run ends it
+   links to its idea ("The verdict is ready" when it finished, "See what research found" otherwise); a
+   build or any other run never offers a verdict, though a build started from an idea carries its `ideaId`.
 5. **Verdict**: the agreed verdict document (ARCH-004, *The verdict document*): the case against, argued
    first; existing products with what each does and its source; the gap; demand and its signals; what to
    change; what would change the verdict; the red-line screen; the method (strands, searches, sources,
