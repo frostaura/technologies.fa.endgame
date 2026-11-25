@@ -100,6 +100,9 @@ export const motion = {
     grow: { from: { transform: "scaleX(0)" }, to: { transform: "scaleX(1)" } },
     pulse: { "0%": { boxShadow: "0 0 0 0 rgb(18 161 94 / 0.55)" }, "100%": { boxShadow: "0 0 0 10px rgb(18 161 94 / 0)" } },
     ring: { "0%": { boxShadow: "0 0 0 0 rgb(47 91 255 / 0.5)" }, "100%": { boxShadow: "0 0 0 12px rgb(47 91 255 / 0)" } },
+    halo: { "0%": { boxShadow: "0 0 0 0 rgb(107 75 240 / 0.5)" }, "100%": { boxShadow: "0 0 0 16px rgb(107 75 240 / 0)" } },
+    /** A signal travelling along an edge of the organisation graph. */
+    flow: { from: { strokeDashoffset: "24" }, to: { strokeDashoffset: "0" } },
     drift: {
       "0%": { transform: "translate(0,0) scale(1)" },
       "50%": { transform: "translate(70px,-24px) scale(1.25)" },
@@ -120,6 +123,8 @@ export const motion = {
     grow: "grow 1.1s .35s cubic-bezier(.2,.7,.2,1) both",
     pulse: "pulse 1.8s ease-out infinite",
     ring: "ring 1.8s ease-out infinite",
+    halo: "halo 2s ease-out infinite",
+    flow: "flow 1.2s linear infinite",
     drift: "drift 12s ease-in-out infinite",
     travel: "travel 3.2s linear infinite",
     sheen: "sheen 1s linear infinite",
@@ -158,6 +163,8 @@ export const typography = {
 /** Named widths. `page` bounds the console so lines stay readable on an ultrawide. */
 export const layout = {
   width: { page: "96rem", aside: "22rem", dock: "26rem", form: "40rem", prose: "45rem", aura: "20rem", bubble: "85%", reply: "92%" },
+  /** The organisation graph's frame: tall enough to read, short enough to keep the page in view. */
+  height: { graph: "40rem" },
   /** The smallest comfortable touch target. */
   touch: "44px",
   /** Where the org chart's connecting wire sits under a division's badge. */

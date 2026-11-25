@@ -4,7 +4,7 @@ import { Link } from "@/components/Link";
 import { Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { describeError, viewOf } from "@/lib/queryState";
-import { paths } from "@/lib/router";
+import { paths, useLocation } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetConversationQuery, useStartConversationMutation } from "@/store/api";
@@ -35,6 +35,7 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
   const narrowable = selection.kind === "organisation";
   const busy = activeWork(tree);
   const logRef = useRef<HTMLDivElement>(null);
+  const onEmployeePage = useLocation().pathname.startsWith("/employees/");
 
   useEffect(() => {
     const el = logRef.current;
@@ -69,6 +70,11 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
           <span className="text-xs text-ink-muted">
             {narrowable ? "Select a division, project or employee to narrow this." : "Select the organisation band to talk to everything again."}
           </span>
+          {selection.kind === "employee" && selection.employeeId && !onEmployeePage && (
+            <Link href={paths.employee(selection.employeeId)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+              See {name}’s job, record and memory
+            </Link>
+          )}
         </div>
       </div>
 

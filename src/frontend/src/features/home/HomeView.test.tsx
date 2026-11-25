@@ -7,7 +7,7 @@ import { HomeView } from "./HomeView";
 
 const CREDITS = { scope: "acme", balance: 1234, month: { spent: 10, ai: 6, hosting: 4 }, monthsLeftAtPace: 3, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 
-const worker = (id: string, name: string, activity: string | null = null) => ({ id, name, role: "Engineer", kind: "employee" as const, activity });
+const worker = (id: string, name: string, activity: string | null = null) => ({ id, name, role: "Engineer", kind: "employee" as const, activity, status: activity ? ("working" as const) : ("idle" as const), idle: false, standing: null, briefedBy: null });
 
 const TREE: Tree = {
   generatedAt: "2026-11-24T10:00:00Z",
@@ -75,7 +75,7 @@ describe("HomeView", () => {
   });
 
   it("leads a first run to Start", async () => {
-    stub(json({ organisation: null, divisions: [], needsYou: [] }));
+    stub(json({ generatedAt: "2026-11-24T10:00:00Z", viewerRole: "none", organisation: null, divisions: [], needsYou: [] }));
     renderWithStore(<HomeView />);
     expect(await screen.findByText("Name your organisation, then describe your first idea.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Start" }).getAttribute("href")).toBe("/start");
@@ -254,6 +254,10 @@ describe("HomeView", () => {
     stub(json({ ...TREE, viewerRole: "builder" }));
     renderWithStore(<HomeView />);
     await screen.findByRole("region", { name: "Organisation chart" });
-    expect(screen.queryByRole("navigation", { name: "Manage" })).toBeNull();
+    const builder = screen.getByRole("navigation", { name: "Manage" });
+    expect(within(builder).queryByRole("link", { name: /Secrets/ })).toBeNull();
+    expect(within(builder).queryByRole("link", { name: "Operator access" })).toBeNull();
+    // Autonomy and hiring are readable by everyone; changing them is refused below Admin.
+    expect(within(builder).getByRole("link", { name: "Autonomy for Acme" }).getAttribute("href")).toBe("/autonomy?scope=acme");
   });
 });
