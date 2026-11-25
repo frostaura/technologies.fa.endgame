@@ -1,0 +1,135 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-04",
+  "persona": "owner",
+  "scenario": "build-waiting-on-plan",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Accept this plan?"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Accept this plan?",
+        "note": "With the plan checkpoint on, nothing is built until you agree the plan."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Agreed"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Agreed",
+        "note": "Approve: the plan is agreed and building begins."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:part-1"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Built:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Built:",
+        "note": "The first part is built."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Decline the plan, then try again",
+      "persona": "owner",
+      "scenario": "build-waiting-on-plan",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "Accept this plan?"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Add a note (optional)"
+                },
+                "text": "Leave the reminders out for now."
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Accept this plan?",
+            "note": "The same plan; this time with a note, and declined."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Decline"
+              }
+            },
+            {
+              "clock": {
+                "seek": 2000
+              }
+            },
+            {
+              "wait": {
+                "text": "You declined the plan"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "You declined the plan, so nothing was built.",
+            "note": "Declined: the work stops and says so."
+          }
+        },
+        {
+          "step": 3,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "Try again"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The plan was declined, so nothing was built.",
+            "note": "“Try again” plans it afresh."
+          }
+        }
+      ]
+    }
+  ]
+}

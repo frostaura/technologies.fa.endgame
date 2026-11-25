@@ -1,0 +1,37 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-13",
+  "persona": "viewer",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "What is over budget?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Not sent"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Not sent:",
+        "note": "A Viewer can read but not send: kept, with why, and “Send again”."
+      }
+    }
+  ]
+}

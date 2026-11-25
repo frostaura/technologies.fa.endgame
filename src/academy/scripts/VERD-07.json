@@ -1,0 +1,91 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-07",
+  "persona": "owner",
+  "scenario": "verdict-change",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Change the idea"
+          }
+        },
+        {
+          "wait": {
+            "text": "What should change?"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What should change?",
+        "note": "The form opens, pre-filled with research’s change."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Research runs again with your change, and you see a new verdict before anything is built.",
+        "note": "A change is a new round of research with your note."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Research it again with this change"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research it again with this change",
+        "note": "Send it."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Research:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "The idea is researched again; you are taken to the new run."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "goto": "/ideas/{idea}",
+      "act": [
+        {
+          "clock": {
+            "seek": "research:verdict"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Earlier decisions",
+        "note": "Back on the idea, your change is kept under “Earlier decisions”."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "Build it",
+        "note": "The new verdict brings the decisions back; whatever is built next holds your change too."
+      }
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-03",
+  "persona": "viewer",
+  "scenario": "build-plan",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        },
+        {
+          "wait": {
+            "text": "model calls"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Trace",
+        "note": "Technical mode: “Trace”, with model calls, tool calls and denials counted."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Model call:",
+        "note": "Every model call, tool call and permission decision, with its raw event."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "last event #",
+        "note": "The header names the kind of run, its id, its scope and its last event."
+      }
+    }
+  ]
+}

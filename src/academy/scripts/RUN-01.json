@@ -13,7 +13,7 @@
       },
       "highlight": {
         "text": "Started",
-        "note": "The work opens on its title and when it started; the live log follows."
+        "note": "The work opens on its title, its status and when it started."
       }
     },
     {
@@ -24,25 +24,40 @@
       },
       "highlight": {
         "text": "Live",
-        "note": "The status badge, the stream state, the title and when it started."
+        "note": "The stream is live: new steps arrive without a reload."
       }
     },
     {
       "step": 3,
       "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Research started"
+          }
+        }
+      ],
       "highlight": {
         "text": "Step by step",
-        "note": "Steps arrive as they happen, without a reload."
+        "note": "Steps arrive as they happen."
       }
     },
     {
       "step": 4,
       "kind": "demo",
       "clock": {
-        "seek": 600000
+        "seek": "research:finished"
       },
+      "act": [
+        {
+          "wait": {
+            "text": "Finished"
+          }
+        }
+      ],
       "highlight": {
-        "text": "Finished"
+        "text": "Finished",
+        "note": "When it finishes the stream closes."
       }
     }
   ]

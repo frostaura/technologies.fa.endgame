@@ -361,7 +361,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   idea(IDS.ideaTides, "A tide-times board for the harbour café: the next high and low water beside our opening hours, on the screen by the door.", ["Readable from across the room"], `${ORG}/learning/tide-board`, { status: "researching", verdict: null, research: { estimatedCredits: 12, spentCredits: 0, by: wren.name }, runId: IDS.runResearchTides });
   const rl = idea(IDS.ideaReadingList, "A reading list for the supper club: members sign in, add books with a title, author and a one-line note, mark a book as reading or finished, and see what everyone is reading now.", ["Members sign in", "Works on a phone"], ORG, {
     status: "decided",
-    verdict: { ...STORIES["reading-list"]?.verdict, method: { strands: (STORIES["reading-list"]?.strands ?? []).map((s) => ({ id: s.id, title: s.title, sources: s.sources.length + 4, searches: 7, confidence: "high" })), searches: 14, confidence: "high", contractors: 3 } } as never,
+    verdict: { ...STORIES["reading-list"]?.verdict, method: { strands: (STORIES["reading-list"]?.strands ?? []).map((s) => ({ id: s.id, title: s.title, sources: s.sources.length + 4, searches: 7, confidence: "high" })), searches: 14, confidence: "high" } } as never,
     decision: { choice: "build", at: a(2), by: PEOPLE.owner.displayName, overruled: false, runId: IDS.runBuildReadingList, via: "person" },
     research: { estimatedCredits: 12, spentCredits: 10.4, by: wren.name },
   });
@@ -627,8 +627,6 @@ function verdictDocs() {
     ],
     searches,
     confidence,
-    contractors: 3,
-    argued: "The case against was argued first.",
   });
   return {
     build: {
@@ -654,7 +652,7 @@ function verdictDocs() {
       gap: { evidence: "Families complain about missing out when places open, not about paying." },
       demand: { evidence: "Twelve families asked to be told when the next term opens.", signals: [{ text: "Twelve families asked at the counter to be told when places open.", source: null }] },
       suggestedChange: "Start with a waiting list: families leave an email, and the club emails them weekly when places open. Add payments only if the list outgrows the counter.",
-      wouldChange: { text: "If the waiting list passes 60 families, paid online booking would be worth researching again.", changeLabel: "start with a waiting list", estimateCredits: 12 },
+      wouldChange: { text: "If the waiting list passes 60 families, paid online booking would be worth researching again.", changeLabel: null, estimateCredits: null },
       placement: { division: "learning", project: "cookery-club", app: "web", name: "Cookery Club" },
       redLines: { breached: false, line: null, reasoning: null },
       method: method(13, "medium"),
@@ -668,7 +666,7 @@ function verdictDocs() {
       gap: { evidence: "Customers ask for a time window by text, not a map." },
       demand: { evidence: "No evidence of demand was found for a map beyond what the couriers already give." },
       suggestedChange: null,
-      wouldChange: { text: "If the delivery firm stopped sharing its map, this would be worth researching again.", changeLabel: null, estimateCredits: 12 },
+      wouldChange: { text: "If the delivery firm stopped sharing its map, this would be worth researching again.", changeLabel: null, estimateCredits: null },
       redLines: { breached: false, line: null, reasoning: "Van positions are the business's own; no one is watched." },
       method: method(12, "high"),
       rulesApplied: ["No evidence of demand was found, so the verdict is do not build."],
@@ -682,7 +680,7 @@ function verdictDocs() {
       gap: { evidence: "Not looked into." },
       demand: { evidence: "No evidence was gathered for an idea that crosses a red line.", evidenceFound: false },
       suggestedChange: null,
-      wouldChange: { text: "Nothing would change this verdict while it watches people without their consent. A clear conflict-of-interest policy, agreed with staff, answers the worry without watching anyone.", changeLabel: "write a conflict-of-interest policy", estimateCredits: null },
+      wouldChange: { text: "Nothing would change this verdict while it watches people without their consent. A clear conflict-of-interest policy, agreed with staff, answers the worry without watching anyone.", changeLabel: null, estimateCredits: null },
       redLines: { breached: true, line: "surveillance", reasoning: "Following employees' phones after hours to see who else they work for is surveillance and authoritarian tooling: it watches people without their meaningful consent." },
       method: method(3, "high"),
       rulesApplied: ["A red line was found, so nothing may be built."],

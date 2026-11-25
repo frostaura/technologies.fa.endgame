@@ -1,0 +1,74 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-13",
+  "persona": "viewer",
+  "scenario": "build-published",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Running privately"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Estimate",
+        "note": "The estimate shown before the work began."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Spent so far",
+        "note": "What it has spent, against the estimate."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:finished"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Not charged"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Not charged",
+        "note": "“Not charged”: what the work used repairing its own mistakes."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Estimate against actual",
+        "note": "The estimate scored against what it actually cost."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Where the credits go",
+        "note": "Repairing a mistake of its own is never billed."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sent back for repair, at no charge",
+        "note": "Free repairs are named in the steps."
+      }
+    }
+  ]
+}

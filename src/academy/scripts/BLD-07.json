@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-07",
+  "persona": "viewer",
+  "scenario": "build-plan",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:part-2"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Checked and passed"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Checked:",
+        "note": "A separate checker proves the part in a private preview."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Checked and working",
+        "note": "“Checked and working”, with how many of your requirements were shown working."
+      }
+    }
+  ]
+}

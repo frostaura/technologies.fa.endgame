@@ -1,0 +1,96 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-07",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "Start researching a booking app for dive centres."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Message Northwind",
+        "note": "Ask it to start researching an idea."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:approval"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Start researching an idea: a booking app for dive centres.?",
+        "note": "It asks first, in the dock."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Approval needed",
+        "note": "The home strip gains an “Approval needed” card too."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Approved"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Approved. The work carries on from here.",
+        "note": "Approve."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:replied"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Research has started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research has started",
+        "note": "The reply confirms it; the idea is researched."
+      }
+    }
+  ]
+}

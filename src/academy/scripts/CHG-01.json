@@ -1,0 +1,266 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CHG-01",
+  "persona": "owner",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Change Court booking",
+        "note": "A built app can be changed: in your words, screened, planned, built and checked, and what it did before checked again."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "What should change?"
+            },
+            "text": "Let members cancel a booking up to an hour before it starts."
+          }
+        },
+        {
+          "click": {
+            "selector": "[data-testid=change-request] button[type=submit]"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What should change?",
+        "note": "Describe the change, then see what it costs."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Make this change"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Make this change",
+        "note": "The estimate first."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Make this change"
+          }
+        },
+        {
+          "wait": {
+            "text": "Change: Let members"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "“Make this change” opens the change’s run."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "clock": {
+        "seek": "change:plan"
+      },
+      "act": [
+        {
+          "clock": {
+            "speed": 3
+          }
+        },
+        {
+          "wait": {
+            "text": "Parts of the plan"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Everything the app did before still works",
+        "note": "Screened, then a plan quoting your request, ending with “Everything the app did before still works”."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "clock": {
+        "seek": "change:published"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "New version running"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The builder · New version running",
+        "note": "Each part built and checked, the old parts sent back once and repaired free, reviewed, and the new version running."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "While its engineer is paused, no change starts",
+      "persona": "owner",
+      "scenario": "s3-employee-paused",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "What should change?"
+                },
+                "text": "Let members cancel a booking up to an hour before it starts."
+              }
+            },
+            {
+              "click": {
+                "selector": "[data-testid=change-request] button[type=submit]"
+              }
+            },
+            {
+              "wait": {
+                "text": "Make this change"
+              }
+            },
+            {
+              "click": {
+                "text": "Make this change"
+              }
+            },
+            {
+              "wait": {
+                "text": "The change was not started"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The change was not started",
+            "note": "Kasper works on this app and is paused, so no new work starts for him."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Another change is already under way",
+      "persona": "owner",
+      "scenario": "s3-change-running",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "What should change?"
+                },
+                "text": "Show the court numbers on the booking page."
+              }
+            },
+            {
+              "click": {
+                "selector": "[data-testid=change-request] button[type=submit]"
+              }
+            },
+            {
+              "wait": {
+                "text": "Make this change"
+              }
+            },
+            {
+              "click": {
+                "text": "Make this change"
+              }
+            },
+            {
+              "wait": {
+                "text": "The change was not started"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "This app is already being worked on",
+            "note": "One build or change of an app at a time."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A change over a red line changes nothing",
+      "persona": "owner",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "What should change?"
+                },
+                "text": "Record where members go after they leave the club, from their phones."
+              }
+            },
+            {
+              "click": {
+                "selector": "[data-testid=change-request] button[type=submit]"
+              }
+            },
+            {
+              "wait": {
+                "text": "Make this change"
+              }
+            },
+            {
+              "click": {
+                "text": "Make this change"
+              }
+            },
+            {
+              "wait": {
+                "text": "Change: Record"
+              }
+            },
+            {
+              "clock": {
+                "seek": "change:red-line"
+              }
+            },
+            {
+              "wait": {
+                "text": "This change crosses a red line"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "This change crosses a red line",
+            "note": "Screened first: a red line is never built, and no one can overrule it."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AUTO-07",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Learning"
+          }
+        },
+        {
+          "wait": {
+            "text": "Talking to Learning"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Learning"
+            },
+            "text": "Turn on the plan checkpoint here."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Learning",
+        "note": "Select Learning, then ask."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:approval"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Turn on the “Before the plan is carried out” checkpoint here?",
+        "note": "The approval is in the conversation, titled with what will change."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Approved"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Approved. The work carries on from here.",
+        "note": "Approved: the setting is written, marked as set by an agent."
+      }
+    }
+  ]
+}

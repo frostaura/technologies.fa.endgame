@@ -1,0 +1,42 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-10",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "Make Court booking public."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "I cannot do that from here"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "I cannot do that from here",
+        "note": "Asked for something it has no tool for, it says it cannot, and where it is done."
+      }
+    }
+  ]
+}

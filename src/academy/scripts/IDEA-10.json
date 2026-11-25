@@ -1,0 +1,39 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-10",
+  "persona": "viewer",
+  "scenario": "s3-suggestions",
+  "start": "/suggestions?scope=northwind",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Taken or set aside (2)"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Taken or set aside (2)",
+        "note": "Closed suggestions fold away, traceable to what they became."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Set aside"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Taken — see its research",
+        "note": "A taken one opens the idea it became; a set-aside one says so."
+      }
+    }
+  ]
+}

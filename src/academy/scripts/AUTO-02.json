@@ -1,0 +1,60 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AUTO-02",
+  "persona": "admin",
+  "scenario": "established",
+  "start": "/autonomy?scope=northwind/learning",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Checkpoints"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Checkpoints",
+        "note": "Ada switches Learning to checkpoints: work stops at the checkpoints switched on."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Set here",
+        "note": "It changes at once, and says it was set here."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "What it changes in a run: the verdict waits",
+      "persona": "admin",
+      "scenario": "s3-checkpoints",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "clock": {
+            "seek": "research:finished"
+          },
+          "act": [
+            {
+              "wait": {
+                "text": "Waiting for your decision"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Endgame · Waiting for your decision",
+            "note": "With checkpoints on, a build verdict no longer builds on its own."
+          }
+        }
+      ]
+    }
+  ]
+}

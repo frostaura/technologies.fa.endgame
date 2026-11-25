@@ -1,0 +1,33 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-10",
+  "persona": "owner",
+  "scenario": "verdict-red-line",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Verdict ·",
+        "note": "A red line forces “do not build”, whatever the market says."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "This idea crosses a red line",
+        "note": "FrostAura never builds it, and no one can overrule that."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Overruling is not offered: no one may build over a red line.",
+        "note": "Only “Change the idea” and “Drop the idea” are offered."
+      }
+    }
+  ]
+}

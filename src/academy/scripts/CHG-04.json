@@ -1,0 +1,21 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CHG-04",
+  "persona": "owner",
+  "scenario": "s3-change-running",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "goto": "/apps/{app}",
+      "clock": {
+        "seek": "change:finished"
+      },
+      "highlight": {
+        "text": "History",
+        "note": "After a change, the app’s history shows its versions by the employee who made them, the newest live."
+      }
+    }
+  ]
+}

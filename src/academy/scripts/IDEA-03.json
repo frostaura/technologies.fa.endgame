@@ -1,0 +1,70 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-03",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/start",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Describe the idea and the research estimate appears here before anything is charged.",
+        "note": "Before typing, the panel says where the estimate will appear."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "The idea"
+            },
+            "text": "A league ladder for the club's Wednesday nights."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research comes first",
+        "note": "Twelve characters or more and it asks for the estimate."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Estimated"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Estimated",
+        "note": "The figure, and the basis it was worked out from."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Works on a phone"
+          }
+        },
+        {
+          "wait": {
+            "text": "Estimated"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research this idea",
+        "note": "Editing the idea throws the old figure away and asks again; until it is shown the button stays off."
+      }
+    }
+  ]
+}

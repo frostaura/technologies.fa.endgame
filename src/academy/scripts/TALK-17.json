@@ -1,0 +1,85 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-17",
+  "persona": "owner",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Message Court booking"
+            },
+            "text": "Let members cancel a booking up to an hour before it starts."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:approval"
+          }
+        },
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Needs you",
+        "note": "The conversation’s own checkpoint, under the message that led to it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Add a note (optional)"
+            },
+            "text": "Leagues keep their own rule."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Add a note (optional)",
+        "note": "A note goes back with your answer."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Approved"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Approved. The work carries on from here.",
+        "note": "Answered where you asked; the reply follows."
+      }
+    }
+  ]
+}

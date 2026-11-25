@@ -1,0 +1,52 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-09",
+  "persona": "owner",
+  "scenario": "verdict-build",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Drop the idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Drop the idea",
+        "note": "Dropping ends the idea and keeps its record."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Drop this idea?",
+        "note": "A confirmation first."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes"
+          }
+        },
+        {
+          "wait": {
+            "text": "You dropped the idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "You dropped the idea",
+        "note": "You stay on the page; no run follows."
+      }
+    }
+  ]
+}

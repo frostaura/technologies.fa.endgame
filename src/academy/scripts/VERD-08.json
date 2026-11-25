@@ -1,0 +1,52 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-08",
+  "persona": "owner",
+  "scenario": "verdict-do-not-build",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Overrule and build anyway"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Overrule and build anyway",
+        "note": "Overruling is your call; the project keeps a note that research advised against it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Build it against the verdict? This is recorded as an overrule.",
+        "note": "A confirmation first."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes"
+          }
+        },
+        {
+          "wait": {
+            "text": "Build:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "Yes: a build run starts and you are taken to it."
+      }
+    }
+  ]
+}

@@ -1,0 +1,169 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-01",
+  "persona": "viewer",
+  "scenario": "researching",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "pause": true
+      },
+      "highlight": {
+        "text": "Estimated the cost",
+        "note": "The estimate is the first step, then “Work started”."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "play": true
+      },
+      "act": [
+        {
+          "clock": {
+            "speed": 2
+          }
+        },
+        {
+          "wait": {
+            "text": "Research started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "Wren already researches here, so nobody is hired; research starts."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Research · Research started",
+        "note": "Three researchers, at the same time, with up to 7 searches each."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:strand-existing"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Looked for what they leave undone"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Looked for existing products",
+        "note": "Three contractor groups, each working; open one to see its searches and credits."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:judging"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Weighed the evidence"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Weighed the evidence and wrote the verdict",
+        "note": "Once the three report back, the judge weighs them."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:verdict"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Verdict: build"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research · Verdict: build",
+        "note": "The verdict, in one line."
+      }
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:decided"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Building has started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Endgame · Building has started",
+        "note": "Northwind is in auto-mode, so a build verdict is built on its own."
+      }
+    },
+    {
+      "step": 8,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:finished"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "The verdict is ready"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Read it",
+        "note": "Finished: the verdict is ready to read."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "In checkpoints mode the verdict waits for you",
+      "persona": "viewer",
+      "scenario": "s3-checkpoints",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "clock": {
+            "seek": "research:finished"
+          },
+          "act": [
+            {
+              "wait": {
+                "text": "Waiting for your decision"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Endgame · Waiting for your decision",
+            "note": "Checkpoints mode: nothing is built until a person decides."
+          }
+        }
+      ]
+    }
+  ]
+}

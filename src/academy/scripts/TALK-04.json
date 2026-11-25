@@ -1,0 +1,58 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-04",
+  "persona": "owner",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "About Court booking only: ask about it, or ask for a change to it.",
+        "note": "On the app’s page, a conversation about the app alone."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Message Court booking"
+            },
+            "text": "Is it healthy?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Message Court booking",
+        "note": "Ask about it, or describe a change."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:replied"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "All of them are healthy."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "All of them are healthy.",
+        "note": "Replies, approvals and the cost before sending work as anywhere else."
+      }
+    }
+  ]
+}

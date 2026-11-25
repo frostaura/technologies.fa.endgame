@@ -1,0 +1,51 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-10",
+  "persona": "viewer",
+  "scenario": "build-published",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Running privately"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The builder · Running privately",
+        "note": "Published privately: only a person can make it public."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:finished"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Estimate against actual"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Finished",
+        "note": "Finished."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "text": "Club Reading List",
+        "note": "The app appears on the org chart."
+      }
+    }
+  ]
+}

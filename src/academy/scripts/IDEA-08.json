@@ -1,0 +1,67 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-08",
+  "persona": "owner",
+  "scenario": "s3-suggestions",
+  "start": "/suggestions?scope=northwind",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Take this idea"
+          }
+        },
+        {
+          "wait": {
+            "text": "Researching it costs at most"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Take this idea",
+        "note": "A suggestion becomes an ordinary idea, with its own research estimate first."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Researching it costs at most",
+        "note": "The research estimate, and its basis."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Research this idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research this idea",
+        "note": "Taken into research."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Research in progress"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research in progress",
+        "note": "You land on the new idea’s page while it is researched."
+      }
+    }
+  ]
+}

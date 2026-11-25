@@ -789,7 +789,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 
 ### TALK-04 Talk to an app
 - **Who:** Builder or above at the app.
-- **Starts at:** the app's page, where the app page mounts the conversation for that app (`AppConversation`, exported by `ConversationDock.tsx`); or API `POST /api/conversations {scope: "{org}/{division}/{project}/{app}", message}`, or MCP `conversation_post`.
+- **Starts at:** the app's page `/apps/{id}`, below "Change {app}" and the dashboard (`AppConversation`, exported by `ConversationDock.tsx`); or API `POST /api/conversations {scope: "{org}/{division}/{project}/{app}", message}`, or MCP `conversation_post`.
 - **Needs:** an app.
 - **Level:** Core · **Learn first:** TALK-03 · **What you learn:** the app has a conversation of its own, about it only, which can ask for a change to it.
 - **Steps:**
@@ -799,7 +799,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **You know it worked when:** "Talking to {app}" heads the dock and replies arrive.
 - **Variations and refusals:** the app page's "Ask about this app" is a different feature (questions answered from the app's telemetry; apps reader). An idea started here is raised at the division above.
 - **Where:** `ConversationDock.tsx` (`AppConversation`, the `app` selection); `WorkEndpoints` `/conversations`; `ControlPlaneTools` `conversation_post`.
-- **Reachable from:** UI (once the app page mounts it); API / MCP.
+- **Reachable from:** UI; API / MCP.
 - **Covered by tests:** `TryAgainAndChanges.test.tsx` ("the conversation… shows the cost first, answers its own approval inline…"); `IdeasAndConversationsTests` (per scope); `McpTests`.
 
 ### TALK-05 Talk to an employee from the chart

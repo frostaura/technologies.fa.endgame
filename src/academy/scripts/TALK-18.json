@@ -1,0 +1,85 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-18",
+  "persona": "owner",
+  "scenario": "build-failed",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Learning"
+          }
+        },
+        {
+          "wait": {
+            "text": "Talking to Learning"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Learning"
+            },
+            "text": "Try the failed build again."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Learning",
+        "note": "In Learning, where the build stopped, ask to try it again."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:approval"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Try again: Build:",
+        "note": "It reads the runs, then asks first."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "It has started again"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "It has started again",
+        "note": "Approved: the new attempt starts with its estimate first, carrying on from the earlier one."
+      }
+    }
+  ]
+}

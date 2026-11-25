@@ -1,0 +1,52 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-09",
+  "persona": "owner",
+  "scenario": "s3-suggestions",
+  "start": "/suggestions?scope=northwind",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Set it aside"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Set it aside",
+        "note": "No confirmation: it leaves the list at once."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 500
+        }
+      ],
+      "highlight": {
+        "text": "A course waiting list",
+        "note": "Gone from the open list…"
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Taken or set aside (3)"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Taken or set aside (3)",
+        "note": "…and kept on record under “Taken or set aside”, its count one higher."
+      }
+    }
+  ]
+}

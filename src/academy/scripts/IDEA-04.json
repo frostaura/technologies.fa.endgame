@@ -1,0 +1,94 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-04",
+  "persona": "owner",
+  "scenario": "s3-waiting-for-budget",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "seek": 3000
+      },
+      "highlight": {
+        "text": "Step by step",
+        "note": "The research was started as usual: nothing on the start screen checks the balance."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Waiting for budget"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Endgame · Waiting for budget",
+        "note": "Learning has 5 credits left this month, less than the 12 estimated: in auto-mode the run pauses before any work."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Resume"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Resume",
+        "note": "After a top-up or a budget raise, “Resume” picks it up again."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "In checkpoints mode an over-budget start does not pause",
+      "persona": "owner",
+      "scenario": "s3-budget-runs-out",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "clock": {
+            "seek": "build:part-1"
+          },
+          "highlight": {
+            "text": "Step by step",
+            "note": "Learning is in checkpoints mode with almost no budget left: the build starts anyway."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "clock": {
+            "seek": "build:part-3"
+          },
+          "act": [
+            {
+              "wait": {
+                "text": "The credit budget ran out"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The credit budget ran out, so this work stopped.",
+            "note": "It is the gateway’s hold before each call that stops it when the credits run out."
+          }
+        }
+      ]
+    }
+  ]
+}

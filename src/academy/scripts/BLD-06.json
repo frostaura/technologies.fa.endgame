@@ -1,0 +1,65 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-06",
+  "persona": "viewer",
+  "scenario": "build-plan",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:part-1"
+      },
+      "act": [
+        {
+          "clock": {
+            "speed": 3
+          }
+        },
+        {
+          "wait": {
+            "text": "Built:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Built:",
+        "note": "Each part is built and committed before the next starts."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "In progress"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "In progress",
+        "note": "Its task moves to “In progress”."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:part-2"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Passed its check"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Passed its check",
+        "note": "And when checked, its part in the plan reads “Passed its check”."
+      }
+    }
+  ]
+}

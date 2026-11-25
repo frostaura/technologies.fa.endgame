@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-05",
+  "persona": "viewer",
+  "scenario": "build-plan",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:part-1"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Estimated the cost again"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Estimated the cost again, from the plan",
+        "note": "Once the plan’s size is known the estimate is refined."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Estimate",
+        "note": "The “Estimate” figure follows it."
+      }
+    }
+  ]
+}

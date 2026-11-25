@@ -1,0 +1,78 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-15",
+  "persona": "owner",
+  "scenario": "budget-spent",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technologies"
+          }
+        },
+        {
+          "wait": {
+            "text": "Talking to Technologies"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "A message here costs at most",
+        "note": "The cost before sending."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Message Technologies"
+            },
+            "text": "What is over budget?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Working on it",
+        "note": "Sending still succeeds: the turn is queued."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "clock": {
+        "seek": 3000
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "The credit budget ran out before a reply"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The credit budget ran out before a reply could be written",
+        "note": "Technologies has spent its budget: a notice instead of a reply, with “See credits”."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "See credits",
+        "note": "It is kept in the conversation’s history."
+      }
+    }
+  ]
+}

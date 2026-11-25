@@ -1,0 +1,53 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-02",
+  "persona": "viewer",
+  "scenario": "build-running",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:hired"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Hired"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Hired",
+        "note": "Within budget, the people the build needs are hired at once."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "joins as a",
+        "note": "Each hire says the role, the monthly limit and why."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A hire waits for you",
+      "persona": "owner",
+      "scenario": "hire-pending",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Hire proposed",
+            "note": "Over budget, or with the hire checkpoint on, a hire is proposed and waits; the work goes on meanwhile."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-05",
+  "persona": "owner",
+  "scenario": "building",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Pause"
+          }
+        },
+        {
+          "wait": {
+            "text": "Resume"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Resume",
+        "note": "A paused run…"
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Resume"
+          }
+        },
+        {
+          "wait": {
+            "text": "Resumed"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Working",
+        "note": "…resumes from its log, not from the beginning."
+      }
+    }
+  ]
+}

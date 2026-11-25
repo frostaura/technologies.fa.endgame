@@ -8,53 +8,64 @@
     {
       "step": 1,
       "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Agreed"
+          }
+        }
+      ],
       "highlight": {
         "text": "The plan",
-        "note": "The badge reads Proposed, then Agreed, with how many parts are done."
+        "note": "The plan is a contract: proposed, then agreed, with how many parts are done."
       }
     },
     {
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "text": "The plan",
-        "note": "The summary of what will be built."
+        "text": "A private reading list for the supper club",
+        "note": "Its summary."
       }
     },
     {
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "text": "What you asked for"
+        "text": "What you asked for",
+        "note": "What you asked for, in your words."
       }
     },
     {
       "step": 4,
       "kind": "demo",
       "highlight": {
-        "text": "Parts of the plan"
+        "text": "Parts of the plan",
+        "note": "Each part, with whether it passed its check."
       }
     },
     {
       "step": 5,
       "kind": "demo",
       "highlight": {
-        "text": "Left out, on purpose"
+        "text": "Left out, on purpose",
+        "note": "Anything left out, with the reason."
       }
     },
     {
       "step": 6,
       "kind": "demo",
       "highlight": {
-        "text": "Technical",
-        "note": "Each part's files and tests are shown in technical mode."
+        "text": "The files and tests behind each part are in technical mode.",
+        "note": "Files and tests are technical detail."
       }
     },
     {
       "step": 7,
       "kind": "demo",
       "highlight": {
-        "text": "The builder · The plan"
+        "text": "The builder · The plan",
+        "note": "The builder says the plan in one message."
       }
     }
   ]

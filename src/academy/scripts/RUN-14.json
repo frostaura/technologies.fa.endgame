@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-14",
+  "persona": "viewer",
+  "scenario": "build-sent-back",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Tasks",
+        "note": "Each part of the plan is a task, claimed by a named employee."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:security-review"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Checked and working"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Done",
+        "note": "Tasks move to “Done” with their summaries as the build goes on."
+      }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-09",
+  "persona": "owner",
+  "scenario": "s3-waiting-for-budget",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "seek": 2000
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Waiting for budget"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Endgame · Waiting for budget",
+        "note": "In auto-mode an estimate larger than what is left does not begin."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "See credits",
+        "note": "Top up or raise the budget from the credits page."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Resume"
+          }
+        },
+        {
+          "wait": {
+            "text": "Research started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Working",
+        "note": "Then “Resume”."
+      }
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-07",
+  "persona": "owner",
+  "scenario": "build-waiting-on-plan",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Accept this plan?"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Needs you",
+        "note": "Waiting for your approval: what approving does, in plain words."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Add a note (optional)"
+            },
+            "text": "Keep the list to one screen on a phone."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Add a note (optional)",
+        "note": "A note goes back to the work with your answer."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Declining stops this work.",
+        "note": "The card says truthfully what a decline does: for the plan, it stops the work."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Approved"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Approved. The work carries on from here.",
+        "note": "Approve."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Agreed"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "You answered",
+        "note": "The answer is logged with your note, and the work goes on."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Decline a step an “Asks you first” rule stopped",
+      "persona": "owner",
+      "scenario": "s3-stage-rules",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "clock": {
+            "seek": "build:part-3"
+          },
+          "act": [
+            {
+              "clock": {
+                "seek": 20000
+              }
+            },
+            {
+              "wait": {
+                "text": "Let the agent change part of the app?"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Let the agent change part of the app?",
+            "note": "A stage rule asks before the app’s description changes."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Decline"
+              }
+            },
+            {
+              "wait": {
+                "text": "Declined"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Declined. It was not done; the work continues without it.",
+            "note": "Declined: only that step is skipped."
+          }
+        }
+      ]
+    }
+  ]
+}

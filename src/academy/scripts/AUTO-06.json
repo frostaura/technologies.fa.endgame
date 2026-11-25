@@ -1,0 +1,42 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AUTO-06",
+  "persona": "admin",
+  "scenario": "s3-stage-rules",
+  "start": "/autonomy?scope=northwind/learning",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Remove here"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Remove here",
+        "note": "Rules set here can be removed; no confirmation."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "li[data-stage='build'] button:nth-of-type(2)"
+          }
+        },
+        {
+          "wait": 800
+        }
+      ],
+      "highlight": {
+        "text": "No rules set for this stage",
+        "note": "The inherited rules apply again."
+      }
+    }
+  ]
+}

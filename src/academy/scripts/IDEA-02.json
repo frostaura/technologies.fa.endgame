@@ -1,7 +1,7 @@
 {
   "$schema": "../schema/step-script.schema.json",
   "flow": "IDEA-02",
-  "persona": "builder",
+  "persona": "owner",
   "scenario": "established",
   "start": "/",
   "steps": [
@@ -13,11 +13,16 @@
           "click": {
             "text": "New idea"
           }
+        },
+        {
+          "wait": {
+            "text": "Where it goes"
+          }
         }
       ],
       "highlight": {
         "text": "New idea",
-        "note": "The breadcrumb shows where the idea will go. There is no organisation field."
+        "note": "From the org chart’s hero: “New idea” opens the start screen under Northwind."
       }
     },
     {
@@ -25,17 +30,17 @@
       "kind": "demo",
       "act": [
         {
-          "type": {
+          "select": {
             "into": {
-              "selector": "textarea"
+              "text": "Where it goes"
             },
-            "text": "A court-booking app for our squash club, sold in playing minutes."
+            "value": "Technologies"
           }
         }
       ],
       "highlight": {
-        "text": "Estimated",
-        "note": "The estimate appears before anything is charged."
+        "text": "Where it goes",
+        "note": "Choose the whole organisation or one division; research is asked for that place."
       }
     },
     {
@@ -43,22 +48,85 @@
       "kind": "demo",
       "act": [
         {
-          "click": {
-            "text": "Research this idea"
+          "type": {
+            "into": {
+              "text": "The idea"
+            },
+            "text": "A court-booking waiting list: when every court is taken, members join a list and get the next free slot."
+          }
+        },
+        {
+          "wait": {
+            "text": "Estimated"
           }
         }
       ],
       "highlight": {
-        "text": "Research:"
+        "text": "Estimated",
+        "note": "The estimate is asked for the place chosen, so the figure shown is the one the run records."
       }
     },
     {
       "step": 4,
       "kind": "demo",
-      "goto": "/start",
       "highlight": {
-        "text": "Back to the org chart"
+        "text": "What happens next",
+        "note": "What happens next follows the autonomy at that place: here, auto-mode."
       }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Research this idea"
+          }
+        },
+        {
+          "wait": {
+            "text": "Research:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "“Research this idea” opens its research run."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Below Builder, the form is replaced by why",
+      "persona": "viewer",
+      "scenario": "established",
+      "start": "/start",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Only a Builder or above starts an idea",
+            "note": "Priya is a Viewer: she is told why, and who can make her a Builder."
+          }
+        }
+      ]
+    },
+    {
+      "title": "In checkpoints mode, nothing is built until you decide",
+      "persona": "owner",
+      "scenario": "s3-checkpoints",
+      "start": "/start",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Nothing is built until you decide; you can overrule it.",
+            "note": "Northwind is in checkpoints mode, so the steps say the verdict waits for you."
+          }
+        }
+      ]
     }
   ]
 }

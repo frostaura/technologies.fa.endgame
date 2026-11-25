@@ -1,0 +1,42 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-06",
+  "persona": "owner",
+  "scenario": "employee-memory",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Message Kasper"
+            },
+            "text": "Who are you?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "I'm Kasper"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Only Kasper hears this, and answers from its job and what it remembers.",
+        "note": "On the employee’s page, the same conversation."
+      }
+    }
+  ]
+}

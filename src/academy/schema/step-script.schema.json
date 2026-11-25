@@ -64,7 +64,36 @@
         "s1-development-apps",
         "s1-development-sign-in",
         "s1-keys-at-limit",
-        "s1-session-check-fails"
+        "s1-session-check-fails",
+        "default",
+        "quiet",
+        "research-running",
+        "research-verdict",
+        "verdict-do-not-build",
+        "verdict-red-line",
+        "build-running",
+        "build-plan",
+        "build-sent-back",
+        "build-security-finding",
+        "build-published",
+        "build-waiting-on-plan",
+        "build-failed",
+        "app-busy",
+        "app-never-measured",
+        "budget-spent",
+        "s3-research-failed",
+        "s3-research-cancelled",
+        "s3-checkpoints",
+        "s3-start-checkpoint",
+        "s3-waiting-for-budget",
+        "s3-budget-runs-out",
+        "s3-change-running",
+        "s3-change-failed",
+        "s3-stage-rules",
+        "s3-suggestions",
+        "s3-employee-paused",
+        "hire-pending",
+        "employee-memory"
       ]
     },
     "start": {
@@ -149,8 +178,26 @@
           ],
           "properties": {
             "seek": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Script milliseconds to move every live run forward by, or a named moment such as \"research:verdict\" (ARCH-009)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "speed"
+          ],
+          "properties": {
+            "speed": {
               "type": "number",
-              "minimum": 0
+              "exclusiveMinimum": 0,
+              "maximum": 20,
+              "description": "How fast live runs play: 1 is real time, 4 is four times as fast."
             }
           }
         }
@@ -241,9 +288,16 @@
           ],
           "properties": {
             "wait": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 10000
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                {
+                  "$ref": "#/definitions/target"
+                }
+              ]
             }
           }
         },

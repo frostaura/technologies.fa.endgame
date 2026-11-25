@@ -1,0 +1,139 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-01",
+  "persona": "first-run",
+  "scenario": "fresh-install",
+  "start": "/start",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "What do you want to build?",
+        "note": "Before anything exists, the console asks for the idea — and the name it will live under."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Your organisation"
+            },
+            "text": "Harbour Rowing Club"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Your organisation",
+        "note": "Everything you make lives under this name; the hint shows the address its apps get."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "The idea"
+            },
+            "text": "A booking sheet for the rowing club's six boats, so members can see which are free on Saturday."
+          }
+        },
+        {
+          "click": {
+            "text": "Members sign in"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Members sign in",
+        "note": "The idea in your own words, then any one-tap constraint it must respect."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Estimated"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Estimated",
+        "note": "Research comes first: its estimate is shown before anything is charged."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Research this idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Starting research…",
+        "note": "Pressed: the organisation is created first, then the idea."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Research:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "You land on the research run, under your new organisation’s name."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A name with too few letters keeps the button off",
+      "persona": "first-run",
+      "scenario": "fresh-install",
+      "start": "/start",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Your organisation"
+                },
+                "text": "!"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "The idea"
+                },
+                "text": "A booking sheet for the rowing club's six boats, so members can see which are free on Saturday."
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Use at least two letters or digits.",
+            "note": "A name that makes fewer than two letters or digits is refused before anything is sent."
+          }
+        }
+      ]
+    }
+  ]
+}

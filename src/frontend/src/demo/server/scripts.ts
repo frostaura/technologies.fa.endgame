@@ -595,6 +595,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       cycle(s, run, { agent: evaluator, employeeId: qa.id, taskType: "evaluate", credits: 0.07, tool: { name: "check_preview", args: { path: "" }, result: fault.evidence }, scope: projectPath });
       s.event("evaluation.failed", { item: item.id, text: item.text, tier: "build", round: 0, faults: [fault.fault], evidence: fault.evidence, summary: `Sent back for repair, at no charge: ${item.text.replace(/\.$/, "")} (${Math.max(0, covered - 1)} of ${covered} of your requirements shown working in the running app).` }, `${prefix}:sent-back`);
       s.event("message", { data: { faults: [fault.fault], passed: false, evidence: fault.evidence }, kind: "workflow.step", step: `item:${item.id}:round:0`, agent: "workflow" });
+      s.event("message", { kind: "agent.reply", agent: evaluator, final: true, reply: JSON.stringify({ passed: false, faults: [fault.fault] }) });
       s.event("message", { from: "evaluator", text: `${qa.name} sent part ${index + 1} back: ${fault.fault} It is being repaired on a stronger model, at no charge.`, title: "Sent back" });
       const repair = `builder-${item.id}-1`;
       s.wait(700).event("message", { kind: "agent.start", task: `Repair this item (round 1). The evaluator found: ${fault.fault}`, agent: repair, taskType: "build-t1" });
@@ -603,6 +604,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
         s.wait(500);
         cycle(s, run, { agent: repair, employeeId: eng.id, taskType: "build-t1", credits: 0.11, model: STRONG, billable: false, tool: { name: k === 2 ? "run" : "edit_file", args: k === 2 ? { command: "make test" } : { path: fixFile }, result: k === 2 ? "exit code 0" : "Edited.", paths: [fixFile], ...(k === 2 ? { command: "make test" } : {}) }, scope: projectPath });
       }
+      s.event("message", { kind: "agent.reply", agent: repair, final: true, reply: `Repaired the ${item.id} item and committed it.` });
       s.effect((w) => {
         const nc = (w.notCharged[org] ??= { credits: 0, repairs: 0 });
         nc.repairs += 1;
@@ -632,15 +634,17 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
         failed = true;
         return;
       }
-      s.wait(600);
+      s.wait(600).event("message", { kind: "agent.start", task: "Evaluate the item now (round 1, built on build-t1).", agent: `evaluator-${item.id}-1`, taskType: "evaluate" });
       cycle(s, run, { agent: `evaluator-${item.id}-1`, employeeId: qa.id, taskType: "evaluate", credits: 0.06, tool: { name: "run", args: { command: "make test" }, result: "exit code 0" }, scope: projectPath });
+      s.event("message", { kind: "agent.reply", agent: `evaluator-${item.id}-1`, final: true, reply: JSON.stringify({ passed: true }) });
       s.event("evaluation.passed", { item: item.id, text: item.text, tier: "build-t1", round: 1, faults: [], evidence: `Re-checked after the repair: ${fault.fault.replace(/\.$/, "")} no longer happens; make test and make lint pass.`, summary: `Checked and working: ${item.text.replace(/\.$/, "")} (${covered} of ${covered} of your requirements shown working in the running app).` }, `${prefix}:repaired`);
     } else {
       s.wait(500);
+      s.event("message", { kind: "agent.reply", agent: evaluator, final: true, reply: JSON.stringify({ passed: true }) });
       s.event("evaluation.passed", { item: item.id, text: item.text, tier: "build", round: 0, faults: [], evidence: `${item.check} — confirmed: make test and make lint exit 0.`, summary: `Checked and working: ${item.text.replace(/\.$/, "")} (${covered} of ${covered} of your requirements shown working in the running app).` });
     }
     s.event("message", { data: { passed: true }, kind: "workflow.step", step: `item:${item.id}`, agent: "workflow" });
-    s.event("task.done", { taskId, summary: "Built, checked and committed." });
+    s.event("task.done", { taskId, summary: `Checked and working: ${item.text.replace(/\.$/, "")}.` });
     s.effect((w) => {
       const t = w.tasks.find((x) => x.id === taskId);
       if (t) Object.assign(t, { status: "done", holderRunId: null, holderEmployeeId: null, actualCredits: 4.2, updatedAt: new Date().toISOString() });
@@ -666,6 +670,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
   }
   const finding = o.finding;
   if (finding) {
+    s.event("message", { kind: "agent.reply", agent: "security-reviewer-0", final: true, reply: JSON.stringify({ passed: false, findings: [finding] }) });
     s.event("message", { from: "security-reviewer", kind: "security.review", passed: false, findings: [finding] });
     s.event("message", { from: "security-reviewer", text: "The security review found 1 problem that would block publishing; they are being fixed now, at no charge.", title: "Security review found problems", milestone: "security:0" }, `${prefix}:security-finding`);
     s.effect((w) => {
@@ -676,9 +681,11 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       s.wait(500);
       cycle(s, run, { agent: "builder-security-repair", employeeId: eng.id, taskType: "build", credits: 0.09, billable: false, tool: { name: k === 2 ? "run" : "edit_file", args: k === 2 ? { command: "make test" } : { path: finding.file }, result: k === 2 ? "exit code 0" : `Edited ${finding.file}.`, paths: [finding.file] }, scope: projectPath });
     }
+    s.event("message", { kind: "agent.reply", agent: "builder-security-repair", final: true, reply: "Fixed what the security review found, and committed it." });
     s.wait(700).event("message", { kind: "agent.start", task: "Review the app now against your checklist, then reply with the JSON object.", agent: "security-reviewer-1", taskType: "evaluate" });
     cycle(s, run, { agent: "security-reviewer-1", employeeId: o.reviewerId, taskType: "evaluate", credits: 0.05, tool: { name: "read_file", args: { path: finding.file }, result: "    94\t… b.Id == id && b.AddedById == user.Id …", paths: [finding.file] }, scope: projectPath });
   }
+  s.event("message", { kind: "agent.reply", agent: finding ? "security-reviewer-1" : "security-reviewer-0", final: true, reply: JSON.stringify({ passed: true, findings: [] }) });
   s.event("message", { from: "security-reviewer", kind: "security.review", passed: true, findings: [] });
   s.event("message", { from: "security-reviewer", text: "The security review checked secrets, sign-in, data, model calls and outbound calls, and found nothing that blocks publishing.", title: "Security review passed", milestone: finding ? "security:1" : "security:0" }, `${prefix}:security-passed`);
 

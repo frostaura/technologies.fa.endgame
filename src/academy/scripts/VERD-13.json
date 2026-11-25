@@ -1,0 +1,38 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-13",
+  "persona": "owner",
+  "scenario": "verdict-build",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Build it"
+          }
+        },
+        {
+          "wait": {
+            "text": "Build:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "Mara builds it; the build starts."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/ideas/{idea}",
+      "highlight": {
+        "text": "You chose to build it",
+        "note": "Back on the idea: who decided, and when, with “Watch the work that followed”."
+      }
+    }
+  ]
+}

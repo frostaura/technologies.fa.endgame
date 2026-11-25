@@ -1,0 +1,42 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-06",
+  "persona": "owner",
+  "scenario": "verdict-change",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Build it with this change"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Build it with this change",
+        "note": "Accept research’s change and have it built in — or build your own words as described."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:plan"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "What you asked for"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What you asked for",
+        "note": "The plan holds the build to the idea plus research’s change."
+      }
+    }
+  ]
+}

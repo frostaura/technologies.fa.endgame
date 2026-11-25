@@ -13,7 +13,7 @@ export type Persona = (typeof PERSONAS)[number];
  * script may name its records as `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}`, which the
  * demo resolves inside the scenario.
  */
-export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode", "account", "two-organisations", "app-asleep", "app-paused", "app-crashed", "at-overdraft-limit", "s1-app-made-private", "s1-app-not-published", "s1-app-private", "s1-app-public", "s1-app-unshared", "s1-development-apps", "s1-development-sign-in", "s1-keys-at-limit", "s1-session-check-fails"] as const;
+export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode", "account", "two-organisations", "app-asleep", "app-paused", "app-crashed", "at-overdraft-limit", "s1-app-made-private", "s1-app-not-published", "s1-app-private", "s1-app-public", "s1-app-unshared", "s1-development-apps", "s1-development-sign-in", "s1-keys-at-limit", "s1-session-check-fails", "default", "quiet", "research-running", "research-verdict", "verdict-do-not-build", "verdict-red-line", "build-running", "build-plan", "build-sent-back", "build-security-finding", "build-published", "build-waiting-on-plan", "build-failed", "app-busy", "app-never-measured", "budget-spent", "s3-research-failed", "s3-research-cancelled", "s3-checkpoints", "s3-start-checkpoint", "s3-waiting-for-budget", "s3-budget-runs-out", "s3-change-running", "s3-change-failed", "s3-stage-rules", "s3-suggestions", "s3-employee-paused", "hire-pending", "employee-memory"] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 /** Where a spotlight lands: a CSS selector, a `data-testid`, or the visible text of a control. */
@@ -28,10 +28,11 @@ export type Action =
   | { type: { into: Target; text: string } }
   | { select: { into: Target; value: string } }
   | { press: string }
-  | { wait: number }
+  | { wait: number | Target }
   | { clock: ClockOp };
 
-export type ClockOp = { play: true } | { pause: true } | { seek: number };
+/** `seek` takes script milliseconds or a named moment such as "build:plan"; `speed` plays live runs faster (ARCH-009). */
+export type ClockOp = { play: true } | { pause: true } | { seek: number | string } | { speed: number };
 
 export interface DemoStep {
   step: number;

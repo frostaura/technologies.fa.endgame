@@ -900,7 +900,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Who:** Viewer or above.
 - **Starts at:** the home page's **"Autonomy for {node}"**, which opens `/autonomy?scope=…`.
 - **Needs:** an organisation.
-- **Level:** Core. **Learn first:** VERD-11.
+- **Level:** Core. **Learn first:** IDEA-02.
 - **What you learn:** a setting made higher up holds for everything beneath it, and each value says where it was set.
 - **Steps:**
   1. The heading reads "How much {name} does on its own", with "Set once for the organisation, narrowed for a division, project or app. The credit budget is the limit that is always on."

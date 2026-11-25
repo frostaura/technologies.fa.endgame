@@ -1,0 +1,39 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-04",
+  "persona": "owner",
+  "scenario": "building",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Pause"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Pause",
+        "note": "Pause stops the work between steps."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Paused"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Resume",
+        "note": "The badge reads “Paused”, and the button now reads “Resume”."
+      }
+    }
+  ]
+}
