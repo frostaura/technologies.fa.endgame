@@ -17,6 +17,9 @@
 2. `PUT /api/autonomy/rule-sets { scope, stage, deny, ask, allow, checkpoints }` sets the rule set for a stage (`research`,
    `plan`, `build`, `evaluate`, `review`, `conversation`) or `all`. Rules are written as the harness reads them:
    `tool` or `tool(pattern)`.
+   An `ask` rule raises an approval and the work waits for the person's answer (with an optional note), even when nobody
+   is watching the run; declined, the step is not taken and the work goes on without it. Only a tool no rule allows is
+   still refused in an unattended run.
 3. `GET /api/autonomy?scope=` shows what is in effect and where each value was set; `DELETE` lets the inherited one apply again.
 4. The Runner reads them through `GET /internal/context` (`settings`, `ruleSets`) before every run.
 

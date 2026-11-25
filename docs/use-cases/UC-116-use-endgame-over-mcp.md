@@ -27,7 +27,7 @@ roles and the same human-only rules, and every app answers MCP too, from what it
 3. `tools/list` returns the organisation's tools (`tree_get`, `node_create`, `idea_submit`,
    `idea_decide`, `run_control`, `approval_answer`, `credits_get`, `budget_set`, `employee_update`,
    `hire_decide`, `autonomy_set`, `member_invite`, `secret_set`, `app_settings`, `app_ask`,
-   `app_restore`, … — the full list is in ARCH-004).
+   `app_restore`, `run_retry`, `app_change`, `suggestion_dismiss`, `conversation_history`, … — the full list is in ARCH-004).
 4. `tools/call` runs the same service the console's endpoint runs, behind the same role check at the
    named scope, held also to the token's role.
 5. For one app: connect to `/mcp/apps/{appId}`; the tools are the app's own operations, derived from

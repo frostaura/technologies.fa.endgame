@@ -45,6 +45,14 @@ decides what happens after a verdict that is allowed to say no.
   `build` and `overrule` are then `403 red_line` for everyone, a person included (CLAUDE.md rule 4); `change` and `drop`
   remain. A verdict that names a breached red line and says anything but do-not-build is `400`.
 - **A6 — auto-mode on a do-not-build, or where checkpoints are on.** `409 owner_decision_required`: the owner decides.
+- **A8 — a new verdict after "change".** The new verdict clears the decision that led to it, so the owner decides again;
+  the earlier decision is kept in `history[]` (choice, the owner's note, who, when, the research that followed).
+- **A9 — building with the agreed change.** Every change the owner asked for goes to the build as the owner message's
+  `changes[]`, and the planner holds the app to the idea plus those changes. On a `change` verdict, `build` with
+  `applyChange: true` adds research's `suggestedChange` too (`409` on any other verdict); auto-mode does so on its own and
+  says so ("Auto-mode is building it now, with research's change applied: …").
+- **A10 — research that did not finish, or a stopped build.** `tryAgain { runId, what, why }` names it; UC-105 A6 starts
+  it again.
 
 ## Postconditions
 
