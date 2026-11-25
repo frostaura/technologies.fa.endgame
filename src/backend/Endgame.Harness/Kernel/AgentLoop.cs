@@ -170,7 +170,7 @@ public sealed class AgentLoop
                     ["kind"] = MessageKinds.AgentReply,
                     ["assistant"] = message.DeepClone(),
                     ["final"] = nudge is null,
-                    ["text"] = OutputText.Truncate(text, 4000),
+                    ["reply"] = OutputText.Truncate(text, 4000),
                     ["accounting"] = accounting,
                 }, cancellationToken);
                 state.Messages.Add(message);
@@ -181,68 +181,57 @@ public sealed class AgentLoop
                     return new AgentResult(state.StopReason, text, state);
                 }
 
-                await events.WriteAsync(HarnessEvents.Message, new JsonObject { ["kind"] = MessageKinds.Nudge, ["text"] = nudge.Value.Text, ["source"] = nudge.Value.Source }, cancellationToken);
+                await events.WriteAsync(HarnessEvents.Message, new JsonObject { ["kind"] = MessageKinds.Nudge, ["nudge"] = nudge.Value.Text, ["source"] = nudge.Value.Source }, cancellationToken);
                 Replay.ApplyNudge(state, nudge.Value.Source, nudge.Value.Text);
                 continue;
             }
 
-            var repeated = false;
-            var first = true;
-            var index = 0;
-            foreach (var call in toolCalls.OfType<JsonObject>())
+            var calls = toolCalls.OfType<JsonObject>().ToList();
+            for (var n = 0; n < calls.Count; n++)
             {
-                call["id"] ??= $"call_{state.Steps}_{index}";
-                var callId = call["id"]!.GetValue<string>();
-                var fn = call["function"] as JsonObject;
-                var name = fn?["name"]?.GetValue<string>() ?? "";
-                var requested = new JsonObject
+                calls[n]["id"] ??= $"call_{state.Steps}_{n}";
+            }
+
+            var requests = calls.Select((call, n) => new JsonObject
+            {
+                ["callId"] = call["id"]!.GetValue<string>(),
+                ["name"] = (call["function"] as JsonObject)?["name"]?.GetValue<string>() ?? "",
+                ["arguments"] = (call["function"] as JsonObject)?["arguments"]?.DeepClone(),
+                ["step"] = state.Steps,
+            }).ToList();
+            requests[0]["assistant"] = message.DeepClone();
+            requests[0]["accounting"] = accounting.DeepClone();
+            var repeated = false;
+            if (Parallel(requests))
+            {
+                // Independent read-only sub-agents run at once, up to the fan-out cap (ARCH-006): every call is
+                // requested first, they work concurrently, and their results enter the conversation in order.
+                foreach (var requested in requests)
                 {
-                    ["callId"] = callId,
-                    ["name"] = name,
-                    ["arguments"] = fn?["arguments"]?.DeepClone(),
-                    ["step"] = state.Steps,
-                };
-                if (first)
-                {
-                    requested["assistant"] = message.DeepClone();
-                    requested["accounting"] = accounting.DeepClone();
+                    await events.WriteAsync(HarnessEvents.ToolRequested, requested, cancellationToken);
+                    state.ToolCalls++;
                 }
 
-                await events.WriteAsync(HarnessEvents.ToolRequested, requested, cancellationToken);
-                if (first)
+                state.Messages.Add(message);
+                var outcomes = await Task.WhenAll(requests.Select((r, n) => ExecuteAsync(state, Json.Str(r, "callId")!, Json.Str(r, "name")!, r["arguments"], n, cancellationToken)));
+                for (var n = 0; n < requests.Count; n++)
                 {
-                    state.Messages.Add(message);
-                    first = false;
+                    repeated |= await RecordResultAsync(state, requests[n], outcomes[n], cancellationToken);
                 }
+            }
+            else
+            {
+                for (var n = 0; n < requests.Count; n++)
+                {
+                    await events.WriteAsync(HarnessEvents.ToolRequested, requests[n], cancellationToken);
+                    if (n == 0)
+                    {
+                        state.Messages.Add(message);
+                    }
 
-                state.ToolCalls++;
-                var outcome = await ExecuteAsync(state, callId, name, fn?["arguments"], index, cancellationToken);
-                var failed = outcome.IsError || (name == "run" && !outcome.Content.StartsWith("[exit code 0]", StringComparison.Ordinal));
-                string? failureKey = null;
-                if (failed)
-                {
-                    failureKey = Signature(name, fn?["arguments"], outcome.Content);
-                }
-
-                var content = OutputText.Truncate(outcome.Content, MaxResultChars);
-                var result = new JsonObject
-                {
-                    ["callId"] = callId,
-                    ["name"] = name,
-                    ["isError"] = outcome.IsError,
-                    ["errorKind"] = outcome.ErrorKind,
-                    ["content"] = content,
-                    ["edited"] = (!outcome.IsError && IsWrite(name)) || outcome.Edited,
-                    ["credits"] = outcome.Credits,
-                    ["verified"] = name == "run" && agent.VerifyCommand.IsMatch(Json.Str(ParseOrEmpty(fn?["arguments"]), "command") ?? ""),
-                    ["failureKey"] = failureKey,
-                };
-                await events.WriteAsync(HarnessEvents.ToolResult, result, cancellationToken);
-                Replay.ApplyToolResult(state, result);
-                index++;
-                if (state.RepeatedFailures >= agent.Limits.MaxRepeatedFailures)
-                {
-                    repeated = true;
+                    state.ToolCalls++;
+                    var outcome = await ExecuteAsync(state, Json.Str(requests[n], "callId")!, Json.Str(requests[n], "name")!, requests[n]["arguments"], n, cancellationToken);
+                    repeated |= await RecordResultAsync(state, requests[n], outcome, cancellationToken);
                 }
             }
 
@@ -251,6 +240,54 @@ public sealed class AgentLoop
                 return await StopAsync(state, StopReasons.RepeatedFailure, $"The same call failed the same way {state.RepeatedFailures} times in a row.", cancellationToken);
             }
         }
+    }
+
+    /// <summary>A turn of two or more <c>spawn</c> calls whose sub-agents only read, within the fan-out cap: independent, so they may run at once.</summary>
+    private bool Parallel(IReadOnlyList<JsonObject> requests)
+    {
+        if (requests.Count < 2 || requests.Count > Math.Min(agent.Limits.MaxSubagents, agent.Limits.MaxToolCallsPerTurn))
+        {
+            return false;
+        }
+
+        foreach (var r in requests)
+        {
+            if (Json.Str(r, "name") != "spawn" || Json.ParseArguments(r["arguments"]).Args is not { } args)
+            {
+                return false;
+            }
+
+            var tools = Json.Strings(args, "tools");
+            if (tools.Any(t => !Subagents.SpawnTool.DefaultTools.Contains(t)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>A call's result into the log and the conversation; true when the same failure has now repeated too often.</summary>
+    private async Task<bool> RecordResultAsync(AgentState state, JsonObject requested, ToolOutcome outcome, CancellationToken cancellationToken)
+    {
+        var name = Json.Str(requested, "name") ?? "";
+        var arguments = requested["arguments"];
+        var failed = outcome.IsError || (name == "run" && !outcome.Content.StartsWith("[exit code 0]", StringComparison.Ordinal));
+        var result = new JsonObject
+        {
+            ["callId"] = Json.Str(requested, "callId"),
+            ["name"] = name,
+            ["isError"] = outcome.IsError,
+            ["errorKind"] = outcome.ErrorKind,
+            ["content"] = OutputText.Truncate(outcome.Content, MaxResultChars),
+            ["edited"] = (!outcome.IsError && IsWrite(name)) || outcome.Edited,
+            ["credits"] = outcome.Credits,
+            ["verified"] = name == "run" && agent.VerifyCommand.IsMatch(Json.Str(ParseOrEmpty(arguments), "command") ?? ""),
+            ["failureKey"] = failed ? Signature(name, arguments, outcome.Content) : null,
+        };
+        await events.WriteAsync(HarnessEvents.ToolResult, result, cancellationToken);
+        Replay.ApplyToolResult(state, result);
+        return state.RepeatedFailures >= agent.Limits.MaxRepeatedFailures;
     }
 
     private async Task<ModelReply> CallModelAsync(AgentState state, JsonArray schemas, CancellationToken cancellationToken)
@@ -267,7 +304,8 @@ public sealed class AgentLoop
             agent.Limits.MaxOutputTokens,
             agent.Repair,
             state.PinnedProvider is { } p ? [p] : null,
-            $"{agent.RunId}:{agent.Id}:{step}:{attempt}:{services.SessionNonce}"), cancellationToken), cancellationToken);
+            $"{agent.RunId}:{agent.Id}:{step}:{attempt}:{services.SessionNonce}",
+            MaxSearches: agent.Limits.MaxSearchesPerCall), cancellationToken), cancellationToken);
         Replay.ApplyAccounting(state, Accounting(reply));
         return reply;
     }
@@ -444,7 +482,7 @@ public sealed class AgentLoop
 
     private async Task<AgentResult> StopAsync(AgentState state, string reason, string text, CancellationToken cancellationToken)
     {
-        await events.WriteAsync(HarnessEvents.Message, new JsonObject { ["kind"] = MessageKinds.AgentStopped, ["reason"] = reason, ["text"] = text }, cancellationToken);
+        await events.WriteAsync(HarnessEvents.Message, new JsonObject { ["kind"] = MessageKinds.AgentStopped, ["reason"] = reason, ["detail"] = text }, cancellationToken);
         state.StopReason = reason;
         state.FinalText ??= text;
         return new AgentResult(reason, text, state);

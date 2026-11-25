@@ -216,10 +216,11 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
         Assert.Equal(0.03m, row["credits"]!.GetValue<decimal>()); // the repair call is not billed, so not counted
         Assert.Equal(2, row["steps"]!.GetValue<int>());
 
-        // The Runner's client sends no scope today: refused rather than answered across organisations.
-        var refused = await Assert.ThrowsAsync<ServiceProblemException>(() => runner.CostHistoryAsync("task", CancellationToken.None));
-        Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
-        Assert.Equal("scope_required", refused.Code);
+        // The Runner's client sends the run's scope, so it reads its own organisation's history and nothing else.
+        Assert.Equal([0.03m], await runner.CostHistoryAsync("task", "frostaura/technologies/squash", CancellationToken.None));
+        Assert.Empty(await runner.CostHistoryAsync("research", "frostaura/technologies/squash", CancellationToken.None));
+        var refused = await ControlPlaneApp.Expect(await service.GetAsync("/internal/estimates/history?taskType=task&limit=50"), HttpStatusCode.BadRequest);
+        Assert.Equal("scope_required", refused["code"]!.GetValue<string>());
     }
 
     [Fact]
@@ -372,8 +373,8 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
 
         // A verdict cannot name a breached red line and still say build.
         var contradiction = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/ideas", new { text = "Contradictory", constraints = Array.Empty<string>() }));
-        var problem = await Assert.ThrowsAsync<ServiceProblemException>(() => runner.RecordVerdictAsync(Guid.Parse(contradiction["id"]!.GetValue<string>()), VerdictSamples.Valid("build", "tobacco-gambling-finance"), CancellationToken.None));
-        Assert.Equal(HttpStatusCode.BadRequest, problem.Status);
+        var problem = await Assert.ThrowsAsync<VerdictRefusedException>(() => runner.RecordVerdictAsync(Guid.Parse(contradiction["id"]!.GetValue<string>()), VerdictSamples.Valid("build", "tobacco-gambling-finance"), CancellationToken.None));
+        Assert.Contains("outcome: \"do-not-build\": a breached red line is never built", problem.Errors);
     }
 
     // ------------------------------------------------------------------ A9

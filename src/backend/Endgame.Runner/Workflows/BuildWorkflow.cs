@@ -6,6 +6,7 @@ using Endgame.Harness;
 using Endgame.Harness.Events;
 using Endgame.Harness.Kernel;
 using Endgame.Harness.Planning;
+using Endgame.Harness.Platform;
 using Endgame.Harness.Tools;
 using Endgame.Harness.Workspaces;
 using Endgame.Hosting.Contracts;
@@ -36,6 +37,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         // Placement: a division, a project and an app, created in the tree.
         var placement = await run.Journal.OnceAsync("placement", () => PlaceAsync(run, idea, cancellationToken), cancellationToken);
         var appId = Guid.Parse(Json.Str(placement, "appId")!);
+        var crew = await StaffAsync(run, placement, cancellationToken);
         var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), cancellationToken);
         var root = workspace.Root;
 
@@ -43,7 +45,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         var plan = PlanContract.FromJson(run.Journal.Get("plan"));
         if (plan is null)
         {
-            var planner = await WorkflowSupport.RunAgentAsync(run, run.Agents.Planner(run, root), workspace,
+            var planner = await WorkflowSupport.RunAgentAsync(run, AgentFactory.As(run, run.Agents.Planner(run, root), crew.Engineer, crew.EngineerMemory, canRemember: false), workspace,
                 $"Plan the app described below. It starts from the app kit's template (the Notes example), which it replaces.\n\nThe idea:\n{idea}\n\nConstraints: {Json.Str(owner, "constraints")}", cancellationToken);
             if (WorkflowOutcome.FromAgent(planner) is { } stopped)
             {
@@ -65,7 +67,9 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
                 }
             }
 
-            await run.AppendAsync(HarnessEvents.PlanAccepted, new JsonObject { ["by"] = Checkpoint(run, "plan") ? "owner" : "auto-mode", ["plan"] = plan.ToJson() }, cancellationToken);
+            var accepted = plan.ToEvent();
+            accepted["by"] = Checkpoint(run, "plan") ? "owner" : "auto-mode";
+            await run.AppendAsync(HarnessEvents.PlanAccepted, accepted, cancellationToken);
             await run.Journal.RecordAsync("plan", plan.ToJson(), cancellationToken);
         }
 
@@ -91,7 +95,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         // Build, evaluate, repair: one feature per session.
         foreach (var item in plan.Items)
         {
-            var built = await BuildItemAsync(run, plan, item, workspace, appId, recreated, cancellationToken);
+            var built = await BuildItemAsync(run, plan, item, workspace, appId, recreated, crew, cancellationToken);
             if (built is not null)
             {
                 return built;
@@ -99,7 +103,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         }
 
         // Security review: a finding blocks publishing.
-        var review = await ReviewAsync(run, plan, workspace, cancellationToken);
+        var review = await ReviewAsync(run, plan, workspace, crew, cancellationToken);
         if (review is not null)
         {
             return review;
@@ -107,14 +111,79 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
 
         // Publish: built and started privately. Going public is the owner's act, in the console.
         var published = await run.Journal.OnceAsync("publish", () => PublishAsync(run, appId, cancellationToken), cancellationToken);
-        var text = Json.Bool(published, "started") == true
-            ? $"{Json.Str(placement, "name")} is built and running privately at {Json.Str(placement, "appPath")}. Only you can open it until you make it public."
-            : $"{Json.Str(placement, "name")} is built and committed, but could not be started: {Json.Str(published, "detail")}";
-        await run.AppendAsync(HarnessEvents.Message, new JsonObject { ["from"] = "builder", ["text"] = text }, cancellationToken);
-        return Json.Bool(published, "started") == true ? WorkflowOutcome.Success(text) : WorkflowOutcome.Failure(text);
+        if (Json.Bool(published, "started") != true)
+        {
+            return WorkflowOutcome.Failure($"{Json.Str(placement, "name")} is built and its work is saved, but it could not be started: {Json.Str(published, "detail")}");
+        }
+
+        var text = $"{Json.Str(placement, "name")} is built and running privately at /{Json.Str(placement, "appPath")}/. Only you and the people you choose can open it until you make it public.";
+        await Workforce.SayAsync(run, "builder", "Running privately", text, cancellationToken, "published");
+        await RecurringJobsAsync(run, placement, crew, cancellationToken);
+        return WorkflowOutcome.Success($"{Json.Str(placement, "name")} is built and running privately.") with { Announced = true };
     }
 
-    private async Task<WorkflowOutcome?> BuildItemAsync(RunContext run, PlanContract plan, PlanItem item, IWorkspace workspace, Guid appId, bool recreated, CancellationToken cancellationToken)
+    /// <summary>The people this build needs, hired from the ontology as the project enters its stages, with what each remembers.</summary>
+    private static async Task<Crew> StaffAsync(RunContext run, JsonObject placement, CancellationToken cancellationToken)
+    {
+        var project = Json.Str(placement, "projectPath")!;
+        var division = Json.Str(placement, "division")!;
+        var name = Json.Str(placement, "name")!;
+        var credits = run.Options.MonthlyCredits;
+        Guid? lead = null;
+        if (Json.Bool(placement, "divisionCreated") == true)
+        {
+            lead = await Workforce.HireAsync(run, new Need("division", $"division:{division}", division, "Sol", "Division lead",
+                "Lead this division: keep its projects coherent and its employees working on what matters, within budget.",
+                run.Options.PlanTaskType, ["read_file", "list_files", "search", "notes", "remember"], credits.GetValueOrDefault("lead", 100m),
+                "A new division was created for this work, and every division has someone answerable for it."), cancellationToken);
+        }
+
+        var engineer = await Workforce.HireAsync(run, new Need("stage", $"stage:build:{project}", project, "Theo", "Software engineer",
+            $"Plan and build {name} feature by feature on the app kit, each one verified and committed; repair what the evaluator sends back.",
+            run.Options.BuildTiers[0], Workforce.BuilderTools, credits.GetValueOrDefault("engineer", 1500m),
+            $"{name} is entering its build, and somebody must build and maintain it.", lead), cancellationToken);
+        var qa = await Workforce.HireAsync(run, new Need("stage", $"stage:evaluate:{project}", project, "Nadia", "QA engineer",
+            $"Check every feature of {name} against its contract, independently of the person who built it: tests, the running app, the details.",
+            run.Options.EvaluateTaskType, Workforce.ReaderTools, credits.GetValueOrDefault("qa", 600m),
+            $"{name} is entering evaluation, and the person who checks the work must not be the one who did it.", lead), cancellationToken);
+        var reviewer = await Workforce.StandingReviewerAsync(run, cancellationToken);
+        return new Crew(
+            engineer, await Workforce.MemoryBlockAsync(run, engineer, project, cancellationToken),
+            qa, await Workforce.MemoryBlockAsync(run, qa, project, cancellationToken),
+            reviewer, await Workforce.MemoryBlockAsync(run, reviewer, project, cancellationToken),
+            project);
+    }
+
+    /// <summary>A recurring job (a schedule the app now declares) is a reason to have someone watch it: raised once, from the ontology.</summary>
+    private static async Task RecurringJobsAsync(RunContext run, JsonObject placement, Crew crew, CancellationToken cancellationToken)
+    {
+        var appPath = Json.Str(placement, "appPath")!;
+        JsonObject graph;
+        try
+        {
+            graph = await run.ControlPlane.OntologyAsync(appPath, "data-flow", cancellationToken);
+        }
+        catch (Harness.Model.ServiceProblemException)
+        {
+            return;
+        }
+
+        var schedules = (graph["nodes"] as JsonArray ?? []).OfType<JsonObject>().Where(n => Json.Str(n, "type") == "schedule").Select(n => Json.Str(n, "name")).OfType<string>().ToList();
+        if (schedules.Count == 0)
+        {
+            return;
+        }
+
+        await Workforce.HireAsync(run, new Need("recurring", $"recurring:{appPath}", appPath, "Ravi", "Operations engineer",
+            $"Watch {Json.Str(placement, "name")}'s recurring jobs ({string.Join(", ", schedules)}): that they run, what they cost, and what fails.",
+            run.Options.SummaryTaskType, ["read_file", "list_files", "search", "notes", "remember"], run.Options.MonthlyCredits.GetValueOrDefault("operations", 100m),
+            $"The app now runs recurring jobs ({string.Join(", ", schedules)}), and recurring work needs someone to watch it.", crew.Engineer), cancellationToken);
+    }
+
+    /// <summary>Who does what in this build, and what each of them remembers about it.</summary>
+    private sealed record Crew(Guid? Engineer, string EngineerMemory, Guid? Qa, string QaMemory, Guid? Reviewer, string ReviewerMemory, string ProjectPath);
+
+    private async Task<WorkflowOutcome?> BuildItemAsync(RunContext run, PlanContract plan, PlanItem item, IWorkspace workspace, Guid appId, bool recreated, Crew crew, CancellationToken cancellationToken)
     {
         if (Json.Bool(run.Journal.Get($"item:{item.Id}"), "passed") == true)
         {
@@ -140,7 +209,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             // Escalate one tier per failed evaluation; repairs of the agent's own failure are not billed.
             var tier = tiers[Math.Min(round, tiers.Count - 1)];
             var repair = round > 0;
-            var builder = run.Agents.Builder(run, $"builder-{item.Id}-{round}", tier, repair, workspace.Root);
+            var builder = AgentFactory.As(run, run.Agents.Builder(run, $"builder-{item.Id}-{round}", tier, repair, workspace.Root), crew.Engineer, crew.EngineerMemory, canRemember: true, crew.ProjectPath);
             var task = repair
                 ? RunnerResources.Prompt("repair", new Dictionary<string, string>
                 {
@@ -164,7 +233,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
                 await workspace.CommitAsync($"{(repair ? "Repair" : "Build")} {item.Id}: {item.Deliverable}", builder.AuthorName, builder.AuthorEmail, cancellationToken);
             }
 
-            var evaluation = await EvaluateAsync(run, item, round, tier, workspace, appId, cancellationToken);
+            var evaluation = await EvaluateAsync(run, item, round, tier, workspace, appId, crew, cancellationToken);
             if (evaluation is null)
             {
                 return WorkflowOutcome.Suspend("evaluation interrupted");
@@ -173,7 +242,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             await run.AppendAsync(Json.Bool(evaluation, "passed") == true ? HarnessEvents.EvaluationPassed : HarnessEvents.EvaluationFailed, new JsonObject
             {
                 ["item"] = item.Id,
-                ["deliverable"] = item.Deliverable,
+                ["text"] = item.Deliverable,
                 ["round"] = round,
                 ["tier"] = tier,
                 ["evidence"] = OutputText.Truncate(Json.Str(evaluation, "evidence") ?? "", 4000),
@@ -184,6 +253,12 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             if (Json.Bool(evaluation, "passed") == true)
             {
                 break;
+            }
+
+            // Work sent back is a lesson for the one who did it, kept for the next task.
+            if (Json.Strings(evaluation, "faults").FirstOrDefault() is { } fault)
+            {
+                await Workforce.RememberAsync(run, crew.Engineer, [new MemoryNote(OutputText.Truncate($"Sent back: {item.Deliverable}", 120), OutputText.Truncate(fault, 1000), "lesson", crew.ProjectPath)], cancellationToken);
             }
         }
 
@@ -198,7 +273,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
     }
 
     /// <summary>The preview, then a separate evaluator with its own context; a build that fails is a failed evaluation without one.</summary>
-    private async Task<JsonObject?> EvaluateAsync(RunContext run, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, CancellationToken cancellationToken)
+    private async Task<JsonObject?> EvaluateAsync(RunContext run, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, CancellationToken cancellationToken)
     {
         string? previewNote = null;
         ITool? probe = null;
@@ -222,7 +297,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             }
         }
 
-        var evaluator = run.Agents.Evaluator(run, $"evaluator-{item.Id}-{round}", item, workspace.Root, probe);
+        var evaluator = AgentFactory.As(run, run.Agents.Evaluator(run, $"evaluator-{item.Id}-{round}", item, workspace.Root, probe), crew.Qa, crew.QaMemory, canRemember: true, crew.ProjectPath);
         var result = await WorkflowSupport.RunAgentAsync(run, evaluator, workspace,
             $"Evaluate the item now (round {round}, built on {tier}).{(previewNote is null ? "" : "\n\n" + previewNote)}", cancellationToken);
         if (WorkflowOutcome.FromAgent(result) is not null)
@@ -254,7 +329,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         }
     }
 
-    private static async Task<WorkflowOutcome?> ReviewAsync(RunContext run, PlanContract plan, IWorkspace workspace, CancellationToken cancellationToken)
+    private static async Task<WorkflowOutcome?> ReviewAsync(RunContext run, PlanContract plan, IWorkspace workspace, Crew crew, CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < 2; attempt++)
         {
@@ -262,7 +337,8 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             var findings = run.Journal.Get(key);
             if (findings is null)
             {
-                var reviewer = await WorkflowSupport.RunAgentAsync(run, run.Agents.SecurityReviewer(run, workspace.Root) with { Id = $"security-reviewer-{attempt}" }, workspace,
+                // The organisation's standing security reviewer does it, and the work is attributed to them.
+                var reviewer = await WorkflowSupport.RunAgentAsync(run, AgentFactory.As(run, run.Agents.SecurityReviewer(run, workspace.Root) with { Id = $"security-reviewer-{attempt}" }, crew.Reviewer, crew.ReviewerMemory, canRemember: true, crew.ProjectPath), workspace,
                     "Review the app now against your checklist, then reply with the JSON object.", cancellationToken);
                 if (WorkflowOutcome.FromAgent(reviewer) is { } stopped)
                 {
@@ -273,6 +349,14 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
                     ?? new JsonObject { ["passed"] = false, ["findings"] = new JsonArray(new JsonObject { ["problem"] = "The review gave no report, so the app is not cleared." }) };
                 await run.Journal.RecordAsync(key, findings, cancellationToken);
                 await run.AppendAsync(HarnessEvents.Message, new JsonObject { ["from"] = "security-reviewer", ["kind"] = "security.review", ["passed"] = Passed(findings), ["findings"] = findings["findings"]?.DeepClone() }, cancellationToken);
+                var count = (findings["findings"] as JsonArray ?? []).Count;
+                await Workforce.SayAsync(run, "security-reviewer", Passed(findings) ? "Security review passed" : "Security review found problems",
+                    Passed(findings)
+                        ? "The security review checked secrets, sign-in, data, model calls and outbound calls, and found nothing that blocks publishing."
+                        : attempt == 0
+                            ? $"The security review found {count} problem{(count == 1 ? "" : "s")} that would block publishing; they are being fixed now, at no charge."
+                            : $"The security review still found {count} problem{(count == 1 ? "" : "s")} after the fix, so the app is not published.",
+                    cancellationToken, $"security:{attempt}");
             }
 
             if (Passed(findings))
@@ -286,7 +370,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             }
 
             // One repair of the findings, on the agent's own work, not billed.
-            var builder = run.Agents.Builder(run, "builder-security-repair", run.Options.BuildTiers[Math.Min(1, run.Options.BuildTiers.Count - 1)], repair: true, workspace.Root);
+            var builder = AgentFactory.As(run, run.Agents.Builder(run, "builder-security-repair", run.Options.BuildTiers[Math.Min(1, run.Options.BuildTiers.Count - 1)], repair: true, workspace.Root), crew.Engineer, crew.EngineerMemory, canRemember: true, crew.ProjectPath);
             var fix = await WorkflowSupport.RunAgentAsync(run, builder, workspace,
                 $"The security review found problems that block publishing. Fix each one, verify with make lint and make test, and commit.\n\n{(findings["findings"] ?? new JsonArray()).ToJsonString(Json.Compact)}\n\nThe plan, for context:\n{plan.Render()}", cancellationToken);
             if (WorkflowOutcome.FromAgent(fix) is { } stopped2)
@@ -341,14 +425,33 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         var name = Json.Str(proposal, "name") is { Length: > 0 } n ? n : OutputText.Truncate(title, 60).Trim();
         var levels = (run.Context["levels"] as JsonArray ?? []).OfType<JsonObject>().ToList();
         var organisation = Json.Str(levels.First(), "path")!;
-        var division = levels.FirstOrDefault(l => Json.Str(l, "level") == "division") is { } d
-            ? Json.Str(d, "path")!
-            : (await run.ControlPlane.EnsureNodeAsync(organisation, "division", Json.Str(proposal, "division") ?? "Labs", WorkflowSupport.Slug(Json.Str(proposal, "division"), "labs"), cancellationToken)).Path;
+        string division;
+        var divisionCreated = false;
+        if (levels.FirstOrDefault(l => Json.Str(l, "level") == "division") is { } d)
+        {
+            division = Json.Str(d, "path")!;
+        }
+        else
+        {
+            var slug = WorkflowSupport.Slug(Json.Str(proposal, "division"), "labs");
+            var made = await run.ControlPlane.EnsureNodeAsync(organisation, "division", DivisionName(slug), slug, cancellationToken);
+            division = made.Path;
+            divisionCreated = made.Created;
+        }
+
         var projectSlug = WorkflowSupport.Slug(Json.Str(proposal, "project") ?? name, "project");
         var project = await run.ControlPlane.EnsureNodeAsync(division, "project", name, projectSlug, cancellationToken);
         var app = await run.ControlPlane.EnsureNodeAsync(project.Path, "app", name, WorkflowSupport.Slug(Json.Str(proposal, "app") ?? "web", "web"), cancellationToken);
-        await run.AppendAsync(HarnessEvents.Message, new JsonObject { ["from"] = "builder", ["text"] = $"{name} will live in {project.Path}." }, cancellationToken);
-        return new JsonObject { ["name"] = name, ["division"] = division, ["projectPath"] = project.Path, ["appPath"] = app.Path, ["appId"] = app.Id.ToString() };
+        await Workforce.SayAsync(run, "builder", "Placed", divisionCreated
+            ? $"{name} will live in a new division, {DivisionName(division.Split('/')[^1])}, as the project {project.Name}."
+            : $"{name} will live in {DivisionName(division.Split('/')[^1])}, as the project {project.Name}.", cancellationToken, "placed");
+        return new JsonObject { ["name"] = name, ["division"] = division, ["divisionCreated"] = divisionCreated, ["projectPath"] = project.Path, ["appPath"] = app.Path, ["appId"] = app.Id.ToString() };
+    }
+
+    private static string DivisionName(string slug)
+    {
+        var words = slug.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(' ', words.Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
     }
 
     private static async Task<decimal?> HeadroomAsync(RunContext run, CancellationToken cancellationToken)

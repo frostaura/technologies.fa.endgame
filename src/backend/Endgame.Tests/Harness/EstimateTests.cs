@@ -43,6 +43,8 @@ public sealed class EstimateTests
         var made = cp.Payload("estimate.made")!;
         Assert.Equal(2.5m, made["credits"]!.GetValue<decimal>());
         Assert.Contains("median of the last 4 task runs", made["basis"]!.GetValue<string>(), StringComparison.Ordinal);
+        // History is read within the run's own organisation: the scope is sent.
+        Assert.Contains(cp.Addresses, a => a.StartsWith("GET /internal/estimates/history?taskType=task&scope=" + Uri.EscapeDataString(Scope), StringComparison.Ordinal));
     }
 
     [Fact]

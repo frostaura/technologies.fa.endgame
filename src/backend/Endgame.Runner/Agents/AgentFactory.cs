@@ -86,6 +86,32 @@ public sealed class AgentFactory(RunnerOptions options)
         Limits = new AgentLimits { MaxSteps = 12, MaxOutputTokens = 4000 },
     };
 
+    /// <summary>
+    /// The agent as the employee (or contractor) doing the work: its model calls carry that id, its curated
+    /// memory follows its instructions as context, and an employee may keep notes with <c>remember</c>.
+    /// </summary>
+    public static AgentDefinition As(RunContext run, AgentDefinition agent, Guid? workerId, string memory, bool canRemember, string? scope = null)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(agent);
+        if (workerId is not { } id)
+        {
+            return agent;
+        }
+
+        var remember = canRemember
+            ? "\n\nBefore you finish, if you learned something about this organisation or this app that would help next time, keep it with remember (at most twice)."
+            : "";
+        return agent with
+        {
+            EmployeeId = id,
+            SystemPrompt = agent.SystemPrompt.TrimEnd() + remember + memory,
+            Tools = canRemember ? agent.Tools.With(new RememberTool(run.ControlPlane, id, run.Run.Id, scope ?? run.Run.Scope)) : agent.Tools,
+            AuthorName = OutputText.Truncate($"Endgame employee {id:N}", 30),
+            AuthorEmail = $"{id:N}@{run.Options.AuthorDomain}",
+        };
+    }
+
     public PermissionPolicy Policy(RunContext run, string stage, IEnumerable<string> allow, IEnumerable<string>? deny = null, IEnumerable<string>? checkpoints = null)
     {
         ArgumentNullException.ThrowIfNull(run);

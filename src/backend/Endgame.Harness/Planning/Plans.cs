@@ -22,6 +22,31 @@ public sealed record PlanContract(string Summary, IReadOnlyList<PlanItem> Items)
         ["items"] = new JsonArray(Items.Select(i => (JsonNode)new JsonObject { ["id"] = i.Id, ["deliverable"] = i.Deliverable, ["check"] = i.Check }).ToArray()),
     };
 
+    /// <summary>The shape of <c>plan.proposed</c> and <c>plan.accepted</c> (ARCH-004): <c>{ summary, items: [{ id, text, check }] }</c>.</summary>
+    public JsonObject ToEvent() => new()
+    {
+        ["summary"] = Summary,
+        ["items"] = new JsonArray(Items.Select(i => (JsonNode)new JsonObject { ["id"] = i.Id, ["text"] = i.Deliverable, ["check"] = i.Check }).ToArray()),
+    };
+
+    /// <summary>A plan read back from a <c>plan.proposed</c> event, in its event shape or the older <c>{ plan }</c> one.</summary>
+    public static PlanContract? FromEvent(JsonObject? payload)
+    {
+        if (payload?["plan"] is JsonObject older)
+        {
+            return FromJson(older);
+        }
+
+        if (payload is null || payload["items"] is not JsonArray items)
+        {
+            return null;
+        }
+
+        return new PlanContract(Json.Str(payload, "summary") ?? "", items.OfType<JsonObject>()
+            .Select((i, n) => new PlanItem(Json.Str(i, "id") is { Length: > 0 } id ? id : $"item-{n + 1}", Json.Str(i, "text") ?? Json.Str(i, "deliverable") ?? "", Json.Str(i, "check") ?? ""))
+            .ToList());
+    }
+
     public static PlanContract? FromJson(JsonObject? o)
     {
         if (o is null)
@@ -123,11 +148,15 @@ public sealed class ProposePlanTool : ITool
 
         var state = call.Context.State;
         state.Plan = plan;
-        await call.Context.Events.WriteAsync(HarnessEvents.PlanProposed, new JsonObject { ["plan"] = plan.ToJson(), ["callId"] = call.CallId }, cancellationToken);
+        var proposed = plan.ToEvent();
+        proposed["callId"] = call.CallId;
+        await call.Context.Events.WriteAsync(HarnessEvents.PlanProposed, proposed, cancellationToken);
         if (call.Context.Agent.AutoAcceptPlan)
         {
             state.PlanAccepted = true;
-            await call.Context.Events.WriteAsync(HarnessEvents.PlanAccepted, new JsonObject { ["by"] = "auto-mode", ["items"] = plan.Items.Count }, cancellationToken);
+            var accepted = plan.ToEvent();
+            accepted["by"] = "auto-mode";
+            await call.Context.Events.WriteAsync(HarnessEvents.PlanAccepted, accepted, cancellationToken);
             return new ToolOutcome($"Plan accepted ({plan.Items.Count} items). Carry it out item by item; call mark_item as each one is done and checked.");
         }
 

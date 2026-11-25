@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Endgame.Harness;
 using Endgame.Harness.Context;
 using Endgame.Harness.Events;
+using Endgame.Harness.Model;
 using Endgame.Harness.Planning;
 using Endgame.Harness.Skills;
 using Endgame.Harness.Subagents;
@@ -205,9 +206,72 @@ public sealed class ReplayAndContextTests
         Assert.False(ws.Files.ContainsKey("/workspace/x.txt"));
         var childEvents = log.Events.Where(e => Replay.Agent(e) == "main.sub-1").ToList();
         Assert.Contains(childEvents, e => e.Type == "tool.result" && e.Payload["errorKind"]?.GetValue<string>() == "unknown_tool");
-        Assert.Contains(log.Events, e => e.Type == "subagent.started" && e.Payload["brief"]!["objective"]!.GetValue<string>().StartsWith("Read secret", StringComparison.Ordinal));
+        Assert.Contains(log.Events, e => e.Type == "subagent.started" && e.Payload["brief"]!.GetValue<string>().StartsWith("Read secret", StringComparison.Ordinal)
+            && e.Payload["title"]!.GetValue<string>().Length is > 0 and <= 60 && e.Payload["briefDetail"]!["objective"] is not null);
         Assert.Equal("It is one line long.", log.Events.Single(e => e.Type == "subagent.finished").Payload["summary"]!.GetValue<string>());
         Assert.Equal(0.05m, result.State.SettledCredits);
+    }
+
+    [Fact]
+    public async Task Independent_read_only_sub_agents_of_one_turn_work_at_the_same_time_and_report_in_order()
+    {
+        // Each child waits until both are in flight: run one after the other, this would never finish.
+        var model = new BarrierModel(2);
+        var tools = TestAgents.WorkspaceTools.Concat<ITool>([new SpawnTool()]);
+        var run = TestAgents.RunAsync(TestAgents.Builder(tools), model, new FakeWorkspace().With("a.txt", "a\n"));
+        var (result, log) = await run.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(result.Completed, result.StopReason);
+        Assert.Equal(2, model.MostAtOnce);
+        var started = log.Events.Where(e => e.Type == "subagent.started").Select(e => e.Payload["subagent"]!.GetValue<string>()).Order().ToList();
+        Assert.Equal(["main.sub-1", "main.sub-2"], started);
+        // Results enter the parent's conversation in the order the calls were made, and replay agrees.
+        var results = log.Events.Where(e => e.Type == "tool.result" && Replay.Agent(e) == "main").Select(e => e.Payload["callId"]!.GetValue<string>()).ToList();
+        Assert.Equal(["survey-a", "survey-b"], results);
+        var replayed = Replay.Fold(log.Events, "main").State;
+        Assert.Equal(result.State.Messages.ToJsonString(), replayed.Messages.ToJsonString());
+        Assert.Equal(2, replayed.SubagentsStarted);
+    }
+
+    /// <summary>The parent asks for two surveys at once; each child blocks until the other has started.</summary>
+    private sealed class BarrierModel(int parties) : IModelClient
+    {
+        private readonly TaskCompletionSource all = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int inFlight;
+        private int arrived;
+
+        public int MostAtOnce { get; private set; }
+
+        public async Task<ModelReply> CompleteAsync(ChatCall call, CancellationToken cancellationToken)
+        {
+            var system = call.Messages[0]!["content"]!.GetValue<string>();
+            if (!system.Contains("You are a sub-agent", StringComparison.Ordinal))
+            {
+                return call.Messages.Count == 2
+                    ? ScriptedModel.Tools(
+                        ("spawn", new { title = "Survey A", objective = "Survey part A.", output_format = "One line.", boundaries = "Read only." }, "survey-a"),
+                        ("spawn", new { title = "Survey B", objective = "Survey part B.", output_format = "One line.", boundaries = "Read only." }, "survey-b"))
+                    : ScriptedModel.Text("Both surveys are in.");
+            }
+
+            lock (this)
+            {
+                inFlight++;
+                MostAtOnce = Math.Max(MostAtOnce, inFlight);
+                if (++arrived == parties)
+                {
+                    all.TrySetResult();
+                }
+            }
+
+            await all.Task.WaitAsync(cancellationToken);
+            await Task.Yield();
+            lock (this)
+            {
+                inFlight--;
+            }
+
+            return ScriptedModel.Text(system.Contains("part A", StringComparison.Ordinal) ? "A is fine." : "B is fine.");
+        }
     }
 
     [Fact]

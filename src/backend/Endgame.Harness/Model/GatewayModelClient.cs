@@ -127,7 +127,9 @@ public sealed class GatewayModelClient(HttpClient http, bool stream = true) : IM
             ["runId"] = call.RunId?.ToString(),
             ["employeeId"] = call.EmployeeId?.ToString(),
             ["messages"] = call.Messages.DeepClone(),
-            ["limits"] = new JsonObject { ["maxTokens"] = call.MaxTokens },
+            ["limits"] = call.MaxSearches is { } searches
+                ? new JsonObject { ["maxTokens"] = call.MaxTokens, ["maxSearches"] = searches }
+                : new JsonObject { ["maxTokens"] = call.MaxTokens },
             ["stream"] = stream,
             ["repair"] = call.Repair,
             ["idempotencyKey"] = call.IdempotencyKey,

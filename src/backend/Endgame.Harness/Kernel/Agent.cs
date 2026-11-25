@@ -35,6 +35,9 @@ public sealed record AgentLimits
 
     /// <summary>A credit ceiling for this agent alone (a sub-agent's budget slice), on top of the gateway's budgets.</summary>
     public decimal? CreditBudget { get; init; }
+
+    /// <summary>On a route with web search, the most searches one call may make (0: none); null leaves the route's maximum.</summary>
+    public int? MaxSearchesPerCall { get; init; }
 }
 
 /// <summary>Everything that defines one agent in a run. A resumed run is rebuilt from the same definition plus its log.</summary>

@@ -24,6 +24,9 @@ public enum WorkflowEnd
 
 public sealed record WorkflowOutcome(WorkflowEnd End, string Summary)
 {
+    /// <summary>The workflow already told the owner how it ended (a milestone message): the Runner adds no closing message of its own.</summary>
+    public bool Announced { get; init; }
+
     public static WorkflowOutcome Success(string summary) => new(WorkflowEnd.Succeeded, summary);
 
     public static WorkflowOutcome Failure(string summary) => new(WorkflowEnd.Failed, summary);
@@ -89,6 +92,9 @@ public sealed class RunContext
     public Func<DateTimeOffset> LeaseExpiry { get; init; } = () => DateTimeOffset.UtcNow.AddMinutes(2);
 
     public required WorkflowJournal Journal { get; init; }
+
+    /// <summary>The milestones told to the owner in this process, so each is said once.</summary>
+    public HashSet<string> Said { get; } = new(StringComparer.Ordinal);
 
     /// <summary>The services every agent of this run shares.</summary>
     public AgentServices Services(bool withTasks = true) => new()

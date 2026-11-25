@@ -58,20 +58,20 @@ public static class Replay
 
                             if (Json.Bool(p, "final") == true)
                             {
-                                state.FinalText = (p["assistant"]?["content"] as JsonValue)?.GetValue<string>() ?? Json.Str(p, "text");
+                                state.FinalText = (p["assistant"]?["content"] as JsonValue)?.GetValue<string>() ?? Json.Str(p, "reply") ?? Json.Str(p, "text");
                                 state.StopReason = state.EverEdited ? StopReasons.Completed : StopReasons.CompletedNoEdits;
                             }
 
                             break;
                         case MessageKinds.Nudge:
-                            ApplyNudge(state, Json.Str(p, "source") ?? "", Json.Str(p, "text") ?? "");
+                            ApplyNudge(state, Json.Str(p, "source") ?? "", Json.Str(p, "nudge") ?? Json.Str(p, "text") ?? "");
                             break;
                         case MessageKinds.Compaction:
                             ApplyCompaction(state, Json.Int(p, "head") ?? 2, Json.Int(p, "cut") ?? 0, Json.Str(p, "summary") ?? "");
                             state.SettledCredits += Json.Dec(p, "credits") ?? 0m;
                             break;
                         case MessageKinds.Notes:
-                            state.Notes.Add(Json.Str(p, "text") ?? "");
+                            state.Notes.Add(Json.Str(p, "note") ?? Json.Str(p, "text") ?? "");
                             break;
                         case MessageKinds.PlanMark:
                             var item = Json.Str(p, "item") ?? "";
@@ -79,7 +79,7 @@ public static class Replay
                             break;
                         case MessageKinds.AgentStopped:
                             state.StopReason = Json.Str(p, "reason");
-                            state.FinalText ??= Json.Str(p, "text");
+                            state.FinalText ??= Json.Str(p, "detail") ?? Json.Str(p, "text");
                             break;
                     }
 
@@ -104,7 +104,7 @@ public static class Replay
                     pending.RemoveAll(c => c.CallId == Json.Str(p, "callId"));
                     break;
                 case HarnessEvents.PlanProposed:
-                    state.Plan = PlanContract.FromJson(p["plan"] as JsonObject);
+                    state.Plan = PlanContract.FromEvent(p);
                     state.PlanAccepted = false;
                     break;
                 case HarnessEvents.PlanAccepted:

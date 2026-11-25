@@ -82,6 +82,37 @@ public sealed class FakeControlPlane : HttpMessageHandler
 
     public List<string> Requests { get; } = [];
 
+    /// <summary>Every request with its query string, for asserting what was sent.</summary>
+    public List<string> Addresses { get; } = [];
+
+    /// <summary>Hires raised, by need key; accepted at once unless <see cref="HiresWait"/>.</summary>
+    public Dictionary<string, JsonObject> Hires { get; } = [];
+
+    public bool HiresWait { get; set; }
+
+    /// <summary>The standing security reviewer every organisation has.</summary>
+    public Guid Reviewer { get; } = Guid.NewGuid();
+
+    /// <summary>Memory per employee: what a run reads, and what it wrote.</summary>
+    public Dictionary<Guid, List<JsonObject>> Memory { get; } = [];
+
+    public List<JsonObject> MemoryReviews { get; } = [];
+
+    public List<JsonObject> Contractors { get; } = [];
+
+    public List<JsonObject> ContractorsFinished { get; } = [];
+
+    /// <summary>Auto-mode's answer: null builds (200), or a problem code it is refused with.</summary>
+    public string? DecisionRefusal { get; set; }
+
+    public List<string> Decisions { get; } = [];
+
+    /// <summary>Faults the control plane names when refusing the first verdict(s); each refusal takes one.</summary>
+    public Queue<string[]> VerdictRefusals { get; } = new();
+
+    /// <summary>Schedules the app declares, as the ontology shows them.</summary>
+    public List<string> Schedules { get; } = [];
+
     public ControlPlaneClient Client() => new(new HttpClient(this) { BaseAddress = new Uri("http://control-plane") });
 
     public RunInfo Info() => System.Text.Json.JsonSerializer.Deserialize<RunInfo>(Run.ToJsonString(), Endgame.Harness.Kernel.Json.Web)!;
@@ -104,6 +135,7 @@ public sealed class FakeControlPlane : HttpMessageHandler
         lock (gate)
         {
             Requests.Add($"{request.Method} {path}");
+            Addresses.Add($"{request.Method} {request.RequestUri.PathAndQuery}");
             var run = $"/internal/runs/{RunId:D}";
             return (request.Method.Method, path) switch
             {
@@ -122,7 +154,15 @@ public sealed class FakeControlPlane : HttpMessageHandler
                 ("POST", var p) when p.StartsWith("/internal/apps/", StringComparison.Ordinal) && p.EndsWith("/token", StringComparison.Ordinal) => Json(new JsonObject { ["token"] = "app-token-for-test" }),
                 ("GET", "/internal/credits/headroom") => Headroom is { } h ? Json(new JsonObject { ["headroomCredits"] = h }) : Problem(HttpStatusCode.NotFound, "not_found", "No such endpoint."),
                 ("GET", "/internal/estimates/history") => Json(new JsonArray(History.Select(c => (JsonNode)new JsonObject { ["credits"] = c }).ToArray())),
-                ("GET", "/internal/employees") => Json(new JsonArray(new JsonObject { ["name"] = "Ada", ["role"] = "Builder" })),
+                ("GET", "/internal/employees") => Json(Staff()),
+                ("POST", "/internal/hires") => Hire(body!.AsObject()),
+                ("GET", var p) when p.StartsWith("/internal/employees/", StringComparison.Ordinal) && p.EndsWith("/memory", StringComparison.Ordinal) => Json(new JsonArray(MemoryOf(p).Select(m => (JsonNode)m.DeepClone()).ToArray())),
+                ("POST", var p) when p.StartsWith("/internal/employees/", StringComparison.Ordinal) && p.EndsWith("/memory", StringComparison.Ordinal) => Remember(p, body!.AsObject()),
+                ("POST", var p) when p.StartsWith("/internal/employees/", StringComparison.Ordinal) && p.EndsWith("/memory/review", StringComparison.Ordinal) => Reviewed(body!.AsObject()),
+                ("POST", "/internal/contractors") => Contractor(body!.AsObject()),
+                ("POST", var p) when p.StartsWith("/internal/contractors/", StringComparison.Ordinal) && p.EndsWith("/finish", StringComparison.Ordinal) => Finished(p, body!.AsObject()),
+                ("POST", var p) when p.StartsWith("/internal/ideas/", StringComparison.Ordinal) && p.EndsWith("/decision", StringComparison.Ordinal) => Decide(body!.AsObject()),
+                ("GET", "/internal/ontology") => Json(new JsonObject { ["nodes"] = new JsonArray(Schedules.Select(n => (JsonNode)new JsonObject { ["id"] = $"schedule:{n}", ["type"] = "schedule", ["name"] = n }).ToArray()), ["edges"] = new JsonArray() }),
                 _ => Problem(HttpStatusCode.NotFound, "not_found", $"{request.Method} {path} is not served by the fake."),
             };
         }
@@ -189,8 +229,115 @@ public sealed class FakeControlPlane : HttpMessageHandler
         return Json(new JsonObject { ["id"] = id, ["title"] = title, ["status"] = "pending" }, HttpStatusCode.Created);
     }
 
+    private JsonArray Staff()
+    {
+        var staff = new JsonArray(
+            new JsonObject { ["id"] = Reviewer.ToString(), ["kind"] = "employee", ["name"] = "Vigil", ["role"] = "Security reviewer", ["status"] = "idle", ["standing"] = "security-reviewer", ["scope"] = "frostaura" },
+            new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["kind"] = "employee", ["name"] = "Ada", ["role"] = "Builder", ["status"] = "idle", ["scope"] = "frostaura" });
+        foreach (var hire in Hires.Values.Where(h => h["employeeId"] is not null))
+        {
+            staff.Add(new JsonObject { ["id"] = hire["employeeId"]!.ToString(), ["kind"] = "employee", ["name"] = hire["name"]?.ToString(), ["role"] = hire["role"]?.ToString(), ["status"] = "idle", ["scope"] = hire["scope"]?.ToString() });
+        }
+
+        return staff;
+    }
+
+    private HttpResponseMessage Hire(JsonObject body)
+    {
+        var key = body["needKey"]!.GetValue<string>();
+        var created = !Hires.ContainsKey(key);
+        if (created)
+        {
+            Hires[key] = new JsonObject
+            {
+                ["id"] = Guid.NewGuid().ToString(),
+                ["status"] = HiresWait ? "proposed" : "accepted",
+                ["trigger"] = body["trigger"]?.ToString(),
+                ["needKey"] = key,
+                ["scope"] = body["scope"]?.ToString(),
+                ["name"] = body["name"]?.ToString(),
+                ["role"] = body["role"]?.ToString(),
+                ["reportsTo"] = body["reportsTo"]?.ToString(),
+                ["modelTier"] = body["jobDescription"]?["modelTier"]?.ToString(),
+                ["expectedMonthlyCredits"] = body["expectedMonthlyCredits"]?.DeepClone(),
+                ["withinBudget"] = !HiresWait,
+                ["employeeId"] = HiresWait ? null : Guid.NewGuid().ToString(),
+            };
+        }
+
+        return Json(new JsonObject { ["hire"] = Hires[key].DeepClone(), ["created"] = created }, created ? HttpStatusCode.Created : HttpStatusCode.OK);
+    }
+
+    private List<JsonObject> MemoryOf(string path)
+    {
+        var id = Guid.Parse(path.Split('/')[3]);
+        if (!Memory.TryGetValue(id, out var entries))
+        {
+            Memory[id] = entries = [];
+        }
+
+        return entries;
+    }
+
+    private HttpResponseMessage Remember(string path, JsonObject body)
+    {
+        var entries = MemoryOf(path);
+        var added = new JsonArray();
+        foreach (var e in (body["entries"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            var entry = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["title"] = e["title"]?.ToString(), ["body"] = e["body"]?.ToString(), ["kind"] = e["kind"]?.ToString(), ["scope"] = e["scope"]?.ToString() ?? "frostaura", ["sourceRunId"] = body["runId"]?.ToString() };
+            entries.Add(entry);
+            added.Add(entry.DeepClone());
+        }
+
+        return Json(added, HttpStatusCode.Created);
+    }
+
+    private HttpResponseMessage Reviewed(JsonObject body)
+    {
+        MemoryReviews.Add(body.DeepClone().AsObject());
+        return Json(new JsonObject { ["merged"] = 0 });
+    }
+
+    private HttpResponseMessage Contractor(JsonObject body)
+    {
+        var contractor = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["kind"] = "contractor", ["name"] = body["name"]?.ToString(), ["role"] = body["role"]?.ToString(), ["briefedBy"] = body["briefedBy"]?.ToString() };
+        Contractors.Add(contractor);
+        return Json(contractor.DeepClone(), HttpStatusCode.Created);
+    }
+
+    private HttpResponseMessage Finished(string path, JsonObject body)
+    {
+        body["contractorId"] = path.Split('/')[3];
+        ContractorsFinished.Add(body.DeepClone().AsObject());
+        return Json(new JsonObject { ["contractor"] = new JsonObject(), ["learned"] = new JsonArray(), ["promotion"] = null });
+    }
+
+    private HttpResponseMessage Decide(JsonObject body)
+    {
+        Decisions.Add($"{body["decision"]}:{body["by"]}");
+        return DecisionRefusal switch
+        {
+            null => Json(new JsonObject { ["idea"] = new JsonObject(), ["run"] = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["kind"] = "build" } }),
+            "red_line" => Problem(HttpStatusCode.Forbidden, "red_line", "It crosses a red line."),
+            var code => Problem(HttpStatusCode.Conflict, code, "Checkpoints are on here, so the owner decides."),
+        };
+    }
+
     private HttpResponseMessage RecordVerdict(JsonObject verdict)
     {
+        if (VerdictRefusals.TryDequeue(out var faults))
+        {
+            return Json(new JsonObject { ["status"] = 400, ["code"] = "verdict_invalid", ["detail"] = "Not in the agreed shape.", ["errors"] = new JsonArray(faults.Select(f => (JsonNode)f).ToArray()) }, HttpStatusCode.BadRequest);
+        }
+
+        // The control plane's own check, exactly (ARCH-004): a fake that accepted anything would hide the defect the first real run found.
+        var faultsFound = Endgame.Domain.Runs.VerdictDocument.Validate(verdict);
+        if (faultsFound.Count > 0)
+        {
+            return Json(new JsonObject { ["status"] = 400, ["code"] = "verdict_invalid", ["detail"] = "Not in the agreed shape.", ["errors"] = new JsonArray(faultsFound.Select(f => (JsonNode)f).ToArray()) }, HttpStatusCode.BadRequest);
+        }
+
         Verdict = verdict.DeepClone().AsObject();
         return Json(new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["status"] = "awaiting_decision", ["verdict"] = verdict["outcome"]?.ToString() });
     }

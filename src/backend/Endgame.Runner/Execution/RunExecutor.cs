@@ -179,10 +179,22 @@ public sealed class RunExecutor(
             var actual = Estimator.Score(all);
             var expected = Estimator.Latest(all) ?? 0m;
             var status = outcome.End == WorkflowEnd.Succeeded ? RunStatuses.Succeeded : RunStatuses.Failed;
+            List<RunEvent> closing = [new RunEvent(HarnessEvents.EstimateScored, Estimator.Scored(expected, actual))];
+            if (!outcome.Announced)
+            {
+                // Said once: a workflow that announced its own ending (a verdict, a published app) is not repeated here.
+                closing.Add(new RunEvent(HarnessEvents.Message, new JsonObject
+                {
+                    ["from"] = "runner",
+                    ["title"] = status == RunStatuses.Succeeded ? "Finished" : "Stopped",
+                    ["text"] = Workflows.WorkflowSupport.ForPeople(outcome.Summary),
+                    ["milestone"] = "finished",
+                }));
+            }
+
             await log.AppendAsync(
             [
-                new RunEvent(HarnessEvents.EstimateScored, Estimator.Scored(expected, actual)),
-                new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["text"] = outcome.Summary, ["outcome"] = status }),
+                .. closing,
                 new RunEvent(RunEventTypes.RunFinished, new JsonObject
                 {
                     ["outcome"] = status,
