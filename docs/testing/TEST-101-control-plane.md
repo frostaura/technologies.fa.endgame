@@ -38,6 +38,7 @@ The acceptance statements of UC-101 to UC-115. The ones with the most weight, an
 | A token's role caps its person's | `McpTests.A_viewers_token_reads_and_changes_nothing` |
 | An app's own API is derived from its OpenAPI and called through Edge with a member session | `McpTests.An_apps_own_api_is_derived…` (fake Edge control listener) |
 | Versions name their authors; a restore is a new commit, rebuilt, and a public app turns private; only the Owner exports | `VersionsAndExportTests` (fake Dock) |
+| God mode logs one entry per visit: an explicit entry then the org chart's burst of reads is one row; eight concurrent first reads are one row; a visit slides on with each read and ends after the window | `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry`, `…Reads_with_no_entry_before_them_log_one_entry…`, `OperatorVisitsTests` |
 | Reserved names, role changes, runs by employee, notifications, top-up requests, God mode, prices, suggestions | `BreadthTests` (fake ops service) |
 
 ## Tests
