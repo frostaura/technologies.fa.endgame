@@ -12,7 +12,8 @@ export function Shell({ children, operator = false }: { children: ReactNode; ope
   const here = parts[0] ?? "";
   const nav = operator
     ? [
-        { to: "/operator", label: "Handbook", on: here === "operator" },
+        { to: "/operator", label: "Handbook", on: here === "operator" && parts.length === 1 },
+        { to: "/operator/browse", label: "Browse", on: here === "operator" && parts.length > 1 },
         { to: "/demo", label: "Live demo", on: here === "demo" },
       ]
     : [

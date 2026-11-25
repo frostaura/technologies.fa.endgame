@@ -50,6 +50,18 @@ export function Browse({ operator = false }: { operator?: boolean }) {
             </a>
           </li>
         ))}
+        {!operator &&
+          (["operator", "host-admin"] as const).map((r) => (
+            <li key={r}>
+              <a href={href("/operator")} className="group flex h-full flex-col rounded-md border border-dashed bg-ground p-5 hover:border-border-strong">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="font-semibold text-ink">{ROLE_LABEL[r]}</span>
+                  <span className="shrink-0 rounded-full bg-night px-2 py-0.5 text-xs font-medium text-primary-ink">FrostAura only</span>
+                </span>
+                <span className="mt-1 text-sm text-ink-muted">{ROLE_BLURB[r]} Taught in the separate operator handbook.</span>
+              </a>
+            </li>
+          ))}
       </ul>
 
       <h2 className="mt-14 font-display text-2xl font-semibold text-ink">By what it is reached by</h2>

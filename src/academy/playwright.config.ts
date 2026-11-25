@@ -6,7 +6,7 @@ import { defineConfig } from "@playwright/test";
  * `CI=1 PW_PORT=<free port above 5600> npm run test:e2e`. The demo frame is answered by the
  * bridge's test double (`test-double/demo/`), routed in by the spec, so op order is deterministic.
  */
-const port = Number(process.env.PW_PORT ?? 5611);
+const port = Number(process.env.PW_PORT ?? 5647);
 export const BASE_PATH = "/technologies.fa.endgame/";
 const isCI = !!process.env.CI;
 

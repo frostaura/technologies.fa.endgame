@@ -323,7 +323,7 @@ e2e-acceptance-run:
 # PDFs. The academy imports the console's Tailwind preset, so the console's packages come first.
 ACADEMY = cd src/academy &&
 SITE_URL ?= https://frostaura.github.io/technologies.fa.endgame/
-ACADEMY_PW_PORT ?= 5611
+ACADEMY_PW_PORT ?= 5647
 
 academy-install:
 	@test -d src/frontend/node_modules || $(FRONTEND) npm ci --no-audit --no-fund
