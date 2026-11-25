@@ -11,6 +11,8 @@ export function versionTitle(v: AppVersion, technical: boolean): string {
   const first = v.message.split("\n")[0]?.trim() ?? "";
   if (technical) return first || "A change";
   if (v.author.kind === "factory") return "The factory recorded its progress";
+  // A restore's own line (`Restore the version <commit>`) names a commit id: say what it is instead.
+  if (/^Restore the version [0-9a-f]{7,40}$/i.test(first)) return "An earlier version, brought back";
   const stripped = first.replace(/^[a-z0-9]+(?:-[a-z0-9]+)*:\s+/, "");
   const sentence = stripped ? `${stripped.charAt(0).toUpperCase()}${stripped.slice(1)}` : "";
   return plainOrNull(sentence) ?? `A change by ${v.author.name}`;

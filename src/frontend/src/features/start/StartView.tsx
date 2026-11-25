@@ -46,6 +46,8 @@ export function StartView() {
   const place = places.find((p) => p.scope === picked) ?? places[0] ?? null;
   const scope = firstRun ? undefined : place?.scope;
   const blocked = !firstRun && !!me.data && !!org && places.length === 0 && (tree.isSuccess || tree.isError || roleRank(roleOf(org.slug)) < roleRank("builder"));
+  // No organisation, and none may be named here: an idea has nowhere to live (ORG-03).
+  const unplaced = !firstRun && !!me.data && !org && !active.isLoading && tree.data?.firstRun === false;
   const [orgName, setOrgName] = useState("");
   const [idea, setIdea] = useState("");
   const [chosen, setChosen] = useState<string[]>([]);
@@ -113,7 +115,17 @@ export function StartView() {
       crumbs={org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }, { label: "New idea" }] : [{ label: "Start" }]}
       aside={<NextSteps scope={firstRun ? null : (scope ?? null)} division={place && place.scope !== org?.slug ? place.label : null} />}
     >
-      {blocked && org ? (
+      {unplaced ? (
+        <section data-state="refused" className="mx-auto flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
+          <h1 className="text-4xl font-semibold leading-tight">Organisations are set up by FrostAura</h1>
+          <p className="text-base text-ink-body">
+            An idea lives in an organisation, and you hold no role in one yet. FrostAura sets one up for each person it invites; if someone already works here, ask them to give you a role.
+          </p>
+          <Link href={paths.home()} className="rounded-xs text-primary-link hover:text-primary-hover">
+            Back to the org chart
+          </Link>
+        </section>
+      ) : blocked && org ? (
         <section data-state="refused" className="mx-auto flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
           <h1 className="text-4xl font-semibold leading-tight">Only a Builder or above starts an idea</h1>
           <p className="text-base text-ink-body">

@@ -1,0 +1,82 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-07",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/tree?scope=northwind/operations",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Archive Operations"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Archive Operations?",
+        "note": "Archiving asks first: it keeps its history, spending and people, and none of its apps is served until it is reactivated."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes, archive Operations"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Operations is archived. Nothing in it was deleted.",
+        "note": "Archived at once; the routing table is recalculated, and the outline marks it Archived."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "selector": "section[aria-label='Organisation chart'] > div:nth-child(3) [data-archived]",
+        "note": "On the chart it is drawn archived: a dashed header with the badge Archived."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/tree?scope=northwind/operations",
+      "act": [
+        {
+          "click": {
+            "text": "Reactivate Operations"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Operations is active again.",
+        "note": "Reactivate brings it back, and its apps are served again."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Builder reads who may",
+      "persona": "builder",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind/operations",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "An Admin or above archives a division.",
+            "note": "Lena is a Builder: archiving a division is an Admin's."
+          }
+        }
+      ]
+    }
+  ]
+}

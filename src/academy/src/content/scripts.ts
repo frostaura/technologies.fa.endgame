@@ -5,7 +5,7 @@
  */
 
 /** Who the embedded console is signed in as. */
-export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin", "division-admin", "invited", "first-run", "two-organisations"] as const;
+export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin", "division-admin", "invited", "first-run", "two-organisations", "no-role"] as const;
 export type Persona = (typeof PERSONAS)[number];
 
 /**
@@ -13,7 +13,7 @@ export type Persona = (typeof PERSONAS)[number];
  * script may name its records as `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}`, which the
  * demo resolves inside the scenario.
  */
-export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode", "account", "two-organisations", "app-asleep", "app-paused", "app-crashed", "at-overdraft-limit", "s1-app-made-private", "s1-app-not-published", "s1-app-private", "s1-app-public", "s1-app-unshared", "s1-development-apps", "s1-development-sign-in", "s1-keys-at-limit", "s1-session-check-fails", "default", "quiet", "research-running", "research-verdict", "verdict-do-not-build", "verdict-red-line", "build-running", "build-plan", "build-sent-back", "build-security-finding", "build-published", "build-waiting-on-plan", "build-failed", "app-busy", "app-never-measured", "budget-spent", "s3-research-failed", "s3-research-cancelled", "s3-checkpoints", "s3-start-checkpoint", "s3-waiting-for-budget", "s3-budget-runs-out", "s3-change-running", "s3-change-failed", "s3-stage-rules", "s3-suggestions", "s3-employee-paused", "hire-pending", "employee-memory"] as const;
+export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode", "account", "two-organisations", "app-asleep", "app-paused", "app-crashed", "at-overdraft-limit", "s1-app-made-private", "s1-app-not-published", "s1-app-private", "s1-app-public", "s1-app-unshared", "s1-development-apps", "s1-development-sign-in", "s1-keys-at-limit", "s1-session-check-fails", "quiet", "hire-pending", "employee-memory", "employee-released", "screening-offline", "build-running", "s4-hiring", "s4-hires-all-decided", "s4-hire-manager-gone", "s4-contractor-working", "s4-contractor-finishes", "s4-employee-working", "s4-employee-record", "s4-employee-team", "s4-employee-at-cap", "s4-idle-sweep", "s4-released-with-memory", "s4-memory-to-tidy", "s4-credits-at-zero", "s4-below-zero", "s4-top-ups-waiting", "s4-operator-log", "s4-operator-log-empty", "default", "empty-organisation", "research-running", "research-verdict", "verdict-do-not-build", "verdict-red-line", "build-plan", "build-sent-back", "build-security-finding", "build-published", "build-waiting-on-plan", "build-failed", "app-busy", "app-never-measured", "budget-spent", "manage-tree", "archived-division", "employee-let-go", "tree-unreachable", "tree-refresh-fails", "ontology-unreachable", "notifications-unreachable", "notifications-refresh-fails", "status-unhealthy", "status-no-services", "status-unreachable", "status-refresh-fails", "session-unreachable", "operator-no-organisation", "ask-unavailable", "app-private", "app-public", "app-shared-empty", "app-restore-fails", "app-rebuild-fails", "app-not-published", "app-wake-slow", "app-wake-busy", "app-unreachable", "outage", "no-secrets", "dashboard-full", "app-long-history", "wake-failures", "s3-research-failed", "s3-research-cancelled", "s3-checkpoints", "s3-start-checkpoint", "s3-waiting-for-budget", "s3-budget-runs-out", "s3-change-running", "s3-change-failed", "s3-stage-rules", "s3-suggestions", "s3-employee-paused"] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 /** Where a spotlight lands: a CSS selector, a `data-testid`, or the visible text of a control. */
@@ -39,6 +39,8 @@ export interface DemoStep {
   kind: "demo";
   /** Navigate first. */
   goto?: string;
+  /** From this step on, someone else is signed in to the same world; needs a `goto`. */
+  persona?: Persona;
   /** Spotlight a control, with an optional callout. */
   highlight?: Target & { note?: string };
   /** Perform these, in order, with visible motion. */
@@ -93,7 +95,18 @@ export interface ImageStep {
   note?: string;
 }
 
-export type ScriptStep = DemoStep | TerminalStep | RequestStep | EmailStep | ImageStep;
+/** Code the step is about ("the app calls X"), shown like the terminal, with what it prints or returns. */
+export interface CodeStep {
+  step: number;
+  kind: "code";
+  language: "csharp" | "typescript" | "tsx" | "javascript" | "json" | "http" | "bash" | "sql" | "yaml" | "text";
+  code: string;
+  /** What running it prints or returns, line for line. */
+  output?: string[];
+  note?: string;
+}
+
+export type ScriptStep = DemoStep | TerminalStep | RequestStep | EmailStep | ImageStep | CodeStep;
 export type ScriptKind = ScriptStep["kind"];
 
 export interface StepScript {

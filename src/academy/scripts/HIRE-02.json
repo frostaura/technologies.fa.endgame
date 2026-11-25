@@ -1,0 +1,119 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HIRE-02",
+  "persona": "owner",
+  "scenario": "hire-pending",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Hire Lark as data analyst?"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Hire proposed",
+        "note": "A hire is shown before it happens: the badge, then who and what role."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "For Technologies · A job keeps coming back",
+        "note": "Where it would work, why it was raised, and by whom — then the reason, in full."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-labelledby='jd-title'] dl",
+        "note": "The job it would be hired to: mandate, where it works, what it may use, services, budget, thinking power, manager — in plain words."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "More than the budget has room for",
+        "note": "Expected 300 credits a month against the room left in Technologies this month."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "An employee with nothing to do is flagged and let go",
+        "note": "An idle hire is never paid for, and its memory is kept for a rehire."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Technical mode names the real tools and tiers",
+      "persona": "owner",
+      "scenario": "hire-pending",
+      "start": "/hires/{hire}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Standard, for reading and judging (research)",
+            "note": "Technical mode adds the real names beside the plain ones: the tier here, and each tool under “May use”."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A Viewer reads it, an Admin decides",
+      "persona": "viewer",
+      "scenario": "hire-pending",
+      "start": "/hires/{hire}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "An Admin or the Owner decides on hires.",
+            "note": "Priya is a Viewer: the whole proposal, and no buttons."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A proposal that is not there",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/hires/00000000-0000-4000-8000-000000000000",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "This hire proposal could not be found",
+            "note": "An address that names no proposal, or one you cannot see."
+          }
+        }
+      ]
+    }
+  ]
+}

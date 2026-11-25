@@ -66,14 +66,15 @@ area("PlatformConsoleEndpoints", {
     requireRole(world, a.path, "admin");
     const email = (str(req.body, "email") ?? "").trim().toLowerCase();
     if (!isEmail(email)) throw invalid("Give a valid e-mail address.");
-    const code = newId(world, "share").replace(/-/g, "").slice(0, 8).toUpperCase();
-    const invitationCode = `${code.slice(0, 4)}-${code.slice(4)}`;
-    const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    // `AppIdentityService.ShareAsync`: 16 random bytes as 32 lower-case hex characters, for 14 days.
+    const invitationCode = (newId(world, "share") + newId(world, "share")).replace(/-/g, "").slice(0, 32);
+    const expiresAt = new Date(Date.now() + 14 * 86_400_000).toISOString();
     const existing = world.shares.find((s) => s.appId === a.id && s.email === email);
     if (existing) Object.assign(existing, { code: invitationCode, invitedAt: new Date().toISOString() });
     else world.shares.push({ appId: a.id, email, invitedAt: new Date().toISOString(), registered: false, code: invitationCode });
     world.changed.push("Shares", "App", "Tree");
-    return created({ email, invitationCode, expiresAt, emailed: false });
+    // The demo's installation has a mail server, so `InvitationMailer.SendShareAsync` queues the e-mail.
+    return created({ email, invitationCode, expiresAt, emailed: true });
   },
 
   "DELETE apps/{id}/shares": (req, { world }) => {
@@ -96,18 +97,28 @@ area("PlatformConsoleEndpoints", {
 
   "GET system/status": (_req, { world }) => {
     const at = new Date().toISOString();
+    // StatusOptions.Probes and DatabaseHealthProbe: the platform's peers, in the server's own order and names.
     const services = [
-      ["edge", "Edge", 3],
       ["control-plane", "Control plane", 6],
+      ["edge", "Edge", 3],
       ["runner", "Runner", 9],
       ["dock", "Dock", 4],
-      ["database", "PostgreSQL", 2],
-      ["egress", "Egress proxy", 5],
-      ["tunnel", "Tunnel", 18],
-      ["backup", "Backup", 7],
+      ["database", "Database", 2],
+      ["console", "Console", 3],
+      ["ops", "Cloudflare and backups", 18],
+      ["collector", "Telemetry collector", 5],
     ] as const;
+    const set = world.systemStatus ?? {};
+    const rows = set.none
+      ? []
+      : services.map(([key, name, latencyMs]) => {
+          const down = set.unhealthy?.[key];
+          return { key, name, state: down ? "unhealthy" : "healthy", latencyMs: down ? 2000 : latencyMs, detail: down ?? null };
+        });
+    // GetSystemStatus: the whole is healthy only if there is at least one part and every part is.
+    const overall = rows.length > 0 && rows.every((r) => r.state === "healthy") ? "healthy" : "unhealthy";
     // Signed out, only whether the whole is healthy and when it was checked (SYS-05).
-    if (!world.sessionUserId) return ok({ overall: "healthy", checkedAt: at });
-    return ok({ overall: "healthy", checkedAt: at, services: services.map(([key, name, latencyMs]) => ({ key, name, state: "healthy", latencyMs, detail: key === "backup" ? "Last backup 3 hours ago." : null })) });
+    if (!world.sessionUserId) return ok({ overall, checkedAt: at });
+    return ok({ overall, checkedAt: at, services: rows });
   },
 });

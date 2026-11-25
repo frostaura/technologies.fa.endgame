@@ -1,0 +1,84 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-06",
+  "persona": "operator",
+  "scenario": "s4-top-ups-waiting",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Waiting requests'] li",
+        "note": "Who asks for how many credits, when, their note, and who sent it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add the credits"
+          }
+        },
+        {
+          "wait": 500
+        },
+        {
+          "click": {
+            "text": "Add it and close the request"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "and closed the request.",
+        "note": "A top-up that names the request: added, the request closed, and both on the Owner's record."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Decline"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Why (the Owner reads this)"
+            },
+            "text": "Two of these ask for the same week; I've added the larger one."
+          }
+        },
+        {
+          "click": {
+            "text": "Decline it"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Answered (3)",
+        "note": "Declined, with a reason: both answers move under “Answered”."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/credits",
+      "persona": "owner",
+      "highlight": {
+        "text": "FrostAura: Two of these ask for the same week",
+        "note": "The Owner reads the answer on Credits."
+      }
+    }
+  ]
+}

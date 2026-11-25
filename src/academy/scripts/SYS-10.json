@@ -1,0 +1,32 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SYS-10",
+  "persona": "owner",
+  "scenario": "tree-unreachable",
+  "start": "/",
+  "steps": [
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "The organisation could not be loaded",
+        "note": "The tree could not be read: a failure, never an empty organisation. There is no conversation while it has failed."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Try again"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "section[aria-label='Organisation chart']",
+        "note": "Try again reads it, and the chart appears."
+      }
+    }
+  ]
+}

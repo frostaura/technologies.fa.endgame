@@ -1,0 +1,100 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-14",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Manage"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Its name",
+        "note": "Manage, with the whole organisation chosen: “Its name”."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Name"
+            },
+            "text": "Northwind Club"
+          }
+        },
+        {
+          "click": {
+            "text": "Save the name"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "It is called Northwind Club now.",
+        "note": "The Owner types the new name and saves it. The address stays northwind."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "selector": "section[aria-label='Organisation'] h1",
+        "note": "The band, the breadcrumb and the header follow the new name."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Anyone but the Owner is told who may",
+      "persona": "admin",
+      "scenario": "quiet",
+      "start": "/tree?scope=northwind",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "The Owner renames the organisation.",
+            "note": "Ada is an Admin: she reads who may rename it, instead of the field."
+          }
+        }
+      ]
+    },
+    {
+      "title": "An empty name is refused before it is sent",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/tree?scope=northwind",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "selector": "form[aria-label^='Rename'] input"
+                },
+                "text": " "
+              }
+            }
+          ],
+          "highlight": {
+            "text": "A name cannot be empty.",
+            "note": "An empty name is refused at once, and Save the name stays disabled."
+          }
+        }
+      ]
+    }
+  ]
+}

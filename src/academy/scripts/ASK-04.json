@@ -1,0 +1,42 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ASK-04",
+  "persona": "builder",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Which days are busiest?"
+            },
+            "text": "Which days are busiest?"
+          }
+        },
+        {
+          "click": {
+            "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+          }
+        },
+        {
+          "click": {
+            "selector": "div[role=\"status\"] > button"
+          }
+        },
+        {
+          "click": {
+            "text": "Ask something else"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "input[placeholder=\"Which days are busiest?\"]",
+        "note": "Cleared: the next question gets its own estimate."
+      }
+    }
+  ]
+}

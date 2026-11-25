@@ -139,7 +139,7 @@ export function DeleteNode({ level, id, name, tree, onDeleted }: { level: Manage
       {confirming ? (
         <Confirm
           title={`Delete ${name}?`}
-          text={`This cannot be undone. Only a ${word(level)} with nothing in it, no work and no spending can be deleted; the settings and roles set on it go with it.`}
+          text={`This cannot be undone. Only ${level === "app" ? "an" : "a"} ${word(level)} with nothing in it, no work and no spending can be deleted; the settings and roles set on it go with it.`}
           yes={`Yes, delete ${name}`}
           no="Keep it"
           onYes={() => void confirm()}

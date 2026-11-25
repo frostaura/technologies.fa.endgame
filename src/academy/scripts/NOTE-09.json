@@ -1,0 +1,30 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "NOTE-09",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/notifications",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "email",
+      "from": "Endgame",
+      "to": "mara@northwind.example",
+      "subject": "Northwind: Shift Rota stopped working",
+      "body": [
+        "Shift Rota stopped working",
+        "It crashed and visitors see an unavailable page. Its last good version can be restored from its history.",
+        "(northwind/operations/shift-rota/web)"
+      ],
+      "note": "An urgent notice is e-mailed once, when it is first raised, to the Owner and the organisation's Admins."
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Also e-mailed",
+        "note": "Its row in the feed says Also e-mailed."
+      }
+    }
+  ]
+}

@@ -35,7 +35,8 @@
         "division-admin",
         "invited",
         "first-run",
-        "two-organisations"
+        "two-organisations",
+        "no-role"
       ]
     },
     "scenario": {
@@ -65,13 +66,35 @@
         "s1-development-sign-in",
         "s1-keys-at-limit",
         "s1-session-check-fails",
-        "default",
         "quiet",
+        "hire-pending",
+        "employee-memory",
+        "employee-released",
+        "screening-offline",
+        "build-running",
+        "s4-hiring",
+        "s4-hires-all-decided",
+        "s4-hire-manager-gone",
+        "s4-contractor-working",
+        "s4-contractor-finishes",
+        "s4-employee-working",
+        "s4-employee-record",
+        "s4-employee-team",
+        "s4-employee-at-cap",
+        "s4-idle-sweep",
+        "s4-released-with-memory",
+        "s4-memory-to-tidy",
+        "s4-credits-at-zero",
+        "s4-below-zero",
+        "s4-top-ups-waiting",
+        "s4-operator-log",
+        "s4-operator-log-empty",
+        "default",
+        "empty-organisation",
         "research-running",
         "research-verdict",
         "verdict-do-not-build",
         "verdict-red-line",
-        "build-running",
         "build-plan",
         "build-sent-back",
         "build-security-finding",
@@ -81,6 +104,35 @@
         "app-busy",
         "app-never-measured",
         "budget-spent",
+        "manage-tree",
+        "archived-division",
+        "employee-let-go",
+        "tree-unreachable",
+        "tree-refresh-fails",
+        "ontology-unreachable",
+        "notifications-unreachable",
+        "notifications-refresh-fails",
+        "status-unhealthy",
+        "status-no-services",
+        "status-unreachable",
+        "status-refresh-fails",
+        "session-unreachable",
+        "operator-no-organisation",
+        "ask-unavailable",
+        "app-private",
+        "app-public",
+        "app-shared-empty",
+        "app-restore-fails",
+        "app-rebuild-fails",
+        "app-not-published",
+        "app-wake-slow",
+        "app-wake-busy",
+        "app-unreachable",
+        "outage",
+        "no-secrets",
+        "dashboard-full",
+        "app-long-history",
+        "wake-failures",
         "s3-research-failed",
         "s3-research-cancelled",
         "s3-checkpoints",
@@ -91,9 +143,7 @@
         "s3-change-failed",
         "s3-stage-rules",
         "s3-suggestions",
-        "s3-employee-paused",
-        "hire-pending",
-        "employee-memory"
+        "s3-employee-paused"
       ]
     },
     "start": {
@@ -332,7 +382,8 @@
             "terminal",
             "request",
             "email",
-            "image"
+            "image",
+            "code"
           ]
         }
       },
@@ -349,6 +400,10 @@
             },
             "goto": {
               "$ref": "#/definitions/route"
+            },
+            "persona": {
+              "$ref": "#/properties/persona",
+              "description": "From this step on, someone else is signed in to the same world (the operator acts, then the Owner reads what was logged). Needs a goto."
             },
             "highlight": {
               "type": "object",
@@ -538,6 +593,49 @@
             "alt": {
               "type": "string",
               "minLength": 1
+            },
+            "note": {
+              "$ref": "#/definitions/note"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "language",
+            "code"
+          ],
+          "properties": {
+            "step": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "const": "code"
+            },
+            "language": {
+              "enum": [
+                "csharp",
+                "typescript",
+                "tsx",
+                "javascript",
+                "json",
+                "http",
+                "bash",
+                "sql",
+                "yaml",
+                "text"
+              ]
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "output": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "note": {
               "$ref": "#/definitions/note"

@@ -1,0 +1,68 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HIRE-06",
+  "persona": "owner",
+  "scenario": "s4-hiring",
+  "start": "/hires?scope=northwind/technologies",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sol, data engineer for Technologies",
+        "note": "Raised by Endgame when Court booking reached a new stage, and accepted at once: it fitted the budget."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sol, data engineer for Technologies"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Sol was hired by auto-mode, inside the budget,",
+        "note": "The decision names auto-mode, with its note."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "text": "Sol · Data engineer",
+        "note": "Sol is on the chart, in Technologies."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Over the room left, it waits for you",
+      "persona": "owner",
+      "scenario": "hire-pending",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Hire Lark as data analyst?",
+            "note": "Lark costs more than the room left, so auto-mode did not hire: it waits for a person under “needs you”."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "goto": "/notifications",
+          "highlight": {
+            "text": "Hire Lark as data analyst?",
+            "note": "And a notification asks the same."
+          }
+        }
+      ]
+    }
+  ]
+}

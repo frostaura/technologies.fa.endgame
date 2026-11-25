@@ -18,6 +18,8 @@ interface Step {
   step: number;
   kind: string;
   goto?: string;
+  /** From this step on, someone else is signed in to the same world. */
+  persona?: string;
   clock?: Record<string, unknown>;
   act?: unknown[];
   highlight?: Record<string, unknown>;
@@ -73,7 +75,7 @@ for (const { script, variation, name } of plays) {
       const where = `${script.flow}${variation ? ` variation ${variation}` : ""} step ${step.step}`;
       let failed: string | null = null;
       try {
-        if (step.goto) await call("goto", { route: step.goto });
+        if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}) });
         if (step.clock) await call("clock", step.clock);
         if (step.act) await call("act", step.act, false);
         if (step.highlight && (await call("highlight", step.highlight)) === false) failed = `the highlight ${JSON.stringify(step.highlight)} found nothing on screen`;

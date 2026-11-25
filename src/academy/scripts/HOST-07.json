@@ -1,0 +1,24 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HOST-07",
+  "persona": "viewer",
+  "scenario": "app-asleep",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Asleep; it wakes on the next visit.",
+        "note": "After its idle minutes with no request in flight, the sweeper stopped it. Normal mode shows its health; technical mode, this."
+      }
+    }
+  ]
+}

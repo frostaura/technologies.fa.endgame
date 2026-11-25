@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-10",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Apps in Court booking'] li",
+        "note": "An app row: its name, health, whether it is awake, who may open it, today's visits and this month's credits."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "ul[aria-label='Apps in Court booking'] a"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Court booking",
+        "note": "The name opens the app's own page."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A paused app",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "ul[aria-label='Apps in Stock Counter'] li",
+            "note": "Stock Counter's budget is spent: Paused, and Health unknown."
+          }
+        }
+      ]
+    },
+    {
+      "title": "An app that has measured nothing yet",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "ul[aria-label='Apps in Tutor Match'] li",
+            "note": "Tutor Match says “Not measured yet”, never zero."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -119,7 +119,7 @@ const nodeRoutes = Object.fromEntries(
           const path = `${parent}/${slug}`;
           if (node(world, path)) throw conflict("A sibling already uses that slug.");
           const at = new Date().toISOString();
-          const n: DemoNode = { id: uuidFor(`node:${path}:${world.counter++}`), path, slug, name: name.trim(), level, createdAt: at, stage: level === "project" ? "idea" : null, ideaId: null, note: null, status: "active" };
+          const n: DemoNode = { id: uuidFor(`node:${path}:${world.counter++}`), path, slug, name: name.trim(), level, createdAt: at, stage: level === "project" ? "planning" : null, ideaId: null, note: null, status: "active" };
           world.nodes.push(n);
           if (level === "app") {
             world.apps.push({ id: uuidFor(`app:${path}:${world.counter++}`), path, name: name.trim(), health: "unknown", healthSummary: "Not published yet.", running: "asleep", status: "draft", pausedReason: null, access: "private", runningSetting: "sleep", idleMinutes: 15, telemetry: null, capCredits: null, version: null, publishedAt: null, endUsers: 0, runningCost: notEnoughHistory(0) });

@@ -1,0 +1,45 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HOST-02",
+  "persona": "viewer",
+  "scenario": "wake-failures",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "goto": "/__app/d7b417af-2493-4fbc-a8e9-875609ae2d61/path/",
+      "highlight": {
+        "text": "It is still starting. Please try again in a few seconds.",
+        "note": "Over 30 seconds to wake: “This app is taking longer than usual” (503, Retry-After 3)."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/__app/16c54191-b459-4235-a608-a265aae2e485/path/",
+      "highlight": {
+        "text": "Endgame is very busy at the moment.",
+        "note": "No room on the host to start it: “This app could not start just now”."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/__app/1e9a1d94-0c35-41c5-adb2-6748ecc4b9b9/path/",
+      "highlight": {
+        "text": "It has an address, but its first version has not been published.",
+        "note": "Nothing published yet: “This app isn't ready yet”."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/__app/a59b6251-dc8b-4acc-a43e-b880a2e96419/path/",
+      "highlight": {
+        "text": "Endgame could not reach it just now.",
+        "note": "Anything else: “This app is temporarily unavailable”. No page ever names machinery."
+      }
+    }
+  ]
+}

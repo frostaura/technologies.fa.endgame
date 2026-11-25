@@ -1,0 +1,90 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-09",
+  "persona": "owner",
+  "scenario": "build-plan",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Club Reading List",
+        "note": "The project's name: selecting it scopes the conversation to the project."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "article[aria-label='Club Reading List']",
+        "note": "A stage chip — here Building — unless the project is live with apps."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Court booking",
+        "note": "Court booking is live with an app, so it carries no stage chip: just its credits this month."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "selector": "article[aria-label='Club Reading List'] [role='img']",
+        "note": "Work under way: the step it is on, spend against the estimate, a moving bar and Watch the work."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Apps in Club Reading List']",
+        "note": "Below: its apps (ORG-10) and the people working on it (ORG-11)."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Watch the work opens the live run",
+      "persona": "owner",
+      "scenario": "build-plan",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Watch the work"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Step by step",
+            "note": "Watch the work opens the build as it runs."
+          }
+        }
+      ]
+    },
+    {
+      "title": "An archived project",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Summer Ladder",
+            "note": "An archived project is a dashed card with the badge Archived, and the note “Archived.”."
+          }
+        }
+      ]
+    }
+  ]
+}

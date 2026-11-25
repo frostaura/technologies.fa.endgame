@@ -25,9 +25,16 @@ function demoSteps(script: StepScript, upTo: number): DemoStep[] {
   return script.steps.filter((s): s is DemoStep => s.kind === "demo" && s.step <= upTo).sort((a, b) => a.step - b.step);
 }
 
+/** Who is signed in at step n: the script's persona, or the last one a step up to n switched to. */
+export function personaAt(script: StepScript, n: number): StepScript["persona"] {
+  let who = script.persona;
+  for (const s of demoSteps(script, n)) if (s.persona) who = s.persona;
+  return who;
+}
+
 function opsFor(script: StepScript, s: DemoStep, catchUp: boolean): PlannedOp[] {
   const ops: PlannedOp[] = [];
-  const who = { persona: script.persona, scenario: script.scenario };
+  const who = { persona: personaAt(script, s.step), scenario: script.scenario };
   if (s.goto) ops.push({ op: "goto", args: { route: s.goto, ...who }, catchUp });
   if (s.clock) ops.push({ op: "clock", args: { ...s.clock }, catchUp });
   if (s.act) ops.push({ op: "act", args: { actions: s.act, ...(catchUp ? { instant: true } : {}) }, catchUp });

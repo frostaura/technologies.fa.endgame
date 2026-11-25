@@ -1,0 +1,213 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-20",
+  "persona": "assistant",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp/apps/7d0c5a9e-2b41-4f6a-9a51-3c8e2d1f0b77",
+      "headers": {
+        "Authorization": "Bearer egp_…",
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "tools": [
+              {
+                "name": "getCurrentUser",
+                "description": "The person using the app: their id, email, display name and kind (member or endUser), or user = null when nobody is signed in.",
+                "annotations": { "readOnlyHint": true, "destructiveHint": false }
+              },
+              {
+                "name": "listNotes",
+                "description": "Every note, newest first, as id, title, author and creation time. An empty list means there are no notes.",
+                "annotations": { "readOnlyHint": true, "destructiveHint": false }
+              },
+              {
+                "name": "getNote",
+                "description": "The whole note with this id, including its body. 404 if there is no such note.",
+                "annotations": { "readOnlyHint": true, "destructiveHint": false }
+              },
+              {
+                "name": "createNote",
+                "description": "Saves a new note by the signed-in person and returns it. Title is required (up to 200 characters); body is optional.",
+                "annotations": { "readOnlyHint": false, "destructiveHint": false }
+              }
+            ]
+          }
+        }
+      },
+      "note": "The template's Notes app: one tool per OpenAPI operation, named by operationId and described by its description; each also has an inputSchema from its parameters and body (not shown). GET operations are read-only."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp/apps/7d0c5a9e-2b41-4f6a-9a51-3c8e2d1f0b77",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "createNote",
+          "arguments": {
+            "body": { "title": "Court 3 lights", "body": "Flickering since Tuesday." }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              { "type": "text", "text": "{\"status\":201,\"body\":{\"id\":\"0193a8e2-5c1f-7d4b-9e2a-6f8c1b3d5e70\",…},\"truncated\":false}" }
+            ],
+            "structuredContent": {
+              "status": 201,
+              "body": {
+                "id": "0193a8e2-5c1f-7d4b-9e2a-6f8c1b3d5e70",
+                "title": "Court 3 lights",
+                "body": "Flickering since Tuesday.",
+                "authorName": "Maya Patel",
+                "createdAt": "2026-11-25T10:15:02.114+00:00"
+              },
+              "truncated": false
+            },
+            "isError": false
+          }
+        }
+      },
+      "note": "The control plane mints an app-scoped member session for the token's person and calls the app through Edge, so authorName is that person. A JSON body goes in as the body argument. Values illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The app refuses the call",
+      "persona": "assistant",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/mcp/apps/7d0c5a9e-2b41-4f6a-9a51-3c8e2d1f0b77",
+          "headers": { "Authorization": "Bearer egp_…" },
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": { "name": "getNote", "arguments": { "id": "00000000-0000-0000-0000-000000000001" } }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "jsonrpc": "2.0",
+              "id": 4,
+              "result": {
+                "structuredContent": {
+                  "status": 404,
+                  "code": "app_error",
+                  "title": "The app refused the call",
+                  "detail": "There is no note with id 00000000-0000-0000-0000-000000000001."
+                },
+                "isError": true
+              }
+            }
+          },
+          "note": "Any answer of 400 or worse. The app's own code is used when its problem has one, else app_error. The same JSON is also in content as text (not shown)."
+        }
+      ]
+    },
+    {
+      "title": "There is no such tool",
+      "persona": "assistant",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/mcp/apps/7d0c5a9e-2b41-4f6a-9a51-3c8e2d1f0b77",
+          "headers": { "Authorization": "Bearer egp_…" },
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": { "name": "deleteNote", "arguments": {} }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "jsonrpc": "2.0",
+              "id": 5,
+              "error": {
+                "code": -32602,
+                "message": "There is no tool 'deleteNote'."
+              }
+            }
+          },
+          "note": "A protocol error (invalid params), not a tool result: the template has no delete operation."
+        }
+      ]
+    },
+    {
+      "title": "The token's person has no role on the app",
+      "persona": "assistant",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/mcp/apps/7d0c5a9e-2b41-4f6a-9a51-3c8e2d1f0b77",
+          "headers": { "Authorization": "Bearer egp_…" },
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": { "name": "listNotes", "arguments": {} }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "jsonrpc": "2.0",
+              "id": 6,
+              "result": {
+                "structuredContent": {
+                  "status": 404,
+                  "code": "not_found",
+                  "title": "Not found",
+                  "detail": "The scope 'acme/labs/demo/notes' was not found, or you cannot see it."
+                },
+                "isError": true
+              }
+            }
+          },
+          "note": "Viewer is the least role that reaches an app's tools; with none, the app is answered as if it did not exist. The path is illustrative."
+        }
+      ]
+    }
+  ]
+}

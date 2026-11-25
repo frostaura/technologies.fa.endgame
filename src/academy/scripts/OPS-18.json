@@ -1,0 +1,75 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-18",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make ops-health",
+      "output": [
+        "docker compose exec -T ops curl -sS http://127.0.0.1:8080/health",
+        "{\"status\":\"healthy\",\"cloudflare\":{\"state\":\"idle\",\"message\":\"No Cloudflare API token is configured (CLOUDFLARE_API_TOKEN): DNS, the tunnel\\u0027s routes and the outage page are not managed from here.\"},\"backups\":{\"state\":\"local\",\"message\":\"Backups go to a directory on this machine (/backups), not offsite: no bucket is configured.\",\"schedule\":\"nightly, from 01:00 UTC; keeps 7 daily and 4 weekly\",\"nextCheckAt\":\"2026-11-25T10:20:14.5521234+00:00\",\"newest\":{\"id\":\"20261125T101500Z\",\"name\":\"endgame-20261125T101500Z.egbk\",\"bytes\":48213504,\"createdAt\":\"2026-11-25T10:15:00+00:00\"},\"count\":1,\"usage\":{\"usedBytes\":48213504,\"allowanceBytes\":10000000000,\"percent\":0.48,\"projectedBytes\":96427008,\"state\":\"local\",\"message\":\"0.048 GB in 1 archive(s) on this machine; nothing is offsite.\"},\"last\":null,\"running\":null}}"
+      ],
+      "note": "One line of JSON. Here: the development stack after one make backup. last stays null because a make backup runs in its own process; last records the service's own runs. ' is written as \\u0027. Ids, sizes and times are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "Production, with a bucket and Cloudflare configured",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-health OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops curl -sS http://127.0.0.1:8080/health",
+            "{\"status\":\"healthy\",\"cloudflare\":{\"state\":\"configured\",\"message\":\"Manages endgame.frostaura.net and *.frostaura.net through tunnel 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42. Changes happen only on an explicit apply.\"},\"backups\":{\"state\":\"offsite\",\"message\":\"Backups go to the bucket \\u0027endgame-backups\\u0027 at 4b8e2d17c9a0f3e65d21b7c84a9f0e13.r2.cloudflarestorage.com, encrypted before upload.\",\"schedule\":\"nightly, from 01:00 UTC; keeps 7 daily and 4 weekly\",\"nextCheckAt\":\"2026-11-25T10:22:41.0937714+00:00\",\"newest\":{\"id\":\"20261125T010312Z\",\"name\":\"endgame-20261125T010312Z.egbk\",\"bytes\":51380224,\"createdAt\":\"2026-11-25T01:03:12+00:00\"},\"count\":8,\"usage\":{\"usedBytes\":406380135,\"allowanceBytes\":10000000000,\"percent\":4.06,\"projectedBytes\":457760359,\"state\":\"ok\",\"message\":\"0.406 GB of the 10 GB free allowance in 8 archive(s).\"},\"last\":{\"trigger\":\"nightly\",\"startedAt\":\"2026-11-25T01:03:12.2201945+00:00\",\"finishedAt\":\"2026-11-25T01:03:21.3318402+00:00\",\"outcome\":\"succeeded\",\"id\":\"20261125T010312Z\",\"archiveBytes\":51380224,\"error\":null},\"running\":null}}"
+          ],
+          "note": "With a token and every Cloudflare key set, cloudflare is configured. With the four bucket keys, backups are offsite and usage is measured against the 10 GB free allowance. Ids, sizes, seconds and dates are illustrative."
+        }
+      ]
+    },
+    {
+      "title": "A token, but not every Cloudflare key",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-health OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops curl -sS http://127.0.0.1:8080/health",
+            "{\"status\":\"healthy\",\"cloudflare\":{\"state\":\"misconfigured\",\"message\":\"A Cloudflare token is set but CLOUDFLARE_ZONE_ID, CLOUDFLARE_TUNNEL_ID is not; nothing is managed.\"},\"backups\":{\"state\":\"offsite\"}}"
+          ],
+          "note": "The backups part is shortened here. On production ENDGAME_ZONE and ENDGAME_CONSOLE_HOST have defaults, so only the ids can be missing."
+        }
+      ]
+    },
+    {
+      "title": "Unhealthy: the backup key cannot be used",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-health",
+          "output": [
+            "docker compose exec -T ops curl -sS http://127.0.0.1:8080/health",
+            "{\"status\":\"unhealthy\",\"cloudflare\":{\"state\":\"idle\",\"message\":\"No Cloudflare API token is configured (CLOUDFLARE_API_TOKEN): DNS, the tunnel\\u0027s routes and the outage page are not managed from here.\"},\"backups\":{\"state\":\"refused\",\"message\":\"ENDGAME_BACKUP_KEY is not 32 bytes written as hex or base64, so no backup runs.\"}}"
+          ],
+          "note": "The answer is 503, but curl -sS prints the body and make ops-health still exits 0. The container's own health check fails on the 503, so compose reports ops as unhealthy."
+        }
+      ]
+    }
+  ]
+}

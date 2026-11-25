@@ -1,0 +1,68 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SEC-02",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/secrets?scope=northwind/technologies/court-booking/web",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Inherited from",
+        "note": "Set higher up, or set here: each with its level and when."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Replaces the one set at Northwind.",
+        "note": "The deepest level that sets a name wins."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/secrets?scope=northwind",
+      "highlight": {
+        "selector": "ul[aria-label=\"Set beneath\"]",
+        "note": "At Northwind: the names set on lower levels, each a link."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Nothing applies",
+      "persona": "admin",
+      "scenario": "no-secrets",
+      "start": "/secrets?scope=northwind",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "No secrets apply to Northwind",
+            "note": "Add one, and everything beneath can read it by name."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Nothing set beneath",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/secrets?scope=northwind/technologies/court-booking/web",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Nothing beneath Court booking sets a secret of its own.",
+            "note": "An app has no level beneath it."
+          }
+        }
+      ]
+    }
+  ]
+}

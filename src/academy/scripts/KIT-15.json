@@ -1,0 +1,146 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-15",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/platform/v1/otlp/v1/traces",
+      "headers": {
+        "Authorization": "Bearer egt_…",
+        "Content-Type": "application/x-protobuf"
+      },
+      "response": {
+        "status": 200
+      },
+      "note": "Sent by OpenTelemetry inside the kit with no code: ASP.NET Core, HttpClient and Npgsql traces, metrics every 15 seconds, and logs. The body is OTLP protobuf (not shown); a JSON export is answered {} instead."
+    },
+    {
+      "step": 2,
+      "kind": "code",
+      "language": "csharp",
+      "code": "// IEndgameTelemetry telemetry, injected. Returns at once.\ntelemetry.Track(\"note.created\",\n    new Dictionary<string, object?> { [\"length\"] = note.Body.Length },\n    user.Id);",
+      "note": "Queued in memory and sent in batches of at most 100, about once a second. It never blocks, and never throws once the name is valid. Use it for what the app itself means."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "POST",
+      "path": "/platform/v1/telemetry/events",
+      "headers": {
+        "Authorization": "Bearer egt_…",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "events": [
+          {
+            "name": "note.created",
+            "at": "2026-11-25T10:15:02.114+00:00",
+            "properties": { "length": 46 },
+            "userId": "usr_6f1c2a9e4b7d4c0e9a3b5d8f1e2c7a40"
+          }
+        ]
+      },
+      "response": {
+        "status": 202
+      },
+      "note": "The body names no app: the intake attributes every event, trace, metric and log to the app by its token. Values illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The event name is not lowercase dotted words",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "csharp",
+          "code": "telemetry.Track(\"NoteCreated\");",
+          "output": [
+            "System.ArgumentException: Event name 'NoteCreated' must be lowercase dot-separated words (e.g. 'note.created'). (Parameter 'name')"
+          ],
+          "note": "The one way Track throws: at once, where it is written."
+        }
+      ]
+    },
+    {
+      "title": "The platform refuses a batch",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/telemetry/events",
+          "headers": {
+            "Authorization": "Bearer egt_…"
+          },
+          "body": {
+            "events": [
+              { "name": "note.created", "at": "2026-11-25T10:15:02.114+00:00", "properties": { "body": "… 9 KB of text …" } }
+            ]
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/invalid_request",
+              "title": "The request is not valid",
+              "status": 400,
+              "detail": "An event's properties are at most 8192 bytes.",
+              "code": "invalid_request"
+            }
+          },
+          "note": "Other refusals: \"At most 100 events per request.\" and \"userId is at most 100 characters.\""
+        },
+        {
+          "step": 2,
+          "kind": "code",
+          "language": "text",
+          "code": "app log, level Error",
+          "output": [
+            "Endgame telemetry: 1 custom event(s) could not be sent and were dropped: The platform answered POST platform/v1/telemetry/events with 400: An event's properties are at most 8192 bytes."
+          ],
+          "note": "The batch is dropped, not retried, and the request that tracked it is never affected."
+        }
+      ]
+    },
+    {
+      "title": "An export is too large",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/otlp/v1/logs",
+          "headers": {
+            "Authorization": "Bearer egt_…",
+            "Content-Type": "application/x-protobuf"
+          },
+          "response": {
+            "status": 413,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/too_large",
+              "title": "Too large",
+              "status": 413,
+              "detail": "An export is at most 4194304 bytes.",
+              "code": "too_large"
+            }
+          },
+          "note": "4 MB is the shipped limit (Telemetry:MaxBodyBytes). A signal other than traces, metrics or logs gets 404 \"The OTLP signals are traces, metrics and logs.\""
+        }
+      ]
+    }
+  ]
+}

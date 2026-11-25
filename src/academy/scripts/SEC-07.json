@@ -1,0 +1,55 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SEC-07",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/secrets?scope=northwind/technologies/court-booking/web",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 800
+        },
+        {
+          "click": {
+            "selector": "ul[aria-label=\"Secrets\"] > li:nth-child(3) a"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Secrets for Technologies",
+        "note": "Every level has its own view of what applies there."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A level where you are not an Admin",
+      "persona": "division-admin",
+      "scenario": "app-busy",
+      "start": "/secrets?scope=northwind/technologies",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 800
+            },
+            {
+              "click": {
+                "selector": "ul[aria-label=\"Secrets\"] > li:nth-child(1) a"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "was not found, or you cannot see it",
+            "note": "Ines holds no role at Northwind itself, so to her its secrets do not exist (404)."
+          }
+        }
+      ]
+    }
+  ]
+}

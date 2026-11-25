@@ -1,0 +1,78 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-25",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "text",
+      "code": "Settings → Secrets and variables → Actions\n  secrets:   PORTAINER_URL  PORTAINER_TOKEN  PORTAINER_ENDPOINT_ID  PORTAINER_STACK_ID\n  variable:  DEPLOY_ENABLED = true   (set last)\n\nthen, after each green push to main:\n  Redeploy on Portainer\n    Pull the new images and redeploy the stack\n      Portainer accepted the redeploy.",
+      "note": "The job reads the stack file and environment Portainer holds and sends them back with pullImage: true, so only the images change. By hand: the stack's Pull and redeploy in Portainer. Not yet run with real credentials (ARCH-008): what you will see, not a recorded run."
+    }
+  ],
+  "variations": [
+    {
+      "title": "DEPLOY_ENABLED is not set",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "text",
+          "code": "Redeploy on Portainer   skipped",
+          "note": "While the variable is not true the job is skipped, not failed, so CI stays green before the stack exists."
+        }
+      ]
+    },
+    {
+      "title": "A Portainer secret is missing",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "text",
+          "code": "PORTAINER_STACK_ID: secret PORTAINER_STACK_ID is required\nError: Process completed with exit code 1.",
+          "note": "Each of the four secrets is checked first and names itself; bash prefixes the line with the script's path, left out here. Portainer is not called."
+        }
+      ]
+    },
+    {
+      "title": "Portainer returns an empty stack file, or refuses",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "text",
+          "code": "Portainer returned an empty stack file\nError: Process completed with exit code 1.\n\nPortainer refused the redeploy (HTTP 403): <Portainer's own message>\nError: Process completed with exit code 1.",
+          "note": "The two ways the call can fail after the secrets are present. Only Portainer's message is printed, never the request, which carries the stack's environment. The status code is illustrative."
+        }
+      ]
+    },
+    {
+      "title": "The stack file changed in the repository",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "text",
+          "code": "Portainer → Stacks → endgame → Editor\n  paste the new docker-compose.prod.yml\n  Update the stack",
+          "note": "A redeploy sends back the stack file Portainer already holds, so a changed docker-compose.prod.yml must be pasted in by hand."
+        }
+      ]
+    }
+  ]
+}

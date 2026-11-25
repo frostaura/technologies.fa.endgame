@@ -1,0 +1,73 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-05",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/start",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Where it goes",
+        "note": "New idea opens the start screen. Where it goes lists the whole organisation and each division you may build in."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "selector": "select"
+          }
+        },
+        {
+          "select": {
+            "into": {
+              "text": "Where it goes"
+            },
+            "value": "Learning"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "It is researched for Learning, and built there if it is built.",
+        "note": "Choose the division."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "The idea"
+            },
+            "text": "A homework club sign-up for the cookery school, with a waiting list."
+          }
+        },
+        {
+          "wait": {
+            "text": "Estimated"
+          }
+        },
+        {
+          "click": {
+            "text": "Research this idea"
+          }
+        },
+        {
+          "wait": {
+            "text": "Step by step"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "Research starts at Learning; if it is built, its project is placed in Learning."
+      }
+    }
+  ]
+}

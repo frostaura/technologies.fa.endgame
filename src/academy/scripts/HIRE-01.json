@@ -1,0 +1,109 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HIRE-01",
+  "persona": "owner",
+  "scenario": "s4-hiring",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Technologies"
+          }
+        },
+        {
+          "wait": 600
+        },
+        {
+          "click": {
+            "text": "Hiring"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Hiring for Technologies",
+        "note": "Hiring is per level of the tree: this page is Technologies and everything beneath it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label='Waiting for you']",
+        "note": "Open proposals wait here; accepted and declined ones are under “Decided” below."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Lark, data analyst for Technologies",
+        "note": "Each card: its badge, who for where, about what it costs a month — here more than the budget has room for — why it was raised, and when."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Contractor roles that keep coming back",
+        "note": "Beside the proposals: contractor roles briefed again and again (HIRE-07), and the people let go (EMP-09)."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Nothing has been proposed here",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/hires?scope=northwind/operations",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "No hires have been proposed here",
+            "note": "Operations has no proposals yet: a hire is proposed when the work here needs someone."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Every proposal is decided",
+      "persona": "owner",
+      "scenario": "s4-hires-all-decided",
+      "start": "/hires?scope=northwind/technologies",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Nothing is waiting. Every proposal here has been decided.",
+            "note": "Lark was declined too, so nothing waits; the decided ones are listed below."
+          }
+        }
+      ]
+    },
+    {
+      "title": "No role at that part of the tree",
+      "persona": "division-admin",
+      "scenario": "quiet",
+      "start": "/hires?scope=northwind/learning",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "The hire proposals could not be loaded",
+            "note": "Ines is an Admin of Technologies only. Learning is not hers to see, so the control plane answers as if it were not there."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-03",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make docker-build",
+      "output": [
+        "make -C src/appkit vendor",
+        "docker compose build",
+        "[+] Building 7/7",
+        " ✔ Service control-plane  Built",
+        " ✔ Service runner         Built",
+        " ✔ Service dock           Built",
+        " ✔ Service egress         Built",
+        " ✔ Service console        Built",
+        " ✔ Service edge           Built",
+        " ✔ Service ops            Built"
+      ],
+      "note": "First the kit is vendored, as in make up (its pack output is left out here), then compose builds the seven images it builds itself. PostgreSQL and the mail catcher are pulled images. The build steps are left out, and the services may finish in another order."
+    }
+  ]
+}

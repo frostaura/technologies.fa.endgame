@@ -99,15 +99,16 @@ function documents(): Document[] {
 }
 
 /** The element a target names, or null; `field` prefers form controls (for typing and selecting). */
-export function find(target: Target | string, field = false): HTMLElement | null {
+export function find(target: Target | string, field = false, strict = false): HTMLElement | null {
   for (const doc of documents()) {
-    const el = findIn(doc, target, field);
+    const el = findIn(doc, target, field, strict);
     if (el) return el;
   }
   return null;
 }
 
-function findIn(document: Document, target: Target | string, field: boolean): HTMLElement | null {
+/** `strict`: only a control or field that the words name — never a region or a run of text that merely holds them. */
+function findIn(document: Document, target: Target | string, field: boolean, strict = false): HTMLElement | null {
   const t: Target = typeof target === "string" ? { text: target } : target;
   if (t.selector) return [...document.querySelectorAll<HTMLElement>(t.selector)].find(visible) ?? null;
   if (t.testId) return [...document.querySelectorAll<HTMLElement>(`[data-testid="${CSS.escape(t.testId)}"]`)].find(visible) ?? null;
@@ -136,6 +137,7 @@ function findIn(document: Document, target: Target | string, field: boolean): HT
   if (starts) return starts;
   const contains = controls.filter((c) => nameOf(c).includes(want)).sort((a, b) => nameOf(a).length - nameOf(b).length)[0];
   if (contains) return contains;
+  if (strict) return null;
   // A region or list named for it (aria-label), such as "Parts of the plan".
   const named = [...document.querySelectorAll<HTMLElement>("[aria-label]")].find((el) => norm(el.getAttribute("aria-label")) === want && visible(el));
   if (named) return named;
@@ -145,10 +147,13 @@ function findIn(document: Document, target: Target | string, field: boolean): HT
   return all[0] ?? null;
 }
 
-async function waitFor(target: Target | string, field = false, ms = 6000): Promise<HTMLElement> {
+async function waitFor(target: Target | string, field = false, ms = 6000, preferControls = false): Promise<HTMLElement> {
   const until = performance.now() + ms;
+  // What a step acts on is a control: while one may still be loading, plain text that happens to
+  // hold the same words ("…replace it.", "Ask it again…") is not taken for it.
+  const patient = preferControls ? performance.now() + Math.min(ms, 4000) : 0;
   for (;;) {
-    const el = find(target, field);
+    const el = find(target, field, performance.now() < patient);
     if (el) return el;
     if (performance.now() > until) throw new Error(`Nothing on the screen matches ${JSON.stringify(target)}.`);
     await sleep(100);
@@ -225,12 +230,12 @@ function tabFrom(from: HTMLElement) {
 
 async function perform(action: Action) {
   if ("click" in action) {
-    const el = await waitFor(action.click);
+    const el = await waitFor(action.click, false, 6000, true);
     await approach(el);
     focusUnlessEmbedded(el);
     el.click();
   } else if ("type" in action) {
-    const el = await waitFor(action.type.into, true);
+    const el = await waitFor(action.type.into, true, 6000, true);
     await approach(el);
     focusUnlessEmbedded(el);
     if (instantNow || reduced()) setValue(el, action.type.text);
@@ -243,7 +248,7 @@ async function perform(action: Action) {
       }
     }
   } else if ("select" in action) {
-    const el = await waitFor(action.select.into, true);
+    const el = await waitFor(action.select.into, true, 6000, true);
     await approach(el);
     const want = norm(action.select.value);
     if (el.tagName === "SELECT") {
@@ -287,9 +292,12 @@ export function runClock(args: ClockArgs) {
 // ---------------------------------------------------------------------------------------------
 
 export const endgameDemo = {
-  goto(args: { route?: string; persona?: string; scenario?: string }) {
+  /** Resolves once the new screen has been drawn, so what a step then acts on is that screen's. */
+  async goto(args: { route?: string; persona?: string; scenario?: string }) {
     clearSpotlight();
+    keepFocusOut(performance.now() + 2000);
     goto(args);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   },
   async highlight(args: Target & { note?: string }) {
     if (!args.selector && !args.testId && !args.text && !args.label) {
@@ -308,10 +316,13 @@ export const endgameDemo = {
   },
   async act(actions: Action[], instant = false) {
     instantNow = instant;
+    keepFocusOut(Infinity);
     try {
       for (const a of actions) await perform(a);
     } finally {
       instantNow = false;
+      // A screen that focuses a field as it opens (a form shown by the click) does so just after.
+      keepFocusOut(performance.now() + 1500);
     }
   },
   clock: runClock,
@@ -327,8 +338,27 @@ declare global {
   }
 }
 
+/**
+ * Embedded, while the demo plays a step (and just after), the console does not take focus by
+ * itself: focus inside the frame would take the academy's arrow keys, and scroll its page.
+ */
+let focusQuietUntil = 0;
+function keepFocusOut(until: number) {
+  focusQuietUntil = until;
+}
+
 export function installBridge(embedded: boolean) {
   embeddedNow = embedded;
+  if (embedded) {
+    // A screen that focuses a field by itself (a form or a confirmation the step opened) would pull
+    // focus — and the browser's scroll — out of the academy page and into the frame. While a step
+    // plays, and just after, that focus is not taken.
+    const focus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
+      if (performance.now() < focusQuietUntil) return;
+      focus.call(this, options);
+    };
+  }
   window.endgameDemo = endgameDemo;
   window.addEventListener("message", (e: MessageEvent) => {
     const m = e.data as Envelope | null;
@@ -343,7 +373,7 @@ async function handle(m: Envelope) {
   try {
     switch (m.op) {
       case "goto":
-        endgameDemo.goto(args as { route?: string; persona?: string; scenario?: string });
+        await endgameDemo.goto(args as { route?: string; persona?: string; scenario?: string });
         await sleep(50);
         post({ id: m.id, op: "goto" });
         break;

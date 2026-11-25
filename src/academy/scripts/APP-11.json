@@ -1,0 +1,109 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-11",
+  "persona": "admin",
+  "scenario": "app-asleep",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "testId": "monthly_credits-now",
+        "note": "What holds it now: Learning's cap, from above."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Set one for Course Notes"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Credits a month"
+            },
+            "text": "120"
+          }
+        },
+        {
+          "click": {
+            "selector": "form[aria-label=\"Set its monthly cap\"] button[type=submit]"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Course Notes may spend 120 credits a month here.",
+        "note": "Its own cap, inside whatever holds the levels above it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Remove it"
+          }
+        }
+      ],
+      "highlight": {
+        "testId": "monthly_credits-now",
+        "note": "Its own is gone; the card says which cap applies again."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Not a number",
+      "persona": "admin",
+      "scenario": "app-asleep",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Set one for Course Notes"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Credits a month"
+                },
+                "text": "lots"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Type a number of credits.",
+            "note": "Checked before anything is sent."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below Admin",
+      "persona": "viewer",
+      "scenario": "app-asleep",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "An Admin or the Owner sets these.",
+            "note": "Anyone reads the cap; an Admin sets it."
+          }
+        }
+      ]
+    }
+  ]
+}

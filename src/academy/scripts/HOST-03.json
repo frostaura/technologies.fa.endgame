@@ -1,0 +1,34 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HOST-03",
+  "persona": "viewer",
+  "scenario": "app-paused",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "It has used this month's budget.",
+        "note": "“This app is paused”, served by the edge: the app is never woken."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/apps/{app}",
+      "highlight": {
+        "text": "Paused: a monthly budget above it is spent.",
+        "note": "The app page says the same, and what restores it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Its monthly cap",
+        "note": "Raising the budget that holds it (APP-11), or the new month, restores it. Nothing is lost."
+      }
+    }
+  ]
+}

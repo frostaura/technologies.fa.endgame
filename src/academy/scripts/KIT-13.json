@@ -1,0 +1,256 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-13",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "csharp",
+      "code": "// IEndgameModels models, injected. No provider key anywhere in the app.\nvar reply = await models.CompleteAsync(new ChatRequest(\n    [ChatMessage.System(\"Summarise the note in one sentence.\"), ChatMessage.User(note.Body)],\n    TaskType: \"summarise\",\n    MaxTokens: 200), ct);",
+      "note": "The task type, not a model name, chooses the route: chat, classify, summarise or extract, each a cheap model with no tools. The kit refuses an empty message list itself."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/platform/v1/models/chat",
+      "headers": {
+        "Authorization": "Bearer egt_…",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "messages": [
+          { "role": "system", "content": "Summarise the note in one sentence." },
+          { "role": "user", "content": "The lights on court 3 have flickered since Tuesday; the club has called the electrician." }
+        ],
+        "taskType": "summarise",
+        "maxTokens": 200
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "content": "Court 3's lights have flickered since Tuesday and an electrician has been called.",
+          "model": "qwen/qwen3.7-flash",
+          "usage": { "inputTokens": 41, "outputTokens": 17 },
+          "credits": 0.0021
+        }
+      },
+      "note": "Before sending, the gateway reserves the most the call could cost against every budget above the app, the organisation's overdraft limit and the app's own monthly allowance. The reply's figures are illustrative."
+    },
+    {
+      "step": 3,
+      "kind": "code",
+      "language": "csharp",
+      "code": "logger.LogInformation(\"{Model}: {In} in, {Out} out, {Credits} credits\",\n    reply.Model, reply.Usage.InputTokens, reply.Usage.OutputTokens, reply.Credits);",
+      "output": [
+        "qwen/qwen3.7-flash: 41 in, 17 out, 0.0021 credits"
+      ],
+      "note": "Credits is what the call was settled at, its real cost, charged to the app's cascade; the reservation is released. The figures are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The budget is spent",
+      "persona": "builder",
+      "scenario": "budget-spent",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/models/chat",
+          "headers": { "Authorization": "Bearer egt_…" },
+          "body": {
+            "messages": [{ "role": "user", "content": "Summarise this note." }],
+            "taskType": "summarise"
+          },
+          "response": {
+            "status": 402,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/budget_exhausted",
+              "title": "The budget is exhausted",
+              "status": 402,
+              "detail": "The monthly budget at acme/labs has 0.0004 credits left; this call needs up to 0.016. This is terminal for the run: do not retry it.",
+              "code": "budget_exhausted",
+              "terminal": true,
+              "bindingScope": "acme/labs",
+              "headroomCredits": 0.0004,
+              "neededCredits": 0.016
+            }
+          },
+          "note": "The scope and figures are illustrative."
+        },
+        {
+          "step": 2,
+          "kind": "code",
+          "language": "csharp",
+          "code": "try { reply = await models.CompleteAsync(request, ct); }\ncatch (EndgameBudgetExhaustedException e) { logger.LogWarning(\"{Message}\", e.Message); }",
+          "output": [
+            "The credit budget for this app is spent: The monthly budget at acme/labs has 0.0004 credits left; this call needs up to 0.016. This is terminal for the run: do not retry it."
+          ],
+          "note": "The kit never retries it."
+        },
+        {
+          "step": 3,
+          "kind": "request",
+          "method": "GET",
+          "path": "/acme/labs/demo/notes/api/notes/0193a8e2-5c1f-7d4b-9e2a-6f8c1b3d5e70/summary",
+          "response": {
+            "status": 402,
+            "body": {
+              "title": "The credit budget is spent",
+              "status": 402,
+              "detail": "This feature is paused until the organisation tops up its credits.",
+              "code": "budget_exhausted"
+            }
+          },
+          "note": "Left uncaught, the kit's error handler answers the app's caller like this, plus a traceId, and the web kit throws BudgetExhaustedError. The endpoint is an illustrative one of the app's own."
+        }
+      ]
+    },
+    {
+      "title": "The app's own model allowance is used up",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/models/chat",
+          "headers": { "Authorization": "Bearer egt_…" },
+          "body": {
+            "messages": [{ "role": "user", "content": "Summarise this note." }],
+            "taskType": "summarise"
+          },
+          "response": {
+            "status": 402,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/budget_exhausted",
+              "title": "The budget is exhausted",
+              "status": 402,
+              "detail": "The app's own model calls have 0.003 credits left of their 500 this month; this call needs up to 0.016. This is terminal for the run: do not retry it.",
+              "code": "budget_exhausted",
+              "terminal": true,
+              "bindingScope": "app models",
+              "headroomCredits": 0.003,
+              "neededCredits": 0.016
+            }
+          },
+          "note": "The same code as a spent budget, told apart by bindingScope. The cap is 500 credits a month unless app_models.monthly_credits is set in the cascade. Figures illustrative."
+        }
+      ]
+    },
+    {
+      "title": "The organisation is at its overdraft limit",
+      "persona": "builder",
+      "scenario": "at-overdraft-limit",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/models/chat",
+          "headers": { "Authorization": "Bearer egt_…" },
+          "body": {
+            "messages": [{ "role": "user", "content": "Summarise this note." }],
+            "taskType": "summarise"
+          },
+          "response": {
+            "status": 402,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/overdraft_limit",
+              "title": "The overdraft limit is reached",
+              "status": 402,
+              "detail": "The organisation has 0 credits available including its overdraft of 100; this call needs up to 0.016. Work stops until the organisation is topped up; do not retry it.",
+              "code": "overdraft_limit",
+              "terminal": true,
+              "bindingScope": "organisation balance",
+              "headroomCredits": 0,
+              "neededCredits": 0.016
+            }
+          },
+          "note": "Figures illustrative."
+        },
+        {
+          "step": 2,
+          "kind": "code",
+          "language": "text",
+          "code": "EndgamePlatformException (Code = \"overdraft_limit\")",
+          "output": [
+            "The platform answered POST platform/v1/models/chat with 402: The organisation has 0 credits available including its overdraft of 100; this call needs up to 0.016. Work stops until the organisation is topped up; do not retry it."
+          ],
+          "note": "The kit has no exception of its own for this code. Left uncaught, the app's caller gets 502 \"A platform service failed\" with code overdraft_limit, not a 402."
+        }
+      ]
+    },
+    {
+      "title": "No model fits the price ceiling",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/models/chat",
+          "headers": { "Authorization": "Bearer egt_…" },
+          "body": {
+            "messages": [{ "role": "user", "content": "… a very long document …" }],
+            "taskType": "summarise",
+            "maxTokens": 2000
+          },
+          "response": {
+            "status": 422,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/ceiling_unreachable",
+              "title": "This call could cost more than its task type allows",
+              "status": 422,
+              "detail": "At the route's price ceiling this call could cost US$0.0312, above the US$0.02 allowed for one 'app.summarise' call. Send a shorter prompt or a lower max_tokens.",
+              "code": "ceiling_unreachable",
+              "terminal": false
+            }
+          },
+          "note": "US$0.02 is the summarise route's ceiling in the shipped routing table; the worst-case figure is illustrative. Nothing is reserved."
+        }
+      ]
+    },
+    {
+      "title": "The input is refused",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/models/chat",
+          "headers": { "Authorization": "Bearer egt_…" },
+          "body": {
+            "messages": [{ "role": "user", "content": "Bonjour" }],
+            "taskType": "translate"
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/invalid_request",
+              "title": "The request is not valid",
+              "status": 400,
+              "detail": "taskType is one of chat, classify, summarise, extract.",
+              "code": "invalid_request"
+            }
+          },
+          "note": "Also \"messages is a list of 1 to 100 messages.\", \"Each message has a role (system, user or assistant) and non-empty content.\" and \"maxTokens is a positive number.\""
+        }
+      ]
+    }
+  ]
+}

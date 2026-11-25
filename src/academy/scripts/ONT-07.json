@@ -1,0 +1,140 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ONT-07",
+  "persona": "assistant",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/ontology?scope=northwind&view=all",
+      "response": {
+        "status": 200,
+        "body": {
+          "scope": "northwind",
+          "generatedAt": "2026-11-25T09:30:00Z",
+          "nodes": [
+            {
+              "id": "organisation:6f1c2a40-3b7e-4d2a-9c11-5e8f0a7d2b31",
+              "type": "organisation",
+              "name": "Northwind",
+              "scope": "northwind",
+              "status": "active",
+              "attributes": null
+            },
+            {
+              "id": "division:…",
+              "type": "division",
+              "name": "Technologies",
+              "scope": "northwind/technologies",
+              "status": "active",
+              "attributes": null
+            },
+            {
+              "id": "employee:3b9d6c2e-8f41-4e7a-a0d5-1c2e9f7b6a10",
+              "type": "employee",
+              "name": "Kasper",
+              "scope": "northwind/technologies/court-booking",
+              "status": "idle",
+              "attributes": null
+            },
+            "…"
+          ],
+          "edges": [
+            {
+              "from": "organisation:6f1c2a40-3b7e-4d2a-9c11-5e8f0a7d2b31",
+              "to": "division:…",
+              "type": "owns",
+              "label": null
+            },
+            {
+              "from": "employee:3b9d6c2e-8f41-4e7a-a0d5-1c2e9f7b6a10",
+              "to": "project:…",
+              "type": "works-on",
+              "label": "Software engineer"
+            },
+            "…"
+          ],
+          "views": {
+            "org-chart": [
+              "owns",
+              "works-on",
+              "reports-to"
+            ],
+            "data-flow": [
+              "depends-on",
+              "data-flows-to"
+            ]
+          }
+        }
+      },
+      "note": "Derived on every read and stored nowhere. view=all returns every kind of line; ids are illustrative and the lists shortened."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+          "name": "ontology_get",
+          "arguments": {
+            "scope": "northwind/technologies",
+            "view": "org-chart"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ \"scope\": \"northwind/technologies\", \"nodes\": [ … ], \"edges\": [ … ] }"
+              }
+            ]
+          }
+        }
+      },
+      "note": "An assistant asks the same over MCP, at any level it may read."
+    }
+  ],
+  "variations": [
+    {
+      "title": "A view that does not exist",
+      "persona": "assistant",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "GET",
+          "path": "/api/ontology?scope=northwind&view=everything",
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/invalid_request",
+              "title": "The request is not valid",
+              "status": 400,
+              "detail": "view is all, org-chart, data-flow.",
+              "code": "invalid_request"
+            }
+          },
+          "note": "Only the three views exist."
+        }
+      ]
+    }
+  ]
+}

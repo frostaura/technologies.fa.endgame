@@ -1,0 +1,127 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-01",
+  "persona": "owner",
+  "scenario": "s4-employee-record",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "h1",
+        "note": "Kasper: the avatar, the name, and the status badge — Free, Working, Paused or Let go."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/employees/07901976-9249-4982-a94e-47c1479af3e9",
+      "highlight": {
+        "text": "Nothing to do for 14 days",
+        "note": "Idle too long, and the header says so: Ruth has had nothing to do for 14 days."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/employees/{employee}",
+      "highlight": {
+        "text": "Software engineer · Employee · Hired 45 days ago · Reports to Odile",
+        "note": "Its role, that it is an employee, when it was hired, and who it reports to."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label='Track record']",
+        "note": "Four tiles worked out from its real work: work accepted, repairs never billed, cost against its budget, and how close its estimates come."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-labelledby='job-title'] dl",
+        "note": "The job it works to, in plain words: mandate, where, what it may use, services, budget and thinking power."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-labelledby='work-title']",
+        "note": "Its last piece of work, and the tasks it took on, each with its status, estimate and cost."
+      }
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "highlight": {
+        "text": "Contractors it has briefed",
+        "note": "Then the contractors it briefed, a conversation with it, and — in the aside — what it remembers."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Technical mode adds the identifier",
+      "persona": "owner",
+      "scenario": "s4-employee-record",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Identifier",
+            "note": "Technical mode adds the employee's id, and the real tool and tier names."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A Viewer reads the record, with no actions",
+      "persona": "viewer",
+      "scenario": "s4-employee-record",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Work accepted",
+            "note": "Priya is a Viewer: the whole record, and none of the action buttons."
+          }
+        }
+      ]
+    },
+    {
+      "title": "An employee that is not there",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/00000000-0000-4000-8000-000000000000",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "This employee could not be found",
+            "note": "An address that names no employee, or one you cannot see."
+          }
+        }
+      ]
+    }
+  ]
+}

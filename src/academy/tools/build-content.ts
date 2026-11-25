@@ -1,4 +1,4 @@
-import { copyFileSync, cpSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import QRCode from "qrcode";
 import { parseFlows } from "./parse-flows.ts";
@@ -27,6 +27,17 @@ export function qrPath(text: string): { size: number; path: string } {
   return { size, path: d };
 }
 
+/**
+ * The images `make academy-shots` captured: `public/shots/index.json` maps "<FLOW-ID>/<step>" (and
+ * "<FLOW-ID>/v<n>" for a variation's last step) to a file under public/shots/. None captured is fine.
+ */
+export function readShots(dir = path.join(root, "public/shots")): Record<string, string> {
+  const file = path.join(dir, "index.json");
+  if (!existsSync(file)) return {};
+  const index = JSON.parse(readFileSync(file, "utf8")) as { shots?: Record<string, string> };
+  return Object.fromEntries(Object.entries(index.shots ?? {}).filter(([, f]) => existsSync(path.join(dir, f))));
+}
+
 function main() {
   const siteUrl = process.env.SITE_URL?.trim() || DEFAULT_SITE_URL;
   const content = parseFlows(docs);
@@ -45,6 +56,8 @@ function main() {
   const pct = (a: number, b: number) => (b ? `${((100 * a) / b).toFixed(1)}%` : "0%");
   log(`  Script coverage: ${c.flowsWithScript}/${c.flows} flows (${pct(c.flowsWithScript, c.flows)}), ${c.stepsWithMedia}/${c.steps} steps with media (${pct(c.stepsWithMedia, c.steps)}).`);
   log(`  By kind: ${Object.entries(c.byKind).map(([k, n]) => `${k} ${n}`).join(" · ") || "none"}; ${c.variations} variation(s) under "What else can happen".`);
+  const shots = readShots();
+  log(`  Captured images: ${Object.keys(shots).length ? `${Object.keys(shots).length} steps (public/shots/, from make academy-shots)` : "none (make academy-shots captures them)"}`);
 
   if (fatal.length || scripts.problems.length) {
     for (const p of fatal) log(`  FATAL ${p.file}:${p.line} ${p.flow} — ${p.message}`);
@@ -56,6 +69,7 @@ function main() {
   mkdirSync(out, { recursive: true });
   writeFileSync(path.join(out, "content.json"), JSON.stringify(content));
   writeFileSync(path.join(out, "scripts.json"), JSON.stringify(scripts.scripts));
+  writeFileSync(path.join(out, "shots.json"), JSON.stringify(shots));
   writeFileSync(path.join(out, "search-index.json"), JSON.stringify(buildIndex(content.flows)));
   writeFileSync(
     path.join(out, "site.json"),

@@ -1,0 +1,47 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-19",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/acme/labs/demo/notes/hooks/court-sensor",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "court": "3",
+        "occupied": true
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "title": "Webhook verification failed",
+          "status": 401,
+          "detail": "The X-Signature header did not verify."
+        }
+      },
+      "note": "Declared, so Edge lets it through, but there is no signature. WebhookVerification offers HmacSha256 and SharedToken only; there is no way to map a hook without one."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/acme/labs/demo/notes/hooks/garage-door",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "open": true
+      },
+      "response": {
+        "status": 401
+      },
+      "note": "Not declared, on a private app, with no session: Edge treats it as any signed-out request. A POST gets 401 with a Location header to the app's sign-in page; the app never sees it."
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-13",
+  "persona": "builder",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Name"
+            },
+            "text": "Court bookings"
+          }
+        },
+        {
+          "click": {
+            "text": "Save the name"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "h1",
+        "note": "The heading follows the new name; its addresses never change."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Archive it",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Archive Court booking"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Archive Court booking?",
+            "note": "Archiving keeps its code, data and history."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Yes, archive Court booking"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Reactivate Court booking",
+            "note": "Archived; reactivating it brings it back."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below Builder",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "A Builder or above renames or archives it.",
+            "note": "A Viewer is told who can, rather than offered controls that fail."
+          }
+        }
+      ]
+    }
+  ]
+}

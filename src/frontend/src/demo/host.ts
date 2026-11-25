@@ -6,9 +6,12 @@ import { clock, seek, tick } from "./server/engine";
 import { answerApproval } from "./server/routes/work";
 import { WORLD_VERSION, type World } from "./server/world";
 import { PERSONAS, buildWorld, resolveRoute, type Persona, type Scenario } from "./world/scenarios";
+import "./world/scenarios.s2";
 // Scenarios kept per flow file. Imported here, after scenarios.ts has run: they call its defineScenario.
 import "./world/scenarios.s1";
 import "./world/scenarios.s3";
+import "./world/scenarios.s4";
+import "./world/scenarios.s5";
 import { installDevice } from "./device";
 
 /**
@@ -162,8 +165,9 @@ export function goto(next: { route?: string; persona?: string; scenario?: string
     if (scenario !== session.scenario) begin(scenario, persona, true);
     else {
       const built = buildWorld(scenario, persona);
-      world.sessionUserId = built.persona.userId && world.users.some((u) => u.id === built.persona.userId) ? built.persona.userId : null;
+      // The persona's own edits first: a persona may bring the person it signs in as (first-run, no-role).
       built.persona.apply?.(world);
+      world.sessionUserId = built.persona.userId && world.users.some((u) => u.id === built.persona.userId) ? built.persona.userId : null;
       world.entered = [];
       session = { ...session, persona: built.persona.name, personaInfo: built.persona };
       save();

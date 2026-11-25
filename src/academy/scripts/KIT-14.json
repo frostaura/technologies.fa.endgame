@@ -1,0 +1,92 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-14",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "csharp",
+      "code": "// IEndgameSecrets secrets, injected. Read it where it is used; never log it.\nvar stripeKey = await secrets.GetAsync(\"STRIPE_API_KEY\", ct);",
+      "note": "The kit checks the name is UPPER_SNAKE_CASE, then sends GET /platform/v1/secrets/STRIPE_API_KEY with the app's token. GetAsync returns only the value."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "GET",
+      "path": "/platform/v1/secrets/STRIPE_API_KEY",
+      "headers": {
+        "Authorization": "Bearer egt_…"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "name": "STRIPE_API_KEY",
+          "value": "sk_test_…",
+          "scope": "acme/labs"
+        }
+      },
+      "note": "Resolved from the app upwards; the deepest level that sets the name wins, and scope names it. The value and scope here are illustrative, never a real key."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The name is not UPPER_SNAKE_CASE",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "csharp",
+          "code": "await secrets.GetAsync(\"stripeKey\", ct);",
+          "output": [
+            "System.ArgumentException: Secret name 'stripeKey' must be UPPER_SNAKE_CASE (e.g. 'STRIPE_API_KEY'). (Parameter 'name')"
+          ],
+          "note": "Refused in the app; nothing is sent. Called directly, the platform's own check answers 400 \"A secret name is UPPER_SNAKE_CASE, for example STRIPE_API_KEY.\""
+        }
+      ]
+    },
+    {
+      "title": "No level sets the secret",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "GET",
+          "path": "/platform/v1/secrets/STRIPE_API_KEY",
+          "headers": {
+            "Authorization": "Bearer egt_…"
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/secret_not_found",
+              "title": "No such secret",
+              "status": 404,
+              "detail": "No secret named STRIPE_API_KEY is set at any level searched: app acme/labs/demo/notes, project acme/labs/demo, division acme/labs, organisation acme.",
+              "code": "secret_not_found"
+            }
+          },
+          "note": "The detail names every level searched, from the app up. The paths are illustrative."
+        },
+        {
+          "step": 2,
+          "kind": "code",
+          "language": "csharp",
+          "code": "try { stripeKey = await secrets.GetAsync(\"STRIPE_API_KEY\", ct); }\ncatch (EndgameSecretNotFoundException e) { logger.LogError(\"{Name}: {Message}\", e.Name, e.Message); }",
+          "output": [
+            "STRIPE_API_KEY: No secret named STRIPE_API_KEY is set at any level searched: app acme/labs/demo/notes, project acme/labs/demo, division acme/labs, organisation acme."
+          ],
+          "note": "Set it with SEC-03 at the app or any level above it."
+        }
+      ]
+    }
+  ]
+}

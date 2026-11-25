@@ -1,0 +1,131 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "MEM-02",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Add something Kasper should know"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "In a few words"
+            },
+            "text": "League nights start at 19:00"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "What Kasper should remember"
+            },
+            "text": "From October, league nights start at 19:00, not 19:20; block bookings follow."
+          }
+        },
+        {
+          "select": {
+            "into": {
+              "text": "Kind"
+            },
+            "value": "A fact"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Add it",
+        "note": "A title, what to remember, and its kind."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add it"
+          }
+        },
+        {
+          "wait": 200
+        }
+      ],
+      "highlight": {
+        "text": "League nights start at 19:00",
+        "note": "At the top at once, faded and “Saving…” until it is saved."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "selector": "ul[aria-label='Memory entries'] li:first-child",
+        "note": "Saved: “Added by a person”. Kasper reads it before his next task."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A title and what to remember are needed",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Add something Kasper should know"
+              }
+            },
+            {
+              "click": {
+                "text": "Add it"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Give it a short title and say what it should remember.",
+            "note": "Nothing is sent."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A Viewer reads, a Builder teaches",
+      "persona": "viewer",
+      "scenario": "quiet",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "What Kasper remembers",
+            "note": "Priya is a Viewer: she reads the memory; adding, correcting and removing need a Builder."
+          }
+        }
+      ]
+    }
+  ]
+}

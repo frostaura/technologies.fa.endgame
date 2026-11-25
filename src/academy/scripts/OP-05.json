@@ -1,0 +1,196 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-05",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "selector": "li[data-org='northfield'] button[aria-expanded]"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Credits to add"
+            },
+            "text": "600"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Note"
+            },
+            "text": "Topped up so the homework planner is back for term."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "A top-up settles any debt first and restarts everything paused at once.",
+        "note": "How many credits, and a note the Owner reads beside the top-up."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add the credits"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Added 600 credits to Northfield Tutors.",
+        "note": "Added — and its Owner can read that you did. The button becomes “Done”."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "li[data-org='northfield']",
+        "note": "Northfield Tutors is back in credit: the debt was settled first and its paused app restarted. The top-up heads “Top-ups made”."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A note is needed on screen",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "selector": "li[data-org='northfield'] button[aria-expanded]"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Credits to add"
+                },
+                "text": "600"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Add the credits",
+            "note": "Disabled until there is a note: the Owner reads it beside the top-up."
+          }
+        }
+      ]
+    },
+    {
+      "title": "The Owner reads it",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "selector": "li[data-org='northwind'] button[aria-expanded]"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Credits to add"
+                },
+                "text": "250"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Note"
+                },
+                "text": "A little extra for the league season."
+              }
+            },
+            {
+              "click": {
+                "text": "Add the credits"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "Added 250 credits to Northwind.",
+            "note": "Nell tops up Northwind."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "goto": "/operator-access",
+          "persona": "owner",
+          "highlight": {
+            "text": "Added 250 credits",
+            "note": "Mara reads it in her operator log; the top-up and its note are on her Credits screen too."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Only FrostAura tops up",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/api/credits/top-ups",
+          "body": {
+            "organisation": "northwind",
+            "credits": 500,
+            "note": "",
+            "idempotencyKey": "4d1f0c9e-6b2a-4e57-9a3c-2f8b7d1e6a05"
+          },
+          "response": {
+            "status": 403,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/forbidden",
+              "title": "Forbidden",
+              "status": 403,
+              "detail": "Credits are topped up by FrostAura (manual top-ups; there is no payment gateway).",
+              "code": "forbidden"
+            }
+          },
+          "note": "Anyone who is not an operator is refused; there is no card on file and no payment gateway."
+        }
+      ]
+    }
+  ]
+}

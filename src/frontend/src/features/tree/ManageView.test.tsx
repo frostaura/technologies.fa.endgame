@@ -127,11 +127,20 @@ describe("ManageView", () => {
     });
     renderWithStore(<ManageView />);
     fireEvent.click(await screen.findByRole("button", { name: "Delete Ledger" }));
+    expect(screen.getByText(/^This cannot be undone\. Only a project with nothing in it/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Yes, delete Ledger" }));
     expect(await screen.findByText(/still has children, work or credit history attached/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Archive it instead" }));
     expect(await screen.findByText("Ledger is archived instead. Nothing in it was deleted.")).toBeTruthy();
     expect(api.calls.find((c) => c.method === "PATCH")?.body).toEqual({ status: "archived" });
+  });
+
+  it("asks before deleting an app in plain English: an app, not a app", async () => {
+    window.history.replaceState(null, "", "/tree?scope=acme/tools/ledger/web");
+    stub();
+    renderWithStore(<ManageView />);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Ledger web" }));
+    expect(screen.getByText(/^This cannot be undone\. Only an app with nothing in it, no work and no spending can be deleted/)).toBeTruthy();
   });
 
   it("reactivates an archived division as active", async () => {

@@ -80,6 +80,7 @@ temporarily unavailable".
 | `signed-out` | Nobody | |
 | `first-run` | Kit Marlow, signed in on a fresh install with no organisation | |
 | `two-organisations` | Kai Moreno, a Builder at Northwind and an Admin at Quayside Bakery (the organisation switcher) | `two-orgs` |
+| `no-role` | Sol Hart, signed in with a passkey, no role in any organisation once organisations exist | |
 
 A persona switch keeps the world; a scenario switch builds a new one.
 
@@ -109,15 +110,41 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `employee-released` | An employee who was let go, memory archived | `employee-let-go` |
 | `two-organisations` | A person in two organisations | |
 | `screening-offline` | God mode with no model to screen a new organisation (it needs the operator's own decision) | |
+| `operator-no-organisation` | A FrostAura operator who holds no role in any organisation: home is the God-mode panel | |
+| `tree-unreachable`, `tree-refresh-fails` | Home cannot reach the control plane once (then "Try again" works); or it loads, then every refresh fails | |
+| `ontology-unreachable` | The organisation graph cannot be read once | |
+| `notifications-unreachable`, `notifications-refresh-fails` | The feed cannot be read once; or it loads, then every refresh fails | |
+| `status-unhealthy`, `status-no-services`, `status-unreachable`, `status-refresh-fails` | System status with the Runner not answering; with no services at all; unreadable once; read once, then failing | |
+| `session-unreachable` | The session check cannot reach the control plane once | |
 | `s1-app-public`, `s1-app-private`, `s1-app-not-published` | Tutor Match, as a visitor meets it: public, private, or with no published version yet | |
 | `s1-app-unshared`, `s1-app-made-private` | Court booking after an Admin stopped sharing it, or made it private (for the `end-user` persona) | |
 | `s1-session-check-fails` | The first session check gets a bare 503, as from a gateway with no control plane behind it | |
 | `s1-keys-at-limit` | Mara already holds 50 live assistant keys | |
 | `s1-development-sign-in`, `s1-development-apps` | A development deployment (`ENDGAME_DEV_LOGIN=true`): on a fresh install, and with Northwind's apps | |
+| `s4-hiring`, `s4-hires-all-decided`, `s4-hire-manager-gone` | Technologies' hiring with Lark waiting, Sol hired by auto-mode and Bea declined; every proposal decided; Lark drafted to report to Tomas, since let go | |
+| `s4-contractor-working`, `s4-contractor-finishes` | Odile's data contractor at work; and finishing inside a playing run (`s4:contractor-finished`): its lesson to Odile, its role raised and hired | |
+| `s4-employee-record`, `s4-employee-working`, `s4-employee-team`, `s4-employee-at-cap` | Kasper with his tasks; at work on a live run; with Mina reporting to him; at his monthly cap, told so | |
+| `s4-idle-sweep`, `s4-released-with-memory`, `s4-memory-to-tidy` | Ruth idle under checkpoints and Ivo let go by the sweep; Tomas let go with his memory; Kasper's memory with a note learned twice and one removed | |
+| `s4-credits-at-zero`, `s4-below-zero`, `s4-top-ups-waiting` | The balance at 0, at −120, and five top-up requests already waiting | |
+| `s4-operator-log`, `s4-operator-log-empty` | Northwind's operator log with every kind of entry, and with none | |
+| `app-private`, `app-public`, `app-shared-empty` | Court booking private, public, or shared with nobody yet (`scenarios.s5.ts`) | |
+| `app-long-history`, `app-not-published` | Court booking with more versions than a page shows; Tutor Match with nothing published, nothing run (so it can be deleted) | |
+| `app-restore-fails`, `app-rebuild-fails` | Bringing a version back, or "Rebuild and restart", cannot start the app | |
+| `app-wake-slow`, `app-wake-busy`, `app-unreachable`, `wake-failures` | A wake the Edge cannot finish: over 30 seconds, no room, unreachable; `wake-failures` puts one of each (and an unpublished app) side by side | |
+| `outage` | The host cannot be reached: Cloudflare's outage page at Court booking's address | |
+| `ask-unavailable`, `dashboard-full` | No model route, so nothing about an app can be asked; Court booking's dashboard at its 30 questions | |
+| `no-secrets` | No secret set anywhere in Northwind | |
 
 Scenarios are kept one file per flow file, `world/scenarios.s<n>.ts`, each registered by one
 side-effect import in `host.ts`. Not in `scenarios.ts`: a scenario file calls its `defineScenario`,
 so importing it there is a cycle whose `const` map is not yet initialised.
+
+The academy's organisation, tree, notification and system flows use `world/scenarios.s2.ts`. A
+failed read there is `World.outages`: a request by method and route pattern, answered normally
+`skip` times, then failing `times` times (always, when unset) — as a problem body with `status`, or,
+with none, as a control plane that cannot be reached (the fetch rejects, so the console says "could
+not be reached"). System status follows `World.systemStatus` (services unhealthy in their probe's
+own words, or none), with the server's eight services in `StatusOptions.Probes` order.
 
 ### Named moments (`clock { seek }`)
 
@@ -270,6 +297,13 @@ shares, dashboard questions, versions, notifications, suggestions, tokens, setti
 top-ups and requests, the operator log and prices. It lives in the page, is saved to
 `sessionStorage` under `endgame-demo:world` while the tab is open (a blocked storage only means a
 reload forgets), and is rebuilt by "Reset the demo" or the bridge's `reset`.
+
+Asking about an app is played by keywords in the question (`routes/breadth.ts`), so each answer the
+console can draw has a question that brings it: a number, bars, a line, a table cut short or empty, a
+question the app does not record, one that still fails after the free repair, and one that times out.
+The export is a real gzipped tar built in the page (`server/archive.ts`): `manifest.json` in the
+control plane's shape, `code.bundle` (a git bundle of the app's versions that `git clone` reads) and
+`platform.json`; the demo has no database to dump, and its manifest says so.
 
 The run scripts were modelled on two real run logs read from a development stack (a research run
 of 40 events and a build run of 1,457): the same event types, payload fields, milestones and

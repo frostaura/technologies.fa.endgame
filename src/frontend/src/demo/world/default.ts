@@ -120,7 +120,8 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     topUpRequests: [],
     topUps: [],
     operatorLog: [],
-    pricing: { pricing: DEFAULT_PRICING, source: "stored", updatedAt: a(20 * day), updatedBy: PEOPLE.operator.displayName, history: [] },
+    // Changed once, twenty days ago: the margin went from 1.2 to 1.25.
+    pricing: { pricing: DEFAULT_PRICING, source: "stored", updatedAt: a(20 * day), updatedBy: PEOPLE.operator.displayName, history: [{ at: a(20 * day), by: PEOPLE.operator.displayName, byEmail: PEOPLE.operator.email, before: { ...DEFAULT_PRICING, margin: 1.2 }, after: DEFAULT_PRICING }] },
     counter: 0,
     changed: [],
   };
@@ -153,9 +154,9 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   n(`${ORG}/operations/van-tracker`, "Delivery Van Tracker", { stage: "verdict", ideaId: IDS.ideaVans, note: "Research says do not build. Waiting for your call." });
   // Kept but not served: last summer's events, with history, so it can be archived and not deleted.
   n(`${ORG}/events`, "Events", { status: "archived" });
-  n(`${ORG}/events/summer-ladder`, "Summer Ladder", { status: "archived", stage: "paused", note: "Archived after the summer season." });
+  n(`${ORG}/events/summer-ladder`, "Summer Ladder", { status: "archived", stage: "paused", note: "Archived." });
   // Nothing attached yet: this one can be deleted.
-  n(`${ORG}/operations/gift-cards`, "Gift Cards", { stage: "idea", note: "Named, nothing built yet." });
+  n(`${ORG}/operations/gift-cards`, "Gift Cards", { stage: "planning" });
   for (const [slug, name] of [
     ["quayside", "Quayside Bakery"],
     ["quayside/shop", "Shop"],
@@ -209,10 +210,10 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   app(`${ORG}/technologies/court-booking/web`, "Court booking", { running: "always-on", runningSetting: "always-on", access: "shared", healthSummary: "Healthy: 412 requests today, none failed.", telemetry: tele(186, 412, 0, 38, 210, 2), capCredits: 400, endUsers: 3, runningCost: estimated(9.4, 21.9, 310), publishedAt: a(41 * day) });
   app(`${ORG}/learning/course-notes/web`, "Course Notes", { running: "asleep", status: "sleeping", healthSummary: "Asleep; it wakes on the next visit.", telemetry: tele(4, 31, 0, 22, 140, 95), runningCost: estimated(2.1, 18.4, 96), publishedAt: a(33 * day) });
   app(`${ORG}/learning/tutor-match/web`, "Tutor Match", { running: "awake", healthSummary: "Running; nothing measured yet.", telemetry: null, publishedAt: a(40), runningCost: notEnoughHistory(0) });
-  app(`${ORG}/operations/stock-counter/web`, "Stock Counter", { running: "paused", status: "stopped", pausedReason: "budget", health: "unknown", healthSummary: "Paused: the Stock Counter project has spent its monthly budget.", telemetry: tele(0, 0, 0, 0, 0, 3 * 60), runningCost: estimated(3.2, 17.9, 120), publishedAt: a(25 * day) });
+  app(`${ORG}/operations/stock-counter/web`, "Stock Counter", { running: "paused", status: "stopped", pausedReason: "budget", health: "unknown", healthSummary: "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it.", telemetry: tele(0, 0, 0, 0, 0, 3 * 60), runningCost: estimated(3.2, 17.9, 120), publishedAt: a(25 * day) });
   app(`${ORG}/operations/shift-rota/web`, "Shift Rota", { running: "awake", status: "failed", health: "down", healthSummary: "It crashed and visitors see an unavailable page. Its last good version can be restored from its history.", telemetry: tele(23, 96, 41, 51, 2900, 12), runningCost: estimated(4.8, 19.2, 150), publishedAt: a(12 * day) });
   app("quayside/shop/orders/web", "Pre-orders", { running: "asleep", status: "sleeping", healthSummary: "Asleep; it wakes on the next visit.", telemetry: tele(12, 80, 0, 30, 120, 40) });
-  app("northfield/tuition/homework/web", "Homework Planner", { running: "paused", status: "stopped", pausedReason: "overdraft", health: "unknown", healthSummary: "Paused: the organisation reached its overdraft limit.", telemetry: tele(0, 0, 0, 0, 0, 26 * 60) });
+  app("northfield/tuition/homework/web", "Homework Planner", { running: "paused", status: "stopped", pausedReason: "overdraft", health: "unknown", healthSummary: "Paused: the organisation reached its overdraft limit. A top-up restores it at once.", telemetry: tele(0, 0, 0, 0, 0, 26 * 60) });
 
   // Spending this month ------------------------------------------------------------------------
   const sp = (path: string, ai: number, hosting: number) => w.spend.push({ path, ai, hosting });
@@ -346,9 +347,9 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
       decision: null,
       record: { total: 0, build: 0, change: 0, doNotBuild: 0, overruled: [] },
       redLine: null,
-      history: [],
-      tryAgain: null,
       ...extra,
+      history: extra.history ?? [],
+      tryAgain: extra.tryAgain ?? null,
     };
     w.ideas.push(i);
     return i;

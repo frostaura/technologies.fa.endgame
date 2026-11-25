@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHR-01",
+  "persona": "viewer",
+  "scenario": "app-private",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Court booking is private to your organisation.",
+        "note": "Only a shared app has a list of people."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A public app",
+      "persona": "viewer",
+      "scenario": "app-public",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Court booking is public, so anyone with the address can open it.",
+            "note": "To choose who can, set it to Shared."
+          }
+        }
+      ]
+    }
+  ]
+}

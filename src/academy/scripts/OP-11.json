@@ -1,0 +1,71 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-11",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "PATCH",
+      "path": "/api/organisations/8c817256-b6e0-42c2-a5b3-601576450a79",
+      "body": {
+        "status": "suspended"
+      },
+      "response": {
+        "status": 403,
+        "body": {
+          "type": "https://endgame.frostaura.net/problems/forbidden",
+          "title": "Forbidden",
+          "status": 403,
+          "detail": "This needs the owner role at 'northwind'; you are a admin there (set at northwind).",
+          "code": "forbidden"
+        }
+      },
+      "note": "An operator in God mode acts as an Admin, and changing an organisation needs its Owner: refused."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "PATCH",
+      "path": "/api/organisations/8c817256-b6e0-42c2-a5b3-601576450a79",
+      "body": {
+        "status": "suspended"
+      },
+      "response": {
+        "status": 403,
+        "body": {
+          "type": "https://endgame.frostaura.net/problems/forbidden",
+          "title": "Forbidden",
+          "status": 403,
+          "detail": "An organisation is suspended or reinstated by FrostAura.",
+          "code": "forbidden"
+        }
+      },
+      "note": "Its Owner, who passes the role check, is refused because only FrostAura changes an organisation's status."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "PATCH",
+      "path": "/api/organisations/8c817256-b6e0-42c2-a5b3-601576450a79",
+      "body": {
+        "status": "suspended"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "8c817256-b6e0-42c2-a5b3-601576450a79",
+          "level": "organisation",
+          "slug": "northwind",
+          "name": "Northwind",
+          "path": "northwind",
+          "status": "suspended",
+          "createdAt": "2026-09-24T09:00:00+00:00"
+        }
+      },
+      "note": "Only an operator who is also the organisation's Owner gets through; its apps then leave the routing table."
+    }
+  ]
+}

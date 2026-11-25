@@ -1,0 +1,49 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "NOTE-03",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/notifications",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "nav[aria-label='Where you are']",
+        "note": "The full feed: Northwind / Notifications."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "What needs you, newest first.",
+        "note": "Newest first. The urgent ones are e-mailed too, when e-mail is set up."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Mark all read",
+        "note": "How many are unread, and Mark all read."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "selector": "li[data-notification]",
+        "note": "Each row: its kind as a badge, New, how long ago, the title as a link, one line, Mark read, and Also e-mailed when it was."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "What you are told about",
+        "note": "What raises a notice, and who sees it."
+      }
+    }
+  ]
+}

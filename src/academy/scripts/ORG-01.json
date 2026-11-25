@@ -1,0 +1,85 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-01",
+  "persona": "first-run",
+  "scenario": "default",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "selector": "main",
+        "note": "Kit Marlow is signed in on a fresh Endgame. Home asks for the tree; while it loads, grey placeholders stand in."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/tree",
+      "response": {
+        "status": 200,
+        "body": {
+          "generatedAt": "2026-11-25T09:30:00Z",
+          "viewerRole": "none",
+          "organisation": null,
+          "divisions": [],
+          "needsYou": [],
+          "firstRun": true
+        }
+      },
+      "note": "A real, empty answer: no organisation anywhere yet, and firstRun says this person may name the first one."
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Name your organisation, then describe your first idea.",
+        "note": "The first-run band: what to do, one line on what happens next, and Start."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "selector": "header",
+        "note": "The header holds only the Endgame mark: no breadcrumb, bell or credits until an organisation exists."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Start"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What do you want to build?",
+        "note": "Start opens the start screen, where the organisation is named with its first idea."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A FrostAura operator with no organisation sees God mode instead",
+      "persona": "operator",
+      "scenario": "operator-no-organisation",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "You run Endgame for FrostAura. Every organisation is one step away.",
+            "note": "An operator is never offered a first organisation: home is the God-mode panel (ORG-17)."
+          }
+        }
+      ]
+    }
+  ]
+}

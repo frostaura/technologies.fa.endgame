@@ -1,0 +1,156 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-21",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make -C src/appkit vendor",
+      "output": [
+        "rm -rf template/vendor/nuget",
+        "  Successfully created package '…/src/appkit/template/vendor/nuget/Endgame.AppKit.0.1.0.nupkg'.",
+        "  Successfully created package '…/src/appkit/template/vendor/nuget/Endgame.AppKit.Testing.0.1.0.nupkg'.",
+        "  Successfully created package '…/src/appkit/template/vendor/nuget/Endgame.AppKit.DevPlatform.0.1.0.nupkg'.",
+        "rm -rf template/vendor/npm && mkdir -p template/vendor/npm",
+        "endgame-appkit-0.1.0.tgz"
+      ],
+      "note": "Abridged: make also echoes each recipe line, and dotnet and npm print more. The package lines are dotnet pack's and npm pack's own. Run from the Endgame repository."
+    },
+    {
+      "step": 2,
+      "kind": "code",
+      "language": "csharp",
+      "code": "// api/Courts/CourtsEndpoints.cs, in a copy of src/appkit/template/ (vendor/ included).\npublic static void MapCourts(this RouteGroupBuilder api)\n{\n    var courts = api.MapGroup(\"courts\").WithTags(\"Courts\");\n    courts.MapGet(\"\", ListAsync)\n        .WithName(\"listCourts\")\n        .WithDescription(\"Every court, with whether it is free now.\");\n}\n\n// api/Program.cs\nvar api = app.UseEndgameApp();\napi.MapCourts();",
+      "note": "Every endpoint goes on the api group UseEndgameApp() returns, with an operationId (WithName) and a description: the platform makes each one an MCP tool. Courts is an illustrative feature in place of the template's Notes."
+    },
+    {
+      "step": 3,
+      "kind": "code",
+      "language": "tsx",
+      "code": "import { useApiQuery } from \"@endgame/appkit\";\nimport { EmptyState, FailedState, LoadingState } from \"@endgame/appkit/ui\";\n\nexport function CourtsPage() {\n  const courts = useApiQuery<Court[]>(\"courts\");\n  if (courts.status === \"loading\") return <LoadingState label=\"Loading courts…\" />;\n  if (courts.status === \"failed\") return <FailedState error={courts.error} onRetry={courts.reload} />;\n  if (courts.data.length === 0) return <EmptyState title=\"No courts yet\" />;\n  return <ul data-testid=\"court-list\">{/* … */}</ul>;\n}",
+      "note": "No URL starts with \"/\": api(\"courts\") and useApiQuery resolve against <base>, and main.tsx gives the router routerBasename(). Then update docs/app.md, docs/data.md and docs/decisions.md."
+    },
+    {
+      "step": 4,
+      "kind": "terminal",
+      "command": "make build",
+      "output": [
+        "cd web && npm run build",
+        "> tsc -b && vite build",
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet build App.slnx --nologo",
+        "Build succeeded in 9.4s"
+      ],
+      "note": "The front end builds into api/wwwroot, then the API, warnings as errors on both sides. npm ci runs first when web/node_modules is out of date. Vite's lines are left out; the time is illustrative."
+    },
+    {
+      "step": 5,
+      "kind": "terminal",
+      "command": "make lint",
+      "output": [
+        "cd web && npm run lint && npm run typecheck",
+        "> eslint . --max-warnings 0",
+        "> tsc -b --noEmit",
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet format App.slnx --verify-no-changes --verbosity minimal"
+      ],
+      "note": "Silence after each line is a pass. ESLint carries the kit's rules endgame/no-root-relative-url and endgame/no-location-read."
+    },
+    {
+      "step": 6,
+      "kind": "terminal",
+      "command": "make test",
+      "output": [
+        "cd web && npm run test -- --run",
+        " Test Files  5 passed (5)",
+        "      Tests  21 passed (21)",
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet test App.slnx --nologo --no-build",
+        "Passed!  - Failed:     0, Passed:     7, Skipped:     0, Total:     7, Duration: 4 s - App.Api.Tests.dll (net10.0)"
+      ],
+      "note": "Builds first. Needs ENDGAME_TEST_DATABASE: each test creates and drops its own database there. The summary lines are Vitest's and dotnet's; counts are the template's own and change as you add tests."
+    },
+    {
+      "step": 7,
+      "kind": "terminal",
+      "command": "make image",
+      "output": [
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet publish api/App.Api.csproj /t:PublishContainer --nologo",
+        "  Building image 'app' with tags 'latest' on top of base image 'mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled'.",
+        "  Pushed image 'app:latest' to local registry via 'docker'."
+      ],
+      "note": "The publish runs the web build itself. ReadyToRun, chiseled, user app. The image lines are the .NET SDK's own; Dock passes its own repository, tag and -r when it builds."
+    },
+    {
+      "step": 8,
+      "kind": "terminal",
+      "command": "make migration name=AddCourts",
+      "output": [
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet ef migrations add AddCourts --project api --output-dir Migrations",
+        "Build started...",
+        "Build succeeded.",
+        "Done. To undo this action, use 'ef migrations remove'"
+      ],
+      "note": "One per schema change, after dotnet tool restore (left out here; see KIT-11). Never edit a migration once it is committed."
+    }
+  ],
+  "variations": [
+    {
+      "title": "An endpoint has no operation id or description",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "csharp",
+          "code": "courts.MapGet(\"\", ListAsync);",
+          "output": [
+            "Unhandled exception. System.InvalidOperationException: Endgame app kit: 2 endpoints break the API contract (the platform builds the app's MCP tools from it):",
+            "  - GET api/courts: missing an operation id. Add .WithName(\"listCourts\") — lowerCamelCase, unique, a verb first.",
+            "  - GET api/courts: missing a description. Add .WithDescription(\"…\") — one or two sentences saying what it does and returns; an agent reads it to decide when to call it."
+          ],
+          "note": "Every problem is listed at once, with a suggested name. \"Unhandled exception. System.InvalidOperationException:\" is .NET's own prefix."
+        }
+      ]
+    },
+    {
+      "title": "A URL starts with \"/\", or the page reads window.location",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make lint",
+          "output": [
+            "  12:22  error  '/logo.svg' starts with '/', so it ignores the app's address prefix and breaks under /<org>/<division>/<project>/. Write it without the leading slash (resolved against <base>), use api('…') for the API, or <Link to=\"…\"> for in-app routes  endgame/no-root-relative-url",
+            "  18:15  error  Reading location.search does not change when a <Link> or navigate() moves to another page, so this page is not re-rendered there. Read it from the router instead: useSearchParams() (from react-router)  endgame/no-location-read"
+          ],
+          "note": "The messages are the kit's ESLint rules; the line and column layout is ESLint's, with illustrative positions. ESLint drops each message's final full stop in this format."
+        }
+      ]
+    },
+    {
+      "title": "The built page uses absolute asset URLs",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "text",
+          "code": "the exception that stops the app at start",
+          "output": [
+            "Endgame app kit: wwwroot/index.html cannot be served under an address prefix:",
+            "  - src=\"/assets/index-B3k9.js\" is root-relative. Build with base: './' in vite.config.ts and write URLs without a leading slash."
+          ],
+          "note": "The app does not start. The quoted attribute is illustrative; the kit quotes whatever it found."
+        }
+      ]
+    }
+  ]
+}

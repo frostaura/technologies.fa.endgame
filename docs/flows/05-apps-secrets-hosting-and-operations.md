@@ -22,14 +22,14 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   3. The heading is the app's name. Under it is the subdomain address followed by "· also at <path address>", or only the path address when there is no subdomain.
   4. A button reads "Open the app".
   5. The four tiles appear (APP-02), then "Ask about this app", "Dashboard", "History", the sharing card and the "Secrets" card.
-  6. The side column shows "Running", "Who can open it", "What it uses" and "It is yours". In technical mode it also shows "Underneath".
+  6. The side column shows "Running", "Who can open it", "What it may spend", "What it uses", "The app itself" and "It is yours". In technical mode it also shows "Underneath".
   7. The page re-reads the app every 20 seconds, but only while the browser tab has focus.
 - **Variations and refusals:**
   - An unknown id gives "This app could not be found".
   - Any other failure gives "The app could not be loaded", with the reason and a retry.
   - A stale cached copy shows a stale notice above the page.
-  - Each section has its own error boundary, so one broken section does not blank the page. The boundaries are named "The app's settings", "What it uses", "The download", "Asking about this app", "The dashboard", "The history", "Sharing" and "The secrets".
-  - A person with no role here gets 403. The page shows "The app could not be loaded" with the reason.
+  - Each section has its own error boundary, so one broken section does not blank the page. The boundaries are named "The app's settings", "What it may spend", "What it uses", "The app itself", "The download", "Asking about this app", "The dashboard", "The history", "Sharing" and "The secrets".
+  - A person with no role at the app or above it gets 404, exactly as for an app that does not exist, so nothing is learned about what they cannot see: the page shows "This app could not be found" with "The scope '<path>' was not found, or you cannot see it. (404)".
 - **Where:** `features/apps/AppView.tsx`; `GET /api/apps/{id}` (WorkEndpoints, Viewer); `ReadModels.AppAsync`
 - **Reachable from:** UI; API; MCP `app_get`
 - **Covered by tests:** `AppView.test.tsx` ("names the app's own organisation…", "shows a skeleton while loading", "records a failed read and names a missing app"); `tests-e2e/console.spec.ts` "app and credits"; `McpTests`
@@ -50,14 +50,13 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
      - Technical mode shows the raw summary, which can include "Running version <v>.".
   2. **Visits today tile.** The value is a number. The note is one of "<n> errors in <m> requests", "Last visit <time ago>" or "No visits yet".
   3. **Typical response tile.** The value is the median response time, or "No traffic yet". The note is "Slowest 1 in 20: <time>" or "Measured once it has visitors".
-  4. **Cost this month tile.** The value is the credits spent. The note is "Cap <credits>" or "No cap of its own; the one above applies".
+  4. **Cost this month tile.** The value is the credits spent. The note says what holds it: "Its own cap: <n> credits a month", "No cap of its own; <Level>'s <n> credits applies", or "No cap on it or above it".
 - **Variations and refusals:**
   - Before the app has measured anything, Visits and Typical response both read "Not measured yet". Their notes are "It reports its visits once it has run." and "Measured once it has visitors.".
   - Health is "degraded" when more than one response in twenty failed over the last 15 minutes. The summary then reads "Running, but X of the last Y responses failed.".
 - **Where:** `AppView.tsx` (AppBody, Tile, healthNote); `home/treeModel.ts` healthChip; `ReadModels.AppAsync` / `AppHealth`
 - **Reachable from:** UI; MCP `app_get`
 - **Covered by tests:** `AppView.test.tsx` ("shows status, both addresses, telemetry…", "says when there is no traffic to measure…", "says an app that has measured nothing yet is not measured, never zero…"); `PlatformApiTests.Telemetry_is_stored_per_app_and_the_app_page_and_tree_show_what_was_measured`; `tests-stack/acceptance.spec.ts` test 10
-- **Oddity:** the cap note's wording misleads. `capCredits` is resolved through the whole cascade, so when it is null there is no cap at any level, yet the note says "the one above applies".
 
 ### APP-03 Open the hosted app from its page
 - **Who:** anyone who can open the page
@@ -105,7 +104,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Who:** Builder or above.
 - **Starts at:** the "Running" fieldset on the app page, while "Sleeps when unused" is chosen. Also `POST /api/apps/{id}/settings { idleMinutes }` and MCP `app_settings`.
 - **Needs:** Builder.
-- **Level:** Core · **Learn first:** APP-04 · **What you learn:** a sleeping app costs least, and how soon it sleeps is yours to choose.
+- **Level:** Advanced · **Learn first:** APP-04 · **What you learn:** a sleeping app costs least, and how soon it sleeps is yours to choose.
 - **Steps:**
   1. Under the running choices, **"Sleeps after this many idle minutes"** holds the current value, with "From 1 to 1,440 (a day)."
   2. Type a number and press **"Save"**. "It sleeps after <n> idle minutes now." appears.
@@ -183,7 +182,9 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   6. Technical mode also shows "MCP: <origin>/mcp/apps/<id>".
 - **Variations and refusals:**
   - A failed graph read gives "What it uses could not be loaded" with a retry.
-  - A failed secrets read gives "Its secrets could not be read: <reason>". This is what a Builder or Viewer sees, because listing secrets needs Admin.
+  - A failed secrets read gives "Its secrets could not be read: <reason>" (an Admin only).
+  - Below Admin, its secrets are not asked for: there is no secrets chip and no "Secrets it can read" line.
+  - The service chips name only what the app has actually used: sign-in once anyone has signed in to it, registered or been invited; AI once it has called a model; e-mail once it has sent one; measured visits once it has reported telemetry; incoming data and schedules once it declares a webhook or a schedule.
 - **Where:** `AppAside.tsx` (WhatItUses); `GET /api/ontology?scope&view=all`; `GET /api/secrets?scope`
 - **Reachable from:** UI
 - **Covered by tests:** `AppBreadth.test.tsx` "lists the services it leans on, its secrets by name, and that assistants can use it"; `AppView.test.tsx` "says how many people signed up to it…"; `tests-e2e/breadth.spec.ts` "the Owner downloads everything, and sees what the app uses"
@@ -226,7 +227,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Who:** Admin or above. Anyone reads it.
 - **Starts at:** the app page's side panel **"What it may spend"**, card **"Its monthly cap"** ("All it spends a month, hosting and AI together. Work and visits stop at it until it is raised or the month turns."). Also its row on `/credits` (CRED-03).
 - **Needs:** Admin.
-- **Level:** Core · **Learn first:** CRED-03 · **What you learn:** an app can be held to its own cap, inside whatever holds the levels above it.
+- **Level:** Advanced · **Learn first:** CRED-03 · **What you learn:** an app can be held to its own cap, inside whatever holds the levels above it.
 - **Steps:**
   1. The card says what holds it: "<n> credits a month, set on <App>", "<n> credits a month, from <Level>", or "No cap on it or above it: only the organisation's balance and overdraft hold it."
   2. Press **"Set one for <App>"** (or **"Change it"**), type into "Credits a month", press **"Save"**: "<App> may spend <n> credits a month here."
@@ -253,7 +254,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Who:** Builder or above.
 - **Starts at:** the app page's side panel **"The app itself"**, or `/tree` (TREE-06, TREE-08).
 - **Needs:** Builder.
-- **Level:** Core · **Learn first:** TREE-06 · **What you learn:** an app's name can change; its addresses do not; archiving keeps everything.
+- **Level:** Advanced · **Learn first:** TREE-06 · **What you learn:** an app's name can change; its addresses do not; archiving keeps everything.
 - **Steps:** "Name" and **"Save the name"** as TREE-06; **"Archive <App>"** and **"Reactivate <App>"** as TREE-08. **"Manage it with the rest of the organisation"** opens `/tree` at the app.
 - **You know it worked when:** the heading shows the new name, or the app reads archived.
 - **Variations and refusals:** below Builder: "A Builder or above renames or archives it."
@@ -271,7 +272,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Variations and refusals:** the 409 is shown with **"Archive it instead"**. MCP has no delete tool.
 - **Where:** `AppManage.tsx`, `NodeControls.tsx` (DeleteNode); `DELETE /api/apps/{id}`.
 - **Reachable from:** UI; API.
-- **Covered by tests:** `ManageView.test.tsx` (delete refused, archive instead).
+- **Covered by tests:** `ManageView.test.tsx` ("shows the refusal to delete what has history, and archives it instead", "asks before deleting an app in plain English: an app, not a app").
 
 ### APP-15 Rebuild and restart an app
 - **Who:** Builder or above.
@@ -330,7 +331,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   5. The credit balance is refreshed.
 - **Variations and refusals:**
   - The model declines, because the app does not record what is asked: the alert shows the model's own plain reason.
-  - It still fails after the repair: "That question could not be answered from what the app records. Try asking it another way."
+  - It still fails after the repair: the control plane's own words, "It could not be worked out from what this app records. Try asking it another way, or about its visits, requests, errors, events or measurements." (The console says "That question could not be answered from what the app records. Try asking it another way." only when no reason comes back.)
   - It times out: "That question took too long to answer. Try a narrower one, such as a shorter period."
   - No route configured: "Questions about apps cannot be answered on this installation yet."
   - 403: "Asking needs the Builder role here. <reason>"
@@ -443,7 +444,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Steps:**
   1. The section reads "Any version can be brought back." and shows a skeleton.
   2. Up to 10 versions are listed, newest first. Each shows a plain title (the first line, without its plan-id prefix), the author (an employee's name links to their page; otherwise "The factory" or the person's name), the time ago, and "Live now" on the live one.
-  3. The factory's own commits are titled "The factory recorded its progress". A title that names files falls back to "A change by <name>".
+  3. The factory's own commits are titled "The factory recorded its progress". A restore is titled "An earlier version, brought back". A title that names files falls back to "A change by <name>".
   4. "Show earlier versions" loads 10 more. It reads "Loading…" while it waits.
 - **Variations and refusals:**
   - With no versions: "No versions yet" with "The first version appears here once it is built."
@@ -451,7 +452,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - Technical mode shows the first 12 characters of the commit id and the rest of the message.
 - **Where:** `History.tsx`, `appModel.ts`; `GET /api/apps/{id}/versions?limit` (Viewer)
 - **Reachable from:** UI; API; MCP `app_versions`
-- **Covered by tests:** `AppBreadth.test.tsx` ("lists versions with who made each…", "records a failed read and an empty history distinctly", "names a version by its first line…"); `VersionsAndExportTests.The_history_names_…`; `tests-e2e/breadth.spec.ts` "history names who made each version…"
+- **Covered by tests:** `AppBreadth.test.tsx` ("lists versions with who made each…", "records a failed read and an empty history distinctly", "names a version by its first line…", "names a restore for what it is, not by its commit id"); `VersionsAndExportTests.The_history_names_…`; `tests-e2e/breadth.spec.ts` "history names who made each version…"
 
 ### VER-02 Bring an earlier version back
 - **Who:** Builder or above, or an operator
@@ -467,7 +468,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   3. The person presses "Bring it back". "Keep the live version" or the Escape key cancels instead.
   4. While it works, the page reads "Bringing it back: it becomes the newest version, then it is rebuilt and restarted."
   5. Dock makes a new commit by the person. A public app is set to private, then the app is rebuilt, given a fresh token and started.
-  6. The result reads "The earlier version is back and running.", plus "It was public, so it is private now. Make it public again once you have looked at it." when that applies. "Done" closes it.
+  6. The result reads "The earlier version is back and running.", plus "It was public, so it is private now. Make it public again once you have looked at it." when that applies. "Done" closes it. The restored version heads the history as "An earlier version, brought back", by the person, marked "Live now".
 - **Variations and refusals:**
   - The rebuild fails: "The earlier version is back, but it is not running yet." with "It could not be rebuilt and started. Rebuild it again below, or ask the builder to look." (technical mode shows the build error) and **"Rebuild and restart"** (APP-15).
   - The restore is refused: "That version was not brought back: <reason> Nothing changed."
@@ -476,7 +477,6 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Where:** `History.tsx`; `POST /api/apps/{id}/versions/{commit}/restore` (Builder); `AppVersionService.RestoreAsync`
 - **Reachable from:** UI; API; MCP `app_restore`, recorded as made over MCP
 - **Covered by tests:** `AppBreadth.test.tsx` ("asks before bringing a version back…", "keeps the live version when a restore is refused…"); `VersionsAndExportTests.A_restore_is_a_new_change_by_the_person_republished_and_a_public_app_turns_private`; `tests-e2e/breadth.spec.ts`
-- **Finding:** "Try publishing it again" names a step that has no control anywhere on the app page.
 
 ### VER-03 Download everything (the export)
 - **Who:** Owner only
@@ -541,15 +541,15 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** a green box reads "<email> is invited…" with the code, and the address appears in the list as "Invited just now".
 - **Steps:**
   1. The person types an address and presses "Invite". It reads "Inviting…". The address joins the list at once.
-  2. The server makes a 32-character code valid for 14 days, and e-mails it with the app's address when mail is configured.
-  3. The page shows "<email> is invited. Give them this code; they register with it at <App>'s sign-up page before <date>.", the code, "Copy the code" (which then reads "Copied") and "It will not be shown again.".
+  2. The server makes a 32-character code valid for 14 days, keeps only its hash, and, when a mail server is configured, e-mails it: the subject is "<Org> shared <App> with you", and the message gives the app's address, says to choose "Create your sign-in" with this e-mail address and the code, and that the code works once, until a time in UTC.
+  3. The page shows "<email> is invited, and the code was e-mailed to them. If it does not arrive, give them this code; they register with it at <App>’s sign-up page within 14 days, before <date>.", the code, "Copy the code" (which then reads "Copied") and "It will not be shown again.".
   4. "Done" closes the box. The invited person then registers (KIT-03).
 - **Variations and refusals:**
   - A badly formed address: "That does not look like an e-mail address." and the button stays disabled.
   - A refusal: "<email> was not invited: <reason> Nothing changed." and the address is removed from the list.
   - The copy fails: "The code could not be copied; select it and copy it by hand."
   - Inviting an address again issues a fresh code. The old one stops working and the list is not duplicated.
-  - When a mail server sent it, the note reads "<email> is invited, and the code was e-mailed to them. If it does not arrive, give them this code; …"; otherwise "<email> is invited. No e-mail was sent, so give them this code; …".
+  - With no mail server, nothing is e-mailed and the note reads "<email> is invited. No e-mail was sent, so give them this code; they register with it at <App>’s sign-up page within 14 days, before <date>.".
   - The share endpoint does not check that access is Shared. Not verified what an invitation does on a private app; KIT-03 refuses sign-up there.
 - **Where:** `AppView.tsx` (Sharing, InvitationCode); `store/sensitive.ts` `shareApp`; `POST /api/apps/{id}/shares` (Admin); `AppIdentityService.ShareAsync`; `InvitationMailer`
 - **Reachable from:** UI and API
@@ -700,7 +700,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** every level has its own view of what applies there.
 - **You know it worked when:** the heading changes to "Secrets for <other level>".
 - **Steps:** the person follows a link and the page reloads with the new `?scope`.
-- **Variations and refusals:** 403 at a level where the person is not an Admin.
+- **Variations and refusals:** at a level where the person holds a role below Admin: 403, "You cannot see the secrets here"; at a level where they hold no role at all: 404, "The secrets could not be loaded" with "The scope '<path>' was not found, or you cannot see it.".
 - **Where:** `SecretsView.tsx`
 - **Reachable from:** UI
 - **Covered by tests:** none found specifically
@@ -874,16 +874,18 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** an app never handles passwords; it is told who the person is.
 - **You know it worked when:** `GET api/me` returns `{"user": {...}}` for a signed-in person.
 - **Steps:**
-  1. Edge forwards `X-Endgame-Session`. The kit resolves it with `POST /platform/v1/identity/resolve` and caches the result for 30 seconds at most.
+  1. Edge forwards `X-Endgame-Session`. The kit resolves it with `POST /platform/v1/identity/resolve` and caches the result for 30 seconds at most, and never past its `expiresAt`.
   2. The user has a kind (`member` or `endUser`) and a role (`owner`, `admin`, `builder`, `viewer`, or null for an end user).
   3. `IEndgameIdentity.CurrentUser`, `.RequireUser()` (a browser is redirected to sign in), and the web hooks `useCurrentUser()`, `signInUrl()` and `signUpUrl()` expose it.
 - **Variations and refusals:**
-  - An invalid session: 401 `session_invalid`.
-  - A missing or wrong app token: 401 `app_token_invalid`.
-  - A call that came through Edge's public side: 404.
+  - An invalid session: 401 `session_invalid` "The session is unknown, has expired, or is not a session for this app."; the kit treats the person as signed out.
+  - An API call to a `.RequireUser()` endpoint with nobody signed in: 401 "Sign in required" with a `signInUrl`; the web kit throws `NotSignedInError`.
+  - A missing or wrong app token: 401 `app_token_invalid` "The platform API needs the app's token (ENDGAME_APP_TOKEN) as a bearer token; this one is missing, unknown or superseded."
+  - A call that came through Edge's public side: 404 `not_found` "There is nothing at this address."
+  - A handler that takes a non-nullable `EndgameUser` without `.RequireUser()` stops the app at start.
 - **Where:** `appkit/sdk-dotnet/Endgame.AppKit/Identity/*`; `sdk-web/src/hooks.ts`, `router.ts`; `PlatformEndpoints.cs`; `AppTokenFilter`
 - **Reachable from:** inside the app (API only)
-- **Covered by tests:** `PlatformApiTests.Identity_resolves_a_member_and_an_end_user…`; `IdentityTests` (kit); `PlatformApiTests.The_app_token_is_required…`
+- **Covered by tests:** `PlatformApiTests.Identity_resolves_a_member_and_an_end_user…`; `IdentityTests` (kit); `PlatformApiTests.The_app_token_is_required…`; `ApiContractTests.A_required_user_without_RequireUser_stops_start_up`
 
 ### KIT-11 An app keeps its own data
 - **Who:** the app, and its developer
@@ -897,11 +899,13 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. The developer adds an entity and runs `make migration name=AddThing`.
   2. Migrations run at start. A first start takes an empty database to the latest schema.
 - **Variations and refusals:**
-  - Missing environment variables stop the app with one message naming all of them.
+  - Missing environment variables stop the app with one message naming all of them: "Endgame app kit: missing environment variable(s) …".
+  - A database that cannot be migrated stops the app: "Endgame app kit: could not migrate the database at … (ENDGAME_DATABASE): …", naming the host and database, never the password.
+  - A database that cannot be reached makes `GET health` answer 503 with `"database":"unreachable"`.
   - `make migration` with no name prints "usage: make migration name=AddSomething".
-- **Where:** `EndgameApp.cs`; `template/Makefile`
+- **Where:** `EndgameApp.cs`; `EndgameSettings.cs`; `Hosting/EndgameStartup.cs`; `template/Makefile`
 - **Reachable from:** command line / app code
-- **Covered by tests:** `HostingIntegrationTests.Apps_cannot_read_each_others_data_or_the_platforms`; `template/api.tests`
+- **Covered by tests:** `HostingIntegrationTests.Apps_cannot_read_each_others_data_or_the_platforms`; `HostingTests.Health_reports_the_database`, `Missing_environment_is_named_in_one_message` (kit); `template/api.tests`
 
 ### KIT-12 An app sends e-mail
 - **Who:** the app, on behalf of a user
@@ -916,12 +920,12 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   2. It sends `POST /platform/v1/email`, which answers 202 with an id.
   3. The message is queued in the outbox and the dispatcher delivers it through SMTP.
 - **Variations and refusals:**
-  - The kit refuses no recipients, a bad address, or a missing subject or text.
-  - The server refuses more than 50 recipients, a subject that is not one line of 1 to 300 characters, text over 256 KB, or HTML over 512 KB.
+  - The kit refuses no recipients or a bad address ("An email needs at least one recipient, and every recipient must be an address.") and a missing subject or text ("An email needs a subject and a plain-text body.") before anything is sent.
+  - The server answers 400 `invalid_request`: "to is a list of 1 to 50 addresses.", "subject is one line of 1 to 300 characters.", "text is required, at most 256 KB." or "html is at most 512 KB."; the kit throws `EndgamePlatformException` with that code.
   - Without SMTP configured, nothing is sent.
 - **Where:** `Services/PlatformServices.cs`; `AppEmailService`; `EmailDispatcher`; `SmtpEmailSender`
 - **Reachable from:** API only (inside the app)
-- **Covered by tests:** `PlatformApiTests.Email_is_queued_and_delivered_through_smtp_and_bad_mail_is_refused`; `tests-stack/acceptance.spec.ts` test 7
+- **Covered by tests:** `PlatformApiTests.Email_is_queued_and_delivered_through_smtp_and_bad_mail_is_refused`; `PlatformServiceTests.Email_is_handed_to_the_platform` (kit); `tests-stack/acceptance.spec.ts` test 7
 
 ### KIT-13 An app calls a model within its AI allowance
 - **Who:** the app
@@ -936,14 +940,15 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   2. The gateway reserves the most the call could cost, checked against the budgets above the app and the app's own model allowance.
   3. The call is made and settled at its real cost.
 - **Variations and refusals:**
-  - The budget is spent: 402 `budget_exhausted`; the kit throws `EndgameBudgetExhaustedException` and never retries.
-  - The overdraft limit is reached: 402 `overdraft_limit`.
-  - The allowance is exceeded: refused with "The app's own model calls have <n> credits left of their <cap> this month; this call needs up to <m>."
-  - No model fits the price ceiling: 422 `ceiling_unreachable`.
-  - Bad input: "taskType is one of …", "messages is a list of 1 to 100 messages.", "Each message has a role…", "maxTokens is a positive number.".
+  - The budget is spent: 402 `budget_exhausted` "The monthly budget at <scope> has <n> credits left; this call needs up to <m>. This is terminal for the run: do not retry it."; the kit throws `EndgameBudgetExhaustedException` and never retries, and an unhandled one reaches the app's caller as 402 "The credit budget is spent".
+  - The overdraft limit is reached: 402 `overdraft_limit` "The organisation has <n> credits available including its overdraft of <o>; this call needs up to <m>. Work stops until the organisation is topped up; do not retry it." The kit throws a plain `EndgamePlatformException` with that code, which reaches the app's caller as 502 "A platform service failed".
+  - The allowance is exceeded: 402 `budget_exhausted` with `bindingScope` "app models": "The app's own model calls have <n> credits left of their <cap> this month; this call needs up to <m>. This is terminal for the run: do not retry it."
+  - No model fits the price ceiling: 422 `ceiling_unreachable` "At the route's price ceiling this call could cost US$<x>, above the US$<y> allowed for one '<task type>' call. Send a shorter prompt or a lower max_tokens."
+  - No model provider key on the control plane: 503 `model_provider_unconfigured`.
+  - Bad input: 400 `invalid_request` "taskType is one of chat, classify, summarise, extract.", "messages is a list of 1 to 100 messages.", "Each message has a role (system, user or assistant) and non-empty content.", "maxTokens is a positive number."; the kit itself refuses an empty message list with "A chat request needs at least one message."
 - **Where:** `PlatformServices.cs`; `AppModelService`; `ModelGateway`; `CreditLedger`
 - **Reachable from:** API only
-- **Covered by tests:** `PlatformApiTests.Models_go_through_the_same_gateway…held_to_its_cap`; `PlatformServiceTests` (kit)
+- **Covered by tests:** `PlatformApiTests.Models_go_through_the_same_gateway…held_to_its_cap`; `PlatformServiceTests.Models_answer_through_the_platform_and_a_spent_budget_is_terminal` (kit)
 
 ### KIT-14 An app reads a secret by name
 - **Who:** the app
@@ -957,11 +962,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. The kit checks the name format and sends `GET /platform/v1/secrets/{name}`.
   2. The reply is `{name, value, scope}`, resolved from the app upwards.
 - **Variations and refusals:**
-  - A bad name: "A secret name is UPPER_SNAKE_CASE, for example STRIPE_API_KEY."
-  - Not set anywhere: 404 `secret_not_found` "No secret named X is set at any level searched: …"; the kit throws `EndgameSecretNotFoundException`.
+  - A bad name: the kit refuses it before sending, "Secret name '<name>' must be UPPER_SNAKE_CASE (e.g. 'STRIPE_API_KEY')."; the platform's own check answers 400 "A secret name is UPPER_SNAKE_CASE, for example STRIPE_API_KEY."
+  - Not set anywhere: 404 `secret_not_found` "No secret named X is set at any level searched: app …, project …, division …, organisation …."; the kit throws `EndgameSecretNotFoundException`, whose `Name` is the name asked for.
 - **Where:** `PlatformServices.cs`; `AppSecretService`; `CascadeService.RevealSecretAsync`
 - **Reachable from:** API only
-- **Covered by tests:** `PlatformApiTests.Secrets_cascade…`; `tests-stack/acceptance.spec.ts` test 5
+- **Covered by tests:** `PlatformApiTests.Secrets_cascade…`; `PlatformServiceTests.Secrets_resolve_by_name_and_a_missing_one_says_where_it_looked` (kit); `tests-stack/acceptance.spec.ts` test 5
 
 ### KIT-15 An app records telemetry, automatic and custom
 - **Who:** the app
@@ -973,14 +978,16 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** the app page's Visits and Typical response tiles show figures, and ASK-02 can answer questions about the events.
 - **Steps:**
   1. Traces, metrics (every 15 seconds) and logs go to `POST /platform/v1/otlp/v1/{signal}` as OTLP, in protobuf or JSON.
-  2. `Track` never blocks or throws. Events are batched (at most 100, about once a second) to `POST /platform/v1/telemetry/events`.
+  2. `Track` never blocks, and never throws once the name is valid. Events are batched (at most 100, about once a second) to `POST /platform/v1/telemetry/events`, which answers 202.
   3. The intake attributes everything to the app by its token.
 - **Variations and refusals:**
-  - A body over the limit: 413 "An export is at most <n> bytes."
-  - `ENDGAME_TELEMETRY_EXPORT=false` records and drops everything.
+  - A bad event name throws at once, in the app: "Event name '<name>' must be lowercase dot-separated words (e.g. 'note.created')."
+  - A batch the platform refuses (for example properties over 8 KB: "An event's properties are at most 8192 bytes.") is dropped and logged: "Endgame telemetry: <n> custom event(s) could not be sent and were dropped: …".
+  - An OTLP body over the limit: 413 `too_large` "An export is at most 4194304 bytes."
+  - `ENDGAME_TELEMETRY_EXPORT=false` records and drops the OTLP signals. On the evaluator's preview (`ENDGAME_PREVIEW=true`) nothing is exported and `Track` records nothing.
 - **Where:** `Services/EndgameTelemetry.cs`; `PlatformEndpoints.cs`; `TelemetryService`
 - **Reachable from:** API only
-- **Covered by tests:** `PlatformApiTests.Telemetry_is_stored_per_app…`, `Otlp_json_is_accepted_too`; `tests-stack/acceptance.spec.ts` test 10
+- **Covered by tests:** `PlatformApiTests.Telemetry_is_stored_per_app…`, `Otlp_json_is_accepted_too`; `PlatformServiceTests.Custom_events_arrive_in_batches_without_blocking`, `A_preview_records_no_custom_events_and_exports_nothing` (kit); `tests-stack/acceptance.spec.ts` test 10
 
 ### KIT-16 An app runs a recurring job on a schedule
 - **Who:** the app; the platform calls it
@@ -991,21 +998,22 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** the platform calls the app on a cron, signed, and wakes it if it is asleep.
 - **You know it worked when:** the handler runs at the cron time and the platform records the call as answered 204.
 - **Steps:**
-  1. At start, the kit declares every schedule with `PUT /platform/v1/schedules`, replacing the whole set.
-  2. A leased scheduler finds due rows and posts a signed body to Edge's control listener.
+  1. Once the app has started, the kit declares every schedule with `PUT /platform/v1/schedules`, replacing the whole set; the platform answers with each schedule's `nextRunAt`.
+  2. A leased scheduler finds due rows and posts a signed body, `{"scheduledFor": …}`, to Edge's control listener.
   3. Edge wakes the app and forwards the call to `_platform/schedules/<name>`.
   4. The kit checks the signature and runs the handler. The app answers 204, and the schedule moves to its next time.
 - **Variations and refusals:**
-  - A bad cron fails at start: "Schedule '<n>' has cron '<c>'. Use five fields…".
-  - The server refuses more than 50 schedules or duplicate names.
-  - An unsigned or stale call (over 5 minutes): 401 "Unsigned schedule call".
+  - A bad cron fails where `MapSchedule` is written: "Schedule '<n>' has cron '<c>'. Use five fields — minute hour day-of-month month day-of-week — with digits, *, /, ',' and '-' only, e.g. '0 7 * * *'."
+  - The server answers 400 to more than 50 schedules ("An app declares at most 50 schedules."), duplicate names ("Two schedules have the same name."), a cron it cannot read, or an unknown time zone ("'<zone>' is not a time zone this platform knows (use an IANA name such as UTC or Europe/London)."). The kit retries the declaration five times, then logs "Endgame app kit: the platform never accepted this app's …; they will not run until the app restarts: …".
+  - An unsigned or stale call (over 5 minutes): 401 "Unsigned schedule call", "Only the platform may run schedules."
   - A run while the app has never started: "The app has no platform token yet (it has not been started)."
-  - A non-204 answer is recorded as "The app answered <status>."
+  - A paused app is not called: Edge answers 409, recorded as "The app answered 409."
+  - A non-204 answer is recorded as "The app answered <status>."; a handler that throws makes the run fail.
   - Runs missed during downtime run once, not once per miss.
   - The public side never routes `_platform/*`; it returns 404.
 - **Where:** `Services/CallbackEndpoints.cs`; `AppDeclarationService`; `Workers.cs` Scheduler; Edge `Control/PlatformCallbacks.cs`
 - **Reachable from:** API only. Schedules are not listed in the console beyond the "Schedules" chip.
-- **Covered by tests:** `PlatformApiTests.Schedules_are_declared_called_back_signed_through_edge…`; `EdgePipelineTests.A_schedule_callback_on_the_control_listener_wakes_the_app…`; `tests-stack/acceptance.spec.ts` test 8
+- **Covered by tests:** `PlatformApiTests.Schedules_are_declared_called_back_signed_through_edge…`; `EdgePipelineTests.A_schedule_callback_on_the_control_listener_wakes_the_app…`; `PlatformServiceTests.Schedules_are_declared_at_start_and_only_signed_runs_execute`, `A_bad_cron_is_refused_where_it_is_written`, `Callback_signatures_verify_only_fresh_matching_bodies` (kit); `tests-stack/acceptance.spec.ts` test 8
 
 ### KIT-17 An outside device posts to a signed (HMAC) webhook
 - **Who:** an outside device or service
@@ -1022,11 +1030,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   4. The handler can read the body with `ReadJson<T>()` or `ReadText()`.
 - **Variations and refusals:**
   - A missing or wrong header: 401 "Webhook verification failed" / "The <header> header did not verify."
-  - The secret is not set: the kit throws `EndgameSecretNotFoundException`. Not verified what status the caller then sees.
-  - More than 50 webhooks, a path other than `hooks/<name>`, or duplicate names are refused at declaration.
+  - The secret is not set (and the call carries the header): the kit throws `EndgameSecretNotFoundException`, and its error handler answers the caller 502 "A platform service failed" with `code` `secret_not_found`.
+  - More than 50 webhooks ("An app declares at most 50 webhooks."), a path other than `hooks/<name>` ("A webhook's path is hooks/<name>."), or duplicate names ("Two webhooks have the same name.") are refused at declaration with 400.
 - **Where:** `CallbackEndpoints.cs`; `AppDeclarationService`; Edge `AppGate.cs`
 - **Reachable from:** API only
-- **Covered by tests:** `EdgePipelineTests.Declared_webhooks_and_only_those_reach_a_private_app_without_a_session`; `PlatformApiTests.The_evaluator_…calls_its_declared_webhook_signed_with_the_vaults_secret`; `tests-stack/acceptance.spec.ts` test 9
+- **Covered by tests:** `EdgePipelineTests.Declared_webhooks_and_only_those_reach_a_private_app_without_a_session`; `PlatformApiTests.The_evaluator_…calls_its_declared_webhook_signed_with_the_vaults_secret`; `PlatformServiceTests.Webhooks_are_declared_and_only_verified_calls_reach_the_handler` (kit); `tests-stack/acceptance.spec.ts` test 9
 
 ### KIT-18 A simple device posts to a shared-token webhook
 - **Who:** an outside device
@@ -1037,10 +1045,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** a device that cannot sign can prove itself with a shared token from the vault.
 - **You know it worked when:** the handler's answer comes back.
 - **Steps:** as KIT-17, but the header value is compared with the secret in constant time.
-- **Variations and refusals:** a mismatch gets 401 "Webhook verification failed".
+- **Variations and refusals:** a mismatch or a missing header gets 401 "Webhook verification failed", "The <header> header did not verify."
 - **Where:** `CallbackEndpoints.cs`
 - **Reachable from:** API only
-- **Covered by tests:** kit `PlatformServiceTests` (not checked line by line)
+- **Covered by tests:** `PlatformServiceTests.Webhooks_are_declared_and_only_verified_calls_reach_the_handler` (kit; its `door` hook posts the right token and gets 204; the wrong-token case is not tested)
 
 ### KIT-19 Unsigned or undeclared webhook calls are refused
 - **Who:** an outside caller
@@ -1051,12 +1059,12 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** there is deliberately no "no verification" option.
 - **You know it worked when:** the caller gets 401.
 - **Steps:**
-  1. If the hook is declared but the call is unsigned, the kit refuses it with 401.
-  2. If the hook is undeclared on a private app, Edge treats the call as needing sign-in: 401 with a Location header for a POST.
+  1. If the hook is declared but the call is unsigned, the kit refuses it with 401 "Webhook verification failed", before the handler runs.
+  2. If the hook is undeclared on a private app, Edge treats the call as needing sign-in: a signed-out POST gets 401 with a `Location` header pointing at the app's `_endgame/auth/sign-in?returnTo=…`.
 - **Variations and refusals:** an undeclared hook on a public app passes through to the app. Not verified what the app answers.
 - **Where:** `CallbackEndpoints.cs` (`WebhookVerification` has no "none"); `AppGate.cs`
 - **Reachable from:** API only
-- **Covered by tests:** `tests-stack/acceptance.spec.ts` test 9 ("…an undeclared one does not")
+- **Covered by tests:** `EdgePipelineTests.Declared_webhooks_and_only_those_reach_a_private_app_without_a_session`; `tests-stack/acceptance.spec.ts` test 9 ("…an undeclared one does not")
 
 ### KIT-20 An AI assistant uses an app's own derived MCP tools
 - **Who:** an AI assistant, using a person's access token (tokens are another reader's area)
@@ -1070,9 +1078,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. The assistant lists the tools. One tool is derived per OpenAPI operation, named by its `operationId` and described by its `description`, and cached with the published version. GET operations are marked read-only.
   2. The assistant calls a tool. The control plane mints an app-scoped member session and calls the app through Edge.
 - **Variations and refusals:**
-  - The app answers 400 or worse: the tool fails with "The app refused the call" and the app's code and detail.
-  - An unknown tool: "There is no tool '<name>'."
-  - No role on the app: refused.
+  - The app answers 400 or worse: the tool result is an error (`isError: true`) with the app's status, "The app refused the call", and the app's `code` (or `app_error`) and `detail`.
+  - An unknown tool: a JSON-RPC error, "There is no tool '<name>'."
+  - No role on the app: a call fails with 404 `not_found` "The scope '<path>' was not found, or you cannot see it."
+  - The app's OpenAPI document cannot be read: 502 `app_openapi_unavailable` "Its OpenAPI document (openapi/v1.json) answered <status>."
 - **Where:** `Mcp/AppTools.cs`, `McpSetup.cs`; `AppGateway`; the kit's `ApiContract.cs` (operationId and description are required at start)
 - **Reachable from:** MCP only
 - **Covered by tests:** `McpTests.An_apps_own_api_is_derived_from_its_openapi_and_called_through_edge_with_a_member_session`
@@ -1124,6 +1133,28 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Reachable from:** command line only
 - **Covered by tests:** CI `appkit` job
 
+### KIT-23 An app's API refuses bad input, and its front end tells each failure apart
+- **Who:** the app, and its developer
+- **Starts at:** a request record with DataAnnotations, mapped on the `api` group from `UseEndgameApp()`; `api()` and `useApiQuery()` in `@endgame/appkit`
+- **Needs:** the kit
+- **Level:** Developer
+- **Learn first:** KIT-21
+- **What you learn:** a handler only ever sees valid input, every failure is a problem document, and the front end branches on the error's type, never on its message.
+- **You know it worked when:** a bad form gets 400 with one entry per field, and the page shows each field's message.
+- **Steps:**
+  1. The developer puts `[Required]`, `[StringLength]` or `[Range]` on the request record's properties.
+  2. Before the handler runs, the kit checks every such body and answers 400 "Some fields need fixing" with `errors` mapping each field to what is wrong.
+  3. A platform failure the app does not catch becomes a problem with a `code`: 402 "The credit budget is spent", 503 "A platform service is unavailable", or 502 "A platform service failed". Every problem carries a `traceId`.
+  4. In the browser, `api()` throws the matching error: `ValidationError` (with `errors`), `NotSignedInError` (with `signInUrl`), `ForbiddenError`, `NotFoundError`, `BudgetExhaustedError`, or `NetworkError` when nothing answered.
+  5. `useApiQuery()` reports `loading`, `loaded` or `failed`, so a failed read is never shown as an empty one.
+- **Variations and refusals:**
+  - A 402 from the kit says "This feature is paused until the organisation tops up its credits."
+  - `api("/notes")` throws at once: "drop the leading slash"; `api("api/notes")` throws "paths are already inside api/"; an absolute URL throws "api() calls this app's own API only."
+  - Nothing answers: `NetworkError` "The app could not be reached. Check the connection and try again."
+- **Where:** `Hosting/InputValidation.cs`; `Hosting/EndgameErrors.cs`; `EndgameApp.cs`; `sdk-web/src/api.ts`, `errors.ts`, `hooks.ts`
+- **Reachable from:** API only (inside the app)
+- **Covered by tests:** `ApiContractTests.Input_is_validated_before_the_handler_runs_with_one_entry_per_field`; `HostingTests.Errors_are_problem_details_with_a_trace_id` (kit); `sdk-web/src/api.test.ts`, `hooks.test.tsx`
+
 ## HOST — sleep, wake, pause and crash, as a person meets them
 
 ### HOST-01 A sleeping app wakes on a visit
@@ -1174,7 +1205,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   3. Raising the budget (APP-11) or the month turning restores the app.
 - **Variations and refusals:** none.
 - **Where:** `AppGate.cs`; `ReadModels.AppAsync`
-- **Reachable from:** UI. Raising the budget is API or MCP only.
+- **Reachable from:** UI. The budget is raised on the app page (APP-11) or the credits page, or by API or MCP.
 - **Covered by tests:** `EdgePipelineTests.An_app_paused_by_a_spent_budget_says_so`, `A_paused_app_gets_its_holding_page_and_is_never_woken`
 
 ### HOST-04 An app paused at the overdraft limit
@@ -1236,7 +1267,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Core
 - **Learn first:** APP-04, APP-05
 - **What you learn:** an app sleeps after its idle minutes, never while it is serving someone, and never if it is set to always on.
-- **You know it worked when:** the app page's Health note reads "Asleep; it wakes on the next visit.".
+- **You know it worked when:** the app page's "Running" legend shows it asleep, and in technical mode its Health note reads "Asleep; it wakes on the next visit." (In normal mode an app that has measured anything keeps its errors-today note while it sleeps.)
 - **Steps:** the sweeper checks each app's own setting (default 15 minutes) and stops apps with no request in flight.
 - **Variations and refusals:** none.
 - **Where:** `Runtime/IdleSweeper.cs`
@@ -1278,14 +1309,14 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 
 ### OPS-02 Stop the local stack, keeping or wiping its data
 - **Who:** host administrator / developer
-- **Starts at:** `make down` (keeps the data), or `make docker-down` (also removes the database volume; local only)
+- **Starts at:** `make down` (keeps the data), or `make docker-down` (also removes every volume: the database, the app repositories and the local backup archives; local only)
 - **Needs:** OPS-01
 - **Level:** Operator
 - **Learn first:** OPS-01
 - **What you learn:** `down` keeps the data and `docker-down` wipes it.
 - **You know it worked when:** `docker compose ps` lists nothing.
 - **Steps:** run the target.
-- **Variations and refusals:** none.
+- **Variations and refusals:** `make docker-down` runs `docker compose down -v --remove-orphans`, which also removes the `backup` volume, so local archives go with it. An archive in a bucket is not touched.
 - **Where:** Makefile
 - **Reachable from:** command line only
 - **Covered by tests:** none found
@@ -1312,7 +1343,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Learn first:** nothing
 - **What you learn:** the backend, the console and the kit all lint with zero warnings.
 - **You know it worked when:** it exits 0.
-- **Steps:** `dotnet format --verify-no-changes`, then ESLint and tsc for the console, then the kit's lint.
+- **Steps:** `dotnet format --verify-no-changes`, then ESLint (zero warnings allowed) and tsc for the console, then the kit's lint, which packs the kit before it lints the template.
 - **Variations and refusals:** none.
 - **Where:** Makefile
 - **Reachable from:** command line only
@@ -1340,7 +1371,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Learn first:** OPS-05
 - **What you learn:** the backend, console, kit and ops tests, including the backup rehearsal, run together.
 - **You know it worked when:** every suite passes.
-- **Steps:** run the target.
+- **Steps:** run the target. It runs the backend tests, the console's unit tests, the kit's tests against a throwaway PostgreSQL, then `ops-test` (OPS-27).
 - **Variations and refusals:** none.
 - **Where:** Makefile
 - **Reachable from:** command line only
@@ -1355,9 +1386,9 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** the stack is deployable only when every service reports healthy through the edge.
 - **You know it worked when:** `make smoke` prints "smoke: every service healthy through the edge; console served."
 - **Steps:**
-  1. `make smoke` probes `/api/system/status` for `"overall":"healthy"`, the console's `<div id="root">` and `/health`, up to 40 times, 3 seconds apart.
-  2. `make e2e` runs Playwright with `PW_BASE_URL`, which **runs only `smoke.spec.ts`**.
-- **Variations and refusals:** on failure, `make smoke` prints "smoke: the stack did not report healthy through the edge in time." with the status, `ps` and logs.
+  1. `make smoke` runs `make up`, prints "Probing the stack through the edge on :8095...", then probes `/api/system/status` for `"overall":"healthy"`, the console's `<div id="root">` and `/health`, up to 40 times, 3 seconds apart. On success it prints the status body, then its last line.
+  2. `make e2e` runs Playwright with `PW_BASE_URL`, which **runs only `smoke.spec.ts`**: its two tests in the desktop and phone projects.
+- **Variations and refusals:** on failure, `make smoke` prints "smoke: the stack did not report healthy through the edge in time." with the status, `docker compose ps` and the last 80 log lines, and exits 1.
 - **Where:** Makefile; `src/frontend/playwright.config.ts`
 - **Reachable from:** command line only
 - **Covered by tests:** `tests-e2e/smoke.spec.ts`
@@ -1368,11 +1399,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Starts at:** `make prod-config`
 - **Needs:** Docker Compose
 - **Level:** Operator
-- **Learn first:** OPS-24
+- **Learn first:** OPS-01
 - **What you learn:** production can never turn on the development sign-in, always runs as Production, and refuses to start without the backup key.
 - **You know it worked when:** it prints "prod-config: parses; development sign-in pinned off; every service Production; backup key required."
-- **Steps:** the stack file is parsed with throwaway values and the three properties are checked.
-- **Variations and refusals:** each failed property prints its own `prod-config: …` message.
+- **Steps:** the stack file is parsed with throwaway values for its seven required variables, and the three properties are checked. Every check is silent, so a pass prints only the last line.
+- **Variations and refusals:** each failed property prints its own message and exits 1: "prod-config: the production control plane could enable the development sign-in", "prod-config: a production service does not run as Production" or "prod-config: the production stack does not refuse a missing ENDGAME_BACKUP_KEY".
 - **Where:** Makefile
 - **Reachable from:** command line only
 - **Covered by tests:** CI `stack-smoke`
@@ -1414,7 +1445,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** tenant zero, the club app and an invited organisation are each proven end to end.
 - **You know it worked when:** the Playwright run passes.
 - **Steps:** the run stops at `ACC_SPEND_STOP_USD` (default 5).
-- **Variations and refusals:** with no key set: the matching "acc-up: set OPENROUTER_API_KEY…" message.
+- **Variations and refusals:** with no key set: "acc-up: set OPENROUTER_API_KEY in .env (the factory calls live models)".
 - **Where:** Makefile; `Endgame.Harness.Bench/acceptance`
 - **Reachable from:** command line only
 - **Covered by tests:** this target is the test run itself
@@ -1431,7 +1462,8 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. PostgreSQL and the ops service are started if needed.
   2. It prints "Backing up to <store>...", then "Backup <id>: <n> bytes sealed (<m> before encryption) in <s> s.", the databases, each volume, any pruned archives, `BACKUP_ID=<id>`, and a storage usage line.
 - **Variations and refusals:**
-  - Another backup or restore is running: "Another backup or restore is running; try again when it has finished."
+  - Another backup or restore is running: "Another backup or restore is running; try again when it has finished." (exit 1).
+  - A key that is not 32 bytes: "ENDGAME_BACKUP_KEY is not 32 bytes written as hex or base64, so no backup runs." (exit 1).
   - Usage near or over the free allowance prefixes the usage line with "WARNING: ".
   - With no S3 bucket configured, the archive goes to a local volume and is reported as not offsite.
 - **Where:** Makefile; `Endgame.Ops/Program.cs` (OpsCli backup); `BackupService`
@@ -1447,10 +1479,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** one archive is made per day after the set hour, and old ones are pruned on a daily and weekly rule.
 - **You know it worked when:** `make ops-backups` lists an archive for today.
 - **Steps:**
-  1. Every 5 minutes, once the hour has passed (01:00 UTC by default), the service runs a backup if today has none.
-  2. It skips a server that is still empty.
-  3. Retention keeps the newest archive of each of the last 7 days and the last 4 ISO weeks, and always keeps the newest.
-- **Variations and refusals:** a failure is retried at the next check. Nothing notifies a person (per ARCH-007).
+  1. The first check is 30 seconds after the service starts, then one every 5 minutes. Once the hour has passed (01:00 UTC by default), the service runs a backup if today has none; an empty store is due at once, whatever the hour.
+  2. It skips a server that is still empty, and logs "The nightly backup is due but every database is empty (a stack waiting for a restore?); skipped."
+  3. Retention keeps the newest archive of each of the last 7 days and the last 4 ISO weeks, and always keeps the newest. It runs only after a backup succeeds, and logs each archive it prunes.
+- **Variations and refusals:** a failure is logged ("The nightly backup failed; it will try again at the next check: …") and retried at the next check. Nothing notifies a person (per ARCH-007). With `ENDGAME_BACKUP_SCHEDULE=false` it logs "The nightly backup schedule is switched off (Ops__Backup__ScheduleEnabled=false)." and never runs.
 - **Where:** `Backups/BackupScheduler.cs`, `Retention.cs`
 - **Reachable from:** system
 - **Covered by tests:** `BackupPolicyTests`
@@ -1479,7 +1511,8 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** "Backup <id> is intact: <n> database(s), <m> file(s), every chunk authenticated against the manifest." is printed.
 - **Steps:** run the target.
 - **Variations and refusals:**
-  - No id given: "ops-verify: make ops-verify BACKUP=<id>".
+  - No id given: "ops-verify: make ops-verify BACKUP=<id>" (exit 2).
+  - No archive with that id: "There is no backup endgame-<id>.egbk in /backups." from the local store.
   - Damaged archives give messages such as "The backup is damaged: it has entries after its manifest.", "The backup has no manifest: it is incomplete." or "The backup's manifest is format X; this version reads Y.".
   - A wrong key is named as such.
 - **Where:** OpsCli verify
@@ -1505,6 +1538,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - With `OVERWRITE=1`: "Replacing what is already here (OVERWRITE): …".
   - Not configured: "Backups are not configured." or the specific reason.
   - Busy: as OPS-12.
+  - After any refusal or failure from the ops command, make stops there, so the services stopped in step 1 stay stopped until `make up` (or `docker compose up -d --wait`) brings them back.
   - Restore exists only on the command line; it is never on the HTTP API.
 - **Where:** Makefile; OpsCli restore; `BackupService.RestoreAsync`
 - **Reachable from:** command line only
@@ -1520,7 +1554,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** the rehearsal test passes; or, by hand, the restored stack opens with its data.
 - **Steps:**
   1. Automatic: the test backs up, destroys the stack, restores, checks that no plaintext is in the upload, and checks that a second restore is refused without overwrite.
-  2. By hand: copy the archive and `ENDGAME_BACKUP_KEY` to the other host, then run `make restore BACKUP=<id> OPS_COMPOSE="docker compose -f docker-compose.prod.yml"`.
+  2. By hand, per ARCH-007 step 9: copy the compose file and `.env` to the other host, with the same `ENDGAME_VAULT_MASTER_KEY`, `DOCK_SECRET_KEY` and `ENDGAME_BACKUP_KEY` (and the bucket keys, or the archive itself when it is local), then run `make restore BACKUP=<id> OPS_COMPOSE="docker compose -f docker-compose.prod.yml"`.
 - **Variations and refusals:** none.
 - **Where:** `Endgame.Ops.Tests/Rehearsal`; ARCH-007
 - **Reachable from:** command line only
@@ -1533,11 +1567,13 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-12
 - **What you learn:** the ops service says in plain words what it is, and is not, doing.
-- **You know it worked when:** a JSON report is printed. It answers 503 when unhealthy, for example with no backup key.
+- **You know it worked when:** a one-line JSON report is printed. It answers 503 when unhealthy, for example with a backup key that is missing or not 32 bytes.
 - **Steps:** run the target.
 - **Variations and refusals:**
-  - With no Cloudflare token, the report says Cloudflare is idle.
+  - With no Cloudflare token, the report says Cloudflare is idle; with a token but not every key, misconfigured.
   - With no S3 bucket, it says backups are local.
+  - Unhealthy, the answer is 503 but `make ops-health` still exits 0 (curl prints the body); the container's own health check fails.
+  - `last` records only the service's own runs (nightly, or `POST /internal/ops/backups`), not a `make backup`, which runs in its own process.
 - **Where:** `Api/OpsEndpoints.cs` `/health`
 - **Reachable from:** command line / HTTP
 - **Covered by tests:** `OpsApiTests.With_no_token_health_says…`, `Without_a_backup_key_health_is_unhealthy_and_says_why`
@@ -1569,8 +1605,8 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   2. It prints each change as keep, create, update, delete or conflict.
 - **Variations and refusals:**
   - Conflicts end the line with "; conflicts must be resolved first" (exit 3).
-  - No token: "No Cloudflare API token is configured (CLOUDFLARE_API_TOKEN), so nothing is managed."
-  - Half configured: "Cloudflare is half configured; also needed: …"
+  - No token: "No Cloudflare API token is configured (CLOUDFLARE_API_TOKEN), so nothing is managed." (exit 1)
+  - Half configured: "Cloudflare is half configured; also needed: …" (exit 1)
   - Console host two labels deep: "ENDGAME_CONSOLE_HOST (…) must be one label directly under ENDGAME_ZONE (…): the free certificate covers one level only."
 - **Where:** `Cloudflare/CloudflareReconciler.cs`
 - **Reachable from:** command line; `GET /internal/ops/cloudflare/plan`
@@ -1614,11 +1650,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-06
 - **What you learn:** nothing is built on the host; every release is seven images for two architectures.
-- **You know it worked when:** `publish-manifest` is green and each image has `sha-<commit>` and `latest` tags.
+- **You know it worked when:** every "Tag <image> (multi-arch)" job is green and each image has `sha-<commit>` and `latest` tags. Not yet seen: this has not run with real credentials (ARCH-008).
 - **Steps:**
-  1. After the backend, hosting, appkit, ops, frontend, security, stack-smoke, e2e and stack-acceptance jobs pass, `publish` builds the seven images for amd64 and arm64.
-  2. `publish-manifest` joins them under `sha-<commit>` and `latest`.
-- **Variations and refusals:** without the Docker Hub secrets, each `publish` job fails at "Log in to Docker Hub".
+  1. After the Backend, Hosting (real Docker), App kit, Ops (with the restore rehearsal), Frontend, Security, Stack smoke, E2E smoke and Stack acceptance (make e2e-stack) jobs pass, `publish` runs 14 jobs named "Publish <image> (<arch>)": the seven images, each for amd64 and arm64.
+  2. `publish-manifest` runs "Tag <image> (multi-arch)" for each image, joining both architectures under `sha-<commit>` and `latest`.
+- **Variations and refusals:** without the Docker Hub secrets, each `publish` job fails at "Log in to Docker Hub", after its image has built.
 - **Where:** `.github/workflows/ci.yml`; ARCH-008
 - **Reachable from:** CI
 - **Covered by tests:** not verified. ARCH-008 says nothing has been pushed with credentials yet.
@@ -1630,15 +1666,15 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-23, OPS-08
 - **What you learn:** the stack's name and its never-change keys matter, and the edge is the only published port.
-- **You know it worked when:** every service is healthy within about a minute, `http://<host>:8095/health` answers, and `https://endgame.<zone>/` opens.
+- **You know it worked when:** every service is healthy within about a minute, `http://<host>:8095/health` answers, and `https://endgame.<zone>/` opens. Not yet seen: no deploy has run with real credentials (ARCH-008).
 - **Steps:**
-  1. Name the stack `endgame` and paste `docker-compose.prod.yml`.
-  2. Paste a filled `.env.production.example`. Save `DOCK_SECRET_KEY`, `ENDGAME_VAULT_MASTER_KEY` and `ENDGAME_BACKUP_KEY` off the machine.
+  1. In Portainer, Stacks, Add stack: name it `endgame`, choose the web editor and paste `docker-compose.prod.yml`.
+  2. Under Environment variables, Advanced mode, paste a filled `.env.production.example`. Save `DOCK_SECRET_KEY`, `ENDGAME_VAULT_MASTER_KEY` and `ENDGAME_BACKUP_KEY` off the machine.
   3. Deploy.
   4. Route the tunnel, either on the host or with `COMPOSE_PROFILES=tunnel` and `CLOUDFLARE_TUNNEL_TOKEN`.
-  5. Register a passkey with an operator address and top the organisation up.
+  5. Register a passkey with an operator address and top the organisation up (OP-05).
 - **Variations and refusals:**
-  - The stack refuses to start without each required variable.
+  - The stack refuses to start without each required variable: compose says "required variable <KEY> is missing a value: <KEY> is required".
   - Without SMTP, no mail is sent and codes are handed over by hand.
   - Without S3, backups are local.
 - **Where:** ARCH-008; `docker-compose.prod.yml`
@@ -1652,13 +1688,14 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-24
 - **What you learn:** a redeploy moves images and nothing else; a changed stack file must be pasted in by hand.
-- **You know it worked when:** the `deploy` job is green, or the stack shows the new images.
+- **You know it worked when:** the "Redeploy on Portainer" job is green and prints "Portainer accepted the redeploy.", or the stack shows the new images. Not yet seen: this job has not run with real credentials (ARCH-008).
 - **Steps:** the job reads the stack file and environment Portainer holds and sends them back with `pullImage: true`.
 - **Variations and refusals:**
   - With the variable unset, the job is skipped, not failed.
   - A missing secret fails the job with "secret X is required".
   - An empty stack file fails with "Portainer returned an empty stack file".
-  - A non-200 answer fails the job.
+  - A non-200 answer fails the job with "Portainer refused the redeploy (HTTP <status>): <Portainer's message>".
+  - A changed `docker-compose.prod.yml` is not delivered: paste it into the stack's editor by hand.
 - **Where:** `ci.yml` `deploy`
 - **Reachable from:** CI / Portainer
 - **Covered by tests:** none
@@ -1670,24 +1707,40 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-25, OPS-16
 - **What you learn:** a rollback is an image tag, but database migrations only go forward.
-- **You know it worked when:** the services run the older tag.
+- **You know it worked when:** the services run the older tag, and the edge's `/health` names that commit as its `revision`. Not yet seen: no release has been deployed with real credentials (ARCH-008).
 - **Steps:** set `ENDGAME_IMAGE_TAG=sha-<commit>` and update the stack.
 - **Variations and refusals:** going back across a migration needs a restore (OPS-16).
 - **Where:** ARCH-008
 - **Reachable from:** Portainer
 - **Covered by tests:** none
 
+### OPS-27 Run the ops service's tests and the outage Worker's
+- **Who:** developer
+- **Starts at:** `make ops-test-worker` (the outage Worker alone), or `make ops-test` (the Worker, then the ops service)
+- **Needs:** Node for the Worker; the .NET SDK and Docker for the ops tests and the rehearsal
+- **Level:** Developer
+- **Learn first:** OPS-06
+- **What you learn:** the outage page's Worker is tested on its own under Node, with no dependencies and no build step; the ops tests add the fake-Cloudflare reconciler and the restore rehearsal.
+- **You know it worked when:** `node --test` ends with "ℹ fail 0", and the ops test run has no failures.
+- **Steps:**
+  1. `make ops-test-worker` runs `node --test` in `src/ops/outage-worker`: 26 tests, from a healthy origin passing through to the page being self-contained.
+  2. `make ops-test` runs the Worker's tests first, then `dotnet test` on `Endgame.Ops.Tests`, including the backup, destroy and restore rehearsal on its own throwaway stack.
+- **Variations and refusals:** with `ENDGAME_SKIP_DOCKER_TESTS=1` (or `true`) the rehearsal returns at once and writes "Skipped: ENDGAME_SKIP_DOCKER_TESTS is set." to its test output.
+- **Where:** Makefile; `src/ops/outage-worker/outage-worker.test.mjs`; `Endgame.Ops.Tests`
+- **Reachable from:** command line only
+- **Covered by tests:** this target is the test run itself (CI "Ops (with the restore rehearsal)")
+
 ## Gaps and oddities found
 
-1. ~~No console control for an app's budget cap~~ — fixed (APP-11). The app page shows the cap, but nothing in `api.ts` calls `/api/cascade`, so caps can be set only by API or MCP (`budget_set`).
-2. ~~No console control for an app's AI allowance~~ — fixed (APP-12). Formerly: (`app_models.monthly_credits`, default 500 credits). It is never shown anywhere.
-3. ~~No console control for idle minutes~~ — fixed (APP-05). Formerly: The settings endpoint and MCP accept it (1 to 1440); the console only displays it under "Underneath".
-4. ~~Rename, archive and delete an app have no screen~~ — fixed (APP-13, APP-14). There is still no MCP delete. Formerly: exist only as `PATCH` and `DELETE /api/apps/{id}` and MCP `node_update`. There is no screen, and no MCP delete.
+1. Fixed: an app's own monthly cap is set on its page (APP-11), as well as by API or MCP (`budget_set`).
+2. Fixed: an app's own AI allowance (`app_models.monthly_credits`) is shown and set on its page (APP-12).
+3. Fixed: idle minutes are set on the app page (APP-05).
+4. Fixed: an app is renamed, archived and deleted on its page (APP-13, APP-14). There is still no MCP delete.
 5. **No user-facing way to pause or stop an app.** Paused, stopped and failed are set only by the system or by hosting.
-6. ~~"Try publishing it again" names an action with no control~~ — fixed: "Rebuild and restart" (APP-15). Formerly: after a failed restore names an action that has no control on the app page.
-7. ~~The share reply's `emailed` flag is ignored~~ — fixed (SHR-03). Formerly: The page always says "Give them this code", even when the code was e-mailed.
-8. ~~Role gating is missing on the app page~~ — fixed (APP-04, APP-06, APP-09, SHR-02). Formerly: The Running and "Who can open it" radios show to Viewers and Builders, who then hit a refusal and rollback. The Sharing list and both Secrets panels show a load failure to non-Admins rather than saying the Admin role is needed.
-9. ~~The cap note misleads~~ — fixed: it says whose cap applies, or that none does (APP-11). Formerly: "No cap of its own; the one above applies" appears when no level has a cap at all, because `capCredits` is resolved through the whole cascade.
+6. Fixed: a failed restore offers "Rebuild and restart" (APP-15).
+7. Fixed: the invitation note says whether the code was e-mailed (SHR-03).
+8. Fixed: the app page's controls follow the role (APP-04, APP-06, APP-09, SHR-02).
+9. Fixed: the cap note says whose cap applies, or that none does (APP-02, APP-11).
 10. **Sharing has no MCP tools** (no list, invite or remove). The dashboard has no MCP tools. Asking over MCP (`app_ask`) has no estimate step, although rule 11 says an estimate is shown first.
 11. **The MCP `app_settings` schema offers `public`**, which is always refused (`human_only`). Its own description says "private or shared".
 12. **The share endpoint accepts invitations whatever the access setting.** The console shows the invite form only when the app is Shared. Not verified what such a share does once the app is switched to Shared.
@@ -1696,3 +1749,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 15. **No local run target for a hand-built app** against the kit's dev platform. The dev platform host is used only by the tests and `make proof`.
 16. **Backup failures and outages notify no one inside Endgame** (stated in ARCH-007). Only the log and `/health` carry them.
 17. **The doc comment on Edge's `Unavailable.Paused` says "overdraft"** while the shared paused copy talks about credits. They are consistent in substance, but the overdraft and budget cases depend on `PausedReason` being set correctly. Not verified beyond the Edge tests.
+18. **A refused or failed `make restore` leaves the stack stopped** (`Makefile`, the `restore` recipe): it stops the Edge, console, Runner, Dock and control plane first, and its final `up -d --wait` never runs when the ops command refuses (data present, busy, wrong key, damaged archive). See OPS-16.
+19. **`/health` never sees a command-line backup** (`Backups/BackupScheduler.cs`, `Api/OpsEndpoints.cs`): `last` and `running` live in the ops service's memory, and `make backup` runs in a process of its own. See OPS-18.
+20. **A bad backup key fails `make backup` before it can say why**: the ops container's health check is `curl --fail /health`, which answers 503 for that key, so `up --wait` fails first. See OPS-12.
+21. **`make docker-down` also removes the local backup archives** (its `-v` removes the `backup` volume with the database). See OPS-02.
+22. **The kit turns `overdraft_limit` into 502** (`src/appkit/sdk-dotnet/Endgame.AppKit/Platform/PlatformClient.cs`, `ToException`): it has no exception for that code, so the app's caller gets "A platform service failed" rather than 402, and the web kit's `BudgetExhaustedError` never fires. `PLATFORM-API.md` §3.2 does not list `overdraft_limit` either. See KIT-13.
+23. **A doubled full stop in the kit's 401 message** (`PlatformClient.cs`, the 401 branch): the template appends "." after a detail that already ends in one. See KIT-10.
+24. **An app's outbound calls may be blocked by default**: Dock accepts an egress allow-list (`AllowedHosts`, `Endgame.Hosting.Contracts/DockApi.cs`), but nothing in the control plane was found to send one. Not traced end to end.

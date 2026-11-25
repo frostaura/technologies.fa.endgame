@@ -1,0 +1,58 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VER-03",
+  "persona": "owner",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Download the code, its full history and all its data",
+        "note": "Everything can leave, at no cost. Secrets never do."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Download everything"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Saved as",
+        "note": "It reads “Preparing the download…”, then saves the archive."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Saved as web-export.tar.gz.",
+        "note": "manifest.json, code.bundle with every version, platform.json; on a live install its database dump too."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Only the Owner downloads it",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Only the Owner can download it.",
+            "note": "An Admin, or an operator in God mode, is refused."
+          }
+        }
+      ]
+    }
+  ]
+}

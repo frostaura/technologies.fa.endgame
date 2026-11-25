@@ -3,3 +3,6 @@ public/schema/
 .tmp/
 site/
 public/brand/
+# make academy-shots: captured from the demo, made fresh by the Pages workflow (a hand-made image may sit directly in public/shots/)
+public/shots/*/
+public/shots/index.json

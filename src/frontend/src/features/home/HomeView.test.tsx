@@ -90,6 +90,20 @@ describe("HomeView", () => {
     expect(screen.queryByText("Name your organisation, then describe your first idea.")).toBeNull();
   });
 
+  it("tells an operator once that an organisation named in the address does not exist, never asking again and again", async () => {
+    window.history.replaceState(null, "", "/?organisation=nowhere");
+    const api = stubApi({
+      "GET /api/me": json({ ...ME, isOperator: true, organisation: null, memberships: [] }),
+      "GET /api/tree?organisation=nowhere": problem(404, "The organisation 'nowhere' was not found, or you cannot see it."),
+    });
+    renderWithStore(<HomeView />);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("The organisation could not be loaded");
+    await new Promise((r) => setTimeout(r, 300));
+    expect(api.calls.filter((c) => c.path === "/api/tree?organisation=nowhere").length).toBeLessThanOrEqual(2);
+    window.history.replaceState(null, "", "/");
+  });
+
   it("leads a first run to Start", async () => {
     stub(json({ generatedAt: "2026-11-24T10:00:00Z", viewerRole: "none", organisation: null, divisions: [], needsYou: [] }));
     renderWithStore(<HomeView />);

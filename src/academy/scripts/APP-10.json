@@ -1,0 +1,57 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-10",
+  "persona": "viewer",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Technical",
+        "note": "Technical mode names what normal mode never does."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Underneath",
+        "note": "Its id, scope, lifecycle, container, version, when it was published, its idle minutes and both addresses."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Nothing published yet",
+      "persona": "viewer",
+      "scenario": "app-not-published",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "none published",
+            "note": "Version reads “none published” and Published reads “never”."
+          }
+        }
+      ]
+    }
+  ]
+}

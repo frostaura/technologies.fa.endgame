@@ -30,7 +30,7 @@ jobs:
   build:
     name: Build the site
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -55,7 +55,7 @@ jobs:
       - name: Unit tests (parser, scripts, search, bridge)
         run: make academy-test
 
-      - name: Build the academy, the demo and the PDFs into ./site/
+      - name: Capture every demo step, then build the academy, the demo and the PDFs into ./site/
         run: make site SITE_URL="$SITE_URL"
 
       - name: Browser test against the assembled site

@@ -1,0 +1,90 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "NOTE-10",
+  "persona": "assistant",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+          "name": "notifications_list",
+          "arguments": {
+            "unread": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ \"organisation\": \"northwind\", \"unread\": 7, \"notifications\": [ { \"kind\": \"app.crashed\", \"severity\": \"urgent\", \"title\": \"Shift Rota stopped working\", … }, … ] }"
+              }
+            ]
+          }
+        }
+      },
+      "note": "The same feed the console shows, up to 50. There is no tool to mark one read."
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Builder's key is refused",
+      "persona": "assistant",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "Authorization": "Bearer egp_…"
+          },
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+              "name": "notifications_list",
+              "arguments": {}
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "jsonrpc": "2.0",
+              "id": 5,
+              "result": {
+                "isError": true,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "{\"status\":403,\"code\":\"forbidden\",\"title\":\"Forbidden\",\"detail\":\"This needs the admin role at 'northwind'; you are a builder there (set at northwind).\"}"
+                  }
+                ]
+              }
+            }
+          },
+          "note": "Notices are an Admin's: the tool answers with the refusal as an error result."
+        }
+      ]
+    }
+  ]
+}

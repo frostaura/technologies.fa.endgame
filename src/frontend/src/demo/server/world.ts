@@ -262,6 +262,23 @@ export interface World {
   context?: { path: string; key: string; value: unknown; setAt: string }[];
   /** No model answers (the screening of a new organisation then needs an operator's own decision). */
   modelsOffline?: boolean;
+  /** What the Edge (or, for "outage", Cloudflare in front of it) answers instead of an app, by app id: a wake that could not finish. */
+  edgeAnswer?: Record<string, "slow" | "busy" | "unreachable" | "outage">;
+  /** Apps whose rebuild fails (a restore or "Rebuild and restart" that cannot start the app), by app id. */
+  rebuildFails?: string[];
+  /** Whose memory each removed entry was (entry id → employee id), so its removal stays in that employee's change log. */
+  removedMemory?: Record<string, string>;
+  /** When each operator was last seen inside each organisation (`${userId}:${org}`), for the visit window. */
+  operatorSeen?: Record<string, string>;
+  /**
+   * Reads a scenario makes fail, to show what a failed read looks like: a request by method and
+   * route pattern (`GET tree`), answered normally `skip` times, then failing `times` times (always,
+   * when unset) — with `status` as a problem body, or, with none, as a control plane that cannot be
+   * reached. `served` counts the requests seen.
+   */
+  outages?: { method: string; pattern: string; skip?: number; times?: number; status?: number; detail?: string; served?: number }[];
+  /** System status as a scenario sets it: services reporting unhealthy (key → the probe's words), or none at all. */
+  systemStatus?: { unhealthy?: Record<string, string>; none?: boolean };
   /** A development deployment (ID-03): the development sign-in is offered, for this account. Never in any other scenario. */
   developmentSignIn?: { email: string };
   /** How many of the next session checks (`GET me`) fail as an unreachable control plane would (ID-05). */

@@ -1,0 +1,100 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-05",
+  "persona": "builder",
+  "scenario": "app-asleep",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sleeps after this many idle minutes",
+        "note": "Shown while it sleeps when unused: from 1 to 1,440 minutes."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Sleeps after this many idle minutes"
+            },
+            "text": "30"
+          }
+        },
+        {
+          "click": {
+            "text": "Save"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "It sleeps after 30 idle minutes now.",
+        "note": "Saved at once; technical mode's Underneath shows the same."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A number out of range",
+      "persona": "builder",
+      "scenario": "app-asleep",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Sleeps after this many idle minutes"
+                },
+                "text": "2000"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "A whole number of minutes, from 1 to 1,440.",
+            "note": "Refused before anything is sent; Save stays disabled."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below Builder",
+      "persona": "viewer",
+      "scenario": "app-asleep",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "A Builder or above changes it.",
+            "note": "A Viewer reads the idle minutes, and who can change them."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Always on: no idle minutes",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Always on",
+            "note": "An always-on app never sleeps, so the field is not shown."
+          }
+        }
+      ]
+    }
+  ]
+}

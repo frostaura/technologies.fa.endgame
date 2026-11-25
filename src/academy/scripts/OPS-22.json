@@ -1,0 +1,16 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-22",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "text",
+      "code": "Cloudflare dashboard → the frostaura.net zone → Workers Routes\n  each endgame-outage route (endgame.<zone>/* and *.<zone>/*)\n  request-limit failure mode → fail open\n\nCloudflare dashboard → Notifications → Add\n  Tunnel Health Alert, for the tunnel cloudflared runs",
+      "note": "ARCH-007 step 8. Fail open means that past the Free plan's 100,000 Worker requests a day, visitors bypass the outage page instead of seeing error 1027. The alert tells the founder when the machine drops off. Neither is set through the API."
+    }
+  ]
+}

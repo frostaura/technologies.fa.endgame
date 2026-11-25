@@ -1,0 +1,26 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-16",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "DELETE",
+      "path": "/api/organisations/6f1c2a40-3b7e-4d2a-9c11-5e8f0a7d2b31",
+      "response": {
+        "status": 409,
+        "body": {
+          "type": "https://endgame.frostaura.net/problems/conflict",
+          "title": "Conflict",
+          "status": 409,
+          "detail": "'northwind' still has children, work or credit history attached. Archive it instead (status: archived).",
+          "code": "conflict"
+        }
+      },
+      "note": "Northwind has divisions, work and spending, so it is refused. Only an organisation with nothing attached answers 204."
+    }
+  ]
+}

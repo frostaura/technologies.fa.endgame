@@ -1,0 +1,58 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-05",
+  "persona": "signed-out",
+  "scenario": "app-public",
+  "start": "/__app/{app}/path/_endgame/auth/sign-up",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "E-mail address"
+            },
+            "text": "pat@example.com"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Your name"
+            },
+            "text": "Pat Lee"
+          }
+        },
+        {
+          "click": {
+            "text": "Create a passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The reading list",
+        "note": "“Anyone may use Court booking. A passkey on this device signs you in — there is no password.”"
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A private app's sign-up page",
+      "persona": "signed-out",
+      "scenario": "app-private",
+      "start": "/__app/{app}/path/_endgame/auth/sign-up",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Court booking is private: only members of Northwind can open it.",
+            "note": "No form: nobody may make a sign-in here."
+          }
+        }
+      ]
+    }
+  ]
+}

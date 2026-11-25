@@ -1,5 +1,5 @@
 import type { Member, MemberRole } from "@/store/types";
-import { homeOrganisation, me, requireRole, roleAt, scopeOf } from "../access";
+import { homeOrganisation, me, operatorVisit, requireRole, roleAt, scopeOf } from "../access";
 import { area, conflict, created, forbidden, invalid, isEmail, noContent, notFound, num, ok, problem, Refusal, str } from "../http";
 import { creditsView, treeView } from "../views";
 import { newId, orgOf, organisation, uuidFor, within, type DemoMembership, type World } from "../world";
@@ -71,7 +71,10 @@ area("TreeEndpoints", {
     if (named) {
       const held = organisation(world, named) ? roleAt(world, u.id, named) : null;
       if (!held) throw notFound(`The organisation '${named}'`);
-      if (held.viaOperator && !world.entered.includes(named)) world.entered.push(named);
+      if (held.viaOperator) {
+        operatorVisit(world, u, named);
+        if (!world.entered.includes(named)) world.entered.push(named);
+      }
       return ok(treeView(world, u.id, named));
     }
     const home = homeOrganisation(world, u.id);
@@ -83,7 +86,8 @@ area("TreeEndpoints", {
     const slug = (str(req.body, "slug") ?? "").trim();
     const name = (str(req.body, "name") ?? "").trim();
     if (!SLUG.test(slug)) throw invalid(`'${slug}' is not a valid slug: use 2-40 lower-case letters, digits and single hyphens, starting and ending with a letter or digit.`);
-    if (RESERVED.includes(slug)) throw invalid(`'${slug}' is reserved and cannot name an organisation.`);
+    // `ReservedNames.CheckAsync`: Endgame's own names, refused as the control plane refuses them.
+    if (RESERVED.includes(slug)) throw new Refusal(problem(409, "reserved_name", "That name is reserved", `'${slug}' cannot name an organisation: it is one of Endgame's own names.`));
     if (!name) throw invalid("The organisation needs a name.");
     const firstRun = !world.memberships.some((m) => m.userId === u.id) && world.organisations.length === 0;
     if (!firstRun && !u.isOperator) throw forbidden("Organisations are provisioned by FrostAura; there is no self-serve sign-up.");
@@ -216,12 +220,17 @@ area("TreeEndpoints", {
     world.operatorLog.unshift({ id: newId(world, "op"), organisation: scope, at, action: "credits.top_up", operator: { id: u.id, email: u.email, displayName: u.displayName }, detail: { credits, note, entryId: id } });
     const requestId = str(req.body, "requestId");
     const request = requestId ? world.topUpRequests.find((r) => r.id === requestId && r.status === "open") : undefined;
-    if (request) Object.assign(request, { status: "fulfilled", closedAt: at, topUpEntryId: id });
+    if (request) {
+      // The answer is on the record as well as the top-up (OP-06): the Owner reads that their request was met.
+      const closeNote = note.slice(0, 500);
+      Object.assign(request, { status: "fulfilled", closedAt: at, topUpEntryId: id, closeNote });
+      world.operatorLog.unshift({ id: newId(world, "op"), organisation: scope, at, action: "topup_request.fulfilled", operator: { id: u.id, email: u.email, displayName: u.displayName }, detail: { requestId: request.id, credits, note: closeNote } });
+    }
     // A top-up restores at once: apps paused at the overdraft limit wake.
     if (org && org.balance > -(org.ownLimit !== null ? Math.min(org.ownLimit, org.frostauraLimit) : org.frostauraLimit)) {
       for (const a of world.apps) if (orgOf(a.path) === scope && a.pausedReason === "overdraft") Object.assign(a, { pausedReason: null, running: "asleep", status: "sleeping", health: "healthy", healthSummary: "Asleep; it wakes on the next visit." });
     }
-    world.changed.push("Operator", "TopUpRequests", "Credits", "Tree", "App");
+    world.changed.push("Operator", "TopUpRequests", "Credits", "Tree", "App", "OperatorAccess", "Notifications");
     return ok({ id, amount: credits, createdAt: at, organisation: scope });
   },
 });

@@ -1,0 +1,92 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "MEM-05",
+  "persona": "owner",
+  "scenario": "s4-memory-to-tidy",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Last review, 10 days ago",
+        "note": "When it was last reviewed, and what that review merged, removed and corrected."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Review now"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Review started — watch it",
+        "note": "A review is a run you can watch."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "clock": {
+            "seek": 5000
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "1 note merged",
+        "note": "It reported: the note Kasper had learned twice is merged (“Merged at a review”), and the panel shows the new counts."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Not while the employee is paused",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Pause"
+              }
+            },
+            {
+              "wait": 1200
+            },
+            {
+              "click": {
+                "text": "Review now"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "The review did not start",
+            "note": "Kasper is paused, so he is given no new work. Resume him first."
+          }
+        }
+      ]
+    }
+  ]
+}

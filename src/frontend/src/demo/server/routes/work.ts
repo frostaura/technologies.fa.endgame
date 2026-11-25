@@ -6,8 +6,7 @@ import { setStage, startRun } from "../mutations";
 import { startResearch } from "../scripts";
 import { changeEstimate, changeText, conversationEstimate, retryEstimate, retryRun, runView, startChange } from "../tryAgain";
 import { appView, ideaView } from "../views";
-import { node, newId, orgOf, runRecord, setting, uuidFor, type World } from "../world";
-import { storyFor } from "../../world/story";
+import { newId, orgOf, runRecord, setting, type World } from "../world";
 
 /** `WorkEndpoints.cs`: ideas and decisions, runs and their controls, approvals, tasks, apps, conversations. */
 
@@ -57,7 +56,6 @@ export function answerApproval(world: World, approvalId: string, decision: "appr
 
 export function createIdea(world: World, text: string, constraints: string[], scope: string, via: "console" | "conversation" | "suggestion"): Idea {
   const id = newId(world, "idea");
-  const story = storyFor(text);
   const idea: Idea = {
     id,
     title: titleOf(text),
@@ -75,13 +73,7 @@ export function createIdea(world: World, text: string, constraints: string[], sc
     tryAgain: null,
   };
   world.ideas.push(idea);
-  // The idea shows on the chart as a project being researched, in the division research suggests.
-  const org = orgOf(scope);
-  const division = scope.includes("/") ? scope : `${org}/${story.division.slug}`;
-  if (!node(world, division)) world.nodes.push({ id: uuidFor(`node:${division}`), path: division, slug: division.split("/")[1] ?? "studio", name: story.division.name, level: "division", createdAt: new Date().toISOString(), stage: null, ideaId: null, note: null });
-  let project = `${division}/${story.project}`;
-  if (node(world, project)) project = `${project}-${world.counter}`;
-  world.nodes.push({ id: uuidFor(`node:${project}`), path: project, slug: project.split("/").pop() ?? story.project, name: story.name, level: "project", createdAt: new Date().toISOString(), stage: "researching", ideaId: id, note: "Research is under way." });
+  // Nothing is placed in the tree yet: as BuildWorkflow.PlaceAsync, placement is the build's first step (TREE-01).
   const r = startResearch(world, id, scope, text, constraints, via, null);
   idea.runId = r.run.id;
   world.changed.push("Tree", "Credits", "Idea");

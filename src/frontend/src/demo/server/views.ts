@@ -1,7 +1,7 @@
-import type { AppDetail, BudgetLine, Credits, Idea, Me, Membership, NeedsYou, OperatorOrganisation, Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
+import type { AppDetail, BudgetLine, Credits, Idea, Me, Membership, NeedsYou, OperatorOrganisation, Pricing, RunningCost, Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import { highestIn, homeOrganisation, roleAt } from "./access";
 import { ideaState } from "./tryAgain";
-import { appAt, chain, levelOf, node, orgOf, organisation, spentBelow, within, type DemoApp, type DemoUser, type World } from "./world";
+import { DEFAULT_PRICING, appAt, chain, levelOf, node, orgOf, organisation, spentBelow, within, type DemoApp, type DemoUser, type World } from "./world";
 
 /**
  * The control plane's views, built from the world: what `ConsoleViews.cs` and the endpoint files
@@ -128,9 +128,10 @@ export function treeView(world: World, userId: string, org: string): Tree {
           id: p.id,
           slug: p.slug,
           name: p.name,
-          stage: p.stage ?? "live",
+          // ReadModels.ProjectStage: an archived project is "paused", with the note "Archived.".
+          stage: p.status === "archived" ? "paused" : (p.stage ?? "live"),
           ideaId: p.ideaId,
-          note: p.note,
+          note: p.status === "archived" ? "Archived." : p.note,
           progress: progressOf(world, p.path),
           spend: { monthCredits: total(world, p.path) },
           workers: workersAt(world, p.path),
@@ -140,18 +141,30 @@ export function treeView(world: World, userId: string, org: string): Tree {
         })),
     }));
   const projects = divisions.reduce((n, d) => n + d.projects.length, 0);
-  const apps = world.apps.filter((a) => orgOf(a.path) === org).length;
+  // ReadModels.TreeAsync: the summary counts the apps shown, and someone granted part of the tree
+  // sees no organisation-level workers, spend summed from the divisions they see, and only the
+  // needs on what their grants cover.
+  const apps = divisions.reduce((n, d) => n + d.projects.reduce((m, p) => m + p.apps.length, 0), 0);
+  const covered = (path: string) => !!held || world.memberships.some((m) => m.userId === userId && within(path, m.path));
   const people = world.employees.filter((e) => orgOf(e.scope) === org && e.kind === "employee" && e.status !== "released").length;
   const summary = `${divisions.length} ${divisions.length === 1 ? "division" : "divisions"} · ${projects} ${projects === 1 ? "project" : "projects"} · ${apps} ${apps === 1 ? "app" : "apps"} · ${people} ${people === 1 ? "employee" : "employees"}`;
   const viewerRole = held?.role ?? highestIn(world, userId, org) ?? "none";
   return {
     generatedAt: now,
     viewerRole,
-    organisation: { id: o.id, slug: o.slug, name: o.name, summary, spend: { monthCredits: total(world, org) }, workers: workersAt(world, org), role: roleOf(world, userId, org) },
+    organisation: { id: o.id, slug: o.slug, name: o.name, summary, spend: { monthCredits: held ? total(world, org) : divisions.reduce((n, d) => n + d.spend.monthCredits, 0) }, workers: held ? workersAt(world, org) : [], role: roleOf(world, userId, org) },
     divisions,
-    needsYou: needsYou(world, org),
+    needsYou: needsYou(world, org).filter((n) => covered(needScope(world, n))),
     firstRun: false,
   };
+}
+
+/** Where a need sits in the tree: the idea's, the run's, the hire's or the employee's level. */
+function needScope(world: World, n: NeedsYou): string {
+  if (n.kind === "verdict") return world.ideas.find((i) => i.id === n.ideaId)?.scope ?? "";
+  if (n.kind === "approval") return world.runs.find((r) => r.run.id === n.runId)?.run.scope ?? "";
+  if (n.kind === "hire") return n.scope;
+  return world.employees.find((e) => e.id === n.employeeId)?.scope ?? "";
 }
 
 function needsYou(world: World, org: string): NeedsYou[] {
@@ -213,7 +226,7 @@ export function appView(world: World, a: DemoApp): AppDetail {
     telemetry: a.telemetry,
     cost: { monthCredits: total(world, a.path), capCredits: world.budgets.find((b) => b.path === a.path)?.cap ?? null },
     settings: { running: a.runningSetting, access: a.access },
-    runningCost: a.runningCost,
+    runningCost: pricedRunningCost(world, a.runningCost),
     sharedWith: world.shares.filter((s) => s.appId === a.id).length,
     endUsers: a.endUsers,
     status: a.status,
@@ -223,21 +236,53 @@ export function appView(world: World, a: DemoApp): AppDetail {
   };
 }
 
+/** A month of hosting for one way of running, in credits at the given prices (`PricingService`). */
+function hostingCredits(p: Pricing, awakeHours: number, m: NonNullable<RunningCost["measured"]>): number {
+  const h = p.hosting;
+  const usd = awakeHours * h.usdPerAwakeHour + (m.memoryMb / 1024) * awakeHours * h.usdPerGbHourMemory + (m.storageMb / 1024) * h.usdPerGbMonthStorage + (m.requestsPerMonth / 1e6) * h.usdPerMillionRequests;
+  return usd * p.creditsPerUsd * p.margin;
+}
+
+/**
+ * An app's running cost at today's prices: a price change (OP-09) moves every app's monthly figures
+ * and the rates it quotes at once, by what changed for that app's own use. At the default prices
+ * the figures are the world's own.
+ */
+export function pricedRunningCost(world: World, rc: RunningCost): RunningCost {
+  const p = world.pricing.pricing;
+  const n = (v: number) => String(Number(v.toFixed(4)));
+  const prices = `Today's prices: ${n(p.hosting.usdPerAwakeHour * p.creditsPerUsd)} credits an awake hour, ${n(p.hosting.usdPerGbHourMemory * p.creditsPerUsd)} per GB of memory an awake hour, ${n(p.hosting.usdPerGbMonthStorage * p.creditsPerUsd)} per GB stored a month and ${n(p.hosting.usdPerMillionRequests * p.creditsPerUsd)} per million requests.`;
+  const measured = rc.measured;
+  if (!measured) return { ...rc, prices };
+  const scale = <T extends { credits: number; awakeHoursPerMonth: number }>(choice: T | null): T | null => {
+    if (!choice) return null;
+    const before = hostingCredits(DEFAULT_PRICING, choice.awakeHoursPerMonth, measured);
+    return before > 0 ? { ...choice, credits: round(choice.credits * (hostingCredits(p, choice.awakeHoursPerMonth, measured) / before)) } : choice;
+  };
+  return { ...rc, prices, sleep: scale(rc.sleep), alwaysOn: scale(rc.alwaysOn) };
+}
+
 export function creditsView(world: World, scope: string): Credits {
   const org = orgOf(scope);
   const o = organisation(world, org);
   const spent = spentBelow(world, scope);
   const lines: BudgetLine[] = [];
   const depthOf = (p: string) => p.split("/").length - 1;
-  for (const n of world.nodes.filter((x) => within(x.path, scope)).sort((a, b) => a.path.localeCompare(b.path))) {
+  // `ReadModels.BudgetLinesAsync`: every node in tree order (by name at each level), each followed by its employees with a cap.
+  const nodes = world.nodes.filter((x) => within(x.path, scope));
+  const parentOf = (p: string) => p.split("/").slice(0, -1).join("/");
+  const walk = (n: (typeof nodes)[number]) => {
     const s = spentBelow(world, n.path);
     const cap = world.budgets.find((b) => b.path === n.path)?.cap ?? null;
     lines.push({ scope: n.path, name: n.name, level: n.level, depth: depthOf(n.path), spentCredits: round(s.ai + s.hosting), capCredits: cap, appId: appAt(world, n.path)?.id ?? null });
-  }
-  for (const e of world.employees.filter((x) => x.kind === "employee" && within(x.scope, scope) && x.status !== "released" && x.jobDescription.monthlyCreditLimit !== null)) {
-    const tr = world.trackRecords.find((t) => t.employeeId === e.id);
-    lines.push({ scope: e.scope, name: e.name, level: "employee", depth: depthOf(e.scope) + 1, spentCredits: tr?.cost.monthCredits ?? 0, capCredits: e.jobDescription.monthlyCreditLimit, appId: null, employeeId: e.id });
-  }
+    for (const e of world.employees.filter((x) => x.kind === "employee" && x.scope === n.path && x.status !== "released" && x.jobDescription.monthlyCreditLimit !== null).sort((a, b) => a.name.localeCompare(b.name))) {
+      const tr = world.trackRecords.find((t) => t.employeeId === e.id);
+      lines.push({ scope: e.scope, name: e.name, level: "employee", depth: depthOf(e.scope) + 1, spentCredits: tr?.cost.monthCredits ?? 0, capCredits: e.jobDescription.monthlyCreditLimit, appId: null, employeeId: e.id });
+    }
+    for (const c of nodes.filter((x) => parentOf(x.path) === n.path).sort((a, b) => a.name.localeCompare(b.name))) walk(c);
+  };
+  const top = nodes.find((x) => x.path === scope);
+  if (top) walk(top);
   const balance = o?.balance ?? 0;
   const limit = o ? (o.ownLimit !== null ? Math.min(o.ownLimit, o.frostauraLimit) : o.frostauraLimit) : 0;
   const held = world.runs.filter((r) => orgOf(r.run.scope) === org && (r.run.status === "running" || r.run.status === "waiting")).reduce((n, r) => n + Math.max(0, (r.run.estimateCredits ?? 0) - r.run.spentCredits) * 0.1, 0);

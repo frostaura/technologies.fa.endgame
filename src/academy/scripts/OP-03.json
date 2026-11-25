@@ -1,0 +1,392 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-03",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Its name"
+            },
+            "text": "Harbour Watch"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Its apps live at /harbour-watch/",
+        "note": "Its address name fills itself from the name, and can be edited."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "The Owner's e-mail"
+            },
+            "text": "ana@harbourwatch.example"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "The Owner's name"
+            },
+            "text": "Ana Ribeiro"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The Owner's e-mail",
+        "note": "The person FrostAura invited: they become its Owner."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "What it does"
+            },
+            "text": "Tide tables, mooring bookings and a weather board for a small harbour."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "A sentence or two on what the organisation does",
+        "note": "Required: at least 10 characters, so it can be screened."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "What it does is screened against FrostAura’s red lines before it is set up",
+        "note": "Screened first; its name is checked against FrostAura's own addresses; every idea it has is screened again."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Set it up"
+          }
+        },
+        {
+          "wait": 2000
+        }
+      ],
+      "highlight": {
+        "text": "It was screened against the red lines and crosses none",
+        "note": "A model judged it against the four red lines — as a platform cost, charged to no organisation — and it crosses none."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "The Owner's invitation code",
+        "note": "Shown once: they make their passkey with it before it expires. With e-mail set up, it is sent to them too."
+      }
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Its name"
+            },
+            "text": "Rye & Crumb"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "The Owner's e-mail"
+            },
+            "text": "lena@northwind.example"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "What it does"
+            },
+            "text": "A bakery's pre-order counter and a weekly bread list."
+          }
+        },
+        {
+          "click": {
+            "text": "Set it up"
+          }
+        },
+        {
+          "wait": 2000
+        }
+      ],
+      "highlight": {
+        "text": "already has a passkey, so they can sign in as its Owner now.",
+        "note": "An Owner who already has an account needs no code."
+      }
+    },
+    {
+      "step": 8,
+      "kind": "demo",
+      "highlight": {
+        "selector": "li[data-org='harbour-watch']",
+        "note": "Listed, with its standing security reviewer; its operator log records how it was screened, by whom, and that it was set up."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A breach is refused, naming the line",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Its name"
+                },
+                "text": "Shift Watch"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "The Owner's e-mail"
+                },
+                "text": "sam@shiftwatch.example"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "What it does"
+                },
+                "text": "We track where employees go after work using their phones, so managers know who else they work for."
+              }
+            }
+          ],
+          "highlight": {
+            "text": "What it does",
+            "note": "What it does, as the Owner told FrostAura."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Set it up"
+              }
+            },
+            {
+              "wait": 2000
+            }
+          ],
+          "highlight": {
+            "text": "crosses a red line — surveillance and authoritarian tooling",
+            "note": "Refused, naming the line and why. Nothing is created."
+          }
+        }
+      ]
+    },
+    {
+      "title": "No model answers: screen it yourself",
+      "persona": "operator",
+      "scenario": "screening-offline",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Its name"
+                },
+                "text": "Harbour Watch"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "The Owner's e-mail"
+                },
+                "text": "ana@harbourwatch.example"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "What it does"
+                },
+                "text": "Tide tables, mooring bookings and a weather board for a small harbour."
+              }
+            },
+            {
+              "click": {
+                "text": "Set it up"
+              }
+            },
+            {
+              "wait": 2000
+            }
+          ],
+          "highlight": {
+            "text": "Screen it yourself",
+            "note": "No model could be reached, so it was not set up. You may record your own decision, with a reason."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "select": {
+                "into": {
+                  "text": "Your decision"
+                },
+                "value": "It crosses no red line"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Why"
+                },
+                "text": "A harbour's tide tables and bookings: it harms no one and watches no one."
+              }
+            },
+            {
+              "click": {
+                "text": "Set it up"
+              }
+            },
+            {
+              "wait": 2000
+            }
+          ],
+          "highlight": {
+            "text": "You screened it against the red lines yourself",
+            "note": "Set up on your decision, which its operator log records “by hand”, with your reason."
+          }
+        }
+      ]
+    },
+    {
+      "title": "One of Endgame's own names",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Its name"
+                },
+                "text": "Endgame"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "The Owner's e-mail"
+                },
+                "text": "ana@harbourwatch.example"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "What it does"
+                },
+                "text": "Tide tables, mooring bookings and a weather board for a small harbour."
+              }
+            },
+            {
+              "click": {
+                "text": "Set it up"
+              }
+            },
+            {
+              "wait": 2000
+            }
+          ],
+          "highlight": {
+            "text": "cannot name an organisation: it is one of Endgame's own names",
+            "note": "Reserved names are refused before anything is made."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Not an e-mail address",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "The Owner's e-mail"
+                },
+                "text": "ana@harbour"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "That does not look like an e-mail address.",
+            "note": "“Set it up” stays disabled."
+          }
+        }
+      ]
+    }
+  ]
+}

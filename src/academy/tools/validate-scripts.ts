@@ -7,7 +7,8 @@ import type { StepScript } from "../src/content/scripts.ts";
 /**
  * Validates every `scripts/<FLOW-ID>.json` against the JSON Schema and against the parsed flows:
  * the flow exists, each step number is one of its steps, no step is scripted twice, and every
- * image named is on disk under `public/shots/`.
+ * image named is on disk under `public/shots/`. A variation's steps are its own, numbered 1, 2, 3…
+ * with none missing, and each carries the note that says what it shows.
  */
 
 export interface Coverage {
@@ -69,6 +70,7 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
       if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.shot.file}, which does not exist`);
       if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.file}, which does not exist`);
       if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${file}: step ${step.step} is a demo step that sends the console nothing`);
+      if (step.kind === "demo" && step.persona && !step.goto) problems.push(`${file}: step ${step.step} changes who is signed in, so it needs a goto`);
     }
     (script.variations ?? []).forEach((v, i) => {
       const where = `${file}: variation ${i + 1} ("${v.title}")`;

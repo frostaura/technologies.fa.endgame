@@ -1,0 +1,81 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-18",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/tree?organisation=northwind",
+      "response": {
+        "status": 200,
+        "body": {
+          "generatedAt": "2026-11-25T09:30:00Z",
+          "viewerRole": "admin",
+          "organisation": {
+            "slug": "northwind",
+            "name": "Northwind",
+            "summary": "4 divisions · 12 projects · 5 apps · 10 employees",
+            "role": "admin"
+          },
+          "divisions": [
+            "…"
+          ],
+          "needsYou": [
+            "…"
+          ],
+          "firstRun": false
+        }
+      },
+      "note": "Reading another organisation's tree is itself an entry: it is logged, as an Admin, where Northwind's Owner can read it. Shortened here."
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/?organisation=northwind",
+      "highlight": {
+        "text": "You are inside Northwind as a FrostAura operator",
+        "note": "The coral band names the organisation you are inside, with Leave Northwind."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "nav[aria-label='Manage']",
+        "note": "Everything else is home as an Admin sees it, People and Secrets included; the balance and the bell are Northwind's."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/notifications",
+      "highlight": {
+        "text": "Leave Northwind",
+        "note": "The organisation is remembered for the tab: every other screen shows it until you leave."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An organisation that does not exist",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "goto": "/?organisation=nowhere",
+          "highlight": {
+            "text": "The organisation could not be loaded",
+            "note": "An unknown address is a failed read, said plainly."
+          }
+        }
+      ]
+    }
+  ]
+}

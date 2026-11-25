@@ -1,0 +1,110 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-01",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/start",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "The idea"
+            },
+            "text": "A booking sheet for the rowing club's six boats, so members can see which are free on Saturday."
+          }
+        },
+        {
+          "wait": {
+            "text": "Estimated"
+          }
+        },
+        {
+          "click": {
+            "text": "Research this idea"
+          }
+        },
+        {
+          "wait": {
+            "text": "Research: A booking sheet"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "“Where it goes” was left at the whole of Northwind, so research is asked where this should live."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:finished"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Read it"
+          }
+        },
+        {
+          "click": {
+            "text": "Read it"
+          }
+        },
+        {
+          "wait": {
+            "text": "Suggested home"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Suggested home",
+        "note": "The verdict is build, and it suggests a home: a division, a project and an app."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Build it"
+          }
+        },
+        {
+          "wait": {
+            "text": "Build: A booking sheet"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "The build starts. Its first step places the idea: the division first, made if it does not exist, then the project and the app."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:placed"
+      },
+      "highlight": {
+        "text": "will live in a new division",
+        "note": "The run's log says where it lives: a new division, Studio."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "text": "Studio",
+        "note": "Within 15 seconds the chart has a new column, Studio, with the project in it."
+      }
+    }
+  ]
+}

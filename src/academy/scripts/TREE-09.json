@@ -1,0 +1,115 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-09",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/tree?scope=northwind/operations/gift-cards",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Delete Gift Cards"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Delete Gift Cards?",
+        "note": "Deleting cannot be undone. Only a project with nothing in it, no work and no spending can be deleted."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes, delete Gift Cards"
+          }
+        },
+        {
+          "wait": {
+            "text": "Division in Northwind"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "nav[aria-label='Every part of the organisation'] button[aria-current='true']",
+        "note": "Gift Cards is gone from the outline, and its parent, Operations, is chosen."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Something with history is archived instead",
+      "persona": "owner",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind/operations/shift-rota",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "Its address: northwind/operations/shift-rota"
+              }
+            },
+            {
+              "click": {
+                "text": "Delete Shift Rota"
+              }
+            },
+            {
+              "wait": {
+                "text": "Delete Shift Rota?"
+              }
+            },
+            {
+              "click": {
+                "text": "Yes, delete Shift Rota"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Archive it instead",
+            "note": "Shift Rota has an app and history: the server refuses (409), and offers archiving instead."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Archive it instead"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Shift Rota is archived instead. Nothing in it was deleted.",
+            "note": "Archived, with everything in it kept."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A Builder reads who may",
+      "persona": "builder",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind/operations/gift-cards",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "An Admin or above deletes a project with nothing in it.",
+            "note": "Deleting is an Admin's, at every level."
+          }
+        }
+      ]
+    }
+  ]
+}

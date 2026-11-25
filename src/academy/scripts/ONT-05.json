@@ -1,0 +1,50 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ONT-05",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Who works on what"
+          }
+        },
+        {
+          "click": {
+            "selector": "ul[aria-label='Who works on what'] a[href*='employees']"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "main",
+        "note": "An employee or contractor in a graph opens their page."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/",
+      "act": [
+        {
+          "click": {
+            "text": "How data flows"
+          }
+        },
+        {
+          "click": {
+            "selector": "ul[aria-label='How data flows'] a[href*='apps']"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "main",
+        "note": "An app opens the app's page. Nothing else in the graph is a link."
+      }
+    }
+  ]
+}

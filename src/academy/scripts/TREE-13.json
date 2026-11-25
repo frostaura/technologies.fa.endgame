@@ -1,0 +1,138 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-13",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Manage Technologies",
+        "note": "Each division's header on the chart, and each project card, has Manage."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Manage Technologies"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "nav[aria-label='Every part of the organisation']",
+        "note": "Manage: the outline lists every part of Northwind. Archived ones are marked."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label='Division: Technologies']",
+        "note": "The chosen part: its level and parent, its address, and Active or Archived."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "What is in it",
+        "note": "Its name (TREE-06), and what is in it, with Add a project (TREE-03)."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Archive or delete",
+        "note": "Archive or delete (TREE-07 to TREE-09)."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "What this is",
+        "note": "Beside it: what this level is (TREE-11, TREE-12)."
+      }
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "selector": "nav[aria-label='Manage']",
+        "note": "Autonomy, hiring, people and secrets stay on their own screens, from the shortcut row; budgets on Credits."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Viewer reads who may change each thing",
+      "persona": "viewer",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind/technologies",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "section[aria-label='Division: Technologies']",
+            "note": "Priya is a Viewer: each control is replaced by who may use it."
+          }
+        }
+      ]
+    },
+    {
+      "title": "The tree cannot be read",
+      "persona": "owner",
+      "scenario": "tree-unreachable",
+      "start": "/tree",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "The organisation could not be loaded",
+            "note": "A failed read says so, with Try again."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Try again"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "nav[aria-label='Every part of the organisation']",
+            "note": "Try again reads it, and the outline appears."
+          }
+        }
+      ]
+    },
+    {
+      "title": "With no organisation",
+      "persona": "first-run",
+      "scenario": "default",
+      "start": "/tree",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "There is no organisation to manage yet",
+            "note": "Before an organisation is named there is nothing to manage."
+          }
+        }
+      ]
+    }
+  ]
+}

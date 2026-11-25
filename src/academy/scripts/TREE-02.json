@@ -1,0 +1,162 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-02",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Add a division",
+        "note": "On the chart, after the last division: Add a division. Admins and the Owner see it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add a division"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "form[aria-label^='Add a']",
+        "note": "Manage opens with the organisation chosen and the form ready: Name, and Its address."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+            },
+            "text": "Field Trips"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "form[aria-label^='Add a'] input[aria-describedby]",
+        "note": "The address fills itself from the name: northwind/field-trips. It can be changed now, never once it is made."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add the division"
+          }
+        },
+        {
+          "wait": {
+            "text": "Its address: northwind/field-trips"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "nav[aria-label='Every part of the organisation'] button[aria-current='true']",
+        "note": "Field Trips is made, listed in the outline and chosen."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "text": "No projects in Field Trips yet.",
+        "note": "On the chart's next refresh it is a column of its own, with nothing in it yet."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An address that is not one",
+      "persona": "owner",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind&add=1",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+                },
+                "text": "Field Trips"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "selector": "form[aria-label^='Add a'] input[aria-describedby]"
+                },
+                "text": "-trips"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Use 2 to 40 lower-case letters",
+            "note": "An address that is not one is refused as you type, and Add the division stays disabled."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A sibling already uses that address",
+      "persona": "owner",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind&add=1",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+                },
+                "text": "Learning"
+              }
+            },
+            {
+              "click": {
+                "text": "Add the division"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The division was not made",
+            "note": "Learning already exists: the server refuses it (409), and nothing changed."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A Builder reads who may",
+      "persona": "builder",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "An Admin or above adds a division here.",
+            "note": "Lena is a Builder: no form, just who may. The chart shows her no Add a division."
+          }
+        }
+      ]
+    }
+  ]
+}
