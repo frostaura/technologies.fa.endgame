@@ -103,4 +103,31 @@ public sealed class EstimateTests
         return new RunExecutor(cp.Client(), model, new FakeWorkspaces(workspace ?? new FakeWorkspace().With("a.txt", "one\n")), workflows ?? [new TaskWorkflow()],
             new AgentFactory(options), new Estimator(options), options, NullLogger<RunExecutor>.Instance, dock?.Client(), RunnerResources.Skills());
     }
+
+    [Fact]
+    public async Task A_workspace_waits_while_dock_prepares_its_image_and_still_fails_on_any_other_refusal()
+    {
+        var answers = new Queue<(System.Net.HttpStatusCode, string)>([
+            (System.Net.HttpStatusCode.ServiceUnavailable, "{\"code\":\"workspace_image_not_ready\",\"detail\":\"building\"}"),
+            (System.Net.HttpStatusCode.ServiceUnavailable, "{\"code\":\"workspace_image_not_ready\",\"detail\":\"building\"}"),
+            (System.Net.HttpStatusCode.Created, $"{{\"id\":\"{Guid.NewGuid()}\",\"appId\":\"{Guid.NewGuid()}\",\"root\":\"/workspace\",\"branch\":\"main\",\"head\":\"c0\",\"leaseExpiresAt\":\"2026-11-25T03:00:00Z\"}}"),
+        ]);
+        var dock = new Endgame.Runner.Platform.DockClient(new HttpClient(new Answers(answers)) { BaseAddress = new Uri("http://dock") }) { WorkspaceImagePoll = TimeSpan.FromMilliseconds(10) };
+        var request = new Endgame.Hosting.Contracts.CreateWorkspaceRequest(Guid.NewGuid(), Guid.NewGuid(), null, DateTimeOffset.UtcNow.AddMinutes(5), null, null);
+        Assert.NotNull(await dock.CreateWorkspaceAsync(request, CancellationToken.None));
+        Assert.Empty(answers);
+
+        var refused = new Queue<(System.Net.HttpStatusCode, string)>([(System.Net.HttpStatusCode.ServiceUnavailable, "{\"code\":\"unavailable\",\"detail\":\"no database\"}")]);
+        var other = new Endgame.Runner.Platform.DockClient(new HttpClient(new Answers(refused)) { BaseAddress = new Uri("http://dock") }) { WorkspaceImagePoll = TimeSpan.FromMilliseconds(10) };
+        await Assert.ThrowsAsync<Endgame.Harness.Workspaces.WorkspaceException>(() => other.CreateWorkspaceAsync(request, CancellationToken.None));
+    }
+
+    private sealed class Answers(Queue<(System.Net.HttpStatusCode Status, string Body)> answers) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var (status, body) = answers.Dequeue();
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") });
+        }
+    }
 }
