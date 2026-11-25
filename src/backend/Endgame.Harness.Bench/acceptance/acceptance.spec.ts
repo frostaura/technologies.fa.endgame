@@ -294,10 +294,15 @@ test("1. tenant zero: FrostAura, with Technologies and Labs, made through the pu
   test.skip(!!REUSE, "replaying against a club app already built");
   const made = await owner.request.post("/api/organisations", { data: { name: "FrostAura", slug: frostaura } });
   const created = made.status() === 403 ? await operator.request.post("/api/organisations", { data: { name: "FrostAura", slug: frostaura, ownerEmail } }) : made;
-  const org = await ok<{ id: string }>(created, 201);
-  story.frostauraId = org.id;
+  // On a stack that already holds tenant zero (a second pass), it is found rather than made again.
+  if (created.status() === 409) {
+    story.frostauraId = (await ok<{ organisation: { id: string } }>(await owner.request.get(`/api/tree?organisation=${frostaura}`))).organisation.id;
+  } else {
+    story.frostauraId = (await ok<{ id: string }>(created, 201)).id;
+  }
   for (const [slug, name] of [["technologies", "Technologies"], ["labs", "Labs"]]) {
-    await ok(await owner.request.post("/api/divisions", { data: { parent: frostaura, slug, name } }), 201);
+    const division = await owner.request.post("/api/divisions", { data: { parent: frostaura, slug, name } });
+    expect([201, 409], await division.text()).toContain(division.status());
   }
   await ok(await operator.request.post("/api/credits/top-ups", { data: { organisation: frostaura, credits: 2000, note: "acceptance: tenant zero" } }));
   const tree = await ok<{ divisions: { slug: string; name: string }[] }>(await owner.request.get(`/api/tree?organisation=${frostaura}`));
@@ -338,7 +343,7 @@ test("1b. tenant zero's workforce and org chart, filled by the factory's own hir
   await note(`tenant zero's workforce: ${JSON.stringify(story.report.workforce)}`);
 });
 
-test("3. the club app, used: a member books a court and sees it, the hardware asks, the e-mail arrives, MCP calls it", async ({ browser }) => {
+test("3. the club app, used: a member books a court and sees it, the hardware asks, the e-mail arrives, MCP calls it", async () => {
   if (REUSE) {
     story.club.appPath = REUSE;
     story.club.appId = (await appOf(owner, REUSE.split("/")[0])).id;
@@ -360,7 +365,6 @@ test("3. the club app, used: a member books a court and sees it, the hardware as
   story.report.mcpCall = { tool: read!.name, isError: called.isError ?? false, text: text(called).slice(0, 800) };
   expect(called.isError ?? false, text(called)).toBe(false);
   await note(`MCP: ${read!.name} answered ${text(called).slice(0, 300)}`);
-  await appTools.close();
 
   // The member, in a real browser: the owner is a member of the club's organisation and opens the private app.
   const page = await owner.newPage();
@@ -372,14 +376,116 @@ test("3. the club app, used: a member books a court and sees it, the hardware as
   await page.screenshot({ path: path.join(STATE, "club-1-home.png"), fullPage: true });
   story.report.clubHomeText = (await page.locator("body").innerText()).slice(0, 1500);
   await note(`club app home: ${String(story.report.clubHomeText).slice(0, 400)}`);
-  // The rest of this step is the club's own flow; it is written against the app the factory built (TEST-201).
-  await clubFlow(page, browser);
+  // The rest is the club's own flow, through the app's own screens, its MCP tools and its incoming endpoint.
+  await clubFlow(page, appTools);
+  await appTools.close();
 });
 
-/** Filled in against the built app: book, balance, bookings, hardware, e-mail. */
-async function clubFlow(page: Page, browser: Browser) {
-  void page;
-  void browser;
+/** The arguments a derived tool needs: its path and query parameters, and a body with every required field filled. */
+function argumentsFor(tool: { inputSchema: { properties?: Record<string, unknown>; required?: string[] } }, given: Record<string, unknown>, body: Record<string, unknown>) {
+  const args: Record<string, unknown> = { ...given };
+  const schema = tool.inputSchema.properties?.body as { properties?: Record<string, { type?: string }> } | undefined;
+  if (schema) {
+    const filled: Record<string, unknown> = {};
+    for (const [name, field] of Object.entries(schema.properties ?? {})) {
+      const match = Object.entries(body).find(([k]) => new RegExp(k, "i").test(name));
+      if (match) filled[name] = match[1];
+      else if (field.type === "string") filled[name] = "Acceptance test";
+    }
+    args.body = filled;
+  }
+  return args;
+}
+
+/** Book, balance, bookings, the confirmation e-mail, the hardware's question: against the app the factory built. */
+async function clubFlow(page: Page, appTools: Client) {
+  const app = `${EDGE}/${story.club.appPath}/`;
+  const minutesLeft = async () => {
+    await page.goto(app);
+    await page.waitForLoadState("networkidle");
+    const match = /(\d+)\s*minutes?\s*left/i.exec(await page.getByRole("main").innerText());
+    expect(match, "the balance is shown on the member's home").toBeTruthy();
+    return Number(match![1]);
+  };
+  const me = (await ok<{ user: { id: string; displayName: string; email: string } }>(await page.request.get(`${app}api/me`))).user;
+  const tools = (await appTools.listTools()).tools;
+  const find = (pattern: RegExp) => tools.find((t) => pattern.test(t.name)) ?? (() => { throw new Error(`no tool matching ${pattern} in ${tools.map((t) => t.name)}`); })();
+
+  // An admin adds a package of minutes to the member (the owner holds the admin role), through the app's MCP tool.
+  const before = await minutesLeft();
+  const add = find(/add.*minute|minute.*package|topup|top_up/i);
+  const added = await appTools.callTool({ name: add.name, arguments: argumentsFor(add as never, { memberId: me.id }, { minutes: 60 }) });
+  expect(added.isError ?? false, text(added)).toBe(false);
+  const afterPackage = await minutesLeft();
+  expect(afterPackage).toBe(before + 60);
+  await note(`an admin added a 60-minute package through MCP (${add.name}): ${before} → ${afterPackage} minutes`);
+
+  // The member books a court for tomorrow evening, in the app's own form.
+  await page.getByRole("link", { name: /book a court/i }).or(page.getByRole("button", { name: /book a court/i })).first().click();
+  const form = page.getByRole("button", { name: /^book/i });
+  if (!(await form.last().isVisible({ timeout: 8_000 }).catch(() => false))) {
+    story.report.clubDefects = [...((story.report.clubDefects as string[]) ?? []), "the 'Book a court' link changes the address but does not show the booking form; opening the address directly does"];
+    await note("defect: the in-app link to the booking form does not render it; opening its address directly");
+    await page.goto(`${app}bookings/new`);
+  }
+  await page.getByLabel(/court/i).first().selectOption({ index: 1 });
+  const tomorrow = new Date(Date.now() + 24 * 3600_000);
+  const local = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}T18:00`;
+  await page.getByLabel(/start|when|time/i).first().fill(local);
+  await page.getByLabel(/minutes|duration|length/i).first().fill("30");
+  const mailsBefore = (await mailTo(me.email)).length;
+  const booked = page.waitForResponse((r) => r.request().method() === "POST" && /bookings/.test(r.url()));
+  await page.getByRole("button", { name: /^book/i }).last().click();
+  expect((await booked).status()).toBeLessThan(300);
+  await page.screenshot({ path: path.join(STATE, "club-2-booked.png"), fullPage: true });
+  const afterBooking = await minutesLeft();
+  expect(afterBooking).toBe(afterPackage - 30);
+  await expect(page.getByRole("main")).toContainText(/18:00|6:00/);
+  await page.screenshot({ path: path.join(STATE, "club-3-home-after.png"), fullPage: true });
+  await note(`the member booked a court for tomorrow 18:00 for 30 minutes: balance ${afterPackage} → ${afterBooking}, the booking listed on the home page`);
+
+  // The confirmation e-mail, in the mail catcher.
+  let mails: { subject: string; text: string }[] = [];
+  for (let i = 0; i < 30 && mails.length <= mailsBefore; i++) {
+    await new Promise((r) => setTimeout(r, 2_000));
+    mails = await mailTo(me.email);
+  }
+  expect(mails.length, "a confirmation e-mail reached the mail catcher").toBeGreaterThan(mailsBefore);
+  story.report.clubMail = { subject: mails[0].subject, text: mails[0].text.slice(0, 500) };
+  await note(`confirmation e-mail: "${mails[0].subject}"`);
+
+  // The court hardware asks whether a court is booked right now, and by whom: a booking that has just begun, made
+  // through the app's MCP tool, then the incoming endpoint signed as the device signs it.
+  const courts = await ok<{ id: string; name: string }[]>(await page.request.get(`${app}api/courts`));
+  const create = find(/create.*booking|book/i);
+  const start = new Date(Date.now() + 75_000).toISOString();
+  const now = await appTools.callTool({ name: create.name, arguments: argumentsFor(create as never, {}, { courtId: courts[1].id, startAt: start, durationMinutes: 30, minutes: 30 }) });
+  expect(now.isError ?? false, text(now)).toBe(false);
+  await note(`MCP: ${create.name} booked ${courts[1].name} from ${start}`);
+  const secret = randomBytes(24).toString("hex");
+  await ok(await owner.request.put("/api/secrets", { data: { scope: story.club.appPath, name: "COURT_STATUS", value: secret } }));
+  await new Promise((r) => setTimeout(r, 80_000));
+  const ask = async (courtId: string) => {
+    const body = JSON.stringify({ courtId });
+    const signature = "sha256=" + (await import("node:crypto")).createHmac("sha256", secret).update(body).digest("hex");
+    const response = await fetch(`${app}hooks/court-status`, { method: "POST", headers: { "content-type": "application/json", "X-Court-Signature": signature }, body });
+    return { status: response.status, body: await response.json().catch(() => null) as { booked?: boolean; memberName?: string } | null };
+  };
+  const busy = await ask(courts[1].id);
+  const free = await ask(courts[2].id);
+  const unsigned = await fetch(`${app}hooks/court-status`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ courtId: courts[1].id }) });
+  story.report.clubHardware = { busy, free, unsignedStatus: unsigned.status };
+  expect(busy.status).toBe(200);
+  expect(busy.body?.booked).toBe(true);
+  expect(busy.body?.memberName).toBe(me.displayName);
+  expect(free.body?.booked).toBe(false);
+  expect(unsigned.status).toBeGreaterThanOrEqual(400);
+  await note(`hardware: ${courts[1].name} → ${JSON.stringify(busy.body)}; ${courts[2].name} → ${JSON.stringify(free.body)}; unsigned → ${unsigned.status}`);
+
+  // Both bookings, as the member's own list over MCP.
+  const upcoming = await appTools.callTool({ name: find(/upcoming|list.*booking/i).name, arguments: {} });
+  expect(text(upcoming)).toContain(courts[1].name);
+  await note(`MCP: upcoming bookings ${text(upcoming).slice(0, 300)}`);
 }
 
 test("4. an invited organisation builds an app of its own, shares it, and is kept apart from the first", async ({ browser }) => {
