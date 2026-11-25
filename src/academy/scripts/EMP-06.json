@@ -1,0 +1,51 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-06",
+  "persona": "owner",
+  "scenario": "idle-sweep",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Ruth has had no work for 14 days",
+        "note": "Learning works under checkpoints, so idle Ruth is held for you as a “Nothing to do” card."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Ruth has had no work for 14 days"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Let go",
+        "note": "On her record: “Nothing to do for 14 days”. You let her go (EMP-05), or give her work."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/hires?scope=northwind/operations",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Ivo"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Archived by Endgame",
+        "note": "Operations runs in auto-mode: nobody was asked. The sweep let Ivo go an hour ago and archived his memory."
+      }
+    }
+  ]
+}

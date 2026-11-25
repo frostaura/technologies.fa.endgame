@@ -203,6 +203,7 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | HIRE-04 | Decline a proposal | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | HIRE-05 | Change a proposal before deciding | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | HIRE-06 | A hire made automatically in auto-mode | Automatic | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
+| HIRE-09 | Ask for a new hire of your own choosing | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | EMP-01 | Read an employee's record | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | EMP-03 | Change or remove an employee's monthly budget | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | EMP-04 | Pause and resume an employee | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
@@ -211,12 +212,14 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | EMP-07 | See contractors and who reports to an employee | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | EMP-08 | Talk to an employee | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | EMP-09 | Rehire a former employee | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
+| EMP-10 | Change an employee's name, role, mandate, tools, services, thinking power or manager | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-01 | Read what an employee remembers | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-02 | Add something an employee should know | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-03 | Correct a memory entry | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-04 | Remove a memory entry | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | CRED-04 | Read estimates against cost, and what was not charged | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | CRED-07 | Ask FrostAura for a top-up | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
+| CRED-03 | Set, change or remove a monthly cap at a level | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | CRED-09 | How AI work and hosting become spending | Automatic | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | OP-10 | The Owner reads the operator log | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | APP-04 | Choose how the app runs: Sleeps when unused or Always on | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
@@ -319,10 +322,7 @@ Through the API, an AI assistant or the app kit. Not console lessons.
 | SYS-05 | Read system status by API | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | IDEA-06 | Submit an idea to a division by API or MCP | API or assistant only | [The factory](03-the-factory.md) |
 | CHG-05 | Give an employee a task on an app (internal only) | Automatic | [The factory](03-the-factory.md) |
-| HIRE-09 | Ask for a new hire of your own choosing | API or assistant only | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
-| EMP-10 | Change an employee's name, role, mandate, tools, services, thinking power or manager | API or assistant only | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-06 | The employee writes and reads its own memory | Automatic | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
-| CRED-03 | Set, change or remove a monthly cap at a level | API or assistant only | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | KIT-09 | Use the development sign-in (development stacks only) | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | KIT-10 | An app knows who is signed in, and their role | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | KIT-11 | An app keeps its own data | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
@@ -426,21 +426,21 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | **Change an app after it is built.** No screen, endpoint or assistant tool asks the factory to change an existing app. The Runner has a workflow that edits an app's code; nothing a person can reach starts it, and it does not republish. | CHG-01, CHG-02, CHG-05 | Confirmed |
 | **Try again.** A failed or cancelled build, a rejected plan and a failed research run cannot be restarted, though several messages say they can. | CHG-03, VERD-12, RUN-10, RUN-11 | Confirmed |
 | **Create, rename, archive or delete a division, project or app.** They appear when the factory places a built idea, or through the API or an assistant. Nothing can be moved by any route. | TREE-02 to TREE-10, TREE-13, ORG-14 | Confirmed |
-| **Set a budget cap** at any level, or an app's own. Caps are shown and enforced; they can only be set through the API or an assistant. | CRED-03, APP-11, APP-12 | Confirmed |
+| **Set a budget cap** at any level, or an app's own. Caps are shown and enforced; they can only be set through the API or an assistant. | CRED-03, APP-11, APP-12 | Fixed: caps are set, changed and removed on Credits (CRED-03) and on an app's page (APP-11). |
 | **Describe a level.** Context is set only through the API or an assistant. | TREE-11 | Reported |
 | **Choose the division for a new idea** on the start screen. | IDEA-02, TREE-01 | Reported |
 | **Talk to an app**, or answer a conversation's own approval inside the conversation. | TALK-04, TALK-07 | Reported |
-| **Edit an employee** (name, role, mandate, tools, manager), raise a hire by hand, list released employees. | EMP-10, HIRE-09, EMP-09 | Reported |
+| **Edit an employee** (name, role, mandate, tools, manager), raise a hire by hand, list released employees. | EMP-10, HIRE-09, EMP-09 | Fixed: "Edit the job" on the record, "Ask for a hire" and "People let go" on Hiring. |
 | **Add a second passkey**, switch between organisations, land where you were going after signing in. | ID-08, ID-02 | Reported |
 
 ### Things that do not do what the screen says
 
 | What | Flows | Status |
 | --- | --- | --- |
-| **God mode follows the operator only onto the org chart.** Credits, Hiring, People, Secrets and the rest read the operator's own organisation. | OP-04 | Confirmed |
-| **Setting up an organisation does not screen it against the red lines**, though the form says so and the project's rule 4 requires it. Only its name is checked. | OP-03 | Confirmed |
+| **God mode follows the operator only onto the org chart.** Credits, Hiring, People, Secrets and the rest read the operator's own organisation. | OP-04 | Fixed: every screen but "Ideas from your portfolio" works on the organisation entered. |
+| **Setting up an organisation does not screen it against the red lines**, though the form says so and the project's rule 4 requires it. Only its name is checked. | OP-03 | Fixed: what it does is screened by a model, or by the operator with a reason when none answers. |
 | **Talking to an employee is not answered by that employee.** The same general assistant answers, without the employee's memory or job; only the cost is charged to them. | TALK-05, TALK-06 | Confirmed |
-| **Pausing an employee does not stop it being given work.** | EMP-04 | Reported |
+| **Pausing an employee does not stop it being given work.** | EMP-04 | Fixed: its work pauses, and new work for it waits until it is resumed. |
 | **After "Change the idea", the second verdict has no decision buttons**, and the requested change never reaches the build, which plans from the original wording. | VERD-06, VERD-07, VERD-11 | Reported |
 | **"Asks you first" rules refuse instead of asking.** | AUTO-05 | Reported |
 | **Two lines on the start screen are untrue in auto-mode:** "Nothing is built until you have seen the verdict", and that hires are "proposed". | IDEA-01, VERD-11, BLD-02 | Reported |

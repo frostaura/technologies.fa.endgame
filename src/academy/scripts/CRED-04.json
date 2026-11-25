@@ -1,0 +1,25 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CRED-04",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/credits",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Estimates against what it cost",
+        "note": "Every piece of work is estimated first and scored against what it cost: the headline, the spread and the largest miss."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "What you were not charged for",
+        "note": "An employee fixing its own mistake is never billed: what that saved you this month."
+      }
+    }
+  ]
+}

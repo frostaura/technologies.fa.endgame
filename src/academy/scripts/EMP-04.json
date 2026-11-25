@@ -1,0 +1,93 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-04",
+  "persona": "owner",
+  "scenario": "employee-working",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 800
+        },
+        {
+          "click": {
+            "text": "Pause"
+          }
+        },
+        {
+          "wait": 1000
+        }
+      ],
+      "highlight": {
+        "text": "Paused",
+        "note": "Paused at once: no new work, and not let go."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Working now: League block bookings: hold four courts for two hours"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Waiting for Kasper, who is paused.",
+        "note": "His run under way stops at the next step boundary and says why."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/employees/{employee}",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Kasper"
+            },
+            "text": "Could you start on the waiting list next?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "is paused, so they are given no new work",
+        "note": "New work for him waits — even a conversation is refused until he is resumed."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Resume"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Working",
+        "note": "Resumed: Working again, since the run is still his, and what waited goes back to the queue."
+      }
+    }
+  ]
+}

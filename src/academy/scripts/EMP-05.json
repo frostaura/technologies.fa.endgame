@@ -1,0 +1,124 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-05",
+  "persona": "owner",
+  "scenario": "employee-team",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Let go"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Let Kasper go?",
+        "note": "It leaves the org chart and the bill; its memory is archived; its reports move up."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Yes, let Kasper go",
+        "note": "Confirm, or “Keep” to cancel."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes, let Kasper go"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Let go just now",
+        "note": "The badge and the line read “Let go”."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Archived when it was let go. A rehire brings all of it back.",
+        "note": "Its memory is archived, read only; Mina, who reported to Kasper, now reports to Odile."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Rehire Kasper",
+        "note": "The only action left (EMP-09)."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A standing hire is never let go",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/d561714a-957f-4a58-a8b2-7c1b9b412849",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "A standing hire is never let go: every organisation keeps one.",
+            "note": "The security reviewer: “Let go” is disabled."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Not while it is working on a run",
+      "persona": "owner",
+      "scenario": "employee-working",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Let go"
+              }
+            },
+            {
+              "wait": 400
+            },
+            {
+              "click": {
+                "text": "Yes, let Kasper go"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "Could not let go",
+            "note": "Kasper is working on a run: let it finish or cancel it first. Nothing was changed."
+          }
+        }
+      ]
+    }
+  ]
+}

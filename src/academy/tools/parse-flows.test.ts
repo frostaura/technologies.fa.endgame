@@ -29,7 +29,7 @@ describe("the flow parser, against the real docs/flows", () => {
     expect(org?.whatYouLearn).toMatch(/band totals the whole organisation/);
     const idea = byId.get("IDEA-02");
     expect(idea?.learnFirst).toEqual(["IDEA-01"]);
-    expect(idea?.steps).toHaveLength(4);
+    expect(idea?.steps).toHaveLength(5);
   });
 
   it("keeps nested bullets and tables under the step they belong to", () => {

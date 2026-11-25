@@ -1,0 +1,89 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "MEM-04",
+  "persona": "owner",
+  "scenario": "memory-to-tidy",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "selector": "[data-memory] span > button:nth-of-type(2)"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Why should Kasper forget this? (optional)"
+            },
+            "text": "It says again what the older note already says."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Remove it",
+        "note": "Say why, if you like; “Keep it” cancels."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Remove it"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Removed by a person",
+        "note": "Gone from the memory at once; the change log keeps it, with your reason."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "“Keep it” puts it back",
+      "persona": "owner",
+      "scenario": "memory-to-tidy",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "selector": "[data-memory] span > button:nth-of-type(2)"
+              }
+            },
+            {
+              "wait": 300
+            },
+            {
+              "click": {
+                "text": "Keep it"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Courts are booked in 40-minute slots",
+            "note": "Nothing was removed."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,169 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-09",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Last changed",
+        "note": "When the prices last changed — or that the defaults still hold."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Dollars per awake hour"
+            },
+            "text": "0.004"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Dollars per awake hour",
+        "note": "Change any figure: here an app's awake hour doubles in cost."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Save the prices"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Change the prices for every organisation?",
+        "note": "Work already estimated keeps its estimate; new work is priced with these. It is recorded with your name."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Change the prices"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "The new prices hold from now on, for every organisation.",
+        "note": "“Keep them as they are” would have cancelled."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ol[aria-label='Price changes'] li",
+        "note": "The change heads “Changes”: when, who, and each figure before → after."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "goto": "/operator-access",
+      "persona": "owner",
+      "highlight": {
+        "text": "Changed the prices for every organisation",
+        "note": "Every Owner reads it in their operator log."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Every app's running cost moves with it",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Dollars per awake hour"
+                },
+                "text": "0.004"
+              }
+            },
+            {
+              "click": {
+                "text": "Save the prices"
+              }
+            },
+            {
+              "click": {
+                "text": "Change the prices"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "The new prices hold from now on",
+            "note": "Nell doubles the cost of an awake hour."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "goto": "/apps/{app}",
+          "persona": "owner",
+          "highlight": {
+            "text": "Today's prices: 0.4 credits an awake hour",
+            "note": "Court booking now quotes the new rate, and what it costs a month to run moved with it."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A margin below one would sell at a loss",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "type": {
+                "into": {
+                  "selector": "input[id$='-margin']"
+                },
+                "text": "0.9"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "At least 1.0: a margin below one would sell at a loss.",
+            "note": "“Save the prices” stays disabled."
+          }
+        }
+      ]
+    }
+  ]
+}

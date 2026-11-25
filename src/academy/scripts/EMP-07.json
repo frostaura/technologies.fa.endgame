@@ -1,0 +1,48 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-07",
+  "persona": "owner",
+  "scenario": "contractor-working",
+  "start": "/employees/f844ad47-51af-4b59-a15a-535703f4b405",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "7 contractors so far, 1 working now.",
+        "note": "How many it has briefed, how many work now, and what they cost — inside its own budget."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Contractors working now']",
+        "note": "Each role working now, with its brief; it opens that contractor's record."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Reports to it:",
+        "note": "Everyone who reports to Odile, each a link."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Data contractor"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "A contractor keeps no memory",
+        "note": "A contractor's own page: its brief, who briefed it, and no memory — what it learns goes to Odile."
+      }
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-08",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Top-ups']",
+        "note": "Every top-up on the record: the organisation, the note, when and by whom, and how many credits."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Technical mode adds the address name",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "ul[aria-label='Top-ups'] code",
+            "note": "Each organisation's address name, beside its name."
+          }
+        }
+      ]
+    }
+  ]
+}

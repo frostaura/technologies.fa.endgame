@@ -1,0 +1,65 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HIRE-08",
+  "persona": "owner",
+  "scenario": "contractor-finishes",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1500
+        },
+        {
+          "clock": {
+            "seek": 7000
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "7 contractors so far, 0 working now.",
+        "note": "Odile's data contractor finished its brief and left the chart."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/hires?scope=northwind/technologies",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Data contractor, data contractor for Technologies"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "7 Data contractor contractors were briefed here in the last 30 days",
+        "note": "The platform raised the promotion itself, counting the contractors and what they cost."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-labelledby='jd-title'] dl",
+        "note": "It reports to Odile, who briefed them, and takes her tools, services and thinking power."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Data contractor was hired by auto-mode",
+        "note": "It fitted the budget, so auto-mode hired it, as in HIRE-06; otherwise it would wait for you."
+      }
+    }
+  ]
+}

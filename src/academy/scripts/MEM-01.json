@@ -1,0 +1,122 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "MEM-01",
+  "persona": "owner",
+  "scenario": "memory-to-tidy",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Written by Kasper after each task and tidied at every review.",
+        "note": "Curated, not piled up — and yours to read, correct or remove."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Memory entries'] li",
+        "note": "An entry: title, body, what kind it is, which place it is about, and where it came from — “the task” links to the run."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "How it works here · About Court booking",
+        "note": "Kinds: A fact, How it works here, A preference, A lesson learned."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "A preference · About Court booking · Corrected by a person",
+        "note": "Origins: Added by a person, Corrected by a person, Corrected at a review, Merged at a review, Learned on a task, Remembered."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "What changed in it",
+      "persona": "owner",
+      "scenario": "memory-to-tidy",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "ol[aria-label='Changes to the memory']",
+            "note": "Every change, newest first: what, by whom, the title, when, and the work it came from."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Show all 9"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Show the latest only",
+            "note": "Eight show; “Show all” lists the rest."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Let go: archived, read only",
+      "persona": "owner",
+      "scenario": "released-with-memory",
+      "start": "/employees/14b08848-f257-450f-ad4f-c91e519ce679",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Archived when it was let go. A rehire brings all of it back.",
+            "note": "Tomas's memory is kept, read only: no Correct, no Remove."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A contractor keeps no memory",
+      "persona": "owner",
+      "scenario": "contractor-working",
+      "start": "/employees/500160d7-881e-4bf3-a1fb-d72df02a59fd",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "A contractor keeps no memory",
+            "note": "What it learns goes to the employee who briefed it."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Nothing remembered yet",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/113ddcbb-e3b1-4515-aff3-0447c0b0cb0d",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Nothing remembered yet",
+            "note": "Pell has not written anything down yet."
+          }
+        }
+      ]
+    }
+  ]
+}

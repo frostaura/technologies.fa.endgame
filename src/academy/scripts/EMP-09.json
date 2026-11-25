@@ -1,0 +1,81 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-09",
+  "persona": "owner",
+  "scenario": "released-with-memory",
+  "start": "/hires?scope=northwind/operations",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Tomas"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Where Tomas works again",
+        "note": "From “People let go” to his record. It starts at where he was: “(where it was)”."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Where Tomas works again"
+            },
+            "value": "northwind/operations/shift-rota"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Rehire Tomas",
+        "note": "Somewhere else if you like; his memory comes back with him."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Rehire Tomas"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Free",
+        "note": "Free again, working at Shift Rota, with his memory restored and editable."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "No one has been let go here",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/hires?scope=northwind/technologies",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "No one has been let go here.",
+            "note": "The aside, when nobody at this level has been let go."
+          }
+        }
+      ]
+    }
+  ]
+}

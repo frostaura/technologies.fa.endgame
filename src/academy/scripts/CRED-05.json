@@ -1,0 +1,134 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CRED-05",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/credits",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Change your limit"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "How far below zero you may go"
+            },
+            "text": "600"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "FrostAura allows at most 1,000 below zero.",
+        "note": "Yours can be tighter than FrostAura's, never deeper."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Save my limit"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Your own limit is saved.",
+        "note": "“Your own limit” now reads 600 below zero."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Deeper than FrostAura allows",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Change your limit"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "How far below zero you may go"
+                },
+                "text": "1200"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "That is deeper than the 1,000 FrostAura allows.",
+            "note": "Refused on screen; “Save my limit” stays disabled."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Remove your own limit",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Remove your own limit"
+              }
+            },
+            {
+              "wait": 1200
+            }
+          ],
+          "highlight": {
+            "text": "Your own limit is removed.",
+            "note": "The most FrostAura allows applies now."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Only the Owner sets it",
+      "persona": "admin",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Only the Owner sets the organisation’s own limit.",
+            "note": "Ada is an Admin: she reads it, and cannot change it."
+          }
+        }
+      ]
+    }
+  ]
+}

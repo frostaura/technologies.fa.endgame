@@ -2,13 +2,16 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "CRED-01",
   "persona": "owner",
-  "scenario": "established",
+  "scenario": "quiet",
   "start": "/",
   "steps": [
     {
       "step": 1,
       "kind": "demo",
       "act": [
+        {
+          "wait": 1000
+        },
         {
           "click": {
             "text": "credits left"
@@ -17,7 +20,7 @@
       ],
       "highlight": {
         "text": "Credits left",
-        "note": "The balance, and how long it lasts at this month's pace."
+        "note": "The balance, and how long it lasts at this month’s pace."
       }
     },
     {
@@ -25,8 +28,90 @@
       "kind": "demo",
       "highlight": {
         "text": "Spent this month",
-        "note": "Then On AI work and On hosting."
+        "note": "Then this month's spending, split into AI work and hosting."
       }
+    }
+  ],
+  "variations": [
+    {
+      "title": "It runs out within the month",
+      "persona": "owner",
+      "scenario": "low-credits",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "At this month’s pace, it runs out within the month.",
+            "note": "38 credits left at this month's pace: less than a month, said as such."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Exactly zero, with an overdraft",
+      "persona": "owner",
+      "scenario": "credits-at-zero",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Nothing is left above zero.",
+            "note": "Nothing stops at zero: work carries on into the overdraft, and the next top-up settles it."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below zero, inside the overdraft",
+      "persona": "owner",
+      "scenario": "below-zero",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "You are below zero.",
+            "note": "The banner turns to “Below zero” and says how much more can be spent before work stops."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below zero, at the limit",
+      "persona": "owner",
+      "scenario": "at-overdraft-limit",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "You are below zero, at your limit.",
+            "note": "Work is paused until a top-up settles the debt."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A role at one division only",
+      "persona": "division-admin",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Credits could not be loaded",
+            "note": "Ines is an Admin of Technologies only. Credits are read at organisation level, where she holds no role, so they are not hers to see."
+          }
+        }
+      ]
     }
   ]
 }

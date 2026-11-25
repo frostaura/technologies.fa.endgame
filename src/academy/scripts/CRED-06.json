@@ -1,0 +1,137 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CRED-06",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/credits",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Tighter limits already set']",
+        "note": "Each part held to less: its name, level, how far below zero, and who set it when."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Which part"
+            },
+            "value": "northwind/learning"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Below zero, at most"
+            },
+            "text": "300"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Set this limit",
+        "note": "Choose a part, and how far it may go."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Set this limit"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Learning now stops at 300 below zero.",
+        "note": "It joins the list."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "No deeper than the organisation",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Below zero, at most"
+                },
+                "text": "900"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "No deeper than the organisation's 800.",
+            "note": "A part can only be held to less."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Remove a tighter limit",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Remove Operations's tighter limit"
+              }
+            },
+            {
+              "wait": 1200
+            }
+          ],
+          "highlight": {
+            "text": "Operations is no longer held to less",
+            "note": "The organisation's own limit applies to it again."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below Admin, not shown",
+      "persona": "builder",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "If you run out",
+            "note": "Lena is a Builder: no tighter limits are listed or set here."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CRED-07",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/credits",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Ask for a top-up"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "How many credits"
+            },
+            "text": "1500"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "A note for FrostAura"
+            },
+            "text": "League season: Court booking is busier than ever."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Ask for it",
+        "note": "How many credits, and a note for FrostAura if you like."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Ask for it"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Asked FrostAura for 1,500 credits.",
+        "note": "Listed at once as “Waiting for FrostAura”."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "FrostAura: Done — enjoy the autumn term.",
+        "note": "An answered request reads “Added” or “Declined”, with FrostAura's note and when it was asked and answered."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Five requests already waiting",
+      "persona": "owner",
+      "scenario": "top-ups-waiting",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Ask for a top-up"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Five requests are already waiting; FrostAura answers those first.",
+            "note": "“Ask for it” stays disabled."
+          }
+        }
+      ]
+    },
+    {
+      "title": "An Admin reads them, the Owner asks",
+      "persona": "admin",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "ul[aria-label='Top-up requests']",
+            "note": "Ada is an Admin: she sees every request and what became of it, and no “Ask for a top-up”."
+          }
+        }
+      ]
+    }
+  ]
+}
