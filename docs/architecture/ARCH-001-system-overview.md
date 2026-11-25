@@ -128,8 +128,7 @@ and removes it.
 ## Not built yet
 
 The offsite copy runs once R2 is configured (ARCH-007). Builders work one plan item at a time in one workspace:
-parallel builders are not built (ARCH-006, *Sub-agents*). A preview's e-mail still reaches the platform's outbox
-under the app's id (ARCH-006, *Checking the work*).
+parallel builders are not built (ARCH-006, *Sub-agents*).
 
 ## Links
 

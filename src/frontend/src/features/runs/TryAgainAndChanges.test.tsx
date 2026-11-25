@@ -7,6 +7,7 @@ import { RESEARCH_VERDICT, ideaFixture } from "@/test/fixtures";
 import { FakeEventSource, ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { answeredText, deriveRun } from "./runModel";
 import { RunView } from "./RunView";
+import { flushRunStreams } from "./useRunStream";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const TREE = { generatedAt: "2026-11-24T10:00:00Z", viewerRole: "owner", organisation: { id: "o1", slug: "acme", name: "Acme", summary: null, spend: { monthCredits: 0 }, workers: [] }, divisions: [], needsYou: [] };
@@ -27,6 +28,7 @@ function feed(events: [string, Record<string, unknown>?][], source = FakeEventSo
   act(() => {
     source.open();
     events.forEach(([type, payload], i) => source.emit(i + 1, type, payload ?? {}));
+    flushRunStreams();
   });
 }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -16,7 +16,7 @@ import { useControlRunMutation, useGetRunQuery } from "@/store/api";
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
-import { accuracy, deriveRun, isTerminal, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
+import { accuracy, deriveRun, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
 import { buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
 import { useRunStream } from "./useRunStream";
 import { ApprovalCard } from "./ApprovalCard";
@@ -31,6 +31,12 @@ const STATUS: Record<RunStatus, { label: string; tone: BadgeTone }> = {
   failed: { label: "Did not succeed", tone: "attention-strong" },
   cancelled: { label: "Cancelled", tone: "quiet" },
 };
+
+/** The events that change a run's state: once one arrives after a control, the log is the status again. */
+const STATE_EVENTS = new Set(["run.paused", "run.resumed", "run.finished"]);
+
+/** How many of the latest steps a long run draws at first; earlier ones are shown on request, this many at a time. */
+const STEPS_AT_ONCE = 200;
 
 const TONE_CLASS: Record<StepTone, string> = {
   structure: "bg-primary-tint text-primary",
@@ -77,25 +83,33 @@ function RunBody({ run }: { run: Run }) {
   const [retry, setRetry] = useState(0);
   const log = useRunStream(run.id, retry);
   const mode = useAppSelector((s) => s.ui.mode);
-  const derived = deriveRun(log.events);
+  // Derived once per batch of events, not once per render: a long build carries thousands of them.
+  const derived = useMemo(() => deriveRun(log.events), [log.events]);
   const [control, controlState] = useControlRunMutation();
   const [controlError, setControlError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // What a pause, resume or cancel just did, and how far the log had got then: until the log itself records a change
+  // of state after it, the screen keeps the answer, so a button never flips back to what it was before it was pressed.
+  const [settled, setSettled] = useState<{ status: RunStatus; seq: number } | null>(null);
+  const logMoved = settled !== null && log.events.some((e) => e.seq > settled.seq && STATE_EVENTS.has(e.type));
 
-  // While a control request is in flight the optimistic status wins; afterwards the log does.
-  const status: RunStatus = controlState.isLoading ? run.status : (derived.status ?? run.status);
+  // While a control request is in flight the optimistic status wins; then what it did; afterwards the log.
+  const status: RunStatus = controlState.isLoading ? run.status : settled && !logMoved ? settled.status : (derived.status ?? run.status);
   const terminal = isTerminal(status);
   // run.finished's summary may be technical (ARCH-004); normal mode says the closing message instead.
   const lastPlain = [...derived.messages].reverse().find((m) => m.from !== "owner" && plainOrNull(m.text))?.text ?? null;
   const outcome = mode === "technical" ? derived.finishedSummary : (plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null));
   const estimate = derived.estimateCredits ?? run.estimateCredits;
-  const spent = Math.max(derived.settledCredits, run.spentCredits);
+  // One figure, from one source: the log's billable settlements, as the ledger counts them, so it is the run's own
+  // cost (spentCredits); the run's figure stands in only until the log's first events arrive.
+  const spent = log.events.length > 0 ? derived.settledCredits : run.spentCredits;
 
   const act = async (action: "pause" | "resume" | "cancel") => {
     setControlError(null);
     setConfirmCancel(false);
     try {
-      await control({ id: run.id, action }).unwrap();
+      const answered = await control({ id: run.id, action }).unwrap();
+      setSettled({ status: answered.status, seq: lastSeq(log.events) });
     } catch (e) {
       setControlError(`Could not ${action}: ${describeError(e as never)}`);
     }
@@ -346,8 +360,11 @@ function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
 }
 
 function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]; mode: Mode; derived: DerivedRun; stream: StreamStatus; terminal: boolean }) {
-  const planItem = (id: string) => planItemLabel(derived.plan, id, mode);
-  const timeline = buildTimeline(events, mode, planItem);
+  const plan = derived.plan;
+  const timeline = useMemo(() => buildTimeline(events, mode, (id: string) => planItemLabel(plan, id, mode)), [events, mode, plan]);
+  const [shown, setShown] = useState(STEPS_AT_ONCE);
+  const hidden = Math.max(0, timeline.items.length - shown);
+  const items = hidden > 0 ? timeline.items.slice(hidden) : timeline.items;
   return (
     <section aria-labelledby="trace-title" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -372,11 +389,21 @@ function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]
           </Loading>
         )
       ) : (
-        <ol aria-label="Steps" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-          {timeline.items.map((item) => (
-            <TimelineRow key={item.key} item={item} />
-          ))}
-        </ol>
+        <>
+          {hidden > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-border-strong bg-surface px-5 py-3">
+              <span className="text-ink-body">{`${plural(hidden, "earlier step")} folded away; the latest ${formatNumber(items.length)} are below.`}</span>
+              <Button size="sm" variant="outline" onClick={() => setShown((n) => n + STEPS_AT_ONCE)}>
+                {`Show ${plural(Math.min(STEPS_AT_ONCE, hidden), "earlier step")}`}
+              </Button>
+            </div>
+          )}
+          <ol aria-label="Steps" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
+            {items.map((item) => (
+              <TimelineRow key={item.key} item={item} />
+            ))}
+          </ol>
+        </>
       )}
     </section>
   );
@@ -419,9 +446,15 @@ const GROUP_STATUS: Record<TimelineGroup["status"], { label: string; tone: Badge
 function GroupRow({ group }: { group: TimelineGroup }) {
   const credits = groupCredits(group);
   const status = GROUP_STATUS[group.status];
+  // Open while it works, folded once done, unless the person opened or folded it. A folded piece draws none of its steps.
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  const open = toggled ?? group.status === "working";
   return (
     <li data-group={group.agent} className={cn("border-b last:border-b-0", RISE)}>
-      <details open={group.status === "working"} className="group/sub">
+      <details open={open} onToggle={(e) => {
+          // Only the person's own click counts: the browser also fires this when the page opens or folds it.
+          if (e.currentTarget.open !== open) setToggled(e.currentTarget.open);
+        }} className="group/sub">
         <summary className="flex min-h-touch cursor-pointer list-none gap-3 px-4 py-3 hover:bg-ground sm:px-5 [&::-webkit-details-marker]:hidden">
           <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xs bg-violet-tint text-violet">
             <Icon name="contractors" className="size-4" />
@@ -442,7 +475,7 @@ function GroupRow({ group }: { group: TimelineGroup }) {
             </span>
           </span>
         </summary>
-        {group.items.length > 0 && (
+        {open && group.items.length > 0 && (
           <ol aria-label={`Steps: ${group.title}`} className="ml-6 flex flex-col border-l-2 border-violet-line sm:ml-9">
             {group.items.map((item) => (
               <TimelineRow key={item.key} item={item} />
@@ -457,7 +490,8 @@ function GroupRow({ group }: { group: TimelineGroup }) {
 function RunAside({ runId }: { runId: string }) {
   const log = useAppSelector((s) => s.runs[runId]);
   const run = useGetRunQuery(runId).data;
-  const derived = deriveRun(log?.events ?? []);
+  const events = log?.events;
+  const derived = useMemo(() => deriveRun(events ?? []), [events]);
   const active = useActiveOrganisation();
   return (
     <>

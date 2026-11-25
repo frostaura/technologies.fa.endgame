@@ -13,7 +13,8 @@ using Microsoft.Extensions.Options;
 namespace Endgame.Infrastructure.Platform;
 
 /// <summary>The app a platform call came from: its id and its whole cascade path.</summary>
-public sealed record AppCaller(ResolvedScope Scope, Guid TokenId)
+/// <param name="Preview">The call came from the app's preview (an unpublished build under check), not the app itself.</param>
+public sealed record AppCaller(ResolvedScope Scope, Guid TokenId, bool Preview = false)
 {
     public const string ItemKey = "endgame.app-caller";
 
@@ -34,7 +35,9 @@ public sealed class AppTokenService(EndgameDbContext db, TenantSession session, 
 {
     public const string Prefix = "egt_";
 
-    public async Task<string> IssueAsync(ResolvedScope app, CancellationToken cancellationToken)
+    /// <param name="preview">A token for the app's preview: it supersedes only an earlier preview's, never the app's own, and
+    /// what is sent with it is held rather than delivered.</param>
+    public async Task<string> IssueAsync(ResolvedScope app, CancellationToken cancellationToken, bool preview = false)
     {
         ArgumentNullException.ThrowIfNull(app);
         if (app.AppId is not { } appId)
@@ -50,7 +53,7 @@ public sealed class AppTokenService(EndgameDbContext db, TenantSession session, 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         await session.ApplyAsync(db, cancellationToken);
         await db.AppTokens
-            .Where(t => t.OrganisationId == app.OrganisationId && t.AppId == appId && (t.ValidUntil == null || t.ValidUntil > now.AddSeconds(options.Value.TokenGraceSeconds)))
+            .Where(t => t.OrganisationId == app.OrganisationId && t.AppId == appId && t.Preview == preview && (t.ValidUntil == null || t.ValidUntil > now.AddSeconds(options.Value.TokenGraceSeconds)))
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.ValidUntil, now.AddSeconds(options.Value.TokenGraceSeconds)), cancellationToken);
         db.AppTokens.Add(new AppTokenRecord
         {
@@ -60,6 +63,7 @@ public sealed class AppTokenService(EndgameDbContext db, TenantSession session, 
             Salt = salt,
             TokenHash = Hash(token),
             CreatedAt = now,
+            Preview = preview,
         });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -80,7 +84,7 @@ public sealed class AppTokenService(EndgameDbContext db, TenantSession session, 
         session.UseSystem();
         var row = await db.AppTokens.AsNoTracking()
             .Where(t => t.TokenHash == hash && (t.ValidUntil == null || t.ValidUntil > now))
-            .Select(t => new { t.Id, t.OrganisationId, t.AppId })
+            .Select(t => new { t.Id, t.OrganisationId, t.AppId, t.Preview })
             .SingleOrDefaultAsync(cancellationToken);
         if (row is null)
         {
@@ -95,7 +99,7 @@ public sealed class AppTokenService(EndgameDbContext db, TenantSession session, 
             return null;
         }
 
-        return new AppCaller(scope, row.Id);
+        return new AppCaller(scope, row.Id, row.Preview);
     }
 
     /// <summary>The app's current token, recomputed — the HMAC key for platform-to-app callbacks. Null if none was issued.</summary>
@@ -103,7 +107,7 @@ public sealed class AppTokenService(EndgameDbContext db, TenantSession session, 
     {
         session.UseOrganisation(organisationId);
         var salt = await db.AppTokens.AsNoTracking()
-            .Where(t => t.OrganisationId == organisationId && t.AppId == appId && t.ValidUntil == null)
+            .Where(t => t.OrganisationId == organisationId && t.AppId == appId && !t.Preview && t.ValidUntil == null)
             .OrderByDescending(t => t.CreatedAt)
             .Select(t => t.Salt)
             .FirstOrDefaultAsync(cancellationToken);

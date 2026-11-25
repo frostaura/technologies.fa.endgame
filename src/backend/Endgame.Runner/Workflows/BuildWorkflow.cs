@@ -158,13 +158,13 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             await Workforce.SayAsync(run, "builder", "The plan", PlanAnnouncement(plan), cancellationToken, "planned");
         }
 
-        // The estimate, refined by the plan's size: in auto-mode a build that would break the budget does not begin.
+        // The estimate, refined by the plan's size: in every autonomy mode a build that would break the budget does not begin.
         if (!run.Journal.Done("estimate.plan"))
         {
             var estimate = await estimator.EstimateAsync(run, plan, cancellationToken);
             await run.AppendAsync(HarnessEvents.EstimateMade, Estimator.Made(estimate, "plan"), cancellationToken);
             var headroom = await HeadroomAsync(run, cancellationToken);
-            if (headroom is { } room && estimate.Credits > room && Autonomy(run) == "auto")
+            if (headroom is { } room && estimate.Credits > room)
             {
                 await run.Sink.AppendAsync(
                 [
@@ -695,7 +695,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             try
             {
                 var image = await dock.BuildAsync(appId, null, cancellationToken);
-                var token = await run.ControlPlane.MintAppTokenAsync(appId, cancellationToken);
+                // The preview's own token: what it e-mails is held, never sent, and the live app's token is left alone.
+                var token = await run.ControlPlane.MintAppTokenAsync(appId, cancellationToken, preview: true);
                 await dock.StartPreviewAsync(appId, new StartAppRequest(run.OrganisationId, image.Image, token, null, null), cancellationToken);
                 probe = preview is null ? null : new CheckPreviewTool(preview, appId);
                 callApp = caller is null ? null : new CallAppTool(caller, appId);

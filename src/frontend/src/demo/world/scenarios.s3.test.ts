@@ -23,7 +23,7 @@ const play = (w: World, ms: number) => {
 
 describe("the factory's scenarios", () => {
   it("registers every one", () => {
-    for (const name of ["s3-research-failed", "s3-research-cancelled", "s3-checkpoints", "s3-start-checkpoint", "s3-waiting-for-budget", "s3-budget-runs-out", "s3-change-running", "s3-change-failed", "s3-stage-rules", "s3-suggestions", "s3-employee-paused"])
+    for (const name of ["s3-research-failed", "s3-research-cancelled", "s3-checkpoints", "s3-start-checkpoint", "s3-waiting-for-budget", "s3-checkpoints-waiting-for-budget", "s3-budget-runs-out", "s3-change-running", "s3-change-failed", "s3-stage-rules", "s3-suggestions", "s3-employee-paused"])
       expect(scenarioNamed(name), name).toBeDefined();
   });
 
@@ -41,6 +41,14 @@ describe("the factory's scenarios", () => {
     const start = world("s3-start-checkpoint");
     play(start, 2000);
     expect(start.approvals.find((a) => a.runId === IDS.runResearchTides)?.title).toBe("Start this work? Estimated 12 credits.");
+  });
+
+  it("waits for budget in checkpoints mode too, and asks nothing until the estimate fits", () => {
+    const w = world("s3-checkpoints-waiting-for-budget");
+    play(w, 2000);
+    expect(run(w, IDS.runResearchTides)?.run.status).toBe("paused");
+    expect(said(w, IDS.runResearchTides, "Waiting for budget")).toMatch(/^This work is estimated at 12 credits, more than the 5 left in its budget/);
+    expect(w.approvals.filter((a) => a.runId === IDS.runResearchTides)).toHaveLength(0);
   });
 
   it("stops a build when the budget runs out part-way, keeping what was finished", () => {

@@ -923,9 +923,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - The kit refuses no recipients or a bad address ("An email needs at least one recipient, and every recipient must be an address.") and a missing subject or text ("An email needs a subject and a plain-text body.") before anything is sent.
   - The server answers 400 `invalid_request`: "to is a list of 1 to 50 addresses.", "subject is one line of 1 to 300 characters.", "text is required, at most 256 KB." or "html is at most 512 KB."; the kit throws `EndgamePlatformException` with that code.
   - Without SMTP configured, nothing is sent.
-- **Where:** `Services/PlatformServices.cs`; `AppEmailService`; `EmailDispatcher`; `SmtpEmailSender`
+  - Sent by the app's preview — an unpublished build the factory is checking, which carries a token of its own (`POST /internal/apps/{id}/token?preview=true`) that never replaces the app's — the message is checked the same way and answered 202, then **held**: kept with the status `held`, never delivered. The evaluator's `sent_emails` reads it as "held (sent by the preview, kept here and never delivered)", so an e-mail requirement can still be shown working.
+- **Where:** `Services/PlatformServices.cs`; `AppEmailService` (`EmailStatuses.Held`); `AppTokenService.IssueAsync` (preview tokens); `EmailDispatcher`; `SmtpEmailSender`; `RunnerTools.SentEmailsTool`
 - **Reachable from:** API only (inside the app)
-- **Covered by tests:** `PlatformApiTests.Email_is_queued_and_delivered_through_smtp_and_bad_mail_is_refused`; `PlatformServiceTests.Email_is_handed_to_the_platform` (kit); `tests-stack/acceptance.spec.ts` test 7
+- **Covered by tests:** `PlatformApiTests.Email_is_queued_and_delivered_through_smtp_and_bad_mail_is_refused`, `…A_previews_email_is_held_and_shown_as_held_and_its_token_leaves_the_apps_own_alone`; `PlatformServiceTests.Email_is_handed_to_the_platform` (kit); `tests-stack/acceptance.spec.ts` test 7
 
 ### KIT-13 An app calls a model within its AI allowance
 - **Who:** the app

@@ -52,6 +52,9 @@ export function scopeOf(world: World, value: string | null | undefined): string 
   return value;
 }
 
+/** The role with its article, as a sentence says it (`MemberRoles.WithArticle`): "an admin", "a builder". */
+export const withArticle = (role: MemberRole): string => (role === "admin" || role === "owner" ? `an ${role}` : `a ${role}`);
+
 /** Require a role at a scope; answers with the control plane's own refusal words. */
 export function requireRole(world: World, path: string, needed: MemberRole): Held {
   const u = me(world);
@@ -63,7 +66,7 @@ export function requireRole(world: World, path: string, needed: MemberRole): Hel
     const acted = (world.actedAsOperator ??= []);
     if (!acted.includes(orgOf(path))) acted.push(orgOf(path));
   }
-  if (RANK[held.role] < RANK[needed]) throw forbidden(`This needs the ${needed} role at '${path}'; you are a ${held.role} there (set at ${held.at}).`);
+  if (RANK[held.role] < RANK[needed]) throw forbidden(`This needs the ${needed} role at '${path}'; you are ${withArticle(held.role)} there (set at ${held.at}).`);
   return held;
 }
 

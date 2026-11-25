@@ -7,6 +7,7 @@ using Endgame.Domain.Cascade;
 using Endgame.Domain.Platform;
 using Endgame.Domain.Runs;
 using Endgame.Domain.Tree;
+using Endgame.Domain.Workforce;
 using Endgame.Infrastructure.Access;
 using Endgame.Infrastructure.Cascade;
 using Endgame.Infrastructure.Identity;
@@ -35,6 +36,7 @@ internal static class ControlPlaneTools
         ["tree_get"] = MemberRole.Viewer,
         ["node_create"] = MemberRole.Builder,
         ["node_update"] = MemberRole.Builder,
+        ["node_delete"] = MemberRole.Admin,
         ["cascade_get"] = MemberRole.Viewer,
         ["cascade_set"] = MemberRole.Admin,
         ["cascade_remove"] = MemberRole.Admin,
@@ -61,6 +63,11 @@ internal static class ControlPlaneTools
         ["employee_get"] = MemberRole.Viewer,
         ["employee_update"] = MemberRole.Admin,
         ["employee_release"] = MemberRole.Admin,
+        ["contractor_stop"] = MemberRole.Admin,
+        ["memory_read"] = MemberRole.Viewer,
+        ["memory_add"] = MemberRole.Builder,
+        ["memory_correct"] = MemberRole.Builder,
+        ["memory_forget"] = MemberRole.Builder,
         ["hires_list"] = MemberRole.Viewer,
         ["hire_raise"] = MemberRole.Admin,
         ["hire_decide"] = MemberRole.Admin,
@@ -105,7 +112,7 @@ internal static class ControlPlaneTools
                 var (parent, _) = await c.S<AccessService>().RequireAsync(c.UserId, c.Req("parent"), level == NodeLevel.Division ? MemberRole.Admin : MemberRole.Builder, c.Ct);
                 if (parent.Level != level - 1)
                 {
-                    throw EndgameProblem.Invalid($"A {level.ToWire()} is created under a {(level - 1).ToWire()}; '{parent.Path}' is a {parent.Level.ToWire()}.");
+                    throw EndgameProblem.Invalid($"{NodeLevels.Capitalised(level.WithArticle())} is created under {(level - 1).WithArticle()}; '{parent.Path}' is {parent.Level.WithArticle()}.");
                 }
 
                 return await c.S<TreeService>().CreateChildAsync(parent, c.Req("name"), c.Req("slug"), c.Ct);
@@ -122,6 +129,19 @@ internal static class ControlPlaneTools
 
                 await access.RequireAsync(c.UserId, scope, scope.Level == NodeLevel.Division ? MemberRole.Admin : MemberRole.Builder, c.Ct);
                 return await c.S<TreeService>().UpdateAsync(scope, c.Str("name"), c.Str("status"), c.Ct);
+            }),
+        Write("node_delete", "Deletes a division, project or app that has nothing in it, no work and no spending (Admin); the settings and roles set on it go with it. Anything with history is refused (409): archive it instead with node_update.",
+            Schema(("scope", Str("The node's scope path."), true)), async c =>
+            {
+                var scope = await c.S<ScopeResolver>().RequireAsync(c.Req("scope"), c.Ct);
+                if (scope.Level == NodeLevel.Organisation)
+                {
+                    throw EndgameProblem.Invalid("An organisation is not deleted; delete a division, project or app.");
+                }
+
+                await c.S<AccessService>().RequireAsync(c.UserId, scope, MemberRole.Admin, c.Ct);
+                await c.S<TreeService>().DeleteAsync(scope, c.Ct);
+                return new { deleted = scope.Path.ToString() };
             }),
         Read("cascade_get", "The effective values of one kind at a scope (budget, rule_set, context, setting; secret and permission need Admin), each with the level that set it.",
             Schema(("scope", Str("A scope path."), true), ("kind", Enum("The kind.", CascadeKinds.All.ToArray()), true)), async c =>
@@ -366,6 +386,42 @@ internal static class ControlPlaneTools
             {
                 var employee = await Employee(c, MemberRole.Admin);
                 return await c.S<EmployeeService>().ReleaseAsync(employee.OrganisationId, employee.Id, c.Ct);
+            }),
+        Write("contractor_stop", "Stops a contractor at once: it makes no more model calls, what it did is kept, and the work that briefed it carries on without it.",
+            Schema(("id", Uuid("The contractor's id."), true)), async c =>
+            {
+                var contractor = await Employee(c, MemberRole.Admin);
+                return await c.S<EmployeeService>().StopContractorAsync(contractor.OrganisationId, contractor.Id, c.Ct);
+            }),
+        Read("memory_read", "An employee's curated memory, most recently reviewed or written first; what applies at one scope with scope, archived entries too with includeArchived.",
+            Schema(("id", Uuid("The employee's id."), true), ("scope", Str("Only what applies at this scope path."), false), ("includeArchived", Bool("Archived entries too."), false)), async c =>
+            {
+                var employee = await Employee(c, MemberRole.Viewer);
+                var at = c.Str("scope") is { } path ? await c.S<ScopeResolver>().RequireAsync(path, c.Ct) : null;
+                return await c.S<MemoryService>().ForScopeAsync(employee.OrganisationId, employee.Id, at, c.Bool("includeArchived") ?? false, c.Ct);
+            }),
+        Write("memory_add", "Adds an entry to an employee's memory, as a person would (Builder): a short title, what to remember, and its kind.",
+            Schema(("id", Uuid("The employee's id."), true), ("title", Str("A short title."), true), ("body", Str("What to remember."), true),
+                ("kind", Enum("What kind of note.", MemoryKinds.All.ToArray()), true), ("scope", Str("Where it applies, at or beneath the employee's place; its own place when left out."), false)), async c =>
+            {
+                var employee = await Employee(c, MemberRole.Builder);
+                var added = await c.S<MemoryService>().AddAsync(employee.OrganisationId, employee.Id, null, [new MemoryInput(c.Req("title"), c.Req("body"), c.Req("kind"), c.Str("scope"))], MemoryActors.Person, c.UserId, c.Ct);
+                return added[0];
+            }),
+        Write("memory_correct", "Corrects an entry in an employee's memory (Builder); the change log keeps what it said before.",
+            Schema(("id", Uuid("The employee's id."), true), ("entryId", Uuid("The entry's id."), true), ("title", Str("A new title."), false), ("body", Str("What it should say."), false),
+                ("kind", Enum("A new kind.", MemoryKinds.All.ToArray()), false)), async c =>
+            {
+                var employee = await Employee(c, MemberRole.Builder);
+                return await c.S<MemoryService>().CorrectAsync(employee.OrganisationId, employee.Id, c.Id("entryId"), new MemoryCorrection(c.Str("title"), c.Str("body"), c.Str("kind")), c.UserId, c.Ct);
+            }),
+        Write("memory_forget", "Removes an entry from an employee's memory (Builder), saying why; the change log keeps it.",
+            Schema(("id", Uuid("The employee's id."), true), ("entryId", Uuid("The entry's id."), true), ("why", Str("Why it is removed."), false)), async c =>
+            {
+                var employee = await Employee(c, MemberRole.Builder);
+                var entry = c.Id("entryId");
+                await c.S<MemoryService>().RemoveAsync(employee.OrganisationId, employee.Id, entry, c.Str("why"), c.UserId, c.Ct);
+                return new { removed = entry };
             }),
         Read("hires_list", "Hire proposals at a scope and beneath it (proposed, accepted, declined).",
             Schema(("scope", Str("A scope path."), true), ("status", Enum("Only this status.", "proposed", "accepted", "declined"), false)), async c =>

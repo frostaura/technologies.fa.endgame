@@ -754,6 +754,10 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("organisation_id");
 
+                    b.Property<bool>("Preview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("preview");
+
                     b.Property<byte[]>("Salt")
                         .IsRequired()
                         .HasColumnType("bytea")
@@ -1203,7 +1207,7 @@ namespace Endgame.Infrastructure.Persistence.Migrations
 
                     b.ToTable("email_messages", null, t =>
                         {
-                            t.HasCheckConstraint("ck_email_messages_status", "status IN ('queued', 'sending', 'sent', 'failed')");
+                            t.HasCheckConstraint("ck_email_messages_status", "status IN ('queued', 'sending', 'sent', 'failed', 'held')");
                         });
                 });
 

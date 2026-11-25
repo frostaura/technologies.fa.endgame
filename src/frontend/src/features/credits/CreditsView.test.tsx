@@ -28,6 +28,26 @@ afterEach(() => {
 });
 
 describe("CreditsView", () => {
+  it("reads credits at the division of someone granted only that division, and lets its Admin set caps there", async () => {
+    const division: Credits = {
+      ...CREDITS,
+      scope: "acme/tools",
+      budgets: [
+        { scope: "acme/tools", name: "Tools", level: "division", depth: 0, spentCredits: 250, capCredits: null, appId: null },
+        { scope: "acme/tools/ledger/web", name: "Ledger web", level: "app", depth: 2, spentCredits: 90, capCredits: 100, appId: "a1" },
+      ],
+    };
+    const me = { ...ME, memberships: [{ id: "m2", scope: "acme/tools", level: "division", role: "admin", organisationId: "o1", organisationSlug: "acme", organisationName: "Acme" }] };
+    const api = stubApi({ "GET /api/me": json(me), "GET /api/credits?scope=acme%2Ftools": json(division) });
+    renderWithStore(<CreditsView />);
+    expect(await screen.findByText(/Your role is in Tools, so this shows its spending and caps/)).toBeTruthy();
+    // The page asks at the division; only the header's balance pill asks at the organisation (ORG-19).
+    expect(api.calls.map((c) => c.path)).toContain("/api/credits?scope=acme%2Ftools");
+    const budgets = screen.getByRole("list", { name: "Budgets" });
+    expect(within(budgets).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByText(/An Admin or the Owner sets the caps/)).toBeNull();
+  });
+
   it("shows a skeleton while loading", async () => {
     stubApi({ "GET /api/me": json(ME), "GET /api/credits": "pending" });
     renderWithStore(<CreditsView />);

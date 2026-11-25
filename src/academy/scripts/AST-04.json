@@ -267,7 +267,7 @@
               "status": 403,
               "code": "forbidden",
               "title": "Forbidden",
-              "detail": "This needs the owner role at 'northwind'; this access token acts as a admin at most."
+              "detail": "This needs the owner role at 'northwind'; this access token acts as an admin at most."
             },
             "isError": true
           }

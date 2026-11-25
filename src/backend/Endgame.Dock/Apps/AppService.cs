@@ -150,7 +150,7 @@ public sealed class AppService(
             var name = names.AppPreviewContainer(appId);
             await RemoveContainerAsync(name, cancellationToken);
             var connection = await databases.EnsurePreviewAsync(appId, cancellationToken);
-            var token = request.AppToken ?? await reports.AppTokenAsync(appId, cancellationToken)
+            var token = request.AppToken ?? await reports.AppTokenAsync(appId, cancellationToken, preview: true)
                 ?? throw DockProblem.Unavailable("The control plane did not issue the app's platform token.");
             var labels = names.Labels(ResourceNames.AppPreviewKind, appId);
             labels[ResourceNames.CommitLabel] = image[(image.LastIndexOf(':') + 1)..];

@@ -514,6 +514,29 @@ public sealed partial class EmployeeService(
         return await GetAsync(scope.OrganisationId, record.Id, cancellationToken);
     }
 
+    /// <summary>
+    /// A person stops a contractor (EMP-07): it is finished at once, so the model gateway refuses its next call and it
+    /// stops at its next step. What it did is kept in the run, and the work that briefed it carries on without it.
+    /// </summary>
+    public async Task<EmployeeView> StopContractorAsync(Guid organisationId, Guid contractorId, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        var row = await db.Employees.AsNoTracking().SingleOrDefaultAsync(e => e.OrganisationId == organisationId && e.Id == contractorId, cancellationToken)
+            ?? throw EndgameProblem.NotFound("The contractor");
+        if (row.Kind != EmployeeKinds.Contractor)
+        {
+            throw EndgameProblem.Invalid($"Only a contractor is stopped; {row.Name} is an employee, who is paused or let go.");
+        }
+
+        if (row.Status == EmployeeStatuses.Released)
+        {
+            throw EndgameProblem.Conflict($"{row.Name} has already finished.");
+        }
+
+        await FinishContractorAsync(organisationId, contractorId, cancellationToken);
+        return await GetAsync(organisationId, contractorId, cancellationToken);
+    }
+
     /// <summary>Marks a contractor done: gone from the chart and the bill. Returns it as it was released.</summary>
     public async Task<EmployeeRecord> FinishContractorAsync(Guid organisationId, Guid contractorId, CancellationToken cancellationToken)
     {

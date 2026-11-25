@@ -103,8 +103,8 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
         }
 
         throw EndgameProblem.Forbidden(role == grant.Role
-            ? $"This needs the {required.ToWire()} role at '{scope.Path}'; you are a {grant.Role.ToWire()} there (set at {grant.Path})."
-            : $"This needs the {required.ToWire()} role at '{scope.Path}'; this access token acts as a {role.ToWire()} at most.");
+            ? $"This needs the {required.ToWire()} role at '{scope.Path}'; you are {grant.Role.WithArticle()} there (set at {grant.Path})."
+            : $"This needs the {required.ToWire()} role at '{scope.Path}'; this access token acts as {role.WithArticle()} at most.");
     }
 
     /// <summary>True when the request came with a personal access token (an MCP client), whose ceiling then holds.</summary>

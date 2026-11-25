@@ -169,16 +169,15 @@ function cycle(
 }
 
 /**
- * `RunExecutor.GateAsync`, before any work: in auto-mode an estimate larger than the headroom
- * pauses the run, saying why; with the start checkpoint on in checkpoints mode the owner approves
- * the estimate first, and a decline ends the run having charged nothing.
+ * `RunExecutor.GateAsync`, before any work: in every autonomy mode an estimate larger than the
+ * headroom pauses the run, saying why; with the start checkpoint on in checkpoints mode the owner
+ * then approves the estimate, and a decline ends the run having charged nothing.
  */
 function gate(s: Script, run: DemoRun, expected: number, prefix: string) {
   const key = `gate:${run.run.id}`;
   s.effect((w, r) => {
     const room = headroomAt(w, r.run.scope);
-    const auto = (setting(w, r.run.scope, "autonomy")?.value ?? "auto") === "auto";
-    if (!auto || expected <= room) return;
+    if (expected <= room) return;
     append(w, r, "message", { from: "runner", title: "Waiting for budget", code: "estimate_over_budget", text: `This work is estimated at ${expected} credits, more than the ${room} left in its budget, so it has not started. Raise the budget or top up, then resume it.`, estimate: expected, headroom: room });
     append(w, r, "run.paused", { by: "runner", reason: "estimate_over_budget" });
     return ["Run", "Tree"];
@@ -517,14 +516,14 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
   s.event("message", { data: { items: items.map((i) => ({ id: i.id, check: i.check, deliverable: i.detail })) }, kind: "workflow.step", step: "plan", agent: "workflow" });
   for (const id of o.carried) s.event("message", { data: { passed: true, carried: true }, kind: "workflow.step", step: `item:${id}`, agent: "workflow" });
 
-  // The estimate, refined by the plan: in auto-mode a plan that would break the budget does not begin (RUN-09).
-  const planCredits = prefix === "change" ? 9 : 90;
+  // The estimate, refined by the plan: in every autonomy mode a plan that would break the budget does not begin (RUN-09).
+  const planCredits = typeof run.playback?.params.planEstimate === "number" ? run.playback.params.planEstimate : prefix === "change" ? 9 : 90;
   if (!o.planCarried) {
     s.wait(200).event("estimate.made", { basis: `the starting figure for ${prefix} runs (fewer than 3 finished runs to learn from), scaled to a plan of ${items.length} items`, stage: "plan", source: "runner", credits: planCredits, samples: 0 });
     s.effect((w, r) => {
       r.run.estimateCredits = planCredits;
       const room = headroomAt(w, r.run.scope);
-      if ((setting(w, r.run.scope, "autonomy")?.value ?? "auto") !== "auto" || planCredits <= room) return ["Run"];
+      if (planCredits <= room) return ["Run"];
       append(w, r, "message", { from: "runner", title: "Waiting for budget", code: "estimate_over_budget", text: `The plan is estimated at ${planCredits} credits, more than the ${room} left, so building has not started. Raise the budget, then resume.`, estimate: planCredits, headroom: room });
       append(w, r, "run.paused", { by: "runner", reason: "estimate_over_budget" });
       return ["Run", "Tree"];
@@ -777,8 +776,9 @@ defineScript("build", (world, run) => {
 
   s.event("run.started", { holder: "runner-demo-1" });
   if (!p.retryOf) {
-    s.wait(300).event("estimate.made", { basis: "the starting figure for build runs (fewer than 3 finished runs to learn from)", stage: "start", source: "runner", credits: 120, samples: 0 });
-    gate(s, run, 120, "build");
+    const startCredits = typeof p.startEstimate === "number" ? p.startEstimate : 120;
+    s.wait(300).event("estimate.made", { basis: "the starting figure for build runs (fewer than 3 finished runs to learn from)", stage: "start", source: "runner", credits: startCredits, samples: 0 });
+    gate(s, run, startCredits, "build");
   } else {
     gate(s, run, run.run.estimateCredits ?? 20, "build");
   }
@@ -816,7 +816,7 @@ defineScript("build", (world, run) => {
       s.effect((w) => {
         hireEmployee(w, { key: h.who.key, name: h.who.name, role: h.who.role, scope: h.scope, limit: h.limit, mandate: h.who.role === "Software engineer" ? `Build and maintain ${story.name}.` : h.who.role === "QA engineer" ? `Check ${story.name}'s work against its plan, sceptically, before it ships.` : `Answer for ${story.division.name}: its people, its budget and its work.`, reason: h.reason, trigger: h.step.startsWith("hire:division") ? "division" : "stage", runId: run.run.id });
       });
-      s.event("message", { from: "runner", text: `${h.who.name} joins as a ${h.who.role.toLowerCase()}, at up to ${h.limit} credits a month: ${h.reason}`, title: `Hired ${h.who.name}`, milestone: h.step.replace(/^hire:/, "hired:") });
+      s.event("message", { from: "runner", text: `${h.who.name} joins as ${/^[aeiou]/i.test(h.who.role) ? "an" : "a"} ${h.who.role.toLowerCase()}, at up to ${h.limit} credits a month: ${h.reason}`, title: `Hired ${h.who.name}`, milestone: h.step.replace(/^hire:/, "hired:") });
     }
   }
   s.mark("build:hired");

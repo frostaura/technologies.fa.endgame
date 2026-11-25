@@ -43,7 +43,7 @@
       }
     },
     {
-      "step": 4,
+      "step": 5,
       "kind": "demo",
       "clock": {
         "seek": "research:finished"

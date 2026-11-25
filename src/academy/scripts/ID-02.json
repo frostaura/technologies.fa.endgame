@@ -76,7 +76,7 @@
             }
           ],
           "highlight": {
-            "selector": "nav[aria-label='Where you are']",
+            "text": "A cap set higher up holds for everything beneath it.",
             "note": "Signed in, the console opens Credits, the screen first asked for — not the org chart."
           }
         }

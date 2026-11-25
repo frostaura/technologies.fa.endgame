@@ -530,7 +530,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Variations and refusals:**
   - Unknown, revoked or expired key, or no bearer: 401 with `WWW-Authenticate: Bearer realm="endgame-mcp", error="invalid_token"`.
   - Unknown tool: "There is no tool '{name}'."
-  - Refusals come back as an error result `{ status, code, title, detail }`. Role too low: 403, naming the needed role and, if the key caps it, "this access token acts as a {role} at most". Another organisation or branch: 404.
+  - Refusals come back as an error result `{ status, code, title, detail }`. Role too low: 403, naming the needed role and, if the key caps it, "this access token acts as a viewer at most" (or "a builder", "an admin"). Another organisation or branch: 404.
 - **Where:** `Mcp/McpSetup.cs`, `Mcp/ControlPlaneTools.cs`.
 - **Reachable from:** MCP only
 - **Covered by tests:** `McpTests.The_control_plane_tools_do_what_the_console_does_under_the_same_rules`; `EdgeRoutingTests.Mcp_goes_to_the_control_plane_before_the_console_catches_everything`.
@@ -567,6 +567,7 @@ All need AST-05. All are MCP only, Level Advanced. Covered by `McpTests` and `Au
 - **AST-08 Shape the tree:**
   - `node_create` (division: Admin; project or app: Builder; the parent must be one level up).
   - `node_update` (rename, or status active/archived; division: Admin, otherwise Builder; an organisation is refused with "An organisation is renamed by its Owner, through PATCH /api/organisations/{id} with a signed-in session; not with an assistant's key.").
+  - `node_delete` (Admin; a division, project or app with nothing in it, by scope path; one with history is 409 "'{path}' still has children, work or credit history attached. Archive it instead (status: archived)."; an organisation is 400 "An organisation is not deleted; delete a division, project or app.") (TREE-09).
 - **AST-09 Values, budgets and credits:**
   - `cascade_get` (Viewer; secret and permission kinds need Admin).
   - `cascade_set` and `cascade_remove` (budget, rule_set, context, setting. The role depends on the key: context and `sleep.*` need Builder, the overdraft own-limit needs Owner and so is unreachable, everything else needs Admin. Secret and permission kinds are refused with "Secrets are set with secret_set and roles with member_invite.").
@@ -590,6 +591,11 @@ All need AST-05. All are MCP only, Level Advanced. Covered by `McpTests` and `Au
   - `employees_list` and `employee_get` (Viewer).
   - `employee_update` (Admin; name, role, mandate, or status paused/idle).
   - `employee_release` (Admin).
+  - `contractor_stop` (Admin; a working contractor stops at its next step; an employee is 400 "Only a contractor is stopped; {Name} is an employee, who is paused or let go.") (EMP-11).
+  - `memory_read` (Viewer; optionally what applies at one `scope`, and archived entries with `includeArchived`) (MEM-01).
+  - `memory_add` (Builder; `title`, `body`, `kind` fact/practice/preference/lesson, optional `scope`; recorded as added by a person) (MEM-02).
+  - `memory_correct` (Builder; `entryId` and any of `title`, `body`, `kind`; the change log keeps what it said) (MEM-03).
+  - `memory_forget` (Builder; `entryId`, optional `why`; the change log keeps it) (MEM-04).
   - `hires_list` (Viewer).
   - `hire_raise` and `hire_decide` (Admin).
 - **AST-13 Autonomy and rules:**
@@ -609,7 +615,7 @@ All need AST-05. All are MCP only, Level Advanced. Covered by `McpTests` and `Au
   - `app_ask` (Builder; charged to the app).
   - `app_versions` (Viewer).
   - `app_restore` (Builder; a public app becomes private).
-- **Missing as tools** (finding): app sharing (list, share, unshare), keys, notifications mark-read, top-up requests, the operator log, an employee's memory, the app dashboard. Export, overdraft and top-ups are deliberately absent.
+- **Missing as tools** (finding): app sharing (list, share, unshare), keys, notifications mark-read, top-up requests, the operator log, the app dashboard. Export, overdraft and top-ups are deliberately absent.
 
 ---
 
@@ -1044,7 +1050,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 7. ~~One organisation per person in the console~~ — fixed on "Your account" (ID-09); the header switcher waits for the shell to mount it. Formerly: It opens the first membership and has no switcher.
 8. ~~The AI assistants list shows keys from every organisation without naming which~~ — fixed (AST-03).
 9. **MCP does not match "anything possible in the UI is possible over MCP":**
-   - no tools for sharing an app, keys, notification read marks, top-up requests, the operator log, employee memory or the dashboard;
+   - no tools for sharing an app, keys, notification read marks, top-up requests, the operator log or the dashboard (employee memory now has `memory_read`, `memory_add`, `memory_correct` and `memory_forget`; deleting a node has `node_delete`);
    - `member_invite` returns the code to the assistant (it now also e-mails it, as the console does, when a mail server is configured);
    - not verified: an Owner's key probably cannot grant Admin, because it is capped at Admin.
 10. **Fixed:** Edge wording — the share e-mail says "Create your sign-in", as Edge's link does, and the access-denied page no longer says "has not been shared with you" of a private app.
@@ -1055,5 +1061,5 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 15. **Partly fixed:** People says a member's code works for 7 days and shows each pending code's date. The share screen (app shares, 14 days) does not say yet.
 16. **Fixed:** "Send a new code" on a pending person's row (PPL-05).
 17. **Not verified:** an archived app, if still routed, shows anonymous visitors the "You are signed in…" refusal (archived apps, and apps in an archived division or project, are no longer routed: TREE-07). **Fixed:** a role-less account after the first organisation exists is told organisations are set up by FrostAura, not offered the first-run screen (ORG-03).
-18. **A key's refusal reads "acts as a admin at most"** (`AccessService.cs`, `RequireAsync`): the role word is put after "a" whatever it is (AST-04).
+18. ~~A key's refusal reads "acts as a admin at most"~~ — fixed: a role is said with its own article, "an admin", "an owner", "a builder", "a viewer", in every refusal (`MemberRoles.WithArticle`; AST-04).
 19. **Fixed:** in the demo console, the address a signed-out visitor asked for is kept (it was read from the page's path, not the console's), so ID-02 and ID-04 land where they were going there too.

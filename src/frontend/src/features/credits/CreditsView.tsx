@@ -7,7 +7,7 @@ import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useGetCreditsQuery, useGetMeQuery } from "@/store/api";
-import type { BudgetLine, Credits, MemberRole } from "@/store/types";
+import type { BudgetLine, Credits, MemberRole, Membership } from "@/store/types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { roleRank } from "@/lib/roles";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
@@ -19,9 +19,12 @@ export function CreditsView() {
   const me = useGetMeQuery(undefined);
   const active = useActiveOrganisation();
   const org = active.organisation;
-  const query = useGetCreditsQuery(org?.slug ?? "", { skip: !org });
+  // Someone whose roles all sit below the organisation reads credits at their own level, as home does (ORG-19, CRED-01).
+  const own = org && !active.entered && active.role === null ? highestGrant(me.data?.memberships ?? [], org.slug) : undefined;
+  const scope = own?.scope ?? org?.slug ?? "";
+  const query = useGetCreditsQuery(scope, { skip: !org });
   const view = org ? viewOf(query) : me.isError ? { kind: "failed" as const, reason: "Your session could not be read.", status: null } : { kind: "loading" as const };
-  const isAdmin = roleRank(active.role) >= roleRank("admin");
+  const isAdmin = roleRank(own?.role ?? active.role) >= roleRank("admin");
   const home = active.entered && org ? paths.homeOf(org.slug) : paths.home();
 
   return (
@@ -41,17 +44,29 @@ export function CreditsView() {
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
-          <CreditsBody credits={view.data} organisation={org?.slug ?? ""} isAdmin={isAdmin} />
+          <CreditsBody credits={view.data} organisation={scope} isAdmin={isAdmin} branch={own ? (view.data.budgets[0]?.name ?? own.scope) : null} />
         </>
       )}
     </AppShell>
   );
 }
 
-function CreditsBody({ credits, organisation, isAdmin }: { credits: Credits; organisation: string; isAdmin: boolean }) {
+/** The highest level a person holds a role at in one organisation: a division before a project before an app. */
+function highestGrant(memberships: Membership[], organisation: string): Membership | undefined {
+  return memberships
+    .filter((m) => m.organisationSlug === organisation)
+    .sort((a, b) => a.scope.split("/").length - b.scope.split("/").length || a.scope.localeCompare(b.scope))[0];
+}
+
+function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Credits; organisation: string; isAdmin: boolean; branch: string | null }) {
   const negative = credits.balance < 0;
   return (
     <>
+      {branch && (
+        <p role="note" className="max-w-prose text-ink-body">
+          Your role is in {branch}, so this shows its spending and caps. The balance is the whole organisation&rsquo;s, which its work draws on.
+        </p>
+      )}
       <section className={cn("relative flex flex-wrap items-end justify-between gap-5 overflow-hidden rounded-lg px-6 py-8 text-primary-ink sm:px-8", negative ? "bg-attention-text" : "bg-primary", RISE)}>
         <div aria-hidden className="absolute -top-24 right-20 size-aura animate-drift rounded-full bg-violet opacity-75 blur-aura motion-reduce:animate-none" />
         <div aria-hidden className="absolute -bottom-36 -right-20 size-aura animate-drift rounded-full bg-teal opacity-75 blur-aura animate-delay-5 motion-reduce:animate-none" />
