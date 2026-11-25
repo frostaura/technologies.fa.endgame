@@ -30,9 +30,16 @@ rule sets, context, settings, secrets and roles that apply beneath it.
    returns each effective value with `setAtLevel`, `setAtPath` and the levels it `overrides`;
    `DELETE /api/cascade?scope=&kind=&key=` removes it so the inherited value applies again.
 4. `POST /api/members { scope, email, displayName, role }` grants Admin, Builder or Viewer at any node
-   (only the Owner grants Admin); a new person gets an invitation code. `GET /api/members?scope=`,
-   `DELETE /api/members/{id}`.
-5. `GET /api/tree` returns the org chart in one document: `organisation` (with `summary`, `spend.monthCredits`,
+   (only the Owner grants Admin); a new person gets a one-time invitation code, returned once and also
+   e-mailed when a mail server is configured (`emailed`); they register a passkey with it and land in
+   the organisation with exactly that role. `GET /api/members?scope=` lists each grant with where it
+   was set; `PATCH /api/members/{id} { role }` changes it where it was set (to or from Admin, the
+   Owner); `DELETE /api/members/{id}` removes it.
+5. A new organisation's name may not take a FrostAura subdomain: the ops service lists them
+   (`409 reserved_name`); while Cloudflare is managed and that list cannot be read, no new name is
+   accepted (`503 reserved_names_unavailable`); with Cloudflare not managed here, the built-in list
+   applies and `nameCheck.note` says so.
+6. `GET /api/tree` returns the org chart in one document: `organisation` (with `summary`, `spend.monthCredits`,
    `workers`), `divisions[].projects[].apps[]` — every node with status words the console reads, this
    month's spend from the ledger, and its employees — plus `needsYou[]` (verdicts and approvals waiting).
 
@@ -62,7 +69,9 @@ rule sets, context, settings, secrets and roles that apply beneath it.
 - The resolver names the level that set a value, and inherited values return when a narrower one is removed.
 - Secrets appear by name only. Bad slugs, duplicates and deletes with children are refused as problems.
 
-Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `TreeEndpointTests`, `CascadeCreditsAndAppsTests`, `DatabaseInvariantTests`.
+- Every public endpoint, called by each role inside and outside its scope, lets it through or refuses it as its row says.
+
+Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `TreeEndpointTests`, `CascadeCreditsAndAppsTests`, `DatabaseInvariantTests`, `AuthorizationMatrixTests`, `BreadthTests` (names, role changes).
 
 ## Links
 

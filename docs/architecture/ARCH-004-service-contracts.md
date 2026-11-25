@@ -1,6 +1,6 @@
 # ARCH-004 — Service contracts
 
-The interfaces between Endgame's services, as built by the three control-plane passes, the Dock and
+The interfaces between Endgame's services, as built by the four control-plane passes, the Dock and
 Edge lane, the Runner lane and the app kit. A lane may add to its own service freely; it changes a contract here
 only by editing this file first. The app-facing half is fixed field for field in
 [`src/appkit/PLATFORM-API.md`](../../src/appkit/PLATFORM-API.md); the shared hosting types are in
@@ -23,6 +23,10 @@ only by editing this file first. The app-facing half is fixed field for field in
 | Control plane | SMTP server (development: the `mailcatcher` service) | SMTP | Mail; in development every message stays in the catcher. |
 | Control plane | Edge control listener | Internal API | Route refreshes; platform-to-app callbacks. |
 | Control plane | OpenRouter | HTTPS | **The only component holding the OpenRouter key.** |
+| Control plane | Dock | Internal API, service token | An app's version history, restore and republish, the code export and the data dump. |
+| Control plane | Ops | Internal API, service token | Reserved organisation names (`GET /internal/ops/reserved-hosts`, `/health`); its health on the status view. |
+| Control plane | Edge control listener | `/internal/apps/{id}/call/{**path}`, service token | The per-app MCP surface: an app's OpenAPI document and its operations, woken if asleep. |
+| MCP client | Control plane (through Edge) | `/mcp`, `/mcp/apps/{appId}`, personal access token | Everything a member does, as tools (below). |
 | Control plane | SMTP server | SMTP | **Only when `Smtp__Host` and `Smtp__From` are set**; otherwise mail waits in the outbox. |
 | Dock | Docker Engine | Socket | **The only component holding the socket.** |
 | App container | Control plane (via the egress proxy) | `/platform/v1/*`, app token | Identity, models, secrets, e-mail, schedules, webhooks, telemetry. |
@@ -58,7 +62,11 @@ the control plane owns the database schema and migrations.
 | Organisation | `active`, `suspended` | — |
 | Division, project | `active`, `archived` | Project stage: `idea`, `researching`, `verdict`, `planning`, `building`, `evaluating`, `reviewing`, `publishing`, `live`, `paused`, `dropped` |
 | App | `draft`, `building`, `running`, `sleeping`, `stopped`, `failed`, `archived` | `running`: `asleep`, `awake`, `always-on`, `starting`, `paused`; `health`: `healthy`, `degraded`, `down`, `unknown` |
-| Run | `queued`, `running`, `paused`, `waiting_approval`, `succeeded`, `failed`, `cancelled` | `queued`, `running`, `waiting`, `paused`, `finished`, `failed`, `cancelled` |
+| Run | `queued`, `running`, `paused`, `waiting_approval`, `succeeded`, `failed`, `cancelled`; kind `research`, `conversation`, `build`, `task`, `review`, `suggest` | `queued`, `running`, `waiting`, `paused`, `finished`, `failed`, `cancelled` |
+| Suggestion | `open`, `taken`, `dismissed` | same |
+| Top-up request | `open`, `fulfilled`, `declined` | same |
+| Notification | kind as under *Notifications*; severity `info`, `urgent` | same |
+| Access token | role `admin`, `builder`, `viewer` (never `owner`) | `active` is derived |
 | Task | `todo`, `in_progress`, `blocked`, `done`, `failed`, `cancelled` | same |
 | Employee | `idle`, `working`, `paused`, `released`; kind `employee` or `contractor`; `standing` `security-reviewer` or null | same, plus `idle.flagged` (no work for longer than setting `workforce.idle_days`, default 14) |
 | Hire proposal | `proposed`, `accepted`, `declined`; trigger `division`, `stage`, `recurring`, `promotion`, `owner` | same |
@@ -78,13 +86,17 @@ minutes (`degraded` when more than one response in twenty failed).
 | Session | `GET /api/auth/options`; `POST /api/auth/passkey/register/{options,complete}`, `POST /api/auth/passkey/login/{options,complete}`; `POST /api/auth/logout` (also ends every app session the browser carries); `POST /api/auth/development` (Development and `ENDGAME_DEV_LOGIN=true` only); `GET /api/me` |
 | Tree | `GET /api/tree?organisation=` (an operator may name any organisation: entry is logged); `POST /api/organisations`, `POST /api/divisions`, `/projects`, `/apps`; `PATCH`/`DELETE` `…/{id}` |
 | Cascade | `GET /api/cascade?scope=&kind=`, `PUT /api/cascade { scope, kind, key, value }`, `DELETE /api/cascade?scope=&kind=&key=` |
-| Members | `GET /api/members?scope=`, `POST /api/members { scope, email, displayName, role }` (returns a one-time invitation code), `DELETE /api/members/{membershipId}` |
+| Members | `GET /api/members?scope=` → `[{ membershipId, userId, email, displayName, scope (where the grant was set), role, hasPasskey, grantedAt }]` (Admin); `POST /api/members { scope, email, displayName, role }` → `{ member, invitationCode, expiresAt, emailed }` (code once; `emailed` when a mail server is configured); `PATCH /api/members/{membershipId} { role }` → the same shape (Admin; to or from `admin`, the Owner); `DELETE /api/members/{membershipId}` |
+| Access tokens | `GET /api/tokens` → `[AccessToken]`; `POST /api/tokens { name, organisation, role?, expiresInDays? }` → `201 { token, accessToken }` (the token `egp_…` once; role at most the caller's highest in the organisation, never `owner`, default theirs and `admin` for an Owner; `expiresInDays` 1–366 or none); `DELETE /api/tokens/{id}` → `AccessToken` (revoked). `AccessToken { id, name, organisation, role, prefix, createdAt, expiresAt, lastUsedAt, revokedAt, active }` |
 | Secrets | `GET /api/secrets?scope=` → `{ scope, effective: [{ name, setAtLevel, setAtPath, setAt, inherited, overrides }], setBelow: [{ name, setAtPath }] }` — never a value; `PUT /api/secrets { scope, name, value }`; `DELETE /api/secrets?scope=&name=` (Admin and above) |
-| Credits | `GET /api/credits?scope=` (balance, month `{ spent, ai, hosting }`, budgets in tree order, estimates, not charged, overdraft `{ frostauraLimit, ownLimit }`, top-ups, held, available); `POST /api/credits/top-ups` (operators) |
+| Credits | `GET /api/credits?scope=` (balance, month `{ spent, ai, hosting }`, budgets in tree order, estimates, not charged, overdraft `{ frostauraLimit, ownLimit }`, top-ups, held, available); `POST /api/credits/top-ups { organisation, credits, note, idempotencyKey?, requestId? }` (operators; `requestId` marks that request fulfilled); `PUT /api/credits/overdraft { scope, credits }` → `CreditsView` (at the organisation its own limit, Owner; beneath it a narrower one, Admin; never deeper, 400); `POST /api/credits/top-up-requests { organisation?, credits, note? }` → `201 TopUpRequest` (Owner; at most five open); `GET /api/credits/top-up-requests?organisation=` → `[TopUpRequest]` (Admin). `TopUpRequest { id, organisation, organisationName, credits, note, status: open|fulfilled|declined, requestedBy, requestedByEmail, requestedAt, closedAt, closeNote, topUpEntryId }` |
 | Ideas | `POST /api/ideas/estimate`, `POST /api/ideas`, `GET /api/ideas/{id}`, `POST /api/ideas/{id}/decision` |
-| Runs | `GET /api/runs/{id}`, `GET /api/runs/{id}/events` (server-sent events, resumable), `POST /api/runs/{id}/{pause,resume,cancel}`, `POST /api/runs/{id}/approvals/{approvalId}` |
+| Ideas from the portfolio | `POST /api/ideas/suggestions/estimate { scope }` → `{ credits, basis }`; `POST /api/ideas/suggestions { scope }` → `201 { run: PublicRun, estimate }` (Builder; a `suggest` run, its `estimate.made` in the log); `GET /api/ideas/suggestions?scope=` → `[Suggestion]` (Viewer); `POST /api/ideas/suggestions/{id}/take { constraints? }` → `201 PublicIdea` (research queued with its estimate); `POST /api/ideas/suggestions/{id}/dismiss` → `Suggestion` (Builder). `Suggestion { id, scope, runId, title, idea, gap, whyUs, reuses[], status: open|taken|dismissed, ideaId, createdAt }` |
+| Runs | `GET /api/runs?scope=&employeeId=&kind=&status=&limit=` → `[PublicRun]` newest first, at most 100 (Viewer; `employeeId` alone: wherever the employee works); `GET /api/runs/{id}`, `GET /api/runs/{id}/events` (server-sent events, resumable), `POST /api/runs/{id}/{pause,resume,cancel}`, `POST /api/runs/{id}/approvals/{approvalId}` |
 | Tasks | `GET /api/tasks?scope=&status=&limit=` |
 | Apps | `GET /api/apps/{id}` (health, running, addresses, `telemetry { visitsToday, requestsToday, errorsToday, latencyP50Ms, latencyP95Ms, lastVisitAt }` or null before anything was measured, cost, settings, `runningCost { sleep, alwaysOn }` or null, `sharedWith`); `POST /api/apps/{id}/settings { running?, access?, idleMinutes? }` (access needs Admin; `public` only from a person) |
+| Ask about this app | `POST /api/apps/{id}/ask/estimate { question }` → `{ credits, basis }` (Viewer); `POST /api/apps/{id}/ask { question }` → `{ question, answer, chart: { kind: line|bar|number|table, x, y[], series: [{ name, points: [{ x, y }] }] }, sql, columns[], rows[], truncated, credits: { estimate, charged } }` (Builder; charged to the app; `sql` is for technical mode); `422 ask_unanswerable` / `query_timeout` / `query_failed`; `503 ask_unavailable` with no `ask` route. Dashboard: `GET /api/apps/{id}/dashboard` → `[{ id, question, answer, sql, chart, columns, rows, truncated, askedAt, ranAt, error }]` re-run on read (Viewer); `POST /api/apps/{id}/dashboard { question, sql, chart?, answer? }` → `201` (Builder; the query is guarded again; at most 30); `DELETE /api/apps/{id}/dashboard/{questionId}` (Builder) |
+| Versions and export | `GET /api/apps/{id}/versions?skip=&limit=` → `{ appId, live, versions: [{ commit, message, at, author: { kind: employee|person|factory, id, name }, live }], hasMore }` (Viewer); `POST /api/apps/{id}/versions/{commit}/restore` → `{ version, published, madePrivate, publishError }` (Builder; a new commit by the person, rebuilt and restarted; a public app becomes private); `GET /api/apps/{id}/export` → `application/gzip`, `<app slug>-export.tar.gz` holding `<slug>/manifest.json`, `code.bundle` (git bundle, whole history), `database.dump` (pg_dump custom, absent when the app never ran) and `platform.json` (end users without passkeys, shares, schedules, webhooks, custom events) (Owner only) |
 | Sharing | `GET /api/apps/{id}/shares`, `POST /api/apps/{id}/shares { email }` → `{ email, invitationCode, expiresAt }` (code shown once), `DELETE /api/apps/{id}/shares?email=` |
 | Conversation | `POST /api/conversations { scope, message, employeeId?, conversationId? }` → a run; `GET /api/conversations?scope=&employeeId=` |
 | Autonomy | `GET /api/autonomy?scope=` → `{ scope, autonomy: auto|checkpoints, autonomySetAtPath, checkpoints: { start, plan, hire: { on, setAtPath } }, ruleSets: [{ stage, deny[], ask[], allow[], checkpoints[], setAtPath, overrides[] }], stages[] }` (Viewer); `PUT /api/autonomy { scope, autonomy?, checkpoints?: { start?, plan?, hire? } }`, `DELETE /api/autonomy?scope=&key=`, `PUT /api/autonomy/rule-sets { scope, stage, deny?, ask?, allow?, checkpoints? }`, `DELETE /api/autonomy/rule-sets?scope=&stage=` (Admin and above; each answers the view) |
@@ -92,7 +104,8 @@ minutes (`degraded` when more than one response in twenty failed).
 | Memory | `GET /api/employees/{id}/memory?scope=&includeArchived=` → `[MemoryEntry]`; `GET …/memory/changes?limit=`; `POST …/memory { title, body, kind, scope? }`, `PATCH …/memory/{entryId} { title?, body?, kind? }`, `DELETE …/memory/{entryId}?why=`, `POST …/{id}/reviews` → the queued `review` run (Builder) |
 | Hires | `GET /api/hires?scope=&status=`, `GET /api/hires/{id}` → `Hire`; `POST /api/hires { scope, name, role, jobDescription, reportsTo?, expectedMonthlyCredits, reason, needKey?, trigger? }`, `PATCH /api/hires/{id}`, `POST /api/hires/{id}/accept { note? }`, `POST /api/hires/{id}/decline { note? }` (Admin) |
 | Ontology | `GET /api/ontology?scope=&view=all|org-chart|data-flow` → `{ scope, generatedAt, nodes: [{ id, type, name, scope, status, attributes }], edges: [{ from, to, type, label }], views }` |
-| God mode | `GET /api/operator/organisations` (operators); `GET /api/audit/operator-access?organisation=` (the Owner only) → `[{ id, at, action, operator { id, email, displayName }, detail }]` |
+| God mode (operators only; never by access token) | `GET /api/operator/organisations` → `[{ id, slug, name, status, createdAt, balance, standing: in-credit|overdrawn|at-limit, overdraft: { frostauraLimit, ownLimit, effective }, apps, lastActivityAt, openTopUpRequests }]`; `POST /api/operator/organisations/{slug}/enter` → `{ organisationId, organisation, role: admin, enteredAt, logged }` (logged for the Owner); `PUT /api/operator/organisations/{slug}/overdraft { credits }` → the organisation's summary (logged `overdraft.set`); `GET /api/operator/top-ups?organisation=` → `[{ id, organisation, credits, note, at, by, byEmail }]`; `GET /api/operator/top-up-requests?status=` → `[TopUpRequest]`; `POST /api/operator/top-up-requests/{id}/close { status: fulfilled|declined, note?, topUpEntryId? }` → `TopUpRequest` (logged); `GET /api/operator/pricing` → `{ pricing, source: defaults|stored, updatedAt, updatedBy, history: [{ at, by, byEmail, before, after }] }`; `PUT /api/operator/pricing { creditsPerUsd, margin, hosting: { usdPerAwakeHour, usdPerGbHourMemory, usdPerGbMonthStorage, usdPerMillionRequests }, defaultAppModelMonthlyCredits }` (audited; margin ≥ 1.0). `POST /api/organisations { name, slug, ownerEmail, ownerDisplayName? }` → `{ id, slug, name, ownerEmail, ownerInvitationCode, invitationExpiresAt, invitationEmailed, nameCheck: { slug, source: cloudflare|built-in, note } }`; `409 reserved_name`, `503 reserved_names_unavailable`. `GET /api/audit/operator-access?organisation=` (the Owner only) → `[{ id, at, action, operator { id, email, displayName }, detail }]` |
+| Notifications | `GET /api/notifications?organisation=&unread=&limit=` → `{ organisation, unread, notifications: [{ id, kind, severity: info|urgent, title, detail, scope, subject: { kind, id } | null, createdAt, read, emailedAt }] }` (Admin and above where the grant covers the node; others an empty feed); `POST /api/notifications/{id}/read` → 204; `POST /api/notifications/read-all?organisation=` → `{ marked }`. Kinds: `verdict`, `approval`, `hire`, `budget.80`, `budget.cap`, `credits.zero`, `overdraft.half`, `overdraft.limit`, `app.crashed`, `security.finding`; the urgent ones (`budget.cap`, `credits.zero`, `overdraft.*`, `app.crashed`, `security.finding`) are also queued as e-mail to the organisation's Owner and Admins when a mail server is configured |
 | System | `GET /api/system/status`, `GET /api/openapi/v1.json` |
 
 Errors are problem details with a stable `code`. A failed read is distinguishable from an empty one.
@@ -161,7 +174,9 @@ form; anything else is 400 `invalid_return_to`. When it points at the subdomain 
 | `POST /internal/access/check { appId, cookie, path }` | → `{ decision: allow | sign-in | deny, sessionToken, signInUrl, reason }`. `cookie` is the request's whole `Cookie` header; `sessionToken` is app-scoped (`egs_…`, 15 minutes) and never a cookie value; `signInUrl` is null (Edge uses the app's own sign-in page). |
 | `POST /internal/access/handoff { appId, code }` | → `{ cookieName, cookieValue, expiresAt, returnTo }` for Edge to set on the subdomain host, or `410 handoff_invalid` (unknown, used, or older than a minute). |
 | `POST /internal/apps/{id}/token` | → `{ token }` (`egt_…`). Mints a fresh app token, stored only as a hash; the previous one keeps working for `AppSessions:TokenGraceSeconds`. |
-| `POST /internal/apps/{id}/published { version }`, `POST /internal/apps/{id}/state { status }` | Dock's reports. |
+| `POST /internal/apps/{id}/published { version }`, `POST /internal/apps/{id}/state { status }` | Dock's reports. A `failed` state raises an `app.crashed` notification. |
+| `GET /internal/runs/{id}/suggestion-context` | For a `suggest` run: `{ scope, organisation, products: [{ kind: division|project|app, scope, name, status }], ideas: [{ title, status, verdict }], context: ["key: value"], alreadySuggested: [title], maxSuggestions: 5 }`; `409` for another kind of run. |
+| `POST /internal/runs/{id}/suggestions { suggestions: [{ title, idea, gap, whyUs, reuses[] }] }` | The run's result, 1 to 5, once per run → `201 [Suggestion]`; `400` outside those bounds, `409` twice or after the run finished. |
 | `POST /internal/usage/hosting { samples: [{ sampleId, appId, from, to, awakeSeconds, memoryBytes, storageBytes, requests }] }` | → `{ recorded, duplicates, credits }`. One `hosting` ledger entry per sample; a `sampleId` is charged once. **Two reporters**, each sending its own samples: Dock (`dock:<instance>:<app>:<period start>` — awake seconds and mean memory from its memory sampler, the app database's size, `requests: 0`) and Edge (`edge:<process>:<app>:<period start>` — the requests it forwarded, nothing else), every `UsageReportSeconds` (300). Edge alone sees requests, so it reports them rather than handing counts to Dock. A sample not taken is resent under the same id; one refused for good (4xx) is dropped. |
 
 ## Control plane — platform API for apps (`/platform/v1`, app token)
@@ -174,6 +189,66 @@ the app's monthly model allowance (setting `app_models.monthly_credits`, default
 `402 budget_exhausted` with `bindingScope: "app models"`; `402 overdraft_limit` at the overdraft
 limit; OTLP accepts protobuf or JSON, optionally gzipped, and answers an empty response in the
 request's encoding.
+
+## MCP (`/mcp`, `/mcp/apps/{appId}`, personal access token)
+
+The official C# SDK (`ModelContextProtocol.AspNetCore` 2.4.0), streamable HTTP, stateless. Both
+endpoints accept only `Authorization: Bearer egp_…` (`/api` never accepts a token, `/mcp` never a
+cookie); `401` otherwise. A token acts as its person, held to its organisation (any other is `404`)
+and to the lower of its role and theirs; God mode is never available through one. No OAuth
+authorization server exists (the token is made in the console), so no protected-resource metadata
+is published.
+
+- **`/mcp`** — the control plane's tools, each calling the service the public endpoint calls behind
+  the same role check: `tree_get`, `node_create`, `node_update`, `cascade_get`, `cascade_set`,
+  `cascade_remove`, `idea_estimate`, `idea_submit`, `idea_get`, `idea_decide`, `ideas_suggest`,
+  `ideas_suggestions`, `suggestion_take`, `runs_list`, `run_get`, `run_events`, `run_control`,
+  `approval_answer`, `tasks_list`, `credits_get`, `budget_set`, `employees_list`, `employee_get`,
+  `employee_update`, `employee_release`, `hires_list`, `hire_raise`, `hire_decide`, `autonomy_get`,
+  `autonomy_set`, `rule_set_set`, `members_list`, `member_invite`, `member_revoke`, `secrets_list`
+  (names only), `secret_set`, `secret_remove`, `app_get`, `app_settings`, `app_ask`, `app_versions`,
+  `app_restore`, `conversation_post`, `ontology_get`, `notifications_list`. The actor is `mcp`, not a
+  person: `access: public`, an organisation's deepest or own overdraft, top-ups and the export are
+  impossible; a red line refuses a build for everyone. A refusal is a tool result with `isError: true`
+  and the problem `{ status, code, title, detail }` as its text and structured content.
+- **`/mcp/apps/{appId}`** — one tool per operation of the app's OpenAPI document (`openapi/v1.json`,
+  PLATFORM-API §2), fetched through Edge and cached per published version: name from `operationId`,
+  description from the operation, input from its path and query parameters plus `body` (the JSON
+  request body, `$ref`s inlined). `_platform`, `_endgame`, `hooks`, `health` and `openapi` paths are
+  never offered. Listing needs a role on the app (Viewer); a call goes to the app with a fresh
+  app-scoped member session (`X-Endgame-Session: egs_…`), so the app sees that person as at its door,
+  and answers `{ status, body, truncated }` (an app's 4xx/5xx is an error result with its `code`).
+
+**What Edge must serve for it** (control listener, service token): `ANY /internal/apps/{appId}/call/{**path}`
+— wake the app if it sleeps, forward method, query, body, `Content-Type` and the `X-Endgame-Session`
+header unchanged to `http://app-<id:N>:8080/{path}` with the path form's `X-Forwarded-Prefix`, return
+the app's status, `Content-Type` and body; `400` for a `_platform/` path, `404` for an app it does not
+route, `409` paused or unpublished, `503` when it cannot be woken. `AppCalls__Transport=direct` posts
+straight to the container instead.
+
+## Ask about this app
+
+Four views in schema `ask`, `security_invoker`, each one app's telemetry only:
+`requests(at, method, route, path, status, duration_ms, failed)`, `errors(at, source, status, route, message)`,
+`events(at, name, user_id, properties)`, `metrics(at, name, unit, type, value, count, sum)`. The model
+(route `ask`, two calls plus one uncharged repair) writes one query; three fences hold it:
+
+1. **The guard** (`TelemetrySqlGuard`): one `SELECT` or `WITH … SELECT`; relations only the four views
+   (or a CTE defined earlier); functions from an allow-list; casts to a list of types; no comments,
+   quoted identifiers, dollar quoting, escapes, `INTO`, locks or session statements.
+2. **The role**: the query runs in a read-only transaction as `endgame_ask` (no login, no inherit),
+   which may read only the views and the four telemetry tables under them; the tenant policy pins
+   the organisation and a restrictive policy for that role pins the app, from transaction-local
+   settings. `set_config` is executable only by `endgame_app` and `endgame_system`, so a query cannot
+   move its own pins.
+3. **Limits**: `statement_timeout` (`Ask:StatementTimeoutMs`, 3000) and at most `Ask:MaxRows` (500) rows.
+
+## Prices
+
+One settings document (`platform_settings`, key `pricing`), its every change in
+`platform_setting_changes` (append-only). Every scope resolves `CreditOptions`, the hosting rates and
+the default per-app model allowance from it (cached 30 s, refreshed at once on a change); configuration
+holds the defaults until the first save.
 
 ## Platform → app callbacks
 
@@ -193,7 +268,12 @@ posts straight to the container instead.
 `GET /internal/repos/{appId}` and `…/log`, `…/files`, `…/archive`, `…/export`, `POST …/restore`;
 `POST /internal/apps/{id}/build`, `…/start`, `…/stop`, `…/wake`, `PUT …/egress`,
 `GET /internal/apps` and `…/{id}`, `DELETE …/{id}`; `POST /internal/usage/flush`. Shapes are in
-`Endgame.Hosting.Contracts`. `start` asks the control plane for a fresh app token
+`Endgame.Hosting.Contracts`.
+
+**Owed by Dock** (the control plane calls it; built and tested against a fake):
+`GET /internal/apps/{id}/database/dump` → `200 application/octet-stream`, a `pg_dump --format=custom`
+of the app's own database (Dock alone knows its opaque name; its image needs `pg_dump` 16), streamed;
+`404 { code: "not_found" }` when the app has no database yet. Until it exists, the export answers `502`. `start` asks the control plane for a fresh app token
 (`POST /internal/apps/{id}/token`) unless one is given, and injects it as `ENDGAME_APP_TOKEN`.
 
 ## Edge — control listener (`:8081`, service token)
@@ -246,10 +326,22 @@ under both address shapes, exposes `/health` and its OpenAPI description, reache
 through the kit with the token Dock injects, and has no outbound access except through the egress
 proxy. PLATFORM-API.md is the contract.
 
+## The `suggest` run (owed by the Runner)
+
+A Builder's `POST /api/ideas/suggestions` queues a run of kind `suggest` at the organisation or a
+division, its log opening with `estimate.made { credits, basis: "suggest" }` and a `message`
+`{ from: owner, kind: ideas.suggest, text }`. The Runner claims it like any run
+(`kinds` including `suggest`), reads `GET /internal/runs/{id}/suggestion-context` (and the ontology,
+`GET /internal/ontology?scope=`), makes its model calls on the `research` route with the run id (so
+they are reserved, attributed and capped as usual, within `Estimates:SuggestCalls`, 6), posts one to
+five suggestions to `POST /internal/runs/{id}/suggestions`, then finishes the run (`run.finished`).
+Each suggestion names the gap it fills, why this organisation is placed to build it (from its
+products and ideas), and what it would reuse; none repeats `alreadySuggested` or an existing idea.
+
 ## Ports and names (inside the compose network)
 
 Every service listens on `8080`; Edge's control listener on `8081`. Names: `edge`, `control-plane`,
-`runner`, `dock`, `console`, `postgres`, `egress`, and in development `mailcatcher` (SMTP `1025`).
+`runner`, `dock`, `console`, `postgres`, `egress`, `ops`, and in development `mailcatcher` (SMTP `1025`).
 App containers are `app-<app id>`, workspaces `ws-<run id>`. The control plane finds its peers through `Services__ControlPlane`, `__Edge`,
-`__EdgeControl`, `__Runner`, `__Dock`, `__Console`, `__Collector`, whose defaults are these names in
-every environment.
+`__EdgeControl`, `__Runner`, `__Dock`, `__Console`, `__Ops`, `__Collector`, whose defaults are these names in
+every environment (`__Ops` empty: no ops service, organisation names are checked against the built-in list).

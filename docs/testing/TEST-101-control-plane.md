@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | **ID** | TEST-101 |
-| **Covers** | UC-101 to UC-115 · ARCH-002 · ARCH-003 · ARCH-004 (control-plane side) |
+| **Covers** | UC-101 to UC-120 · ARCH-002 · ARCH-003 · ARCH-004 (control-plane side) |
 | **Status** | Current |
 
 ## What must be true
@@ -28,6 +28,14 @@ The acceptance statements of UC-101 to UC-115. The ones with the most weight, an
 | The track record is derived, never counted | `WorkforceTests.The_track_record_is_derived_from_runs_their_logs_and_the_ledger` |
 | Every organisation-scoped table forces row-level security | `WorkforceTests.Every_organisation_scoped_table_forces_row_level_security` (every table with `organisation_id`) |
 | The memory change log is append-only | `WorkforceTests.Memory_is_written_after_a_task…` (a DELETE as the owner is refused) |
+| Every public endpoint × every role × inside and outside scope | `AuthorizationMatrixTests` — every `/api` endpoint has a row (or an exemption with its reason) or the build fails; a role at or above the row's minimum is let through, one below is `403`, outside is `404`; operators' rows refuse every member, the Owner included |
+| Every MCP tool is held to the same roles | `AuthorizationMatrixTests.Every_mcp_tool_is_held_to_the_same_roles…` (each tool × Admin, Builder, Viewer tokens, inside and outside; another organisation is `404`) |
+| Access tokens are hashed, capped, never Owner, revocable, last use shown | `McpTests.Tokens_are_shown_once…` |
+| The SDK's own MCP client lists and calls control-plane tools, under the console's rules | `McpTests.The_control_plane_tools_do_what_the_console_does…` (secrets never read back; `public` is `human_only`; an organisation's overdraft refused; another organisation not found) |
+| A token's role caps its person's | `McpTests.A_viewers_token_reads_and_changes_nothing` |
+| An app's own API is derived from its OpenAPI and called through Edge with a member session | `McpTests.An_apps_own_api_is_derived…` (fake Edge control listener) |
+| Versions name their authors; a restore is a new commit, rebuilt, and a public app turns private; only the Owner exports | `VersionsAndExportTests` (fake Dock) |
+| Reserved names, role changes, runs by employee, notifications, top-up requests, God mode, prices, suggestions | `BreadthTests` (fake ops service) |
 
 ## Tests
 
@@ -38,6 +46,7 @@ The acceptance statements of UC-101 to UC-115. The ones with the most weight, an
 | Integration | `ControlPlane/*Tests.cs` with `WebApplicationFactory` | The real control plane on a freshly migrated database; only OpenRouter replaced |
 | Integration | `ControlPlane/WorkforceTests.cs` | The standing security reviewer; hire proposals, auto-mode within budget, one proposal per need, edit/accept/decline, checkpoints; the derived track record; memory written, read per scope, reviewed and curated; reassign, release, rehire; contractors, their caps and promotion; idle flag and auto-release; the ontology |
 | Integration | `ControlPlane/RunnerContractTests.cs` | Section A of the third pass through the Runner's real client classes |
+| Integration | `ControlPlane/McpTests.cs`, `AuthorizationMatrixTests.cs`, `VersionsAndExportTests.cs`, `BreadthTests.cs` | The fourth pass: MCP and tokens, the roles everywhere, versions and export, the rest of the breadth |
 | Live (opt-in) | `ControlPlane/LiveModelTests.cs` | Every routed model id exists on OpenRouter; one real call settles at or under its reservation |
 
 **Fixtures** (`src/backend/Endgame.Tests/Fixtures/`):
@@ -49,7 +58,12 @@ The acceptance statements of UC-101 to UC-115. The ones with the most weight, an
   usage on the last chunk, an error inside a 200, a mid-stream error chunk, a 404 when no provider fits
   `max_price`, and `/api/v1/generation`. It keeps every request body for assertions and can hold calls in flight.
 - `SoftwareAuthenticator` — an ES256 passkey producing WebAuthn registration and assertion responses (minimal CBOR).
-- `ControlPlaneApp` — the host, with browser-like clients (cookies, `Origin`) and a service-token client.
+- `ControlPlaneApp` — the host, with browser-like clients (cookies, `Origin`), a service-token client, a
+  bearer client and the MCP SDK's own client (`McpAsync`) for access tokens. It sets `Services:Ops`
+  empty (the built-in reserved names) and switches the notification sweep off; tests drive
+  `NotificationSweep.RunOnceAsync`.
+- `FakePeer` — an in-test Kestrel server each test maps routes on, standing in for Dock, the ops service
+  or Edge's control listener, with every request kept.
 
 Commands: `make test` (whole suite); iterate with
 `MSBuildEnableWorkloadResolver=false dotnet test src/backend/Endgame.Tests/Endgame.Tests.csproj --filter "FullyQualifiedName~ModelGatewayTests"`.
@@ -72,6 +86,8 @@ Reasoned from each test's setup; the passkey-origin, development-sign-in, auto-h
 | Promotion | Two contractors in the role instead of three: no proposal is raised |
 | Idle release | The project's autonomy `auto` → `checkpoints`: the sweep releases no one and the flag waits in needsYou |
 | Red line | `redLines.breached` true → false: the overrule is accepted |
+| Authorisation matrix | Changing one endpoint's role (the dashboard read to Builder) and one tool's (`secrets_list` to Viewer) made both matrix tests fail with exactly those rows (run once, then reverted) |
+| Notifications, once per episode | Without the sweep between the half-way sample and the one past the limit, `overdraft.half` is never raised (it was, before the test was ordered so) |
 
 ## Against the running system
 

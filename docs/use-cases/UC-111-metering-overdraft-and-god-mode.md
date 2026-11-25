@@ -25,6 +25,12 @@
    each entry (one per operator per organisation per ten minutes) is written to `operator_actions`, which the
    Owner reads at `/api/audit/operator-access`, with every other operator action.
 5. The sweep releases reservations that lapsed with their lease and requeues runs whose lease lapsed.
+6. God mode's screens (operators only, never by access token): `GET /api/operator/organisations` — each
+   organisation's balance, standing (`in-credit`, `overdrawn`, `at-limit`), overdraft, apps, last
+   activity and open top-up requests; `POST /api/operator/organisations/{slug}/enter` (logged);
+   `PUT …/{slug}/overdraft { credits }` (logged); `GET /api/operator/top-ups`; the top-up requests; the prices.
+7. Provisioning hands over: `POST /api/organisations { name, slug, ownerEmail }` returns the Owner's
+   one-time code once and e-mails it when a mail server is configured (`invitationEmailed`).
 
 ## Alternate and failure flows
 
@@ -43,4 +49,5 @@
 
 Tests: [`TEST-102`](../testing/TEST-102-platform-api.md) — `ControlPlaneDebtsTests`;
 [`TEST-010`](../testing/TEST-010-hosting.md) — `UsageLedgerTests`, `EdgePipelineTests` (requests);
-[`TEST-090`](../testing/TEST-090-stack-acceptance.md) — usage as credits, the paused page and the top-up.
+[`TEST-090`](../testing/TEST-090-stack-acceptance.md) — usage as credits, the paused page and the top-up;
+[`TEST-101`](../testing/TEST-101-control-plane.md) — `BreadthTests` (God mode's screens, hand-over).

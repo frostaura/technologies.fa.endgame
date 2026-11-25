@@ -32,6 +32,15 @@ path, and the bill is the ledger, line by line.
    run's lease, and a sweep writes the release.
 4. `GET /api/credits?scope=` → `{ scope, balance, month { spent, ai, hosting }, monthsLeftAtPace, budgets[] { scope, name, level, depth, spentCredits, capCredits, appId } (tree order), estimates | null, notCharged { credits, repairs }, overdraft { frostauraLimit, ownLimit }, topUps[], heldCredits, available }`.
 
+5. An Owner asks for more: `POST /api/credits/top-up-requests { credits, note }`; it appears to operators
+   (`GET /api/operator/top-up-requests`), who top up by hand naming it (`requestId`) or decline it. No
+   payment is taken.
+6. Tighter limits: `PUT /api/credits/overdraft { scope, credits }` — the organisation's own (Owner), or a
+   narrower one for a division, project or app (Admin); never deeper than what applies above.
+7. The figures are one runtime document (`/api/operator/pricing`, operators): credits per dollar, the
+   margin, hosting rates, the default per-app model allowance. A change applies to the next charge and
+   is audited.
+
 ## Alternate and failure flows
 
 - **A1 — a cap would be exceeded.** The call is refused 402 `budget_exhausted`, `terminal: true`, naming the
@@ -55,7 +64,7 @@ path, and the bill is the ledger, line by line.
 - 40 concurrent admissions against a budget fitting 13 admit exactly 13; 12 concurrent HTTP calls fitting 5 reach the provider exactly 5 times.
 - Settled spend equals the reply's cost; a refusal or provider error releases the hold.
 
-Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `ModelGatewayTests`, `DatabaseInvariantTests`, `CascadeCreditsAndAppsTests`.
+Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `ModelGatewayTests`, `DatabaseInvariantTests`, `CascadeCreditsAndAppsTests`, `BreadthTests` (requests, limits, prices).
 
 ## Links
 
