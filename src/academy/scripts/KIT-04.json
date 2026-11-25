@@ -1,0 +1,49 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-04",
+  "persona": "end-user",
+  "scenario": "app-busy",
+  "start": "/__app/{app}/path/_endgame/auth/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in with your passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The reading list",
+        "note": "An end user's passkey belongs to this one app. “New here? Create your sign-in” goes to sign-up."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "The app is private now",
+      "persona": "end-user",
+      "scenario": "app-private",
+      "start": "/__app/{app}/path/_endgame/auth/sign-in",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Sign in with your passkey"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "This app is private",
+            "note": "Only members with rights over it may open it now."
+          }
+        }
+      ]
+    }
+  ]
+}

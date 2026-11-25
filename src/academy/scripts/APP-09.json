@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-09",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label=\"Secrets it can read\"]",
+        "note": "Each name, and where it was set. Never a value."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Manage secrets"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Secrets for Court booking",
+        "note": "The secrets page, at this app (SEC-01)."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "No secrets apply",
+      "persona": "admin",
+      "scenario": "no-secrets",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "No secrets apply to it.",
+            "note": "Add one, and the app reads it by name."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below Admin",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "An Admin or the Owner sees which secrets it is given",
+            "note": "Below Admin the names are not even asked for."
+          }
+        }
+      ]
+    }
+  ]
+}

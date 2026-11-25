@@ -1,0 +1,395 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ASK-02",
+  "persona": "builder",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Which days are busiest?"
+            },
+            "text": "Which days are busiest?"
+          }
+        },
+        {
+          "click": {
+            "text": "See what it costs"
+          }
+        },
+        {
+          "click": {
+            "selector": "div[role=\"status\"] > button"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Asking…",
+        "note": "Asking: a model writes one read-only query."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Saturday is the busiest day",
+        "note": "The query was guarded and run on this app's own records, then a second call put the rows into words. A failed query is repaired once, free."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Cost 0.1 credits of at most 0.4 credits",
+        "note": "Charged at the real cost, against the most it could have cost; then the answer and its chart, here bars."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Mon",
+        "note": "A chart of up to 24 bars. Had there been more rows than shown, a line under it would say so."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "credits left",
+        "note": "The balance is read again: it fell by what the question cost."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A line over the week",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "How did visits go this week?"
+              }
+            },
+            {
+              "click": {
+                "text": "See what it costs"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "the week has been rising",
+            "note": "A line: up to 120 points."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A single number",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "How many visits today?"
+              }
+            },
+            {
+              "click": {
+                "text": "See what it costs"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "186 visits today.",
+            "note": "A single number."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A table",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Which pages are slowest?"
+              }
+            },
+            {
+              "click": {
+                "text": "See what it costs"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The booking page is the slowest",
+            "note": "A table: its first 50 rows."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A long table, cut short",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "List every booking made today"
+              }
+            },
+            {
+              "click": {
+                "text": "See what it costs"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Only the first rows are shown; there were more.",
+            "note": "More rows came back than are shown, and it says so."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A table with no rows",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Which requests failed today?"
+              }
+            },
+            {
+              "click": {
+                "text": "See what it costs"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "No rows came back.",
+            "note": "Nothing matched, and the table says so."
+          }
+        }
+      ]
+    },
+    {
+      "title": "The app does not record it",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "How much money did we take this month?"
+              }
+            },
+            {
+              "click": {
+                "text": "See what it costs"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The app does not record payments",
+            "note": "Declined: the model's own plain reason, and nothing is charged for an answer."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Still unanswerable after the free repair",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Why do people cancel?"
+              }
+            },
+            {
+              "click": {
+                "text": "See what it costs"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "It could not be worked out from what this app records.",
+            "note": "The query failed twice; the repair was not charged."
+          }
+        }
+      ]
+    },
+    {
+      "title": "It takes too long",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Who has visited the most ever?"
+              }
+            },
+            {
+              "click": {
+                "text": "See what it costs"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "That question took too long to answer.",
+            "note": "Too wide: ask for a narrower period."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A spent budget",
+      "persona": "builder",
+      "scenario": "budget-spent",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Which days are busiest?"
+              }
+            },
+            {
+              "click": {
+                "text": "See what it costs"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The monthly budget at",
+            "note": "A budget above the app is spent: nothing is asked."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-03",
+  "persona": "viewer",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Open the app",
+        "note": "The app lives at its own address, outside the console."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Open the app"
+          }
+        }
+      ],
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "It opens at the subdomain address; with no subdomain, at the path address."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-app",
+        "note": "Priya is a member, so the app opens. Others meet its sign-in page, and a sleeping app wakes first."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Signed out: the app asks who you are",
+      "persona": "signed-out",
+      "scenario": "app-private",
+      "start": "/__app/{app}/subdomain/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "testId": "edge-page",
+            "note": "Nobody is signed in, so the app's sign-in page answers instead (KIT-01, KIT-02)."
+          }
+        }
+      ]
+    }
+  ]
+}

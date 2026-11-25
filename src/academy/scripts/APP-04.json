@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "APP-04",
   "persona": "builder",
-  "scenario": "app-live",
+  "scenario": "app-busy",
   "start": "/apps/{app}",
   "steps": [
     {
@@ -17,7 +17,8 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "text": "Today's prices"
+        "text": "Today's prices",
+        "note": "What the figures are built from: its own hours, and today's prices."
       }
     },
     {
@@ -26,12 +27,12 @@
       "act": [
         {
           "click": {
-            "text": "Always on"
+            "text": "Sleeps when unused"
           }
         }
       ],
       "highlight": {
-        "text": "Always on",
+        "text": "Sleeps when unused",
         "note": "The choice shows at once, before the server answers."
       }
     },
@@ -39,9 +40,43 @@
       "step": 4,
       "kind": "demo",
       "highlight": {
-        "text": "Always on",
-        "note": "Saved: the edge is told the routes changed, and the org chart refreshes."
+        "text": "Sleeps after this many idle minutes",
+        "note": "Saved: it now sleeps when unused, and its idle minutes can be set (APP-05)."
       }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Not enough history to price it",
+      "persona": "builder",
+      "scenario": "app-never-measured",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Not enough history yet",
+            "note": "Under 24 measured hours in 14 days: no monthly figure is guessed."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below Builder",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "A Builder or above changes how it runs.",
+            "note": "A Viewer sees the choices, disabled, and who can change them."
+          }
+        }
+      ]
     }
   ]
 }

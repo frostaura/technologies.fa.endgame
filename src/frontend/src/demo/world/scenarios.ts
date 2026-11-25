@@ -152,7 +152,7 @@ defineScenario({
     const o = w.organisations.find((x) => x.slug === ORG);
     if (!o) return;
     o.balance = -(o.ownLimit ?? o.frostauraLimit);
-    for (const a of w.apps) if (a.path.startsWith(`${ORG}/`) && a.status !== "failed") Object.assign(a, { running: "paused", status: "stopped", pausedReason: "overdraft", health: "unknown", healthSummary: "Paused: the organisation reached its overdraft limit." });
+    for (const a of w.apps) if (a.path.startsWith(`${ORG}/`) && a.status !== "failed") Object.assign(a, { running: "paused", status: "stopped", pausedReason: "overdraft", health: "unknown", healthSummary: "Paused: the organisation reached its overdraft limit. A top-up restores it at once." });
     stopLiveRuns(w, "Stopped at the overdraft limit.");
     w.notifications.unshift({ id: uuidFor("notification:overdraft.limit:northwind"), kind: "overdraft.limit", severity: "urgent", title: "The overdraft limit is reached: work has stopped and apps are paused", detail: `The balance is ${o.balance} credits. Nothing is deleted; a top-up restores everything at once.`, scope: ORG, subject: null, createdAt: new Date().toISOString(), read: false, emailedAt: new Date().toISOString(), organisation: ORG });
   },
@@ -168,7 +168,7 @@ defineScenario({
     const spent = w.spend.filter((s) => s.path.startsWith(`${ORG}/technologies`)).reduce((n, s) => n + s.ai + s.hosting, 0);
     if (b) b.cap = Math.floor(spent);
     const app = w.apps.find((a) => a.id === IDS.tableBookings);
-    if (app) Object.assign(app, { running: "paused", status: "stopped", pausedReason: "budget", health: "unknown", healthSummary: "Paused: Technologies has spent its monthly budget." });
+    if (app) Object.assign(app, { running: "paused", status: "stopped", pausedReason: "budget", health: "unknown", healthSummary: "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it." });
     w.notifications.unshift({ id: uuidFor("notification:budget.cap:tech"), kind: "budget.cap", severity: "urgent", title: "Technologies reached its monthly budget", detail: `${Math.floor(spent)} of ${Math.floor(spent)} credits spent this month at ${ORG}/technologies. Work there stops until the budget is raised or the month turns.`, scope: `${ORG}/technologies`, subject: null, createdAt: new Date().toISOString(), read: false, emailedAt: null, organisation: ORG });
   },
   route: "/credits",

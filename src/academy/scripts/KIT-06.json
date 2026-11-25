@@ -1,0 +1,17 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-06",
+  "persona": "signed-out",
+  "scenario": "app-public",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "The reading list",
+        "note": "Admitted with no session: no sign-in page, and the app sees no one signed in."
+      }
+    }
+  ]
+}

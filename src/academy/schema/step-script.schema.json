@@ -90,7 +90,9 @@
         "app-unreachable",
         "outage",
         "no-secrets",
-        "dashboard-full"
+        "dashboard-full",
+        "app-long-history",
+        "wake-failures"
       ]
     },
     "start": {

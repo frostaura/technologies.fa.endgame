@@ -224,6 +224,12 @@ describe("history", () => {
     expect(versionTitle(VERSIONS.versions[2] as never, false)).toBe("Replace the Notes screens with the Books screens");
     expect(versionTitle(VERSIONS.versions[2] as never, true)).toBe("frontend-books: replace the Notes screens with the Books screens");
   });
+
+  it("names a restore for what it is, not by its commit id", () => {
+    const restore = { commit: "c".repeat(40), message: "Restore the version 8433c60166e2", at: "t", author: { kind: "person", id: "u1", name: "Ada Lovelace" }, live: true };
+    expect(versionTitle(restore as never, false)).toBe("An earlier version, brought back");
+    expect(versionTitle(restore as never, true)).toBe("Restore the version 8433c60166e2");
+  });
 });
 
 describe("what it uses, and taking it away", () => {

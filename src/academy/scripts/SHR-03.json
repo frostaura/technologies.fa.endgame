@@ -1,0 +1,98 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHR-03",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Invite by e-mail"
+            },
+            "text": "coach@northwind.example"
+          }
+        },
+        {
+          "click": {
+            "text": "Invite"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "coach@northwind.example",
+        "note": "It joins the list at once, while it is invited."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "email",
+      "from": "Endgame <no-reply@endgame.example>",
+      "to": "coach@northwind.example",
+      "subject": "Northwind shared Court booking with you",
+      "body": [
+        "Northwind shared Court booking with you.",
+        "Open https://endgame.example/northwind/technologies/court-booking/web/ and choose \"Create your sign-in\" with this e-mail address and the code below.",
+        "You sign in with a passkey; no password is ever set.",
+        "Invitation code: 3f9c2a7e41b84d06a95e1c7d28b4f0e3",
+        "It works once, until 2026-12-09 12:00 UTC."
+      ],
+      "note": "Sent because this installation has a mail server. The code (32 characters, invented here) lasts 14 days; only its hash is kept."
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "[aria-label=\"Invitation code\"]",
+        "note": "The page shows the code once too, with Copy the code. It will not be shown again."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Done"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Invited just now",
+        "note": "They register with it at the app (KIT-03)."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Not an e-mail address",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Invite by e-mail"
+                },
+                "text": "coach at northwind"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "That does not look like an e-mail address.",
+            "note": "Checked as you type; Invite stays disabled."
+          }
+        }
+      ]
+    }
+  ]
+}

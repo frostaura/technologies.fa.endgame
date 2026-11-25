@@ -1,0 +1,42 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ASK-06",
+  "persona": "builder",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Take off"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Which weekday gets the most bookings?",
+        "note": "The first card left at once, with no confirmation."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Viewer cannot take one off",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "How many visits a day this week?",
+            "note": "A Viewer reads the cards; only a Builder takes one off."
+          }
+        }
+      ]
+    }
+  ]
+}

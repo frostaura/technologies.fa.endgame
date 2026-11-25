@@ -1,0 +1,32 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HOST-01",
+  "persona": "viewer",
+  "scenario": "app-asleep",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Open the app"
+          }
+        }
+      ],
+      "highlight": {
+        "testId": "hosted-waiting",
+        "note": "Asleep: the edge starts one wake, shared by every visitor arriving now. The first visitor waits a moment."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "The reading list",
+        "note": "Once the app answers, the edge forwards the request; the reply carries how long the wake took."
+      }
+    }
+  ]
+}

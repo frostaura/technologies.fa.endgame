@@ -61,8 +61,13 @@ defineScenario({
   title: "Tutor Match has an address, but no version is published yet",
   apply: (w) => {
     const a = w.apps.find((x) => x.id === IDS.tutorMatch);
-    if (a) Object.assign(a, { status: "draft", version: null, publishedAt: null, telemetry: null, healthSummary: "Not published yet." });
+    if (!a) return;
+    Object.assign(a, { status: "draft", version: null, publishedAt: null, telemetry: null, healthSummary: "Not published yet." });
+    // Nothing has been built, run or spent on it yet, so it can still be deleted (APP-14).
     delete w.versions[IDS.tutorMatch];
+    w.spend = w.spend.filter((s) => s.path !== a.path);
+    w.employees = w.employees.filter((e) => e.scope !== a.path);
+    w.tasks = w.tasks.filter((x) => x.scope !== a.path);
   },
   route: "/apps/{app}",
   featured: { app: IDS.tutorMatch },
@@ -103,4 +108,30 @@ defineScenario({
   },
   route: "/apps/{app}",
   featured: COURT,
+});
+
+defineScenario({
+  name: "app-long-history",
+  title: "Court booking with a long history: more versions than one page shows",
+  apply: (w) => {
+    const list = (w.versions[IDS.tableBookings] ??= []);
+    const oldest = list[list.length - 1];
+    const older = ["Court colours on the booking grid", "Members choose a favourite court", "Booking reminders the evening before", "Cancel a booking up to two hours before", "A month view for the league", "Guests booked by a member", "Club closing days block bookings", "Weekly summary for the committee", "Coaching sessions bookable by coaches", "Booking confirmations by e-mail"];
+    older.forEach((message, i) => list.push({ commit: uuidFor(`commit:long-history:${i}`).replace(/-/g, "").slice(0, 40), message, at: ago((45 + i * 6) * 24 * 60), author: { kind: "employee", id: oldest?.author.id ?? null, name: "Kasper" }, live: false }));
+  },
+  route: "/apps/{app}",
+  featured: COURT,
+});
+
+// HOST-02: every way a wake can end without the app, one app each.
+defineScenario({
+  name: "wake-failures",
+  title: "Wakes that do not finish: too slow, no room, not published, unreachable",
+  apply: (w) => {
+    w.edgeAnswer = { [IDS.courseNotes]: "slow", [IDS.tableBookings]: "busy", [IDS.shiftRota]: "unreachable" };
+    const t = w.apps.find((x) => x.id === IDS.tutorMatch);
+    if (t) Object.assign(t, { status: "draft", version: null, publishedAt: null, telemetry: null, healthSummary: "Not published yet." });
+  },
+  route: "/__app/{app}/path/",
+  featured: NOTES,
 });

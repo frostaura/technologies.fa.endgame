@@ -1,0 +1,56 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-01",
+  "persona": "signed-out",
+  "scenario": "app-private",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Not signed in: a GET is redirected to the app's own sign-in page, remembering where it was going."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Members of Northwind",
+        "note": "The edge's own page: members sign in with the passkey they use for Endgame."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign in to Court booking",
+        "note": "A private app has no “Using this app” section: no one else may make a sign-in."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in with a passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The reading list",
+        "note": "The passkey prompt done, they are back where they asked to go."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "The app is given a 15-minute token for this app alone, never the browser's own cookie."
+      }
+    }
+  ]
+}

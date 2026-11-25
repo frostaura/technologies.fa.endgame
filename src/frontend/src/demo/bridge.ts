@@ -1,6 +1,6 @@
 import { clock } from "./server/engine";
 import { goto, reset, seekTo } from "./host";
-import { clearSpotlight, moveCursor, showSpotlight } from "./overlay";
+import { clearSpotlight, moveCursor, rectOf, showSpotlight } from "./overlay";
 
 /**
  * The academy bridge (ARCH-009): a small postMessage protocol through which a parent frame drives
@@ -58,7 +58,7 @@ function visible(el: Element): boolean {
   if (el.closest("[data-demo-chrome]")) return false;
   const r = (el as HTMLElement).getBoundingClientRect();
   if (r.width === 0 && r.height === 0) return false;
-  const style = getComputedStyle(el);
+  const style = (el.ownerDocument.defaultView ?? window).getComputedStyle(el);
   return style.visibility !== "hidden" && style.display !== "none";
 }
 
@@ -68,18 +68,33 @@ function norm(s: string | null | undefined): string {
 
 function nameOf(el: Element): string {
   const labelled = el.getAttribute("aria-labelledby");
-  const byId = labelled ? labelled.split(" ").map((id) => document.getElementById(id)?.textContent ?? "").join(" ") : "";
+  const byId = labelled ? labelled.split(" ").map((id) => el.ownerDocument.getElementById(id)?.textContent ?? "").join(" ") : "";
   return norm(el.getAttribute("aria-label") || byId || (el as HTMLInputElement).value || el.textContent);
 }
 
 function controlFor(label: Element): HTMLElement | null {
   const forId = label.getAttribute("for");
-  if (forId) return document.getElementById(forId);
+  if (forId) return label.ownerDocument.getElementById(forId);
   return label.querySelector("input, textarea, select");
 }
 
-/** The element a target names, or null; `field` prefers form controls (for typing and selecting). */
-export function find(target: Target | string, field = false): HTMLElement | null {
+/**
+ * The element a target names, or null; `field` prefers form controls (for typing and selecting).
+ * The console's page is searched first, then any of the Edge's own pages (same-origin frames).
+ */
+export function find(target: Target | string, field = false, strict = false): HTMLElement | null {
+  const inPage = findIn(document, target, field, strict);
+  if (inPage) return inPage;
+  for (const frame of document.querySelectorAll<HTMLIFrameElement>('iframe[data-testid="edge-page"]')) {
+    const doc = frame.contentDocument;
+    const el = doc ? findIn(doc, target, field, strict) : null;
+    if (el) return el;
+  }
+  return null;
+}
+
+/** `strict`: only a control or field that the words name — never a region or a run of text that merely holds them. */
+function findIn(document: Document, target: Target | string, field: boolean, strict = false): HTMLElement | null {
   const t: Target = typeof target === "string" ? { text: target } : target;
   if (t.selector) return [...document.querySelectorAll<HTMLElement>(t.selector)].find(visible) ?? null;
   if (t.testId) return [...document.querySelectorAll<HTMLElement>(`[data-testid="${CSS.escape(t.testId)}"]`)].find(visible) ?? null;
@@ -108,6 +123,7 @@ export function find(target: Target | string, field = false): HTMLElement | null
   if (starts) return starts;
   const contains = controls.filter((c) => nameOf(c).includes(want)).sort((a, b) => nameOf(a).length - nameOf(b).length)[0];
   if (contains) return contains;
+  if (strict) return null;
   // A region or list named for it (aria-label), such as "Parts of the plan".
   const named = [...document.querySelectorAll<HTMLElement>("[aria-label]")].find((el) => norm(el.getAttribute("aria-label")) === want && visible(el));
   if (named) return named;
@@ -117,10 +133,13 @@ export function find(target: Target | string, field = false): HTMLElement | null
   return all[0] ?? null;
 }
 
-async function waitFor(target: Target | string, field = false, ms = 6000): Promise<HTMLElement> {
+async function waitFor(target: Target | string, field = false, ms = 6000, preferControls = false): Promise<HTMLElement> {
   const until = performance.now() + ms;
+  // What a step acts on is a control: while one may still be loading, plain text that happens to
+  // hold the same words ("…replace it.", "Ask it again…") is not taken for it.
+  const patient = preferControls ? performance.now() + Math.min(ms, 4000) : 0;
   for (;;) {
-    const el = find(target, field);
+    const el = find(target, field, performance.now() < patient);
     if (el) return el;
     if (performance.now() > until) throw new Error(`Nothing on the screen matches ${JSON.stringify(target)}.`);
     await sleep(100);
@@ -137,12 +156,12 @@ async function approach(el: HTMLElement) {
   el.scrollIntoView({ block: "center", behavior: instantNow || reduced() ? "auto" : "smooth" });
   if (instantNow) return;
   await sleep(250);
-  const r = el.getBoundingClientRect();
+  const r = rectOf(el);
   await moveCursor(r.left + r.width / 2, r.top + r.height / 2);
 }
 
 function setValue(el: HTMLElement, value: string) {
-  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : el.tagName === "SELECT" ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, value);
   el.dispatchEvent(new Event("input", { bubbles: true }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
@@ -150,12 +169,12 @@ function setValue(el: HTMLElement, value: string) {
 
 async function perform(action: Action) {
   if ("click" in action) {
-    const el = await waitFor(action.click);
+    const el = await waitFor(action.click, false, 6000, true);
     await approach(el);
     el.focus({ preventScroll: true });
     el.click();
   } else if ("type" in action) {
-    const el = await waitFor(action.type.into, true);
+    const el = await waitFor(action.type.into, true, 6000, true);
     await approach(el);
     el.focus({ preventScroll: true });
     if (instantNow || reduced()) setValue(el, action.type.text);
@@ -168,10 +187,10 @@ async function perform(action: Action) {
       }
     }
   } else if ("select" in action) {
-    const el = await waitFor(action.select.into, true);
+    const el = await waitFor(action.select.into, true, 6000, true);
     await approach(el);
     const want = norm(action.select.value);
-    if (el instanceof HTMLSelectElement) {
+    if (el.tagName === "SELECT" && el instanceof (el.ownerDocument.defaultView ?? window).HTMLSelectElement) {
       const option = [...el.options].find((o) => norm(o.textContent) === want || norm(o.value) === want) ?? [...el.options].find((o) => norm(o.textContent).startsWith(want));
       if (!option) throw new Error(`The list ${JSON.stringify(action.select.into)} has no ${action.select.value}.`);
       setValue(el, option.value);
@@ -181,12 +200,14 @@ async function perform(action: Action) {
     }
   } else if ("press" in action) {
     const key = typeof action.press === "string" ? action.press : action.press.key;
-    const el = (document.activeElement as HTMLElement | null) ?? document.body;
+    let el = (document.activeElement as HTMLElement | null) ?? document.body;
+    // Focus inside one of the Edge's pages: the key goes to what has focus in that frame.
+    if (el.tagName === "IFRAME") el = ((el as HTMLIFrameElement).contentDocument?.activeElement as HTMLElement | null) ?? el;
     el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
     if (key === "Enter") {
       const form = el.closest("form");
       if (form) form.requestSubmit();
-      else if (el instanceof HTMLButtonElement || el instanceof HTMLAnchorElement) el.click();
+      else if (el.tagName === "BUTTON" || el.tagName === "A") el.click();
     }
     el.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
   } else if ("wait" in action) {
@@ -210,9 +231,11 @@ export function runClock(args: ClockArgs) {
 // ---------------------------------------------------------------------------------------------
 
 export const endgameDemo = {
-  goto(args: { route?: string; persona?: string; scenario?: string }) {
+  /** Resolves once the new screen has been drawn, so what a step then acts on is that screen's. */
+  async goto(args: { route?: string; persona?: string; scenario?: string }) {
     clearSpotlight();
     goto(args);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   },
   async highlight(args: Target & { note?: string }) {
     if (!args.selector && !args.testId && !args.text && !args.label) {
@@ -265,7 +288,7 @@ async function handle(m: Envelope) {
   try {
     switch (m.op) {
       case "goto":
-        endgameDemo.goto(args as { route?: string; persona?: string; scenario?: string });
+        await endgameDemo.goto(args as { route?: string; persona?: string; scenario?: string });
         await sleep(50);
         post({ id: m.id, op: "goto" });
         break;

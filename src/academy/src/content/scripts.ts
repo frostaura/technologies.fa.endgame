@@ -21,7 +21,7 @@ export const SCENARIOS = [
   "screening-offline",
   // Area 05 (scenarios.s5.ts in the demo)
   "ask-unavailable", "app-private", "app-public", "app-shared-empty", "app-restore-fails", "app-rebuild-fails", "app-not-published", "app-wake-slow",
-  "app-wake-busy", "app-unreachable", "outage", "no-secrets", "dashboard-full",
+  "app-wake-busy", "app-unreachable", "outage", "no-secrets", "dashboard-full", "app-long-history", "wake-failures",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 

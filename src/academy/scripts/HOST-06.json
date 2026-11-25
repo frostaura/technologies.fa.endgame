@@ -1,0 +1,52 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HOST-06",
+  "persona": "viewer",
+  "scenario": "app-busy",
+  "start": "/__app/{app}/path",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "The path address, on the platform's host. Without its trailing slash, it is redirected (308) to the address with one."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "The reading list",
+        "note": "The edge strips the prefix, sets the forwarded headers, and drops any X-Endgame-* header and platform cookie the browser sent."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/__app/{app}/subdomain/",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "The same app, from the same container, at its organisation's subdomain."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "_platform is never public",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/__app/{app}/path/_platform/schedules/nightly-digest",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "testId": "hosted-not-found",
+            "note": "The platform's callbacks are never reachable from the public side: 404."
+          }
+        }
+      ]
+    }
+  ]
+}

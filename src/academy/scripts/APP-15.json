@@ -1,0 +1,57 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-15",
+  "persona": "builder",
+  "scenario": "app-crashed",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Rebuild and restart"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Building its newest version again",
+        "note": "Its newest version is built again and started."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Shift Rota is rebuilt and running again.",
+        "note": "History and who may open it are unchanged."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "It cannot be rebuilt",
+      "persona": "builder",
+      "scenario": "app-rebuild-fails",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Rebuild and restart"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Shift Rota could not be rebuilt.",
+            "note": "Its last version stays as it is; technical mode shows the build's error."
+          }
+        }
+      ]
+    }
+  ]
+}

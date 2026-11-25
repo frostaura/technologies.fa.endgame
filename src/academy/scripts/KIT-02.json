@@ -1,0 +1,58 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-02",
+  "persona": "signed-out",
+  "scenario": "app-private",
+  "start": "/__app/{app}/subdomain/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "On the organisation subdomain, sign-in moves to the path form on the platform's host."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in with a passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Signed in there, then handed back to the subdomain with a one-minute, single-use code."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "The reading list",
+        "note": "The edge redeemed the code once and set the subdomain's own cookie."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An expired or reused link",
+      "persona": "signed-out",
+      "scenario": "app-private",
+      "start": "/__app/{app}/path/_endgame/auth/handoff",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Sign-in links work once, for a minute.",
+            "note": "“This sign-in link has expired”, with “Sign in again”."
+          }
+        }
+      ]
+    }
+  ]
+}

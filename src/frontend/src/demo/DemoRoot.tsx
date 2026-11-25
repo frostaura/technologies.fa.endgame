@@ -80,6 +80,12 @@ function HostedRoute({ appId, form, rest }: { appId: string; form: "path" | "sub
         navigate: (r) => navigate(`/__app/${appId}/${form}/${r}`),
         exit: () => navigate(`/apps/${appId}`),
         onWake: () => markWoken(appId),
+        // An address registered at this app (KIT-03's "already registered") and, for the end-user persona, their passkey on this device (KIT-04).
+        isRegistered: (email) => world.shares.some((s) => s.appId === app.id && s.registered && s.email === email.trim().toLowerCase()),
+        returningEndUser: session.personaInfo.visitor === "end-user" ? (() => {
+          const share = world.shares.find((s) => s.appId === app.id && s.registered);
+          return share ? { kind: "end-user" as const, displayName: share.email.split("@")[0] ?? null, email: share.email } : null;
+        })() : undefined,
       }}
     />
   );

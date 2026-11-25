@@ -1,0 +1,82 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SEC-01",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Manage secrets"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Secrets for Court booking",
+        "note": "The level comes from the address; with none, it is your organisation."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "A value is never shown, not even to you",
+        "note": "What applies here and where each was set. To change a value, replace it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "nav[aria-label=\"Where you are\"]",
+        "note": "Each level in the breadcrumb opens its own secrets."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Add a secret",
+        "note": "Add one at this level (SEC-03)."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Below Admin",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/secrets?scope=northwind/technologies/court-booking/web",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "You cannot see the secrets here",
+            "note": "Secrets are an Admin's: a Builder is refused, with the reason."
+          }
+        }
+      ]
+    },
+    {
+      "title": "No organisation yet",
+      "persona": "first-run",
+      "scenario": "fresh-install",
+      "start": "/secrets",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "There are no secrets until your organisation is named",
+            "note": "Name your organisation first."
+          }
+        }
+      ]
+    }
+  ]
+}

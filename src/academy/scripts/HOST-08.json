@@ -1,0 +1,17 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HOST-08",
+  "persona": "viewer",
+  "scenario": "outage",
+  "start": "/__app/{app}/subdomain/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "It can't be reached right now.",
+        "note": "Cloudflare's outage Worker answers when the host cannot be reached: 502, 504, 52x, 530 or no answer at all."
+      }
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SEC-06",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/secrets?scope=northwind/technologies/court-booking/web",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "ul[aria-label=\"Secrets\"] > li:nth-child(2) button:nth-of-type(2)"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Remove PAYMENTS_API_KEY here? The one set at Northwind applies again.",
+        "note": "Asked first."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Remove it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "PAYMENTS_API_KEY",
+        "note": "Removed here."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label=\"Secrets\"] > li:nth-child(2)",
+        "note": "Northwind's PAYMENTS_API_KEY applies again: the row is now inherited."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "The only one of its name",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/secrets?scope=northwind/technologies/court-booking/web",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "selector": "ul[aria-label=\"Secrets\"] > li:nth-child(4) button:nth-of-type(2)"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Nothing here or beneath will have it, unless it sets its own.",
+            "note": "With nothing above it, removing it removes it for everything beneath."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Keep it",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/secrets?scope=northwind/technologies/court-booking/web",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "selector": "ul[aria-label=\"Secrets\"] > li:nth-child(2) button:nth-of-type(2)"
+              }
+            },
+            {
+              "click": {
+                "text": "Keep it"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Replaces the one set at Northwind.",
+            "note": "Nothing changed."
+          }
+        }
+      ]
+    }
+  ]
+}

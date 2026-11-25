@@ -1,0 +1,100 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-01",
+  "persona": "viewer",
+  "scenario": "app-busy",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "goto": "/apps/{app}",
+      "highlight": {
+        "selector": "h1",
+        "note": "The app's own page. While it is read, a skeleton holds its place: one wide bar and four tiles."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "nav[aria-label=\"Where you are\"]",
+        "note": "The app's own organisation, then its division, project and the app itself."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "· also at",
+        "note": "Its subdomain address, then its path address: two addresses, one app."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Open the app",
+        "note": "Opens the app itself, at its own address."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label=\"Today\"]",
+        "note": "Four tiles first; asking, the dashboard, the history, sharing and secrets follow below."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "Who can open it",
+        "note": "The side column: how it runs, who can open it, what it may spend, what it uses, the app itself, and that it is yours."
+      }
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "highlight": {
+        "text": "Visits today",
+        "note": "While this tab has focus, the page reads the app again every 20 seconds."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An address that names no app",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/00000000-0000-4000-8000-000000000000",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "This app could not be found",
+            "note": "Nothing is shown that does not exist: the page says so plainly."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Someone with no role at the app",
+      "persona": "division-admin",
+      "scenario": "app-asleep",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "was not found, or you cannot see it",
+            "note": "Ines is an Admin of Technologies only: to her, Course Notes in Learning does not exist."
+          }
+        }
+      ]
+    }
+  ]
+}

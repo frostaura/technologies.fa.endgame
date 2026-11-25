@@ -47,6 +47,19 @@ document.addEventListener(
   true,
 );
 
+/**
+ * A console address ("/apps/…") on a link the console did not route itself — a control left over
+ * from the screen being replaced, say — is followed inside the demo, never as a page load that a
+ * static host cannot answer.
+ */
+window.addEventListener("click", (e) => {
+  const a = (e.target as Element | null)?.closest?.("a[href]");
+  const href = a?.getAttribute("href") ?? "";
+  if (!a || e.defaultPrevented || !href.startsWith("/") || href.startsWith("//") || a.getAttribute("target") === "_blank") return;
+  e.preventDefault();
+  navigate(href);
+});
+
 const root = document.getElementById("root");
 if (!root) throw new Error("#root is missing from index.html");
 createRoot(root).render(

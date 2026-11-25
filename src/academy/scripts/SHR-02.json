@@ -1,0 +1,51 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHR-02",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label=\"People it is shared with\"]",
+        "note": "Each address, registered or invited, with Stop sharing beside it."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Nobody yet",
+      "persona": "admin",
+      "scenario": "app-shared-empty",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Not shared with anyone yet.",
+            "note": "Invite someone; they register at the app with the code."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below Admin",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Court booking is shared with 3 people.",
+            "note": "Below Admin, only how many: an Admin or the Owner sees who."
+          }
+        }
+      ]
+    }
+  ]
+}

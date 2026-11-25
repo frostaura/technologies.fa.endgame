@@ -22,14 +22,14 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   3. The heading is the app's name. Under it is the subdomain address followed by "· also at <path address>", or only the path address when there is no subdomain.
   4. A button reads "Open the app".
   5. The four tiles appear (APP-02), then "Ask about this app", "Dashboard", "History", the sharing card and the "Secrets" card.
-  6. The side column shows "Running", "Who can open it", "What it uses" and "It is yours". In technical mode it also shows "Underneath".
+  6. The side column shows "Running", "Who can open it", "What it may spend", "What it uses", "The app itself" and "It is yours". In technical mode it also shows "Underneath".
   7. The page re-reads the app every 20 seconds, but only while the browser tab has focus.
 - **Variations and refusals:**
   - An unknown id gives "This app could not be found".
   - Any other failure gives "The app could not be loaded", with the reason and a retry.
   - A stale cached copy shows a stale notice above the page.
-  - Each section has its own error boundary, so one broken section does not blank the page. The boundaries are named "The app's settings", "What it uses", "The download", "Asking about this app", "The dashboard", "The history", "Sharing" and "The secrets".
-  - A person with no role here gets 403. The page shows "The app could not be loaded" with the reason.
+  - Each section has its own error boundary, so one broken section does not blank the page. The boundaries are named "The app's settings", "What it may spend", "What it uses", "The app itself", "The download", "Asking about this app", "The dashboard", "The history", "Sharing" and "The secrets".
+  - A person with no role at the app or above it gets 404, exactly as for an app that does not exist, so nothing is learned about what they cannot see: the page shows "This app could not be found" with "The scope '<path>' was not found, or you cannot see it. (404)".
 - **Where:** `features/apps/AppView.tsx`; `GET /api/apps/{id}` (WorkEndpoints, Viewer); `ReadModels.AppAsync`
 - **Reachable from:** UI; API; MCP `app_get`
 - **Covered by tests:** `AppView.test.tsx` ("names the app's own organisation…", "shows a skeleton while loading", "records a failed read and names a missing app"); `tests-e2e/console.spec.ts` "app and credits"; `McpTests`
@@ -50,14 +50,13 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
      - Technical mode shows the raw summary, which can include "Running version <v>.".
   2. **Visits today tile.** The value is a number. The note is one of "<n> errors in <m> requests", "Last visit <time ago>" or "No visits yet".
   3. **Typical response tile.** The value is the median response time, or "No traffic yet". The note is "Slowest 1 in 20: <time>" or "Measured once it has visitors".
-  4. **Cost this month tile.** The value is the credits spent. The note is "Cap <credits>" or "No cap of its own; the one above applies".
+  4. **Cost this month tile.** The value is the credits spent. The note says what holds it: "Its own cap: <n> credits a month", "No cap of its own; <Level>'s <n> credits applies", or "No cap on it or above it".
 - **Variations and refusals:**
   - Before the app has measured anything, Visits and Typical response both read "Not measured yet". Their notes are "It reports its visits once it has run." and "Measured once it has visitors.".
   - Health is "degraded" when more than one response in twenty failed over the last 15 minutes. The summary then reads "Running, but X of the last Y responses failed.".
 - **Where:** `AppView.tsx` (AppBody, Tile, healthNote); `home/treeModel.ts` healthChip; `ReadModels.AppAsync` / `AppHealth`
 - **Reachable from:** UI; MCP `app_get`
 - **Covered by tests:** `AppView.test.tsx` ("shows status, both addresses, telemetry…", "says when there is no traffic to measure…", "says an app that has measured nothing yet is not measured, never zero…"); `PlatformApiTests.Telemetry_is_stored_per_app_and_the_app_page_and_tree_show_what_was_measured`; `tests-stack/acceptance.spec.ts` test 10
-- **Oddity:** the cap note's wording misleads. `capCredits` is resolved through the whole cascade, so when it is null there is no cap at any level, yet the note says "the one above applies".
 
 ### APP-03 Open the hosted app from its page
 - **Who:** anyone who can open the page
@@ -105,7 +104,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Who:** Builder or above.
 - **Starts at:** the "Running" fieldset on the app page, while "Sleeps when unused" is chosen. Also `POST /api/apps/{id}/settings { idleMinutes }` and MCP `app_settings`.
 - **Needs:** Builder.
-- **Level:** Core · **Learn first:** APP-04 · **What you learn:** a sleeping app costs least, and how soon it sleeps is yours to choose.
+- **Level:** Advanced · **Learn first:** APP-04 · **What you learn:** a sleeping app costs least, and how soon it sleeps is yours to choose.
 - **Steps:**
   1. Under the running choices, **"Sleeps after this many idle minutes"** holds the current value, with "From 1 to 1,440 (a day)."
   2. Type a number and press **"Save"**. "It sleeps after <n> idle minutes now." appears.
@@ -183,7 +182,9 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   6. Technical mode also shows "MCP: <origin>/mcp/apps/<id>".
 - **Variations and refusals:**
   - A failed graph read gives "What it uses could not be loaded" with a retry.
-  - A failed secrets read gives "Its secrets could not be read: <reason>". This is what a Builder or Viewer sees, because listing secrets needs Admin.
+  - A failed secrets read gives "Its secrets could not be read: <reason>" (an Admin only).
+  - Below Admin, its secrets are not asked for: there is no secrets chip and no "Secrets it can read" line.
+  - The service chips name only what the app has actually used: sign-in once anyone has signed in to it, registered or been invited; AI once it has called a model; e-mail once it has sent one; measured visits once it has reported telemetry; incoming data and schedules once it declares a webhook or a schedule.
 - **Where:** `AppAside.tsx` (WhatItUses); `GET /api/ontology?scope&view=all`; `GET /api/secrets?scope`
 - **Reachable from:** UI
 - **Covered by tests:** `AppBreadth.test.tsx` "lists the services it leans on, its secrets by name, and that assistants can use it"; `AppView.test.tsx` "says how many people signed up to it…"; `tests-e2e/breadth.spec.ts` "the Owner downloads everything, and sees what the app uses"
@@ -226,7 +227,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Who:** Admin or above. Anyone reads it.
 - **Starts at:** the app page's side panel **"What it may spend"**, card **"Its monthly cap"** ("All it spends a month, hosting and AI together. Work and visits stop at it until it is raised or the month turns."). Also its row on `/credits` (CRED-03).
 - **Needs:** Admin.
-- **Level:** Core · **Learn first:** CRED-03 · **What you learn:** an app can be held to its own cap, inside whatever holds the levels above it.
+- **Level:** Advanced · **Learn first:** CRED-03 · **What you learn:** an app can be held to its own cap, inside whatever holds the levels above it.
 - **Steps:**
   1. The card says what holds it: "<n> credits a month, set on <App>", "<n> credits a month, from <Level>", or "No cap on it or above it: only the organisation's balance and overdraft hold it."
   2. Press **"Set one for <App>"** (or **"Change it"**), type into "Credits a month", press **"Save"**: "<App> may spend <n> credits a month here."
@@ -253,7 +254,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Who:** Builder or above.
 - **Starts at:** the app page's side panel **"The app itself"**, or `/tree` (TREE-06, TREE-08).
 - **Needs:** Builder.
-- **Level:** Core · **Learn first:** TREE-06 · **What you learn:** an app's name can change; its addresses do not; archiving keeps everything.
+- **Level:** Advanced · **Learn first:** TREE-06 · **What you learn:** an app's name can change; its addresses do not; archiving keeps everything.
 - **Steps:** "Name" and **"Save the name"** as TREE-06; **"Archive <App>"** and **"Reactivate <App>"** as TREE-08. **"Manage it with the rest of the organisation"** opens `/tree` at the app.
 - **You know it worked when:** the heading shows the new name, or the app reads archived.
 - **Variations and refusals:** below Builder: "A Builder or above renames or archives it."
@@ -271,7 +272,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Variations and refusals:** the 409 is shown with **"Archive it instead"**. MCP has no delete tool.
 - **Where:** `AppManage.tsx`, `NodeControls.tsx` (DeleteNode); `DELETE /api/apps/{id}`.
 - **Reachable from:** UI; API.
-- **Covered by tests:** `ManageView.test.tsx` (delete refused, archive instead).
+- **Covered by tests:** `ManageView.test.tsx` ("shows the refusal to delete what has history, and archives it instead", "asks before deleting an app in plain English: an app, not a app").
 
 ### APP-15 Rebuild and restart an app
 - **Who:** Builder or above.
@@ -330,7 +331,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   5. The credit balance is refreshed.
 - **Variations and refusals:**
   - The model declines, because the app does not record what is asked: the alert shows the model's own plain reason.
-  - It still fails after the repair: "That question could not be answered from what the app records. Try asking it another way."
+  - It still fails after the repair: the control plane's own words, "It could not be worked out from what this app records. Try asking it another way, or about its visits, requests, errors, events or measurements." (The console says "That question could not be answered from what the app records. Try asking it another way." only when no reason comes back.)
   - It times out: "That question took too long to answer. Try a narrower one, such as a shorter period."
   - No route configured: "Questions about apps cannot be answered on this installation yet."
   - 403: "Asking needs the Builder role here. <reason>"
@@ -443,7 +444,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Steps:**
   1. The section reads "Any version can be brought back." and shows a skeleton.
   2. Up to 10 versions are listed, newest first. Each shows a plain title (the first line, without its plan-id prefix), the author (an employee's name links to their page; otherwise "The factory" or the person's name), the time ago, and "Live now" on the live one.
-  3. The factory's own commits are titled "The factory recorded its progress". A title that names files falls back to "A change by <name>".
+  3. The factory's own commits are titled "The factory recorded its progress". A restore is titled "An earlier version, brought back". A title that names files falls back to "A change by <name>".
   4. "Show earlier versions" loads 10 more. It reads "Loading…" while it waits.
 - **Variations and refusals:**
   - With no versions: "No versions yet" with "The first version appears here once it is built."
@@ -451,7 +452,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - Technical mode shows the first 12 characters of the commit id and the rest of the message.
 - **Where:** `History.tsx`, `appModel.ts`; `GET /api/apps/{id}/versions?limit` (Viewer)
 - **Reachable from:** UI; API; MCP `app_versions`
-- **Covered by tests:** `AppBreadth.test.tsx` ("lists versions with who made each…", "records a failed read and an empty history distinctly", "names a version by its first line…"); `VersionsAndExportTests.The_history_names_…`; `tests-e2e/breadth.spec.ts` "history names who made each version…"
+- **Covered by tests:** `AppBreadth.test.tsx` ("lists versions with who made each…", "records a failed read and an empty history distinctly", "names a version by its first line…", "names a restore for what it is, not by its commit id"); `VersionsAndExportTests.The_history_names_…`; `tests-e2e/breadth.spec.ts` "history names who made each version…"
 
 ### VER-02 Bring an earlier version back
 - **Who:** Builder or above, or an operator
@@ -467,7 +468,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   3. The person presses "Bring it back". "Keep the live version" or the Escape key cancels instead.
   4. While it works, the page reads "Bringing it back: it becomes the newest version, then it is rebuilt and restarted."
   5. Dock makes a new commit by the person. A public app is set to private, then the app is rebuilt, given a fresh token and started.
-  6. The result reads "The earlier version is back and running.", plus "It was public, so it is private now. Make it public again once you have looked at it." when that applies. "Done" closes it.
+  6. The result reads "The earlier version is back and running.", plus "It was public, so it is private now. Make it public again once you have looked at it." when that applies. "Done" closes it. The restored version heads the history as "An earlier version, brought back", by the person, marked "Live now".
 - **Variations and refusals:**
   - The rebuild fails: "The earlier version is back, but it is not running yet." with "It could not be rebuilt and started. Rebuild it again below, or ask the builder to look." (technical mode shows the build error) and **"Rebuild and restart"** (APP-15).
   - The restore is refused: "That version was not brought back: <reason> Nothing changed."
@@ -476,7 +477,6 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Where:** `History.tsx`; `POST /api/apps/{id}/versions/{commit}/restore` (Builder); `AppVersionService.RestoreAsync`
 - **Reachable from:** UI; API; MCP `app_restore`, recorded as made over MCP
 - **Covered by tests:** `AppBreadth.test.tsx` ("asks before bringing a version back…", "keeps the live version when a restore is refused…"); `VersionsAndExportTests.A_restore_is_a_new_change_by_the_person_republished_and_a_public_app_turns_private`; `tests-e2e/breadth.spec.ts`
-- **Finding:** "Try publishing it again" names a step that has no control anywhere on the app page.
 
 ### VER-03 Download everything (the export)
 - **Who:** Owner only
@@ -541,15 +541,15 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** a green box reads "<email> is invited…" with the code, and the address appears in the list as "Invited just now".
 - **Steps:**
   1. The person types an address and presses "Invite". It reads "Inviting…". The address joins the list at once.
-  2. The server makes a 32-character code valid for 14 days, and e-mails it with the app's address when mail is configured.
-  3. The page shows "<email> is invited. Give them this code; they register with it at <App>'s sign-up page before <date>.", the code, "Copy the code" (which then reads "Copied") and "It will not be shown again.".
+  2. The server makes a 32-character code valid for 14 days, keeps only its hash, and, when a mail server is configured, e-mails it: the subject is "<Org> shared <App> with you", and the message gives the app's address, says to choose "Create your sign-in" with this e-mail address and the code, and that the code works once, until a time in UTC.
+  3. The page shows "<email> is invited, and the code was e-mailed to them. If it does not arrive, give them this code; they register with it at <App>’s sign-up page within 14 days, before <date>.", the code, "Copy the code" (which then reads "Copied") and "It will not be shown again.".
   4. "Done" closes the box. The invited person then registers (KIT-03).
 - **Variations and refusals:**
   - A badly formed address: "That does not look like an e-mail address." and the button stays disabled.
   - A refusal: "<email> was not invited: <reason> Nothing changed." and the address is removed from the list.
   - The copy fails: "The code could not be copied; select it and copy it by hand."
   - Inviting an address again issues a fresh code. The old one stops working and the list is not duplicated.
-  - When a mail server sent it, the note reads "<email> is invited, and the code was e-mailed to them. If it does not arrive, give them this code; …"; otherwise "<email> is invited. No e-mail was sent, so give them this code; …".
+  - With no mail server, nothing is e-mailed and the note reads "<email> is invited. No e-mail was sent, so give them this code; they register with it at <App>’s sign-up page within 14 days, before <date>.".
   - The share endpoint does not check that access is Shared. Not verified what an invitation does on a private app; KIT-03 refuses sign-up there.
 - **Where:** `AppView.tsx` (Sharing, InvitationCode); `store/sensitive.ts` `shareApp`; `POST /api/apps/{id}/shares` (Admin); `AppIdentityService.ShareAsync`; `InvitationMailer`
 - **Reachable from:** UI and API
@@ -1205,7 +1205,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   3. Raising the budget (APP-11) or the month turning restores the app.
 - **Variations and refusals:** none.
 - **Where:** `AppGate.cs`; `ReadModels.AppAsync`
-- **Reachable from:** UI. Raising the budget is API or MCP only.
+- **Reachable from:** UI. The budget is raised on the app page (APP-11) or the credits page, or by API or MCP.
 - **Covered by tests:** `EdgePipelineTests.An_app_paused_by_a_spent_budget_says_so`, `A_paused_app_gets_its_holding_page_and_is_never_woken`
 
 ### HOST-04 An app paused at the overdraft limit
@@ -1267,7 +1267,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Core
 - **Learn first:** APP-04, APP-05
 - **What you learn:** an app sleeps after its idle minutes, never while it is serving someone, and never if it is set to always on.
-- **You know it worked when:** the app page's Health note reads "Asleep; it wakes on the next visit.".
+- **You know it worked when:** the app page's "Running" legend shows it asleep, and in technical mode its Health note reads "Asleep; it wakes on the next visit." (In normal mode an app that has measured anything keeps its errors-today note while it sleeps.)
 - **Steps:** the sweeper checks each app's own setting (default 15 minutes) and stops apps with no request in flight.
 - **Variations and refusals:** none.
 - **Where:** `Runtime/IdleSweeper.cs`
@@ -1732,15 +1732,15 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 
 ## Gaps and oddities found
 
-1. ~~No console control for an app's budget cap~~ — fixed (APP-11). The app page shows the cap, but nothing in `api.ts` calls `/api/cascade`, so caps can be set only by API or MCP (`budget_set`).
-2. ~~No console control for an app's AI allowance~~ — fixed (APP-12). Formerly: (`app_models.monthly_credits`, default 500 credits). It is never shown anywhere.
-3. ~~No console control for idle minutes~~ — fixed (APP-05). Formerly: The settings endpoint and MCP accept it (1 to 1440); the console only displays it under "Underneath".
-4. ~~Rename, archive and delete an app have no screen~~ — fixed (APP-13, APP-14). There is still no MCP delete. Formerly: exist only as `PATCH` and `DELETE /api/apps/{id}` and MCP `node_update`. There is no screen, and no MCP delete.
+1. Fixed: an app's own monthly cap is set on its page (APP-11), as well as by API or MCP (`budget_set`).
+2. Fixed: an app's own AI allowance (`app_models.monthly_credits`) is shown and set on its page (APP-12).
+3. Fixed: idle minutes are set on the app page (APP-05).
+4. Fixed: an app is renamed, archived and deleted on its page (APP-13, APP-14). There is still no MCP delete.
 5. **No user-facing way to pause or stop an app.** Paused, stopped and failed are set only by the system or by hosting.
-6. ~~"Try publishing it again" names an action with no control~~ — fixed: "Rebuild and restart" (APP-15). Formerly: after a failed restore names an action that has no control on the app page.
-7. ~~The share reply's `emailed` flag is ignored~~ — fixed (SHR-03). Formerly: The page always says "Give them this code", even when the code was e-mailed.
-8. ~~Role gating is missing on the app page~~ — fixed (APP-04, APP-06, APP-09, SHR-02). Formerly: The Running and "Who can open it" radios show to Viewers and Builders, who then hit a refusal and rollback. The Sharing list and both Secrets panels show a load failure to non-Admins rather than saying the Admin role is needed.
-9. ~~The cap note misleads~~ — fixed: it says whose cap applies, or that none does (APP-11). Formerly: "No cap of its own; the one above applies" appears when no level has a cap at all, because `capCredits` is resolved through the whole cascade.
+6. Fixed: a failed restore offers "Rebuild and restart" (APP-15).
+7. Fixed: the invitation note says whether the code was e-mailed (SHR-03).
+8. Fixed: the app page's controls follow the role (APP-04, APP-06, APP-09, SHR-02).
+9. Fixed: the cap note says whose cap applies, or that none does (APP-02, APP-11).
 10. **Sharing has no MCP tools** (no list, invite or remove). The dashboard has no MCP tools. Asking over MCP (`app_ask`) has no estimate step, although rule 11 says an estimate is shown first.
 11. **The MCP `app_settings` schema offers `public`**, which is always refused (`human_only`). Its own description says "private or shared".
 12. **The share endpoint accepts invitations whatever the access setting.** The console shows the invite form only when the app is Shared. Not verified what such a share does once the app is switched to Shared.
@@ -1749,3 +1749,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 15. **No local run target for a hand-built app** against the kit's dev platform. The dev platform host is used only by the tests and `make proof`.
 16. **Backup failures and outages notify no one inside Endgame** (stated in ARCH-007). Only the log and `/health` carry them.
 17. **The doc comment on Edge's `Unavailable.Paused` says "overdraft"** while the shared paused copy talks about credits. They are consistent in substance, but the overdraft and budget cases depend on `PausedReason` being set correctly. Not verified beyond the Edge tests.
+18. **A refused or failed `make restore` leaves the stack stopped** (`Makefile`, the `restore` recipe): it stops the Edge, console, Runner, Dock and control plane first, and its final `up -d --wait` never runs when the ops command refuses (data present, busy, wrong key, damaged archive). See OPS-16.
+19. **`/health` never sees a command-line backup** (`Backups/BackupScheduler.cs`, `Api/OpsEndpoints.cs`): `last` and `running` live in the ops service's memory, and `make backup` runs in a process of its own. See OPS-18.
+20. **A bad backup key fails `make backup` before it can say why**: the ops container's health check is `curl --fail /health`, which answers 503 for that key, so `up --wait` fails first. See OPS-12.
+21. **`make docker-down` also removes the local backup archives** (its `-v` removes the `backup` volume with the database). See OPS-02.
+22. **The kit turns `overdraft_limit` into 502** (`src/appkit/sdk-dotnet/Endgame.AppKit/Platform/PlatformClient.cs`, `ToException`): it has no exception for that code, so the app's caller gets "A platform service failed" rather than 402, and the web kit's `BudgetExhaustedError` never fires. `PLATFORM-API.md` §3.2 does not list `overdraft_limit` either. See KIT-13.
+23. **A doubled full stop in the kit's 401 message** (`PlatformClient.cs`, the 401 branch): the template appends "." after a detail that already ends in one. See KIT-10.
+24. **An app's outbound calls may be blocked by default**: Dock accepts an egress allow-list (`AllowedHosts`, `Endgame.Hosting.Contracts/DockApi.cs`), but nothing in the control plane was found to send one. Not traced end to end.

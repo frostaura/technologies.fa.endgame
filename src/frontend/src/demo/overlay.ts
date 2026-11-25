@@ -19,6 +19,19 @@ function layer(className: string): HTMLDivElement {
   return el;
 }
 
+/**
+ * Where an element is on the demo's page: an element inside one of the Edge's pages (drawn in a
+ * same-origin frame, see `hosted/EdgeDocument`) is offset by where its frame sits.
+ */
+export function rectOf(el: Element): DOMRect {
+  const r = el.getBoundingClientRect();
+  if (el.ownerDocument === document) return r;
+  const frame = [...document.querySelectorAll("iframe")].find((f) => f.contentDocument === el.ownerDocument);
+  if (!frame) return r;
+  const f = frame.getBoundingClientRect();
+  return new DOMRect(r.left + f.left, r.top + f.top, r.width, r.height);
+}
+
 function place() {
   frame = 0;
   if (!tracked || !ring) return;
@@ -26,7 +39,7 @@ function place() {
     clearSpotlight();
     return;
   }
-  const r = tracked.getBoundingClientRect();
+  const r = rectOf(tracked);
   Object.assign(ring.style, { left: `${r.left - 6}px`, top: `${r.top - 6}px`, width: `${r.width + 12}px`, height: `${r.height + 12}px` });
   if (note) {
     const below = r.bottom + 12 + 80 < window.innerHeight;

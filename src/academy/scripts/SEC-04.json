@@ -1,0 +1,37 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SEC-04",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/secrets?scope=northwind/technologies/court-booking/web",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Replace"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "New value for PAYMENTS_API_KEY"
+            },
+            "text": "demo-value-not-real"
+          }
+        },
+        {
+          "click": {
+            "text": "Replace the secret"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "PAYMENTS_API_KEY is saved. Its value is sealed and will not be shown.",
+        "note": "Replaced, never read: “set just now”."
+      }
+    }
+  ]
+}
