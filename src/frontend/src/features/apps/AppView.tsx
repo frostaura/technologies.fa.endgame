@@ -442,9 +442,10 @@ function Settings({ app, orgName }: { app: AppDetail; orgName: string }) {
   };
 
   const cost = app.runningCost;
-  const options: { value: AppDetail["settings"]["running"]; title: string; text: string }[] = [
-    { value: "sleep", title: "Sleeps when unused", text: `Cheapest. The first visitor waits a few seconds. ${cost ? `About ${formatCredits(cost.sleep)} a month.` : "Its monthly cost is not measured yet."}` },
-    { value: "always-on", title: "Always on", text: `Instant for everyone. ${cost ? `About ${formatCredits(cost.alwaysOn)} a month.` : "Its monthly cost is not measured yet."}` },
+  const monthly = (choice: AppDetail["runningCost"]["sleep"]) => (choice ? `About ${formatCredits(choice.credits)} a month.` : "Not enough history yet to say what it costs a month.");
+  const options: { value: AppDetail["settings"]["running"]; title: string; text: string; basis: string | null }[] = [
+    { value: "sleep", title: "Sleeps when unused", text: `Cheapest. The first visitor waits a few seconds. ${monthly(cost.sleep)}`, basis: cost.sleep?.basis ?? null },
+    { value: "always-on", title: "Always on", text: `Instant for everyone. ${monthly(cost.alwaysOn)}`, basis: cost.alwaysOn?.basis ?? null },
   ];
   const access: { value: AppAccess; text: string }[] = [
     { value: "private", text: `Private: only people in ${orgName}` },
@@ -476,9 +477,13 @@ function Settings({ app, orgName }: { app: AppDetail; orgName: string }) {
             <span className="flex flex-col gap-0.5">
               <span className="font-semibold">{o.title}</span>
               <span className="text-ink-body">{o.text}</span>
+              {o.basis && <span className="text-sm text-ink-muted">{o.basis}</span>}
             </span>
           </label>
         ))}
+        <p data-state={cost.state} className="text-sm text-ink-muted">
+          {cost.state === "estimated" ? cost.basis : `Not enough history yet. ${cost.basis}`} {cost.prices}
+        </p>
       </fieldset>
 
       <fieldset className={cn("flex flex-col gap-2.5", RISE, stagger(1))}>

@@ -18,8 +18,9 @@ const APP: AppDetail = {
   telemetry: { visitsToday: 2, requestsToday: 22, errorsToday: 0, latencyP50Ms: 1.9, latencyP95Ms: 174.3, lastVisitAt: null },
   cost: { monthCredits: 0.07, capCredits: null },
   settings: { running: "sleep", access: "public" },
-  runningCost: { sleep: 74, alwaysOn: 184 },
+  runningCost: { state: "estimated", windowDays: 14, minimumHours: 24, measuredHours: 58, basis: "Measured over the last 14 days: awake 8 of the 58 hours measured, using 448 MB while awake, 2 GB stored and about 59,586 requests a month.", prices: "Today's prices: 0.2 credits an awake hour, 0.4 per GB of memory an awake hour, 10 per GB stored a month and 20 per million requests.", sleep: { credits: 74, awakeHoursPerMonth: 99.3, basis: "Awake about 99 hours a month, as it was 8 of the 58 hours measured in the last 14 days, using 448 MB while awake, with 2 GB stored and about 59,586 requests a month." }, alwaysOn: { credits: 184, awakeHoursPerMonth: 720, basis: "Awake all 720 hours of a month at the 448 MB it uses while awake, with the same 2 GB stored and about 59,586 requests a month." }, measured: { awakeHours: 8, memoryMb: 448, storageMb: 2048, requestsPerMonth: 59586 } },
   sharedWith: 0,
+  endUsers: 0,
   status: "running",
   version: "f2a84f83c1f6d2852e9f62f57720ec931052273d",
   publishedAt: "2026-11-25T01:59:54Z",
@@ -87,6 +88,43 @@ describe("asking about an app", () => {
     expect(screen.getByText("Nothing is kept on the dashboard yet")).toBeTruthy();
   });
 
+  async function askAndFail(body: Record<string, unknown>) {
+    stub({ "POST /api/apps/a1/ask/estimate": json(ASK_ESTIMATE), "POST /api/apps/a1/ask": json(body, 422) });
+    const rendered = renderWithStore(<AppView appId="a1" />);
+    fireEvent.change(await screen.findByLabelText("Ask about this app"), { target: { value: "How many visits did it get today, by hour?" } });
+    fireEvent.click(screen.getByRole("button", { name: "See what it costs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ask it" }));
+    return { ...rendered, alert: await screen.findByRole("alert") };
+  }
+
+  it("says a query that could not run in plain words in normal mode, never the database's message", async () => {
+    const { alert } = await askAndFail({ title: "The query could not run", detail: 'column "id" does not exist', status: 422, code: "query_failed" });
+    expect(alert.textContent).toContain("could not be answered from what the app records");
+    expect(alert.textContent).not.toMatch(/query/i);
+    expect(document.body.textContent).not.toMatch(/column|does not exist/);
+  });
+
+  it("shows an unanswerable question's plain reason, and the query and the database's message only in technical mode", async () => {
+    const { alert, store } = await askAndFail({
+      title: "That question could not be answered",
+      detail: "It could not be worked out from what this app records. Try asking it another way.",
+      status: 422,
+      code: "ask_unanswerable",
+      technical: { sql: "SELECT count(id) AS visits FROM requests", error: 'column "id" does not exist' },
+    });
+    expect(alert.textContent).toContain("It could not be worked out from what this app records.");
+    expect(document.body.textContent).not.toContain("count(id)");
+    expect(document.body.textContent).not.toContain("does not exist");
+    act(() => void store.dispatch(modeSet("technical")));
+    expect(screen.getByText("SELECT count(id) AS visits FROM requests")).toBeTruthy();
+    expect(screen.getByText('column "id" does not exist')).toBeTruthy();
+  });
+
+  it("shows a declined question's own plain reason", async () => {
+    const { alert } = await askAndFail({ title: "That question cannot be answered from what this app records", detail: "The app does not record where its visitors come from.", status: 422, code: "ask_unanswerable" });
+    expect(alert.textContent).toContain("The app does not record where its visitors come from.");
+  });
+
   it("offers estimates but not asking to a Viewer", async () => {
     stub({ "GET /api/me": json(VIEWER), "POST /api/apps/a1/ask/estimate": json(ASK_ESTIMATE) });
     renderWithStore(<AppView appId="a1" />);
@@ -110,6 +148,17 @@ describe("the dashboard", () => {
     stub({ "GET /api/apps/a1/dashboard": problem(503, "Questions about apps cannot be answered yet") });
     renderWithStore(<AppView appId="a1" />);
     expect(await screen.findByText("The dashboard could not be loaded")).toBeTruthy();
+  });
+
+  it("says why a kept question no longer works out in plain words, and what failed underneath only in technical mode", async () => {
+    stub({
+      "GET /api/apps/a1/dashboard": json([{ ...SAVED, error: "It can no longer be worked out from what the app records.", technical: { sql: "SELECT count(id) AS n FROM requests", error: 'column "id" does not exist' } }]),
+    });
+    const { store } = renderWithStore(<AppView appId="a1" />);
+    expect(await screen.findByText("This question no longer runs: It can no longer be worked out from what the app records.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("does not exist");
+    act(() => void store.dispatch(modeSet("technical")));
+    expect(screen.getByText('column "id" does not exist')).toBeTruthy();
   });
 
   it("shows each saved query only in technical mode", async () => {

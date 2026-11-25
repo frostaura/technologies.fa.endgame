@@ -14,10 +14,14 @@ public sealed class OpaqueNames(byte[] key)
     public const string RolePrefix = "r_";
     public const string TestRolePrefix = "t_";
     public const string TestDatabasePrefix = "w_";
+    public const string PreviewDatabasePrefix = "p_";
 
     public string Database(Guid appId) => DatabasePrefix + Hex("database", appId, 12);
 
     public string Role(Guid appId) => RolePrefix + Hex("role", appId, 12);
+
+    /// <summary>The preview instance's throwaway database: the app's role owns it, and it is dropped after evaluation.</summary>
+    public string PreviewDatabase(Guid appId) => PreviewDatabasePrefix + Hex("preview-database", appId, 12);
 
     public string Password(Guid appId) =>
         Convert.ToBase64String(Mac("password", appId)).TrimEnd('=').Replace('+', 'A').Replace('/', 'B');
@@ -32,7 +36,7 @@ public sealed class OpaqueNames(byte[] key)
         Convert.ToBase64String(Mac("test-password", runId)).TrimEnd('=').Replace('+', 'A').Replace('/', 'B');
 
     /// <summary>True for an app's or a workspace's database: never a platform database.</summary>
-    public static bool IsAppDatabase(string name) => HasOpaqueForm(name, DatabasePrefix) || HasOpaqueForm(name, TestDatabasePrefix);
+    public static bool IsAppDatabase(string name) => HasOpaqueForm(name, DatabasePrefix) || HasOpaqueForm(name, TestDatabasePrefix) || HasOpaqueForm(name, PreviewDatabasePrefix);
 
     /// <summary>True for a role name this scheme could have produced.</summary>
     public static bool IsAppRole(string name) => HasOpaqueForm(name, RolePrefix) || HasOpaqueForm(name, TestRolePrefix);

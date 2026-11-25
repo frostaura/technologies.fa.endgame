@@ -38,6 +38,10 @@ The acceptance statements of UC-101 to UC-115. The ones with the most weight, an
 | A token's role caps its person's | `McpTests.A_viewers_token_reads_and_changes_nothing` |
 | An app's own API is derived from its OpenAPI and called through Edge with a member session | `McpTests.An_apps_own_api_is_derived…` (fake Edge control listener) |
 | Versions name their authors; a restore is a new commit, rebuilt, and a public app turns private; only the Owner exports | `VersionsAndExportTests` (fake Dock) |
+| An app's running cost is its own measured use at today's prices: hand-computed sleep and always-on figures from Dock and Edge samples over 58 hours, a sample outside the 14-day window ignored, under 24 hours "not enough history", and a price change moving both | `FinalDefectsTests.The_running_cost_of_each_choice_comes_from_the_apps_own_measured_use_and_the_current_prices` |
+| An app counts its registered end users, not the members who open it; the ontology shows identity for an app with only a member's session or only a share | `FinalDefectsTests.An_app_counts_its_registered_end_users…`, `…An_app_people_sign_in_to_depends_on_identity…` |
+| The credits view lists the narrower overdraft limits: at the organisation every division, project and app limit with who set it; at a project the division's above it and the app's beneath it, not a sibling division's | `FinalDefectsTests.The_credits_view_lists_every_narrower_overdraft_limit_on_and_beneath_the_scope` |
+| God mode logs one entry per visit: an explicit entry then the org chart's burst of reads is one row; eight concurrent first reads are one row; a visit slides on with each read and ends after the window | `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry`, `…Reads_with_no_entry_before_them_log_one_entry…`, `OperatorVisitsTests` |
 | Reserved names, role changes, runs by employee, notifications, top-up requests, God mode, prices, suggestions | `BreadthTests` (fake ops service) |
 
 ## Tests

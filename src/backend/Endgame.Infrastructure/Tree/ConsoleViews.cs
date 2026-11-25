@@ -124,9 +124,10 @@ public sealed record AppSettingsView(string Running, string Access);
 /// (today is the UTC day). Null only while the app has measured nothing yet — never zeros that were not measured.
 /// </param>
 /// <param name="RunningCost">
-/// Expected monthly credits for each running choice, <c>{ sleep, alwaysOn }</c>, from the app's measured hosting over the
-/// last seven days. Null until Dock has reported any.
+/// What each running choice would cost a month, from the app's own measured hosting over the last 14 days and the current
+/// prices, each with what it assumes; or <c>state: not-enough-history</c> (under 24 hours measured) with no figures. Never null.
 /// </param>
+/// <param name="EndUsers">How many end users have registered for the app (members who open it are not counted).</param>
 public sealed record PublicAppView(
     Guid Id,
     string Name,
@@ -137,8 +138,9 @@ public sealed record PublicAppView(
     JsonNode? Telemetry,
     CostView Cost,
     AppSettingsView Settings,
-    JsonNode? RunningCost,
+    Platform.RunningCostView RunningCost,
     int SharedWith,
+    int EndUsers,
     string Status,
     string? Version,
     DateTimeOffset? PublishedAt,
@@ -148,11 +150,28 @@ public sealed record BudgetLineView(string Scope, string Name, string Level, int
 
 public sealed record MonthView(decimal Spent, decimal Ai, decimal Hosting);
 
-public sealed record EstimatesView(long Pieces, decimal WithinPercent, long Under, long Over, decimal LargestMissPercent);
+/// <summary>
+/// Estimates scored against actuals. <paramref name="WithinPercent"/> is the share of pieces that came within 10% of their
+/// estimate; <paramref name="TypicalGapPercent"/> the typical gap with its sign — the median across scored pieces of
+/// (actual − estimate) / estimate, in percent (−84 is "usually 84% under the estimate"), null when no piece had an
+/// estimate above zero; <paramref name="Typically"/> says it in a word: <c>under</c>, <c>over</c>, or <c>within</c>
+/// when the typical gap is within 10% either way.
+/// </summary>
+public sealed record EstimatesView(long Pieces, decimal WithinPercent, long Under, long Over, decimal LargestMissPercent, decimal? TypicalGapPercent, string? Typically);
 
 public sealed record NotChargedView(decimal Credits, long Repairs);
 
-public sealed record OverdraftView(decimal FrostauraLimit, decimal? OwnLimit);
+/// <summary>A narrower overdraft limit set at a division, project or app.</summary>
+/// <param name="Scope">The node's path.</param>
+/// <param name="Level"><c>division</c>, <c>project</c> or <c>app</c>.</param>
+/// <param name="SetByName">The display name of who set it; null when unknown.</param>
+public sealed record OverdraftLimitView(string Scope, string Name, string Level, decimal Credits, DateTimeOffset SetAt, Guid? SetBy, string? SetByName);
+
+/// <param name="FrostauraLimit">The deepest FrostAura allows the organisation.</param>
+/// <param name="OwnLimit">The tightest of the organisation's own limit and any narrower one on the scope's chain; null when none.</param>
+/// <param name="Limits">Every narrower limit at a division, project or app that applies at the scope (on its chain above it)
+/// or is set beneath it, in tree order.</param>
+public sealed record OverdraftView(decimal FrostauraLimit, decimal? OwnLimit, IReadOnlyList<OverdraftLimitView> Limits);
 
 public sealed record TopUpView(DateTimeOffset At, decimal Credits, string Note);
 

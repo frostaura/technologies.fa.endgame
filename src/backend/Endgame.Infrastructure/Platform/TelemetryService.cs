@@ -214,7 +214,8 @@ public sealed class TelemetryService(EndgameDbContext db, TenantSession session,
 
     /// <summary>
     /// A server span that is a visit: a page load, not an API call, an asset, a health poll, a
-    /// platform callback or a webhook.
+    /// platform callback or a webhook. <c>ask.requests.visit</c> repeats this rule (migration
+    /// <c>AskVisits</c>), so an asked "how many visits" is this number; <c>AskTests</c> holds them equal.
     /// </summary>
     private const string VisitSql = """
         (http_method = 'GET'

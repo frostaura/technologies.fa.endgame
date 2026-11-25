@@ -9,22 +9,45 @@ import { describeError, errorStatus, viewOf } from "@/lib/queryState";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
 import { useAskAppMutation, useEstimateAskMutation, useGetDashboardQuery, useRemoveQuestionMutation, useSaveQuestionMutation } from "@/store/api";
-import type { AskAnswer, AskEstimate, SavedQuestion } from "@/store/types";
+import type { AskAnswer, AskEstimate, AskTechnical, SavedQuestion } from "@/store/types";
 import { AskChartView } from "./AskChart";
 
-/** What a refused question means, in words: the control plane's codes for asking. */
-function askProblem(e: unknown): string {
+const CANNOT_ANSWER = "That question could not be answered from what the app records. Try asking it another way.";
+
+/** A refused question: plain words for everyone, and what failed underneath for technical mode. */
+interface AskFailure {
+  words: string;
+  technical: AskTechnical | null;
+}
+
+function technicalOf(data: unknown): AskTechnical | null {
+  const t = (data as { technical?: unknown } | undefined)?.technical;
+  if (!t || typeof t !== "object") return null;
+  const { sql, error } = t as { sql?: unknown; error?: unknown };
+  return typeof error === "string" ? { sql: typeof sql === "string" ? sql : null, error } : null;
+}
+
+/**
+ * What a refused question means, in words: the control plane's codes for asking. Normal mode never
+ * repeats a query or a database message (CLAUDE.md rule 12); those travel apart, as `technical`.
+ */
+function askProblem(e: unknown): AskFailure {
   const status = errorStatus(e as never);
-  const data = (e as { data?: { code?: string } } | undefined)?.data;
+  const data = (e as { data?: { code?: string; detail?: unknown } } | undefined)?.data;
+  const technical = technicalOf(data);
   switch (data?.code) {
     case "ask_unanswerable":
-      return "That question could not be answered from what the app records. Try asking it another way.";
+      // Its detail is written for the owner: the plain reason, never the query.
+      return { words: typeof data.detail === "string" && data.detail.trim() ? data.detail.trim() : CANNOT_ANSWER, technical };
+    case "query_failed":
+    case "query_refused":
+      return { words: CANNOT_ANSWER, technical: technical ?? (typeof data.detail === "string" ? { sql: null, error: data.detail } : null) };
     case "query_timeout":
-      return "That question took too long to answer. Try a narrower one, such as a shorter period.";
+      return { words: "That question took too long to answer. Try a narrower one, such as a shorter period.", technical };
     case "ask_unavailable":
-      return "Questions about apps cannot be answered on this installation yet.";
+      return { words: "Questions about apps cannot be answered on this installation yet.", technical: null };
     default:
-      return status === 403 ? `Asking needs the Builder role here. ${describeError(e as never)}` : describeError(e as never);
+      return { words: status === 403 ? `Asking needs the Builder role here. ${describeError(e as never)}` : describeError(e as never), technical: null };
   }
 }
 
@@ -38,7 +61,7 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
   const [question, setQuestion] = useState("");
   const [estimate, setEstimate] = useState<{ for: string; value: AskEstimate } | null>(null);
   const [answer, setAnswer] = useState<AskAnswer | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<AskFailure | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [estimateAsk, estimating] = useEstimateAskMutation();
   const [askApp, asking] = useAskAppMutation();
@@ -54,7 +77,8 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
       const value = await estimateAsk({ appId, question: typed }).unwrap();
       setEstimate({ for: typed, value });
     } catch (e) {
-      setProblem(`No estimate could be made: ${askProblem(e)}`);
+      const failure = askProblem(e);
+      setProblem({ ...failure, words: `No estimate could be made: ${failure.words}` });
     }
   };
 
@@ -112,9 +136,12 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
       )}
 
       {problem && (
-        <p role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
-          {problem}
-        </p>
+        <div className="flex flex-col gap-2">
+          <p role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
+            {problem.words}
+          </p>
+          {technical && problem.technical && <Underneath technical={problem.technical} />}
+        </div>
       )}
 
       {answer && (
@@ -163,6 +190,25 @@ function Query({ sql }: { sql: string }) {
     <details>
       <summary className="min-h-touch cursor-pointer py-2 text-sm text-ink-muted">The query</summary>
       <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xs bg-ground p-3 font-mono text-xs">{sql}</pre>
+    </details>
+  );
+}
+
+/** Technical mode only: the last query tried and the guard's or the database's message about it. */
+function Underneath({ technical }: { technical: AskTechnical }) {
+  return (
+    <details open className="text-sm">
+      <summary className="min-h-touch cursor-pointer py-2 text-ink-muted">What failed underneath</summary>
+      <div className="flex flex-col gap-2">
+        {technical.sql && (
+          <>
+            <span className="text-ink-muted">The last query tried</span>
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xs bg-ground p-3 font-mono text-xs">{technical.sql}</pre>
+          </>
+        )}
+        <span className="text-ink-muted">What refused it</span>
+        <pre className="whitespace-pre-wrap break-words rounded-xs bg-ground p-3 font-mono text-xs">{technical.error}</pre>
+      </div>
     </details>
   );
 }
@@ -247,7 +293,7 @@ function SavedCard({ appId, question, canChange, onRefused }: { appId: string; q
         </>
       )}
       <span className="text-sm text-ink-muted">{pending ? "Keeping it…" : `Worked out ${timeAgo(question.ranAt)}`}</span>
-      {technical && question.sql && <Query sql={question.sql} />}
+      {technical && question.error && question.technical ? <Underneath technical={question.technical} /> : technical && question.sql && <Query sql={question.sql} />}
     </li>
   );
 }

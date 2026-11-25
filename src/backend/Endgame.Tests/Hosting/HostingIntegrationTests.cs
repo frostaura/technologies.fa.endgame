@@ -461,6 +461,78 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     }
 
     [DockerFact]
+    public async Task The_evaluators_preview_has_its_own_database_and_leaves_nothing_in_the_app_when_destroyed()
+    {
+        // The evaluator's test records stayed in published apps: it wrote into the app's own database. A preview is the same
+        // image beside the app with a database of its own, reached only through the control listener, and destroyed with it.
+        var app = env.LedgerApp;
+        var preview = HostingEnvironment.AppContainer(app) + HostingConventions.PreviewSuffix;
+        var status = await env.DockAsync<AppStatus>(HttpMethod.Post, $"/internal/apps/{app:D}/preview", new StartAppRequest(HostingEnvironment.OrganisationId, null, null, null, null));
+        Assert.Equal($"http://{preview}:{HostingConventions.AppPort}", status.Target);
+
+        async Task<(HttpStatusCode Status, string Body)> CallAsync(HttpMethod method, string path, string? body, bool toPreview)
+        {
+            using var request = new HttpRequestMessage(method, new Uri(env.EdgeControlUrl, $"/internal/apps/{app:D}/call/{path}"));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(HostingConventions.ServiceTokenScheme, env.Token);
+            if (toPreview)
+            {
+                request.Headers.TryAddWithoutValidation(HostingConventions.PreviewHeader, "1");
+            }
+
+            if (body is not null)
+            {
+                request.Content = new StringContent(body);
+            }
+
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            using var response = await http.SendAsync(request);
+            return (response.StatusCode, await response.Content.ReadAsStringAsync());
+        }
+
+        (HttpStatusCode Status, string Body) last = (HttpStatusCode.OK, "");
+        try
+        {
+            await HostingEnvironment.WaitAsync("the preview answering", async () => (last = await CallAsync(HttpMethod.Get, "api/notes", null, toPreview: true)).Status == HttpStatusCode.OK, TimeSpan.FromSeconds(60));
+        }
+        catch (TimeoutException)
+        {
+            var (_, logs, errors) = await DockerCli.RunAsync(TimeSpan.FromSeconds(20), "logs", "--tail", "40", preview);
+            var (_, state, _) = await DockerCli.RunAsync(TimeSpan.FromSeconds(20), "inspect", "-f", "{{.State.Status}} exit {{.State.ExitCode}} oom {{.State.OOMKilled}} {{json .NetworkSettings.Networks}}", preview);
+            logs = state + "\n" + logs;
+            Assert.Fail($"The preview never answered: {(int)last.Status} {last.Body}\n--- preview ---\n{logs}{errors}\n--- edge ---\n{await env.LogsAsync("edge")}");
+        }
+
+        var note = $"Added by Test member (member-a) {Guid.NewGuid():N}";
+        Assert.Equal(HttpStatusCode.Created, (await CallAsync(HttpMethod.Post, "api/notes", note, toPreview: true)).Status);
+        Assert.Contains(note, (await CallAsync(HttpMethod.Get, "api/notes", null, toPreview: true)).Body, StringComparison.Ordinal);
+        var live = await CallAsync(HttpMethod.Get, "api/notes", null, toPreview: false);
+        Assert.Equal(HttpStatusCode.OK, live.Status);
+        Assert.DoesNotContain(note, live.Body, StringComparison.Ordinal);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await env.DockAsync(HttpMethod.Delete, $"/internal/apps/{app:D}/preview")).StatusCode);
+        Assert.DoesNotContain(preview, await DockerCli.CheckedAsync("ps", "-a", "--format", "{{.Names}}"), StringComparison.Ordinal);
+        var previews = await DockerCli.CheckedAsync("exec", HostingEnvironment.Container("postgres"), "psql", "-U", "postgres", "-tAc", "SELECT count(*) FROM pg_database WHERE datname LIKE 'p\\_%'");
+        Assert.Equal("0", previews.Trim());
+        Assert.DoesNotContain(note, (await CallAsync(HttpMethod.Get, "api/notes", null, toPreview: false)).Body, StringComparison.Ordinal);
+        Assert.NotEqual(HttpStatusCode.OK, (await CallAsync(HttpMethod.Get, "api/notes", null, toPreview: true)).Status);
+    }
+
+    [DockerFact]
+    public async Task The_egress_proxy_comes_back_when_its_container_restarts()
+    {
+        // After Docker itself stopped uncleanly, the proxy's own pid file survived in its container and named PID 1 —
+        // the restarted squid — so every restart refused to run ("Squid is already running") and apps lost the platform.
+        var proxy = HostingEnvironment.Container("egress");
+        await DockerCli.CheckedAsync("restart", "--time", "0", proxy);
+        await HostingEnvironment.WaitAsync("the proxy running again after its restart", async () =>
+            (await DockerCli.CheckedAsync("inspect", "--format", "{{.State.Running}} {{.RestartCount}}", proxy)).Trim().StartsWith("true", StringComparison.Ordinal)
+            && (await DockerCli.RunAsync(TimeSpan.FromSeconds(10), "exec", proxy, "nc", "-z", "127.0.0.1", "3128")).ExitCode == 0, TimeSpan.FromSeconds(30));
+        using var client = env.EdgeClient();
+        var platform = await client.GetFromJsonAsync<JsonElement>($"/acme/apps/ledger/web/api/fetch?url={Uri.EscapeDataString($"http://{HostingEnvironment.PlatformHost}:{env.ControlPlane.Port}/api/ping")}&direct=false");
+        Assert.True(platform.GetProperty("reached").GetBoolean(), platform.ToString());
+    }
+
+    [DockerFact]
     public async Task A_recreated_edge_reaches_an_app_again_on_its_next_wake()
     {
         // A redeployed edge is a new container on none of the app networks: every app answered 503 until restarted.

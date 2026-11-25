@@ -12,6 +12,28 @@ describe("addresses", () => {
     expect(result?.messages.map((m) => m.ruleId)).toContain("endgame/no-root-relative-url");
   });
 
+  it("fails a page that reads the address from window.location instead of the router", async () => {
+    const [result] = await eslint.lintText("export const court = () => new URLSearchParams(window.location.search).get('court');\n", {
+      filePath: "src/example.ts",
+    });
+    expect(result?.messages.map((m) => m.ruleId)).toContain("endgame/no-location-read");
+  });
+
+  it("fails the bare global location too", async () => {
+    const [result] = await eslint.lintText("export const tab = () => location.hash.slice(1);\n", { filePath: "src/example.ts" });
+    expect(result?.messages.map((m) => m.ruleId)).toContain("endgame/no-location-read");
+  });
+
+  it("passes the router's way, and leaving the app through location", async () => {
+    const [result] = await eslint.lintText(
+      'import { useSearchParams } from "react-router";\nimport { signInUrl } from "@endgame/appkit";\n' +
+        'export function useCourt() {\n  const [params] = useSearchParams();\n  return params.get("court");\n}\n' +
+        "export const leave = () => location.assign(signInUrl());\n",
+      { filePath: "src/example.ts" },
+    );
+    expect(result?.messages).toEqual([]);
+  });
+
   it("passes the same call written the kit's way", async () => {
     const [result] = await eslint.lintText('import { api } from "@endgame/appkit";\nexport const go = () => api("notes");\n', {
       filePath: "src/example.ts",

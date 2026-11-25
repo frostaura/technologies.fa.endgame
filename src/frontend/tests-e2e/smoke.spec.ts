@@ -5,7 +5,8 @@ import { expect, test, type Page } from "@playwright/test";
  * plane offers the development sign-in (docker-compose.yml's default); system status is technical
  * detail, so it is opened in technical mode.
  */
-const SERVICES = ["Control plane", "Edge", "Runner", "Dock", "Database", "Console"];
+// The development stack runs the ops service too (Cloudflare and backups, ARCH-007), so the status lists it.
+const SERVICES = ["Control plane", "Edge", "Runner", "Dock", "Database", "Console", "Cloudflare and backups"];
 
 async function signInAndOpenSystemStatus(page: Page) {
   await page.goto("/");

@@ -1,5 +1,6 @@
 import { Link } from "@/components/Link";
 import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { estimateHeadline, estimateSpread } from "@/lib/estimates";
 import { formatCredits, formatDate, formatNumber, percent, plural } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
@@ -10,7 +11,7 @@ import type { BudgetLine, Credits } from "@/store/types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { roleAt, roleRank } from "@/lib/roles";
 import { AppShell } from "../shell/AppShell";
-import { NarrowerLimit, OwnLimit, TopUpRequests } from "./CreditsActions";
+import { NarrowerLimit, NarrowerLimits, OwnLimit, TopUpRequests } from "./CreditsActions";
 import { paceLine } from "./creditsModel";
 
 export function CreditsView() {
@@ -92,9 +93,9 @@ function CreditsBody({ credits }: { credits: Credits }) {
           <h2 className="text-lg font-semibold">Estimates against what it cost</h2>
           {credits.estimates && credits.estimates.pieces > 0 ? (
             <>
-              <span className="font-display text-3xl font-semibold">Within {formatNumber(credits.estimates.withinPercent)}%</span>
+              <span className="font-display text-3xl font-semibold">{estimateHeadline(credits.estimates)}</span>
               <span className="text-ink-body">
-                Across {plural(credits.estimates.pieces, "piece")} of work this month. {formatNumber(credits.estimates.under)} came in under the estimate, {formatNumber(credits.estimates.over)} over. The largest miss was {formatNumber(credits.estimates.largestMissPercent)}%.
+                Across {plural(credits.estimates.pieces, "piece")} of work this month. {estimateSpread(credits.estimates)} The largest miss was {formatNumber(credits.estimates.largestMissPercent)}%.
               </span>
             </>
           ) : (
@@ -171,6 +172,11 @@ function OverdraftAside({ credits, organisation }: { credits: Credits; organisat
         {credits.overdraft && (
           <ErrorBoundary name="Your overdraft limit">
             <OwnLimit organisation={organisation} credits={credits} isOwner={isOwner} />
+          </ErrorBoundary>
+        )}
+        {credits.overdraft && isAdmin && (
+          <ErrorBoundary name="The tighter limits">
+            <NarrowerLimits credits={credits} />
           </ErrorBoundary>
         )}
         {credits.overdraft && isAdmin && (

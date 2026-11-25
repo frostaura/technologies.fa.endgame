@@ -12,4 +12,7 @@ COPY squid.conf /etc/squid/squid.conf
 USER squid
 EXPOSE 3128
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=6 CMD nc -z 127.0.0.1 3128 || exit 1
-ENTRYPOINT ["squid", "-N", "-d", "1", "-f", "/etc/squid/squid.conf"]
+# A pid file left by a container that was killed (Docker itself stopping uncleanly) names PID 1, which the restarted
+# squid also is, so squid would refuse to start ("already running") on every restart. Nothing else runs in this
+# container, so a pid file present at start is always stale.
+ENTRYPOINT ["/bin/sh", "-c", "rm -f /run/squid/squid.pid && exec squid -N -d 1 -f /etc/squid/squid.conf"]

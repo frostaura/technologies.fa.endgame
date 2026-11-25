@@ -17,6 +17,23 @@ const port = Number(process.argv[2] ?? 5591);
 let state: MockState = scenario("populated");
 /** The Owner's own overdraft limit, once set through the console. */
 let ownLimit: number | null = null;
+/** Narrower limits set through PUT /api/credits/overdraft below the organisation, by scope. */
+const narrower = new Map<string, number>();
+function withLimits(c: { overdraft: { ownLimit: number | null; limits?: unknown[] } | null }) {
+  if (ownLimit !== null && c.overdraft) c.overdraft.ownLimit = ownLimit;
+  if (c.overdraft && narrower.size > 0) {
+    c.overdraft.limits = [...narrower].sort(([a], [b]) => a.localeCompare(b)).map(([scope, credits]) => ({
+      scope,
+      name: scope.split("/").pop() ?? scope,
+      level: (["division", "project", "app"] as const)[Math.min(scope.split("/").length - 2, 2)],
+      credits,
+      setAt: new Date().toISOString(),
+      setBy: "u1",
+      setByName: "Fixture Owner",
+    }));
+  }
+  return c;
+}
 const requests: { method: string; path: string; body: unknown }[] = [];
 const waiters = new Map<string, Set<() => void>>();
 
@@ -195,6 +212,7 @@ const server = createServer(async (req, res) => {
   if (path === "/__mock/scenario" && method === "POST") {
     state = scenario(((body as { name?: string } | null)?.name ?? "populated") as ScenarioName);
     ownLimit = null;
+    narrower.clear();
     requests.length = 0;
     return send(res, 204);
   }
@@ -255,12 +273,11 @@ const server = createServer(async (req, res) => {
       viewerRole: state.viewerRole,
       orgSlug: state.org?.slug ?? null,
       credits: () => {
-        const c = state.credits() as { overdraft: { ownLimit: number | null } | null };
-        if (ownLimit !== null && c.overdraft) c.overdraft.ownLimit = ownLimit;
-        return c as unknown as Record<string, unknown>;
+        return withLimits(state.credits() as { overdraft: { ownLimit: number | null } | null }) as unknown as Record<string, unknown>;
       },
       setOwnLimit: (scope: string, credits: number) => {
         if (scope === state.org?.slug) ownLimit = credits;
+        else narrower.set(scope, credits);
       },
     };
     if (await handleBreadth(req, res, path, method, url, body, ctx, send, problem)) return;
@@ -609,14 +626,15 @@ const server = createServer(async (req, res) => {
 
   // The ontology and tasks ---------------------------------------------------------------
   if (path === "/api/ontology") return send(res, 200, state.ontology());
-  if (path === "/api/tasks") return send(res, 200, state.tasks);
+  if (path === "/api/tasks") {
+    const employeeId = url.searchParams.get("employeeId");
+    return send(res, 200, employeeId ? state.tasks.filter((t) => t.employeeId === employeeId) : state.tasks);
+  }
 
   // Credits ------------------------------------------------------------------------------
   if (path === "/api/credits") {
     if (state.failCredits) return problem(res, 500, "Credits could not be read");
-    const c = state.credits() as { overdraft: { ownLimit: number | null } | null };
-    if (ownLimit !== null && c.overdraft) c.overdraft.ownLimit = ownLimit;
-    return send(res, 200, c);
+    return send(res, 200, withLimits(state.credits() as { overdraft: { ownLimit: number | null } | null }));
   }
 
   // System -------------------------------------------------------------------------------

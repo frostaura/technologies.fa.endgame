@@ -28,8 +28,13 @@ this skill where they differ.
 4. Every schema change is a migration (`make migration name=AddThing`); never edit a committed one.
 5. Every read shows loading, failed, empty and loaded differently (`useApiQuery` with `LoadingState`, `FailedState`, `EmptyState`).
 
+Every screen carries the kit's test ids (`page-<view>`, `<entity>-item`, `new-<entity>`, `save-<entity>`, …): the
+table is in `AGENTS.md` and the `write-a-screen` skill, the plan item names the ones its screens carry, and the
+factory checks each exists in `web/src` as `data-testid="…"`.
+
 ## Proving a change
 
 `make lint` and `make test` must pass with zero warnings. A change is done when there is a test for the
-behaviour on each side it touches, and `docs/` says what changed. Commit each finished feature on its
+behaviour on each side it touches, a navigation test (`renderApp(<App />, { at: "/" })`, then click) for each link
+or button that moves between pages, and `docs/` says what changed. Commit each finished feature on its
 own with `commit`, then update `PROGRESS.md`.

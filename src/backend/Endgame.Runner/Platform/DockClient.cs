@@ -96,6 +96,24 @@ public sealed class DockClient(HttpClient http)
         return await ReadAsync<AppStatus>(response, cancellationToken);
     }
 
+    /// <summary>The evaluator's preview of the app (its own throwaway database), replacing any earlier one.</summary>
+    public async Task<AppStatus> StartPreviewAsync(Guid appId, StartAppRequest request, CancellationToken cancellationToken)
+    {
+        using var response = await Http.PostAsJsonAsync($"/internal/apps/{appId:D}/preview", request, Json.Web, cancellationToken);
+        return await ReadAsync<AppStatus>(response, cancellationToken);
+    }
+
+    /// <summary>Destroys the preview and its database.</summary>
+    public async Task RemovePreviewAsync(Guid appId, CancellationToken cancellationToken)
+    {
+        using var response = await Http.DeleteAsync($"/internal/apps/{appId:D}/preview", cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var problem = await ServiceProblemException.FromAsync(response, cancellationToken);
+            throw new WorkspaceException($"Dock refused: {problem.Detail}", problem.Code);
+        }
+    }
+
     public async Task<AppStatus> StatusAsync(Guid appId, CancellationToken cancellationToken)
     {
         using var response = await Http.GetAsync($"/internal/apps/{appId:D}", cancellationToken);

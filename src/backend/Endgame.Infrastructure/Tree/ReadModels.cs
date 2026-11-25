@@ -117,9 +117,13 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var spend = await ledger.SpendThisMonthByNodeAsync(organisationId, cancellationToken);
         var sleepModes = await db.CascadeEntries.AsNoTracking()
             .Where(e => e.OrganisationId == organisationId && e.Kind == "setting" && e.Key == CascadeKeys.SleepMode).ToListAsync(cancellationToken);
+        var liveIds = liveRuns.Select(r => r.Id).ToList();
         var tasks = await db.Tasks.AsNoTracking()
-            .Where(t => t.OrganisationId == organisationId && t.RunId != null && liveRuns.Select(r => r.Id).Contains(t.RunId.Value))
-            .Select(t => new { t.RunId, t.Status }).ToListAsync(cancellationToken);
+            .Where(t => t.OrganisationId == organisationId && t.RunId != null && liveIds.Contains(t.RunId.Value))
+            .Select(t => new { t.RunId, t.Status, t.EmployeeId }).ToListAsync(cancellationToken);
+        var charged = await db.CreditEntries.AsNoTracking()
+            .Where(c => c.OrganisationId == organisationId && c.RunId != null && c.EmployeeId != null && liveIds.Contains(c.RunId.Value))
+            .Select(c => new { c.RunId, c.EmployeeId }).Distinct().ToListAsync(cancellationToken);
         var (estimates, runSpend) = await RunCostsAsync(organisationId, liveRuns.Select(r => r.Id).ToArray(), cancellationToken);
         var measured = await telemetry.SummariesAsync(organisationId, null, cancellationToken);
         var shares = (await db.AppShares.AsNoTracking().Where(x => x.OrganisationId == organisationId).GroupBy(x => x.AppId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken))
@@ -131,6 +135,9 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var visible = grants.Select(g => g.NodeId).ToHashSet();
         bool Visible(Guid id, params Guid[] ancestors) => everything || visible.Contains(id) || ancestors.Any(visible.Contains);
         var runTitles = liveRuns.ToDictionary(r => r.Id, r => r.Title);
+        // Who works in each run that is under way: its owner, whoever claimed a task in it, whoever its model calls were charged to.
+        var working = WorkingIn(liveRuns.Where(r => r.Status is RunStatuses.Running or RunStatuses.WaitingApproval).ToList(),
+            tasks.Where(t => t.EmployeeId != null).Select(t => (t.RunId!.Value, t.EmployeeId!.Value)).Concat(charged.Select(c => (c.RunId!.Value, c.EmployeeId!.Value))));
 
         var idleDays = await db.CascadeEntries.AsNoTracking()
             .Where(e => e.OrganisationId == organisationId && e.Kind == "setting" && e.Key == AgentSettings.WorkforceIdleDays).ToListAsync(cancellationToken);
@@ -140,13 +147,15 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         {
             EmployeeStatuses.Paused => "Paused",
             _ when e.CurrentRunId is { } run && runTitles.TryGetValue(run, out var title) => title,
+            _ when working.TryGetValue(e.Id, out var worked) => runTitles[worked],
             _ when e.Kind == Domain.Workforce.EmployeeKinds.Contractor => e.Brief is { Length: > 120 } brief ? brief[..117] + "..." : e.Brief,
             _ => null,
         };
 
         IReadOnlyList<WorkerView> Workers(Guid? division, Guid? project, Guid? app) => employees
             .Where(e => e.DivisionId == division && e.ProjectId == project && e.AppId == app)
-            .Select(e => new WorkerView(e.Id, e.Name, e.Role, e.Kind, Activity(e), e.Status, idle[e.Id].Flagged, e.Standing, e.BriefedById))
+            .Select(e => new WorkerView(e.Id, e.Name, e.Role, e.Kind, Activity(e), e.Status == EmployeeStatuses.Idle && working.ContainsKey(e.Id) ? EmployeeStatuses.Working : e.Status,
+                idle[e.Id].Flagged && !working.ContainsKey(e.Id), e.Standing, e.BriefedById))
             .ToList();
 
         SpendView Spend(Func<(Guid? DivisionId, Guid? ProjectId, Guid? AppId, Guid? EmployeeId, decimal Credits), bool> where) => new(spend.Where(where).Sum(s => s.Credits));
@@ -211,6 +220,23 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         needs = [.. needs, .. await WorkforceNeedsAsync(organisationId, everything, visible, employees.Where(e => idle[e.Id].Flagged).ToList(), idle, cancellationToken)];
         var viewer = RoleResolver.Resolve(grants)?.Role.ToWire() ?? "none";
         return new TreeView(clock.GetUtcNow(), viewer, root, divisionViews, needs);
+    }
+
+    /// <summary>For each employee, the newest of <paramref name="runs"/> (newest first) it works in: as the run's owner, or by a task or a charged model call in it.</summary>
+    public static Dictionary<Guid, Guid> WorkingIn(IReadOnlyList<RunRecord> runs, IEnumerable<(Guid RunId, Guid EmployeeId)> workedIn)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        var order = runs.Select((r, i) => (r.Id, i)).ToDictionary(x => x.Id, x => x.i);
+        var working = new Dictionary<Guid, Guid>();
+        foreach (var (run, employee) in runs.Where(r => r.EmployeeId is not null).Select(r => (r.Id, r.EmployeeId!.Value)).Concat(workedIn ?? []))
+        {
+            if (order.TryGetValue(run, out var at) && (!working.TryGetValue(employee, out var held) || order[held] > at))
+            {
+                working[employee] = run;
+            }
+        }
+
+        return working;
     }
 
     public TreeView FirstRun() => new(clock.GetUtcNow(), "none", null, [], []);
@@ -401,6 +427,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var spent = (await ledger.SpendThisMonthByNodeAsync(scope.OrganisationId, cancellationToken)).Where(s => s.AppId == app.Id).Sum(s => s.Credits);
         var measured = (await telemetry.SummariesAsync(scope.OrganisationId, app.Id, cancellationToken)).GetValueOrDefault(app.Id);
         var sharedWith = await db.AppShares.AsNoTracking().CountAsync(x => x.OrganisationId == scope.OrganisationId && x.AppId == app.Id, cancellationToken);
+        var endUsers = await db.AppEndUsers.AsNoTracking().CountAsync(x => x.OrganisationId == scope.OrganisationId && x.AppId == app.Id, cancellationToken);
         var runningCost = await hosting.RunningCostAsync(scope.OrganisationId, app.Id, cancellationToken);
         var route = (await tree.RoutesAsync(cancellationToken)).Routes.FirstOrDefault(r => r.AppId == app.Id);
         session.UseOrganisation(scope.OrganisationId);
@@ -429,11 +456,10 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             ["latencyP95Ms"] = measured.LatencyP95Ms,
             ["lastVisitAt"] = measured.LastVisitAt,
         };
-        JsonNode? runningCostView = runningCost is { } rc ? new JsonObject { ["sleep"] = rc.Sleep, ["alwaysOn"] = rc.AlwaysOn } : null;
         return new PublicAppView(app.Id, app.Name, scope.Path.ToString(), new HealthView(health, summary), route?.Paused == true ? "paused" : AppRunning(app.Status, alwaysOn),
             new AppAddressesView(addresses.Path, addresses.Subdomain), telemetryView,
             new CostView(spent, cap is null ? null : CascadeService.NumberOf(JsonNode.Parse(cap.Entry.ValueJson))),
-            new AppSettingsView(alwaysOn ? "always-on" : "sleep", access), runningCostView, sharedWith, app.Status, app.CurrentVersion, app.PublishedAt,
+            new AppSettingsView(alwaysOn ? "always-on" : "sleep", access), runningCost, sharedWith, endUsers, app.Status, app.CurrentVersion, app.PublishedAt,
             idle is null ? TreeService.DefaultIdleMinutes : (int)(CascadeService.NumberOf(JsonNode.Parse(idle.Entry.ValueJson)) ?? TreeService.DefaultIdleMinutes));
     }
 
@@ -478,12 +504,35 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var frostaura = CascadeService.OperatorOverdraft(settings);
         var own = settings.Where(e => (e.Key == CascadeKeys.OverdraftOwnLimit && e.Level == NodeLevel.Organisation) || (e.Key == CascadeKeys.OverdraftLimit && e.Level > NodeLevel.Organisation))
             .Select(e => CascadeService.NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m).DefaultIfEmpty(-1m).Min();
+        var limits = await OverdraftLimitsAsync(scope, cancellationToken);
         var topUps = await db.CreditEntries.AsNoTracking().Where(e => e.OrganisationId == org && e.Kind == "top_up")
             .OrderByDescending(e => e.CreatedAt).Take(50)
             .Select(e => new TopUpView(e.CreatedAt, e.Amount, e.Note ?? "")).ToListAsync(cancellationToken);
         return new CreditsView(scope.Path.ToString(), position.Balance, new MonthView(spent, ai, spent - ai), monthsLeft, budgets, estimates,
-            new NotChargedView(notCharged, repairs), new OverdraftView(frostaura, own < 0 ? null : own), topUps,
+            new NotChargedView(notCharged, repairs), new OverdraftView(frostaura, own < 0 ? null : own, limits), topUps,
             position.HeldOrganisation, position.Balance + position.OverdraftLimit);
+    }
+
+    /// <summary>The narrower overdraft limits (division, project, app) on the scope's chain above it and beneath it, in tree order.</summary>
+    private async Task<IReadOnlyList<OverdraftLimitView>> OverdraftLimitsAsync(ResolvedScope scope, CancellationToken cancellationToken)
+    {
+        var org = scope.OrganisationId;
+        var rows = (await (from e in db.CascadeEntries.AsNoTracking()
+                           join u in db.Users.AsNoTracking() on e.SetBy equals u.Id into people
+                           from u in people.DefaultIfEmpty()
+                           where e.OrganisationId == org && e.Kind == "setting" && e.Key == CascadeKeys.OverdraftLimit && e.DivisionId != null
+                           select new { Entry = e, SetByName = u == null ? null : u.DisplayName }).ToListAsync(cancellationToken))
+            .Where(r => scope.OnChain(r.Entry) || scope.Contains(r.Entry)).ToList();
+        var views = new List<OverdraftLimitView>();
+        foreach (var r in rows)
+        {
+            var node = await scopes.ForRowAsync(org, r.Entry.DivisionId, r.Entry.ProjectId, r.Entry.AppId, cancellationToken);
+            views.Add(new OverdraftLimitView(node.Path.ToString(), node.Node.Name, node.Level.ToWire(), CascadeService.NumberOf(JsonNode.Parse(r.Entry.ValueJson)) ?? 0m,
+                r.Entry.SetAt, r.Entry.SetBy, r.SetByName));
+        }
+
+        session.UseOrganisation(org);
+        return views.OrderBy(v => v.Scope, StringComparer.Ordinal).ToList();
     }
 
     /// <summary>Every node at and beneath the scope, in tree order, with its own cap and this month's spend; employees with a cap follow their node.</summary>
@@ -544,7 +593,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
     }
 
     /// <summary>
-    /// Estimates scored against what the work cost, in the scope (and for one employee when given): the
+    /// Estimates scored against what the work cost, in the scope (and for one employee when given — the run's owner, or
+    /// for a run nobody owns, such as a factory build, the employee its billable model calls were mostly charged to): the
     /// Runner's <c>estimate.scored { expectedCredits, actualCredits }</c>, and the older
     /// <c>{ estimated, actual }</c>. Null before any was scored.
     /// </summary>
@@ -561,7 +611,10 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                 JOIN runs r ON r.organisation_id = e.organisation_id AND r.id = e.run_id
                 WHERE e.organisation_id = @org AND e.type = 'estimate.scored'
                   AND (@division IS NULL OR r.division_id = @division) AND (@project IS NULL OR r.project_id = @project) AND (@app IS NULL OR r.app_id = @app)
-                  AND (@employee IS NULL OR r.employee_id = @employee)) x
+                  AND (@employee IS NULL OR COALESCE(r.employee_id, (
+                        SELECT c.employee_id FROM credit_entries c
+                        WHERE c.organisation_id = r.organisation_id AND c.run_id = r.id AND c.kind = 'settlement' AND c.billable AND c.employee_id IS NOT NULL
+                        GROUP BY c.employee_id ORDER BY SUM(c.amount) DESC, c.employee_id LIMIT 1)) = @employee)) x
             WHERE x.estimated IS NOT NULL AND x.actual IS NOT NULL
             """, cancellationToken, P("org", scope.OrganisationId), P("division", scope.DivisionId), P("project", scope.ProjectId), P("app", scope.AppId), P("employee", employeeId));
         var pieces = new List<(decimal Estimated, decimal Actual)>();
@@ -580,9 +633,20 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
 
         static decimal Miss((decimal Estimated, decimal Actual) p) => p.Estimated == 0 ? (p.Actual == 0 ? 0 : 1) : Math.Abs(p.Actual - p.Estimated) / p.Estimated;
         var within = pieces.Count(p => Miss(p) <= EstimateTolerance);
+        var gap = TypicalGap(pieces);
         return new EstimatesView(pieces.Count, decimal.Round(100m * within / pieces.Count, 1),
             pieces.Count(p => p.Actual < p.Estimated && Miss(p) > EstimateTolerance), pieces.Count(p => p.Actual > p.Estimated && Miss(p) > EstimateTolerance),
-            decimal.Round(pieces.Max(Miss) * 100m, 1));
+            decimal.Round(pieces.Max(Miss) * 100m, 1),
+            gap is { } typical ? decimal.Round(typical * 100m, 1) : null,
+            gap switch { null => null, var g when Math.Abs(g.Value) <= EstimateTolerance => "within", < 0 => "under", _ => "over" });
+    }
+
+    /// <summary>The median of (actual − estimate) / estimate over the pieces that had an estimate above zero: the typical gap, with its direction.</summary>
+    public static decimal? TypicalGap(IReadOnlyList<(decimal Estimated, decimal Actual)> pieces)
+    {
+        ArgumentNullException.ThrowIfNull(pieces);
+        var gaps = pieces.Where(p => p.Estimated > 0).Select(p => (p.Actual - p.Estimated) / p.Estimated).Order().ToList();
+        return gaps.Count == 0 ? null : gaps.Count % 2 == 1 ? gaps[gaps.Count / 2] : (gaps[(gaps.Count / 2) - 1] + gaps[gaps.Count / 2]) / 2m;
     }
 
     /// <summary>

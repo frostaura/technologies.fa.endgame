@@ -183,7 +183,7 @@ public sealed class AgentEventWriter(IEventSink sink, string agent)
     public static JsonObject Fit(JsonObject payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        var size = System.Text.Encoding.UTF8.GetByteCount(payload.ToJsonString(Json.Compact));
+        var size = Size(payload);
         var guard = 0;
         while (size > HarnessEvents.MaxPayloadBytes - 1024 && guard++ < 64)
         {
@@ -197,10 +197,21 @@ public sealed class AgentEventWriter(IEventSink sink, string agent)
             var keep = Math.Max(128, text.Length - (size - (HarnessEvents.MaxPayloadBytes - 2048)) - 64);
             set(OutputText.Truncate(text, Math.Min(keep, text.Length / 2)));
             payload["truncated"] = true;
-            size = System.Text.Encoding.UTF8.GetByteCount(payload.ToJsonString(Json.Compact));
+            size = Size(payload);
         }
 
         return payload;
+    }
+
+    /// <summary>
+    /// The payload's size as the control plane measures it: its default <c>ToJsonString()</c>, which writes '&lt;', '&gt;',
+    /// '&amp;', '+' and the like as six-character escapes (markup grows several times over), counted in characters and in
+    /// UTF-8 bytes, whichever is larger.
+    /// </summary>
+    private static int Size(JsonObject payload)
+    {
+        var text = payload.ToJsonString();
+        return Math.Max(text.Length, System.Text.Encoding.UTF8.GetByteCount(text));
     }
 
     private static (string? Text, Action<string>? Set) Largest(JsonNode node, string? best, Action<string>? bestSet)

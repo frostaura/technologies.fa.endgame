@@ -555,8 +555,8 @@ export const api = createApi({
       providesTags: ["Ontology"],
       extraOptions: guarded(g.ontologyGuard, "the organisation graph"),
     }),
-    getTasks: build.query<TaskItem[], { scope: string; limit?: number }>({
-      query: ({ scope, limit }) => `tasks?scope=${encodeURIComponent(scope)}&limit=${limit ?? 100}`,
+    getTasks: build.query<TaskItem[], { scope: string; limit?: number; employeeId?: string }>({
+      query: ({ scope, limit, employeeId }) => `tasks?scope=${encodeURIComponent(scope)}&limit=${limit ?? 100}${employeeId ? `&employeeId=${encodeURIComponent(employeeId)}` : ""}`,
       providesTags: ["Tasks"],
       extraOptions: guarded(g.tasksGuard, "the recent work"),
     }),
@@ -585,7 +585,7 @@ export const api = createApi({
         const at = new Date().toISOString();
         const undo = dispatch(
           api.util.updateQueryData("getDashboard", appId, (list) => {
-            list.push({ id: tempId, question, answer, sql, chart, columns, rows, truncated, askedAt: at, ranAt: at, error: null });
+            list.push({ id: tempId, question, answer, sql, chart, columns, rows, truncated, askedAt: at, ranAt: at, error: null, technical: null });
           }),
         );
         try {

@@ -116,6 +116,9 @@ public sealed class FakeControlPlane : HttpMessageHandler
     /// <summary>What a suggest run recorded, once.</summary>
     public JsonArray? Suggestions { get; private set; }
 
+    /// <summary>The task graph: every task created, as the control plane would hold it.</summary>
+    public List<JsonObject> Tasks { get; } = [];
+
     /// <summary>Schedules the app declares, as the ontology shows them.</summary>
     public List<string> Schedules { get; } = [];
 
@@ -152,9 +155,9 @@ public sealed class FakeControlPlane : HttpMessageHandler
                 ("POST", var p) when p == run + "/events" => AppendAll(body!.AsObject()),
                 ("GET", "/internal/context") => Json(Context),
                 ("POST", "/internal/approvals") => Approve(body!.AsObject()),
-                ("POST", "/internal/tasks") => Json(new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["title"] = body!["title"]?.ToString(), ["status"] = "todo" }, HttpStatusCode.Created),
-                ("POST", "/internal/tasks/checkout") => Json(new JsonObject { ["id"] = body!["taskId"]?.ToString(), ["title"] = "t", ["status"] = "in_progress", ["holderRunId"] = RunId.ToString() }),
-                ("PATCH", var p) when p.StartsWith("/internal/tasks/", StringComparison.Ordinal) => Json(new JsonObject { ["id"] = p[16..], ["title"] = "t", ["status"] = body!["status"]?.ToString() }),
+                ("POST", "/internal/tasks") => CreateTask(body!.AsObject()),
+                ("POST", "/internal/tasks/checkout") => Checkout(body!.AsObject()),
+                ("PATCH", var p) when p.StartsWith("/internal/tasks/", StringComparison.Ordinal) => FinishTask(Guid.Parse(p[16..]), body!.AsObject()),
                 ("POST", var p) when p.StartsWith("/internal/ideas/", StringComparison.Ordinal) && p.EndsWith("/verdict", StringComparison.Ordinal) => RecordVerdict(body!.AsObject()),
                 ("POST", "/internal/tree/nodes") => Node(body!.AsObject()),
                 ("POST", var p) when p.StartsWith("/internal/apps/", StringComparison.Ordinal) && p.EndsWith("/token", StringComparison.Ordinal) => Json(new JsonObject { ["token"] = "app-token-for-test" }),
@@ -227,6 +230,61 @@ public sealed class FakeControlPlane : HttpMessageHandler
         }
 
         return Json(appended);
+    }
+
+    // The task graph, with the control plane's rules that matter here: checkout is conditional on the expected status and
+    // holder, who claimed a task is kept when it finishes, and each change is logged on the run as TaskService logs it.
+    private HttpResponseMessage CreateTask(JsonObject body)
+    {
+        var id = Guid.NewGuid();
+        var task = new JsonObject
+        {
+            ["id"] = id.ToString(),
+            ["scope"] = body["scope"]?.ToString(),
+            ["runId"] = body["runId"]?.ToString(),
+            ["title"] = body["title"]?.ToString(),
+            ["description"] = body["description"]?.ToString() ?? "",
+            ["status"] = "todo",
+            ["holderRunId"] = null,
+            ["holderEmployeeId"] = null,
+            ["employeeId"] = null,
+        };
+        Tasks.Add(task);
+        Append("task.created", new JsonObject { ["taskId"] = id.ToString(), ["summary"] = task["title"]?.ToString() });
+        return Json(task.DeepClone(), HttpStatusCode.Created);
+    }
+
+    private HttpResponseMessage Checkout(JsonObject body)
+    {
+        var task = Tasks.Single(t => t["id"]!.GetValue<string>() == body["taskId"]!.GetValue<string>());
+        var expected = body["expectedStatus"]?.ToString();
+        var holder = body["expectedHolderRunId"]?.ToString();
+        if (task["status"]!.GetValue<string>() != expected || task["holderRunId"]?.ToString() != holder)
+        {
+            return Json(new JsonObject { ["status"] = 409, ["code"] = "conflict", ["detail"] = "conflict: the task's status or holder was not what you expected.", ["task"] = task.DeepClone() }, HttpStatusCode.Conflict);
+        }
+
+        task["status"] = "in_progress";
+        task["holderRunId"] = body["runId"]?.ToString();
+        task["holderEmployeeId"] = body["employeeId"]?.ToString();
+        task["employeeId"] = body["employeeId"]?.ToString();
+        Append("task.claimed", new JsonObject { ["taskId"] = task["id"]!.ToString(), ["employeeId"] = task["employeeId"]?.ToString(), ["previousHolder"] = holder });
+        return Json(task.DeepClone());
+    }
+
+    private HttpResponseMessage FinishTask(Guid id, JsonObject body)
+    {
+        var task = Tasks.Single(t => t["id"]!.GetValue<string>() == id.ToString());
+        var status = body["status"]!.GetValue<string>();
+        task["status"] = status;
+        task["holderRunId"] = null;
+        task["holderEmployeeId"] = null;
+        if (status is "done" or "failed")
+        {
+            Append($"task.{status}", new JsonObject { ["taskId"] = id.ToString(), ["summary"] = body["summary"]?.ToString() ?? task["title"]?.ToString(), ["employeeId"] = task["employeeId"]?.ToString() });
+        }
+
+        return Json(task.DeepClone());
     }
 
     private HttpResponseMessage Approve(JsonObject body)
@@ -401,6 +459,9 @@ public sealed class FakeDock : HttpMessageHandler
 
     public List<JsonObject> Starts { get; } = [];
 
+    /// <summary>The evaluator's previews started (<c>POST /internal/apps/{id}/preview</c>).</summary>
+    public List<JsonObject> Previews { get; } = [];
+
     public bool FailBuild { get; set; }
 
     public DockClient Client() => new(new HttpClient(this) { BaseAddress = new Uri("http://dock") });
@@ -416,6 +477,17 @@ public sealed class FakeDock : HttpMessageHandler
             return FailBuild
                 ? Json(new JsonObject { ["code"] = "build_failed", ["detail"] = "error CS1002: ; expected" }, HttpStatusCode.UnprocessableEntity)
                 : Json(new JsonObject { ["appId"] = appId, ["commit"] = "c0010000", ["image"] = $"app-{appId}:c001", ["durationMs"] = 6000, ["logTail"] = "Build succeeded." });
+        }
+
+        if (path.EndsWith("/preview", StringComparison.Ordinal) && request.Method == HttpMethod.Post)
+        {
+            Previews.Add(body!.AsObject());
+            return Json(Status(appId));
+        }
+
+        if (path.EndsWith("/preview", StringComparison.Ordinal) && request.Method == HttpMethod.Delete)
+        {
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
         }
 
         if (path.EndsWith("/start", StringComparison.Ordinal))

@@ -314,15 +314,53 @@ export interface AppDetail {
   telemetry: AppTelemetry | null;
   cost: { monthCredits: number; capCredits: number | null };
   settings: { running: "sleep" | "always-on"; access: AppAccess };
-  /** Expected monthly credits for each running choice, from measured hosting. Null until measured. */
-  runningCost: { sleep: number; alwaysOn: number } | null;
+  /** What each running choice would cost a month, from this app's own measured use and today's prices — or why not yet. */
+  runningCost: RunningCost;
   sharedWith: number;
+  /** How many end users have registered for it (members who open it are not counted). */
+  endUsers: number;
   /** The app's own lifecycle word (draft, building, running, sleeping, failed, stopped, archived). */
   status: string;
   version: string | null;
   publishedAt: string | null;
   /** Minutes idle before it sleeps. */
   idleMinutes: number;
+}
+
+/** One running choice's monthly figure and what it assumes. */
+export interface RunningChoiceCost {
+  credits: number;
+  awakeHoursPerMonth: number;
+  basis: string;
+}
+
+/**
+ * `runningCost` of `GET /api/apps/{id}`: from the app's own hosting over the last `windowDays`, at today's
+ * prices. Under `minimumHours` of measured time it is `not-enough-history` and both choices are null.
+ */
+export interface RunningCost {
+  state: "estimated" | "not-enough-history";
+  windowDays: number;
+  minimumHours: number;
+  measuredHours: number;
+  /** What was measured, or why there is no estimate yet. */
+  basis: string;
+  /** Today's hosting prices, in credits. */
+  prices: string;
+  sleep: RunningChoiceCost | null;
+  alwaysOn: RunningChoiceCost | null;
+  measured: { awakeHours: number; memoryMb: number; storageMb: number; requestsPerMonth: number } | null;
+}
+
+/** A narrower overdraft limit set at a division, project or app, from `GET /api/credits`'s `overdraft.limits`. */
+export interface OverdraftLimit {
+  scope: string;
+  name: string;
+  level: "division" | "project" | "app";
+  credits: number;
+  setAt: string;
+  setBy: string | null;
+  setByName: string | null;
 }
 
 export interface AppTelemetry {
@@ -410,7 +448,7 @@ export interface Credits {
   budgets: BudgetLine[];
   estimates: Estimates | null;
   notCharged: { credits: number; repairs: number };
-  overdraft: { frostauraLimit: number; ownLimit: number | null } | null;
+  overdraft: { frostauraLimit: number; ownLimit: number | null; limits: OverdraftLimit[] } | null;
   topUps: { at: string; credits: number; note: string }[];
   /** Credits reserved for work in flight across the organisation. */
   heldCredits: number;
@@ -486,15 +524,20 @@ export interface Employee {
 
 export interface Estimates {
   pieces: number;
+  /** The share of pieces that came within 10% of their estimate. */
   withinPercent: number;
   under: number;
   over: number;
   largestMissPercent: number;
+  /** The median of (cost − estimate) / estimate, in percent: −84 is "usually 84% under the estimate". */
+  typicalGapPercent: number | null;
+  typically: "under" | "over" | "within" | null;
 }
 
 export interface TrackRecord {
   employeeId: string;
-  work: { accepted: number; sentBack: number; acceptedPercent: number | null };
+  /** `judged`: judgements it made of other employees' work, as the evaluator. */
+  work: { accepted: number; sentBack: number; acceptedPercent: number | null; judged: number };
   runs: { finished: number; succeeded: number; failed: number; cancelled: number };
   repairsNotCharged: { credits: number; calls: number };
   cost: { toDateCredits: number; monthCredits: number };
@@ -698,6 +741,8 @@ export interface TaskItem {
   status: "todo" | "in_progress" | "blocked" | "done" | "failed" | "cancelled";
   holderRunId: string | null;
   holderEmployeeId: string | null;
+  /** Who claimed it last; kept once it is finished, when nobody holds it. */
+  employeeId: string | null;
   claimedAt: string | null;
   estimateCredits: number | null;
   actualCredits: number | null;
@@ -737,6 +782,15 @@ export interface AskAnswer {
   credits: { estimate: number; charged: number };
 }
 
+/**
+ * What went wrong underneath a question, for technical mode only: the last query tried and the
+ * guard's or the database's message. A refused ask carries it as the problem's `technical`.
+ */
+export interface AskTechnical {
+  sql: string | null;
+  error: string;
+}
+
 /** A question kept on the dashboard, re-run on every read at no model cost. */
 export interface SavedQuestion {
   id: string;
@@ -749,8 +803,10 @@ export interface SavedQuestion {
   truncated: boolean;
   askedAt: string;
   ranAt: string;
-  /** Why the saved query no longer runs, when it does not. */
+  /** Why the saved question no longer works out, in plain words, when it does not. */
   error: string | null;
+  /** The query and the message behind `error`. Technical mode only. */
+  technical: AskTechnical | null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -931,7 +987,10 @@ export interface OperatorEntry {
 
 export interface OperatorTopUp {
   id: string;
+  /** The organisation's address name (slug): technical mode and links only. */
   organisation: string;
+  /** Its display name: what normal mode shows. */
+  organisationName: string;
   credits: number;
   note: string;
   at: string;

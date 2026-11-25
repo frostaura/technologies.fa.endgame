@@ -30,7 +30,13 @@
 | A hostile or mistaken dashboard query is refused before it runs | `TelemetrySqlGuardTests.A_hostile_or_mistaken_query_is_refused` (47 rows: writes, other tables, the catalog, `pg_sleep`, `set_config`, comments, quoting, locks, `INTO`, CTE tricks, casts) and `An_ordinary_dashboard_question_is_allowed` (10 rows) |
 | Run without the guard, a query still reads one app only | `AskTests.Without_the_guard…` (RLS pins the app on the tables under the views; other tables refused by privilege; `set_config` refused; read-only; timeout; row limit) |
 | A question is answered through the gateway, charged to the app; a refused query gets one uncharged repair | `AskTests.A_question_becomes…`, `A_refused_query_gets_one_repair…` |
+| The model is told the views' real columns and types, read from the database catalog; there is no `id` and it is told so; every hint names a real view | `AskTests.The_prompt_lists_every_view_and_column_the_database_has_and_no_other` (checked against `information_schema` read as the superuser, and against the system message actually sent), `Every_hint_names_a_view_that_exists_and_every_view_has_one`, `A_hint_for_a_view_the_database_does_not_have_fails_the_prompt` |
+| "Visits" asked about are the visits the app's page counts | `AskTests.Visits_in_the_views_are_the_visits_the_app_page_counts` (page GETs against API calls, files, a POST, a callback and a health check; `ask.requests.visit` equals `telemetry.visitsToday`) |
+| A database error goes back to the model with the failing query for one repair, not charged | `AskTests.A_database_error_goes_back_to_the_model_for_one_uncharged_repair` (`count(id)` → the repair call carries `The database said: column "id" does not exist` → `count(*)` answers; ledger: two charged settlements, one not charged) |
+| A repair that still fails is `422 ask_unanswerable` in plain words, the query and the database's message apart under `technical` | `AskTests.A_repair_that_still_fails_says_so_in_plain_words_with_the_technical_detail_apart` (title and detail name no query, column or database; no third call; ledger: one charged, one not) |
+| The model may decline a question the views cannot answer | `AskTests.The_model_may_decline_a_question_the_views_cannot_answer` (its plain reason is the detail; one call, charged) |
 | The dashboard re-runs saved questions; a Viewer reads, cannot ask | `AskTests.Saved_questions_rerun_on_read…` |
+| A saved question that no longer runs says so in plain words, the database's message apart | `AskTests.A_saved_question_that_no_longer_runs_says_so_plainly_with_the_database_message_apart` |
 | Urgent notifications go out through the outbox when mail is configured | `BreadthTests.The_owner_is_told…` (`email_messages.app_id` null) |
 
 ## Fixtures

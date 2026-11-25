@@ -35,6 +35,13 @@
 - The breadth screens have four states each, and their optimistic changes (a kept question, a role, a removal,
   a revoked key, read marks, a suggestion set aside, the overdraft, God mode's overdraft and prices) roll
   back with the reason on the page. God mode is marked on every screen and closed to anyone else.
+- Only a research run links to a verdict; a build run never offers one (`RunView.test.tsx`, "never offers a
+  verdict on a build run"). God mode's top-ups name each organisation by its display name, its address
+  name only in technical mode (`OperatorView.test.tsx`). Each running choice shows its monthly figure with
+  what it assumes and today's prices, or "Not enough history yet" with the reason; "what it uses" says how many
+  people signed up (`AppView.test.tsx`). The credits page lists the narrower overdraft limits already set to
+  Owners and Admins, says when there are none, and names their scopes only in technical mode
+  (`CreditsActions.test.tsx`).
 
 ## Tests
 
@@ -51,7 +58,7 @@
 | End to end | `tests-e2e/workforce.spec.ts` against the mock | The verdict page, the plain run view, workers and needs-you on the chart, both graph views, the employee conversation, the employee screen (memory, review, pause, budget, let go, refusals), hire accept / edit / decline and a recurring role proposed, autonomy and rule sets with their origin, refusals and a read-only Viewer — on desktop and phone. |
 | End to end | `tests-e2e/console.spec.ts` against `tests-e2e/mock-api/` (test only) | Sign-in (development and a real passkey via a virtual authenticator), home, first run to verdict to overrule, inline approval, pause and resume, app settings and rollback, go-public confirmation, sharing with a one-time code, an unmeasured app, secrets set / inherited / removed and refused, the operator log and its refusal, conversation history across a reload, the two-row phone header, credits, sideways scroll and reduced motion — on desktop and phone. |
 | Unit | `src/features/runs/plainLanguage.test.ts`, `src/lib/plain.ts` | The plain-language detector, and normal mode against two trimmed real run logs (`src/test/fixtures/real-runs.json`); hires and factory agents named from their people and work. |
-| Component | `src/features/apps/AppBreadth.test.tsx`, `src/features/{people,assistants,notifications,suggestions,operator}/*.test.tsx`, `src/features/credits/CreditsActions.test.tsx` | Four states, estimates first, one-time values kept out of the store, optimistic changes and rollbacks, role gating, normal against technical wording. |
+| Component | `src/features/apps/AppBreadth.test.tsx`, `src/features/{people,assistants,notifications,suggestions,operator}/*.test.tsx`, `src/features/credits/CreditsActions.test.tsx` | Four states, estimates first, one-time values kept out of the store, optimistic changes and rollbacks, role gating, normal against technical wording (asking: every failure code in plain words in normal mode, the last query and the database's message only in technical mode). |
 | End to end | `tests-e2e/breadth.spec.ts` against the mock (`tests-e2e/mock-api/breadth.ts`) | The plain run log and needs-you card, the app page's asking, dashboard, history and download, people, AI assistants, notifications, ideas from the portfolio, the overdraft and top-ups, and God mode — on desktop and phone, with no sideways scroll. |
 | End to end | `tests-e2e/smoke.spec.ts` with `PW_BASE_URL` (`make e2e`) | The real stack through the edge. |
 

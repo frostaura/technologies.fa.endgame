@@ -18,6 +18,7 @@ import type {
   PricingView,
   RestoreResult,
   SavedQuestion,
+  AskTechnical,
   Suggestion,
   SuggestionsStarted,
   TopUpRequest,
@@ -39,7 +40,10 @@ import type {
   NeedsYou,
   Ontology,
   OperatorAction,
+  OverdraftLimit,
   RecurringRole,
+  RunningChoiceCost,
+  RunningCost,
   Run,
   RunEvent,
   SecretList,
@@ -147,7 +151,15 @@ export const treeGuard: Guard<Tree> = (v, path) => {
   return { ...t, needsYou: t.needsYou.filter((n): n is NeedsYou => n !== null) };
 };
 
-const estimates = obj<Estimates>({ pieces: num, withinPercent: num, under: num, over: num, largestMissPercent: num });
+const estimates = obj<Estimates>({
+  pieces: num,
+  withinPercent: num,
+  under: num,
+  over: num,
+  largestMissPercent: num,
+  typicalGapPercent: withDefault(nn, null),
+  typically: withDefault(nullable(oneOf(["under", "over", "within"] as const)), null),
+});
 
 export const creditsGuard: Guard<Credits> = obj<Credits>({
   scope: s,
@@ -167,7 +179,13 @@ export const creditsGuard: Guard<Credits> = obj<Credits>({
   ),
   estimates: nullable(estimates),
   notCharged: obj<Credits["notCharged"]>({ credits: num, repairs: num }),
-  overdraft: nullable(obj<NonNullable<Credits["overdraft"]>>({ frostauraLimit: num, ownLimit: nn })),
+  overdraft: nullable(
+    obj<NonNullable<Credits["overdraft"]>>({
+      frostauraLimit: num,
+      ownLimit: nn,
+      limits: arr(obj<OverdraftLimit>({ scope: s, name: s, level: oneOf(["division", "project", "app"] as const), credits: num, setAt: s, setBy: ns, setByName: ns })),
+    }),
+  ),
   topUps: arr(obj<Credits["topUps"][number]>({ at: s, credits: num, note: s })),
   heldCredits: withDefault(num, 0),
   available: withDefault(num, 0),
@@ -232,6 +250,8 @@ export const conversationGuard: Guard<ConversationHistory> = obj<ConversationHis
   messages: arr(obj<ConversationHistory["messages"][number]>({ runId: s, seq: num, at: s, from: s, text: s })),
 });
 
+const runningChoice = obj<RunningChoiceCost>({ credits: num, awakeHoursPerMonth: num, basis: s });
+
 export const appGuard: Guard<AppDetail> = obj<AppDetail>({
   id: s,
   name: s,
@@ -244,8 +264,19 @@ export const appGuard: Guard<AppDetail> = obj<AppDetail>({
   ),
   cost: obj<AppDetail["cost"]>({ monthCredits: num, capCredits: nn }),
   settings: obj<AppDetail["settings"]>({ running: oneOf(["sleep", "always-on"] as const), access }),
-  runningCost: nullable(obj<NonNullable<AppDetail["runningCost"]>>({ sleep: num, alwaysOn: num })),
+  runningCost: obj<RunningCost>({
+    state: oneOf(["estimated", "not-enough-history"] as const),
+    windowDays: num,
+    minimumHours: num,
+    measuredHours: num,
+    basis: s,
+    prices: s,
+    sleep: nullable(runningChoice),
+    alwaysOn: nullable(runningChoice),
+    measured: nullable(obj<NonNullable<RunningCost["measured"]>>({ awakeHours: num, memoryMb: num, storageMb: num, requestsPerMonth: num })),
+  }),
   sharedWith: withDefault(num, 0),
+  endUsers: num,
   status: withDefault(s, ""),
   version: withDefault(ns, null),
   publishedAt: withDefault(ns, null),
@@ -308,7 +339,7 @@ export const employeesGuard: Guard<Employee[]> = arr(employeeGuard);
 
 export const trackRecordGuard: Guard<TrackRecord> = obj<TrackRecord>({
   employeeId: s,
-  work: obj<TrackRecord["work"]>({ accepted: num, sentBack: num, acceptedPercent: nn }),
+  work: obj<TrackRecord["work"]>({ accepted: num, sentBack: num, acceptedPercent: nn, judged: withDefault(num, 0) }),
   runs: obj<TrackRecord["runs"]>({ finished: num, succeeded: num, failed: num, cancelled: num }),
   repairsNotCharged: obj<TrackRecord["repairsNotCharged"]>({ credits: num, calls: num }),
   cost: obj<TrackRecord["cost"]>({ toDateCredits: num, monthCredits: num }),
@@ -426,6 +457,7 @@ export const tasksGuard: Guard<TaskItem[]> = arr(
     status: oneOf(["todo", "in_progress", "blocked", "done", "failed", "cancelled"] as const),
     holderRunId: ns,
     holderEmployeeId: ns,
+    employeeId: withDefault(ns, null),
     claimedAt: ns,
     estimateCredits: nn,
     actualCredits: nn,
@@ -460,6 +492,8 @@ export const askAnswerGuard: Guard<AskAnswer> = obj<AskAnswer>({
   credits: obj<AskAnswer["credits"]>({ estimate: num, charged: num }),
 });
 
+export const askTechnicalGuard: Guard<AskTechnical> = obj<AskTechnical>({ sql: withDefault(ns, null), error: s });
+
 export const savedQuestionGuard: Guard<SavedQuestion> = obj<SavedQuestion>({
   id: s,
   question: s,
@@ -472,6 +506,7 @@ export const savedQuestionGuard: Guard<SavedQuestion> = obj<SavedQuestion>({
   askedAt: s,
   ranAt: s,
   error: withDefault(ns, null),
+  technical: withDefault(nullable(askTechnicalGuard), null),
 });
 export const dashboardGuard: Guard<SavedQuestion[]> = arr(savedQuestionGuard);
 
@@ -584,7 +619,7 @@ export const operatorOrganisationGuard: Guard<OperatorOrganisation> = obj<Operat
 });
 export const operatorOrganisationsGuard: Guard<OperatorOrganisation[]> = arr(operatorOrganisationGuard);
 export const operatorEntryGuard: Guard<OperatorEntry> = obj<OperatorEntry>({ organisationId: s, organisation: s, role: s, enteredAt: s, logged: withDefault(s, "") });
-export const operatorTopUpsGuard: Guard<OperatorTopUp[]> = arr(obj<OperatorTopUp>({ id: s, organisation: s, credits: num, note: withDefault(s, ""), at: s, by: ns, byEmail: ns }));
+export const operatorTopUpsGuard: Guard<OperatorTopUp[]> = arr(obj<OperatorTopUp>({ id: s, organisation: s, organisationName: withDefault(s, ""), credits: num, note: withDefault(s, ""), at: s, by: ns, byEmail: ns }));
 export const pricingGuard: Guard<PricingView> = obj<PricingView>({
   pricing: obj<PricingView["pricing"]>({
     creditsPerUsd: num,

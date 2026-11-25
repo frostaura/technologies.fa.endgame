@@ -22,8 +22,14 @@
    apps `paused` (`pausedReason: overdraft_limit`) and model calls are refused with 402 `overdraft_limit`.
    A spent budget above an app pauses it too (`budget_exhausted`). A top-up restores everything at once.
 4. An operator — only an address in `ENDGAME_OPERATORS` — lists every organisation and enters one as Admin;
-   each entry (one per operator per organisation per ten minutes) is written to `operator_actions`, which the
-   Owner reads at `/api/audit/operator-access`, with every other operator action.
+   each entry is written to `operator_actions` as `organisation.entered`, which the Owner reads at
+   `/api/audit/operator-access`, with every other operator action. **One visit, one entry:** an explicit
+   `POST …/{slug}/enter` always writes one and starts a visit; a read inside the organisation
+   (`GET /api/tree?organisation=`, or any scoped read an operator makes there) writes one only when that
+   operator's last entry or read in that organisation is more than `Operators:EntryLogWindowMinutes` (10)
+   ago — the visit slides on with each read, so a polling org chart is one entry. Concurrent first reads
+   write one row (an advisory lock on organisation and operator). The last-seen time is kept per process;
+   after a restart the log is the record, so the rule only errs toward logging.
 5. The sweep releases reservations that lapsed with their lease and requeues runs whose lease lapsed.
 6. God mode's screens (operators only, never by access token): `GET /api/operator/organisations` — each
    organisation's balance, standing (`in-credit`, `overdrawn`, `at-limit`), overdraft, apps, last

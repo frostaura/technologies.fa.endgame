@@ -12,14 +12,26 @@ namespace Endgame.Runner.Workflows;
 /// </summary>
 public static class EvaluationGate
 {
-    /// <summary>The evaluator's answer with the gate applied: <c>passed</c> recomputed, a fault added for each requirement not evidenced.</summary>
-    public static JsonObject Apply(PlanContract plan, PlanItem item, JsonObject answer, IReadOnlyList<string> calls)
+    /// <summary>
+    /// The evaluator's answer with the gate applied: <c>passed</c> recomputed, a fault added for each requirement not evidenced
+    /// and for each test id the plan promised that the app's screens do not carry (<paramref name="missingTestIds"/>).
+    /// </summary>
+    public static JsonObject Apply(PlanContract plan, PlanItem item, JsonObject answer, IReadOnlyList<string> calls, IReadOnlyList<string>? missingTestIds = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(answer);
         ArgumentNullException.ThrowIfNull(calls);
         var gated = answer.DeepClone().AsObject();
+        if (missingTestIds is { Count: > 0 })
+        {
+            var missing = Json.Strings(gated, "faults").Prepend(
+                $"The screens do not carry the test ids the plan promised: {string.Join(", ", missingTestIds)}. Put each on its element as data-testid=\"…\" (the kit's convention in AGENTS.md), and select by it in the page's tests.").ToList();
+            gated["faults"] = new JsonArray(missing.Distinct(StringComparer.Ordinal).Select(f => (JsonNode)f).ToArray());
+            gated["missingTestIds"] = new JsonArray(missingTestIds.Select(t => (JsonNode)t).ToArray());
+            gated["passed"] = false;
+        }
+
         var requirements = plan.RequirementsOf(item);
         if (requirements.Count == 0)
         {
@@ -56,7 +68,7 @@ public static class EvaluationGate
 
         gated["requirements"] = checkedOut;
         gated["faults"] = new JsonArray(faults.Distinct(StringComparer.Ordinal).Select(f => (JsonNode)f).ToArray());
-        gated["passed"] = Json.Bool(answer, "passed") == true && allMet && calls.Count > 0;
+        gated["passed"] = Json.Bool(answer, "passed") == true && allMet && calls.Count > 0 && missingTestIds is not { Count: > 0 };
         return gated;
     }
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { formatCredits, formatDate, formatNumber } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
+import { useAppSelector } from "@/store";
 import { useGetTopUpRequestsQuery, useGetTreeQuery, useRequestTopUpMutation, useSetOverdraftMutation } from "@/store/api";
 import type { Credits, TopUpRequest } from "@/store/types";
 import { placements } from "../workforce/workforceModel";
@@ -75,6 +76,39 @@ export function OwnLimit({ organisation, credits, isOwner }: { organisation: str
         <Button variant="outline" className="self-start" onClick={() => setOpen(true)}>
           Change your limit
         </Button>
+      )}
+    </div>
+  );
+}
+
+/** The narrower limits already set (Admin): each division, project or app held to less, with who set it. */
+export function NarrowerLimits({ credits }: { credits: Credits }) {
+  const technical = useAppSelector((s) => s.ui.mode) === "technical";
+  const limits = credits.overdraft?.limits ?? [];
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="font-display text-base font-semibold">Tighter limits already set</h3>
+      {limits.length === 0 ? (
+        <p data-state="empty" className="text-sm text-ink-muted">
+          No division, project or app is held to less than the organisation.
+        </p>
+      ) : (
+        <ul aria-label="Tighter limits already set" className="flex flex-col divide-y rounded-xs border border-border-strong">
+          {limits.map((l) => (
+            <li key={l.scope} className="flex flex-col gap-0.5 px-4 py-2.5">
+              <span className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-medium">
+                  {l.name} <span className="text-sm font-normal text-ink-muted">{l.level}</span>
+                </span>
+                <span className="font-semibold">{formatNumber(l.credits)} below zero</span>
+              </span>
+              <span className="text-xs text-ink-muted">
+                {l.setByName ? `Set by ${l.setByName}, ${formatDate(l.setAt)}` : `Set ${formatDate(l.setAt)}`}
+              </span>
+              {technical && <code className="break-all font-mono text-xs text-ink-muted">{l.scope}</code>}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

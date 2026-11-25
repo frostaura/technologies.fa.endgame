@@ -431,37 +431,117 @@ public sealed class HostingMeter(EndgameDbContext db, TenantSession session, Sco
         return new HostingUsageResult(recorded, duplicates, total);
     }
 
-    /// <summary>Expected monthly credits for each running choice, from the app's measured hosting over the last seven days. Null before any was measured.</summary>
-    public async Task<(decimal Sleep, decimal AlwaysOn)?> RunningCostAsync(Guid organisationId, Guid appId, CancellationToken cancellationToken)
+    /// <summary>The window of measured hosting a running-cost estimate reads.</summary>
+    public const int RunningCostWindowDays = 14;
+
+    /// <summary>Less measured time than this and there is no estimate: "not enough history yet".</summary>
+    public const int RunningCostMinimumHours = 24;
+
+    private const decimal HoursInMonth = 720m;
+
+    /// <summary>
+    /// What each running choice would cost a month (UC-107), from this app's own measured hosting over the
+    /// last <see cref="RunningCostWindowDays"/> days and the current hosting prices. The measured time runs
+    /// from the start of the first sample in the window to the end of the last; with less than
+    /// <see cref="RunningCostMinimumHours"/> of it there is no estimate. "Sleeps when unused" keeps the
+    /// measured share of time awake; "always on" is awake all 720 hours of a month; both at the mean memory
+    /// while awake, the latest storage, and the measured requests a month.
+    /// </summary>
+    public async Task<RunningCostView> RunningCostAsync(Guid organisationId, Guid appId, CancellationToken cancellationToken)
     {
-        var since = clock.GetUtcNow().AddDays(-7);
+        var since = clock.GetUtcNow().AddDays(-RunningCostWindowDays);
         session.UseOrganisation(organisationId);
         await using var command = await db.CommandAsync("""
-            SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (period_end - period_start))), 0), COALESCE(SUM(awake_seconds), 0), COALESCE(SUM(credits), 0),
-                   COALESCE(MAX(memory_bytes), 0), COALESCE(MAX(storage_bytes), 0), COALESCE(SUM(requests), 0), COUNT(*)
-            FROM hosting_samples WHERE organisation_id = @org AND app_id = @app AND period_end >= @since
+            SELECT COALESCE(EXTRACT(EPOCH FROM (MAX(period_end) - MIN(period_start))), 0)::numeric,
+                   COALESCE(SUM(awake_seconds), 0)::numeric,
+                   COALESCE(SUM(awake_seconds::numeric * memory_bytes), 0)::numeric,
+                   COALESCE((SELECT storage_bytes FROM hosting_samples l
+                             WHERE l.organisation_id = @org AND l.app_id = @app AND l.period_start >= @since AND l.storage_bytes > 0
+                             ORDER BY l.period_end DESC, l.received_at DESC LIMIT 1), 0)::numeric,
+                   COALESCE(SUM(requests), 0)::numeric
+            FROM hosting_samples WHERE organisation_id = @org AND app_id = @app AND period_start >= @since
             """, cancellationToken, P("org", organisationId), P("app", appId), P("since", since));
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        await reader.ReadAsync(cancellationToken);
-        if (reader.GetInt64(6) == 0)
+        decimal observedSeconds, awakeSeconds, memorySeconds, storage, requests;
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
-            return null;
+            await reader.ReadAsync(cancellationToken);
+            (observedSeconds, awakeSeconds, memorySeconds, storage, requests) = (reader.GetDecimal(0), reader.GetDecimal(1), reader.GetDecimal(2), reader.GetDecimal(3), reader.GetDecimal(4));
         }
 
-        var period = reader.GetDecimal(0);
-        var charged = reader.GetDecimal(2);
-        var memory = reader.GetInt64(3);
-        var storage = reader.GetInt64(4);
-        var requests = reader.GetDecimal(5);
-        var month = 30m * 86400m;
-        var sleep = period <= 0 ? 0 : charged / period * month;
         var o = options.Value;
-        var alwaysOnUsd = (month / 3600m * (o.UsdPerAwakeHour + (memory / Gigabyte * o.UsdPerGbHourMemory)))
-                          + (storage / Gigabyte * o.UsdPerGbMonthStorage)
-                          + (period <= 0 ? 0 : requests / period * month / 1_000_000m * o.UsdPerMillionRequests);
-        return (decimal.Round(sleep, 2), decimal.Round(credits.ToCredits(alwaysOnUsd), 2));
+        var prices = string.Create(CultureInfo.InvariantCulture,
+            $"Today's prices: {Figure(credits.ToCredits(o.UsdPerAwakeHour))} credits an awake hour, {Figure(credits.ToCredits(o.UsdPerGbHourMemory))} per GB of memory an awake hour, {Figure(credits.ToCredits(o.UsdPerGbMonthStorage))} per GB stored a month and {Figure(credits.ToCredits(o.UsdPerMillionRequests))} per million requests.");
+        var observedHours = decimal.Round(observedSeconds / 3600m, 1);
+        if (observedSeconds < RunningCostMinimumHours * 3600m)
+        {
+            var basis = observedSeconds <= 0
+                ? $"Nothing measured yet. An estimate needs at least {RunningCostMinimumHours} hours of this app's own use in the last {RunningCostWindowDays} days."
+                : string.Create(CultureInfo.InvariantCulture, $"Only {Figure(observedHours)} hours measured so far. An estimate needs at least {RunningCostMinimumHours} hours of this app's own use in the last {RunningCostWindowDays} days.");
+            return new RunningCostView(RunningCostStates.NotEnoughHistory, RunningCostWindowDays, RunningCostMinimumHours, observedHours, basis, prices, null, null, null);
+        }
+
+        var month = HoursInMonth * 3600m;
+        var memory = awakeSeconds > 0 ? memorySeconds / awakeSeconds : 0;
+        var memoryGb = memory / Gigabyte;
+        var requestsPerMonth = requests / observedSeconds * month;
+        var perAwakeHour = o.UsdPerAwakeHour + (memoryGb * o.UsdPerGbHourMemory);
+        var fixedUsd = (storage / Gigabyte * o.UsdPerGbMonthStorage) + (requestsPerMonth / 1_000_000m * o.UsdPerMillionRequests);
+        var sleepHours = awakeSeconds / observedSeconds * HoursInMonth;
+        var sleepCredits = decimal.Round(credits.ToCredits((sleepHours * perAwakeHour) + fixedUsd), 2, MidpointRounding.AwayFromZero);
+        var alwaysOnCredits = decimal.Round(credits.ToCredits((HoursInMonth * perAwakeHour) + fixedUsd), 2, MidpointRounding.AwayFromZero);
+
+        var memoryMb = decimal.Round(memory / (1024m * 1024m), 0);
+        var awakeHours = decimal.Round(awakeSeconds / 3600m, 1);
+        var stored = Size(storage);
+        var perMonth = decimal.Round(requestsPerMonth, 0);
+        var measured = string.Create(CultureInfo.InvariantCulture,
+            $"Measured over the last {RunningCostWindowDays} days: awake {Figure(awakeHours)} of the {Figure(observedHours)} hours measured, using {Figure(memoryMb)} MB while awake, {stored} stored and about {perMonth:N0} requests a month.");
+        var sleep = new RunningChoiceCost(sleepCredits, decimal.Round(sleepHours, 1),
+            string.Create(CultureInfo.InvariantCulture,
+                $"Awake about {Figure(decimal.Round(sleepHours, 0))} hours a month, as it was {Figure(awakeHours)} of the {Figure(observedHours)} hours measured in the last {RunningCostWindowDays} days, using {Figure(memoryMb)} MB while awake, with {stored} stored and about {perMonth:N0} requests a month."));
+        var alwaysOn = new RunningChoiceCost(alwaysOnCredits, HoursInMonth,
+            string.Create(CultureInfo.InvariantCulture,
+                $"Awake all 720 hours of a month at the {Figure(memoryMb)} MB it uses while awake, with the same {stored} stored and about {perMonth:N0} requests a month."));
+        return new RunningCostView(RunningCostStates.Estimated, RunningCostWindowDays, RunningCostMinimumHours, observedHours, measured, prices, sleep, alwaysOn,
+            new RunningCostMeasured(awakeHours, memoryMb, decimal.Round(storage / (1024m * 1024m), 0), perMonth));
     }
+
+    private static string Figure(decimal value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+
+    private static string Size(decimal bytes) => bytes >= Gigabyte
+        ? string.Create(CultureInfo.InvariantCulture, $"{Figure(decimal.Round(bytes / Gigabyte, 1))} GB")
+        : string.Create(CultureInfo.InvariantCulture, $"{Figure(decimal.Round(bytes / (1024m * 1024m), 0))} MB");
 }
+
+public static class RunningCostStates
+{
+    public const string Estimated = "estimated";
+    public const string NotEnoughHistory = "not-enough-history";
+}
+
+/// <param name="Credits">Expected credits a month for this choice.</param>
+/// <param name="AwakeHoursPerMonth">The awake hours a month it assumes.</param>
+/// <param name="Basis">What it assumes, in one plain sentence.</param>
+public sealed record RunningChoiceCost(decimal Credits, decimal AwakeHoursPerMonth, string Basis);
+
+/// <param name="AwakeHours">Hours awake in the measured time.</param>
+/// <param name="MemoryMb">Mean memory while awake.</param>
+/// <param name="StorageMb">The latest stored size.</param>
+/// <param name="RequestsPerMonth">Measured requests, stretched to a month.</param>
+public sealed record RunningCostMeasured(decimal AwakeHours, decimal MemoryMb, decimal StorageMb, decimal RequestsPerMonth);
+
+/// <summary>
+/// <c>runningCost</c> of <c>GET /api/apps/{id}</c>: what each running choice would cost a month, or why
+/// there is no estimate yet (<c>state: not-enough-history</c>, with <c>sleep</c> and <c>alwaysOn</c> null).
+/// </summary>
+/// <param name="State"><c>estimated</c> or <c>not-enough-history</c>.</param>
+/// <param name="WindowDays">How far back the measured use is read.</param>
+/// <param name="MinimumHours">How much measured time an estimate needs.</param>
+/// <param name="MeasuredHours">Measured time in the window: from the first sample's start to the last one's end.</param>
+/// <param name="Basis">What was measured, or why there is no estimate yet.</param>
+/// <param name="Prices">The hosting prices it uses, in credits, as they stand now.</param>
+public sealed record RunningCostView(string State, int WindowDays, int MinimumHours, decimal MeasuredHours, string Basis, string Prices,
+    RunningChoiceCost? Sleep, RunningChoiceCost? AlwaysOn, RunningCostMeasured? Measured);
 
 // ------------------------------------------------------------------------------------ edge
 

@@ -290,8 +290,9 @@ export function scenario(name: ScenarioName): MockState {
       telemetry: { visitsToday: 233, requestsToday: 1800, errorsToday: 0, latencyP50Ms: 180, latencyP95Ms: 540, lastVisitAt: ago(2) },
       cost: { monthCredits: 310, capCredits: 500 },
       settings: { running: "always-on", access: "private" },
-      runningCost: { sleep: 30, alwaysOn: 180 },
+      runningCost: { state: "estimated", windowDays: 14, minimumHours: 24, measuredHours: 58, basis: "Measured over the last 14 days: awake 8 of the 58 hours measured, using 448 MB while awake, 2 GB stored and about 59,586 requests a month.", prices: "Today's prices: 0.2 credits an awake hour, 0.4 per GB of memory an awake hour, 10 per GB stored a month and 20 per million requests.", sleep: { credits: 30, awakeHoursPerMonth: 99.3, basis: "Awake about 99 hours a month, as it was 8 of the 58 hours measured in the last 14 days, using 448 MB while awake, with 2 GB stored and about 59,586 requests a month." }, alwaysOn: { credits: 180, awakeHoursPerMonth: 720, basis: "Awake all 720 hours of a month at the 448 MB it uses while awake, with the same 2 GB stored and about 59,586 requests a month." }, measured: { awakeHours: 8, memoryMb: 448, storageMb: 2048, requestsPerMonth: 59586 } },
       sharedWith: 0,
+      endUsers: 0,
       status: "running",
       version: "1.4.0",
       publishedAt: ago(60 * 24 * 6),
@@ -307,14 +308,15 @@ export function scenario(name: ScenarioName): MockState {
       telemetry: { visitsToday: 0, requestsToday: 0, errorsToday: 0, latencyP50Ms: null, latencyP95Ms: null, lastVisitAt: ago(60 * 50) },
       cost: { monthCredits: 22, capCredits: null },
       settings: { running: "sleep", access: "shared" },
-      runningCost: { sleep: 20, alwaysOn: 150 },
+      runningCost: { state: "estimated", windowDays: 14, minimumHours: 24, measuredHours: 58, basis: "Measured over the last 14 days: awake 8 of the 58 hours measured, using 448 MB while awake, 2 GB stored and about 59,586 requests a month.", prices: "Today's prices: 0.2 credits an awake hour, 0.4 per GB of memory an awake hour, 10 per GB stored a month and 20 per million requests.", sleep: { credits: 20, awakeHoursPerMonth: 99.3, basis: "Awake about 99 hours a month, as it was 8 of the 58 hours measured in the last 14 days, using 448 MB while awake, with 2 GB stored and about 59,586 requests a month." }, alwaysOn: { credits: 150, awakeHoursPerMonth: 720, basis: "Awake all 720 hours of a month at the 448 MB it uses while awake, with the same 2 GB stored and about 59,586 requests a month." }, measured: { awakeHours: 8, memoryMb: 448, storageMb: 2048, requestsPerMonth: 59586 } },
       sharedWith: 2,
+      endUsers: 2,
       status: "sleeping",
       version: "0.9.2",
       publishedAt: ago(60 * 24 * 40),
       idleMinutes: 15,
     },
-    // Published but not yet measured: the control plane sends telemetry and runningCost as null.
+    // Published but not yet measured: telemetry is null and runningCost says there is not enough history yet.
     app3: {
       id: "app3",
       name: "Tide board",
@@ -325,8 +327,9 @@ export function scenario(name: ScenarioName): MockState {
       telemetry: null,
       cost: { monthCredits: 0, capCredits: null },
       settings: { running: "sleep", access: "public" },
-      runningCost: null,
+      runningCost: { state: "not-enough-history", windowDays: 14, minimumHours: 24, measuredHours: 0, basis: "Nothing measured yet. An estimate needs at least 24 hours of this app's own use in the last 14 days.", prices: "Today's prices: 0.2 credits an awake hour, 0.4 per GB of memory an awake hour, 10 per GB stored a month and 20 per million requests.", sleep: null, alwaysOn: null, measured: null },
       sharedWith: 0,
+      endUsers: 14,
       status: "running",
       version: "0.1.0",
       publishedAt: ago(20),
@@ -466,7 +469,7 @@ export function scenario(name: ScenarioName): MockState {
   });
   const track = (id: string, accepted: number, sentBack: number, estimates: unknown) => ({
     employeeId: id,
-    work: { accepted, sentBack, acceptedPercent: accepted + sentBack > 0 ? Math.round((accepted / (accepted + sentBack)) * 1000) / 10 : null },
+    work: { accepted, sentBack, acceptedPercent: accepted + sentBack > 0 ? Math.round((accepted / (accepted + sentBack)) * 1000) / 10 : null, judged: 0 },
     runs: { finished: accepted + sentBack, succeeded: accepted, failed: sentBack, cancelled: 0 },
     repairsNotCharged: { credits: 18, calls: sentBack },
     cost: { toDateCredits: 1240, monthCredits: 140 },
@@ -476,7 +479,7 @@ export function scenario(name: ScenarioName): MockState {
   s.employees = {
     e1: {
       employee: employee(ada, "northwind/research", job("northwind/research", "Research every new idea before anything is built, and argue the case against it first.", ["read_file", "web_search", "spawn"], "research", 200)),
-      trackRecord: track("e1", 19, 3, { pieces: 9, withinPercent: 12, under: 6, over: 3, largestMissPercent: 17 }),
+      trackRecord: track("e1", 19, 3, { pieces: 9, withinPercent: 12, under: 6, over: 3, largestMissPercent: 17, typicalGapPercent: -18, typically: "under" }),
       contractors: [
         { ...employee({ id: "c1", name: "Contractor", role: "Researcher", status: "working", standing: null }, "northwind/research/recipes", job("northwind/research/recipes", "", [], "research", null)), kind: "contractor", brief: "Sweep the competitors of Recipe box.", briefedBy: { id: "e1", name: "Ada" } },
       ],
@@ -528,8 +531,8 @@ export function scenario(name: ScenarioName): MockState {
   };
   s.recurringRoles = [{ scope: "northwind/research", role: "Competitor sweep", contractors: 3, windowDays: 30, costCredits: 90, lastBriefedBy: "e1", lastBrief: "Sweep the competitors of a new idea and name each with its price." }];
   s.tasks = [
-    { id: "t-1", scope: "northwind/research", runId: "run-done", parentTaskId: null, title: "Research: Court ladder", description: "", status: "done", holderRunId: "run-done", holderEmployeeId: "e1", claimedAt: ago(60 * 24), estimateCredits: 60, actualCredits: 54, dependsOn: [], createdAt: ago(60 * 24), updatedAt: ago(60 * 23) },
-    { id: "t-2", scope: "northwind/research/recipes", runId: "run-research", parentTaskId: null, title: "Competitor sweep: Recipe box", description: "", status: "in_progress", holderRunId: "run-research", holderEmployeeId: "e1", claimedAt: ago(30), estimateCredits: 90, actualCredits: null, dependsOn: [], createdAt: ago(30), updatedAt: ago(5) },
+    { id: "t-1", scope: "northwind/research", runId: "run-done", parentTaskId: null, title: "Research: Court ladder", description: "", status: "done", holderRunId: null, holderEmployeeId: null, employeeId: "e1", claimedAt: ago(60 * 24), estimateCredits: 60, actualCredits: 54, dependsOn: [], createdAt: ago(60 * 24), updatedAt: ago(60 * 23) },
+    { id: "t-2", scope: "northwind/research/recipes", runId: "run-research", parentTaskId: null, title: "Competitor sweep: Recipe box", description: "", status: "in_progress", holderRunId: "run-research", holderEmployeeId: "e1", employeeId: "e1", claimedAt: ago(30), estimateCredits: 90, actualCredits: null, dependsOn: [], createdAt: ago(30), updatedAt: ago(5) },
   ];
   s.autonomy = {
     northwind: { autonomy: "auto", checkpoints: { hire: true }, ruleSets: { all: { deny: ["run(rm -rf *)"], ask: [], allow: [], checkpoints: [] } } },
@@ -574,7 +577,7 @@ export function scenario(name: ScenarioName): MockState {
       { from: "contractor:c1", to: "employee:e1", type: "reports-to", label: "briefed by" },
       { from: "person:u1", to: "organisation:org1", type: "works-on", label: "owner" },
       { from: "app:app1", to: "service:identity", type: "depends-on", label: null },
-      { from: "service:identity", to: "app:app1", type: "data-flows-to", label: "signed-in end users" },
+      { from: "service:identity", to: "app:app1", type: "data-flows-to", label: "signed-in people" },
       { from: "app:app1", to: "service:email", type: "depends-on", label: null },
       { from: "app:app1", to: "service:email", type: "data-flows-to", label: "outbound mail" },
       { from: "app:app1", to: "service:models", type: "depends-on", label: null },
@@ -672,9 +675,9 @@ export function scenario(name: ScenarioName): MockState {
       { scope: "northwind/research", name: "Research", level: "division", depth: 1, spentCredits: 142, capCredits: null, appId: null },
       { scope: "northwind/research/field-notes", name: "Field notes", level: "project", depth: 2, spentCredits: 120, capCredits: 300, appId: null },
     ],
-    estimates: { pieces: 12, withinPercent: 8, under: 9, over: 3, largestMissPercent: 15 },
+    estimates: { pieces: 12, withinPercent: 8, under: 9, over: 3, largestMissPercent: 15, typicalGapPercent: -11.5, typically: "under" },
     notCharged: { credits: 37, repairs: 2 },
-    overdraft: { frostauraLimit: 3000, ownLimit: 1000 },
+    overdraft: { frostauraLimit: 3000, ownLimit: 1000, limits: [] },
     topUps: [{ at: ago(60 * 24 * 10), credits: 10_000, note: "Added by FrostAura" }],
     heldCredits: 12,
     available: (name === "empty-org" ? 0 : 9_548) + 3000,

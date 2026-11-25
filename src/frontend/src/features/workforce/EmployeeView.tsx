@@ -5,6 +5,7 @@ import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { estimateHeadline } from "@/lib/estimates";
 import { formatCredits, formatNumber, plural, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf, type ViewState } from "@/lib/queryState";
@@ -127,6 +128,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
       <section aria-label="Track record" className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-4", RISE, stagger(1))}>
         <Stat label="Work accepted" value={acceptedLine(trackRecord.work)}>
           {trackRecord.work.sentBack > 0 ? `${plural(trackRecord.work.sentBack, "piece")} sent back` : "Nothing sent back"}
+          {trackRecord.work.judged > 0 && ` · ${plural(trackRecord.work.judged, "judgement")} of others’ work`}
         </Stat>
         <Stat label="Repairs not charged" value={formatCredits(trackRecord.repairsNotCharged.credits)}>
           {trackRecord.repairsNotCharged.calls > 0 ? `${plural(trackRecord.repairsNotCharged.calls, "repair")} of its own mistakes, never billed` : "No repairs of its own work"}
@@ -136,7 +138,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
             ? `Budget ${formatNumber(job.monthlyCreditLimit)} a month, ${formatNumber(trackRecord.cost.monthCredits)} used`
             : `${formatNumber(trackRecord.cost.monthCredits)} this month; no budget of its own, the one above holds`}
         </Stat>
-        <Stat label="Estimates" value={trackRecord.estimates && trackRecord.estimates.pieces > 0 ? `Within ${formatNumber(trackRecord.estimates.withinPercent)}%` : "None scored yet"}>
+        <Stat label="Estimates" value={trackRecord.estimates && trackRecord.estimates.pieces > 0 ? estimateHeadline(trackRecord.estimates) : "None scored yet"}>
           {trackRecord.estimates && trackRecord.estimates.pieces > 0
             ? `Across ${plural(trackRecord.estimates.pieces, "piece")} of work. The largest miss was ${formatNumber(trackRecord.estimates.largestMissPercent)}%.`
             : "Scored once its first estimated work finishes"}
@@ -352,9 +354,10 @@ const TASK_STATUS: Record<TaskItem["status"], string> = {
 };
 
 function RecentWork({ employee }: { employee: Employee }) {
-  const query = useGetTasksQuery({ scope: employee.scope, limit: 200 });
+  // The tasks it claimed — a factory build's items, checks and reviews included — kept as its work once they are done.
+  const query = useGetTasksQuery({ scope: employee.scope, limit: 50, employeeId: employee.id });
   const view = viewOf(query);
-  const tasks = view.kind === "loaded" ? view.data.filter((t) => t.holderEmployeeId === employee.id).slice(0, 12) : [];
+  const tasks = view.kind === "loaded" ? view.data.filter((t) => (t.employeeId ?? t.holderEmployeeId) === employee.id).slice(0, 12) : [];
   const runs = [employee.currentRun ? { id: employee.currentRun.id, title: employee.currentRun.title, now: true } : null, employee.lastRunId && employee.lastRunId !== employee.currentRun?.id ? { id: employee.lastRunId, title: "Its last piece of work", now: false } : null].filter(
     (r): r is { id: string; title: string; now: boolean } => r !== null,
   );

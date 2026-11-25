@@ -93,10 +93,99 @@ const noRootRelativeUrl: Rule.RuleModule = {
   },
 };
 
-/** `import endgame from "@endgame/appkit/eslint"` → `plugins: { endgame }`, rules `endgame/no-root-relative-url`. */
+/** Objects whose `location` property is the page's address. */
+const LOCATION_OWNERS = new Set(["window", "document", "globalThis", "self"]);
+
+/** Calls on `location` that leave the page (or reload it) rather than read where it is. */
+const NAVIGATIONS = new Set(["assign", "replace", "reload"]);
+
+/** Parts of the address that name the host, not the page: the app's own address is `document.baseURI`. */
+const HOST_PARTS = new Set(["origin", "host", "hostname", "port", "protocol"]);
+
+/** The router hook that answers each part of the address. */
+const ROUTER_HOOK: Record<string, string> = {
+  search: "useSearchParams()",
+  hash: "useLocation().hash",
+  pathname: "useParams()",
+};
+
+function propertyName(member: Node): string | null {
+  if (member.type !== "MemberExpression") return null;
+  if (!member.computed && member.property.type === "Identifier") return member.property.name;
+  if (member.property.type === "Literal" && typeof member.property.value === "string") return member.property.value;
+  return null;
+}
+
+/**
+ * Reading the address from `window.location` gives the URL the page was *loaded* at. A `<Link>`
+ * or `navigate()` changes the address through the router without telling anything that read
+ * `location` itself, so such a page does not re-render: the address changes and the screen does
+ * not. The router's hooks re-render on every navigation. Leaving the app — `location.assign(…)`,
+ * `.replace(…)`, `.reload()`, or assigning `location.href` — stays allowed.
+ */
+const noLocationRead: Rule.RuleModule = {
+  meta: {
+    type: "problem",
+    docs: { description: "Disallow reading the address from window.location; read it from the router." },
+    schema: [],
+    messages: {
+      read:
+        "Reading location.{{property}} does not change when a <Link> or navigate() moves to another page, so this page is not re-rendered there. " +
+        "Read it from the router instead: {{use}} (from react-router).",
+      host:
+        "Reading location.{{property}} ignores the app's address prefix. The app's own address is document.baseURI " +
+        "(e.g. new URL(document.baseURI).{{property}}); build URLs with api(), apiUrl() or new URL('…', document.baseURI).",
+      whole:
+        "Reading window.location does not change when a <Link> or navigate() moves to another page, so this page is not re-rendered there. " +
+        "Read the address from the router: useParams(), useSearchParams() or useLocation() (from react-router).",
+    },
+  },
+  create(context) {
+    const check = (location: Node) => {
+      const parent = location.parent as Node | undefined;
+      if (parent?.type === "AssignmentExpression" && parent.left === location) return; // location = url
+      if (parent?.type === "MemberExpression" && parent.object === location) {
+        const property = propertyName(parent);
+        const grand = parent.parent as Node | undefined;
+        if (property && NAVIGATIONS.has(property) && grand?.type === "CallExpression" && grand.callee === parent) return;
+        if (property === "href" && grand?.type === "AssignmentExpression" && grand.left === parent) return;
+        const name = property ?? "[…]";
+        if (HOST_PARTS.has(name)) {
+          context.report({ node: parent, messageId: "host", data: { property: name } });
+          return;
+        }
+        context.report({ node: parent, messageId: "read", data: { property: name, use: ROUTER_HOOK[name] ?? "useLocation()" } });
+        return;
+      }
+      context.report({ node: location, messageId: "whole" });
+    };
+
+    return {
+      // window.location, document.location, globalThis.location, self.location
+      MemberExpression(node: Node) {
+        if (node.type !== "MemberExpression" || propertyName(node) !== "location") return;
+        if (node.object.type === "Identifier" && LOCATION_OWNERS.has(node.object.name)) check(node);
+      },
+      // The bare global `location`; a local of that name (`const location = useLocation()`) is the router's.
+      "Program:exit"(program) {
+        const scope = context.sourceCode.getScope(program);
+        const references = new Set([
+          ...scope.through.filter((reference) => reference.identifier.name === "location"),
+          ...(scope.set.get("location")?.references ?? []),
+        ]);
+        for (const reference of references) check(reference.identifier as Node);
+      },
+    };
+  },
+};
+
+/**
+ * `import endgame from "@endgame/appkit/eslint"` → `plugins: { endgame }`, rules
+ * `endgame/no-root-relative-url` and `endgame/no-location-read`.
+ */
 const plugin: ESLint.Plugin = {
   meta: { name: "@endgame/appkit", version: "0.1.0" },
-  rules: { "no-root-relative-url": noRootRelativeUrl },
+  rules: { "no-root-relative-url": noRootRelativeUrl, "no-location-read": noLocationRead },
 };
 
 export default plugin;

@@ -27,7 +27,10 @@ public sealed class EdgePreviewProbe(HttpClient edgeControl) : IPreviewProbe
 {
     public async Task<PreviewAnswer> SendAsync(Guid appId, string method, string path, string? body, CancellationToken cancellationToken)
     {
-        using var response = await edgeControl.PostAsJsonAsync($"/internal/apps/{appId:D}/probe", new { method, path, body }, Json.Web, cancellationToken);
+        // Always the preview: the evaluator's requests never reach the app itself or its data.
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/internal/apps/{appId:D}/probe") { Content = JsonContent.Create(new { method, path, body }, options: Json.Web) };
+        request.Headers.TryAddWithoutValidation(Endgame.Hosting.Contracts.HostingConventions.PreviewHeader, "1");
+        using var response = await edgeControl.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             throw await ServiceProblemException.FromAsync(response, cancellationToken);
@@ -62,6 +65,8 @@ public sealed class EdgeAppCaller(HttpClient edgeControl, ControlPlaneClient con
         var session = await controlPlane.TestSessionAsync(appId, persona, role, cancellationToken);
         using var request = new HttpRequestMessage(new HttpMethod(method), $"/internal/apps/{appId:D}/call/{path.TrimStart('/')}");
         request.Headers.TryAddWithoutValidation(Endgame.Hosting.Contracts.HostingConventions.SessionHeader, session);
+        // Always the preview being evaluated, with its own throwaway database: test members never write into the app's.
+        request.Headers.TryAddWithoutValidation(Endgame.Hosting.Contracts.HostingConventions.PreviewHeader, "1");
         request.Headers.TryAddWithoutValidation("Accept", "application/json, text/html;q=0.8, */*;q=0.5");
         if (!string.IsNullOrEmpty(body) && method is not ("GET" or "DELETE"))
         {
@@ -181,6 +186,7 @@ public sealed class CallWebhookTool(ControlPlaneClient controlPlane, Guid appId)
                 ["secretName"] = Json.Str(call.Arguments, "secret_name"),
                 ["prefix"] = Json.Str(call.Arguments, "prefix") ?? (scheme == "hmac-sha256" ? "sha256=" : ""),
                 ["body"] = Json.Str(call.Arguments, "body") ?? "",
+                ["preview"] = true, // the evaluator only ever calls the preview it is evaluating
             }, cancellationToken);
             var made = Json.Bool(answer, "secretCreated") == true ? $" (the secret {Json.Str(answer, "secretName")} was not set, so the platform made one at the app)" : "";
             return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {Json.Int(answer, "status")} {Json.Str(answer, "contentType")} — POST hooks/{name} as device (signed){made}\n\n{OutputText.Truncate(Json.Str(answer, "body") ?? "", 8000)}"));

@@ -97,7 +97,8 @@ public sealed class TelemetryQueryRunner(EndgameDbContext db, IOptions<AskOption
                     "The query ran past its time limit. Ask about a shorter period, or something simpler."),
                 PostgresErrorCodes.InsufficientPrivilege => new EndgameProblem(422, "query_refused", "The query reads something it may not",
                     "Only the app's own telemetry views can be read."),
-                _ => new EndgameProblem(422, "query_failed", "The query could not run", ex.MessageText),
+                // The database's own words (and its hint, when it gives one): what the model repairs from.
+                _ => new EndgameProblem(422, "query_failed", "The query could not run", string.IsNullOrWhiteSpace(ex.Hint) ? ex.MessageText : $"{ex.MessageText} ({ex.Hint})"),
             };
         }
         finally

@@ -77,8 +77,9 @@ public sealed class RunnerOptions
     /// <summary>
     /// Credits a run of each kind is expected to cost before an organisation has history of its own (scored, then
     /// replaced by the median of its finished runs). Measured, not guessed: a build is priced for a typical plan of
-    /// four items — the live factory builds of 2026-11-25 cost 13.35 and 14.56 credits for three-item plans, about
-    /// 4.7 an item (TEST-201) — and research is the control plane's own calibrated estimate, with this as a fallback.
+    /// four items until it has a plan — the live factory builds of 2026-11-25 cost 13.35 and 14.56 credits for three-item
+    /// plans (TEST-201) — and then weighed by it (<see cref="BuildEstimate"/>); research is the control plane's own
+    /// calibrated estimate, with this as a fallback.
     /// </summary>
     public Dictionary<string, decimal> EstimatePriors { get; set; } = new(StringComparer.Ordinal)
     {
@@ -90,8 +91,37 @@ public sealed class RunnerOptions
         ["review"] = 1m,
     };
 
+    /// <summary>How a build is estimated from its plan before the organisation has finished builds of its own to learn from.</summary>
+    public BuildEstimateWeights BuildEstimate { get; set; } = new();
+
     /// <summary>Paths no agent may write, whatever any rule says (the protected-path floor), relative to an app's repository.</summary>
     public List<string> ProtectedPaths { get; set; } = ["vendor/**", "api/Migrations/*.Designer.cs", "api/Migrations/*ModelSnapshot.cs", ".github/**", ".endgame/**"];
 
     public string AuthorDomain { get; set; } = "agents.endgame.frostaura.net";
+}
+
+/// <summary>
+/// A build's starting estimate, item by item, weighted by what each item involves (section <c>Runner:BuildEstimate</c>).
+/// Fitted to the live builds of 2026-11-25 (TEST-201): the three-item reading list (the books kept and served, the list,
+/// the add-a-book form and a book's page; five to eight requirements) cost 13.35, 14.56, 17.6 and 23.9 credits, and these
+/// weights give 18.5; the five-item club app (three items that keep data, two screens, one item with a signed webhook and
+/// a confirmation e-mail; eight requirements) cost 59.1 including one repair, and these weights give 53. A flat four-item
+/// figure had estimated it at 20, a third of its cost: the webhook-and-e-mail item alone failed four rounds in its first build.
+/// </summary>
+public sealed class BuildEstimateWeights
+{
+    /// <summary>Every item: one builder session, one commit, one evaluation of the running app.</summary>
+    public decimal PerItem { get; set; } = 3m;
+
+    /// <summary>An item that keeps data (an entity, a migration, the endpoints that serve it, their tests).</summary>
+    public decimal DataItem { get; set; } = 1.5m;
+
+    /// <summary>An item with a screen (a page, a view or a form, with its four states).</summary>
+    public decimal Screen { get; set; } = 1m;
+
+    /// <summary>Each platform service an item reaches — webhooks, e-mail, schedules, models — which the evaluator must also show working.</summary>
+    public decimal Integration { get; set; } = 12m;
+
+    /// <summary>Each requirement an item covers: every one is shown working in the running app, signed in.</summary>
+    public decimal Requirement { get; set; } = 0.75m;
 }

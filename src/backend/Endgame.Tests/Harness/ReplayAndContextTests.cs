@@ -275,6 +275,19 @@ public sealed class ReplayAndContextTests
     }
 
     [Fact]
+    public void A_payload_of_markup_is_fitted_to_the_limit_as_the_control_plane_measures_it()
+    {
+        // A live planner read the template's JSX and the build stopped on "400 An event's payload is at most 65536 bytes":
+        // the writer measured with relaxed escaping, while the control plane's ToJsonString() writes '<', '>', '&' and '+'
+        // as six-character escapes, so 40 KB of markup is about 200 KB to it.
+        var markup = string.Concat(Enumerable.Repeat("<li data-testid=\"book-item\"><a href=\"x\">A&B</a></li>\n", 900));
+        var fitted = AgentEventWriter.Fit(new JsonObject { ["output"] = markup, ["name"] = "read_file" });
+        Assert.True(fitted.ToJsonString().Length <= HarnessEvents.MaxPayloadBytes, $"{fitted.ToJsonString().Length} characters as the control plane writes it");
+        Assert.True(global::System.Text.Encoding.UTF8.GetByteCount(fitted.ToJsonString()) <= HarnessEvents.MaxPayloadBytes);
+        Assert.True(fitted["truncated"]!.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task A_tool_that_prints_binary_never_puts_a_nul_into_the_log()
     {
         // The first real build failed on this: grep -a over a DLL printed NUL bytes, and jsonb refused the event.

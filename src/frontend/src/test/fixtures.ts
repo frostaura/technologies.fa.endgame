@@ -68,12 +68,12 @@ export function employeeFixture(overrides: Record<string, unknown> = {}) {
 
 export const TRACK_RECORD = {
   employeeId: "e1",
-  work: { accepted: 19, sentBack: 3, acceptedPercent: 86.4 },
+  work: { accepted: 19, sentBack: 3, acceptedPercent: 86.4, judged: 0 },
   runs: { finished: 22, succeeded: 20, failed: 1, cancelled: 1 },
   repairsNotCharged: { credits: 12.5, calls: 3 },
   cost: { toDateCredits: 1240, monthCredits: 140 },
   contractors: { engaged: 6, working: 1, toDateCredits: 300, monthCredits: 40 },
-  estimates: { pieces: 9, withinPercent: 12, under: 6, over: 3, largestMissPercent: 17 },
+  estimates: { pieces: 9, withinPercent: 12, under: 6, over: 3, largestMissPercent: 17, typicalGapPercent: -18, typically: "under" },
 };
 
 export function employeeDetailFixture(overrides: Record<string, unknown> = {}) {
@@ -150,7 +150,7 @@ export const ONTOLOGY = {
     { from: "app:a1", to: "service:models", type: "depends-on", label: null },
     { from: "app:a1", to: "service:models", type: "data-flows-to", label: "prompts" },
     { from: "app:a1", to: "service:identity", type: "depends-on", label: null },
-    { from: "service:identity", to: "app:a1", type: "data-flows-to", label: "signed-in end users" },
+    { from: "service:identity", to: "app:a1", type: "data-flows-to", label: "signed-in people" },
   ],
   views: { "org-chart": ["owns", "works-on", "reports-to"], "data-flow": ["depends-on", "data-flows-to"] },
 };

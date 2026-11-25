@@ -98,12 +98,37 @@ public sealed class EgressManager(
                 return;
             }
 
+            // A reconfigure closes squid's listening port and opens it again a moment later; every app's outbound call
+            // and platform call in that moment is refused. Return only once it accepts connections again, so whatever
+            // asked for the push (an app's start, a changed allow-list) is never followed by a refused call of its own.
+            await WaitUntilListeningAsync(proxy.ID, peers.EgressPort, cancellationToken);
             pushedTo = incarnation;
             logger.LogInformation("Egress policy pushed: {Count} networks.", current.Networks.Count);
         }
         finally
         {
             push.Release();
+        }
+    }
+
+    /// <summary>Squid handles a reconfigure after the signal returns: let it start, then wait for two answers in a row.</summary>
+    private async Task WaitUntilListeningAsync(string proxyId, int port, CancellationToken cancellationToken)
+    {
+        await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+        var answered = 0;
+        for (var attempt = 0; attempt < 60 && answered < 2; attempt++)
+        {
+            var probe = await exec.RunAsync(proxyId, ["nc", "-z", "127.0.0.1", port.ToString(System.Globalization.CultureInfo.InvariantCulture)], TimeSpan.FromSeconds(5), 1024, cancellationToken: cancellationToken);
+            answered = probe.ExitCode == 0 ? answered + 1 : 0;
+            if (answered < 2)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+            }
+        }
+
+        if (answered < 2)
+        {
+            logger.LogWarning("The egress proxy did not accept connections again within seconds of its reconfigure.");
         }
     }
 }

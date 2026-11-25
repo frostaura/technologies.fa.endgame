@@ -18,6 +18,9 @@ export default defineConfig([
       "react-refresh/only-export-components": ["error", { allowConstantExport: true }],
       // The app runs under /<org>/<division>/<project>/ and at a subdomain root: no URL may start with "/".
       "endgame/no-root-relative-url": "error",
+      // Read the address from the router (useParams, useSearchParams, useLocation), never window.location:
+      // a page that reads location is not re-rendered when a link moves to it.
+      "endgame/no-location-read": "error",
       // One token layer: arbitrary Tailwind values (p-[13px], text-[#fff]) bypass it.
       "no-restricted-syntax": [
         "error",

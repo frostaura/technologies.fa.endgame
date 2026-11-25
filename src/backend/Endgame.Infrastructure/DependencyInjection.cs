@@ -62,6 +62,7 @@ public static class DependencyInjection
 
         services.AddScoped<ScopeResolver>();
         services.AddScoped<AccessService>();
+        services.AddSingleton<OperatorVisits>();
         services.AddScoped<CascadeService>();
         services.AddScoped<CreditLedger>();
         services.AddScoped<ICreditLedger>(sp => sp.GetRequiredService<CreditLedger>());
@@ -132,6 +133,7 @@ public static class DependencyInjection
         services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
         services.AddScoped<TelemetryQueryRunner>();
         services.AddScoped<AskService>();
+        services.AddSingleton<AskViewCatalog>();
         services.AddSingleton<DockClient>();
         services.AddHttpClient(DockClient.ClientName, client => client.Timeout = Timeout.InfiniteTimeSpan);
         services.AddScoped<AppVersionService>();
