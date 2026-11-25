@@ -4,7 +4,7 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 
 **Read from the code, not from the other docs.** On 2026-11-25 five readers each took one area and read the screens, the endpoints, the assistant tools, the edge, the app kit and the Makefile end to end. Where a flow could not be settled from code it says *not verified from code*. Nothing was run to produce it, so a flow's steps are what the code does, not a recording of a session.
 
-**321 flows** in five files:
+**323 flows** in five files:
 
 | File | Covers | Flows |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 | [The organisation, home and conversations](02-organisation-home-and-conversations.md) | The home screen, the tree of divisions, projects and apps, the two graph views, conversations, notifications, system status. | 75 |
 | [The factory](03-the-factory.md) | From an idea to a running app: ideas, research and the verdict, runs, plan, build, check, review, publish, autonomy and rule sets, changing an app. | 62 |
 | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) | Hiring, employees and contractors, employee memory, credits, budgets and the overdraft, the operator's screens. | 45 |
-| [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) | The app page, asking about an app, versions and export, sharing, secrets, what a hosted app can use, sleep and wake, running the platform. | 91 |
+| [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) | The app page, asking about an app, versions and export, sharing, secrets, what a hosted app can use, sleep and wake, running the platform. | 93 |
 
 ## How to read a flow
 
@@ -296,7 +296,7 @@ For the person who owns the setup: rule sets, tighter limits, assistants, techni
 | SEC-05 | Override an inherited secret at a lower level | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | KIT-20 | An AI assistant uses an app's own derived MCP tools | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Developer — 40 flows, 3 with a screen
+### Developer — 42 flows, 3 with a screen
 
 Through the API, an AI assistant or the app kit. Not console lessons.
 
@@ -336,12 +336,14 @@ Through the API, an AI assistant or the app kit. Not console lessons.
 | KIT-19 | Unsigned or undeclared webhook calls are refused | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | KIT-21 | A developer builds an app on the kit by hand | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | KIT-22 | A developer works on the kit itself | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| KIT-23 | An app's API refuses bad input, and its front end tells each failure apart | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | OPS-04 | Lint everything | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | OPS-05 | Build everything | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | OPS-06 | Run the test suites | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | OPS-09 | Run the merged-stack acceptance test | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | OPS-10 | Run the factory proof with live models (opt-in, spends money) | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | OPS-11 | Run the first version's acceptance tests with live models (opt-in) | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| OPS-27 | Run the ops service's tests and the outage Worker's | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
 ### Operator — 36 flows, 13 with a screen
 
