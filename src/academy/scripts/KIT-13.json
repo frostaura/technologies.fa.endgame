@@ -181,12 +181,28 @@
         {
           "step": 2,
           "kind": "code",
-          "language": "text",
-          "code": "EndgamePlatformException (Code = \"overdraft_limit\")",
+          "language": "csharp",
+          "code": "try { reply = await models.CompleteAsync(request, ct); }\ncatch (EndgameOverdraftLimitException e) { logger.LogWarning(\"{Message}\", e.Message); }",
           "output": [
-            "The platform answered POST platform/v1/models/chat with 402: The organisation has 0 credits available including its overdraft of 100; this call needs up to 0.016. Work stops until the organisation is topped up; do not retry it."
+            "The overdraft limit is reached: The organisation has 0 credits available including its overdraft of 100; this call needs up to 0.016. Work stops until the organisation is topped up; do not retry it."
           ],
-          "note": "The kit has no exception of its own for this code. Left uncaught, the app's caller gets 502 \"A platform service failed\" with code overdraft_limit, not a 402."
+          "note": "The kit throws its own EndgameOverdraftLimitException (Code \"overdraft_limit\", Status 402) in the platform's own words, and never retries it."
+        },
+        {
+          "step": 3,
+          "kind": "request",
+          "method": "GET",
+          "path": "/acme/labs/demo/notes/api/notes/0193a8e2-5c1f-7d4b-9e2a-6f8c1b3d5e70/summary",
+          "response": {
+            "status": 402,
+            "body": {
+              "title": "The overdraft limit is reached",
+              "status": 402,
+              "detail": "This feature is paused until the organisation tops up its credits.",
+              "code": "overdraft_limit"
+            }
+          },
+          "note": "Left uncaught, the kit's error handler answers the app's caller like this, plus a traceId: the same 402 as a spent budget, told apart by code, and the web kit throws BudgetExhaustedError. The endpoint is an illustrative one of the app's own."
         }
       ]
     },

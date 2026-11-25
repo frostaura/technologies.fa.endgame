@@ -17,7 +17,7 @@ SLN = Endgame.AppKit.slnx
 VERSION = 0.1.0
 NUGET_CACHE ?= $(HOME)/.nuget/packages
 TEST_DB_PORT ?= 55471
-TEST_DB_CONTAINER = test-appkit-pg
+TEST_DB_CONTAINER ?= test-appkit-pg
 export ENDGAME_TEST_DATABASE ?= Host=127.0.0.1;Port=$(TEST_DB_PORT);Username=postgres;Password=appkit-test
 
 build: build-sdk vendor build-template

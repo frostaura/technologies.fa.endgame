@@ -47,6 +47,45 @@ public sealed class PlatformServiceTests
     }
 
     [Fact]
+    public async Task At_the_overdraft_limit_a_model_call_is_a_typed_terminal_refusal_in_the_platforms_words()
+    {
+        await using var host = await KitHost.StartAsync(api: api =>
+            api.MapPost("summaries", async (IEndgameModels models) => (await models.CompleteAsync(new ChatRequest([ChatMessage.User("hello")], "summarise"))).Content)
+                .WithName("createSummary").WithDescription("Summarises."));
+        var models = host.Services.GetRequiredService<IEndgameModels>();
+        host.Platform.OverdraftLimitReached = true;
+
+        var refused = await Assert.ThrowsAsync<EndgameOverdraftLimitException>(() => models.CompleteAsync(new ChatRequest([ChatMessage.User("again")])));
+        Assert.Equal("overdraft_limit", refused.Code);
+        Assert.Equal(HttpStatusCode.PaymentRequired, refused.Status);
+        Assert.StartsWith("The overdraft limit is reached: ", refused.Message);
+        Assert.Contains("Work stops until the organisation is topped up", refused.Message);
+        Assert.Single(host.Platform.ModelCalls); // never retried
+
+        // Unhandled in an endpoint, it is the same 402 a spent budget is, never a bad gateway.
+        var response = await host.Client().PostAsync("/api/summaries", null);
+        Assert.Equal(HttpStatusCode.PaymentRequired, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("overdraft_limit", problem.GetProperty("code").GetString());
+        Assert.Equal("The overdraft limit is reached", problem.GetProperty("title").GetString());
+        Assert.Equal("This feature is paused until the organisation tops up its credits.", problem.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task A_superseded_app_token_is_named_in_one_sentence()
+    {
+        await using var host = await KitHost.StartAsync();
+        var models = host.Services.GetRequiredService<IEndgameModels>();
+        host.Platform.AppToken = "superseded-by-a-restart";
+
+        var refused = await Assert.ThrowsAsync<EndgamePlatformException>(() => models.CompleteAsync(new ChatRequest([ChatMessage.User("hello")])));
+        Assert.Equal(HttpStatusCode.Unauthorized, refused.Status);
+        Assert.Equal("app_token_invalid", refused.Code);
+        Assert.Contains("The app token is missing or wrong. The token is injected when the app starts", refused.Message);
+        Assert.DoesNotContain("..", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Secrets_resolve_by_name_and_a_missing_one_says_where_it_looked()
     {
         await using var host = await KitHost.StartAsync();

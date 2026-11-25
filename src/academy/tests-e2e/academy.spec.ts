@@ -76,32 +76,35 @@ test("a refusal message someone saw on screen finds the flow that explains it", 
   for (let i = 0; i < at; i++) await box.press("ArrowDown");
   await box.press("Enter");
   await expect(page).toHaveURL(/#\/flow\/ID-07/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Try to register without an invitation, or with one through the console");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Try to register without an invitation");
 });
 
 test("stepping through a scripted flow sends the live console each op in order", async ({ page }) => {
   await withDemo(page);
   await page.goto("./#/flow/IDEA-02");
   await expect.poll(() => received(page)).toEqual([
-    'reset {}',
-    'goto {"route":"/","persona":"builder","scenario":"established"}',
-    expect.stringMatching(/^act \{"actions":\[\{"click":\{"text":"New idea"\}\}\]\}$/),
+    "reset {}",
+    'goto {"route":"/","persona":"owner","scenario":"established"}',
+    expect.stringMatching(/^act \{"actions":\[\{"click":\{"text":"New idea"\}\}/),
     expect.stringMatching(/^highlight \{"text":"New idea"/),
   ]);
   const ops = async () => (await received(page)).map((l) => l.split(" ")[0]);
+  const first = ["reset", "goto", "act", "highlight"];
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("[aria-current=step]")).toContainText("Where it goes");
+  await expect.poll(ops).toEqual([...first, "act", "highlight"]);
   await page.keyboard.press("ArrowRight");
   await expect(page.locator("[aria-current=step]")).toContainText("Type the idea");
-  await expect.poll(ops).toEqual(["reset", "goto", "act", "highlight", "act", "highlight"]);
-  await page.keyboard.press("ArrowRight");
-  await expect.poll(ops).toEqual(["reset", "goto", "act", "highlight", "act", "highlight", "act", "highlight"]);
+  await expect.poll(ops).toEqual([...first, "act", "highlight", "act", "highlight"]);
+  // A step with nothing to do in the console only moves the spotlight.
   await page.keyboard.press("ArrowRight");
   await expect(page).toHaveURL(/#\/flow\/IDEA-02\/step\/4$/);
-  await expect.poll(ops).toEqual(["reset", "goto", "act", "highlight", "act", "highlight", "act", "highlight", "goto", "highlight"]);
-  expect((await received(page))[4]).toContain('"text":"A court-booking app for our squash club, sold in playing minutes."');
+  await expect.poll(ops).toEqual([...first, "act", "highlight", "act", "highlight", "highlight"]);
+  expect((await received(page))[6]).toContain('"text":"A court-booking waiting list');
   // "Show me again" resets the console and replays up to this step.
   await page.getByRole("button", { name: "Show me again" }).click();
-  await expect.poll(async () => (await received(page)).length).toBeGreaterThan(10);
-  const replay = (await received(page)).slice(10).map((l) => l.split(" ")[0]);
+  await expect.poll(async () => (await received(page)).length).toBeGreaterThan(9);
+  const replay = (await received(page)).slice(9).map((l) => l.split(" ")[0]);
   expect(replay[0]).toBe("reset");
   expect(replay.at(-1)).toBe("highlight");
 });
@@ -122,7 +125,8 @@ test("without the demo, a live step says once that the console could not be load
   await page.route("**/demo/**", (route) => route.fulfill({ status: 404, body: "" }));
   await page.goto("./#/flow/ORG-04");
   await expect(page.getByText("The live console could not be loaded here")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId("facts")).toBeVisible();
+  // The step's captured picture stands in for the console; with none captured, the flow's facts do.
+  await expect(page.locator('img[src*="shots/"]').or(page.getByTestId("facts")).first()).toBeVisible();
   await expect(page.getByText("The header shows:")).toBeVisible();
   errors = errors.filter((e) => !/404|Failed to load resource/.test(e));
 });

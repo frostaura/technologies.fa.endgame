@@ -107,6 +107,16 @@ public sealed class RehearsalTests(ITestOutputHelper output)
         await Compose(Long, "up", "-d", "--build", "--wait");
         report.Add($"stack {Project} built and up in {watch.Elapsed.TotalSeconds:0} s (edge :{edgePort}, ops :{opsPort})");
 
+        // --- A malformed backup key: `make backup` says which variable is wrong and the shape it needs,
+        // never its value, instead of failing first on the ops container's health check.
+        const string badKey = "rehearsal-this-is-not-a-backup-key";
+        var (badExit, badOut, badError) = await RunAsync(new Dictionary<string, string> { ["ENDGAME_BACKUP_KEY"] = badKey }, TimeSpan.FromMinutes(5), "make", "-C", repositoryRoot, "--no-print-directory", "backup");
+        Assert.NotEqual(0, badExit);
+        Assert.Contains("ENDGAME_BACKUP_KEY is set but is not a backup key", badError);
+        Assert.Contains("64 hex characters", badError);
+        Assert.DoesNotContain(badKey, badOut + badError, StringComparison.Ordinal);
+        report.Add("refused: `make backup` with a malformed ENDGAME_BACKUP_KEY names the variable and its shape, not the value");
+
         // --- Data: an organisation, an app with its repository, a secret, ledger entries, an app database.
         using var owner = await SignInAsync(OwnerEmail, "Rehearsal owner");
         using var operatorClient = await SignInAsync(OperatorEmail, "Rehearsal operator");
@@ -153,6 +163,18 @@ public sealed class RehearsalTests(ITestOutputHelper output)
         report.Add($"backup {id}: `make backup` took {backupSeconds:0.0} s wall; archive {archive.Size:N0} bytes in the bucket");
         report.Add($"  {backup.Split('\n').FirstOrDefault(l => l.StartsWith("Backup ", StringComparison.Ordinal))?.Trim()}");
 
+        // The service's /health counts the archive although another process (the command line) made it.
+        using (var opsHttp = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{opsPort}") })
+        {
+            await WaitAsync("the ops service's /health", async () => (await opsHttp.GetAsync("/health")).IsSuccessStatusCode, TimeSpan.FromMinutes(2));
+            var health = JsonNode.Parse(await opsHttp.GetStringAsync("/health"))!;
+            Assert.Equal(id, (string)health["backups"]!["last"]!["id"]!);
+            Assert.Equal("succeeded", (string)health["backups"]!["last"]!["outcome"]!);
+            Assert.Equal(1, (int)health["backups"]!["count"]!);
+        }
+
+        report.Add("health: /health reports the `make backup` archive as the latest backup");
+
         await using (var body = await s3.GetAsync(archive.Key, default))
         {
             using var copy = new MemoryStream();
@@ -163,11 +185,22 @@ public sealed class RehearsalTests(ITestOutputHelper output)
             Assert.Equal(-1, bytes.AsSpan().IndexOf("written before the backup"u8));
         }
 
-        // --- Destroy: every volume of the stack goes. The bucket is elsewhere.
-        await Compose(TimeSpan.FromMinutes(5), "down", "-v", "--remove-orphans");
+        // --- Destroy, through the Makefile: `make docker-down` deletes the data but keeps the local backup
+        // archives; only `make docker-wipe CONFIRM=yes` takes them too. The bucket is elsewhere.
+        await Make(TimeSpan.FromMinutes(5), "docker-down");
+        var kept = (await Docker("volume", "ls", "-q", "--filter", $"label=com.docker.compose.project={Project}")).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var keptVolume = Assert.Single(kept);
+        Assert.Equal("backup", (await Docker("volume", "inspect", "-f", "{{index .Labels \"com.docker.compose.volume\"}}", keptVolume)).Trim());
+        report.Add($"docker-down: the database and repositories volumes removed, the local backups volume {keptVolume} kept");
+
+        var (wipeExit, _, wipeError) = await RunAsync(TimeSpan.FromMinutes(1), "make", "-C", repositoryRoot, "--no-print-directory", "docker-wipe");
+        Assert.NotEqual(0, wipeExit);
+        Assert.Contains("Run make docker-wipe CONFIRM=yes", wipeError);
+        Assert.Single((await Docker("volume", "ls", "-q", "--filter", $"label=com.docker.compose.project={Project}")).Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        await Make(TimeSpan.FromMinutes(5), "docker-wipe", "CONFIRM=yes");
         var volumes = await Docker("volume", "ls", "-q", "--filter", $"label=com.docker.compose.project={Project}");
         Assert.Equal("", volumes.Trim());
-        report.Add("destroyed: the stack's containers and every volume (database, repositories, local backups)");
+        report.Add("destroyed: docker-wipe CONFIRM=yes removed every volume (database, repositories, local backups)");
 
         // --- Restore onto the now-empty stack, through the Makefile.
         watch.Restart();
@@ -191,12 +224,20 @@ public sealed class RehearsalTests(ITestOutputHelper output)
         Assert.Equal("written before the backup", await PsqlAs("app_rehearsal", appPassword, "app_rehearsal", "SELECT body FROM notes WHERE id = 1"));
         report.Add($"verified: org, app and tree; repository head {after.Head[..12]}; secret decrypts through the platform API; balance {after.Balance} and {after.LedgerRows} ledger rows; app database readable by its own role and password");
 
-        // --- A second restore over the live data is refused, and changes nothing.
-        var (exit, _, error) = await RunAsync(TimeSpan.FromMinutes(5), "sh", "-c", $"{ComposeCommand} exec -T ops /app/Endgame.Ops restore {id}");
+        // --- A second restore over the live data, through the Makefile, is refused, changes nothing, and
+        // leaves every service that was running running again.
+        var (exit, _, error) = await RunAsync(TimeSpan.FromMinutes(10), "make", "-C", repositoryRoot, "--no-print-directory", "restore", $"BACKUP={id}");
         Assert.NotEqual(0, exit);
         Assert.Contains("Refusing to restore over data that is already here", error);
+        Assert.Contains("restore: nothing was restored; starting again what was running before.", error);
+        var running = (await Compose(TimeSpan.FromMinutes(1), "ps", "--services", "--status", "running")).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var service in new[] { "edge", "console", "runner", "dock", "control-plane", "postgres", "ops" })
+        {
+            Assert.Contains(service, running);
+        }
+
         Assert.Equal(before.LedgerRows, (await SnapshotAsync(ownerAfter, appId, dock)).LedgerRows);
-        report.Add("refused: restoring again over the non-empty stack without OVERWRITE=1");
+        report.Add("refused: `make restore` again over the non-empty stack without OVERWRITE=1; every service running again");
     }
 
     private sealed record Snapshot(string Head, string Secret, decimal Balance, long LedgerRows, string TopUps, string SecretNames, string Tree);
@@ -405,7 +446,11 @@ public sealed class RehearsalTests(ITestOutputHelper output)
 
     private static string Tail(string text) => text.Length > 4000 ? text[^4000..] : text;
 
-    private async Task<(int Exit, string Stdout, string Stderr)> RunAsync(TimeSpan timeout, string file, params string[] arguments)
+    private Task<(int Exit, string Stdout, string Stderr)> RunAsync(TimeSpan timeout, string file, params string[] arguments) =>
+        RunAsync(null, timeout, file, arguments);
+
+    /// <summary>Runs a command with the stack's environment, and <paramref name="overrides"/> on top of it.</summary>
+    private async Task<(int Exit, string Stdout, string Stderr)> RunAsync(IReadOnlyDictionary<string, string>? overrides, TimeSpan timeout, string file, params string[] arguments)
     {
         var start = new ProcessStartInfo(file)
         {
@@ -420,6 +465,11 @@ public sealed class RehearsalTests(ITestOutputHelper output)
         }
 
         foreach (var (key, value) in StackEnvironment())
+        {
+            start.Environment[key] = value;
+        }
+
+        foreach (var (key, value) in overrides ?? new Dictionary<string, string>())
         {
             start.Environment[key] = value;
         }

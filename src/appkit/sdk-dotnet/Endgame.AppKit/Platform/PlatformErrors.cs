@@ -21,6 +21,13 @@ public sealed class EndgamePlatformUnavailableException(string message, Exceptio
 public sealed class EndgameBudgetExhaustedException(string message)
     : EndgamePlatformException(message, HttpStatusCode.PaymentRequired, "budget_exhausted");
 
+/// <summary>
+/// The organisation that owns this app has reached its overdraft limit, so the platform refuses new
+/// model calls. Terminal: retrying will not help until the organisation is topped up.
+/// </summary>
+public sealed class EndgameOverdraftLimitException(string message)
+    : EndgamePlatformException(message, HttpStatusCode.PaymentRequired, "overdraft_limit");
+
 /// <summary>No secret with this name is set at any level of the app's cascade.</summary>
 public sealed class EndgameSecretNotFoundException(string name, string message)
     : EndgamePlatformException(message, HttpStatusCode.NotFound, "secret_not_found")

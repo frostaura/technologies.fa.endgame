@@ -89,13 +89,20 @@ internal sealed class PlatformClient(IHttpClientFactory factory)
         return (response.StatusCode, code) switch
         {
             (HttpStatusCode.Unauthorized, _) => new EndgamePlatformException(
-                $"The platform refused this app's token ({EndgameEnvironment.AppToken}) on {method} {path}: {detail}. " +
+                $"The platform refused this app's token ({EndgameEnvironment.AppToken}) on {method} {path}: {Sentence(detail)} " +
                 "The token is injected when the app starts; a restarted app gets a fresh one.", response.StatusCode, code ?? "app_token_invalid"),
             (_, "budget_exhausted") => new EndgameBudgetExhaustedException($"The credit budget for this app is spent: {detail}"),
+            (_, "overdraft_limit") => new EndgameOverdraftLimitException($"{problem?.Title ?? OverdraftTitle}: {detail}"),
             (_, "secret_not_found") => new EndgameSecretNotFoundException(path.Split('/')[^1], detail),
             _ => new EndgamePlatformException($"The platform answered {method} {path} with {(int)response.StatusCode}: {detail}", response.StatusCode, code),
         };
     }
+
+    /// <summary>The platform's own title for an <c>overdraft_limit</c> refusal (the model gateway's words).</summary>
+    internal const string OverdraftTitle = "The overdraft limit is reached";
+
+    /// <summary>The text as one sentence: exactly one full stop at the end, however the platform ended it.</summary>
+    private static string Sentence(string text) => text.TrimEnd().TrimEnd('.') + ".";
 
     internal static void Configure(HttpClient client, EndgameSettings settings)
     {

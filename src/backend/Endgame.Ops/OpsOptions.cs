@@ -143,12 +143,13 @@ public sealed class BackupOptions
     {
         if (Key.Length == 0)
         {
-            return "ENDGAME_BACKUP_KEY is not set, so nothing can be encrypted and no backup runs.";
+            return $"ENDGAME_BACKUP_KEY is not set, so nothing can be encrypted and no backup runs. {BackupKey.Shape}";
         }
 
         if (!BackupKey.TryParse(Key, out _))
         {
-            return "ENDGAME_BACKUP_KEY is not 32 bytes written as hex or base64, so no backup runs.";
+            return $"ENDGAME_BACKUP_KEY is set but is not a backup key, so no backup runs. {BackupKey.Shape} " +
+                "An archive opens only with the key that sealed it, so keep the one you have used before.";
         }
 
         if (Postgres.Length == 0)
@@ -168,6 +169,9 @@ public sealed class BackupOptions
 /// <summary>The backup key: 32 bytes, written as 64 hex characters or as base64.</summary>
 public static class BackupKey
 {
+    /// <summary>The shape a key must have, for every refusal that names the variable. Never the value.</summary>
+    public const string Shape = "It must be 32 random bytes written as 64 hex characters (or as 44 characters of base64); make one with `openssl rand -hex 32`.";
+
     public static bool TryParse(string text, out byte[] key)
     {
         key = [];
@@ -195,5 +199,5 @@ public static class BackupKey
     }
 
     public static byte[] Parse(string text) =>
-        TryParse(text, out var key) ? key : throw new InvalidOperationException("ENDGAME_BACKUP_KEY must be 32 bytes written as hex or base64.");
+        TryParse(text, out var key) ? key : throw new InvalidOperationException($"ENDGAME_BACKUP_KEY is not a backup key. {Shape}");
 }

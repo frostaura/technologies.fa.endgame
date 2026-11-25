@@ -28,13 +28,13 @@ reference pages cited on each `CloudflareClient` method.
 | No token: no call; a console host two levels down: refused before any call; a wrong token: Cloudflare's error. | `ReconcilerTests.With_no_token_nothing_is_called`, `…two_levels_down…`, `…wrong_token…` |
 | DNS listing reads every page. | `ReconcilerTests.Records_are_read_across_every_page` |
 | Reserved hosts: every label the zone uses, including one a deeper record implies; cached; incomplete without a token. | `ReconcilerTests.Reserved_hosts_*` |
-| `/health` says idle with no token and local with no bucket; `503` without a backup key. | `OpsApiTests.With_no_token_*`, `OpsApiTests.Without_a_backup_key_*` |
+| `/health` says idle with no token and local with no bucket; `503` without a backup key; its `last` counts an archive another process made. | `OpsApiTests.With_no_token_*`, `OpsApiTests.Without_a_backup_key_*`, `OpsApiTests.Health_counts_an_archive_*`, `OpsApiTests.The_last_attempt_*` |
 | Internal endpoints need the service token; apply needs `confirm=true`; a conflicting plan is refused with the plan attached. | `OpsApiTests` |
 | Sealing round-trips any length; the plaintext never appears; a wrong key, any altered byte, a truncation (even at a chunk boundary), an unfinished archive, appended bytes and swapped chunks all fail. | `SealedStreamTests` |
 | SigV4 reproduces AWS's published "GET Object" signature. | `SigV4Tests` |
-| Retention, usage warnings, the nightly due rule, role restoration and configuration refusals. | `BackupPolicyTests` |
+| Retention, usage warnings, the nightly due rule, role restoration and configuration refusals; a bad key names the variable and its shape, never its value; a part-way restore failure says so. | `BackupPolicyTests` |
 | The outage Worker: healthy and deliberate answers (200, 3xx, 403, 404, 500, 501, 503) pass through unchanged; 502, 504, 520–527, 530 and network failures become the page (HTML for navigations, plain text otherwise, no body for HEAD); the page is self-contained and names no infrastructure. | `src/ops/outage-worker/outage-worker.test.mjs` |
-| **Backup → destroy → restore**: every piece of data comes back and the secret still decrypts; the archive is sealed; a second restore over live data is refused. | `Rehearsal/RehearsalTests.Backup_then_destroy_then_restore_brings_every_piece_of_data_back` |
+| **Backup → destroy → restore**: a malformed key is refused by `make backup` in words; `/health` sees the command-line backup; `make docker-down` keeps only the backup volume and `make docker-wipe CONFIRM=yes` removes it; every piece of data comes back and the secret still decrypts; the archive is sealed; a second `make restore` over live data is refused and leaves every service running. | `Rehearsal/RehearsalTests.Backup_then_destroy_then_restore_brings_every_piece_of_data_back` |
 
 ## The rehearsal
 
@@ -45,20 +45,25 @@ read; plus a test-only S3-compatible server (`versity/versitygw:v1.0.16`, contai
 choice; its images are no longer pullable from Docker Hub or quay.io on this machine.
 
 1. Build and start the whole stack with the e2e overlay (Dock's API on loopback) and the rehearsal overlay.
-2. Through the real Edge: the development sign-in, an organisation, a division, a project and an app;
+2. `make backup` with `ENDGAME_BACKUP_KEY` set to a value that is not a key: it fails, the error names
+   the variable and the shape it needs, and the value appears nowhere in the output.
+3. Through the real Edge: the development sign-in, an organisation, a division, a project and an app;
    through Dock: the app's repository (an initial commit); a secret at the organisation; two operator
    top-ups (ledger entries). Through `psql`: an app database owned by its own login role, closed to `PUBLIC`, with a row.
-3. Snapshot: the repository head, the secret **as the app reads it** (a fresh app token, then
+4. Snapshot: the repository head, the secret **as the app reads it** (a fresh app token, then
    `GET /platform/v1/secrets/REHEARSAL_SECRET` on the control plane), the balance, the top-ups, the
    ledger row count, the inherited secret names, the tree.
-4. `make backup` (with `OPS_COMPOSE` naming this stack). The bucket holds exactly one object; it starts
-   `EGBK` and contains neither the secret nor the app database's row.
-5. `docker compose down -v`: every volume of the stack is gone.
-6. `make restore BACKUP=<id>`.
-7. The snapshot again — equal in every field — and the app database's row read **as its own role with
+5. `make backup` (with `OPS_COMPOSE` naming this stack). The bucket holds exactly one object; it starts
+   `EGBK` and contains neither the secret nor the app database's row. The ops service's `/health` names
+   that archive as `last`, although another process made it.
+6. `make docker-down`: only the `backup` volume is left. `make docker-wipe` without `CONFIRM=yes` is
+   refused and removes nothing; with it, every volume of the stack is gone.
+7. `make restore BACKUP=<id>`.
+8. The snapshot again — equal in every field — and the app database's row read **as its own role with
    its own password**.
-8. A second restore without `OVERWRITE=1` is refused, and the ledger is unchanged.
-9. Teardown: the stack with its volumes and images, anything Dock labelled with the project, the S3
+9. A second `make restore` without `OVERWRITE=1` is refused, every service is running again
+   afterwards, and the ledger is unchanged.
+10. Teardown: the stack with its volumes and images, anything Dock labelled with the project, the S3
    server and its network.
 
 ## Fixture variation

@@ -133,15 +133,18 @@ archive (tomorrow's is uploaded before anything is pruned), and `warning` is rep
 passes 80 %, `over` once it passes the allowance — on `/health`, `GET /internal/ops/backups`, the
 log and the output of `make backup` / `make ops-backups`.
 
-**Restore.** `make restore BACKUP=<id>`: stops Edge, the console, the Runner, Dock and the control
-plane; brings up PostgreSQL and ops; then the ops command line **verifies the whole archive first**
+**Restore.** `make restore BACKUP=<id>`: notes what is running, stops Edge, the console, the Runner,
+Dock and the control plane; brings up PostgreSQL and ops; then the ops command line **verifies the whole archive first**
 (every chunk authenticated, every entry against the manifest) and only then checks the targets —
 any listed database that exists with tables, views or sequences, or a non-empty repositories
 volume, is a refusal unless `OVERWRITE=1`. Then roles (made tolerant of roles that exist, and never
 touching the connecting administrator's own role or password), each database (`pg_restore --create`,
 so owner, grants and the `REVOKE CONNECT` Dock sets come back; an existing empty database — the one
 the PostgreSQL image creates at start — is dropped first), and the volume files. Finally the whole
-stack is started. `OPS_COMPOSE` names the stack (`docker compose -f docker-compose.prod.yml` on the
+stack is started. A restore that does not go ahead (any refusal: data present, a missing or wrong
+key, a damaged or missing archive, the lease held) exits 1 and the Makefile starts again exactly
+what was running before; one that fails after it began writing exits 4 and leaves the services
+stopped, so nothing starts on half-restored data. `OPS_COMPOSE` names the stack (`docker compose -f docker-compose.prod.yml` on the
 production host).
 
 **The key.** `ENDGAME_BACKUP_KEY` (32 bytes, hex or base64) comes from the environment. The spec
@@ -150,20 +153,23 @@ the archive, so a key kept only there could never open the backup it would be ne
 must exist outside the machine (the founder's password manager); see *Not built yet*. In
 production it is required: `docker-compose.prod.yml` refuses to start without it (`make prod-config`
 proves the refusal), because `ops` is the stack's only backup. The development stack has a
-development default.
+development default. The ops container's health check fails on an unusable key, so `make backup` and
+`make restore` start ops without waiting on it, and the command line names the variable and the
+shape it needs, never its value.
 
 ## Interfaces
 
 | Endpoint (service token) | Contract |
 | --- | --- |
-| `GET /health` (no token) | `{ status: healthy | unhealthy, cloudflare: { state: idle | misconfigured | configured, message }, backups: { state: refused | local | offsite | unreachable, message, schedule, nextCheckAt, newest, count, usage, last, running } }`. `503` only when backups are refused (no key, bad key, no database, half-configured bucket). |
+| `GET /health` (no token) | `{ status: healthy | unhealthy, cloudflare: { state: idle | misconfigured | configured, message }, backups: { state: refused | local | offsite | unreachable, message, schedule, nextCheckAt, newest, count, usage, last, running } }`. `503` only when backups are refused (no key, bad key, no database, half-configured bucket). `last` is the newer of this process's last attempt and the store's newest archive, so a `make backup` (its own process) counts; `running` is this process's run only. |
 | `GET /internal/ops/reserved-hosts` | `{ zone, complete, source: cloudflare | static, readAt, labels: [..], reserved: [{ label, reason, records }], reason }` |
 | `GET /internal/ops/cloudflare/plan` | `{ generatedAt, changes: [{ resource: dns | tunnel | worker | route, action: create | update | delete | keep | conflict, target, detail }], hasConflicts, inSync, mutations }`; `409 cloudflare_unconfigured`; `502 cloudflare_error`. |
 | `POST /internal/ops/cloudflare/apply?confirm=true` | `{ applied: [change], after: plan }`; `400 confirmation_required` without `confirm=true`; `409 plan_has_conflicts` (with `plan`) — nothing changed. |
 | `GET /internal/ops/backups` | `{ destination: offsite | local, describe, backups: [{ id, name, bytes, createdAt }], usage: { usedBytes, allowanceBytes, percent, projectedBytes, state: ok | warning | over | local, message }, last, running }`; `502 backup_store_unreachable`. |
 | `POST /internal/ops/backups` | Runs one now and returns `{ id, name, destination, archiveBytes, plaintextBytes, seconds, databases, volumes, pruned }`; `409 backup_running` / `backup_refused`. |
 
-Make targets: `backup`, `restore BACKUP= [OVERWRITE=1]`, `ops-backups`, `ops-verify BACKUP=`,
+Make targets: `backup`, `restore BACKUP= [OVERWRITE=1]`, `docker-down` (deletes the development
+stack's data but keeps the `backup` volume), `docker-wipe CONFIRM=yes` (every volume, the local backups too), `ops-backups`, `ops-verify BACKUP=`,
 `ops-health`, `ops-reserved-hosts`, `ops-cloudflare-plan`, `ops-cloudflare-apply CONFIRM=yes`,
 `ops-test` (part of `make test`, and CI's `ops` job, which runs the rehearsal on the runner's
 Docker engine), `ops-test-worker`. CI publishes the `ops` image with the others.

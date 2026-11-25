@@ -10,13 +10,14 @@
       "kind": "terminal",
       "command": "make backup",
       "output": [
-        "docker compose up -d --wait postgres ops",
-        "[+] Running 2/2",
+        "docker compose up -d --wait postgres && docker compose up -d ops",
+        "[+] Running 1/1",
         " ✔ Container endgame-postgres-1  Healthy",
-        " ✔ Container endgame-ops-1       Healthy",
+        "[+] Running 1/1",
+        " ✔ Container endgame-ops-1       Started",
         "docker compose exec -T ops /app/Endgame.Ops backup"
       ],
-      "note": "PostgreSQL and the ops service are started if they are not running. On the production host add OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"."
+      "note": "PostgreSQL is started and waited on; the ops service is started without waiting for its health check, so a key it cannot use is reported by the backup itself. On the production host add OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"."
     },
     {
       "step": 2,
@@ -78,7 +79,7 @@
       ]
     },
     {
-      "title": "The backup key is not 32 bytes",
+      "title": "The backup key is missing or is not a key",
       "persona": "host-admin",
       "scenario": "established",
       "start": "/",
@@ -86,13 +87,14 @@
         {
           "step": 1,
           "kind": "terminal",
-          "command": "docker compose exec -T ops /app/Endgame.Ops backup",
+          "command": "make backup",
           "output": [
-            "Backing up to a directory on this machine (/backups), not offsite: no bucket is configured...",
-            "ENDGAME_BACKUP_KEY is not 32 bytes written as hex or base64, so no backup runs.",
+            "docker compose up -d --wait postgres && docker compose up -d ops",
+            "docker compose exec -T ops /app/Endgame.Ops backup",
+            "ENDGAME_BACKUP_KEY is set but is not a backup key, so no backup runs. It must be 32 random bytes written as 64 hex characters (or as 44 characters of base64); make one with `openssl rand -hex 32`. An archive opens only with the key that sealed it, so keep the one you have used before.",
             "make: *** [backup] Error 1"
           ],
-          "note": "The key must be 64 hex characters or base64 of 32 bytes (openssl rand -hex 32). With this key /health is also unhealthy (OPS-18), so the ops container fails its health check and the compose line before it fails first."
+          "note": "The variable is named with the shape it needs, never its value, and no backup runs. With no key at all it reads \"ENDGAME_BACKUP_KEY is not set, so nothing can be encrypted and no backup runs.\" and the same shape. The compose progress lines are left out."
         }
       ]
     },
