@@ -19,6 +19,8 @@ export interface Step {
   mark?: string;
   /** Stop here until the approval is answered. */
   approval?: Omit<DemoApproval, "id" | "runId" | "answer">;
+  /** An approval decided when the step is reached, from the world as it is then (a rule or a checkpoint set meanwhile); null asks nothing. */
+  ask?: (world: World, run: DemoRun) => Omit<DemoApproval, "id" | "runId" | "answer"> | null;
 }
 
 export type ScriptBuilder = (world: World, run: DemoRun) => Step[];
@@ -70,6 +72,10 @@ export class Script {
   }
   approval(a: NonNullable<Step["approval"]>, mark?: string) {
     this.steps.push({ at: this.t, approval: a, ...(mark ? { mark } : {}) });
+    return this;
+  }
+  ask(fn: NonNullable<Step["ask"]>, mark?: string) {
+    this.steps.push({ at: this.t, ask: fn, ...(mark ? { mark } : {}) });
     return this;
   }
 }
@@ -136,6 +142,7 @@ export function append(world: World, r: DemoRun, type: string, payload: Record<s
       r.run.outcome = outcome;
       r.run.summary = typeof payload.summary === "string" ? payload.summary : r.run.summary;
       r.run.finishedAt = event.at;
+      r.ended = r.playback ?? r.ended ?? null;
       r.playback = null;
       for (const e of world.employees) if (e.currentRun?.id === r.run.id) settle(world, e.id, r.run.id);
       break;
@@ -181,10 +188,11 @@ function apply(world: World, r: DemoRun, step: Step): boolean {
     const tags = step.effect(world, r);
     if (Array.isArray(tags)) world.changed.push(...tags.map(String));
   }
-  if (step.approval) {
+  const approval = step.approval ?? (r.playback ? step.ask?.(world, r) : null) ?? null;
+  if (approval) {
     const id = newId(world, "approval");
-    world.approvals.push({ id, runId: r.run.id, answer: null, ...step.approval });
-    append(world, r, "approval.requested", { approvalId: id, title: step.approval.title, question: step.approval.title, detail: step.approval.detail });
+    world.approvals.push({ id, runId: r.run.id, answer: null, ...approval });
+    append(world, r, "approval.requested", { approvalId: id, title: approval.title, question: approval.title, detail: approval.detail, onDecline: approval.onDecline ?? "continues" });
     r.run.status = "waiting";
     world.changed.push("Tree", "Run", "Notifications");
     return false;
@@ -204,6 +212,8 @@ export function advance(world: World, r: DemoRun, ms: number) {
     if (!step || step.at > pb.elapsed) break;
     pb.cursor += 1;
     if (!apply(world, r, step)) break;
+    // A step that paused the run (waiting for budget) stops it here until it is resumed.
+    if ((r.run.status as string) === "paused") break;
   }
 }
 

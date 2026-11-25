@@ -1,5 +1,6 @@
 import type { AppDetail, BudgetLine, Credits, Idea, Me, Membership, NeedsYou, OperatorOrganisation, Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import { highestIn, homeOrganisation, roleAt } from "./access";
+import { ideaState } from "./tryAgain";
 import { appAt, chain, levelOf, node, orgOf, organisation, spentBelow, within, type DemoApp, type DemoUser, type World } from "./world";
 
 /**
@@ -180,6 +181,8 @@ export function ideaView(world: World, idea: Idea): Idea {
   const decided = world.ideas.filter((i) => i.verdict && orgOf(world.runs.find((r) => r.run.id === i.runId)?.run.scope ?? i.scope ?? "") === org);
   return {
     ...idea,
+    ...ideaState(world, idea),
+    history: idea.history ?? [],
     record: {
       total: decided.length,
       build: decided.filter((i) => i.verdict?.outcome === "build").length,

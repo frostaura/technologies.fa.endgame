@@ -28,6 +28,8 @@ const TITLES: Record<string, string> = {
   "POST runs/{id}/resume": "Resumed a piece of work",
   "POST runs/{id}/cancel": "Cancelled a piece of work",
   "POST runs/{runId}/approvals/{approvalId}": "Answered an approval",
+  "POST runs/{id}/retry": "Started stopped work again",
+  "POST apps/{id}/changes": "Asked for a change to an app",
   "POST conversations": "Wrote in a conversation",
   "POST hires/{id}/accept": "Accepted a hire",
   "POST hires/{id}/decline": "Declined a hire",
