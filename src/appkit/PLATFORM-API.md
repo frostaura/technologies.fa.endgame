@@ -63,7 +63,9 @@ resolution for at most 30 s and never past `expiresAt`.
 → { "messages": [{ "role": "system" | "user" | "assistant", "content": "…" }],
     "taskType": "chat" | "classify" | "summarise" | "extract", "maxTokens": 512, "temperature": 0.2 }
 ← 200 { "content": "…", "model": "…", "usage": { "inputTokens": 10, "outputTokens": 20 }, "credits": 0.001 }
-← 402 { "code": "budget_exhausted" }      terminal; the kit never retries
+← 402 { "code": "budget_exhausted" }      terminal; the kit never retries (EndgameBudgetExhaustedException)
+← 402 { "code": "overdraft_limit" }       the organisation is at its overdraft limit; terminal until it is
+                                           topped up, never retried (EndgameOverdraftLimitException)
 ← 422 { "code": "ceiling_unreachable" }   no model for the task type fits the price ceiling
 ```
 

@@ -28,7 +28,7 @@
   ],
   "variations": [
     {
-      "title": "Wipe the data too, with make docker-down (local only)",
+      "title": "Delete the data but keep the local backups, with make docker-down (local only)",
       "persona": "host-admin",
       "scenario": "established",
       "start": "/",
@@ -37,6 +37,47 @@
           "step": 1,
           "kind": "terminal",
           "command": "make docker-down",
+          "output": [
+            "docker compose down --remove-orphans",
+            "[+] Running 10/10",
+            " ✔ Container endgame-edge-1           Removed",
+            " ✔ Container endgame-console-1        Removed",
+            " ✔ Container endgame-dock-1           Removed",
+            " ✔ Container endgame-runner-1         Removed",
+            " ✔ Container endgame-control-plane-1  Removed",
+            " ✔ Container endgame-ops-1            Removed",
+            " ✔ Container endgame-mailcatcher-1    Removed",
+            " ✔ Container endgame-egress-1         Removed",
+            " ✔ Container endgame-postgres-1       Removed",
+            " ✔ Network endgame_default            Removed",
+            "docker-down: kept endgame_backup, the local backup archives (make docker-wipe CONFIRM=yes deletes them too).",
+            "docker-down: removed endgame_dock_data",
+            "docker-down: removed endgame_postgres_data"
+          ],
+          "note": "The database and every app's repository are deleted; the backup volume is kept, so make restore can bring the data back afterwards. An archive in a bucket is never touched. Never run this on the production host."
+        }
+      ]
+    },
+    {
+      "title": "Delete everything, the local backups too, with make docker-wipe CONFIRM=yes",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make docker-wipe",
+          "output": [
+            "docker-wipe deletes every volume of the stack: the database, the app repositories and the local backup archives (an archive in a bucket is not touched). Run make docker-wipe CONFIRM=yes.",
+            "make: *** [docker-wipe] Error 2"
+          ],
+          "note": "Without CONFIRM=yes nothing is stopped or deleted. Exit code 2."
+        },
+        {
+          "step": 2,
+          "kind": "terminal",
+          "command": "make docker-wipe CONFIRM=yes",
           "output": [
             "docker compose down -v --remove-orphans",
             "[+] Running 13/13",
@@ -54,7 +95,7 @@
             " ✔ Volume endgame_dock_data           Removed",
             " ✔ Volume endgame_backup              Removed"
           ],
-          "note": "-v removes every volume the stack named: the database, every app's repository, and the local backup archives. An archive in a bucket is not touched. Never run this on the production host."
+          "note": "Every volume the stack named goes: the database, every app's repository and the local backup archives. Nothing of the stack is left on this machine; an archive in a bucket is not touched."
         }
       ]
     }

@@ -12,6 +12,10 @@ public sealed class BackupBusyException() : Exception("Another backup or restore
 /// <summary>A restore refused to run. Nothing was changed.</summary>
 public sealed class RestoreRefusedException(string message) : Exception(message);
 
+/// <summary>A restore failed after it had begun to write: the databases and volumes may hold part of the archive.</summary>
+public sealed class RestoreIncompleteException(string name, Exception inner)
+    : Exception($"The restore of {name} failed part-way, so the databases and volumes may hold part of it: {inner.Message.TrimEnd().TrimEnd('.')}. Run it again with OVERWRITE=1 once the cause is fixed.", inner);
+
 /// <summary>
 /// One archive of everything: every database (roles first, then each database as <c>pg_dump</c>'s
 /// custom format), the app repositories volume and the uploaded-files volume if there is one —
@@ -133,9 +137,14 @@ public sealed class BackupService(
         }
 
         watch.Restart();
-        await using (var source = await store.OpenReadAsync(name, cancellationToken))
+        try
         {
+            await using var source = await store.OpenReadAsync(name, cancellationToken);
             await ReadAsync(source, new RestoreTarget(manifest, overwrite, progress), cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new RestoreIncompleteException(name, ex);
         }
 
         var restoreSeconds = watch.Elapsed.TotalSeconds;

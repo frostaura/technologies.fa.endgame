@@ -183,9 +183,9 @@
           "language": "text",
           "code": "EndgamePlatformException (Code = \"app_token_invalid\")",
           "output": [
-            "The platform refused this app's token (ENDGAME_APP_TOKEN) on POST platform/v1/identity/resolve: The platform API needs the app's token (ENDGAME_APP_TOKEN) as a bearer token; this one is missing, unknown or superseded.. The token is injected when the app starts; a restarted app gets a fresh one."
+            "The platform refused this app's token (ENDGAME_APP_TOKEN) on POST platform/v1/identity/resolve: The platform API needs the app's token (ENDGAME_APP_TOKEN) as a bearer token; this one is missing, unknown or superseded. The token is injected when the app starts; a restarted app gets a fresh one."
           ],
-          "note": "What the kit throws. The doubled full stop is in the kit's message as written: its template adds one after the platform's detail."
+          "note": "What the kit throws: the platform's detail as one sentence, then how the token is given to the app."
         }
       ]
     },

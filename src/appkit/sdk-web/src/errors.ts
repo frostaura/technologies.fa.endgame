@@ -48,7 +48,10 @@ export class ValidationError extends ApiError {
   }
 }
 
-/** 402: the organisation's credit budget for this feature is spent. */
+/**
+ * 402: this feature is paused until the organisation tops up: a credit budget is spent
+ * (`problem.code` `budget_exhausted`) or the organisation is at its overdraft limit (`overdraft_limit`).
+ */
 export class BudgetExhaustedError extends ApiError {}
 
 /** The request never got an answer: offline, or the app is restarting. */

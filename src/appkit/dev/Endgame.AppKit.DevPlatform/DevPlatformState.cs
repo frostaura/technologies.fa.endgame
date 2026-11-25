@@ -12,13 +12,17 @@ namespace Endgame.AppKit.DevPlatform;
 public sealed class DevPlatformState
 {
     /// <summary>The app token the fake accepts. Tests and the proof inject the same value into the app.</summary>
-    public string AppToken { get; init; } = "dev-app-token";
+    /// <summary>Settable, so a test can supersede it, as a restart of the app does on the real platform.</summary>
+    public string AppToken { get; set; } = "dev-app-token";
 
     /// <summary>Secrets the fake vault answers with.</summary>
     public ConcurrentDictionary<string, string> Secrets { get; } = new(StringComparer.Ordinal);
 
     /// <summary>When true, every model call is refused with <c>budget_exhausted</c>.</summary>
     public bool BudgetExhausted { get; set; }
+
+    /// <summary>When true, every model call is refused with <c>overdraft_limit</c>, as the platform does once the organisation is at its overdraft limit.</summary>
+    public bool OverdraftLimitReached { get; set; }
 
     /// <summary>App-scoped session token → the user it belongs to.</summary>
     public ConcurrentDictionary<string, EndgameUser> Sessions { get; } = new(StringComparer.Ordinal);

@@ -62,7 +62,10 @@ public static class OpsServices
 /// </summary>
 public static class OpsCli
 {
-    private static readonly string[] Commands = ["backup", "backups", "verify", "restore", "cloudflare-plan", "cloudflare-apply", "reserved-hosts"];
+    /// <summary>The exit code of a restore that failed after it began to write (every refusal before that is 1).</summary>
+    public const int RestoreIncompleteExit = 4;
+
+    private static readonly string[] Commands =["backup", "backups", "verify", "restore", "cloudflare-plan", "cloudflare-apply", "reserved-hosts"];
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     public static bool IsCommand(string arg) => Commands.Contains(arg);
@@ -84,6 +87,13 @@ public static class OpsCli
             {
                 case "backup":
                     {
+                        // A refusal (a missing or malformed key above all) is said first, before anything is started.
+                        if (services.GetRequiredService<BackupOptions>().WhyRefused() is { } why)
+                        {
+                            Console.Error.WriteLine(why);
+                            return 1;
+                        }
+
                         var store = services.GetRequiredService<IBackupStore>();
                         Console.WriteLine($"Backing up to {store.Describe}...");
                         var result = await services.GetRequiredService<BackupService>().BackupAsync("make backup", ct);
@@ -165,6 +175,12 @@ public static class OpsCli
                         return result.After.InSync ? 0 : 1;
                     }
             }
+        }
+        catch (RestoreIncompleteException ex)
+        {
+            // Distinct from a refusal (1): the Makefile leaves the stack stopped only for this one.
+            Console.Error.WriteLine(ex.Message);
+            return RestoreIncompleteExit;
         }
         catch (Exception ex) when (ex is RestoreRefusedException or ArchiveIntegrityException or BackupBusyException or CloudflarePlanRefusedException
             or CloudflareException or S3Exception or InvalidOperationException or ArgumentException or FileNotFoundException)
