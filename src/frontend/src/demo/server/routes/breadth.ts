@@ -72,7 +72,8 @@ function answerFor(a: DemoApp, q: string): Omit<AskAnswer, "credits"> {
     return { question: q, answer: `The booking page is the slowest: typically ${pages[0][1]} ms, and 1 in 20 takes ${pages[0][2]} ms or more.`, chart: { kind: "table", x: null, y: ["page", "typical ms", "slowest 1 in 20 ms"], series: [] }, sql: "select path as page, percentile_cont(0.5) within group (order by duration_ms) as \"typical ms\", percentile_cont(0.95) within group (order by duration_ms) as \"slowest 1 in 20 ms\" from requests where at > now() - interval '7 days' group by 1 order by 2 desc", columns: ["page", "typical ms", "slowest 1 in 20 ms"], rows: pages.map(([page, p50, p95]) => ({ page, "typical ms": p50, "slowest 1 in 20 ms": p95 })), truncated: false };
   }
   if (/hour|busiest|when|which day|weekday/.test(lower)) {
-    if (/day/.test(lower)) {
+    // "Which days…" asks about weekdays; "…busiest today?" asks about hours ("today" holds "day").
+    if (!/\bhours?\b/.test(lower) && /\b(days?|weekdays?)\b/.test(lower)) {
       const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
       const v = [0.62, 0.55, 0.66, 0.78, 0.94, 1.1, 0.86].map((f) => Math.round(t.visitsToday * f));
       return { question: q, answer: `Saturday is the busiest day, with ${v[5]} visits; Tuesday is the quietest at ${v[1]}.`, chart: { kind: "bar", x: "day", y: ["visits"], series: [{ name: "visits", points: days.map((d, i) => ({ x: d, y: v[i] ?? 0 })) }] }, sql: "select to_char(at, 'Dy') as day, count(*) as visits from visits where at > now() - interval '28 days' group by 1, extract(isodow from at) order by extract(isodow from at)", columns: ["day", "visits"], rows: days.map((d, i) => ({ day: d, visits: v[i] })), truncated: false };

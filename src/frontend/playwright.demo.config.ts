@@ -15,6 +15,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   reporter: [["list"]],
   timeout: 240_000,
+  // Its own folder: the console's Playwright run clears test-results/ as it starts, so a shared one breaks whichever runs second.
+  outputDir: "test-results-demo",
   webServer: {
     command: `node tests-demo/static-server.ts ${port} /technologies.fa.endgame/demo/`,
     url: `http://127.0.0.1:${port}/technologies.fa.endgame/demo/index.html`,

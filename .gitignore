@@ -21,6 +21,7 @@ dist/
 *.tsbuildinfo
 playwright-report/
 test-results/
+test-results-demo/
 
 # OS and editors
 .DS_Store
