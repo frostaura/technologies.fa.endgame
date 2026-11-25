@@ -81,7 +81,9 @@ export function useActiveTree(options: { pollingInterval?: number; skipPollingIf
   const maybeEntering = named !== null || remembered !== null;
   const chosen = !active.entered && active.organisation && active.organisation.slug !== me.data?.organisation?.slug ? active.organisation.slug : undefined;
   const asked = active.entered && active.organisation ? active.organisation.slug : me.data?.isOperator && named ? named : chosen;
-  const query = useGetTreeQuery(asked, { ...options, skip: maybeEntering && active.isLoading });
+  // Waiting is for the session only: waiting on the entered tree too (the same read) would unsubscribe
+  // and resubscribe around each failed attempt, asking again forever for an organisation that does not exist.
+  const query = useGetTreeQuery(asked, { ...options, skip: maybeEntering && me.isLoading });
   return { ...query, data: query.currentData };
 }
 
