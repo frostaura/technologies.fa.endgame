@@ -20,6 +20,9 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
+    <!-- The control plane's MCP server (streamable HTTP), and its client in the tests. A server library, not an agent harness. -->
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.4.0" />
     <!-- Dock only. ArchitectureTests fails the build of any other project that references it. -->
     <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.4.1" />
     <!-- Dock only: provisions app databases and roles. The version EF Core's provider already pins. -->

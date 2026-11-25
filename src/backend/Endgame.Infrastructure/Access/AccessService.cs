@@ -40,7 +40,7 @@ public sealed class OperatorOptions
 /// everything (<see cref="RoleResolver"/>). Every public endpoint asks here before it acts.
 /// </summary>
 public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, TenantSession session, IOptions<OperatorOptions> operators,
-    Microsoft.Extensions.Configuration.IConfiguration configuration, TimeProvider clock)
+    Microsoft.Extensions.Configuration.IConfiguration configuration, TimeProvider clock, CallerCeiling ceiling)
 {
     public const string EntryAction = "organisation.entered";
 
@@ -75,19 +75,36 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
 
     public async Task<MemberRole> RequireAsync(Guid userId, ResolvedScope scope, MemberRole required, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (ceiling.Active && scope.OrganisationId != ceiling.OrganisationId)
+        {
+            // An access token reaches its own organisation and nothing else, not even to learn what exists.
+            throw EndgameProblem.NotFound($"The scope '{scope.Path}'");
+        }
+
         var grant = await EffectiveRoleAsync(userId, scope, cancellationToken)
             ?? await OperatorEntryAsync(userId, scope, cancellationToken)
             ?? throw EndgameProblem.NotFound($"The scope '{scope.Path}'");
-        return grant.Role.Allows(required)
-            ? grant.Role
-            : throw EndgameProblem.Forbidden($"This needs the {required.ToWire()} role at '{scope.Path}'; you are a {grant.Role.ToWire()} there (set at {grant.Path}).");
+        var role = ceiling.Cap(grant.Role);
+        if (role.Allows(required))
+        {
+            return role;
+        }
+
+        throw EndgameProblem.Forbidden(role == grant.Role
+            ? $"This needs the {required.ToWire()} role at '{scope.Path}'; you are a {grant.Role.ToWire()} there (set at {grant.Path})."
+            : $"This needs the {required.ToWire()} role at '{scope.Path}'; this access token acts as a {role.ToWire()} at most.");
     }
+
+    /// <summary>True when the request came with a personal access token (an MCP client), whose ceiling then holds.</summary>
+    public bool ByAccessToken => ceiling.Active;
 
     /// <summary>Every membership a person holds, in every organisation. Runs as the platform: it spans organisations.</summary>
     public async Task<IReadOnlyList<MembershipView>> MembershipsOfAsync(Guid userId, CancellationToken cancellationToken)
     {
         session.UseSystem();
-        var rows = await db.Memberships.AsNoTracking().Where(m => m.UserId == userId).ToListAsync(cancellationToken);
+        var rows = await db.Memberships.AsNoTracking().Where(m => m.UserId == userId)
+            .Where(m => !ceiling.Active || m.OrganisationId == ceiling.OrganisationId).ToListAsync(cancellationToken);
         var views = new List<MembershipView>();
         foreach (var row in rows)
         {
@@ -102,13 +119,18 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
     /// <summary>Every grant a person holds anywhere in one organisation.</summary>
     public async Task<IReadOnlyList<RoleGrant>> GrantsInOrganisationAsync(Guid userId, Guid organisationId, CancellationToken cancellationToken)
     {
+        if (ceiling.Active && ceiling.OrganisationId != organisationId)
+        {
+            return [];
+        }
+
         session.UseOrganisation(organisationId);
         var rows = await db.Memberships.AsNoTracking().Where(m => m.OrganisationId == organisationId && m.UserId == userId).ToListAsync(cancellationToken);
         var grants = new List<RoleGrant>();
         foreach (var row in rows)
         {
             var scope = await scopes.ForRowAsync(row.OrganisationId, row.DivisionId, row.ProjectId, row.AppId, cancellationToken);
-            grants.Add(new RoleGrant(row.UserId, MemberRoles.FromWire(row.Role), row.Level(), row.NodeId(), scope.Path.ToString()));
+            grants.Add(new RoleGrant(row.UserId, ceiling.Cap(MemberRoles.FromWire(row.Role)), row.Level(), row.NodeId(), scope.Path.ToString()));
         }
 
         session.UseOrganisation(organisationId);
@@ -123,12 +145,23 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
 
     public bool IsOperatorEmail(string? email)
     {
+        if (ceiling.Active)
+        {
+            // God mode is a person at the console, never a token.
+            return false;
+        }
+
         operatorEmails ??= operators.Value.All(configuration[OperatorOptions.Variable]);
         return email is { Length: > 0 } && operatorEmails.Contains(email.Trim().ToLowerInvariant());
     }
 
     public async Task<bool> IsOperatorAsync(Guid userId, CancellationToken cancellationToken)
     {
+        if (ceiling.Active)
+        {
+            return false;
+        }
+
         if (!operatorById.TryGetValue(userId, out var isOperator))
         {
             var email = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Email).SingleOrDefaultAsync(cancellationToken);

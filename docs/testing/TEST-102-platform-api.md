@@ -27,6 +27,11 @@
 | At the overdraft limit work stops and apps pause; a top-up restores; nothing accrues | `ControlPlaneDebtsTests.At_the_overdraft_limit...` |
 | The platform roles hold `CONNECT` themselves | `ControlPlaneDebtsTests.The_platform_roles_hold_connect...` |
 | Cron, time zones and daylight saving | `PlatformUnitTests.Cron_*` |
+| A hostile or mistaken dashboard query is refused before it runs | `TelemetrySqlGuardTests.A_hostile_or_mistaken_query_is_refused` (47 rows: writes, other tables, the catalog, `pg_sleep`, `set_config`, comments, quoting, locks, `INTO`, CTE tricks, casts) and `An_ordinary_dashboard_question_is_allowed` (10 rows) |
+| Run without the guard, a query still reads one app only | `AskTests.Without_the_guard…` (RLS pins the app on the tables under the views; other tables refused by privilege; `set_config` refused; read-only; timeout; row limit) |
+| A question is answered through the gateway, charged to the app; a refused query gets one uncharged repair | `AskTests.A_question_becomes…`, `A_refused_query_gets_one_repair…` |
+| The dashboard re-runs saved questions; a Viewer reads, cannot ask | `AskTests.Saved_questions_rerun_on_read…` |
+| Urgent notifications go out through the outbox when mail is configured | `BreadthTests.The_owner_is_told…` (`email_messages.app_id` null) |
 
 ## Fixtures
 

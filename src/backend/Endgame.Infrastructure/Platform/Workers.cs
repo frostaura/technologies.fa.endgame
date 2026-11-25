@@ -118,7 +118,7 @@ public sealed class EmailDispatcher(IServiceScopeFactory scopes, IEmailSender se
         var db = scope.ServiceProvider.GetRequiredService<EndgameDbContext>();
         scope.ServiceProvider.GetRequiredService<TenantSession>().UseSystem();
         var now = clock.GetUtcNow();
-        var claimed = new List<(Guid Id, Guid Org, Guid App, string[] To, string Subject, string Text, string? Html, string? ReplyTo, int Attempts)>();
+        var claimed = new List<(Guid Id, Guid Org, Guid? App, string[] To, string Subject, string Text, string? Html, string? ReplyTo, int Attempts)>();
         await using (var command = await db.CommandAsync("""
             UPDATE email_messages m SET status = 'sending', lease_until = @lease, attempts = m.attempts + 1
             WHERE m.id IN (SELECT id FROM email_messages
@@ -130,7 +130,7 @@ public sealed class EmailDispatcher(IServiceScopeFactory scopes, IEmailSender se
         {
             while (await reader.ReadAsync(cancellationToken))
             {
-                claimed.Add((reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2), reader.GetFieldValue<string[]>(3), reader.GetString(4), reader.GetString(5),
+                claimed.Add((reader.GetGuid(0), reader.GetGuid(1), reader.GuidOrNull("app_id"), reader.GetFieldValue<string[]>(3), reader.GetString(4), reader.GetString(5),
                     reader.TextOrNull("html_body"), reader.TextOrNull("reply_to"), reader.GetInt32(8)));
             }
         }
@@ -138,7 +138,9 @@ public sealed class EmailDispatcher(IServiceScopeFactory scopes, IEmailSender se
         var sent = 0;
         foreach (var m in claimed)
         {
-            var appName = await db.Apps.AsNoTracking().Where(a => a.OrganisationId == m.Org && a.Id == m.App).Select(a => a.Name).SingleOrDefaultAsync(cancellationToken) ?? "Endgame";
+            var appName = m.App is { } app
+                ? await db.Apps.AsNoTracking().Where(a => a.OrganisationId == m.Org && a.Id == app).Select(a => a.Name).SingleOrDefaultAsync(cancellationToken) ?? "Endgame"
+                : "Endgame";
             string status;
             string? error = null;
             try

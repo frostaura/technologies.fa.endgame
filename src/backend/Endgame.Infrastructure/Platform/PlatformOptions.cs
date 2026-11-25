@@ -25,6 +25,9 @@ public sealed class ServiceAddresses
 
     public string Console { get; set; } = "http://console:8080";
 
+    /// <summary>The ops service (Cloudflare and backups, ARCH-007): reserved organisation names. Empty: none runs, the built-in list applies.</summary>
+    public string Ops { get; set; } = "http://ops:8080";
+
     /// <summary>A telemetry collector, probed only when set (none runs in the stack today).</summary>
     public string Collector { get; set; } = "";
 }

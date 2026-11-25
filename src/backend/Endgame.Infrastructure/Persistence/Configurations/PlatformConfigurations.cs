@@ -174,7 +174,13 @@ internal sealed class EmailMessageConfiguration : IEntityTypeConfiguration<Email
         builder.ToTable("email_messages");
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedNever();
-        builder.MapApp();
+        // The platform's own mail (to members) carries no app; an app's mail always names its app.
+        builder.Property(e => e.OrganisationId).HasColumnName("organisation_id").IsRequired();
+        builder.Property(e => e.AppId).HasColumnName("app_id");
+        builder.HasOne<App>().WithMany()
+            .HasForeignKey(e => new { e.OrganisationId, e.AppId })
+            .HasPrincipalKey(a => new { a.OrganisationId, a.Id })
+            .OnDelete(DeleteBehavior.Restrict);
         builder.Property(e => e.Recipients).HasColumnName("recipients");
         builder.Property(e => e.Subject).HasColumnName("subject").HasMaxLength(300);
         builder.Property(e => e.TextBody).HasColumnName("text_body");

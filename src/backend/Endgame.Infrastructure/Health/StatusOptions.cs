@@ -33,6 +33,7 @@ public sealed class StatusOptions
         Add("runner", "Runner", peers.Runner, 30);
         Add("dock", "Dock", peers.Dock, 40);
         Add("console", "Console", peers.Console, 60);
+        Add("ops", "Cloudflare and backups", peers.Ops, 65);
         Add("collector", "Telemetry collector", peers.Collector, 70);
         list.AddRange(extra.Where(e => list.All(p => p.Key != e.Key)));
         return list;

@@ -97,7 +97,7 @@ public sealed class ControlPlaneDebtsTests(PostgresServer postgres) : IAsyncLife
         Assert.Equal(120m, margin.ToCredits(1m));
         Assert.Equal(0.000120m, margin.ToCreditsCeiling(0.000001m));
         Assert.Contains(new CreditOptions { Margin = 0.9m }.Validate(), f => f.Contains("Margin", StringComparison.Ordinal));
-        Assert.Empty(app.Services.GetRequiredService<CreditOptions>().Validate());
+        Assert.Empty(app.Services.GetRequiredService<PricingService>().Credits().Validate());
 
         // A margin below cost stops the host at start.
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
@@ -118,7 +118,7 @@ public sealed class ControlPlaneDebtsTests(PostgresServer postgres) : IAsyncLife
         Assert.Equal("http://dock:8080", peers.Dock);
         Assert.Equal("http://console:8080", peers.Console);
         var probes = StatusOptions.Probes(new ServiceAddresses(), []);
-        Assert.Equal(["control-plane", "edge", "runner", "dock", "console"], probes.Select(p => p.Key));
+        Assert.Equal(["control-plane", "edge", "runner", "dock", "console", "ops"], probes.Select(p => p.Key));
         Assert.Equal("http://edge:8080/health", probes.Single(p => p.Key == "edge").HealthUrl);
         Assert.Contains(StatusOptions.Probes(new ServiceAddresses { Collector = "http://collector:4318" }, []), p => p.Key == "collector");
         Assert.DoesNotContain(StatusOptions.Probes(new ServiceAddresses { Runner = "" }, []), p => p.Key == "runner");

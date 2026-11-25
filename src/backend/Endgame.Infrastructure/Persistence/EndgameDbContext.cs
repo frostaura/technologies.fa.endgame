@@ -102,6 +102,22 @@ public sealed class EndgameDbContext : IdentityUserContext<EndgameUser, Guid>, I
 
     public DbSet<HostingSampleRecord> HostingSamples => Set<HostingSampleRecord>();
 
+    public DbSet<AccessTokenRecord> AccessTokens => Set<AccessTokenRecord>();
+
+    public DbSet<NotificationRecord> Notifications => Set<NotificationRecord>();
+
+    public DbSet<NotificationReadRecord> NotificationReads => Set<NotificationReadRecord>();
+
+    public DbSet<IdeaSuggestionRecord> IdeaSuggestions => Set<IdeaSuggestionRecord>();
+
+    public DbSet<SavedQuestionRecord> SavedQuestions => Set<SavedQuestionRecord>();
+
+    public DbSet<TopUpRequestRecord> TopUpRequests => Set<TopUpRequestRecord>();
+
+    public DbSet<PlatformSettingRecord> PlatformSettings => Set<PlatformSettingRecord>();
+
+    public DbSet<PlatformSettingChangeRecord> PlatformSettingChanges => Set<PlatformSettingChangeRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

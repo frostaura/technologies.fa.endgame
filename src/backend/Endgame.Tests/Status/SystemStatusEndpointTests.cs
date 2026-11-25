@@ -50,7 +50,7 @@ public sealed class SystemStatusEndpointTests
         var status = await GetStatus(factory);
 
         var keys = status.GetProperty("services").EnumerateArray().Select(s => s.GetProperty("key").GetString()).ToList();
-        Assert.Equal(["control-plane", "edge", "runner", "dock", "database", "console"], keys);
+        Assert.Equal(["control-plane", "edge", "runner", "dock", "database", "console", "ops"], keys);
         Assert.True(status.TryGetProperty("checkedAt", out _));
     }
 

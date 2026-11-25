@@ -118,8 +118,8 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
 
     public const int MaxRunsPerList = 200;
 
-    /// <summary>Runs at the scope and beneath it, newest first: the conversation's view of what is happening.</summary>
-    public async Task<IReadOnlyList<RunView>> ListAsync(ResolvedScope scope, string? kind, string? status, int limit, CancellationToken cancellationToken)
+    /// <summary>Runs at the scope and beneath it, newest first: the conversation's view of what is happening; one employee's when given.</summary>
+    public async Task<IReadOnlyList<RunView>> ListAsync(ResolvedScope scope, string? kind, string? status, int limit, CancellationToken cancellationToken, Guid? employeeId = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (kind is not null && !RunKinds.All.Contains(kind))
@@ -139,6 +139,7 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
             .Where(r => scope.AppId == null || r.AppId == scope.AppId)
             .Where(r => kind == null || r.Kind == kind)
             .Where(r => status == null || r.Status == status)
+            .Where(r => employeeId == null || r.EmployeeId == employeeId)
             .OrderByDescending(r => r.CreatedAt)
             .Take(Math.Clamp(limit, 1, MaxRunsPerList))
             .ToListAsync(cancellationToken);

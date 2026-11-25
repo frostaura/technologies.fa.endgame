@@ -77,6 +77,10 @@ public static class DependencyInjection
         services.AddScoped<HireService>();
         services.AddScoped<OntologyService>();
         services.AddScoped<AccountService>();
+        services.AddScoped<CallerCeiling>();
+        services.AddScoped<OperatorOverview>();
+        services.AddScoped<AccessTokenService>();
+        services.AddScoped<SuggestionService>();
         services.AddScoped<IGatewayContext, GatewayContext>();
         services.AddSingleton<LeaseSweep>();
         services.AddHostedService(sp => sp.GetRequiredService<LeaseSweep>());
@@ -96,6 +100,9 @@ public static class DependencyInjection
         services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
         services.Configure<TelemetryOptions>(configuration.GetSection(TelemetryOptions.SectionName));
         services.Configure<HostingOptions>(configuration.GetSection(HostingOptions.SectionName));
+        // Closed registrations win over the options manager: rates and the default allowance come from the pricing document.
+        services.AddScoped<Microsoft.Extensions.Options.IOptions<HostingOptions>>(sp => Microsoft.Extensions.Options.Options.Create(sp.GetRequiredService<PricingService>().Hosting()));
+        services.AddScoped<Microsoft.Extensions.Options.IOptions<AppModelOptions>>(sp => Microsoft.Extensions.Options.Options.Create(sp.GetRequiredService<PricingService>().AppModels()));
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
 
@@ -117,6 +124,24 @@ public static class DependencyInjection
         services.AddHostedService(sp => sp.GetRequiredService<EmailDispatcher>());
         services.AddSingleton<Scheduler>();
         services.AddHostedService(sp => sp.GetRequiredService<Scheduler>());
+
+        // Platform breadth: asking about an app, its versions and export, reserved names, notifications.
+        services.Configure<AskOptions>(configuration.GetSection(AskOptions.SectionName));
+        services.Configure<AppCallOptions>(configuration.GetSection(AppCallOptions.SectionName));
+        services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
+        services.AddScoped<TelemetryQueryRunner>();
+        services.AddScoped<AskService>();
+        services.AddSingleton<DockClient>();
+        services.AddHttpClient(DockClient.ClientName, client => client.Timeout = Timeout.InfiniteTimeSpan);
+        services.AddScoped<AppVersionService>();
+        services.AddSingleton<ReservedNames>();
+        services.AddHttpClient(ReservedNames.ClientName);
+        services.AddSingleton<AppGateway>();
+        services.AddHttpClient(AppGateway.ClientName);
+        services.AddScoped<NotificationService>();
+        services.AddScoped<InvitationMailer>();
+        services.AddSingleton<NotificationSweep>();
+        services.AddHostedService(sp => sp.GetRequiredService<NotificationSweep>());
         return services;
     }
 
@@ -137,12 +162,14 @@ public static class DependencyInjection
             throw new InvalidOperationException("The credit settings are invalid:" + Environment.NewLine + string.Join(Environment.NewLine, creditFaults));
         }
 
-        services.AddSingleton(credits);
+        // The prices are a runtime document (PricingService): every scope reads the current figures.
+        services.AddSingleton<PricingService>();
+        services.AddScoped(sp => sp.GetRequiredService<PricingService>().Credits());
         services.AddHttpClient<IModelProvider, OpenRouterProvider>(OpenRouterProvider.ClientName, client =>
             client.Timeout = TimeSpan.FromSeconds(gateway.RequestTimeoutSeconds));
         services.AddScoped<ModelGateway>();
         services.AddSingleton(configuration.GetSection(EstimateOptions.SectionName).Get<EstimateOptions>() ?? new EstimateOptions());
-        services.AddSingleton<ResearchEstimator>();
+        services.AddScoped<ResearchEstimator>();
         return services;
     }
 

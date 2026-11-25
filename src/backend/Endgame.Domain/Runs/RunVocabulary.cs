@@ -26,7 +26,10 @@ public static class RunKinds
     public const string Task = "task";
     public const string Review = "review";
 
-    public static readonly IReadOnlyList<string> All = [Research, Conversation, Build, Task, Review];
+    /// <summary>Proposes new ideas from what the organisation already holds (spec, <i>Onboarding</i>).</summary>
+    public const string Suggest = "suggest";
+
+    public static readonly IReadOnlyList<string> All = [Research, Conversation, Build, Task, Review, Suggest];
 }
 
 /// <summary>The run log's event types (ARCH-004, <i>Run log</i>).</summary>

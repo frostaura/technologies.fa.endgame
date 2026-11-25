@@ -14,13 +14,17 @@ using Endgame.Infrastructure.Persistence.Records;
 using Endgame.Infrastructure.Platform;
 using Endgame.Infrastructure.Tree;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace Endgame.ControlPlane.Endpoints;
 
 public sealed record CreateOrganisationRequest(string? Name, string? Slug, string? OwnerEmail, string? OwnerDisplayName);
 
 /// <param name="OwnerInvitationCode">Returned once, when the Owner is new and has no passkey yet.</param>
-public sealed record OrganisationCreated(Guid Id, string Slug, string Name, string OwnerEmail, string? OwnerInvitationCode, DateTimeOffset? InvitationExpiresAt);
+/// <param name="InvitationEmailed">The code was also e-mailed to the Owner (only when a mail server is configured).</param>
+/// <param name="NameCheck">How the name was checked against FrostAura's own subdomains.</param>
+public sealed record OrganisationCreated(Guid Id, string Slug, string Name, string OwnerEmail, string? OwnerInvitationCode, DateTimeOffset? InvitationExpiresAt,
+    bool InvitationEmailed = false, NameCheck? NameCheck = null);
 
 public sealed record CreateNodeRequest(string? Parent, string? Name, string? Slug);
 
@@ -30,7 +34,8 @@ public sealed record CascadeSetRequest(string? Scope, string? Kind, string? Key,
 
 public sealed record GrantRequest(string? Scope, string? Email, string? DisplayName, string? Role);
 
-public sealed record TopUpRequest(string? Organisation, decimal Credits, string? Note, string? IdempotencyKey);
+/// <param name="RequestId">Optional: the top-up request this answers; it is marked fulfilled.</param>
+public sealed record TopUpRequest(string? Organisation, decimal Credits, string? Note, string? IdempotencyKey, Guid? RequestId = null);
 
 /// <summary>The tree (ARCH-004, <i>Tree</i>), the cascade's values, members and credits.</summary>
 internal static class TreeEndpoints
@@ -70,20 +75,23 @@ internal static class TreeEndpoints
 
         var organisations = api.MapGroup("/organisations").WithTags("Tree");
         organisations.MapPost("", async (CreateOrganisationRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access,
-            AccountService accounts, TreeService tree, EndgameDbContext db, TimeProvider clock, CancellationToken ct) =>
+            AccountService accounts, TreeService tree, EndgameDbContext db, ReservedNames reserved, InvitationMailer mailer, ScopeResolver scopes, TimeProvider clock, CancellationToken ct) =>
         {
             var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
             var named = AccountService.ValidateOrganisation(new NewOrganisation(request.Name ?? "", request.Slug ?? ""));
-            if (await accounts.IsFirstRunAsync(ct))
+            var firstRun = await accounts.IsFirstRunAsync(ct);
+            if (!firstRun && !access.IsOperator(me))
+            {
+                throw EndgameProblem.Forbidden("Organisations are provisioned by FrostAura; there is no self-serve sign-up.");
+            }
+
+            // A name may not take one of FrostAura's own subdomains (spec, Addresses and hosting).
+            var check = await reserved.CheckAsync(named.Slug, ct);
+            if (firstRun)
             {
                 // First run: whoever is signed in names the first organisation and becomes its Owner.
                 var first = await accounts.CreateFirstOrganisationAsync(named, me.Id, ct);
-                return Results.Created($"/api/organisations/{first.Id}", new OrganisationCreated(first.Id, first.Slug, first.Name, me.Email!, null, null));
-            }
-
-            if (!access.IsOperator(me))
-            {
-                throw EndgameProblem.Forbidden("Organisations are provisioned by FrostAura; there is no self-serve sign-up.");
+                return Results.Created($"/api/organisations/{first.Id}", new OrganisationCreated(first.Id, first.Slug, first.Name, me.Email!, null, null, false, check));
             }
 
             var owner = request.OwnerEmail is null ? me : await accounts.FindOrCreateAsync(AccountService.NormaliseEmail(request.OwnerEmail), request.OwnerDisplayName, ct);
@@ -99,7 +107,10 @@ internal static class TreeEndpoints
             });
             await db.SaveChangesAsync(ct);
             var (code, expires) = owner.Id == me.Id ? ((string?)null, (DateTimeOffset?)null) : await accounts.IssueInvitationIfNeededAsync(owner);
-            return Results.Created($"/api/organisations/{created.Id}", new OrganisationCreated(created.Id, created.Slug, created.Name, owner.Email!, code, expires));
+            // The hand-over: the code to the operator, once, and by e-mail to the Owner when mail is configured.
+            var emailed = code is not null && expires is { } until
+                && await mailer.SendAsync(await scopes.RequireAsync(created.Slug, ct), owner.Email!, code, until, "Owner", me.DisplayName, ct);
+            return Results.Created($"/api/organisations/{created.Id}", new OrganisationCreated(created.Id, created.Slug, created.Name, owner.Email!, code, expires, emailed, check));
         })
         .WithName("CreateOrganisation")
         .WithSummary("On first run, the signed-in person names the first organisation and becomes its Owner; after that, FrostAura operators provision organisations.")
@@ -167,11 +178,18 @@ internal static class TreeEndpoints
             return Results.Ok(await accounts.MembersAsync(resolved, ct));
         })
         .WithName("ListMembers").WithSummary("Everyone holding a role at the scope or beneath it.").Produces<IReadOnlyList<MemberView>>();
-        members.MapPost("", async (GrantRequest request, ClaimsPrincipal principal, AccessService access, AccountService accounts, CancellationToken ct) =>
+        members.MapPost("", async (GrantRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, AccountService accounts, InvitationMailer mailer, CancellationToken ct) =>
         {
             var role = Role(request.Role);
             var (resolved, mine) = await access.RequireAsync(principal.Id(), request.Scope, MemberRole.Admin, ct);
-            return Results.Ok(await accounts.GrantAsync(resolved, mine, request.Email ?? "", request.DisplayName, role, principal.Id(), ct));
+            var invitation = await accounts.GrantAsync(resolved, mine, request.Email ?? "", request.DisplayName, role, principal.Id(), ct);
+            if (invitation.InvitationCode is { } code && invitation.ExpiresAt is { } until)
+            {
+                var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
+                invitation = invitation with { Emailed = await mailer.SendAsync(resolved, invitation.Member.Email, code, until, role.ToWire(), me.DisplayName, ct) };
+            }
+
+            return Results.Ok(invitation);
         })
         .WithName("GrantRole").WithSummary("Grants a role at a scope; a new person gets a one-time invitation code to register a passkey with.").Produces<Invitation>();
         members.MapDelete("/{membershipId:guid}", async (Guid membershipId, ClaimsPrincipal principal, AccessService access, AccountService accounts, ScopeResolver scopes, CancellationToken ct) =>
@@ -191,7 +209,8 @@ internal static class TreeEndpoints
             return Results.Ok(await reads.CreditsAsync(resolved, ct));
         })
         .WithName("GetCredits").WithSummary("Balance, this month's spend, budgets down the cascade in tree order, estimate accuracy, what was not charged, overdraft and top-ups.").Produces<CreditsView>();
-        credits.MapPost("/top-ups", async (TopUpRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, ScopeResolver scopes, CreditLedger ledger, EdgeNotifier edge, CancellationToken ct) =>
+        credits.MapPost("/top-ups", async (TopUpRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, ScopeResolver scopes, CreditLedger ledger, EdgeNotifier edge,
+            EndgameDbContext db, Endgame.Infrastructure.Tenancy.TenantSession session, CancellationToken ct) =>
         {
             var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
             if (!access.IsOperator(me))
@@ -206,6 +225,14 @@ internal static class TreeEndpoints
             }
 
             var entry = await ledger.TopUpAsync(organisation.OrganisationId, request.Credits, request.Note, me.Id, request.IdempotencyKey, ct);
+            if (request.RequestId is { } requestId)
+            {
+                session.UseOrganisation(organisation.OrganisationId);
+                await db.TopUpRequests.Where(r => r.OrganisationId == organisation.OrganisationId && r.Id == requestId && r.Status == TopUpRequestStatuses.Open)
+                    .ExecuteUpdateAsync(u => u.SetProperty(r => r.Status, TopUpRequestStatuses.Fulfilled).SetProperty(r => r.ClosedAt, entry.CreatedAt)
+                        .SetProperty(r => r.ClosedBy, me.Id).SetProperty(r => r.TopUpEntryId, entry.Id), ct);
+            }
+
             // A top-up settles the debt first and restores paused apps at once (spec, Overdraft).
             edge.RoutesChanged();
             return Results.Ok(new { entry.Id, entry.Amount, entry.CreatedAt, Organisation = organisation.Path.ToString() });
