@@ -407,6 +407,27 @@ public sealed class AskTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_prompt_names_the_custom_events_this_app_records_and_no_other_apps()
+    {
+        // A live model declined "How many books were added today?" — it could not know the app records book.created.
+        openRouter.Chat = Answers(
+            """{"sql": "SELECT count(*) FILTER (WHERE name = 'booking.made') AS made FROM events", "chart": {"kind": "number", "x": null, "y": ["made"]}}""",
+            """{"answer": ""}""");
+        var answer = await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/apps/{bookings}/ask", new { question = "How many bookings were made?" }));
+        var prompt = SystemPrompt(Calls()[0]);
+        Assert.Contains("- booking.made (3 in 30 days; properties e.g. {\"court\": 2})", prompt, StringComparison.Ordinal);
+        Assert.Contains("count(DISTINCT user_id)", prompt, StringComparison.Ordinal);
+        // A model that put nothing into words still answered: the owner reads a plain sentence, never a blank.
+        Assert.Equal("Here is the one result that answers it.", answer["answer"]!.GetValue<string>());
+
+        openRouter.Chat = Answers("""{"sql": null, "unanswerable": "The app records no bookings."}""");
+        await ControlPlaneApp.Expect(await owner.PostAsJsonAsync($"/api/apps/{other}/ask", new { question = "How many bookings were made?" }), (HttpStatusCode)422);
+        var elsewhere = SystemPrompt(Calls()[^1]);
+        Assert.DoesNotContain("booking.made", elsewhere, StringComparison.Ordinal);
+        Assert.Contains("has recorded no custom events", elsewhere, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_repair_that_still_fails_says_so_in_plain_words_with_the_technical_detail_apart()
     {
         const string Second = "SELECT count(user_id) AS visits FROM requests";
