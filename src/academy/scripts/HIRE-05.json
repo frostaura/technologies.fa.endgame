@@ -1,0 +1,178 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HIRE-05",
+  "persona": "owner",
+  "scenario": "hire-pending",
+  "start": "/hires/{hire}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Edit the proposal"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "form[aria-label='Edit the proposal']",
+        "note": "The whole job, the cost and the reason, before you agree to any of it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Expected credits a month"
+            },
+            "text": "80"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Its own monthly budget (optional)"
+            },
+            "text": " "
+          }
+        },
+        {
+          "click": {
+            "text": "Save the proposal"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Fits the budget",
+        "note": "Saved at once: 80 credits a month now fits the room left, and an emptied budget is removed — the cap above holds it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Edit the proposal"
+          }
+        },
+        {
+          "wait": 400
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Expected credits a month"
+            },
+            "text": "500"
+          }
+        },
+        {
+          "click": {
+            "text": "Cancel"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "credits a month, expected",
+        "note": "Cancel leaves it as it was: still 80."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A proposal always says why",
+      "persona": "owner",
+      "scenario": "hire-pending",
+      "start": "/hires/{hire}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Edit the proposal"
+              }
+            },
+            {
+              "wait": 400
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Why this hire"
+                },
+                "text": " "
+              }
+            },
+            {
+              "click": {
+                "text": "Save the proposal"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Say why this hire is needed; a proposal always gives its reason.",
+            "note": "An emptied reason is refused on screen; nothing is sent."
+          }
+        }
+      ]
+    },
+    {
+      "title": "It needs a name and a role",
+      "persona": "owner",
+      "scenario": "hire-pending",
+      "start": "/hires/{hire}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Edit the proposal"
+              }
+            },
+            {
+              "wait": 400
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Name"
+                },
+                "text": " "
+              }
+            },
+            {
+              "click": {
+                "text": "Save the proposal"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "It needs a name and a role.",
+            "note": "Checked before anything is sent."
+          }
+        }
+      ]
+    }
+  ]
+}

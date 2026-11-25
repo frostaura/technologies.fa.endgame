@@ -1,5 +1,5 @@
 import type { Pricing } from "@/store/types";
-import { requireOperator, scopeOf } from "../access";
+import { operatorVisit, requireOperator, scopeOf } from "../access";
 import { area, conflict, invalid, notFound, num, ok, str } from "../http";
 import { operatorOrganisationView } from "../views";
 import { newId, organisation, orgOf, type World } from "../world";
@@ -25,7 +25,7 @@ area("OperatorEndpoints", {
     const o = organisation(world, scopeOf(world, slug));
     if (!o) throw notFound(`The scope '${slug}'`);
     if (!world.entered.includes(slug)) world.entered.push(slug);
-    log(world, slug, "organisation.entered", { scope: slug });
+    operatorVisit(world, requireOperator(world), slug, true);
     return ok({ organisationId: o.id, organisation: o.slug, role: "admin", enteredAt: new Date().toISOString(), logged: "This entry is in the organisation's operator log, which its Owner reads." });
   },
 
@@ -35,8 +35,8 @@ area("OperatorEndpoints", {
     if (!o) throw notFound(`The scope '${req.params.slug ?? ""}'`);
     const credits = num(req.body, "credits") ?? -1;
     if (credits < 0) throw invalid("'overdraft_limit' cannot be negative.");
+    // The organisation's own limit is kept: the tighter of the two applies (OP-07).
     o.frostauraLimit = credits;
-    if (o.ownLimit !== null && o.ownLimit > credits) o.ownLimit = credits;
     log(world, o.slug, "overdraft.set", { credits });
     world.changed.push("Operator", "Credits");
     return ok(operatorOrganisationView(world, o.slug));
@@ -87,8 +87,11 @@ area("OperatorEndpoints", {
     if (!(typeof p.defaultAppModelMonthlyCredits === "number" && p.defaultAppModelMonthlyCredits >= 0)) faults.push("defaultAppModelMonthlyCredits cannot be negative.");
     if (faults.length) throw invalid(faults.join(" "));
     const at = new Date().toISOString();
-    world.pricing = { pricing: p, source: "stored", updatedAt: at, updatedBy: u.displayName, history: [{ at, by: u.displayName, byEmail: u.email, before: world.pricing.pricing, after: p }, ...world.pricing.history] };
-    world.changed.push("Pricing");
+    world.pricing = { pricing: p, source: "stored", updatedAt: at, updatedBy: u.displayName, history: [{ at, by: u.displayName, byEmail: u.email, before: world.pricing.pricing, after: p }, ...world.pricing.history].slice(0, 50) };
+    // Prices apply to every organisation, so every Owner reads that FrostAura changed them.
+    for (const o of world.organisations) world.operatorLog.unshift({ id: newId(world, "op"), organisation: o.slug, at, action: "pricing.changed", operator: { id: u.id, email: u.email, displayName: u.displayName }, detail: { margin: p.margin, creditsPerUsd: p.creditsPerUsd } });
+    // New work is priced with these figures: every app's running cost reads them at once.
+    world.changed.push("Pricing", "OperatorAccess", "App");
     return ok(world.pricing);
   },
 });

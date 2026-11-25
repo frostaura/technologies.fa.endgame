@@ -9,24 +9,53 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "text": "Every organisation",
-        "note": "One card per organisation, with its standing badge."
+        "selector": "ul[aria-label='Organisations']",
+        "note": "One card per organisation: its name, address name and since when, and its standing — In credit, Below zero or At its limit."
       }
     },
     {
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "text": "Overdraft allowed"
+        "text": "Their own: 800; yours: 1,000",
+        "note": "Its balance, how far below zero it may go — its own limit and yours — its apps, and when it was last active."
       }
     },
     {
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "text": "top-up request",
-        "note": "Waiting top-up requests are counted on the card."
+        "text": "One top-up request is waiting.",
+        "note": "A card says when its Owner has asked for credits."
       }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Technical mode adds each organisation's id",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "li[data-org='northwind'] code",
+            "note": "The organisation's id, under its address name."
+          }
+        }
+      ]
     }
   ]
 }

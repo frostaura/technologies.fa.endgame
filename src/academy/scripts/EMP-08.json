@@ -1,0 +1,56 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-08",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Kasper"
+            },
+            "text": "What did you change in Court booking last week?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": 4000
+        }
+      ],
+      "highlight": {
+        "selector": "[role='log']",
+        "note": "Only Kasper hears this, scoped to his place in the tree; he answers from his job and memory."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Not offered once someone is let go",
+      "persona": "owner",
+      "scenario": "s4-released-with-memory",
+      "start": "/employees/14b08848-f257-450f-ad4f-c91e519ce679",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Rehire Tomas",
+            "note": "Tomas has been let go: there is no conversation with him until he is rehired."
+          }
+        }
+      ]
+    }
+  ]
+}

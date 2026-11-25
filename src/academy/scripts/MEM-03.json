@@ -1,0 +1,97 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "MEM-03",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "selector": "[data-memory] button"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "form[aria-label='Correct this memory']",
+        "note": "The same form, filled in with what it says now."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "What Kasper should remember"
+            },
+            "text": "Every court is sold in 40-minute playing slots from 06:20 to 22:20; members and leagues pay in playing minutes."
+          }
+        },
+        {
+          "click": {
+            "text": "Save the correction"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "members and leagues pay in playing minutes",
+        "note": "Changed at once."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Memory entries'] li:first-child",
+        "note": "Its origin now reads “Corrected by a person”, and the change log keeps what it said before."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "“Cancel” leaves it as it was",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "selector": "[data-memory] button"
+              }
+            },
+            {
+              "wait": 300
+            },
+            {
+              "click": {
+                "text": "Cancel"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Courts are booked in 40-minute slots",
+            "note": "Nothing changed."
+          }
+        }
+      ]
+    }
+  ]
+}

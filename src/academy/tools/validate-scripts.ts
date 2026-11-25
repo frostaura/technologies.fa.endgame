@@ -63,16 +63,14 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
     }
     if (script.flow !== id) problems.push(`${file}: "flow" says ${script.flow} but the file is ${id}`);
     const seen = new Set<number>();
-    const checkStep = (where: string, step: StepScript["steps"][number]) => {
-      if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${where} names public/shots/${step.shot.file}, which does not exist`);
-      if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${where} names public/shots/${step.file}, which does not exist`);
-      if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${where} is a demo step that sends the console nothing`);
-    };
     for (const step of script.steps) {
       if (step.step > flow.steps.length) problems.push(`${file}: step ${step.step} does not exist; ${id} has ${flow.steps.length} steps`);
       if (seen.has(step.step)) problems.push(`${file}: step ${step.step} is scripted twice`);
       seen.add(step.step);
-      checkStep(`${file}: step ${step.step}`, step);
+      if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.shot.file}, which does not exist`);
+      if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.file}, which does not exist`);
+      if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${file}: step ${step.step} is a demo step that sends the console nothing`);
+      if (step.kind === "demo" && step.persona && !step.goto) problems.push(`${file}: step ${step.step} changes who is signed in, so it needs a goto`);
     }
     (script.variations ?? []).forEach((v, i) => {
       const where = `${file}: variation ${i + 1} ("${v.title}")`;

@@ -1,0 +1,172 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HIRE-03",
+  "persona": "owner",
+  "scenario": "hire-pending",
+  "start": "/hires/{hire}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Hire Lark"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Hire Lark at about 300 credits a month?",
+        "note": "Pressing “Hire Lark” asks once more, with the cost."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "This is more than the budget has room for this month",
+        "note": "It warns, and does not block: an over-budget hire is still yours to make."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "A note for the record (optional)"
+            },
+            "text": "Odile asked for an analyst before the league season."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "A note for the record (optional)",
+        "note": "The note is kept with the decision."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes, hire"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Lark was hired by Mara Ellison",
+        "note": "The decision shows at once, then the server confirms it."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[role='status']",
+        "note": "Who decided and when, your note in quotes, and a link to the new employee's record."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "See Lark’s record"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Free",
+        "note": "Lark now exists at Technologies with exactly the job you read, status Free — on the org chart, and under “Decided”."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "“Not now” closes the form",
+      "persona": "owner",
+      "scenario": "hire-pending",
+      "start": "/hires/{hire}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Hire Lark"
+              }
+            },
+            {
+              "wait": 600
+            },
+            {
+              "click": {
+                "text": "Not now"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Hire Lark",
+            "note": "Nothing was decided; the proposal still waits for you."
+          }
+        }
+      ]
+    },
+    {
+      "title": "The manager it was drafted with has been let go",
+      "persona": "owner",
+      "scenario": "s4-hire-manager-gone",
+      "start": "/hires/{hire}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Tomas",
+            "note": "Lark was drafted to report to Tomas, who has since been let go."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Hire Lark"
+              }
+            },
+            {
+              "wait": 400
+            },
+            {
+              "click": {
+                "text": "Yes, hire"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "Your decision was not recorded",
+            "note": "Refused: a manager must be on the payroll. The badge goes back, and the proposal still waits."
+          }
+        }
+      ]
+    }
+  ]
+}

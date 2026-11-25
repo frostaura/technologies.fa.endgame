@@ -1,0 +1,134 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CRED-08",
+  "persona": "owner",
+  "scenario": "at-overdraft-limit",
+  "start": "/notifications",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Credits have run out",
+        "note": "At zero you are told: work goes on into the overdraft; ask FrostAura for a top-up."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Halfway to the overdraft limit",
+        "note": "And again halfway down."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "The overdraft limit is reached: work has stopped and apps are paused",
+        "note": "At the limit, new AI work is refused and apps pause behind a holding page. Nothing is deleted."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/operator",
+      "persona": "operator",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "selector": "li[data-org='northwind'] button[aria-expanded]"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Credits to add"
+            },
+            "text": "1500"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Note"
+            },
+            "text": "Settling the overdraft for the league season."
+          }
+        },
+        {
+          "click": {
+            "text": "Add the credits"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Added 1,500 credits to Northwind.",
+        "note": "An operator tops it up (OP-05): the debt is settled first, and everything paused restarts."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "goto": "/credits",
+      "persona": "owner",
+      "highlight": {
+        "text": "Credits left",
+        "note": "Back above zero for the Owner: “Credits left”, and the apps open again."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "The app's holding page",
+      "persona": "owner",
+      "scenario": "at-overdraft-limit",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Open the app"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "testId": "edge-page",
+            "note": "Its visitors get “This app is paused”: nothing has been lost, and it will be back as soon as it is topped up."
+          }
+        }
+      ]
+    },
+    {
+      "title": "What an operator sees",
+      "persona": "operator",
+      "scenario": "at-overdraft-limit",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "At its limit",
+            "note": "Northwind's card reads “At its limit”, beside its balance and how far it may go."
+          }
+        }
+      ]
+    }
+  ]
+}

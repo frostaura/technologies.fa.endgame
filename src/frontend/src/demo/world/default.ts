@@ -120,7 +120,8 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     topUpRequests: [],
     topUps: [],
     operatorLog: [],
-    pricing: { pricing: DEFAULT_PRICING, source: "stored", updatedAt: a(20 * day), updatedBy: PEOPLE.operator.displayName, history: [] },
+    // Changed once, twenty days ago: the margin went from 1.2 to 1.25.
+    pricing: { pricing: DEFAULT_PRICING, source: "stored", updatedAt: a(20 * day), updatedBy: PEOPLE.operator.displayName, history: [{ at: a(20 * day), by: PEOPLE.operator.displayName, byEmail: PEOPLE.operator.email, before: { ...DEFAULT_PRICING, margin: 1.2 }, after: DEFAULT_PRICING }] },
     counter: 0,
     changed: [],
   };

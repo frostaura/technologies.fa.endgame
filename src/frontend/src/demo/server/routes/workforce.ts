@@ -3,7 +3,7 @@ import { append } from "../engine";
 import { me, requireRole, scopeOf } from "../access";
 import { area, conflict, created, invalid, noContent, notFound, num, ok, problem, Refusal, str, strings } from "../http";
 import { blankTrackRecord, startRun } from "../mutations";
-import { newId, orgOf, uuidFor, within, type World } from "../world";
+import { newId, organisation, orgOf, spentBelow, uuidFor, within, type World } from "../world";
 
 /** `WorkforceEndpoints.cs`: employees, contractors, memory, hires, recurring roles, the ontology. */
 
@@ -14,7 +14,8 @@ function employee(world: World, id: string): Employee {
 }
 
 const KINDS: MemoryKind[] = ["fact", "practice", "preference", "lesson"];
-const TIERS = ["build", "evaluate", "plan", "research", "conversation", "review"];
+/** The routing table's task types an employee may be given (`appsettings.json`, `ModelGateway:Routes`, less the `app.` ones). */
+const TIERS = ["architecture", "ask", "build", "build-t1", "build-t2", "build-t3", "chat", "classify", "code", "evaluate", "plan", "research", "summarise"];
 
 function validateJob(job: Record<string, unknown> | undefined) {
   if (!job) return;
@@ -36,12 +37,34 @@ function applyJob(e: { jobDescription: Employee["jobDescription"] }, job: Record
   if (typeof job.modelTier === "string") jd.modelTier = job.modelTier;
 }
 
-function headroom(world: World, scope: string): number {
-  const org = world.organisations.find((o) => o.slug === orgOf(scope));
-  return Math.max(0, Math.round(((org?.balance ?? 0) / 18) * 100) / 100);
+/**
+ * `HireService.HeadroomAsync` (`CreditLedger.Position.Headroom`): the most new work may still spend
+ * where the hire would work — the tightest monthly cap on its chain, or the balance down to the
+ * overdraft limit, whichever is lower. Worked out again on every read.
+ */
+export function headroom(world: World, scope: string): number {
+  const o = organisation(world, orgOf(scope));
+  const limit = o ? (o.ownLimit !== null ? Math.min(o.ownLimit, o.frostauraLimit) : o.frostauraLimit) : 0;
+  let room = (o?.balance ?? 0) + limit;
+  for (const b of world.budgets) {
+    if (!within(scope, b.path)) continue;
+    const s = spentBelow(world, b.path);
+    room = Math.min(room, b.cap - s.ai - s.hosting);
+  }
+  return Math.max(0, Math.round(room * 100) / 100);
 }
 
-function hireNow(world: World, h: Hire, via: string, by: string, note: string | null) {
+/** An open proposal's room and fit, as they are now (a decided one keeps what it was decided on). */
+function withRoom(world: World, h: Hire): Hire {
+  if (h.status !== "proposed") return h;
+  h.headroomCredits = headroom(world, h.scope);
+  h.withinBudget = h.expectedMonthlyCredits <= h.headroomCredits;
+  return h;
+}
+
+export function hireNow(world: World, h: Hire, via: string, by: string, note: string | null) {
+  // `EmployeeService.HireAsync`: the manager it was drafted with must still be on the payroll.
+  if (h.reportsTo && !world.employees.some((x) => x.id === h.reportsTo?.id && x.status !== "released" && x.kind === "employee")) throw invalid("reportsTo names an employee of this organisation who is on the payroll.");
   const id = uuidFor(`employee:hire:${h.id}`);
   const at = new Date().toISOString();
   world.employees.push({
@@ -107,7 +130,9 @@ area("WorkforceEndpoints", {
   "GET employees/recurring-roles": (req, { world }) => {
     const scope = scopeOf(world, req.query.get("scope"));
     requireRole(world, scope, "viewer");
-    return ok(world.recurringRoles.filter((r) => within(r.scope, scope)));
+    // A role stops recurring once an employee holds it there (`EmployeeService.RecurringRolesAsync`).
+    const held = (r: { scope: string; role: string }) => world.employees.some((e) => e.kind === "employee" && e.status !== "released" && e.scope === r.scope && e.role.toLowerCase() === r.role.toLowerCase());
+    return ok(world.recurringRoles.filter((r) => within(r.scope, scope) && !held(r)));
   },
 
   "GET employees/{id}": (req, { world }) => {
@@ -188,6 +213,8 @@ area("WorkforceEndpoints", {
       if (e.status === "released") throw conflict(`${e.name} has already been released.`);
       if (e.status === "working") throw conflict(`${e.name} is working on a run; let it finish or cancel it first.`);
       Object.assign(e, { status: "released", releasedAt: at });
+      // Anyone who reported to it moves up, to its own manager.
+      for (const r of world.employees) if (r.reportsTo?.id === e.id) r.reportsTo = e.reportsTo;
       for (const m of world.memory) if (m.employeeId === e.id) m.archived = true;
       world.memoryChanges.unshift({ id: newId(world, "change"), memoryId: null, action: "archived", by: "platform", userId: null, runId: null, detail: { reason: "released" }, at });
     } else if (action === "rehire") {
@@ -233,8 +260,11 @@ area("WorkforceEndpoints", {
   "GET employees/{id}/memory/changes": (req, { world }) => {
     const e = employee(world, req.params.id ?? "");
     requireRole(world, e.scope, "viewer");
-    const mine = new Set(world.memory.filter((m) => m.employeeId === e.id).map((m) => m.id));
-    return ok(world.memoryChanges.filter((c) => (c.memoryId && mine.has(c.memoryId)) || (!c.memoryId && c.by !== "employee")).slice(0, Number(req.query.get("limit") ?? 100)));
+    const removed = Object.entries(world.removedMemory ?? {}).filter(([, owner]) => owner === e.id).map(([entry]) => entry);
+    const mine = new Set([...world.memory.filter((m) => m.employeeId === e.id).map((m) => m.id), ...removed]);
+    // Newest first, as `MemoryService.ChangesAsync` orders them.
+    const changes = world.memoryChanges.filter((c) => (c.memoryId && mine.has(c.memoryId)) || (!c.memoryId && c.by !== "employee"));
+    return ok([...changes].sort((a, b) => b.at.localeCompare(a.at)).slice(0, Number(req.query.get("limit") ?? 100)));
   },
 
   "PATCH employees/{id}/memory/{entryId}": (req, { world }) => {
@@ -261,6 +291,7 @@ area("WorkforceEndpoints", {
     const m = world.memory.find((x) => x.id === req.params.entryId && x.employeeId === e.id);
     if (!m) throw notFound("The memory entry");
     world.memory = world.memory.filter((x) => x.id !== m.id);
+    (world.removedMemory ??= {})[m.id] = e.id;
     world.memoryChanges.unshift({ id: newId(world, "change"), memoryId: m.id, action: "removed", by: "person", userId: me(world).id, runId: null, detail: { title: m.title, body: m.body, why: req.query.get("why") ?? "" }, at: new Date().toISOString() });
     e.memoryEntries = Math.max(0, e.memoryEntries - 1);
     world.changed.push("Memory", "Employee");
@@ -272,14 +303,14 @@ area("WorkforceEndpoints", {
     requireRole(world, scope, "viewer");
     const status = req.query.get("status");
     if (status && !["proposed", "accepted", "declined"].includes(status)) throw invalid("status is one of proposed, accepted, declined.");
-    return ok(world.hires.filter((h) => within(h.scope, scope) && (!status || h.status === status)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    return ok(world.hires.filter((h) => within(h.scope, scope) && (!status || h.status === status)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((h) => withRoom(world, h)));
   },
 
   "GET hires/{id}": (req, { world }) => {
     const h = world.hires.find((x) => x.id === req.params.id);
     if (!h) throw notFound("The hire proposal");
     requireRole(world, h.scope, "viewer");
-    return ok(h);
+    return ok(withRoom(world, h));
   },
 
   "PATCH hires/{id}": (req, { world }) => {
@@ -302,13 +333,10 @@ area("WorkforceEndpoints", {
     }
     if (req.body.clearReportsTo === true) h.reportsTo = null;
     if (req.body.clearMonthlyCreditLimit === true) h.jobDescription.monthlyCreditLimit = null;
-    if (expected !== undefined) {
-      h.expectedMonthlyCredits = expected;
-      h.withinBudget = expected <= h.headroomCredits;
-    }
+    if (expected !== undefined) h.expectedMonthlyCredits = expected;
     applyJob(h, req.body.jobDescription as Record<string, unknown> | undefined);
     world.changed.push("Hire", "Tree");
-    return ok(h);
+    return ok(withRoom(world, h));
   },
 
   "POST hires/{id}/{decision}": (req, { world }) => {

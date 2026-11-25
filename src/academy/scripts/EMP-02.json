@@ -1,0 +1,115 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-02",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Reassign"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Move Kasper to",
+        "note": "Every place in the tree, indented. Its memory travels with it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "#reassign-manager",
+        "note": "It starts at its manager now, marked “(as now)”; or another, or “Nobody: it answers to you”."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Move Kasper to"
+            },
+            "value": "northwind/technologies/allergen-labels"
+          }
+        },
+        {
+          "click": {
+            "text": "Move"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Allergen Labels and everything beneath it",
+        "note": "Moved: “Works at” shows the new place, and the chart follows."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A reporting loop is refused",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/f844ad47-51af-4b59-a15a-535703f4b405",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Reassign"
+              }
+            },
+            {
+              "select": {
+                "into": {
+                  "text": "Reports to"
+                },
+                "value": "Kasper · Software engineer"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "#reassign-manager",
+            "note": "Odile, told to report to Kasper — who reports to her."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Move"
+              }
+            },
+            {
+              "wait": 1200
+            }
+          ],
+          "highlight": {
+            "text": "Could not reassign",
+            "note": "Refused, in the control plane's words; nothing was changed."
+          }
+        }
+      ]
+    }
+  ]
+}

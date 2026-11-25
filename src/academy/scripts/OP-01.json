@@ -1,0 +1,58 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-01",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "goto": "/notifications",
+      "highlight": {
+        "selector": "[data-god-mode]",
+        "note": "On every screen, a band: GOD MODE, and that entering an organisation is logged where its Owner reads it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/operator",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Enter Northwind"
+          }
+        },
+        {
+          "wait": 1200
+        },
+        {
+          "click": {
+            "text": "Open its org chart"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "You are inside Northwind as a FrostAura operator",
+        "note": "Inside an organisation the band names it, says you act as an Admin and that everything is logged — with “Leave Northwind”."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/operator",
+      "persona": "owner",
+      "highlight": {
+        "text": "God mode is for FrostAura operators",
+        "note": "Mara is not on FrostAura's operator list, so God mode is closed to her — and to any access token."
+      }
+    }
+  ]
+}

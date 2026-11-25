@@ -255,6 +255,10 @@ export interface World {
   edgeAnswer?: Record<string, "slow" | "busy" | "unreachable" | "outage">;
   /** Apps whose rebuild fails (a restore or "Rebuild and restart" that cannot start the app), by app id. */
   rebuildFails?: string[];
+  /** Whose memory each removed entry was (entry id → employee id), so its removal stays in that employee's change log. */
+  removedMemory?: Record<string, string>;
+  /** When each operator was last seen inside each organisation (`${userId}:${org}`), for the visit window. */
+  operatorSeen?: Record<string, string>;
   /** A development deployment (ID-03): the development sign-in is offered, for this account. Never in any other scenario. */
   developmentSignIn?: { email: string };
   /** How many of the next session checks (`GET me`) fail as an unreachable control plane would (ID-05). */

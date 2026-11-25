@@ -114,6 +114,12 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `s1-session-check-fails` | The first session check gets a bare 503, as from a gateway with no control plane behind it | |
 | `s1-keys-at-limit` | Mara already holds 50 live assistant keys | |
 | `s1-development-sign-in`, `s1-development-apps` | A development deployment (`ENDGAME_DEV_LOGIN=true`): on a fresh install, and with Northwind's apps | |
+| `s4-hiring`, `s4-hires-all-decided`, `s4-hire-manager-gone` | Technologies' hiring with Lark waiting, Sol hired by auto-mode and Bea declined; every proposal decided; Lark drafted to report to Tomas, since let go | |
+| `s4-contractor-working`, `s4-contractor-finishes` | Odile's data contractor at work; and finishing inside a playing run (`s4:contractor-finished`): its lesson to Odile, its role raised and hired | |
+| `s4-employee-record`, `s4-employee-working`, `s4-employee-team`, `s4-employee-at-cap` | Kasper with his tasks; at work on a live run; with Mina reporting to him; at his monthly cap, told so | |
+| `s4-idle-sweep`, `s4-released-with-memory`, `s4-memory-to-tidy` | Ruth idle under checkpoints and Ivo let go by the sweep; Tomas let go with his memory; Kasper's memory with a note learned twice and one removed | |
+| `s4-credits-at-zero`, `s4-below-zero`, `s4-top-ups-waiting` | The balance at 0, at −120, and five top-up requests already waiting | |
+| `s4-operator-log`, `s4-operator-log-empty` | Northwind's operator log with every kind of entry, and with none | |
 | `app-private`, `app-public`, `app-shared-empty` | Court booking private, public, or shared with nobody yet (`scenarios.s5.ts`) | |
 | `app-long-history`, `app-not-published` | Court booking with more versions than a page shows; Tutor Match with nothing published, nothing run (so it can be deleted) | |
 | `app-restore-fails`, `app-rebuild-fails` | Bringing a version back, or "Rebuild and restart", cannot start the app | |

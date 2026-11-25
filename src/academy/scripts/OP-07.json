@@ -1,0 +1,141 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-07",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "selector": "li[data-org='northwind'] button[aria-expanded]:last-of-type"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "The most it may go below zero"
+            },
+            "text": "1200"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "No interest and no fees, ever.",
+        "note": "The outer limit: at it, its employees stop and its apps pause; nothing is deleted."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Save"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Northwind may now go 1,200 below zero at most. Its own limit can only be tighter.",
+        "note": "The card updates at once; routing is recalculated."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/operator-access",
+      "persona": "owner",
+      "highlight": {
+        "text": "Changed the deepest overdraft to 1,200 credits below zero",
+        "note": "And the Owner reads it in the operator log."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Lower than the organisation's own limit",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "selector": "li[data-org='northwind'] button[aria-expanded]:last-of-type"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "The most it may go below zero"
+                },
+                "text": "500"
+              }
+            },
+            {
+              "click": {
+                "text": "Save"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "Their own: 800; yours: 500",
+            "note": "Allowed: the tighter one applies — Northwind now stops at 500 below zero."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Not a number of credits",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "selector": "li[data-org='northwind'] button[aria-expanded]:last-of-type"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "The most it may go below zero"
+                },
+                "text": "lots"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Type a number of credits.",
+            "note": "“Save” stays disabled."
+          }
+        }
+      ]
+    }
+  ]
+}

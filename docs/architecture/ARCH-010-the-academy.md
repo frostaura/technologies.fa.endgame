@@ -56,6 +56,9 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   numbered 1, 2, … within the variation and each carries a `note` (there is no flow text beside
   them). The flow page lists them as "Watch it in the live console"; choosing one plays it in the
   stage, with Previous, Next and "Back to the steps".
+- **A hand-over** (`persona` on a demo step, with its `goto`): from that step on someone else is
+  signed in to the same world — an operator tops up or enters an organisation, then its Owner reads
+  the operator log. The player keeps it for every later step (`personaAt`); a jump replays it.
 - **The site** (`src/academy/src/`) is React with hash routing and relative URLs, built as one
   classic deferred script (iife) so it runs from `file://`. Content, scripts and the prebuilt search
   index are bundled. Progress (not started / seen / done, and where the learner left off) lives in

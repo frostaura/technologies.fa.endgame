@@ -1,0 +1,155 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-10",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Edit the job"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Kasper’s job",
+        "note": "The whole job, each field as it is now, in plain words."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Role"
+            },
+            "text": "Lead engineer"
+          }
+        },
+        {
+          "click": {
+            "text": "Brief contractors"
+          }
+        },
+        {
+          "select": {
+            "into": {
+              "text": "Thinking power"
+            },
+            "value": "Stronger, for larger pieces of building"
+          }
+        },
+        {
+          "click": {
+            "text": "Save the job"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Lead engineer · Employee",
+        "note": "Shown at once; only what changed is sent."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "It needs a name and a role",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Edit the job"
+              }
+            },
+            {
+              "wait": 400
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Name"
+                },
+                "text": " "
+              }
+            },
+            {
+              "click": {
+                "text": "Save the job"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "It needs a name and a role.",
+            "note": "Checked before anything is sent."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A reporting loop is refused",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/f844ad47-51af-4b59-a15a-535703f4b405",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Edit the job"
+              }
+            },
+            {
+              "wait": 400
+            },
+            {
+              "select": {
+                "into": {
+                  "text": "Reports to"
+                },
+                "value": "Kasper · Software engineer"
+              }
+            },
+            {
+              "click": {
+                "text": "Save the job"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "Could not change the job",
+            "note": "Odile cannot report to Kasper, who reports to her: refused, and the record goes back."
+          }
+        }
+      ]
+    }
+  ]
+}
