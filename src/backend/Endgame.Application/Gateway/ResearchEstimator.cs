@@ -13,6 +13,12 @@ public sealed class EstimateOptions
 
     /// <summary>The task type research calls are routed by.</summary>
     public string ResearchTaskType { get; set; } = "research";
+
+    /// <summary>The most model calls a run that suggests ideas from the portfolio makes.</summary>
+    public int SuggestCalls { get; set; } = 6;
+
+    /// <summary>The task type those calls are routed by: the research route, which may check the market.</summary>
+    public string SuggestTaskType { get; set; } = "research";
 }
 
 public sealed record Estimate(decimal Credits, string Basis);
@@ -48,5 +54,28 @@ public sealed class ResearchEstimator(ModelGatewayOptions options, CreditOptions
         var total = Math.Ceiling(perCall * estimates.ResearchCalls * 100m) / 100m;
         return new Estimate(total,
             $"Up to {estimates.ResearchCalls.ToString(CultureInfo.InvariantCulture)} research steps, each priced at the most it could cost. Research is charged at what it actually costs, which is usually far less, and never more than this.");
+    }
+
+    /// <summary>
+    /// What a suggestion run costs at most: the same reservation arithmetic on its route, for the most
+    /// calls it makes, with the portfolio it reads (<paramref name="contextCharacters"/>) in every prompt.
+    /// </summary>
+    public Estimate EstimateSuggestions(int contextCharacters)
+    {
+        if (!options.Routes.TryGetValue(estimates.SuggestTaskType, out var route))
+        {
+            throw new EndgameProblem(503, "estimate_unavailable", "The estimate cannot be worked out",
+                $"There is no '{estimates.SuggestTaskType}' route to price suggestions against.");
+        }
+
+        var request = new ChatRequest
+        {
+            TaskType = estimates.SuggestTaskType,
+            Messages = [new JsonObject { ["role"] = "user", ["content"] = new string('x', Math.Clamp(contextCharacters, 1, 200_000)) }],
+        };
+        var perCall = ModelGateway.Prepare(options, credits, request, route, stream: false).ReservedCredits;
+        var total = Math.Ceiling(perCall * estimates.SuggestCalls * 100m) / 100m;
+        return new Estimate(total,
+            $"Up to {estimates.SuggestCalls.ToString(CultureInfo.InvariantCulture)} steps reading what the organisation holds, each priced at the most it could cost. It is charged at what it actually costs.");
     }
 }

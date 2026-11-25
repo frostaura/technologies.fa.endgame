@@ -182,7 +182,8 @@ public sealed class EmailMessageRecord
 
     public Guid Id { get; set; }
 
-    public Guid AppId { get; set; }
+    /// <summary>The app that sent it; null for the platform's own mail to members (an urgent notification, an invitation).</summary>
+    public Guid? AppId { get; set; }
 
     public string[] Recipients { get; set; } = [];
 

@@ -174,7 +174,7 @@ public sealed class OntologyService(EndgameDbContext db, TenantSession session, 
         var schedules = await db.AppSchedules.AsNoTracking().Where(x => x.OrganisationId == org && appIds.Contains(x.AppId)).ToListAsync(cancellationToken);
         var usedModels = (await db.CreditEntries.AsNoTracking().Where(c => c.OrganisationId == org && c.AppId != null && appIds.Contains(c.AppId.Value) && c.TaskType != null && c.TaskType.StartsWith("app."))
             .Select(c => c.AppId!.Value).Distinct().ToListAsync(cancellationToken)).ToHashSet();
-        var usedEmail = (await db.EmailMessages.AsNoTracking().Where(m => m.OrganisationId == org && appIds.Contains(m.AppId)).Select(m => m.AppId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+        var usedEmail = (await db.EmailMessages.AsNoTracking().Where(m => m.OrganisationId == org && m.AppId != null && appIds.Contains(m.AppId.Value)).Select(m => m.AppId!.Value).Distinct().ToListAsync(cancellationToken)).ToHashSet();
         var usedIdentity = (await db.AppEndUsers.AsNoTracking().Where(u => u.OrganisationId == org && appIds.Contains(u.AppId)).Select(u => u.AppId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
         var usedTelemetry = (await db.TelemetryEvents.AsNoTracking().Where(t => t.OrganisationId == org && appIds.Contains(t.AppId)).Select(t => t.AppId).Distinct().ToListAsync(cancellationToken))
             .Concat(await db.TelemetrySpans.AsNoTracking().Where(t => t.OrganisationId == org && appIds.Contains(t.AppId)).Select(t => t.AppId).Distinct().ToListAsync(cancellationToken))

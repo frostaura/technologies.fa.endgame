@@ -19,5 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="../Endgame.Application/Endgame.Application.csproj" />
     <ProjectReference Include="../Endgame.Domain/Endgame.Domain.csproj" />
+    <!-- The wire shapes of Dock's internal API (records only): versions, restore and export are proxied to Dock. -->
+    <ProjectReference Include="../Endgame.Hosting.Contracts/Endgame.Hosting.Contracts.csproj" />
   </ItemGroup>
 </Project>

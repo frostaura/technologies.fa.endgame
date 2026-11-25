@@ -228,6 +228,18 @@ public sealed class AppIdentityService(
         return TokenPrefix + protection.CreateProtector(TokenPurpose).ToTimeLimitedDataProtector().Protect(payload, until);
     }
 
+    /// <summary>
+    /// An app-scoped session token for a member who holds a role on the app, as Edge would mint at the
+    /// door: what the app's MCP surface calls the app with on that member's behalf.
+    /// </summary>
+    public async Task<string> MemberTokenAsync(ResolvedScope app, Guid memberId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        _ = await access.EffectiveRoleAsync(memberId, app, cancellationToken)
+            ?? throw EndgameProblem.NotFound($"The scope '{app.Path}'");
+        return IssueToken(app.AppId!.Value, "member", memberId, null, clock.GetUtcNow().AddMinutes(options.Value.TokenMinutes));
+    }
+
     /// <summary><c>identity/resolve</c>: who an app-scoped token stands for, now. Null when it is invalid, expired, for another app, or no longer admitted.</summary>
     public async Task<ResolvedAppSession?> ResolveAsync(AppCaller caller, string? token, CancellationToken cancellationToken)
     {

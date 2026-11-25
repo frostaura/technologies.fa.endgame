@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Endgame.Application.Common;
 using Endgame.Application.Gateway;
 using Endgame.Domain.Cascade;
+using Endgame.Domain.Platform;
 using Endgame.Domain.Tree;
 using Endgame.Infrastructure.Cascade;
 using Endgame.Infrastructure.Platform;
@@ -10,6 +11,9 @@ using Endgame.Infrastructure.Tree;
 using Endgame.Infrastructure.Work;
 
 namespace Endgame.ControlPlane.Endpoints;
+
+/// <summary><c>POST /internal/runs/{id}/suggestions</c>.</summary>
+public sealed record RecordSuggestionsRequest(IReadOnlyList<SuggestionInput>? Suggestions);
 
 public sealed record CreateRunRequest(string? Scope, string? Kind, string? Title, Guid? EmployeeId, Guid? IdeaId, Guid? ConversationId, Guid? ParentRunId);
 
@@ -183,10 +187,19 @@ internal static class InternalEndpoints
         })
         .WithName("AppPublished").WithSummary("Dock reports a new running version of an app.").Produces<NodeView>();
 
-        group.MapPost("/apps/{id:guid}/state", async (Guid id, AppStateRequest request, ScopeResolver scopes, TreeService tree, CancellationToken ct) =>
+        group.MapPost("/apps/{id:guid}/state", async (Guid id, AppStateRequest request, ScopeResolver scopes, TreeService tree, NotificationService notifications, TimeProvider clock, CancellationToken ct) =>
         {
             var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
-            return Results.Ok(await tree.AppStateAsync(scope, request.Status ?? "", ct));
+            var node = await tree.AppStateAsync(scope, request.Status ?? "", ct);
+            if (request.Status == NodeStatuses.Failed)
+            {
+                // A crash needs a person: once per app per minute of reports.
+                await notifications.RaiseAsync(scope, NotificationKinds.AppCrashed, $"{scope.Node.Name} stopped working",
+                    "It crashed and visitors see an unavailable page. Its last good version can be restored from its history.",
+                    new NotificationSubject("app", id), $"crash:{id:N}:{clock.GetUtcNow():yyyyMMddHHmm}", ct);
+            }
+
+            return Results.Ok(node);
         })
         .WithName("AppState").WithSummary("Dock or the edge report that an app is building, running, sleeping, stopped or failed.").Produces<NodeView>();
 
@@ -211,6 +224,18 @@ internal static class InternalEndpoints
         group.MapPost("/usage/hosting", async (HostingUsageRequest request, HostingMeter meter, CancellationToken ct) =>
             Results.Ok(await meter.RecordAsync(request, ct)))
         .WithName("RecordHostingUsage").WithSummary("Dock reports per-app usage samples (awake seconds, memory, storage, requests); each becomes one hosting credit entry. A sampleId is charged once.").Produces<HostingUsageResult>();
+
+        group.MapGet("/runs/{id:guid}/suggestion-context", async (Guid id, SuggestionService suggestions, CancellationToken ct) =>
+            Results.Ok(await suggestions.ContextForRunAsync(id, ct)))
+        .WithName("SuggestionContext")
+        .WithSummary("A suggest run reads what the organisation holds at its scope: divisions, projects and apps, ideas and their verdicts, the context set on the cascade, and what was suggested before.")
+        .Produces<SuggestionContext>();
+
+        group.MapPost("/runs/{id:guid}/suggestions", async (Guid id, RecordSuggestionsRequest request, SuggestionService suggestions, CancellationToken ct) =>
+            Results.Created($"/api/ideas/suggestions", await suggestions.RecordAsync(id, request.Suggestions, ct)))
+        .WithName("RecordSuggestions")
+        .WithSummary("The suggest run's result: one to five ideas, each { title, idea, gap, whyUs, reuses[] }. Recorded once per run.")
+        .Produces<IReadOnlyList<SuggestionView>>(201);
 
         group.MapPost("/ideas/{id:guid}/verdict", async (Guid id, JsonObject verdict, IdeaService ideas, CancellationToken ct) =>
             Results.Ok(await ideas.RecordVerdictAsync(id, verdict, ct)))

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Endgame.Application;
 using Endgame.Application.Status;
 using Endgame.ControlPlane.Endpoints;
+using Endgame.ControlPlane.Mcp;
 using Endgame.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -52,7 +53,14 @@ builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
             return Task.CompletedTask;
         };
     }));
-builder.Services.AddAuthorization();
+builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AccessTokenAuthenticationHandler>(AccessTokenAuthenticationHandler.SchemeName, null);
+builder.Services.AddAuthorizationBuilder()
+    // MCP clients present a personal access token, and nothing else: a console cookie never reaches /mcp.
+    .AddPolicy(AccessTokenAuthenticationHandler.Policy, policy => policy
+        .AddAuthenticationSchemes(AccessTokenAuthenticationHandler.SchemeName)
+        .RequireAuthenticatedUser());
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddEndgameMcp();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.Configure<RunStreamOptions>(builder.Configuration.GetSection(RunStreamOptions.SectionName));
@@ -107,6 +115,8 @@ members.MapWork();
 members.MapPlatformConsole();
 members.MapAutonomy();
 members.MapWorkforce();
+members.MapBreadth();
+members.MapOperator();
 
 // The platform API for apps (src/appkit/PLATFORM-API.md): the app token, never a member's cookie.
 app.MapGroup("/platform/v1")
@@ -126,6 +136,9 @@ app.MapGroup("/internal")
     .AddEndpointFilter<ServiceTokenFilter>()
     .WithTags("Internal")
     .MapWorkforceInternal();
+
+// MCP, on by default (spec): the organisation's capabilities as tools, and each app's own API.
+app.MapEndgameMcp();
 
 app.Run();
 

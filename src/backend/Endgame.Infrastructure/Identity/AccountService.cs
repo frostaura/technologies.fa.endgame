@@ -17,7 +17,8 @@ public sealed record NewOrganisation(string Name, string Slug);
 
 public sealed record MemberView(Guid MembershipId, Guid UserId, string Email, string DisplayName, string Scope, string Role, bool HasPasskey, DateTimeOffset GrantedAt);
 
-public sealed record Invitation(MemberView Member, string? InvitationCode, DateTimeOffset? ExpiresAt);
+/// <param name="Emailed">The code was also e-mailed to the person (only when a mail server is configured).</param>
+public sealed record Invitation(MemberView Member, string? InvitationCode, DateTimeOffset? ExpiresAt, bool Emailed = false);
 
 /// <summary>
 /// People and their memberships. Endgame is invite-only: a passkey can be registered by the very first

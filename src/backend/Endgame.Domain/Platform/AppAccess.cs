@@ -35,6 +35,13 @@ public enum Actor
 
     /// <summary>A platform service presenting the service token.</summary>
     Service,
+
+    /// <summary>
+    /// A client of the control plane's MCP server, holding a person's access token. It acts with that
+    /// person's role (capped by the token), but it is not the person: whatever only a human may do
+    /// — making an app public, overruling a red line, a top-up — it may not.
+    /// </summary>
+    Mcp,
 }
 
 public static class Actors

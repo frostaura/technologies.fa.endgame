@@ -31,7 +31,6 @@ public sealed record OperatorRef(Guid Id, string? Email, string DisplayName);
 
 public sealed record OperatorActionView(Guid Id, DateTimeOffset At, string Action, OperatorRef Operator, JsonNode? Detail);
 
-public sealed record OrganisationSummary(Guid Id, string Slug, string Name, string Status, DateTimeOffset CreatedAt);
 
 /// <summary>The console's side of the platform API: the vault (write-only), sharing, and God mode's audit trail.</summary>
 internal static class PlatformConsoleEndpoints
@@ -113,22 +112,6 @@ internal static class PlatformConsoleEndpoints
         .WithSummary("Every FrostAura operator entry into the organisation and every operator action on it, newest first (the Owner only).")
         .Produces<IReadOnlyList<OperatorActionView>>();
 
-        api.MapGet("/operator/organisations", async (ClaimsPrincipal principal, AccessService access, EndgameDbContext db, TenantSession session, CancellationToken ct) =>
-        {
-            if (!await access.IsOperatorAsync(principal.Id(), ct))
-            {
-                throw EndgameProblem.Forbidden("Only FrostAura operators list every organisation.");
-            }
-
-            session.UseSystem();
-            var list = await db.Organisations.AsNoTracking().OrderBy(o => o.Slug)
-                .Select(o => new OrganisationSummary(o.Id, o.Slug, o.Name, o.Status, o.CreatedAt)).ToListAsync(ct);
-            session.Clear();
-            return Results.Ok(list);
-        })
-        .WithTags("Operator").WithName("ListOrganisations")
-        .WithSummary("God mode: every organisation, for an operator to enter. Entering one (any read inside it) is written to that organisation's operator log.")
-        .Produces<IReadOnlyList<OrganisationSummary>>();
     }
 
     private static async Task<ResolvedScope> AppAsAdminAsync(Guid id, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, CancellationToken ct)
