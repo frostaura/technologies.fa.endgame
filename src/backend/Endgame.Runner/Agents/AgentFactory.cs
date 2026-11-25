@@ -39,20 +39,26 @@ public sealed class AgentFactory(RunnerOptions options)
         ],
     };
 
-    public AgentDefinition Planner(RunContext run, string root) => Base(run, "planner", options.PlanTaskType) with
+    /// <summary>The factory's planner: its plan must be a faithful contract with <paramref name="idea"/>, or propose_plan refuses it.</summary>
+    public AgentDefinition Planner(RunContext run, string root, string idea) => Base(run, "planner", options.PlanTaskType) with
     {
         SystemPrompt = RunnerResources.Prompt("planner", new Dictionary<string, string> { ["root"] = root, ["skills"] = SkillLibrary.Index(run.Skills, BuilderSkills) }),
-        Tools = new ToolRegistry([new ReadFileTool(), new ListFilesTool(), new SearchTool(), new GitDiffTool(), new LoadSkillTool(), new NotesTool(), new ProposePlanTool()]),
+        Tools = new ToolRegistry([new ReadFileTool(), new ListFilesTool(), new SearchTool(), new GitDiffTool(), new LoadSkillTool(), new NotesTool(), new ProposePlanTool(idea)]),
         Permissions = Policy(run, "plan", []).WithMode(AgentMode.Plan),
         AutoAcceptPlan = false,
         StopHooks = [],
         Limits = new AgentLimits { MaxSteps = 30 },
     };
 
-    public AgentDefinition Evaluator(RunContext run, string id, PlanItem item, string root, ITool? preview) => Base(run, id, options.EvaluateTaskType) with
+    public AgentDefinition Evaluator(RunContext run, string id, PlanItem item, IReadOnlyList<PlanRequirement> requirements, string root, ITool? preview, ITool? callApp) => Base(run, id, options.EvaluateTaskType) with
     {
-        SystemPrompt = RunnerResources.Prompt("evaluator", new Dictionary<string, string> { ["root"] = root, ["item"] = $"[{item.Id}] {item.Deliverable}\nChecked by: {item.Check}" }),
-        Tools = new ToolRegistry(new ITool?[] { new ReadFileTool(), new ListFilesTool(), new SearchTool(), new GitDiffTool(), new RunTool(), preview }.OfType<ITool>()),
+        SystemPrompt = RunnerResources.Prompt("evaluator", new Dictionary<string, string>
+        {
+            ["root"] = root,
+            ["item"] = $"[{item.Id}] {item.Deliverable}\nChecked by: {item.Check}",
+            ["requirements"] = requirements.Count == 0 ? "(none listed: judge the item as written)" : string.Join("\n", requirements.Select(r => $"- {r.Id}: {r.Text}")),
+        }),
+        Tools = new ToolRegistry(new ITool?[] { new ReadFileTool(), new ListFilesTool(), new SearchTool(), new GitDiffTool(), new RunTool(), preview, callApp }.OfType<ITool>()),
         // The evaluator may run checks but never change files: no write tool, and file writes denied outright.
         Permissions = Policy(run, "evaluate", ["run"], deny: ["edit_file", "write_file", "commit"]),
         StopHooks = [],

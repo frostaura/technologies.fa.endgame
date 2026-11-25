@@ -38,7 +38,7 @@ public sealed class TasksTool : ITool
     public JsonObject Parameters => Schema.Object(new JsonObject
     {
         ["action"] = Schema.Enum("What to do.", "create", "claim", "complete", "fail", "list"),
-        ["title"] = Schema.Str("create: the task's title."),
+        ["title"] = Schema.Str("create: the task's title, in plain words for the owner (no file names, endpoints or code)."),
         ["description"] = Schema.Str("create: what done means."),
         ["depends_on"] = Schema.Strings("create: ids of tasks that must be done first."),
         ["id"] = Schema.Str("claim, complete, fail: the task id."),
@@ -74,6 +74,11 @@ public sealed class TasksTool : ITool
                     if (string.IsNullOrEmpty(title))
                     {
                         return ToolOutcome.Error("tasks create needs a title.", "bad_arguments");
+                    }
+
+                    if (Events.OwnerText.Technical(title) is { Count: > 0 } technical)
+                    {
+                        return ToolOutcome.Error($"The owner reads a task's title, so it is plain words: it names {string.Join(", ", technical.Take(3))}. Say what the task achieves, and put files, commands and endpoints in description.", "bad_arguments");
                     }
 
                     var depends = new List<Guid>();

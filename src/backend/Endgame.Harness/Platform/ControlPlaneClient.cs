@@ -293,6 +293,27 @@ public sealed class ControlPlaneClient(HttpClient http)
         return Json.Str(await ReadAsync<JsonObject>(response, cancellationToken), "token") ?? throw new InvalidOperationException("The control plane minted no token.");
     }
 
+    /// <summary><c>POST /internal/apps/{id}/test-session</c>: an app-scoped session for a named test member, for the evaluator's signed-in calls.</summary>
+    public async Task<string> TestSessionAsync(Guid appId, string persona, string role, CancellationToken cancellationToken)
+    {
+        using var response = await Http.PostAsJsonAsync($"/internal/apps/{appId:D}/test-session", new { persona, role }, Json.Web, cancellationToken);
+        return Json.Str(await ReadAsync<JsonObject>(response, cancellationToken), "sessionToken") ?? throw new InvalidOperationException("The control plane minted no session.");
+    }
+
+    /// <summary><c>GET /internal/runs/{id}/suggestion-context</c>: what a <c>suggest</c> run reads (ARCH-004).</summary>
+    public async Task<JsonObject> SuggestionContextAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        using var response = await Http.GetAsync($"/internal/runs/{runId:D}/suggestion-context", cancellationToken);
+        return await ReadAsync<JsonObject>(response, cancellationToken);
+    }
+
+    /// <summary><c>POST /internal/runs/{id}/suggestions</c>: the run's one to five suggestions, once.</summary>
+    public async Task<JsonArray> RecordSuggestionsAsync(Guid runId, JsonArray suggestions, CancellationToken cancellationToken)
+    {
+        using var response = await Http.PostAsJsonAsync($"/internal/runs/{runId:D}/suggestions", new JsonObject { ["suggestions"] = suggestions.DeepClone() }, Json.Web, cancellationToken);
+        return await ReadAsync<JsonArray>(response, cancellationToken);
+    }
+
     /// <summary>Proposed: <c>GET /internal/credits/headroom?scope=</c> → {headroomCredits, bindingScope}.</summary>
     public async Task<decimal?> HeadroomAsync(string scope, CancellationToken cancellationToken)
     {

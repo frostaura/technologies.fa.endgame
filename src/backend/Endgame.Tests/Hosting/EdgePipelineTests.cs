@@ -533,6 +533,21 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Conflict, await Call(HttpMethod.Get, $"/internal/apps/{pausedApp:D}/call/api/x"));
         Assert.Equal(HttpStatusCode.Conflict, await Call(HttpMethod.Get, $"/internal/apps/{unpublishedApp:D}/call/api/x"));
 
+        // Edge's own refusals are marked, so a caller never mistakes them for the app's answer; the app's own are not.
+        using (var paused = new HttpRequestMessage(HttpMethod.Get, $"/internal/apps/{pausedApp:D}/call/api/x"))
+        {
+            paused.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+            using var refused = await control.SendAsync(paused);
+            Assert.Equal("app_paused", refused.Headers.GetValues(HostingConventions.RefusalHeader).Single());
+        }
+
+        using (var own = new HttpRequestMessage(HttpMethod.Get, $"/internal/apps/{privateApp:D}/call/api/x"))
+        {
+            own.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+            using var answered = await control.SendAsync(own);
+            Assert.False(answered.Headers.Contains(HostingConventions.RefusalHeader));
+        }
+
         // An app that cannot be woken is 503, and the gateway carries the app's status to its caller unchanged.
         await ControlAsync(HttpMethod.Post, $"/internal/apps/{privateApp:D}/state", new AppStateReport(privateApp, AppRuntimeState.Sleeping, 0, false, DateTimeOffset.UtcNow));
         backend.WakeAnswer = WakeStart.NoCapacity;

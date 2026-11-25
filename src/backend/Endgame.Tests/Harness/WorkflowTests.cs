@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Endgame.Harness.Model;
+using Endgame.Harness.Planning;
 using Endgame.Runner;
 using Endgame.Runner.Agents;
 using Endgame.Runner.Execution;
@@ -93,6 +94,7 @@ public sealed class WorkflowTests
             cp.Events.Where(e => e.Type == "subagent.started").Select(e => e.Payload["title"]!.GetValue<string>()));
         Assert.All(cp.Events.Where(e => e.Type == "subagent.finished"), e => Assert.DoesNotContain("{", e.Payload["summary"]!.GetValue<string>(), StringComparison.Ordinal));
         AssertMessagesAreForPeople(cp);
+        AssertOwnerFieldsArePlain(cp);
         Assert.Single(cp.Events, e => e.Type == "message" && e.Payload["milestone"]?.GetValue<string>() == "verdict");
 
         // Auto-mode then builds on a build verdict.
@@ -231,6 +233,17 @@ public sealed class WorkflowTests
 
         public Action<ChatCall>? OnBuilder { get; set; }
 
+        /// <summary>The planner's first proposal misses the second requirement; propose_plan must refuse it.</summary>
+        public bool FirstPlanMissesARequirement { get; set; }
+
+        /// <summary>The planner leaves the second requirement out, with a reason.</summary>
+        public bool LeaveOneOut { get; set; }
+
+        /// <summary>For the evaluation numbered n: whether the evaluator calls the running app at all before it answers.</summary>
+        public Func<int, bool> EvaluatorCallsTheApp { get; set; } = _ => true;
+
+        public List<string> PlanToolResults { get; } = [];
+
         public ScriptedModel Model() => new() { Fallback = Answer };
 
         private ModelReply Answer(ChatCall call)
@@ -239,17 +252,28 @@ public sealed class WorkflowTests
             var turn = call.Messages.Count(m => m!["role"]!.GetValue<string>() == "assistant");
             if (system.Contains("You are the planner", StringComparison.Ordinal))
             {
-                if (turn == 0)
+                foreach (var result in call.Messages.Where(m => m!["role"]!.GetValue<string>() == "tool"))
                 {
-                    Plans++;
+                    PlanToolResults.Add(result!["content"]!.ToString());
+                }
+
+                var lastResult = call.Messages.LastOrDefault(m => m!["role"]!.GetValue<string>() == "tool")?["content"]?.ToString() ?? "";
+                if (turn == 0 || (turn == 1 && lastResult.Contains("not a contract yet", StringComparison.Ordinal)))
+                {
+                    Plans += turn == 0 ? 1 : 0;
+                    var missing = FirstPlanMissesARequirement && turn == 0;
+                    var items = new List<object> { new { id = "recipes-api", text = "Families can keep their recipes in one place.", detail = "A recipes API (Recipe entity, GET/POST api/recipes)", check = "make test passes RecipesApiTests; GET api/recipes signed in lists them", covers = new[] { "r1" } } };
+                    if (!missing && !LeaveOneOut)
+                    {
+                        items.Add(new { id = "recipes-page", text = "Households can share their recipes with each other.", detail = "A recipes page with four states and a share action", check = "make test passes RecipesPage.test.tsx", covers = new[] { "r2" } });
+                    }
+
                     return ScriptedModel.Tools(("propose_plan", new
                     {
-                        summary = "Replace notes with recipes.",
-                        items = new[]
-                        {
-                            new { id = "recipes-api", deliverable = "A recipes API", check = "make test passes RecipesApiTests" },
-                            new { id = "recipes-page", deliverable = "A recipes page with four states", check = "make test passes RecipesPage.test.tsx" },
-                        },
+                        summary = "A recipe box for families that households can share.",
+                        requirements = new[] { new { id = "r1", text = "Recipe box for families" }, new { id = "r2", text = "Share recipes between households" } },
+                        items,
+                        leftOut = LeaveOneOut ? new[] { new { requirement = "r2", reason = "sharing between households needs accounts in two organisations, which the first version does not have" } } : [],
                     }, null));
                 }
 
@@ -258,13 +282,21 @@ public sealed class WorkflowTests
 
             if (system.Contains("sceptical evaluator", StringComparison.Ordinal))
             {
+                var calls = EvaluatorCallsTheApp(Evaluations);
                 if (turn == 0)
                 {
                     return ScriptedModel.Tools(("run", new { command = "make test" }, null));
                 }
 
+                if (turn == 1 && calls)
+                {
+                    return ScriptedModel.Tools(("call_app", new { method = "GET", path = "api/recipes?mine=true", @as = "member-a" }, null));
+                }
+
                 var passed = EvaluationPasses(Evaluations++);
-                return ScriptedModel.Text(new JsonObject { ["passed"] = passed, ["evidence"] = "make test: 12 passed", ["faults"] = passed ? new JsonArray() : Json("[\"RecipesApiTests fails: POST without a title returns 500\"]") }.ToJsonString());
+                var requirements = new JsonArray(global::System.Text.RegularExpressions.Regex.Matches(system, @"^- (r\d+):", global::System.Text.RegularExpressions.RegexOptions.Multiline)
+                    .Select(m => (JsonNode)new JsonObject { ["id"] = m.Groups[1].Value, ["met"] = passed, ["evidence"] = calls ? "GET api/recipes as member-a → 200 with the recipe listed" : "The tests cover it." }).ToArray());
+                return ScriptedModel.Text(new JsonObject { ["passed"] = passed, ["evidence"] = "make test: 12 passed", ["requirements"] = requirements, ["faults"] = passed ? new JsonArray() : Json("[\"RecipesApiTests fails: POST without a title returns 500\"]") }.ToJsonString());
             }
 
             if (system.Contains("security reviewer", StringComparison.Ordinal))
@@ -299,7 +331,7 @@ public sealed class WorkflowTests
     private static Task RunBuildAsync(FakeControlPlane cp, ScriptedModel model, FakeWorkspace ws, FakeDock dock, CancellationToken cancellationToken = default)
     {
         var options = new RunnerOptions();
-        return EstimateTests.Executor(cp, model, ws, [new BuildWorkflow(new Estimator(options), new StubProbe())], dock, options)
+        return EstimateTests.Executor(cp, model, ws, [new BuildWorkflow(new Estimator(options), new StubProbe(), new StubCaller())], dock, options)
             .ExecuteAsync(cp.Info(), "runner-test", () => false, cancellationToken);
     }
 
@@ -355,7 +387,14 @@ public sealed class WorkflowTests
         Assert.All(ws.CommitAuthors.Where(a => !a.StartsWith("Endgame factory", StringComparison.Ordinal)), a => Assert.Matches(@"^Endgame employee [0-9a-f]{8}$", a));
         Assert.Contains(ws.CommitAuthors, a => a.StartsWith("Endgame employee", StringComparison.Ordinal));
         var accepted = cp.Payload("plan.accepted")!;
-        Assert.Equal(["A recipes API", "A recipes page with four states"], accepted["items"]!.AsArray().Select(i => i!["text"]!.GetValue<string>()));
+        // The plan is a contract with the idea: its requirements in the idea's words, each covered; plain text for the
+        // owner, the technical detail apart; and every requirement shown working in the running app, signed in.
+        Assert.Equal(["Families can keep their recipes in one place.", "Households can share their recipes with each other."], accepted["items"]!.AsArray().Select(i => i!["text"]!.GetValue<string>()));
+        Assert.Equal(["Recipe box for families", "Share recipes between households"], accepted["requirements"]!.AsArray().Select(r => r!["text"]!.GetValue<string>()));
+        Assert.Contains("api/recipes", accepted["items"]![0]!["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.All(cp.Events.Where(e => e.Type == "evaluation.passed"), e => Assert.True(e.Payload["requirements"]!.AsArray().All(r => r!["met"]!.GetValue<bool>() && r["calls"]!.AsArray().Count == 1)));
+        Assert.Contains("1 of 1 of your requirements shown working", cp.Payload("evaluation.passed")!["summary"]!.GetValue<string>(), StringComparison.Ordinal);
+        AssertOwnerFieldsArePlain(cp);
     }
 
     [Fact]
@@ -383,7 +422,7 @@ public sealed class WorkflowTests
     [Fact]
     public async Task A_new_division_and_a_recurring_job_raise_their_hires_and_a_waiting_hire_never_stops_the_work()
     {
-        var cp = new FakeControlPlane("frostaura", "build", "Recipe box for families") { Headroom = 1000m, HiresWait = true };
+        var cp = new FakeControlPlane("frostaura", "build", "Recipe box for families\nShare recipes between households.") { Headroom = 1000m, HiresWait = true };
         cp.Schedules.Add("nightly-digest");
         var ws = new FakeWorkspace().With("api/Program.cs", "var api = app.UseEndgameApp();\napi.MapNotes();\napp.Run();\n").With("AGENTS.md", "# AGENTS\n");
         await RunBuildAsync(cp, new Factory().Model(), ws, new FakeDock());
@@ -391,7 +430,10 @@ public sealed class WorkflowTests
         Assert.Equal("division", cp.Hires["division:frostaura/labs"]["trigger"]!.GetValue<string>());
         Assert.Equal("recurring", cp.Hires["recurring:frostaura/labs/recipe-box-for-families/web"]["trigger"]!.GetValue<string>());
         Assert.All(cp.Hires.Values, h => Assert.Equal("proposed", h["status"]!.GetValue<string>()));
-        Assert.Contains(cp.Events, e => e.Type == "message" && e.Payload["milestone"]?.GetValue<string>() == "proposed:stage:build:frostaura/labs/recipe-box-for-families");
+        // Said once, in plain words; a hire is not a milestone, and its key never reaches the owner.
+        Assert.Single(cp.Events, e => e.Type == "message" && e.Payload["title"]?.GetValue<string>() == "Theo is proposed");
+        Assert.DoesNotContain(cp.Events, e => e.Type == "message" && e.Payload["kind"] is null && e.Payload.ToJsonString().Contains("stage:build", StringComparison.Ordinal));
+        AssertOwnerFieldsArePlain(cp);
     }
 
     [Fact]
@@ -505,7 +547,7 @@ public sealed class WorkflowTests
         Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
         Assert.All(model.Calls, c => Assert.Equal("chat", c.TaskType));
         Assert.Contains("Ada", model.Calls[1].Messages[^1]!["content"]!.GetValue<string>(), StringComparison.Ordinal);
-        Assert.StartsWith("Allow start_idea: A habit tracker.", Assert.Single(cp.Approvals), StringComparison.Ordinal);
+        Assert.StartsWith("Start researching an idea: A habit tracker", Assert.Single(cp.Approvals), StringComparison.Ordinal);
         Assert.DoesNotContain(cp.Requests, r => r == "POST /internal/ideas");
         Assert.Contains(cp.Events, e => e.Type == "message" && e.Payload["from"]?.GetValue<string>() == "assistant" && e.Payload["text"]!.GetValue<string>().StartsWith("One person works here", StringComparison.Ordinal));
     }
@@ -513,6 +555,121 @@ public sealed class WorkflowTests
     private static string System(ChatCall call) => call.Messages[0]!["content"] is JsonValue v ? v.GetValue<string>() : call.Messages[0]!["content"]![0]!["text"]!.GetValue<string>();
 
     private static JsonNode Json(string text) => JsonNode.Parse(text)!;
+
+    // ---- the plan as a contract, the evaluator's evidence --------------------------------------------
+
+    [Fact]
+    public async Task A_plan_that_misses_a_requirement_of_the_idea_is_refused_and_corrected()
+    {
+        var (cp, ws, dock) = BuildRun();
+        var factory = new Factory { FirstPlanMissesARequirement = true };
+        await RunBuildAsync(cp, factory.Model(), ws, dock);
+        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+        var refusal = Assert.Single(factory.PlanToolResults.Distinct(), r => r.Contains("not a contract yet", StringComparison.Ordinal));
+        Assert.Contains("Requirement 'r2' (\"Share recipes between households\") is covered by no item", refusal, StringComparison.Ordinal);
+        Assert.Single(cp.Types, t => t == "plan.proposed");
+        Assert.Equal(["r1", "r2"], cp.Payload("plan.accepted")!["items"]!.AsArray().SelectMany(i => i!["covers"]!.AsArray().Select(c => c!.GetValue<string>())));
+    }
+
+    [Fact]
+    public async Task A_requirement_left_out_is_told_to_the_owner_with_its_reason()
+    {
+        var (cp, ws, dock) = BuildRun();
+        await RunBuildAsync(cp, new Factory { LeaveOneOut = true }.Model(), ws, dock);
+        Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
+        var left = Assert.Single(cp.Payload("plan.accepted")!["leftOut"]!.AsArray());
+        Assert.Equal(("r2", "Share recipes between households"), (left!["requirement"]!.GetValue<string>(), left["text"]!.GetValue<string>()));
+        var said = cp.Events.Single(e => e.Payload["milestone"]?.GetValue<string>() == "planned").Payload["text"]!.GetValue<string>();
+        Assert.Contains("Left out: Share recipes between households, because sharing between households needs accounts", said, StringComparison.Ordinal);
+        AssertOwnerFieldsArePlain(cp);
+    }
+
+    [Fact]
+    public async Task An_evaluator_that_passes_an_item_without_showing_it_in_the_running_app_is_overruled_and_the_item_repaired()
+    {
+        var (cp, ws, dock) = BuildRun();
+        // The first evaluation says "passed" from the tests alone, never calling the app: the gate fails it.
+        var factory = new Factory { EvaluatorCallsTheApp = n => n != 0 };
+        var model = factory.Model();
+        await RunBuildAsync(cp, model, ws, dock);
+        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+        var failed = cp.Payload("evaluation.failed")!;
+        Assert.Equal(("recipes-api", 0), (failed["item"]!.GetValue<string>(), failed["round"]!.GetValue<int>()));
+        Assert.Contains("never called signed in", failed["faults"]!.ToJsonString(), StringComparison.Ordinal);
+        Assert.False(failed["requirements"]![0]!["met"]!.GetValue<bool>());
+        Assert.StartsWith("Sent back for repair, at no charge: Families can keep their recipes in one place", failed["summary"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains(model.Calls, c => c.Repair && c.TaskType == "build-t1");
+        Assert.Equal(2, cp.Types.Count(t => t == "evaluation.passed"));
+    }
+
+    [Fact]
+    public void The_gate_counts_only_evidence_that_names_a_call_that_was_made()
+    {
+        var plan = PlanContract.FromJson(Json("""{"summary":"s","requirements":[{"id":"r1","text":"see what everyone is reading now"}],"items":[{"id":"a","text":"t","detail":"d","check":"c","covers":["r1"]}]}""").AsObject())!;
+        JsonObject Answer(string evidence) => Json($$"""{"passed":true,"evidence":"e","requirements":[{"id":"r1","met":true,"evidence":"{{evidence}}"}],"faults":[]}""").AsObject();
+        Assert.True(EvaluationGate.Apply(plan, plan.Items[0], Answer("GET api/reading-now as member-a → 200, two books"), ["GET api/reading-now"])["passed"]!.GetValue<bool>());
+        Assert.True(EvaluationGate.Apply(plan, plan.Items[0], Answer("called GET /api/reading-now?limit=5"), ["GET api/reading-now"])["passed"]!.GetValue<bool>());
+        Assert.False(EvaluationGate.Apply(plan, plan.Items[0], Answer("GET api/reading-now-archive → 200"), ["GET api/reading-now"])["passed"]!.GetValue<bool>());
+        Assert.False(EvaluationGate.Apply(plan, plan.Items[0], Answer("GET api/books shows it"), ["GET api/reading-now"])["passed"]!.GetValue<bool>());
+        Assert.False(EvaluationGate.Apply(plan, plan.Items[0], Answer("GET api/reading-now → 200"), [])["passed"]!.GetValue<bool>());
+        var missing = Json("""{"passed":true,"evidence":"e","requirements":[],"faults":[]}""").AsObject();
+        var gated = EvaluationGate.Apply(plan, plan.Items[0], missing, ["GET api/reading-now"]);
+        Assert.False(gated["passed"]!.GetValue<bool>());
+        Assert.Contains("was not checked in the running app", gated["faults"]!.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Members see what everyone is reading now", true)]
+    [InlineData("see what everyone is reading now", true)]
+    [InlineData("A dashboard of reading statistics", false)]
+    public void A_requirement_must_be_in_the_ideas_own_words(string requirement, bool accepted)
+    {
+        const string idea = "A reading list for a small book club. Members add books, mark what they finished, and see what everyone is reading now.";
+        var plan = new PlanContract("A reading list for the club.", [new PlanItem("a", "Members see what the club is reading.", "GET api/reading", "c", ["r1"])], [new PlanRequirement("r1", requirement)]);
+        Assert.Equal(accepted, !plan.Faults(idea).Any(f => f.Contains("own words", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Plan_item_text_and_summary_are_plain_words_and_the_technical_detail_lives_apart()
+    {
+        const string idea = "A court booking app. Members book a court.";
+        var technical = new PlanContract("Add a Booking entity and endpoints.", [new PlanItem("a", "Add BookingsEndpoints.cs with POST api/bookings", "x", "c", ["r1"])], [new PlanRequirement("r1", "Members book a court")]);
+        var faults = technical.Faults(idea);
+        Assert.Contains(faults, f => f.StartsWith("Item 'a' text names technical detail", StringComparison.Ordinal) && f.Contains("BookingsEndpoints.cs", StringComparison.Ordinal));
+        Assert.Contains(faults, f => f.StartsWith("The summary names technical detail", StringComparison.Ordinal));
+        var plain = new PlanContract("Members can book courts.", [new PlanItem("a", "Members can book a court for a time slot.", "Booking entity; POST api/bookings; BookingsEndpoints.cs", "c", ["r1"])], [new PlanRequirement("r1", "Members book a court")]);
+        Assert.Empty(plain.Faults(idea));
+    }
+
+    /// <summary>
+    /// ARCH-004's normal-mode rule over every owner-facing field the Runner writes: messages, plans, evaluations,
+    /// sub-agents and approvals name no file, path, endpoint, code, raw key or infrastructure (OwnerText).
+    /// </summary>
+    private static void AssertOwnerFieldsArePlain(FakeControlPlane cp)
+    {
+        foreach (var (_, type, payload) in cp.Events)
+        {
+            var fields = type switch
+            {
+                "message" when payload["kind"] is null && payload["from"]?.GetValue<string>() != "owner" && payload["from"]?.GetValue<string>() != "assistant" => [payload["title"], payload["text"], payload["milestone"]],
+                "plan.proposed" or "plan.accepted" => [payload["summary"], .. payload["items"]!.AsArray().Select(i => i!["text"]), .. (payload["leftOut"] as JsonArray ?? []).Select(l => l!["reason"])],
+                "evaluation.passed" or "evaluation.failed" => [payload["text"], payload["summary"]],
+                "subagent.started" => [payload["title"]],
+                "approval.requested" => [payload["title"]],
+                _ => Array.Empty<JsonNode?>(),
+            };
+            foreach (var field in fields.OfType<JsonValue>().Select(f => f.GetValue<string>()))
+            {
+                Assert.True(Endgame.Harness.Events.OwnerText.IsPlain(field), $"{type}: \"{field}\" names {string.Join(", ", Endgame.Harness.Events.OwnerText.Technical(field))}");
+            }
+        }
+    }
+
+    private sealed class StubCaller : IAppCaller
+    {
+        public Task<AppCallAnswer> CallAsync(Guid appId, string persona, string role, string method, string path, string? body, CancellationToken cancellationToken) =>
+            Task.FromResult(new AppCallAnswer(200, "application/json", "[{\"title\":\"Soup\"}]"));
+    }
 
     private sealed class StubProbe : IPreviewProbe
     {

@@ -92,7 +92,8 @@ public sealed class RunExecutor(
         catch (Exception e) when (e is not OperationCanceledException)
         {
             logger.LogError(e, "Run {RunId} failed in the Runner.", run.Id);
-            outcome = WorkflowOutcome.Failure($"The work stopped on an internal fault and has been logged: {OutputText.Truncate(e.Message, 300)}");
+            outcome = WorkflowOutcome.Failure($"The work stopped on an internal fault and has been logged: {OutputText.Truncate(e.Message, 300)}")
+                with { ForOwner = "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; it can be started again." };
         }
 
         switch (outcome.End)
@@ -148,7 +149,7 @@ public sealed class RunExecutor(
             {
                 await ctx.Sink.AppendAsync(
                 [
-                    new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["code"] = "estimate_over_budget", ["text"] = text, ["estimate"] = expected, ["headroom"] = room }),
+                    new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["title"] = "Waiting for budget", ["code"] = "estimate_over_budget", ["text"] = text, ["estimate"] = expected, ["headroom"] = room }),
                     new RunEvent(RunEventTypes.RunPaused, new JsonObject { ["by"] = "runner", ["reason"] = "estimate_over_budget" }),
                 ], cancellationToken);
                 return WorkflowOutcome.Suspend("estimate over budget");
@@ -187,7 +188,9 @@ public sealed class RunExecutor(
                 {
                     ["from"] = "runner",
                     ["title"] = status == RunStatuses.Succeeded ? "Finished" : "Stopped",
-                    ["text"] = Workflows.WorkflowSupport.ForPeople(outcome.Summary),
+                    ["text"] = Workflows.WorkflowSupport.ForPeople(outcome.ForOwner ?? (OwnerText.IsPlain(outcome.Summary)
+                        ? outcome.Summary
+                        : status == RunStatuses.Succeeded ? "The work is finished; technical mode has the details." : "The work stopped before it was finished; technical mode says exactly why.")),
                     ["milestone"] = "finished",
                 }));
             }
