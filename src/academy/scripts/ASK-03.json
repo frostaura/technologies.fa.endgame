@@ -1,0 +1,101 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ASK-03",
+  "persona": "builder",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Which days are busiest?"
+            },
+            "text": "Which days are busiest?"
+          }
+        },
+        {
+          "click": {
+            "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+          }
+        },
+        {
+          "click": {
+            "selector": "div[role=\"status\"] > button"
+          }
+        },
+        {
+          "click": {
+            "text": "Keep this on the dashboard"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Keeping it…",
+        "note": "A card joins the dashboard at once, while the question is stored."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "It is on the dashboard, and is worked out afresh each time you open this page.",
+        "note": "Stored as its query, chart and answer, guarded again, and run."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Keep this on the dashboard",
+        "note": "Kept: the button is done, and the card below is the stored one."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "The dashboard is full",
+      "persona": "builder",
+      "scenario": "dashboard-full",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Which days are busiest?"
+              }
+            },
+            {
+              "click": {
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+              }
+            },
+            {
+              "click": {
+                "selector": "div[role=\"status\"] > button"
+              }
+            },
+            {
+              "click": {
+                "text": "Keep this on the dashboard"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "A dashboard holds at most 30 questions; remove one first.",
+            "note": "The card is taken off again, with the reason."
+          }
+        }
+      ]
+    }
+  ]
+}

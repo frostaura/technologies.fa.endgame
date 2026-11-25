@@ -1,0 +1,58 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-06",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Who can open it",
+        "note": "Private, shared or public: one setting, inherited down the tree."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Private: only people in Northwind"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Private: only people in Northwind",
+        "note": "Saved at once."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label=\"Sharing\"]",
+        "note": "From the next request the edge admits only Northwind's members; the sharing card says how to share again."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Below Admin",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "An Admin or the Owner chooses who can open it.",
+            "note": "A Builder sees the choices, disabled, and who makes them."
+          }
+        }
+      ]
+    }
+  ]
+}

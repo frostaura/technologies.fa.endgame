@@ -1,0 +1,82 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-08",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "What it uses",
+        "note": "Read from the organisation's graph of what each app has used."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label=\"What it uses\"]",
+        "note": "A chip for each platform service it has used: here, sign-in and measured visits."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Open to AI assistants",
+        "note": "Then who signed up, who it is shared with, how many secrets it reads, and that assistants can use it."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Secrets it can read:",
+        "note": "Its secrets by name, and a link to manage them."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Let an assistant in",
+        "note": "An assistant you let in uses the app as a person does."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "MCP:",
+        "note": "Technical mode adds the app's own MCP address."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Below Admin",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "ul[aria-label=\"What it uses\"]",
+            "note": "A Viewer sees the services, but not which secrets it is given."
+          }
+        }
+      ]
+    }
+  ]
+}

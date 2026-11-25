@@ -7,7 +7,8 @@ import type { StepScript } from "../src/content/scripts.ts";
 /**
  * Validates every `scripts/<FLOW-ID>.json` against the JSON Schema and against the parsed flows:
  * the flow exists, each step number is one of its steps, no step is scripted twice, and every
- * image named is on disk under `public/shots/`.
+ * image named is on disk under `public/shots/`. A variation's steps are its own, numbered 1, 2, 3…
+ * with none missing, and each carries the note that says what it shows.
  */
 
 export interface Coverage {

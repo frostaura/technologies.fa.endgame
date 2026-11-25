@@ -117,7 +117,22 @@
         "status-unreachable",
         "status-refresh-fails",
         "session-unreachable",
-        "operator-no-organisation"
+        "operator-no-organisation",
+        "ask-unavailable",
+        "app-private",
+        "app-public",
+        "app-shared-empty",
+        "app-restore-fails",
+        "app-rebuild-fails",
+        "app-not-published",
+        "app-wake-slow",
+        "app-wake-busy",
+        "app-unreachable",
+        "outage",
+        "no-secrets",
+        "dashboard-full",
+        "app-long-history",
+        "wake-failures"
       ]
     },
     "start": {
@@ -341,7 +356,8 @@
             "terminal",
             "request",
             "email",
-            "image"
+            "image",
+            "code"
           ]
         }
       },
@@ -551,6 +567,49 @@
             "alt": {
               "type": "string",
               "minLength": 1
+            },
+            "note": {
+              "$ref": "#/definitions/note"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "language",
+            "code"
+          ],
+          "properties": {
+            "step": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "const": "code"
+            },
+            "language": {
+              "enum": [
+                "csharp",
+                "typescript",
+                "tsx",
+                "javascript",
+                "json",
+                "http",
+                "bash",
+                "sql",
+                "yaml",
+                "text"
+              ]
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "output": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "note": {
               "$ref": "#/definitions/note"

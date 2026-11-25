@@ -1,0 +1,65 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-24",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "text",
+      "code": "Portainer → Stacks → + Add stack\n  Name:          endgame\n  Build method:  Web editor\n  Web editor:    paste the whole of docker-compose.prod.yml",
+      "note": "The name matters: Dock finds its neighbours as endgame-edge-1 and so on. Another name needs ENDGAME_STACK_NAME set to match. Not yet run with real credentials (ARCH-008): what you will see, not a recorded run."
+    },
+    {
+      "step": 2,
+      "kind": "code",
+      "language": "bash",
+      "code": "# REQUIRED — the stack refuses to start without every one of these seven.\nPOSTGRES_PASSWORD=\nENDGAME_SERVICE_TOKEN=\nDOCK_SECRET_KEY=\nOPENROUTER_API_KEY=\nENDGAME_VAULT_MASTER_KEY=\nENDGAME_OPERATORS=\nENDGAME_BACKUP_KEY=\n\n# WHERE IT LIVES — defaults shown; set only what differs.\nENDGAME_STACK_NAME=endgame\nENDGAME_GATEWAY_PORT=8095\nENDGAME_CONSOLE_HOST=endgame.frostaura.net\nENDGAME_ZONE=frostaura.net\nENDGAME_IMAGE_TAG=latest\nENDGAME_IMAGE_NAMESPACE=frostaura\nDOCKER_SOCKET_GID=0\n\n# THE TUNNEL — pick one.\nCOMPOSE_PROFILES=\nCLOUDFLARE_TUNNEL_TOKEN=\n\n# OUTGOING MAIL — optional.\nSMTP_HOST=\nSMTP_PORT=587\nSMTP_USERNAME=\nSMTP_PASSWORD=\nSMTP_FROM=\nSMTP_STARTTLS=true\n\n# OFFSITE BACKUPS — optional, all four or none.\nENDGAME_BACKUP_S3_ENDPOINT=\nENDGAME_BACKUP_S3_BUCKET=\nENDGAME_BACKUP_S3_ACCESS_KEY_ID=\nENDGAME_BACKUP_S3_SECRET_ACCESS_KEY=\nENDGAME_BACKUP_S3_REGION=auto\nENDGAME_BACKUP_DIR=\nBACKUP_HOUR_UTC=1\nENDGAME_BACKUP_KEEP_DAILY=7\nENDGAME_BACKUP_KEEP_WEEKLY=4\nENDGAME_BACKUP_SCHEDULE=true\n\n# CLOUDFLARE MANAGEMENT — optional, and held.\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=\nCLOUDFLARE_ZONE_ID=\nCLOUDFLARE_TUNNEL_ID=\n\n# TUNING — optional.\nDOCK_APP_MEMORY_BUDGET_MB=4096\nDOCK_SUBNET_POOL=10.213.0.0/16\nENDGAME_USAGE_REPORT_SECONDS=300\nPOSTGRES_USER=endgame\nPOSTGRES_DB=endgame",
+      "note": "Environment variables → Advanced mode → paste this, from .env.production.example (its comments shortened), and fill it in. Each required key: openssl rand -hex 32 (24 for the password). Keep DOCK_SECRET_KEY, ENDGAME_VAULT_MASTER_KEY and ENDGAME_BACKUP_KEY off this machine too."
+    },
+    {
+      "step": 3,
+      "kind": "terminal",
+      "command": "curl -fsS http://<host>:8095/health",
+      "output": [
+        "{\"status\":\"healthy\",\"service\":\"edge\",\"revision\":\"<commit>\",\"routes\":{\"loaded\":true,\"version\":1,\"apps\":0,\"lastError\":null}}"
+      ],
+      "note": "Deploy the stack, and within about a minute every service reports healthy. The edge is the only published port, and its /health names the commit it was built from. Not yet run with real credentials (ARCH-008): what you will see, not a recorded run."
+    },
+    {
+      "step": 4,
+      "kind": "code",
+      "language": "text",
+      "code": "(a) a tunnel already on the host:\n      endgame.<zone>  →  http://localhost:8095\n      *.<zone>        →  http://localhost:8095\n(b) the tunnel inside this stack:\n      COMPOSE_PROFILES=tunnel\n      CLOUDFLARE_TUNNEL_TOKEN=<the tunnel's token>\n      its public hostnames → http://edge:8080",
+      "note": "Pick one; with (b), update the stack after setting the two keys. The port is ENDGAME_GATEWAY_PORT. With the tunnel routed, https://endgame.<zone>/ opens the console. Not yet run with real credentials (ARCH-008): what you will see, not a recorded run."
+    },
+    {
+      "step": 5,
+      "kind": "code",
+      "language": "text",
+      "code": "https://endgame.<zone>/\n  register a passkey with an address listed in ENDGAME_OPERATORS\n  God mode → the organisation → top it up (OP-05)",
+      "note": "The operator's passkey is the first sign-in. Without SMTP nothing is e-mailed: codes and invitations are handed over by hand. Not yet run with real credentials (ARCH-008): what you will see, not a recorded run."
+    }
+  ],
+  "variations": [
+    {
+      "title": "A required variable is missing",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "docker compose -f docker-compose.prod.yml config -q",
+          "output": [
+            "error while interpolating services.ops.environment.Ops__Backup__Key: required variable ENDGAME_BACKUP_KEY is missing a value: ENDGAME_BACKUP_KEY is required"
+          ],
+          "note": "Portainer shows compose's error and the stack does not start. Each of the seven required keys has its own \"X is required\" message; which is reported first can vary. make prod-config (OPS-08) checks this one."
+        }
+      ]
+    }
+  ]
+}

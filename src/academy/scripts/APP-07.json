@@ -1,0 +1,95 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-07",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Public: anyone, no sign-in needed to open it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Make Court booking public?",
+        "note": "Picking Public saves nothing yet."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Only a person can make this choice.",
+        "note": "Anyone with the address could open it, signed in or not."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Make it public"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Court booking is public",
+        "note": "Saved: visitors are admitted with no sign-in."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Public: anyone, no sign-in needed to open it",
+        "note": "“Keep it as it is”, or Escape, would have left it as it was."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Keep it as it is",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Public: anyone, no sign-in needed to open it"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Keep it as it is",
+            "note": "The dialog can be declined."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Keep it as it is"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Shared: people you invite",
+            "note": "Nothing changed: it is still shared."
+          }
+        }
+      ]
+    }
+  ]
+}

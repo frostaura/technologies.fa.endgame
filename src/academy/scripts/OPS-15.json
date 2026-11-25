@@ -1,0 +1,93 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-15",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make ops-verify BACKUP=20261125T010312Z",
+      "output": [
+        "docker compose exec -T ops /app/Endgame.Ops verify 20261125T010312Z",
+        "Backup 20261125T010312Z is intact: 2 database(s), 1312 file(s), every chunk authenticated against the manifest."
+      ],
+      "note": "The archive is read end to end and every chunk and entry is checked against its manifest. Nothing is restored or changed. The file count is printed without separators. The id and counts are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "No id given",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-verify",
+          "output": [
+            "ops-verify: make ops-verify BACKUP=<id>",
+            "make: *** [ops-verify] Error 2"
+          ],
+          "note": "The Makefile refuses before calling the ops service. Exit code 2."
+        }
+      ]
+    },
+    {
+      "title": "A different backup key",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "docker compose exec -T ops /app/Endgame.Ops verify 20261125T010312Z",
+          "output": [
+            "This backup was sealed with a different ENDGAME_BACKUP_KEY (archive key id 9b2e5c71d40a8f36, configured 41c7e09a2bd35f18).",
+            "make: *** [ops-verify] Error 1"
+          ],
+          "note": "The archive header carries an id of the key that sealed it, so a wrong key is told apart from a damaged archive. The key ids are illustrative."
+        }
+      ]
+    },
+    {
+      "title": "A damaged or incomplete archive",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "docker compose exec -T ops /app/Endgame.Ops verify 20261124T010208Z",
+          "output": [
+            "The backup failed its integrity check at chunk 412: it has been altered or damaged.",
+            "make: *** [ops-verify] Error 1"
+          ],
+          "note": "Others are \"The backup is truncated: it ends before its final chunk.\", \"The backup has no manifest: it is incomplete.\" and \"The backup is damaged: it has entries after its manifest.\". The chunk number is illustrative."
+        }
+      ]
+    },
+    {
+      "title": "No archive with that id",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "docker compose exec -T ops /app/Endgame.Ops verify 20261101T010000Z",
+          "output": [
+            "There is no backup endgame-20261101T010000Z.egbk in /backups.",
+            "make: *** [ops-verify] Error 1"
+          ],
+          "note": "The local store's message. An id in the wrong shape is refused first: \"'<given>' is not a backup id (they look like 20261125T010000Z; `make ops-backups` lists them).\""
+        }
+      ]
+    }
+  ]
+}

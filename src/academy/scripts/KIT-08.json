@@ -1,0 +1,48 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-08",
+  "persona": "end-user",
+  "scenario": "app-public",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign out"
+          }
+        }
+      ],
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "The app's sign-out link goes to _endgame/auth/sign-out: the session is revoked and its cookie cleared."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "The reading list",
+        "note": "A member signing out here is signed out of the console too."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Back inside the app, at its home, signed out."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Back to Endgame",
+        "note": "Signing out of the console also revokes every app session this browser holds."
+      }
+    }
+  ]
+}

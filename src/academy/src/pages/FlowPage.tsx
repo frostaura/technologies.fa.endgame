@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Flow, Step } from "../content/types.ts";
-import { flow as flowById, isOperator, nextInPath, scripts, track } from "../lib/data.ts";
+import { flow as flowById, isOperator, nextInPath, scripts, shotFor, track } from "../lib/data.ts";
 import { ROLE_LABEL } from "../lib/labels.ts";
 import { href } from "../lib/router.ts";
 import { markDone, markSeen, useProgress } from "../lib/progress.ts";
@@ -21,6 +21,7 @@ const MEDIA_LABEL: Record<Media, string> = {
   request: "Request",
   email: "E-mail",
   image: "Screenshot",
+  code: "Code",
   facts: "",
 };
 
@@ -233,6 +234,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
                   ? { title: variation.title, step: branch.step, total: variation.steps.length, onStep: (n) => setBranch({ index: branch.index, step: n }), onClose: () => setBranch(null) }
                   : undefined
               }
+              captured={(n) => (branch && variation ? (n === variation.steps.length ? shotFor(f.id, `v${branch.index + 1}`) : undefined) : shotFor(f.id, n))}
               run={run}
               interactive={interactive}
               onTry={() => setInteractive(true)}

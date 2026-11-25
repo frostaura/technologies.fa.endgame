@@ -1,0 +1,26 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-09",
+  "persona": "signed-out",
+  "scenario": "s1-development-apps",
+  "start": "/__app/{app}/path/_endgame/auth/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Development sign-in",
+        "note": "Only on a development stack (ENDGAME_DEV_LOGIN=true): an e-mail address, then “As a member” or “As a visitor”. make prod-config proves production pins it off."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/__app/{app}/path/_endgame/auth/sign-up",
+      "highlight": {
+        "text": "Create your sign-in for Court booking",
+        "note": "On sign-up the button is “Continue without a passkey”, but not here: Court booking is shared, so an invitation code is required."
+      }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-12",
+  "persona": "admin",
+  "scenario": "app-asleep",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "[data-testid=\"app_models.monthly_credits-now\"] ~ span button"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Credits a month"
+            },
+            "text": "80"
+          }
+        },
+        {
+          "click": {
+            "selector": "form[aria-label=\"Set its ai allowance\"] button[type=submit]"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Course Notes may spend 80 credits a month here.",
+        "note": "Its AI allowance, set on Course Notes. Once used, only its AI answers stop until the month turns."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "None set anywhere",
+      "persona": "viewer",
+      "scenario": "app-asleep",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "FrostAura's standard allowance applies.",
+            "note": "With none set on it or above it, the standard allowance holds."
+          }
+        }
+      ]
+    }
+  ]
+}

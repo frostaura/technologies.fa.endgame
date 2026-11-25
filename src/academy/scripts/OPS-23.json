@@ -1,0 +1,40 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-23",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "text",
+      "code": "Backend · Hosting (real Docker) · App kit · Ops (with the restore rehearsal) · Frontend · Security\nStack smoke · E2E smoke · Stack acceptance (make e2e-stack)\n\nPublish control-plane (amd64)   Publish control-plane (arm64)\nPublish edge (amd64)   Publish edge (arm64)\nPublish runner (amd64)   Publish runner (arm64)\nPublish dock (amd64)   Publish dock (arm64)\nPublish console (amd64)   Publish console (arm64)\nPublish egress (amd64)   Publish egress (arm64)\nPublish ops (amd64)   Publish ops (arm64)",
+      "note": "The job names GitHub shows (ci.yml). On a push to main, once every test job passes, 14 Publish jobs each build one image for one architecture, log in to Docker Hub and push. Not yet run with real credentials (ARCH-008): what you will see, not a recorded run."
+    },
+    {
+      "step": 2,
+      "kind": "code",
+      "language": "text",
+      "code": "Tag control-plane (multi-arch)\nTag edge (multi-arch)\nTag runner (multi-arch)\nTag dock (multi-arch)\nTag console (multi-arch)\nTag egress (multi-arch)\nTag ops (multi-arch)\n\n<namespace>/technologies.fa.endgame-<image>:sha-<commit>\n<namespace>/technologies.fa.endgame-<image>:latest",
+      "note": "Each Tag job joins the two architectures under sha-<commit> and latest. The namespace is the DOCKERHUB_NAMESPACE variable, frostaura when unset. Not yet run with real credentials (ARCH-008): what you will see, not a recorded run."
+    }
+  ],
+  "variations": [
+    {
+      "title": "No Docker Hub secrets",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "text",
+          "code": "Publish control-plane (amd64)\n  ✓ Build\n  ✗ Log in to Docker Hub\n  – Push",
+          "note": "Without DOCKERHUB_USERNAME and DOCKERHUB_TOKEN every Publish job fails at this step, after its image has built. Nothing earlier depends on them. Set them under Settings → Secrets and variables → Actions."
+        }
+      ]
+    }
+  ]
+}

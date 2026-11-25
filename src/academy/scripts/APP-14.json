@@ -1,0 +1,59 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-14",
+  "persona": "admin",
+  "scenario": "app-not-published",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Delete Tutor Match"
+          }
+        },
+        {
+          "click": {
+            "text": "Yes, delete Tutor Match"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "nav[aria-label=\"Where you are\"]",
+        "note": "Nothing was ever built or run on it, so it is deleted, and the organisation opens."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An app that has run is archived instead",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Delete Court booking"
+              }
+            },
+            {
+              "click": {
+                "text": "Yes, delete Court booking"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Archive it instead",
+            "note": "It has history, so it cannot be deleted: archive it instead."
+          }
+        }
+      ]
+    }
+  ]
+}

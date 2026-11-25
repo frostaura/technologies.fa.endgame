@@ -1,0 +1,91 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-02",
+  "persona": "viewer",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Healthy",
+        "note": "Health: a pulsing dot while it is healthy, and today's errors beneath."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Visits today",
+        "note": "Visits today, with when the last one came."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Typical response",
+        "note": "The median response time; beneath it, the slowest one in twenty."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Cost this month",
+        "note": "Credits spent this month; beneath it, the cap that holds it."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Nothing measured yet",
+      "persona": "viewer",
+      "scenario": "app-never-measured",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Not measured yet",
+            "note": "Before it has run, Visits and Typical response say so: unknown, never zero."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Paused: a budget above it is spent",
+      "persona": "viewer",
+      "scenario": "app-paused",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Paused:",
+            "note": "The health note says why it is paused and what restores it."
+          }
+        }
+      ]
+    },
+    {
+      "title": "It crashed",
+      "persona": "viewer",
+      "scenario": "app-crashed",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Down",
+            "note": "Down: it stopped working and needs attention."
+          }
+        }
+      ]
+    }
+  ]
+}

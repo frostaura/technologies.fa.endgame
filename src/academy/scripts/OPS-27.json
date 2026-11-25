@@ -1,0 +1,81 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-27",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make ops-test-worker",
+      "output": [
+        "cd src/ops/outage-worker && node --test",
+        "✔ a healthy origin's answer passes through untouched",
+        "✔ the origin sees the very request the visitor made",
+        "✔ a 502 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 504 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 520 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 521 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 522 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 523 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 524 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 525 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 526 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 527 from the tunnel or Cloudflare becomes the outage page",
+        "✔ a 530 from the tunnel or Cloudflare becomes the outage page",
+        "✔ an origin that cannot be reached at all becomes the outage page",
+        "✔ a deliberate 500 from Endgame or an app is passed through",
+        "✔ a deliberate 501 from Endgame or an app is passed through",
+        "✔ a deliberate 503 from Endgame or an app is passed through",
+        "✔ a deliberate 404 from Endgame or an app is passed through",
+        "✔ a deliberate 403 from Endgame or an app is passed through",
+        "✔ a deliberate 302 from Endgame or an app is passed through",
+        "✔ an API call during an outage gets a short plain-text 503, not a page",
+        "✔ HEAD during an outage gets the status and no body",
+        "✔ only GET and HEAD navigations want a page",
+        "✔ the classification of statuses",
+        "✔ the page is self-contained: no external resource, the mark inline",
+        "✔ the default export is a module Worker with a fetch handler",
+        "ℹ tests 26",
+        "ℹ suites 0",
+        "ℹ pass 26",
+        "ℹ fail 0",
+        "ℹ cancelled 0",
+        "ℹ skipped 0",
+        "ℹ todo 0"
+      ],
+      "note": "Captured from a real run under Node 26. Each test line also ends with its time, and a last line gives the total duration; both vary and are left out. No dependencies, no build step and no network."
+    },
+    {
+      "step": 2,
+      "kind": "terminal",
+      "command": "make ops-test",
+      "output": [
+        "cd src/ops/outage-worker && node --test",
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet test src/backend/Endgame.Ops.Tests/Endgame.Ops.Tests.csproj --nologo",
+        "Test summary: total: 97, failed: 0, succeeded: 97, skipped: 0, duration: 241.8s"
+      ],
+      "note": "The Worker's tests first (step 1), then the ops tests: unit, the reconciler against a fake Cloudflare, and the backup, destroy and restore rehearsal on its own throwaway stack. The counts and time are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "Skip the Docker rehearsal",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "ENDGAME_SKIP_DOCKER_TESTS=1 make ops-test",
+          "output": [
+            "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet test src/backend/Endgame.Ops.Tests/Endgame.Ops.Tests.csproj --nologo"
+          ],
+          "note": "With ENDGAME_SKIP_DOCKER_TESTS set to 1 or true the rehearsal passes at once and writes \"Skipped: ENDGAME_SKIP_DOCKER_TESTS is set.\" to its test output. Use it only where there is no Docker."
+        }
+      ]
+    }
+  ]
+}

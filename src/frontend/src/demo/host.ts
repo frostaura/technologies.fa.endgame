@@ -10,6 +10,7 @@ import "./world/scenarios.s2";
 // Scenarios kept per flow file. Imported here, after scenarios.ts has run: they call its defineScenario.
 import "./world/scenarios.s1";
 import "./world/scenarios.s4";
+import "./world/scenarios.s5";
 import { installDevice } from "./device";
 
 /**

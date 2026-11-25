@@ -1,0 +1,80 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-13",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "csharp",
+      "code": "public static bool IsDue(DateTimeOffset now, IReadOnlyList<StoredBackup> stored, int hourUtc)\n{\n    if (stored.Count == 0)\n    {\n        return true;\n    }\n\n    var newest = stored.Max(b => b.CreatedAt).UtcDateTime;\n    var today = now.UtcDateTime.Date;\n    return newest < today && now.UtcDateTime.Hour >= hourUtc;\n}",
+      "note": "From BackupScheduler.cs. The first check is 30 seconds after the service starts, then one every 5 minutes. An empty store is due at once, whatever the hour. Otherwise a backup is due once the hour (BACKUP_HOUR_UTC, default 1) has passed and today has no archive."
+    },
+    {
+      "step": 2,
+      "kind": "terminal",
+      "command": "docker compose logs ops",
+      "output": [
+        "ops-1  | info: Endgame.Ops.Backups.BackupScheduler[0]",
+        "ops-1  |       The nightly backup is due but every database is empty (a stack waiting for a restore?); skipped."
+      ],
+      "note": "Logged when a backup is due but no database holds a table, view or sequence yet: a fresh stack waiting to be restored onto never gets an empty archive filed as the newest."
+    },
+    {
+      "step": 3,
+      "kind": "terminal",
+      "command": "docker compose logs ops",
+      "output": [
+        "ops-1  | info: Endgame.Ops.Backups.BackupService[0]",
+        "ops-1  |       Backup endgame-20261125T010312Z.egbk: 2 database(s) to the bucket 'endgame-backups' at 4b8e2d17c9a0f3e65d21b7c84a9f0e13.r2.cloudflarestorage.com, encrypted before upload",
+        "ops-1  | info: Endgame.Ops.Backups.BackupService[0]",
+        "ops-1  |       Backup endgame-20261125T010312Z.egbk written: 51380224 bytes sealed in 9.1 s",
+        "ops-1  | info: Endgame.Ops.Backups.BackupService[0]",
+        "ops-1  |       Backup endgame-20261117T010245Z.egbk pruned by retention"
+      ],
+      "note": "The nightly run, then retention: it keeps the newest archive of each of the last 7 days and the last 4 ISO weeks, and always the newest. Pruning runs only after a backup succeeds. Ids, sizes, seconds and dates are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The nightly run fails",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "docker compose logs ops",
+          "output": [
+            "ops-1  | fail: Endgame.Ops.Backups.BackupService[0]",
+            "ops-1  |       Backup failed: The S3 server answered 403 to PUT endgame/endgame-20261125T010312Z.egbk.",
+            "ops-1  | fail: Endgame.Ops.Backups.BackupScheduler[0]",
+            "ops-1  |       The nightly backup failed; it will try again at the next check: The S3 server answered 403 to PUT endgame/endgame-20261125T010312Z.egbk."
+          ],
+          "note": "The failure is logged and retried at the next check, 5 minutes later. Nobody is notified: only this log and /health (its last attempt) carry it. The S3 error text is illustrative, and each line's exception is left out."
+        }
+      ]
+    },
+    {
+      "title": "The schedule never starts",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "docker compose logs ops",
+          "output": [
+            "ops-1  | info: Endgame.Ops.Backups.BackupScheduler[0]",
+            "ops-1  |       The nightly backup schedule is switched off (Ops__Backup__ScheduleEnabled=false)."
+          ],
+          "note": "With ENDGAME_BACKUP_SCHEDULE=false the timer stops at once. With a key that cannot be used it logs a warning instead: \"No nightly backup will run:\" and the reason."
+        }
+      ]
+    }
+  ]
+}

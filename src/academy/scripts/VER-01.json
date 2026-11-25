@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VER-01",
+  "persona": "viewer",
+  "scenario": "app-long-history",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Any version can be brought back.",
+        "note": "Every change is kept, with who made it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Live now",
+        "note": "Newest first: a plain title, who made it and when. One is live."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "The factory recorded its progress",
+        "note": "The factory's own bookkeeping is named as such."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Show earlier versions"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Booking confirmations by e-mail",
+        "note": "Ten more, further back."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "No versions yet",
+      "persona": "viewer",
+      "scenario": "app-not-published",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "No versions yet",
+            "note": "The first version appears once it is built."
+          }
+        }
+      ]
+    }
+  ]
+}

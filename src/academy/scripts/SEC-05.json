@@ -1,0 +1,55 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SEC-05",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/secrets?scope=northwind/technologies/court-booking/web",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Set its own here"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "New value for MAIL_SENDER_ADDRESS"
+            },
+            "text": "demo-value-not-real"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "New value for MAIL_SENDER_ADDRESS",
+        "note": "Court booking sets its own value under the same name."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Replace the secret"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "MAIL_SENDER_ADDRESS is saved.",
+        "note": "Set here now, and it replaces the one set at Northwind."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Replaces the one set at Northwind.",
+        "note": "The app now reads this value, not the inherited one (KIT-14)."
+      }
+    }
+  ]
+}

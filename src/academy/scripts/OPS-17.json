@@ -1,0 +1,34 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-17",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "csharp",
+      "code": "var (exit, _, error) = await RunAsync(TimeSpan.FromMinutes(5), \"sh\", \"-c\", $\"{ComposeCommand} exec -T ops /app/Endgame.Ops restore {id}\");\nAssert.NotEqual(0, exit);\nAssert.Contains(\"Refusing to restore over data that is already here\", error);\nAssert.Equal(before.LedgerRows, (await SnapshotAsync(ownerAfter, appId, dock)).LedgerRows);",
+      "output": [
+        "backup 20261125T101500Z: `make backup` took 14.2 s wall; archive 49,823,744 bytes in the bucket",
+        "destroyed: the stack's containers and every volume (database, repositories, local backups)",
+        "refused: restoring again over the non-empty stack without OVERWRITE=1"
+      ],
+      "note": "The end of RehearsalTests: a throwaway stack is filled, backed up with make backup to an S3 server, destroyed with every volume, restored with make restore, and compared. Then a second restore over the live data must be refused and change nothing."
+    },
+    {
+      "step": 2,
+      "kind": "terminal",
+      "command": "make restore BACKUP=20261125T010312Z OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+      "output": [
+        "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops restore 20261125T010312Z",
+        "Verifying endgame-20261125T010312Z.egbk from the bucket 'endgame-backups' at 4b8e2d17c9a0f3e65d21b7c84a9f0e13.r2.cloudflarestorage.com, encrypted before upload...",
+        "Verified: 2 database(s), 1312 file(s), every chunk authenticated (4.6 s).",
+        "RESTORE_VERIFY_SECONDS=4.62",
+        "RESTORE_SECONDS=12.37"
+      ],
+      "note": "On another Docker host with the compose file and a .env holding the same ENDGAME_VAULT_MASTER_KEY, DOCK_SECRET_KEY and ENDGAME_BACKUP_KEY, and the same bucket keys. The lines in between are as in OPS-16. Ids, sizes, seconds and dates are illustrative."
+    }
+  ]
+}

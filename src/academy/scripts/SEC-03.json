@@ -1,0 +1,156 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SEC-03",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/secrets?scope=northwind/technologies/court-booking/web",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "It applies to Court booking and everything beneath it.",
+        "note": "Saving a name that already applies here replaces it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Name"
+            },
+            "text": "stripe api-key"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "section[aria-label=\"Add a secret\"] input",
+        "note": "Capitals as you type; spaces and hyphens become underscores."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Value"
+            },
+            "text": "demo-value-not-real"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "section[aria-label=\"Add a secret\"] input[type=password]",
+        "note": "A password field: typed once, never shown."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Save the secret"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Saving…",
+        "note": "The value field is cleared at once; the value is sealed."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "STRIPE_API_KEY",
+        "note": "The name joins the list at once, set here."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "STRIPE_API_KEY is saved. Its value is sealed and will not be shown.",
+        "note": "Saved, and the Name field is cleared."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A name it cannot take",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/secrets?scope=northwind/technologies/court-booking/web",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Name"
+                },
+                "text": "1password"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Value"
+                },
+                "text": "demo-value-not-real"
+              }
+            },
+            {
+              "click": {
+                "text": "Save the secret"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Use capital letters, digits and underscores, starting with a letter",
+            "note": "Checked before anything is sent."
+          }
+        }
+      ]
+    },
+    {
+      "title": "No value typed",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/secrets?scope=northwind/technologies/court-booking/web",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Name"
+                },
+                "text": "STRIPE_API_KEY"
+              }
+            },
+            {
+              "click": {
+                "text": "Save the secret"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Type the value to store.",
+            "note": "A secret needs a value."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-06",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make test",
+      "output": [
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet test src/backend/Endgame.Tests/Endgame.Tests.csproj --nologo",
+        "Test summary: total: 1184, failed: 0, succeeded: 1184, skipped: 0, duration: 312.4s",
+        "cd src/frontend && npm run test -- --run",
+        " Test Files  64 passed (64)",
+        "      Tests  702 passed (702)",
+        "make -C src/appkit test",
+        "cd src/ops/outage-worker && node --test",
+        "ℹ tests 26",
+        "ℹ pass 26",
+        "ℹ fail 0",
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet test src/backend/Endgame.Ops.Tests/Endgame.Ops.Tests.csproj --nologo",
+        "Test summary: total: 97, failed: 0, succeeded: 97, skipped: 0, duration: 241.8s"
+      ],
+      "note": "The four suites in order: backend, console, kit, then ops (the outage Worker first, then the ops tests with the restore rehearsal). The Worker's 26 is real. The other counts and times are illustrative, and each suite's per-test lines are left out."
+    }
+  ]
+}

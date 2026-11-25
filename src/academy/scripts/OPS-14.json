@@ -1,0 +1,50 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-14",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make ops-backups",
+      "output": [
+        "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops backups",
+        "Backups in the bucket 'endgame-backups' at 4b8e2d17c9a0f3e65d21b7c84a9f0e13.r2.cloudflarestorage.com, encrypted before upload:",
+        "  20261125T010312Z       51,380,224 bytes",
+        "  20261124T010208Z       51,207,341 bytes",
+        "  20261123T010155Z       51,022,876 bytes",
+        "  20261122T010311Z       50,899,102 bytes",
+        "  20261121T010149Z       50,731,554 bytes",
+        "  20261120T010226Z       50,644,018 bytes",
+        "  20261119T010301Z       50,512,903 bytes",
+        "  20261116T010144Z       49,982,117 bytes",
+        "0.406 GB of the 10 GB free allowance in 8 archive(s)."
+      ],
+      "note": "Production (OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"), newest first: seven daily archives and one older weekly. On the development stack the store is the /backups directory. Ids, sizes, seconds and dates are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "No archive yet",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-backups",
+          "output": [
+            "docker compose exec -T ops /app/Endgame.Ops backups",
+            "Backups in a directory on this machine (/backups), not offsite: no bucket is configured:",
+            "  (none yet)",
+            "0 GB in 0 archive(s) on this machine; nothing is offsite."
+          ],
+          "note": "A fresh development stack with no bucket. The usage line is still printed."
+        }
+      ]
+    }
+  ]
+}

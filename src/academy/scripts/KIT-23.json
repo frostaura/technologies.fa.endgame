@@ -1,0 +1,111 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-23",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "csharp",
+      "code": "/// <summary>What a person writes to make a note. Attributes here are checked before the handler runs.</summary>\npublic sealed record NewNote(\n    [property: Required, StringLength(Note.TitleMax, MinimumLength = 1)] string Title,\n    [property: StringLength(Note.BodyMax)] string? Body);",
+      "note": "From the template. Any body on an api/ endpoint whose type carries DataAnnotations, or implements IValidatableObject, is checked."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/acme/labs/demo/notes/api/notes",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "title": ""
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "title": "Some fields need fixing",
+          "status": 400,
+          "errors": {
+            "Title": ["The Title field is required."]
+          },
+          "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
+        }
+      },
+      "note": "The handler never ran. One entry per field; the messages are .NET's DataAnnotations defaults unless the attribute sets ErrorMessage. The address and trace id are illustrative."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "GET",
+      "path": "/acme/labs/demo/notes/api/notes/0193a8e2-5c1f-7d4b-9e2a-6f8c1b3d5e70/summary",
+      "response": {
+        "status": 402,
+        "body": {
+          "title": "The credit budget is spent",
+          "status": 402,
+          "detail": "This feature is paused until the organisation tops up its credits.",
+          "code": "budget_exhausted",
+          "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
+        }
+      },
+      "note": "A model call inside an illustrative endpoint hit a spent budget and the app did not catch it. Other uncaught platform failures: 503 \"A platform service is unavailable\" or 502 \"A platform service failed\", each with its code."
+    },
+    {
+      "step": 4,
+      "kind": "code",
+      "language": "tsx",
+      "code": "import { api, BudgetExhaustedError, NotSignedInError, signInUrl, ValidationError } from \"@endgame/appkit\";\n\ntry {\n  await api(\"notes\", { method: \"POST\", body: { title, body } });\n} catch (e) {\n  if (e instanceof ValidationError) setFieldErrors(e.errors); // { Title: [\"The Title field is required.\"] }\n  else if (e instanceof NotSignedInError) location.assign(e.signInUrl ?? signInUrl());\n  else if (e instanceof BudgetExhaustedError) setNotice(e.message);\n  else throw e;\n}",
+      "note": "api() never returns a failure as data: 400 ValidationError, 401 NotSignedInError, 402 BudgetExhaustedError, 403 ForbiddenError, 404 NotFoundError, NetworkError when nothing answered, ApiError otherwise. Branch on the type, never the message."
+    },
+    {
+      "step": 5,
+      "kind": "code",
+      "language": "tsx",
+      "code": "const notes = useApiQuery<NoteSummary[]>(\"notes\");\n\n{notes.status === \"loading\" && <LoadingState label=\"Loading notes…\" />}\n{notes.status === \"failed\" && <FailedState error={notes.error} onRetry={notes.reload} />}\n{notes.status === \"loaded\" && notes.data.length === 0 && <EmptyState title=\"No notes yet\" />}",
+      "note": "Three states, never two: a failed read is not shown as \"nothing here\". After any successful write through api(), every mounted useApiQuery re-reads, keeping its data on screen meanwhile."
+    }
+  ],
+  "variations": [
+    {
+      "title": "A path that would escape the app's address",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "typescript",
+          "code": "await api(\"/notes\");\nawait api(\"api/notes\");\nawait api(\"https://example.com/notes\");",
+          "output": [
+            "Error: api(\"/notes\"): drop the leading slash — write api(\"notes\"). A leading slash escapes the app's address prefix and breaks the app under a path.",
+            "Error: api(\"api/notes\"): paths are already inside api/ — write api(\"notes\").",
+            "Error: api(\"https://example.com/notes\"): api() calls this app's own API only. Other hosts are reached from the server, through the platform."
+          ],
+          "note": "Each throws at once, before any request; the three lines are three separate calls."
+        }
+      ]
+    },
+    {
+      "title": "Nothing answers",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "typescript",
+          "code": "try { await api(\"notes\"); } catch (e) { console.log(e instanceof NetworkError, e.status, e.message); }",
+          "output": [
+            "true 0 The app could not be reached. Check the connection and try again."
+          ],
+          "note": "Offline, or the app is restarting. FailedState shows it with a way to try again."
+        }
+      ]
+    }
+  ]
+}

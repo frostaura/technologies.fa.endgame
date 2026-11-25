@@ -10,6 +10,8 @@ import {
   normaliseEmail,
   renderAuthPage,
   renderMessagePage,
+  renderOutagePage,
+  OUTAGE,
   renderUnavailablePage,
   UNAVAILABLE_COPY,
   type AppAuthInfo,
@@ -172,6 +174,9 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
     if (outcome.kind === "unavailable") {
       html = renderUnavailablePage(outcome.reason);
       tabTitle = `${UNAVAILABLE_COPY[outcome.reason].title} · Endgame`;
+    } else if (outcome.kind === "outage") {
+      html = renderOutagePage();
+      tabTitle = OUTAGE.title;
     } else if (outcome.kind === "message") {
       html = renderMessagePage(outcome.title, outcome.message, outcome.link, outcome.linkText);
       tabTitle = `${outcome.title} · Endgame`;

@@ -1,0 +1,162 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-03",
+  "persona": "invited",
+  "scenario": "app-busy",
+  "start": "/__app/{app}/path/_endgame/auth/sign-up",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Create your sign-in for Court booking",
+        "note": "A shared app admits only the addresses it was shared with."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "E-mail address"
+            },
+            "text": "weekend.cover@northwind.example"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Your name"
+            },
+            "text": "Sam Okafor"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Invitation code"
+            },
+            "text": "TB-7QW2"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Create a passkey",
+        "note": "The address it was shared with, a name, and the code they were given."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Create a passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The reading list",
+        "note": "A passkey for this app only; the code is used up, and a 14-day session starts."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A wrong code",
+      "persona": "invited",
+      "scenario": "app-busy",
+      "start": "/__app/{app}/path/_endgame/auth/sign-up",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "E-mail address"
+                },
+                "text": "weekend.cover@northwind.example"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Your name"
+                },
+                "text": "Sam Okafor"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Invitation code"
+                },
+                "text": "WRONG-CODE"
+              }
+            },
+            {
+              "click": {
+                "text": "Create a passkey"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "This app is shared with chosen people",
+            "note": "A wrong address, a wrong, expired or used code: 403, in the same words."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Already registered",
+      "persona": "invited",
+      "scenario": "app-busy",
+      "start": "/__app/{app}/path/_endgame/auth/sign-up",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "E-mail address"
+                },
+                "text": "chef@northwind.example"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Your name"
+                },
+                "text": "Chef"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Invitation code"
+                },
+                "text": "TB-91KD"
+              }
+            },
+            {
+              "click": {
+                "text": "Create a passkey"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "That address is already registered with this app; sign in instead.",
+            "note": "409: sign in instead."
+          }
+        }
+      ]
+    }
+  ]
+}

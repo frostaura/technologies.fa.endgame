@@ -3,6 +3,7 @@ import { append } from "../engine";
 import { atLeast, highestIn, homeOrganisation, me, requireRole, scopeOf } from "../access";
 import { area, conflict, created, forbidden, invalid, noContent, notFound, num, ok, omit, problem, Refusal, str, strings } from "../http";
 import { startRun } from "../mutations";
+import { gitBundle, gzip, tar } from "../archive";
 import { createIdea } from "./work";
 import { memberView, parseRole } from "./tree";
 import { creditsView } from "../views";
@@ -16,6 +17,9 @@ function app(world: World, id: string): DemoApp {
   return a;
 }
 
+/** Dock's `build_failed` detail is the tail of the build log (`BuildService`); this is one such tail. */
+const BUILD_LOG_TAIL = "api/Bookings/BookingEndpoints.cs(41,52): error CS1002: ; expected [/src/api/Api.csproj]\nBuild FAILED.";
+
 const ASK_BASIS = "Up to 3 model calls (writing the query, one repair that is never charged, and the answer), each priced at the most it could cost. It is charged at what it actually costs.";
 
 function question(body: Record<string, unknown>): string {
@@ -24,24 +28,69 @@ function question(body: Record<string, unknown>): string {
   return q;
 }
 
-/** An answer worked out from the app's telemetry, in the shape the real ask returns. */
+/** `AskService.Declined`: the model said the app does not record what the question needs; its plain reason is the detail. */
+function declined(reason: string): Refusal {
+  return new Refusal(problem(422, "ask_unanswerable", "That question cannot be answered from what this app records", reason));
+}
+
+/**
+ * An answer worked out from the app's telemetry, in the shape the real ask returns (`AskService.AskAsync`).
+ * The model's work is played by keywords, so every outcome the console can show has a question that
+ * brings it: a single number, bars, a line, a table (with rows cut short, or none), a question the
+ * app does not record (declined, in the model's own words), one that still fails after the free
+ * repair, and one that takes too long.
+ */
 function answerFor(a: DemoApp, q: string): Omit<AskAnswer, "credits"> {
   const t = a.telemetry;
   const lower = q.toLowerCase();
-  if (!t) throw new Refusal(problem(422, "ask_unanswerable", "That question cannot be answered from what this app records", "The app does not record what this question needs."));
+  if (!t) throw declined("This app has not recorded anything yet: it reports its visits, requests and errors once it has run.");
+  if (/money|revenue|paid|payment|income|profit|price/.test(lower)) {
+    throw declined("The app does not record payments or money taken: it records visits, requests, errors and the bookings people make.");
+  }
+  if (/weather|rain|temperature/.test(lower)) throw declined("The app does not record the weather: it records visits, requests, errors and the bookings people make.");
+  if (/cancel|why/.test(lower)) {
+    const sql = "select reason, count(*) as cancellations from events where name = 'booking.cancelled' group by reason";
+    throw new Refusal(problem(422, "ask_unanswerable", "That question could not be answered", "It could not be worked out from what this app records. Try asking it another way, or about its visits, requests, errors, events or measurements.", { technical: { sql, error: 'column "reason" does not exist' } }));
+  }
+  if (/\bever\b|all time|since (it|the) (started|start|began)/.test(lower)) {
+    throw new Refusal(problem(422, "query_timeout", "That question took too long to answer", "Try a narrower one, such as a shorter period or one thing at a time.", { technical: { sql: "select visitor, count(*) as visits from visits group by visitor order by 2 desc", error: "canceling statement due to statement timeout" } }));
+  }
+  if (/(which|what) (pages?|requests?|addresses?).*(fail|error)|(fail|error).*(which|list)/.test(lower)) {
+    const failed = Array.from({ length: t.errorsToday }, (_, i) => ({ path: ["/book", "/courts", "/sign-in", "/league"][i % 4], status: 500, at: `${String(9 + i).padStart(2, "0")}:${String((i * 17) % 60).padStart(2, "0")}` }));
+    return { question: q, answer: failed.length === 0 ? "No request failed today." : `${failed.length} requests failed today, most of them on ${failed[0]?.path ?? "/"}.`, chart: { kind: "table", x: null, y: ["path", "status", "at"], series: [] }, sql: "select path, status, to_char(at, 'HH24:MI') as at from requests where status >= 500 and at::date = current_date order by at", columns: ["path", "status", "at"], rows: failed, truncated: false };
+  }
   if (/error|fail|broken/.test(lower)) {
     return { question: q, answer: t.errorsToday === 0 ? "No requests failed today." : `${t.errorsToday} of ${t.requestsToday} requests failed today.`, chart: { kind: "number", x: null, y: ["errors"], series: [{ name: "errors", points: [{ x: null, y: t.errorsToday }] }] }, sql: "select count(*) as errors from requests where status >= 500 and at::date = current_date", columns: ["errors"], rows: [{ errors: t.errorsToday }], truncated: false };
   }
-  if (/hour|busiest|when/.test(lower)) {
+  if (/every booking|all (the )?bookings|each booking/.test(lower)) {
+    const courts = ["Court 1", "Court 2", "Court 3", "Glass court"];
+    const rows = Array.from({ length: 50 }, (_, i) => ({ court: courts[i % 4], starts: `${String(7 + Math.floor(i / 4)).padStart(2, "0")}:${i % 2 ? "40" : "00"}`, minutes: i % 3 ? 40 : 80 }));
+    return { question: q, answer: "Every court was booked from 07:00; the glass court filled first each morning.", chart: { kind: "table", x: null, y: ["court", "starts", "minutes"], series: [] }, sql: "select props->>'court' as court, props->>'starts' as starts, (props->>'minutes')::int as minutes from events where name = 'booking.made' and at::date = current_date order by 2", columns: ["court", "starts", "minutes"], rows, truncated: true };
+  }
+  if (/slow|response|latency|fast/.test(lower)) {
+    const pages = [["/book", 64, 260], ["/courts", 41, 190], ["/league", 36, 150], ["/sign-in", 22, 90]] as const;
+    return { question: q, answer: `The booking page is the slowest: typically ${pages[0][1]} ms, and 1 in 20 takes ${pages[0][2]} ms or more.`, chart: { kind: "table", x: null, y: ["page", "typical ms", "slowest 1 in 20 ms"], series: [] }, sql: "select path as page, percentile_cont(0.5) within group (order by duration_ms) as \"typical ms\", percentile_cont(0.95) within group (order by duration_ms) as \"slowest 1 in 20 ms\" from requests where at > now() - interval '7 days' group by 1 order by 2 desc", columns: ["page", "typical ms", "slowest 1 in 20 ms"], rows: pages.map(([page, p50, p95]) => ({ page, "typical ms": p50, "slowest 1 in 20 ms": p95 })), truncated: false };
+  }
+  if (/hour|busiest|when|which day|weekday/.test(lower)) {
+    if (/day/.test(lower)) {
+      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const v = [0.62, 0.55, 0.66, 0.78, 0.94, 1.1, 0.86].map((f) => Math.round(t.visitsToday * f));
+      return { question: q, answer: `Saturday is the busiest day, with ${v[5]} visits; Tuesday is the quietest at ${v[1]}.`, chart: { kind: "bar", x: "day", y: ["visits"], series: [{ name: "visits", points: days.map((d, i) => ({ x: d, y: v[i] ?? 0 })) }] }, sql: "select to_char(at, 'Dy') as day, count(*) as visits from visits where at > now() - interval '28 days' group by 1, extract(isodow from at) order by extract(isodow from at)", columns: ["day", "visits"], rows: days.map((d, i) => ({ day: d, visits: v[i] })), truncated: false };
+    }
     const hours = [9, 10, 11, 12, 13, 14, 17, 18, 19, 20];
     const counts = hours.map((h, i) => Math.round(t.visitsToday * ([0.03, 0.05, 0.08, 0.16, 0.14, 0.06, 0.07, 0.13, 0.17, 0.11][i] ?? 0)) || h % 3);
     const chart: AskChart = { kind: "bar", x: "hour", y: ["visits"], series: [{ name: "visits", points: hours.map((h, i) => ({ x: `${h}:00`, y: counts[i] ?? 0 })) }] };
     return { question: q, answer: "The busiest hour today was 19:00, just ahead of lunchtime at 12:00.", chart, sql: "select extract(hour from at) as hour, count(*) as visits from visits where at::date = current_date group by 1 order by 1", columns: ["hour", "visits"], rows: hours.map((h, i) => ({ hour: `${h}:00`, visits: counts[i] })), truncated: false };
   }
-  if (/week|day|trend|visit/.test(lower)) {
+  if (/week|trend|a day|per day|each day|over time/.test(lower)) {
     const days = Array.from({ length: 7 }, (_, i) => new Date(Date.now() - (6 - i) * 86_400_000).toISOString().slice(0, 10));
     const v = days.map((_, i) => Math.round(t.visitsToday * (0.7 + i * 0.05)));
-    return { question: q, answer: `${t.visitsToday} visits today; the week has been rising steadily.`, chart: { kind: "line", x: "day", y: ["visits"], series: [{ name: "visits", points: days.map((d, i) => ({ x: d, y: v[i] ?? 0 })) }] }, sql: "select at::date as day, count(*) as visits from visits where at > now() - interval '7 days' group by 1 order by 1", columns: ["day", "visits"], rows: days.map((d, i) => ({ day: d, visits: v[i] })), truncated: false };
+    return { question: q, answer: `${t.visitsToday} visits today; the week has been rising steadily, from ${v[0]} a week ago.`, chart: { kind: "line", x: "day", y: ["visits"], series: [{ name: "visits", points: days.map((d, i) => ({ x: d, y: v[i] ?? 0 })) }] }, sql: "select at::date as day, count(*) as visits from visits where at > now() - interval '7 days' group by 1 order by 1", columns: ["day", "visits"], rows: days.map((d, i) => ({ day: d, visits: v[i] })), truncated: false };
+  }
+  if (/how many|count|total|number of/.test(lower)) {
+    const visits = /sign|people|members|users/.test(lower) ? a.endUsers : t.visitsToday;
+    const what = /sign|people|members|users/.test(lower) ? "people have signed up to it" : "visits today";
+    return { question: q, answer: `${visits} ${what}.`, chart: { kind: "number", x: null, y: ["count"], series: [{ name: "count", points: [{ x: null, y: visits }] }] }, sql: /sign|people|members|users/.test(lower) ? "select count(*) as count from end_users" : "select count(*) as count from visits where at::date = current_date", columns: ["count"], rows: [{ count: visits }], truncated: false };
   }
   return {
     question: q,
@@ -56,6 +105,57 @@ function answerFor(a: DemoApp, q: string): Omit<AskAnswer, "credits"> {
     ],
     truncated: false,
   };
+}
+
+/** `AskService.Route`: with no model route (no model configured), nothing about an app can be asked. */
+function requireAskRoute(world: World) {
+  if (world.modelsOffline) throw new Refusal(problem(503, "ask_unavailable", "Questions about apps cannot be answered yet", "There is no 'ask' route in the model routing table."));
+}
+
+/**
+ * `AppVersionService.ExportAsync`, in the page: `<slug>/manifest.json`, `<slug>/code.bundle` (a git
+ * bundle of the app's versions) and `<slug>/platform.json`, gzipped. The demo has no database to
+ * dump, and its manifest says so in place of `database.dump`.
+ */
+function exportArchive(world: World, a: DemoApp, slug: string): Uint8Array {
+  const now = new Date();
+  const started = !!a.telemetry || a.status === "running" || a.status === "sleeping" || a.status === "failed" || a.status === "stopped";
+  const versions = [...(world.versions[a.id] ?? [])].reverse();
+  const changes: string[] = [];
+  const bundle = gitBundle(
+    versions.map((v) => {
+      changes.push(`- ${v.message.split("\n")[0] ?? ""}`);
+      return {
+        message: v.message,
+        author: v.author.name ?? "The factory",
+        email: `${(v.author.name ?? "factory").toLowerCase().replace(/[^a-z0-9]+/g, ".")}@${orgOf(a.path)}.example`,
+        at: Math.floor(Date.parse(v.at) / 1000),
+        files: { "README.md": `# ${a.name}\n\nAn Endgame app, built on the app kit.\n\n## Changes\n\n${changes.join("\n")}\n` },
+      };
+    }),
+  );
+  const shares = world.shares.filter((s) => s.appId === a.id);
+  const platform = {
+    endUsers: shares.filter((s) => s.registered).map((s) => ({ id: uuidFor(`end-user:${a.id}:${s.email}`), email: s.email, displayName: s.email.split("@")[0] ?? s.email, createdAt: s.invitedAt })),
+    shares: shares.map((s) => ({ email: s.email, invitedAt: s.invitedAt })),
+    schedules: [],
+    webhooks: [],
+    events: [],
+  };
+  const platformJson = JSON.stringify(platform, null, 2);
+  const manifest: Record<string, unknown> = {
+    format: "endgame-app-export/1",
+    app: { id: a.id, scope: a.path, name: a.name },
+    exportedAt: now.toISOString().replace("Z", "+00:00"),
+    code: { file: "code.bundle", format: "git bundle (git clone code.bundle)", bytes: bundle.length },
+    database: null,
+    platform: { file: "platform.json", holds: "end users (no passkeys), shares, schedules, webhooks, custom events" },
+    note: "The app expects the platform's services (identity, secrets, models, e-mail, schedules, telemetry); running it elsewhere needs replacements for them. Secrets are never exported.",
+    databaseNote: started ? "This export comes from the demo, which keeps no database for the app. On a live install its own database is here as database.dump (pg_dump custom format)." : "The app has no database yet: it has never been started.",
+  };
+  const mtime = Math.floor(now.getTime() / 1000);
+  const enc = new TextEncoder();
+  return gzip(tar([{ name: `${slug}/manifest.json`, body: enc.encode(JSON.stringify(manifest, null, 2)) }, { name: `${slug}/code.bundle`, body: bundle }, { name: `${slug}/platform.json`, body: enc.encode(platformJson) }], mtime), mtime);
 }
 
 function overdraftReason(world: World, scope: string, needed: number): string | null {
@@ -132,6 +232,7 @@ area("BreadthEndpoints", {
     const a = app(world, req.params.id ?? "");
     requireRole(world, a.path, "viewer");
     question(req.body);
+    requireAskRoute(world);
     return ok({ credits: 0.42, basis: ASK_BASIS });
   },
 
@@ -139,6 +240,7 @@ area("BreadthEndpoints", {
     const a = app(world, req.params.id ?? "");
     requireRole(world, a.path, "builder");
     const q = question(req.body);
+    requireAskRoute(world);
     const budget = budgetReason(world, a.path, 0.42);
     if (budget) throw new Refusal(problem(402, "budget_exhausted", "The budget is exhausted", `${budget} This is terminal for the run: do not retry it.`, { terminal: true, bindingScope: a.path, headroomCredits: 0, neededCredits: 0.42 }));
     const over = overdraftReason(world, a.path, 0.42);
@@ -199,6 +301,12 @@ area("BreadthEndpoints", {
     list.unshift(version);
     const madePrivate = a.access === "public";
     if (madePrivate) a.access = "private";
+    if (world.rebuildFails?.includes(a.id)) {
+      // `AppVersionService.RestoreAsync`: the restore stands as the newest version; building and starting it failed.
+      Object.assign(a, { status: "failed", health: "down", healthSummary: "It stopped working and needs attention." });
+      world.changed.push("Versions", "App", "Tree");
+      return ok({ version: { ...version, live: false }, published: false, madePrivate, publishError: BUILD_LOG_TAIL });
+    }
     if (a.status === "failed") Object.assign(a, { status: "running", health: "healthy", healthSummary: "Running again on the restored version.", running: a.runningSetting === "always-on" ? "always-on" : "awake" });
     a.version = version.commit;
     world.changed.push("Versions", "App", "Tree");
@@ -210,6 +318,7 @@ area("BreadthEndpoints", {
     requireRole(world, a.path, "builder");
     const newest = (world.versions[a.id] ?? [])[0];
     if (!newest) throw conflict("Nothing has been built for this app yet, so there is no version to publish again.");
+    if (world.rebuildFails?.includes(a.id)) return ok({ version: newest, published: false, madePrivate: false, publishError: BUILD_LOG_TAIL });
     for (const v of world.versions[a.id] ?? []) v.live = v === newest;
     Object.assign(a, { status: "running", health: "healthy", healthSummary: "Running again: its newest version was built and restarted.", running: a.runningSetting === "always-on" ? "always-on" : "awake", version: newest.commit, pausedReason: a.pausedReason });
     if (a.running === "paused") a.running = "awake";
@@ -222,8 +331,8 @@ area("BreadthEndpoints", {
     const a = app(world, req.params.id ?? "");
     requireRole(world, a.path, "owner");
     const slug = node(world, a.path)?.slug ?? "app";
-    const text = `This is the demo's stand-in for ${a.name}'s export: on a live install it is a .tar.gz of the code, its whole history and the app's data.\n`;
-    return { status: 200, body: new Blob([text], { type: "application/gzip" }), headers: { "content-type": "application/gzip", "content-disposition": `attachment; filename="${slug}-export.tar.gz"` } };
+    const body = exportArchive(world, a, slug);
+    return { status: 200, body: new Blob([body as BlobPart], { type: "application/gzip" }), headers: { "content-type": "application/gzip", "content-disposition": `attachment; filename="${slug}-export.tar.gz"` } };
   },
 
   // Roles ---------------------------------------------------------------------------------------

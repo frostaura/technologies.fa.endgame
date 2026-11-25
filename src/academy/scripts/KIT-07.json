@@ -1,0 +1,17 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-07",
+  "persona": "division-admin",
+  "scenario": "app-asleep",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "You are signed in, but your account has no access to this app.",
+        "note": "403: being signed in is not the same as having access."
+      }
+    }
+  ]
+}

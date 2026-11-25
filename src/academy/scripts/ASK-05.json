@@ -1,0 +1,82 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ASK-05",
+  "persona": "viewer",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Dashboard",
+        "note": "Read when the page opens: each kept question is run again, with no model call."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Worked out afresh each time you open it, at no cost.",
+        "note": "Each card: the question, its stored answer, a fresh chart, and when it was worked out."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Nothing kept yet",
+      "persona": "viewer",
+      "scenario": "app-asleep",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Nothing is kept on the dashboard yet",
+            "note": "Ask a question above, then keep the answer here."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A question that no longer runs",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "This question no longer runs",
+            "note": "What it needs is no longer recorded: ask it again, and keep the new answer."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Technical mode shows each query",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The query",
+            "note": "Each card's query, and what failed underneath when one breaks."
+          }
+        }
+      ]
+    }
+  ]
+}

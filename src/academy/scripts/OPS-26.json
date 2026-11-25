@@ -1,0 +1,36 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-26",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "bash",
+      "code": "ENDGAME_IMAGE_TAG=sha-<the earlier commit>",
+      "note": "In the stack's environment, then Update the stack. One variable picks the release for every Endgame service. The edge's /health then names that commit as its revision. Not yet run with real credentials (ARCH-008)."
+    }
+  ],
+  "variations": [
+    {
+      "title": "Going back across a database migration",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make restore BACKUP=<an archive from before the migration> OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\" OVERWRITE=1",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops restore 20261118T010233Z --overwrite",
+            "Verifying endgame-20261118T010233Z.egbk from the bucket 'endgame-backups' at 4b8e2d17c9a0f3e65d21b7c84a9f0e13.r2.cloudflarestorage.com, encrypted before upload..."
+          ],
+          "note": "Migrations only go forward, so the older images cannot read a newer schema. Set the tag, then restore an archive made before the migration (OPS-16). Everything since that archive is lost. The id is illustrative."
+        }
+      ]
+    }
+  ]
+}

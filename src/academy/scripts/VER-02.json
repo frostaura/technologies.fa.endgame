@@ -1,0 +1,155 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VER-02",
+  "persona": "builder",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Bring back"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Bring this version of Court booking back?",
+        "note": "A restore adds a version; nothing in the history is lost."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "It becomes the newest version, made by you",
+        "note": "Court booking is shared. Had it been public, this would add that it becomes private."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Bring it back",
+        "note": "“Keep the live version”, or Escape, cancels."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Bring it back"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Bringing it back",
+        "note": "It becomes the newest version, then it is rebuilt and restarted."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "An earlier version, brought back",
+        "note": "A new version, made by Lena, is live now."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "The earlier version is back and running.",
+        "note": "“Done” closes it."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A public app becomes private",
+      "persona": "builder",
+      "scenario": "app-public",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Bring back"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "It is public now, so it becomes private",
+            "note": "Look at the restored version before making it public again."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Bring it back"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "It was public, so it is private now.",
+            "note": "Only a person makes it public again."
+          }
+        }
+      ]
+    },
+    {
+      "title": "It cannot be rebuilt",
+      "persona": "builder",
+      "scenario": "app-restore-fails",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Bring back"
+              }
+            },
+            {
+              "click": {
+                "text": "Bring it back"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The earlier version is back, but it is not running yet.",
+            "note": "The restore stands; rebuild it below (APP-15)."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A Viewer cannot bring one back",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Live now",
+            "note": "A Viewer reads the history; a Builder brings a version back."
+          }
+        }
+      ]
+    }
+  ]
+}

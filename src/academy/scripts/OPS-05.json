@@ -1,0 +1,28 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-05",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make build",
+      "output": [
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet build src/backend/Endgame.slnx --nologo",
+        "Build succeeded in 48.6s",
+        "cd src/frontend && npm run build",
+        "",
+        "> technologies.fa.endgame-console@0.0.0 build",
+        "> tsc -b && vite build",
+        "",
+        "✓ built in 9.12s",
+        "make -C src/appkit build",
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet build Endgame.AppKit.slnx --nologo",
+        "Build succeeded in 17.3s"
+      ],
+      "note": "The backend solution, then the console, then the kit (its SDKs, then a pack, then the template). The project lines from dotnet, Vite's file list and the kit's later steps are left out. The times are illustrative."
+    }
+  ]
+}

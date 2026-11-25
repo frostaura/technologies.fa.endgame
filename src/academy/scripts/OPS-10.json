@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-10",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make e2e-factory",
+      "output": [
+        "make fac-up",
+        "make e2e-factory-run",
+        "",
+        "Running 4 tests using 1 worker",
+        "",
+        "  ✓  1 factory.spec.ts:149:1 › 1. the organisation, topped up by an operator",
+        "  ✓  2 factory.spec.ts:159:1 › 2. the idea, researched with live web search, ends in the agreed verdict",
+        "  ✓  3 factory.spec.ts:214:1 › 3. placement, hires, plan, builders, evaluator, security review and a private publish",
+        "  ✓  4 factory.spec.ts:314:1 › 4. private: a signed-out visitor is refused; the owner opens it, adds two books, finishes one, and they stay",
+        "",
+        "  4 passed (38.2m)",
+        "make fac-down"
+      ],
+      "note": "Project endgame-fac on its own ports. The spec watches the ledger and cancels everything once FAC_SPEND_STOP_USD (default 8.50) is spent. Its progress lines with the spend so far, the compose output and the time are left out or illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "No OpenRouter key in .env",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make e2e-factory",
+          "output": [
+            "make fac-up",
+            "fac-up: set OPENROUTER_API_KEY in .env (the factory calls live models)",
+            "make: *** [fac-up] Error 1",
+            "make fac-down"
+          ],
+          "note": "fac-up checks for a non-empty OPENROUTER_API_KEY line in .env before it builds anything. e2e-factory still runs fac-down afterwards. make's own directory and error lines are shortened here."
+        }
+      ]
+    },
+    {
+      "title": "The spend reaches the stop",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "typescript",
+          "code": "if (spend.usd >= STOP_USD) {\n  await owner.request.post(`/api/runs/${runId}/cancel`);\n  throw new Error(`Spend reached US$${spend.usd.toFixed(2)}, at or past the stop of US$${STOP_USD}: ${label} cancelled.`);\n}",
+          "note": "From factory.spec.ts. While it waits on a run, the spec reads the ledger after each poll; at the stop it cancels the run and the test fails with this message."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHR-04",
+  "persona": "admin",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Stop sharing with weekend.cover@northwind.example"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "They lose access at once, and are signed out of Court booking.",
+        "note": "Asked first."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "[aria-label=\"Confirm stopping sharing with weekend.cover@northwind.example\"] button"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "ul[aria-label=\"People it is shared with\"]",
+        "note": "Gone at once: the share is deleted and their sessions at the app are ended."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Keep it",
+      "persona": "admin",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Stop sharing with weekend.cover@northwind.example"
+              }
+            },
+            {
+              "click": {
+                "text": "Keep it"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "weekend.cover@northwind.example",
+            "note": "Nothing changed: they still have access."
+          }
+        }
+      ]
+    }
+  ]
+}

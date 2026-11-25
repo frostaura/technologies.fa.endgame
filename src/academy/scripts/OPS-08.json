@@ -1,0 +1,74 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-08",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make prod-config",
+      "output": [
+        "prod-config: parses; development sign-in pinned off; every service Production; backup key required."
+      ],
+      "note": "Every check is silent (@), so a pass prints only this line. Throwaway values stand in for the seven required variables. The check then tries to turn the development sign-in on, asks for Development, and leaves the backup key empty."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The production control plane could enable the development sign-in",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make prod-config",
+          "output": [
+            "prod-config: the production control plane could enable the development sign-in",
+            "make: *** [prod-config] Error 1"
+          ],
+          "note": "Printed when docker-compose.prod.yml no longer pins ENDGAME_DEV_LOGIN to the literal \"false\" whatever the environment says."
+        }
+      ]
+    },
+    {
+      "title": "A production service does not run as Production",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make prod-config",
+          "output": [
+            "prod-config: a production service does not run as Production",
+            "make: *** [prod-config] Error 1"
+          ],
+          "note": "Printed when any service's ASPNETCORE_ENVIRONMENT follows ASPNETCORE_ENVIRONMENT=Development from the environment."
+        }
+      ]
+    },
+    {
+      "title": "The stack would start without the backup key",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make prod-config",
+          "output": [
+            "prod-config: the production stack does not refuse a missing ENDGAME_BACKUP_KEY",
+            "make: *** [prod-config] Error 1"
+          ],
+          "note": "Printed when parsing with ENDGAME_BACKUP_KEY empty does not fail with \"ENDGAME_BACKUP_KEY is required\". The ops service is the stack's only backup."
+        }
+      ]
+    }
+  ]
+}

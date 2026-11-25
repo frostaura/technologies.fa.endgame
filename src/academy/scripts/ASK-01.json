@@ -1,0 +1,200 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ASK-01",
+  "persona": "builder",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Ask in plain words",
+        "note": "Plain questions, answered from this app's own records only."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Which days are busiest?"
+            },
+            "text": "Which days are busiest?"
+          }
+        },
+        {
+          "click": {
+            "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Working it out…",
+        "note": "Nothing is asked yet: first, what it could cost."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "At most",
+        "note": "The most it can cost: up to three model calls, each priced at its most. It is charged at what it really costs."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Ask it",
+        "note": "A Builder may ask. A Viewer can see the estimate, but asking needs the Builder role."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Viewer sees the cost, not the button",
+      "persona": "viewer",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Which days are busiest?"
+              }
+            },
+            {
+              "click": {
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Asking spends credits, so it needs the Builder role here.",
+            "note": "A Viewer reads the estimate and the dashboard; a Builder asks."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Editing the question drops the estimate",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Which days are busiest?"
+              }
+            },
+            {
+              "click": {
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "At most",
+            "note": "An estimate, for these words."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Which hours are busiest?"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]",
+            "note": "The words changed, so the estimate is gone: ask for a new one."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A question too short",
+      "persona": "builder",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Hi"
+              }
+            },
+            {
+              "click": {
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "No estimate could be made: Ask a question of 3 to 500 characters.",
+            "note": "From 3 to 500 characters."
+          }
+        }
+      ]
+    },
+    {
+      "title": "No model is configured",
+      "persona": "builder",
+      "scenario": "ask-unavailable",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which days are busiest?"
+                },
+                "text": "Which days are busiest?"
+              }
+            },
+            {
+              "click": {
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "No estimate could be made: Questions about apps cannot be answered on this installation yet.",
+            "note": "With no model route on this installation, nothing about an app can be asked."
+          }
+        }
+      ]
+    }
+  ]
+}

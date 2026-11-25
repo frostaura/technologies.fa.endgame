@@ -65,7 +65,9 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   `localStorage`, every access guarded.
 - **The stage** beside a flow's steps shows, per step: the live console (`demo`), a terminal that
   types the command and prints its output (`terminal`), a request and its response (`request`), the
-  e-mail as it arrives (`email`), or a captured screenshot (`image`). An unscripted screen flow opens
+  e-mail as it arrives (`email`), code a hosted app runs, set like the terminal with what it returns
+  (`code`: `language`, `code`, optional `output`), or a captured screenshot (`image`). When the live
+  console cannot load, a demo step shows the image `make academy-shots` captured for it. An unscripted screen flow opens
   the live console on the route named in its "Starts at". With nothing to play, the stage shows the
   flow's facts (worked-when, where in the code, the tests that prove it).
 - **The bridge** (`src/bridge/`) is the only way the academy touches the demo. The demo is lane D's
@@ -135,7 +137,8 @@ project **Court booking**, and the Admin **Ada Lovelace**.
 | `make academy-assemble` | runs `make demo-build` when that target exists, then assembles `site/` |
 | `make academy-pdf` | `site/academy.pdf` and `site/operator-handbook.pdf`, headless Chromium |
 | `make academy-e2e` | Playwright against `site/` served under `/technologies.fa.endgame/` |
-| `make site` | build, assemble, PDFs |
+| `make academy-shots` | plays every step script against the built demo (fixed clock and viewport, reduced motion, each act awaited) and saves one WebP per demo step and per variation's last step under `public/shots/<FLOW-ID>/`, with `index.json`; a picture identical to the step before is named, not saved again, and unchanged files are not rewritten. `ACADEMY_FLOWS` limits it; `SHOTS_PORT` (default 5691) moves its server |
+| `make site` | shots, build, assemble, PDFs — the print version sets each step's picture beside its text |
 | `npm run script:new -- <FLOW-ID>` | scaffolds `scripts/<FLOW-ID>.json` from the parsed flow |
 
 `DEMO_DIST` (default `src/demo/dist`) names the demo build that `site/demo/` is copied from.
@@ -171,14 +174,13 @@ Nothing is stored server-side. The browser keeps `endgame-academy:progress:v1` i
 | The bridge is postMessage with an envelope and echoed ids | The demo is a separate build by another lane; a message contract can be diffed and tested from both sides | Reaching into the iframe's DOM (couples the academy to the console's markup) |
 | Spotlights by visible text, quoted exactly as the flow quotes it | The console carries almost no `data-testid`s, and the flows already name every control's words | CSS selectors into the console's markup |
 | PDFs rendered from the site's own print route | One source; the print version is a page like any other | A second, PDF-only template |
+| Captured images are generated, not committed (`public/shots/*/` is git-ignored); the Pages workflow makes them | They are reproducible from the scripts and the demo, and committing hundreds of binaries would churn the repository on every screen change | Committing them (repository growth, stale pictures) |
 
 ## Not built yet
 
 - Lane D's demo console. Until it ships, `site/` has no `demo/`, and every live step degrades as
   described above.
-- Captured screenshots: no step carries an `image` or a `shot` yet, so the print version and the
-  degraded stage show text and facts where a picture would go.
-- Scripts for the flows still without one; the build prints how many are scripted, and the About
+- Scripts for any flow still without one; the build prints how many are scripted, and the About
   page shows it.
 - A variation for every refusal in "What else can happen": scripts carry them flow by flow.
 

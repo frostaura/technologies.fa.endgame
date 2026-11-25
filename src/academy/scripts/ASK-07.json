@@ -1,0 +1,80 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ASK-07",
+  "persona": "builder",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Which days are busiest?"
+            },
+            "text": "Which days are busiest?"
+          }
+        },
+        {
+          "click": {
+            "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+          }
+        },
+        {
+          "click": {
+            "selector": "div[role=\"status\"] > button"
+          }
+        },
+        {
+          "click": {
+            "text": "The query"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The query",
+        "note": "The read-only SQL, apart from the answer."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Ask something else"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Which days are busiest?"
+            },
+            "text": "Why do people cancel?"
+          }
+        },
+        {
+          "click": {
+            "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
+          }
+        },
+        {
+          "click": {
+            "selector": "div[role=\"status\"] > button"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What failed underneath",
+        "note": "Opened on its own: the last query tried, and what refused it."
+      }
+    }
+  ]
+}

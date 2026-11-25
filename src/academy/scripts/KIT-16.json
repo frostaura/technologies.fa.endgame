@@ -1,0 +1,230 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-16",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "PUT",
+      "path": "/platform/v1/schedules",
+      "headers": {
+        "Authorization": "Bearer egt_…",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "schedules": [
+          {
+            "name": "nightly-digest",
+            "cron": "0 7 * * *",
+            "timeZone": "Africa/Johannesburg",
+            "path": "_platform/schedules/nightly-digest"
+          }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "schedules": [
+            {
+              "name": "nightly-digest",
+              "cron": "0 7 * * *",
+              "timeZone": "Africa/Johannesburg",
+              "path": "_platform/schedules/nightly-digest",
+              "nextRunAt": "2026-11-26T05:00:00+00:00"
+            }
+          ]
+        }
+      },
+      "note": "Sent by the kit once the app has started, from every MapSchedule in Program.cs. It replaces the whole set; an empty list removes them all. 07:00 in Johannesburg is 05:00 UTC."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/internal/apps/7d0c5a9e-2b41-4f6a-9a51-3c8e2d1f0b77/platform/schedules/nightly-digest",
+      "headers": {
+        "Authorization": "Bearer …",
+        "X-Endgame-Signature": "t=1764133200,v1=4b9e…",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "scheduledFor": "2026-11-26T05:00:00+00:00"
+      },
+      "response": {
+        "status": 204
+      },
+      "note": "The scheduler leases due rows and posts to Edge's control listener with the platform's service token. The signature is HMAC-SHA256 of \"<t>.\" + body, keyed with the app's token. Ids and values illustrative."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "POST",
+      "path": "/_platform/schedules/nightly-digest",
+      "headers": {
+        "X-Endgame-Signature": "t=1764133200,v1=4b9e…",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "scheduledFor": "2026-11-26T05:00:00+00:00"
+      },
+      "response": {
+        "status": 204
+      },
+      "note": "Edge wakes the app if it sleeps and forwards the body and signature unchanged to the app on its own network. It signs nothing; Edge answers the scheduler with the app's status."
+    },
+    {
+      "step": 4,
+      "kind": "code",
+      "language": "csharp",
+      "code": "app.MapSchedule(\"nightly-digest\", \"0 7 * * *\", async run =>\n{\n    var db = run.Services.GetRequiredService<AppDb>();\n    var since = run.ScheduledFor.AddDays(-1);\n    var count = await db.Notes.CountAsync(n => n.CreatedAt >= since, run.CancellationToken);\n    // … send the digest …\n}, timeZone: \"Africa/Johannesburg\");",
+      "note": "The kit checks the signature and that it is under 5 minutes old, then runs the handler and answers 204. Throwing marks the run failed. The schedule moves to its next time either way."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The cron is not five fields",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "csharp",
+          "code": "app.MapSchedule(\"nightly-digest\", \"every day at 7\", run => Task.CompletedTask);",
+          "output": [
+            "Unhandled exception. System.ArgumentException: Schedule 'nightly-digest' has cron 'every day at 7'. Use five fields — minute hour day-of-month month day-of-week — with digits, *, /, ',' and '-' only, e.g. '0 7 * * *'. (Parameter 'cron')"
+          ],
+          "note": "Refused where it is written, so the app does not start. A name that is not a lowercase slug is refused the same way."
+        }
+      ]
+    },
+    {
+      "title": "The platform refuses the declaration",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "PUT",
+          "path": "/platform/v1/schedules",
+          "headers": { "Authorization": "Bearer egt_…" },
+          "body": {
+            "schedules": [
+              { "name": "nightly-digest", "cron": "0 7 * * *", "timeZone": "Mars/Olympus", "path": "_platform/schedules/nightly-digest" }
+            ]
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/invalid_request",
+              "title": "The request is not valid",
+              "status": 400,
+              "detail": "'Mars/Olympus' is not a time zone this platform knows (use an IANA name such as UTC or Europe/London).",
+              "code": "invalid_request"
+            }
+          },
+          "note": "The kit does not check the time zone; the platform does. Also refused: \"An app declares at most 50 schedules.\" and \"Two schedules have the same name.\""
+        },
+        {
+          "step": 2,
+          "kind": "code",
+          "language": "text",
+          "code": "app log",
+          "output": [
+            "Declaring schedules and webhooks failed (attempt 1); retrying: The platform answered PUT platform/v1/schedules with 400: 'Mars/Olympus' is not a time zone this platform knows (use an IANA name such as UTC or Europe/London).",
+            "…",
+            "Endgame app kit: the platform never accepted this app's 1 schedule(s) and 0 webhook(s); they will not run until the app restarts: The platform answered PUT platform/v1/schedules with 400: …"
+          ],
+          "note": "The app keeps serving. It retries five times, then gives up until the next start."
+        }
+      ]
+    },
+    {
+      "title": "An unsigned call reaches the app",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/_platform/schedules/nightly-digest",
+          "headers": { "Content-Type": "application/json" },
+          "body": { "scheduledFor": "2026-11-26T05:00:00+00:00" },
+          "response": {
+            "status": 401,
+            "body": {
+              "title": "Unsigned schedule call",
+              "status": 401,
+              "detail": "Only the platform may run schedules."
+            }
+          },
+          "note": "Missing, wrong, or more than 5 minutes old: the handler never runs. The problem also carries a traceId."
+        }
+      ]
+    },
+    {
+      "title": "Someone tries the public address",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/acme/labs/demo/notes/_platform/schedules/nightly-digest",
+          "response": {
+            "status": 404
+          },
+          "note": "Edge's public side never routes _platform/*; it answers 404 before the app sees anything."
+        }
+      ]
+    },
+    {
+      "title": "The app is paused, or has never started",
+      "persona": "builder",
+      "scenario": "app-paused",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/internal/apps/7d0c5a9e-2b41-4f6a-9a51-3c8e2d1f0b77/platform/schedules/nightly-digest",
+          "headers": {
+            "Authorization": "Bearer …",
+            "X-Endgame-Signature": "t=1764133200,v1=4b9e…"
+          },
+          "body": { "scheduledFor": "2026-11-26T05:00:00+00:00" },
+          "response": {
+            "status": 409,
+            "body": {
+              "title": "The app is Paused; it is not called back.",
+              "status": 409
+            }
+          },
+          "note": "Edge does not wake a paused app for a schedule."
+        },
+        {
+          "step": 2,
+          "kind": "code",
+          "language": "text",
+          "code": "control plane log",
+          "output": [
+            "Schedule nightly-digest of app 7d0c5a9e-2b41-4f6a-9a51-3c8e2d1f0b77 did not succeed: The app answered 409.",
+            "Schedule nightly-digest of app 7d0c5a9e-2b41-4f6a-9a51-3c8e2d1f0b77 did not succeed: The app has no platform token yet (it has not been started)."
+          ],
+          "note": "The second line is for an app that has never started. Either way the error is recorded on the schedule and it moves on; missed runs run once, not once per miss."
+        }
+      ]
+    }
+  ]
+}

@@ -127,6 +127,13 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `s4-idle-sweep`, `s4-released-with-memory`, `s4-memory-to-tidy` | Ruth idle under checkpoints and Ivo let go by the sweep; Tomas let go with his memory; Kasper's memory with a note learned twice and one removed | |
 | `s4-credits-at-zero`, `s4-below-zero`, `s4-top-ups-waiting` | The balance at 0, at −120, and five top-up requests already waiting | |
 | `s4-operator-log`, `s4-operator-log-empty` | Northwind's operator log with every kind of entry, and with none | |
+| `app-private`, `app-public`, `app-shared-empty` | Court booking private, public, or shared with nobody yet (`scenarios.s5.ts`) | |
+| `app-long-history`, `app-not-published` | Court booking with more versions than a page shows; Tutor Match with nothing published, nothing run (so it can be deleted) | |
+| `app-restore-fails`, `app-rebuild-fails` | Bringing a version back, or "Rebuild and restart", cannot start the app | |
+| `app-wake-slow`, `app-wake-busy`, `app-unreachable`, `wake-failures` | A wake the Edge cannot finish: over 30 seconds, no room, unreachable; `wake-failures` puts one of each (and an unpublished app) side by side | |
+| `outage` | The host cannot be reached: Cloudflare's outage page at Court booking's address | |
+| `ask-unavailable`, `dashboard-full` | No model route, so nothing about an app can be asked; Court booking's dashboard at its 30 questions | |
+| `no-secrets` | No secret set anywhere in Northwind | |
 
 Scenarios are kept one file per flow file, `world/scenarios.s<n>.ts`, each registered by one
 side-effect import in `host.ts`. Not in `scenarios.ts`: a scenario file calls its `defineScenario`,
@@ -290,6 +297,13 @@ shares, dashboard questions, versions, notifications, suggestions, tokens, setti
 top-ups and requests, the operator log and prices. It lives in the page, is saved to
 `sessionStorage` under `endgame-demo:world` while the tab is open (a blocked storage only means a
 reload forgets), and is rebuilt by "Reset the demo" or the bridge's `reset`.
+
+Asking about an app is played by keywords in the question (`routes/breadth.ts`), so each answer the
+console can draw has a question that brings it: a number, bars, a line, a table cut short or empty, a
+question the app does not record, one that still fails after the free repair, and one that times out.
+The export is a real gzipped tar built in the page (`server/archive.ts`): `manifest.json` in the
+control plane's shape, `code.bundle` (a git bundle of the app's versions that `git clone` reads) and
+`platform.json`; the demo has no database to dump, and its manifest says so.
 
 The run scripts were modelled on two real run logs read from a development stack (a research run
 of 40 events and a build run of 1,457): the same event types, payload fields, milestones and

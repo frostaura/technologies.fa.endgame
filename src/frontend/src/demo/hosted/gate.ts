@@ -146,6 +146,8 @@ export type GateOutcome =
   | { kind: "redirect"; location: string }
   /** End the visitor's session, then 302 to `location`. */
   | { kind: "sign-out"; location: string }
+  /** The host cannot be reached: Cloudflare's outage Worker answers 503 with its own page. */
+  | { kind: "outage" }
   /** A bare 404 with no body. */
   | { kind: "not-found" };
 
@@ -194,6 +196,8 @@ function unavailable(reason: Unavailable): Extract<GateOutcome, { kind: "unavail
 /** One request through the Edge. */
 export function decide(request: GateRequest): GateOutcome {
   const { app, form, visitor } = request;
+  // Cloudflare's outage Worker answers before the request ever reaches the Edge (src/ops/outage-worker).
+  if (app.state === "outage") return { kind: "outage" };
   const addresses = addressesOf(app);
   const home = homeOf(addresses, form);
 
@@ -256,6 +260,10 @@ export function decide(request: GateRequest): GateOutcome {
   if (check.decision === "deny") return unavailable("Forbidden");
 
   if (app.state === "crashed") return unavailable("Crashed");
+  // `AppGate.ReasonFor`: a wake that did not finish — over 30 seconds, no room on the host, or anything else.
+  if (app.state === "slow") return unavailable("Slow");
+  if (app.state === "busy") return unavailable("Busy");
+  if (app.state === "unreachable") return unavailable("Temporary");
   return { kind: "app", session: check.session, wake: app.state === "asleep" && request.awake !== true };
 }
 

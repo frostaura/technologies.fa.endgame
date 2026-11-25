@@ -3,7 +3,7 @@ import type { StepScript } from "../content/scripts.ts";
 import { stepOf } from "../bridge/player.ts";
 
 /** What shows beside a step: its scripted media, the live console, or the flow's facts. */
-export type Media = "demo" | "terminal" | "request" | "email" | "image" | "facts";
+export type Media = "demo" | "terminal" | "request" | "email" | "image" | "code" | "facts";
 
 export function mediaOf(flow: Flow, script: StepScript | undefined, n: number): Media {
   const s = stepOf(script, n);

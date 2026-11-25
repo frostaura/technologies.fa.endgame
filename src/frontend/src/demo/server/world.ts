@@ -251,6 +251,10 @@ export interface World {
   context?: { path: string; key: string; value: unknown; setAt: string }[];
   /** No model answers (the screening of a new organisation then needs an operator's own decision). */
   modelsOffline?: boolean;
+  /** What the Edge (or, for "outage", Cloudflare in front of it) answers instead of an app, by app id: a wake that could not finish. */
+  edgeAnswer?: Record<string, "slow" | "busy" | "unreachable" | "outage">;
+  /** Apps whose rebuild fails (a restore or "Rebuild and restart" that cannot start the app), by app id. */
+  rebuildFails?: string[];
   /** Whose memory each removed entry was (entry id → employee id), so its removal stays in that employee's change log. */
   removedMemory?: Record<string, string>;
   /** When each operator was last seen inside each organisation (`${userId}:${org}`), for the visit window. */

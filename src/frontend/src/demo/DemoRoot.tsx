@@ -78,7 +78,7 @@ function HostedRoute({ appId, form, rest }: { appId: string; form: "path" | "sub
   // An address Edge knows nothing about (ACC-16).
   if (!app) return <EdgeDocument html={renderUnavailablePage("Temporary")} docKey={`unknown:${appId}`} title={`${UNAVAILABLE_COPY.Temporary.title} · Endgame`} onAction={async () => {}} />;
   const [org, ...below] = app.path.split("/");
-  const state: HostedAppState = app.status === "failed" ? "crashed" : app.running === "paused" ? "paused" : app.status === "building" || app.status === "draft" ? "not-published" : app.running === "asleep" ? "asleep" : "running";
+  const state: HostedAppState = world.edgeAnswer?.[app.id] ?? (app.status === "failed" ? "crashed" : app.running === "paused" ? "paused" : app.status === "building" || app.status === "draft" ? "not-published" : app.running === "asleep" ? "asleep" : "running");
   return (
     <HostedAppView
       key={`${appId}:${visitor.kind}:${visitor.email ?? ""}`}
