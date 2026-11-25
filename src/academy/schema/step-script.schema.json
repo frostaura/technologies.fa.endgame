@@ -31,7 +31,8 @@
         "signed-out",
         "end-user",
         "assistant",
-        "host-admin"
+        "host-admin",
+        "division-admin"
       ]
     },
     "scenario": {
@@ -45,7 +46,30 @@
         "building",
         "app-live",
         "low-credits",
-        "god-mode"
+        "god-mode",
+        "quiet",
+        "hire-pending",
+        "employee-memory",
+        "employee-released",
+        "at-overdraft-limit",
+        "screening-offline",
+        "hiring",
+        "hires-all-decided",
+        "hire-manager-gone",
+        "contractor-working",
+        "contractor-finishes",
+        "employee-working",
+        "employee-record",
+        "employee-team",
+        "employee-at-cap",
+        "idle-sweep",
+        "released-with-memory",
+        "memory-to-tidy",
+        "credits-at-zero",
+        "below-zero",
+        "top-ups-waiting",
+        "operator-log",
+        "operator-log-empty"
       ]
     },
     "start": {
@@ -57,9 +81,51 @@
       "items": {
         "$ref": "#/definitions/step"
       }
+    },
+    "variations": {
+      "type": "array",
+      "description": "What else can happen: each refusal, limit or branch that matters, played on its own beside the flow's \"What else can happen\".",
+      "items": {
+        "$ref": "#/definitions/variation"
+      }
     }
   },
   "definitions": {
+    "variation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "persona",
+        "scenario",
+        "start",
+        "steps"
+      ],
+      "description": "One branch of the flow, played in its own console. Its steps are numbered 1, 2, 3 in order and have no text in the flow, so each says what it shows in its note (or its spotlight's note).",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "persona": {
+          "$ref": "#/properties/persona"
+        },
+        "scenario": {
+          "$ref": "#/properties/scenario"
+        },
+        "start": {
+          "$ref": "#/definitions/route"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/step"
+          }
+        }
+      }
+    },
     "route": {
       "type": "string",
       "pattern": "^/[A-Za-z0-9/{}_?=&.-]*$",
@@ -269,6 +335,10 @@
             },
             "goto": {
               "$ref": "#/definitions/route"
+            },
+            "persona": {
+              "$ref": "#/properties/persona",
+              "description": "From this step on, someone else is signed in to the same world (the operator acts, then the Owner reads what was logged). Needs a goto."
             },
             "highlight": {
               "type": "object",

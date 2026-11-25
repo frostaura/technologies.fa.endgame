@@ -21,12 +21,15 @@ export function DemoFrame({
   onState,
   onTry,
   title,
+  testId = "demo-frame",
 }: {
   request: FrameRequest | null;
   interactive: boolean;
   onState: (s: BridgeState) => void;
   onTry: () => void;
   title: string;
+  /** The frame's test id; a second console on the page (a variation) carries its own. */
+  testId?: string;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const bridge = useRef<DemoBridge | null>(null);
@@ -94,7 +97,7 @@ export function DemoFrame({
         title={title}
         className={`h-full w-full flex-1 bg-surface ${state === "unavailable" ? "invisible" : ""}`}
         onError={() => bridge.current?.fail("The live console could not be loaded.")}
-        data-testid="demo-frame"
+        data-testid={testId}
       />
       {state === "ready" && !interactive && (
         <button

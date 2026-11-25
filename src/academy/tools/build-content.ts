@@ -45,6 +45,7 @@ function main() {
   const pct = (a: number, b: number) => (b ? `${((100 * a) / b).toFixed(1)}%` : "0%");
   log(`  Script coverage: ${c.flowsWithScript}/${c.flows} flows (${pct(c.flowsWithScript, c.flows)}), ${c.stepsWithMedia}/${c.steps} steps with media (${pct(c.stepsWithMedia, c.steps)}).`);
   log(`  By kind: ${Object.entries(c.byKind).map(([k, n]) => `${k} ${n}`).join(" · ") || "none"}`);
+  log(`  Variations with a console of their own: ${c.variations}.`);
 
   if (fatal.length || scripts.problems.length) {
     for (const p of fatal) log(`  FATAL ${p.file}:${p.line} ${p.flow} — ${p.message}`);

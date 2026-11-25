@@ -11,6 +11,8 @@ import { LevelBadge, ReachChip } from "../components/Chips.tsx";
 import { Eyebrow } from "../components/Shell.tsx";
 import { sentence } from "../content/text.ts";
 import { Stage } from "../stage/Stage.tsx";
+import { VariationPlayer } from "../stage/VariationPlayer.tsx";
+import type { StepScript } from "../content/scripts.ts";
 import { mediaOf, type Media } from "../stage/media.ts";
 import { NotFound } from "./NotFound.tsx";
 
@@ -253,7 +255,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
         </div>
       )}
 
-      <Variations flow={f} />
+      <Variations flow={f} script={script} />
     </article>
   );
 }
@@ -314,27 +316,51 @@ function Finish({ flow: f, done, next }: { flow: Flow; done: boolean; next: Flow
   );
 }
 
-function Variations({ flow: f }: { flow: Flow }) {
-  if (!f.variations.length && !f.extras.length) return null;
+function Variations({ flow: f, script }: { flow: Flow; script: StepScript | undefined }) {
+  const shows = script?.variations ?? [];
+  const [playing, setPlaying] = useState<number | null>(null);
+  if (!f.variations.length && !f.extras.length && !shows.length) return null;
   return (
-    <section className="mt-12 max-w-prose">
+    <section className="mt-12">
       <details className="group rounded-lg border bg-surface" open={f.steps.length === 0}>
         <summary className="flex min-h-touch cursor-pointer list-none items-center justify-between gap-4 px-6 py-4 font-display text-xl font-semibold text-ink">
           What else can happen
           <span className="text-sm font-sans font-normal text-ink-muted group-open:hidden">Refusals, limits and other branches</span>
         </summary>
         <div className="border-t px-6 pb-6 pt-2">
-          <Blocks blocks={f.variations} self={f.id} />
-          {f.extras.map((x) => (
-            <div key={x.label} className="mt-4 rounded-md bg-attention-wash p-4">
-              <p className="text-eyebrow font-semibold uppercase text-attention-text">{x.label}</p>
-              <p className="mt-1 text-sm text-ink-body"><Inline text={x.text} self={f.id} /></p>
-              {x.blocks.length > 0 && <Blocks blocks={x.blocks} self={f.id} />}
+          <div className="max-w-prose">
+            <Blocks blocks={f.variations} self={f.id} />
+            {f.extras.map((x) => (
+              <div key={x.label} className="mt-4 rounded-md bg-attention-wash p-4">
+                <p className="text-eyebrow font-semibold uppercase text-attention-text">{x.label}</p>
+                <p className="mt-1 text-sm text-ink-body"><Inline text={x.text} self={f.id} /></p>
+                {x.blocks.length > 0 && <Blocks blocks={x.blocks} self={f.id} />}
+              </div>
+            ))}
+          </div>
+          {shows.length > 0 && (
+            <div className="mt-6" data-print="hide">
+              <p className="text-eyebrow font-semibold uppercase text-ink-muted">See it happen</p>
+              <ul className="mt-2 flex flex-wrap gap-2" aria-label="Branches to watch">
+                {shows.map((v, i) => (
+                  <li key={v.title}>
+                    <button
+                      type="button"
+                      onClick={() => setPlaying(playing === i ? null : i)}
+                      aria-pressed={playing === i}
+                      className={`min-h-touch rounded-full border-2 px-4 text-left text-sm font-semibold ${playing === i ? "border-primary bg-primary text-primary-ink" : "border-primary-line text-ink hover:bg-primary-tint"}`}
+                    >
+                      Show me: {v.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {playing !== null && shows[playing] && <VariationPlayer key={playing} flow={f} variation={shows[playing]} index={playing} />}
             </div>
-          ))}
+          )}
         </div>
       </details>
-      <div className="mt-6 text-sm text-ink-muted" data-print="hide">
+      <div className="mt-6 max-w-prose text-sm text-ink-muted" data-print="hide">
         <Eyebrow>From the docs</Eyebrow>
         <p className="mt-1">
           This page is built from the flow documents, which were read from the code.

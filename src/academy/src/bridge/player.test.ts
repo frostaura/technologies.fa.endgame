@@ -44,6 +44,25 @@ describe("the step player", () => {
     expect(ops(plan(script, 1, 2, true))).toEqual(["reset", "goto", "act", "highlight"]);
   });
 
+  it("a step can hand the same world to someone else, who stays signed in for the steps after it", () => {
+    const handover: StepScript = {
+      flow: "OP-07",
+      persona: "operator",
+      scenario: "god-mode",
+      start: "/operator",
+      steps: [
+        { step: 1, kind: "demo", highlight: { text: "Deepest overdraft" } },
+        { step: 2, kind: "demo", goto: "/operator-access", persona: "owner", highlight: { text: "Operator access" } },
+        { step: 3, kind: "demo", goto: "/credits" },
+      ],
+    };
+    expect(plan(handover, 1, 2)[0]?.args).toEqual({ route: "/operator-access", persona: "owner", scenario: "god-mode" });
+    expect(plan(handover, 2, 3)[0]?.args).toEqual({ route: "/credits", persona: "owner", scenario: "god-mode" });
+    const jump = plan(handover, 0, 3);
+    expect(jump[1]?.args).toMatchObject({ persona: "operator" });
+    expect(jump.filter((o) => o.op === "goto").map((o) => o.args.persona)).toEqual(["operator", "owner", "owner"]);
+  });
+
   it("an unscripted screen flow opens on its own start address", () => {
     expect(planExplore("/credits").map((o) => [o.op, o.args.route])).toEqual([["reset", undefined], ["goto", "/credits"]]);
   });

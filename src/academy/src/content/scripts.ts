@@ -5,7 +5,7 @@
  */
 
 /** Who the embedded console is signed in as. */
-export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin"] as const;
+export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin", "division-admin"] as const;
 export type Persona = (typeof PERSONAS)[number];
 
 /**
@@ -13,7 +13,7 @@ export type Persona = (typeof PERSONAS)[number];
  * script may name its records as `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}`, which the
  * demo resolves inside the scenario.
  */
-export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode"] as const;
+export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode", "quiet", "hire-pending", "employee-memory", "employee-released", "at-overdraft-limit", "screening-offline", "hiring", "hires-all-decided", "hire-manager-gone", "contractor-working", "contractor-finishes", "employee-working", "employee-record", "employee-team", "employee-at-cap", "idle-sweep", "released-with-memory", "memory-to-tidy", "credits-at-zero", "below-zero", "top-ups-waiting", "operator-log", "operator-log-empty"] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 /** Where a spotlight lands: a CSS selector, a `data-testid`, or the visible text of a control. */
@@ -38,6 +38,8 @@ export interface DemoStep {
   kind: "demo";
   /** Navigate first. */
   goto?: string;
+  /** From this step on, someone else is signed in to the same world; needs a `goto`. */
+  persona?: Persona;
   /** Spotlight a control, with an optional callout. */
   highlight?: Target & { note?: string };
   /** Perform these, in order, with visible motion. */
@@ -95,6 +97,19 @@ export interface ImageStep {
 export type ScriptStep = DemoStep | TerminalStep | RequestStep | EmailStep | ImageStep;
 export type ScriptKind = ScriptStep["kind"];
 
+/**
+ * One branch of "What else can happen" — a refusal, a limit, an empty state — played in its own
+ * console. Its steps are numbered 1, 2, 3 in order; the flow has no text for them, so each says what
+ * it shows in its `note` or its spotlight's note.
+ */
+export interface Variation {
+  title: string;
+  persona: Persona;
+  scenario: Scenario;
+  start: string;
+  steps: ScriptStep[];
+}
+
 export interface StepScript {
   $schema?: string;
   flow: string;
@@ -103,4 +118,15 @@ export interface StepScript {
   /** The console address the frame opens at before step 1. */
   start: string;
   steps: ScriptStep[];
+  variations?: Variation[];
+}
+
+/** A variation as a script of its own, so the player plays it exactly as it plays a flow. */
+export function variationScript(flow: string, v: Variation): StepScript {
+  return { flow, persona: v.persona, scenario: v.scenario, start: v.start, steps: v.steps };
+}
+
+/** What a step says beside the console: its note, or its spotlight's note. */
+export function stepCaption(step: ScriptStep | undefined): string | undefined {
+  return step?.note ?? (step?.kind === "demo" ? step.highlight?.note : undefined);
 }
