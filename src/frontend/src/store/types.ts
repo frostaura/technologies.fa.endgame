@@ -486,15 +486,20 @@ export interface Employee {
 
 export interface Estimates {
   pieces: number;
+  /** The share of pieces that came within 10% of their estimate. */
   withinPercent: number;
   under: number;
   over: number;
   largestMissPercent: number;
+  /** The median of (cost − estimate) / estimate, in percent: −84 is "usually 84% under the estimate". */
+  typicalGapPercent: number | null;
+  typically: "under" | "over" | "within" | null;
 }
 
 export interface TrackRecord {
   employeeId: string;
-  work: { accepted: number; sentBack: number; acceptedPercent: number | null };
+  /** `judged`: judgements it made of other employees' work, as the evaluator. */
+  work: { accepted: number; sentBack: number; acceptedPercent: number | null; judged: number };
   runs: { finished: number; succeeded: number; failed: number; cancelled: number };
   repairsNotCharged: { credits: number; calls: number };
   cost: { toDateCredits: number; monthCredits: number };
@@ -698,6 +703,8 @@ export interface TaskItem {
   status: "todo" | "in_progress" | "blocked" | "done" | "failed" | "cancelled";
   holderRunId: string | null;
   holderEmployeeId: string | null;
+  /** Who claimed it last; kept once it is finished, when nobody holds it. */
+  employeeId: string | null;
   claimedAt: string | null;
   estimateCredits: number | null;
   actualCredits: number | null;

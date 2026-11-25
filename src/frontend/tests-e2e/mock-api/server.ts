@@ -609,7 +609,10 @@ const server = createServer(async (req, res) => {
 
   // The ontology and tasks ---------------------------------------------------------------
   if (path === "/api/ontology") return send(res, 200, state.ontology());
-  if (path === "/api/tasks") return send(res, 200, state.tasks);
+  if (path === "/api/tasks") {
+    const employeeId = url.searchParams.get("employeeId");
+    return send(res, 200, employeeId ? state.tasks.filter((t) => t.employeeId === employeeId) : state.tasks);
+  }
 
   // Credits ------------------------------------------------------------------------------
   if (path === "/api/credits") {

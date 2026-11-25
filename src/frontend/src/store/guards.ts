@@ -147,7 +147,15 @@ export const treeGuard: Guard<Tree> = (v, path) => {
   return { ...t, needsYou: t.needsYou.filter((n): n is NeedsYou => n !== null) };
 };
 
-const estimates = obj<Estimates>({ pieces: num, withinPercent: num, under: num, over: num, largestMissPercent: num });
+const estimates = obj<Estimates>({
+  pieces: num,
+  withinPercent: num,
+  under: num,
+  over: num,
+  largestMissPercent: num,
+  typicalGapPercent: withDefault(nn, null),
+  typically: withDefault(nullable(oneOf(["under", "over", "within"] as const)), null),
+});
 
 export const creditsGuard: Guard<Credits> = obj<Credits>({
   scope: s,
@@ -308,7 +316,7 @@ export const employeesGuard: Guard<Employee[]> = arr(employeeGuard);
 
 export const trackRecordGuard: Guard<TrackRecord> = obj<TrackRecord>({
   employeeId: s,
-  work: obj<TrackRecord["work"]>({ accepted: num, sentBack: num, acceptedPercent: nn }),
+  work: obj<TrackRecord["work"]>({ accepted: num, sentBack: num, acceptedPercent: nn, judged: withDefault(num, 0) }),
   runs: obj<TrackRecord["runs"]>({ finished: num, succeeded: num, failed: num, cancelled: num }),
   repairsNotCharged: obj<TrackRecord["repairsNotCharged"]>({ credits: num, calls: num }),
   cost: obj<TrackRecord["cost"]>({ toDateCredits: num, monthCredits: num }),
@@ -426,6 +434,7 @@ export const tasksGuard: Guard<TaskItem[]> = arr(
     status: oneOf(["todo", "in_progress", "blocked", "done", "failed", "cancelled"] as const),
     holderRunId: ns,
     holderEmployeeId: ns,
+    employeeId: withDefault(ns, null),
     claimedAt: ns,
     estimateCredits: nn,
     actualCredits: nn,
