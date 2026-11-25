@@ -175,7 +175,12 @@ public sealed class OntologyService(EndgameDbContext db, TenantSession session, 
         var usedModels = (await db.CreditEntries.AsNoTracking().Where(c => c.OrganisationId == org && c.AppId != null && appIds.Contains(c.AppId.Value) && c.TaskType != null && c.TaskType.StartsWith("app."))
             .Select(c => c.AppId!.Value).Distinct().ToListAsync(cancellationToken)).ToHashSet();
         var usedEmail = (await db.EmailMessages.AsNoTracking().Where(m => m.OrganisationId == org && m.AppId != null && appIds.Contains(m.AppId.Value)).Select(m => m.AppId!.Value).Distinct().ToListAsync(cancellationToken)).ToHashSet();
-        var usedIdentity = (await db.AppEndUsers.AsNoTracking().Where(u => u.OrganisationId == org && appIds.Contains(u.AppId)).Select(u => u.AppId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+        // Identity: anyone has signed in to it (an app session, a member's or an end user's), registered for it,
+        // or been invited to it — not only end users, or a private app its members use reads as using nothing.
+        var usedIdentity = (await db.AppEndUsers.AsNoTracking().Where(u => u.OrganisationId == org && appIds.Contains(u.AppId)).Select(u => u.AppId).Distinct().ToListAsync(cancellationToken))
+            .Concat(await db.AppSessions.AsNoTracking().Where(x => x.OrganisationId == org && appIds.Contains(x.AppId)).Select(x => x.AppId).Distinct().ToListAsync(cancellationToken))
+            .Concat(await db.AppShares.AsNoTracking().Where(x => x.OrganisationId == org && appIds.Contains(x.AppId)).Select(x => x.AppId).Distinct().ToListAsync(cancellationToken))
+            .ToHashSet();
         var usedTelemetry = (await db.TelemetryEvents.AsNoTracking().Where(t => t.OrganisationId == org && appIds.Contains(t.AppId)).Select(t => t.AppId).Distinct().ToListAsync(cancellationToken))
             .Concat(await db.TelemetrySpans.AsNoTracking().Where(t => t.OrganisationId == org && appIds.Contains(t.AppId)).Select(t => t.AppId).Distinct().ToListAsync(cancellationToken))
             .Concat(await db.TelemetryMetrics.AsNoTracking().Where(t => t.OrganisationId == org && appIds.Contains(t.AppId)).Select(t => t.AppId).Distinct().ToListAsync(cancellationToken))
@@ -220,7 +225,7 @@ public sealed class OntologyService(EndgameDbContext db, TenantSession session, 
             if (usedIdentity.Contains(a))
             {
                 Edge($"app:{a}", Service("identity"), DependsOn);
-                Edge(Service("identity"), $"app:{a}", DataFlowsTo, "signed-in end users");
+                Edge(Service("identity"), $"app:{a}", DataFlowsTo, "signed-in people");
             }
 
             if (usedTelemetry.Contains(a))

@@ -574,7 +574,7 @@ export function scenario(name: ScenarioName): MockState {
       { from: "contractor:c1", to: "employee:e1", type: "reports-to", label: "briefed by" },
       { from: "person:u1", to: "organisation:org1", type: "works-on", label: "owner" },
       { from: "app:app1", to: "service:identity", type: "depends-on", label: null },
-      { from: "service:identity", to: "app:app1", type: "data-flows-to", label: "signed-in end users" },
+      { from: "service:identity", to: "app:app1", type: "data-flows-to", label: "signed-in people" },
       { from: "app:app1", to: "service:email", type: "depends-on", label: null },
       { from: "app:app1", to: "service:email", type: "data-flows-to", label: "outbound mail" },
       { from: "app:app1", to: "service:models", type: "depends-on", label: null },

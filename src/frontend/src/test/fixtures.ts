@@ -150,7 +150,7 @@ export const ONTOLOGY = {
     { from: "app:a1", to: "service:models", type: "depends-on", label: null },
     { from: "app:a1", to: "service:models", type: "data-flows-to", label: "prompts" },
     { from: "app:a1", to: "service:identity", type: "depends-on", label: null },
-    { from: "service:identity", to: "app:a1", type: "data-flows-to", label: "signed-in end users" },
+    { from: "service:identity", to: "app:a1", type: "data-flows-to", label: "signed-in people" },
   ],
   views: { "org-chart": ["owns", "works-on", "reports-to"], "data-flow": ["depends-on", "data-flows-to"] },
 };

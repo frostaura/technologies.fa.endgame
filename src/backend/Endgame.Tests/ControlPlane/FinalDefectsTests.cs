@@ -63,6 +63,31 @@ public sealed class FinalDefectsTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal("acme", row["organisation"]!.GetValue<string>());
         Assert.Equal("Acme Holdings", row["organisationName"]!.GetValue<string>());
     }
+
+    [Fact]
+    public async Task An_app_people_sign_in_to_depends_on_identity_in_the_data_flow_even_with_no_end_users()
+    {
+        await owner.DivisionAsync("frostaura", "technologies");
+        await owner.ProjectAsync("frostaura/technologies", "squash");
+        var members = await owner.AppAsync("frostaura/technologies/squash", "members");
+        var invites = await owner.AppAsync("frostaura/technologies/squash", "invites");
+        var quiet = await owner.AppAsync("frostaura/technologies/squash", "quiet");
+
+        // A member signs in to a private app: an app session, and no end user anywhere.
+        var link = new Uri((await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/app-auth/{members}/handoff", new { })))["url"]!.GetValue<string>());
+        await ControlPlaneApp.Ok(app.Internal().PostAsJsonAsync("/internal/access/handoff", new { appId = members, code = System.Web.HttpUtility.ParseQueryString(link.Query)["code"]! }));
+        // Another is shared with an address: whoever opens it signs in first.
+        await owner.SetAsync("frostaura/technologies/squash/invites", "setting", "access", "shared");
+        await ControlPlaneApp.Created(owner.PostAsJsonAsync($"/api/apps/{invites}/shares", new { email = "friend@example.com" }));
+
+        var flow = await ControlPlaneApp.Ok(owner.GetAsync("/api/ontology?scope=frostaura&view=data-flow"));
+        bool Uses(Guid appId) => flow["edges"]!.AsArray().Any(e => e!["from"]!.GetValue<string>() == $"app:{appId}" && e["to"]!.GetValue<string>() == "service:identity" && e["type"]!.GetValue<string>() == "depends-on");
+        Assert.True(Uses(members));
+        Assert.True(Uses(invites));
+        Assert.False(Uses(quiet));
+        Assert.Contains(flow["edges"]!.AsArray(), e => e!["from"]!.GetValue<string>() == "service:identity" && e["to"]!.GetValue<string>() == $"app:{members}" && e["type"]!.GetValue<string>() == "data-flows-to");
+        Assert.Contains(flow["nodes"]!.AsArray(), n => n!["id"]!.GetValue<string>() == "service:identity" && n["type"]!.GetValue<string>() == "service");
+    }
 }
 
 public sealed class OperatorVisitsTests
