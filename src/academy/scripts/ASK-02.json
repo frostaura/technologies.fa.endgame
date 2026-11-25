@@ -53,7 +53,7 @@
       "step": 4,
       "kind": "demo",
       "highlight": {
-        "text": "Mon",
+        "selector": "section[aria-label=\"Asking about this app\"] [role=\"img\"]",
         "note": "A chart of up to 24 bars. Had there been more rows than shown, a line under it would say so."
       }
     },

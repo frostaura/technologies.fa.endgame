@@ -22,7 +22,7 @@ import { activeWork } from "./treeModel";
  * said before is read from the control plane, so it survives a reload; each new message starts a
  * run, and its replies are that run's `message` events, streamed and appended below.
  */
-export function ConversationDock({ tree, selection }: { tree: Tree; selection: Selection }) {
+export function ConversationDock({ tree, selection, fill = true }: { tree: Tree; selection: Selection; fill?: boolean }) {
   const dispatch = useAppDispatch();
   const key = conversationKey(selection);
   const messages = useAppSelector((s) => s.ui.conversations[key]) ?? NONE;
@@ -71,7 +71,7 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
   };
 
   return (
-    <section aria-label="Conversation" className="flex min-h-full flex-col gap-0">
+    <section aria-label="Conversation" className={cn("flex flex-col gap-0", fill && "min-h-full")}>
       <div className="flex items-center gap-3.5 border-b pb-5">
         <Avatar name={name} seed={selection.employeeId ?? selection.scope} size="md" shape={selection.kind === "employee" ? "round" : "square"} />
         <div className="flex min-w-0 flex-col">
@@ -333,5 +333,6 @@ function Replies({ runId, answerer }: { runId: string; answerer: string | null }
 export function AppConversation({ scope, trail }: { scope: string; trail: string[] }) {
   const tree = useActiveTree();
   if (!tree.data) return null;
-  return <ConversationDock tree={tree.data} selection={{ scope, kind: "app", trail }} />;
+  // Inline on the app's page, among its sections: it takes the height of what it holds, never the page's.
+  return <ConversationDock tree={tree.data} selection={{ scope, kind: "app", trail }} fill={false} />;
 }

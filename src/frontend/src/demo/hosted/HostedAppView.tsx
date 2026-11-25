@@ -20,7 +20,7 @@ import {
 } from "./edgePages";
 import { addressesOf, addressFor, resolve, restOf } from "./gate";
 import { personOf } from "./readingList";
-import { ReadingListApp } from "./ReadingListApp";
+import { HostedAppPage } from "./AppPages";
 import type { HostedContext, HostedVisitor } from "./types";
 
 export type { HostedApp, HostedAppState, HostedContext, HostedVisitor, PasskeyPrompt } from "./types";
@@ -137,7 +137,8 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
     const here = new URL(resolved.address);
     tabTitle = app.name;
     body = (
-      <ReadingListApp
+      <HostedAppPage
+        app={app}
         appId={app.id}
         appName={app.name}
         me={outcome.session === null ? null : personOf(visitor)}

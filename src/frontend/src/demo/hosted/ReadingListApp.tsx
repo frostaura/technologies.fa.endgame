@@ -1,21 +1,11 @@
 import { useState, useSyncExternalStore, type FormEvent } from "react";
+import { AppNotFound, HostedAppShell, PageHeading, type AppPageProps } from "./AppShell";
+import { routeOf } from "./apps";
 import { authRest } from "./gate";
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, FailedState, FieldError, Input, KitButton, KitLink, Label, Select } from "./kit";
 import { readingListFor, STATUS_LABEL, STATUSES, type Book, type BookStatus, type Person } from "./readingList";
 
-export interface ReadingListAppProps {
-  appId: string;
-  appName: string;
-  /** Who the Edge says is signed in; null for an anonymous visitor of a public app. */
-  me: Person | null;
-  /** The path inside the app, e.g. "" or "books/new". */
-  rest: string;
-  /** The current address's path and query on its host, for the sign-in page's `returnTo`. */
-  here: string;
-  /** The full address of a path inside the app, for real `href`s. */
-  addressOf(rest: string): string;
-  navigate(rest: string): void;
-}
+export type ReadingListAppProps = AppPageProps;
 
 const TONE: Record<BookStatus, "neutral" | "primary" | "success"> = { want: "neutral", reading: "primary", finished: "success" };
 
@@ -27,45 +17,11 @@ const formatWhen = (iso: string) => new Intl.DateTimeFormat(undefined, { dateSty
  * refuses what the person may not do.
  */
 export function ReadingListApp(props: ReadingListAppProps) {
-  const route = props.rest.split(/[?#]/)[0]?.replace(/\/+$/, "") ?? "";
+  const route = routeOf(props.rest);
   return (
-    <div className="flex flex-1 flex-col bg-ground font-sans text-ink" data-testid="reading-list-app">
-      <header className="border-b bg-surface">
-        <div className="mx-auto flex w-full max-w-page items-center justify-between gap-4 px-4 py-4 sm:px-8">
-          <nav aria-label="Main">
-            <KitLink plain href={props.addressOf("")} onFollow={() => props.navigate("")} data-testid="nav-home" className="font-display text-lg font-semibold text-ink">
-              {props.appName}
-            </KitLink>
-          </nav>
-          <UserMenu {...props} />
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-page flex-1 px-4 py-8 sm:px-8">
-        {route === "" ? <BooksPage {...props} /> : route === "books/new" ? <NewBookPage {...props} /> : <NotFoundPage {...props} />}
-      </main>
-    </div>
-  );
-}
-
-function UserMenu({ me, here, addressOf, navigate }: ReadingListAppProps) {
-  if (me === null) {
-    const signIn = authRest("sign-in", here);
-    return (
-      <KitLink variant="outline" size="sm" href={addressOf(signIn)} onFollow={() => navigate(signIn)}>
-        Sign in
-      </KitLink>
-    );
-  }
-  const signOut = authRest("sign-out");
-  return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="text-ink-muted" data-testid="signed-in-as">
-        {me.displayName}
-      </span>
-      <KitLink variant="ghost" size="sm" href={addressOf(signOut)} onFollow={() => navigate(signOut)}>
-        Sign out
-      </KitLink>
-    </div>
+    <HostedAppShell {...props} testId="reading-list-app" page="reading-list">
+      {route === "" ? <BooksPage {...props} /> : route === "books/new" ? <NewBookPage {...props} /> : <AppNotFound {...props} backTo="the reading list" />}
+    </HostedAppShell>
   );
 }
 
@@ -90,17 +46,11 @@ function BooksPage({ appId, me, addressOf, navigate }: ReadingListAppProps) {
   const reading = books.filter((b) => b.status === "reading").length;
   return (
     <section className="flex flex-col gap-6" data-testid="page-home">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold">The reading list</h1>
-          <p className="text-sm text-ink-muted">
-            {books.length} {books.length === 1 ? "book" : "books"} · {reading} being read now
-          </p>
-        </div>
+      <PageHeading title="The reading list" summary={`${books.length} ${books.length === 1 ? "book" : "books"} · ${reading} being read now`}>
         <KitLink href={addressOf("books/new")} onFollow={() => navigate("books/new")} data-testid="new-book">
           Add a book
         </KitLink>
-      </div>
+      </PageHeading>
       {books.length === 0 ? (
         <div data-testid="book-list">
           <EmptyState title="No books yet">Add the first one with “Add a book”.</EmptyState>
@@ -227,17 +177,5 @@ function NewBookForm({ appId, me, navigate }: ReadingListAppProps & { me: Person
         </form>
       </CardContent>
     </Card>
-  );
-}
-
-function NotFoundPage({ addressOf, navigate }: ReadingListAppProps) {
-  return (
-    <section data-testid="page-not-found">
-      <EmptyState title="There is nothing at this address">
-        <KitLink plain href={addressOf("")} onFollow={() => navigate("")} className="font-semibold text-primary hover:text-primary-hover">
-          Back to the reading list
-        </KitLink>
-      </EmptyState>
-    </section>
   );
 }

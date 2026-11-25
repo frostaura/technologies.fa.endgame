@@ -132,7 +132,7 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `app-restore-fails`, `app-rebuild-fails` | Bringing a version back, or "Rebuild and restart", cannot start the app | |
 | `app-wake-slow`, `app-wake-busy`, `app-unreachable`, `wake-failures` | A wake the Edge cannot finish: over 30 seconds, no room, unreachable; `wake-failures` puts one of each (and an unpublished app) side by side | |
 | `outage` | The host cannot be reached: Cloudflare's outage page at Court booking's address | |
-| `ask-unavailable`, `dashboard-full` | No model route, so nothing about an app can be asked; Court booking's dashboard at its 30 questions | |
+| `ask-unavailable`, `dashboard-full`, `dashboard-question-broken` | No model route, so nothing about an app can be asked; Court booking's dashboard at its 30 questions; Court booking's dashboard keeping a question that no longer runs (only there, so no other lesson shows a failure it does not teach) | |
 | `no-secrets` | No secret set anywhere in Northwind | |
 | `s3-research-failed`, `s3-research-cancelled` | The tide board's research ends with no verdict, or was cancelled: "Try again" on the idea and the run (`scenarios.s3.ts`) | |
 | `s3-checkpoints`, `s3-start-checkpoint` | Northwind in checkpoints mode, so a verdict waits for you; Learning asking "Start this work?" before research begins | |
@@ -180,8 +180,8 @@ clock | reset` for tests.
 | op | args | Does |
 | --- | --- | --- |
 | `goto` | `{ route?, persona?, scenario? }` | Switches persona and/or scenario (a new scenario is a new world), then opens the route (default: the scenario's). |
-| `highlight` | `{ selector? \| testId? \| text? \| label?, note? }`; `{}` clears | Scrolls the control into view and rings it, with the note beside it; waits up to 5 s for it. |
-| `act` | `{ actions: Action[], instant? }` | Performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. `press: "Tab"` moves the focus to the next control, as the browser does. |
+| `highlight` | `{ selector? \| testId? \| text? \| label?, note? }`; `{}` clears | Waits (up to 4 s) until nothing on screen is still loading — no skeleton, no busy region — then scrolls the control into view (a control taller than the view at its top, its heading kept in view) and rings it, with the note beside it; waits up to 5 s for it. The ring stands off the control into the gap around it, never over a neighbour's words; the note goes below, above or beside the ring, wherever it covers least of the page and never the ring. |
+| `act` | `{ actions: Action[], instant? }` | Performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. `press: "Tab"` moves the focus to the next control, as the browser does; `hover` rests the pointer on a target, so what the page shows on hover appears. |
 | `clock` | `{ play?, pause?, speed?, seek? }` | Plays, pauses, sets the speed, or jumps (a moment's name or milliseconds). |
 | `reset` | `{}` | Rebuilds the scenario's world from scratch and opens its route. |
 
@@ -197,8 +197,13 @@ flow id starts with one of those prefixes.
 
 A target is a CSS `selector`, a `testId`, or visible `text` / accessible `label`, matched in that
 order of preference: buttons, links and other controls by accessible name (exact, then prefix,
-then contained), form fields by label, placeholder or aria-label, then the smallest element whose
-text holds it.
+then contained, whole words before part of a word, and a control that deletes or ends something
+last), form fields by label, placeholder or aria-label, then the smallest element whose text holds
+it. A spotlight prefers what the page calls the thing — a heading or label, or words that are
+exactly it — over a control that merely mentions it, and never lands on a destructive control
+unless the step names it outright. `tests-demo/academy-scripts.spec.ts` asks the demo
+(`endgameDemo.inspect`) what each text spotlight landed on and fails a step that took a destructive
+control it did not name, or matched only part of a word ("Mon" inside "month").
 
 ```json
 {
@@ -234,6 +239,7 @@ text holds it.
     "action": {
       "oneOf": [
         { "type": "object", "required": ["click"], "properties": { "click": { "$ref": "#/$defs/target" } }, "additionalProperties": false },
+        { "type": "object", "required": ["hover"], "properties": { "hover": { "$ref": "#/$defs/target" } }, "additionalProperties": false },
         { "type": "object", "required": ["type"], "properties": { "type": { "type": "object", "required": ["into", "text"], "properties": { "into": { "$ref": "#/$defs/target" }, "text": { "type": "string" } } } }, "additionalProperties": false },
         { "type": "object", "required": ["select"], "properties": { "select": { "type": "object", "required": ["into", "value"], "properties": { "into": { "$ref": "#/$defs/target" }, "value": { "type": "string" } } } }, "additionalProperties": false },
         { "type": "object", "required": ["press"], "properties": { "press": { "oneOf": [{ "type": "string" }, { "type": "object", "required": ["key"], "properties": { "key": { "type": "string" } } }] } }, "additionalProperties": false },

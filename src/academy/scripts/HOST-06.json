@@ -17,7 +17,7 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "text": "The reading list",
+        "text": "Book a court",
         "note": "The edge strips the prefix, sets the forwarded headers, and drops any X-Endgame-* header and platform cookie the browser sent."
       }
     },

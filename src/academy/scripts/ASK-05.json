@@ -42,7 +42,7 @@
     {
       "title": "A question that no longer runs",
       "persona": "viewer",
-      "scenario": "app-busy",
+      "scenario": "dashboard-question-broken",
       "start": "/apps/{app}",
       "steps": [
         {

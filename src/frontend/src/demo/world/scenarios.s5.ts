@@ -1,5 +1,5 @@
 import type { SavedQuestion } from "@/store/types";
-import { IDS } from "./default";
+import { brokenQuestion, IDS } from "./default";
 import { defineScenario } from "./scenarios";
 import { ago, uuidFor, type World } from "../server/world";
 
@@ -76,6 +76,15 @@ defineScenario({ name: "app-unreachable", title: "Course Notes cannot be reached
 defineScenario({ name: "outage", title: "The host is down: Cloudflare shows the outage page", apply: (w) => (w.edgeAnswer = { [IDS.tableBookings]: "outage" }), route: "/__app/{app}/subdomain/", featured: COURT });
 
 defineScenario({ name: "no-secrets", title: "No secret is set anywhere in Northwind", apply: (w) => (w.secrets = []), route: "/secrets?scope=northwind", featured: COURT });
+
+// A kept question that no longer runs (ASK-05): its own world, so no other lesson's dashboard shows a failure it does not teach.
+defineScenario({
+  name: "dashboard-question-broken",
+  title: "Court booking's dashboard keeps a question that no longer runs",
+  apply: (w) => w.dashboard.push(brokenQuestion(ago)),
+  route: "/apps/{app}",
+  featured: COURT,
+});
 
 defineScenario({
   name: "dashboard-full",

@@ -10,7 +10,7 @@
       "kind": "demo",
       "goto": "/",
       "highlight": {
-        "selector": "main",
+        "selector": "main h1",
         "note": "Kit Marlow is signed in on a fresh Endgame. Home asks for the tree; while it loads, grey placeholders stand in."
       }
     },

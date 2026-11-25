@@ -8,6 +8,8 @@ import { expect, test } from "@playwright/test";
  * nothing goes unlit (`found: false`) so a lesson never breaks in front of a learner; here, at
  * build, it fails — naming the flow and step — unless tests-demo/academy-allowlist.json lists it
  * with a reason. So wording drift between the console and the academy is caught before it ships.
+ * A text spotlight that landed on a destructive control the step does not name ("Delete Shift
+ * Rota" for "Shift Rota"), or matched only part of a word ("Mon" in "month"), fails too.
  * Each of a script's variations ("What else can happen") is played the same way, from its own start,
  * as its own persona and scenario; its steps are allow-listed as `{ flow, variation, step }`.
  *
@@ -79,6 +81,13 @@ for (const { script, variation, name } of plays) {
         if (step.clock) await call("clock", step.clock);
         if (step.act) await call("act", step.act, false);
         if (step.highlight && (await call("highlight", step.highlight)) === false) failed = `the highlight ${JSON.stringify(step.highlight)} found nothing on screen`;
+        else if (step.highlight && typeof step.highlight.text === "string") {
+          // A text spotlight must ring what its words name: not a control that deletes or ends
+          // something the step did not name, and not a match inside a longer word.
+          const seen = (await call("inspect", { text: step.highlight.text })) as { found: boolean; tag?: string; text?: string; exact?: boolean; wholeWords?: boolean; destructive?: boolean };
+          if (seen.found && seen.destructive && !seen.exact) failed = `the highlight "${step.highlight.text}" rang the ${seen.tag} "${seen.text}", a control that deletes or ends something the step does not name`;
+          else if (seen.found && !seen.wholeWords) failed = `the highlight "${step.highlight.text}" matched only part of a word, in the ${seen.tag} "${seen.text}"`;
+        }
       } catch (e) {
         failed = `an action failed: ${(e instanceof Error ? e.message : String(e)).split("\n")[0] ?? ""}`;
       }

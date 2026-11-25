@@ -72,7 +72,9 @@
       "kind": "demo",
       "act": [
         {
-          "wait": 900
+          "wait": {
+            "text": "Sign out"
+          }
         }
       ],
       "note": "Your device approves; the first person is created, under a lock, and a 14-day session opens."

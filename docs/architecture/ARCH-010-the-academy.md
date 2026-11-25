@@ -93,7 +93,7 @@ message only when `event.source` is the frame's own window and `source` is `"end
 | `clock` | `{ play: true }` · `{ pause: true }` · `{ seek: ms \| moment }` | an echo of `id` |
 | `reset` | `{}` | an echo of `id` |
 
-`Action` is one of `{ click: Target }`, `{ type: { into: Target, text } }`,
+`Action` is one of `{ click: Target }`, `{ hover: Target }`, `{ type: { into: Target, text } }`,
 `{ select: { into: Target, value } }`, `{ press: key }`, `{ wait: ms | Target }`, `{ clock: … }`; a `Target`
 is `{ selector? | testId? | text? }`, where `text` is the visible label of a control, quoted exactly
 as the flow quotes it. `instant: true` asks for the end state without the motion (catching up).

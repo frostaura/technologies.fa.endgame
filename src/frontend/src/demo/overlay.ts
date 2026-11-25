@@ -1,3 +1,5 @@
+import { noteCost, placeNote, ringBox, ringInsets, type Box } from "./placement";
+
 /**
  * The academy's marks on the page: a spotlight ring around a control, with an optional note, and
  * a soft cursor that moves to what a step acts on. Both are drawn above the console, never take a
@@ -39,30 +41,127 @@ export function pageRect(el: Element): { left: number; top: number; width: numbe
   return { left, top, width: r.width, height: r.height, bottom: top + r.height };
 }
 
+/**
+ * What the page shows inside the viewport: each run of words and each control, image or chart, in
+ * the demo's own page coordinates (an Edge page's frame included). The note is set where it hides
+ * least of these, and the ring stands clear of them.
+ */
+function contentBoxes(): Box[] {
+  const out: Box[] = [];
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const push = (r: DOMRect, dx: number, dy: number) => {
+    if (r.width * r.height < 4) return;
+    const b = { left: r.left + dx, top: r.top + dy, right: r.right + dx, bottom: r.bottom + dy };
+    if (b.right <= 0 || b.bottom <= 0 || b.left >= vw || b.top >= vh) return;
+    out.push(b);
+  };
+  const visit = (doc: Document, dx: number, dy: number) => {
+    if (!doc.body) return;
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.nodeValue?.trim() && !n.parentElement?.closest("[data-demo-chrome], script, style, title") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+    });
+    const range = doc.createRange();
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      range.selectNodeContents(n);
+      for (const r of range.getClientRects()) push(r, dx, dy);
+    }
+    for (const el of doc.querySelectorAll("input, textarea, select, button, img, canvas, video, svg, [role=img], [role=progressbar]")) {
+      if (el.closest("[data-demo-chrome]") || el.parentElement?.closest("svg")) continue;
+      push(el.getBoundingClientRect(), dx, dy);
+    }
+    for (const frame of doc.querySelectorAll("iframe")) {
+      try {
+        const inner = frame.contentDocument;
+        const f = frame.getBoundingClientRect();
+        if (inner) visit(inner, dx + f.left + frame.clientLeft, dy + f.top + frame.clientTop);
+      } catch {
+        // A frame from another origin: its contents are its own.
+      }
+    }
+  };
+  visit(document, 0, 0);
+  return out;
+}
+
+let refind: (() => HTMLElement | null) | null = null;
+let lostSince = 0;
+/** Still drawn: in the page, or in an Edge page's frame that is itself still in the page (a removed frame's nodes stay "connected" to its own document). */
+function onPage(el: Element): boolean {
+  if (!el.isConnected) return false;
+  const win = el.ownerDocument.defaultView;
+  if (!win) return false;
+  return win === window || (win.frameElement !== null && onPage(win.frameElement));
+}
+
+let placed: { key: string; at: number; left: number; top: number; score: number; ring: Box } | null = null;
+
 function place() {
   frame = 0;
   if (!tracked || !ring) return;
-  if (!tracked.isConnected) {
-    clearSpotlight();
-    return;
+  if (!onPage(tracked)) {
+    // The screen drew it again (a refresh, a retry): the ring follows the new one, and waits a while for it.
+    const again = refind?.();
+    if (again) {
+      tracked = again;
+      tracked.setAttribute("data-demo-ringed", "");
+    }
+    else {
+      lostSince ||= performance.now();
+      if (performance.now() - lostSince > 10_000) {
+        clearSpotlight();
+        return;
+      }
+      ring.hidden = true;
+      if (note) note.hidden = true;
+      frame = requestAnimationFrame(place);
+      return;
+    }
   }
+  lostSince = 0;
+  ring.hidden = false;
+  if (note) note.hidden = false;
   const r = pageRect(tracked);
-  Object.assign(ring.style, { left: `${r.left - 6}px`, top: `${r.top - 6}px`, width: `${r.width + 12}px`, height: `${r.height + 12}px` });
-  if (note) {
-    const below = r.bottom + 12 + 80 < window.innerHeight;
-    Object.assign(note.style, { left: `${Math.max(8, Math.min(r.left, window.innerWidth - 328))}px`, top: below ? `${r.bottom + 12}px` : `${Math.max(8, r.top - 12 - note.offsetHeight)}px` });
+  const target: Box = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.bottom };
+  const view = { width: window.innerWidth, height: window.innerHeight };
+  const key = [target.left, target.top, target.right, target.bottom, view.width, view.height, note?.offsetWidth ?? 0, note?.offsetHeight ?? 0].map(Math.round).join(",");
+  const now = performance.now();
+  // Measured again when the control moves, and every so often while it stays (the page may still be filling in).
+  if (!placed || placed.key !== key || now - placed.at > 400) {
+    const content = contentBoxes();
+    const box = ringBox(target, ringInsets(target, content), view);
+    let left = 0;
+    let top = 0;
+    let score = 0;
+    if (note) {
+      const best = placeNote(box, { width: note.offsetWidth, height: note.offsetHeight }, view, content);
+      // Stays put unless the control moved or somewhere is clearly better now, so the note does not jitter.
+      const size = { width: note.offsetWidth, height: note.offsetHeight };
+      const here = placed && placed.key === key ? noteCost(box, size, content, placed.left, placed.top, 0) : Infinity;
+      ({ left, top, score } = here - best.score < 200 && placed ? { left: placed.left, top: placed.top, score: here } : best);
+    }
+    placed = { key, at: now, left, top, score, ring: box };
   }
+  const box = placed.ring;
+  // The light outline is drawn outside the element's own box: the box is set one pixel inside the ring's.
+  Object.assign(ring.style, { left: `${box.left + 1}px`, top: `${box.top + 1}px`, width: `${box.right - box.left - 2}px`, height: `${box.bottom - box.top - 2}px` });
+  if (note) Object.assign(note.style, { left: `${placed.left}px`, top: `${placed.top}px` });
   frame = requestAnimationFrame(place);
 }
 
-export function showSpotlight(el: HTMLElement, text: string | null) {
+/** `again` finds the control anew when the screen replaces it, so a re-drawn page keeps its ring. */
+export function showSpotlight(el: HTMLElement, text: string | null, again?: () => HTMLElement | null) {
   clearSpotlight();
   tracked = el;
-  ring = layer("pointer-events-none fixed z-50 rounded-sm ring-4 ring-primary ring-offset-2 ring-offset-surface shadow-raised transition-all duration-200 motion-reduce:transition-none");
+  el.setAttribute("data-demo-ringed", "");
+  refind = again ?? null;
+  // A line, not a band: it stands off the control into the gap around it and never paints over a neighbour's words.
+  ring = layer("pointer-events-none fixed z-50 rounded-sm border-2 border-primary outline outline-1 outline-surface transition-all duration-200 motion-reduce:transition-none");
   ring.setAttribute("data-demo-spotlight", "");
   if (text) {
     note = layer("pointer-events-none fixed z-50 max-w-xs rounded-sm bg-ink px-3 py-2 text-sm text-surface shadow-raised");
     note.setAttribute("role", "status");
+    note.setAttribute("data-demo-note", "");
     note.removeAttribute("aria-hidden");
     note.textContent = text;
   }
@@ -72,11 +171,15 @@ export function showSpotlight(el: HTMLElement, text: string | null) {
 export function clearSpotlight() {
   if (frame) cancelAnimationFrame(frame);
   frame = 0;
+  tracked?.removeAttribute("data-demo-ringed");
   ring?.remove();
   note?.remove();
   ring = null;
   note = null;
   tracked = null;
+  refind = null;
+  lostSince = 0;
+  placed = null;
 }
 
 /** Glide the soft cursor to a point; resolves when it has arrived. */

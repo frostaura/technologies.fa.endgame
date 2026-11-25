@@ -47,7 +47,8 @@ export function SecretsView() {
       <header className={cn("flex flex-col gap-1.5", RISE)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold">
           <Icon name="secrets" tinted className="size-7" />
-          Secrets for {here}
+          {/* Before an organisation is named there is nothing to name the secrets for. */}
+          {here ? `Secrets for ${here}` : "Secrets"}
         </h1>
         <p className="max-w-prose text-ink-body">
           What applies here, and where each was set. A secret set higher up applies beneath unless a lower level sets its own. A value is never shown, not even to you: to change one, replace it.

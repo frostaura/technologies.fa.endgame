@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ONTOLOGY } from "@/test/fixtures";
 import { json, problem, renderWithStore, stubApi } from "@/test/harness";
@@ -47,6 +47,19 @@ describe("OntologyView", () => {
     expect(within(list).getByRole("link", { name: "Ada · Product researcher" }).getAttribute("href")).toBe("/employees/e1");
     expect(list.textContent).toContain("works on Tools");
     expect(screen.getByRole("region", { name: "Who works on what, drawn" })).toBeTruthy();
+  });
+
+  it("names a line on the drawing while the pointer rests on it", async () => {
+    stubApi({ "GET /api/ontology": json(ONTOLOGY) });
+    const { container } = renderWithStore(<OntologyView scope="acme" view="org-chart" />);
+    await screen.findByRole("region", { name: "Who works on what, drawn" });
+    const line = container.querySelector<SVGGElement>('g[data-edge^="Ada"]');
+    expect(line).toBeTruthy();
+    expect(container.querySelector("[data-edge-name]")).toBeNull();
+    fireEvent.pointerOver(line as SVGGElement);
+    expect(container.querySelector("[data-edge-name]")?.textContent).toBe(line?.getAttribute("data-edge"));
+    fireEvent.pointerOut(line as SVGGElement);
+    expect(container.querySelector("[data-edge-name]")).toBeNull();
   });
 
   it("shows data flows with services named by what they do", async () => {

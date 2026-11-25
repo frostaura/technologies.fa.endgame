@@ -9,7 +9,7 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "text": "The reading list",
+        "text": "Book a court",
         "note": "Admitted with no session: no sign-in page, and the app sees no one signed in."
       }
     }

@@ -76,7 +76,13 @@ function HostedRoute({ appId, form, rest }: { appId: string; form: "path" | "sub
     return { kind: "signed-out", displayName: null, email: null };
   })();
   // An address Edge knows nothing about (ACC-16).
-  if (!app) return <EdgeDocument html={renderUnavailablePage("Temporary")} docKey={`unknown:${appId}`} title={`${UNAVAILABLE_COPY.Temporary.title} · Endgame`} onAction={async () => {}} />;
+  // The Edge's own page for an address it does not know, drawn the full height of the window as any Edge page is.
+  if (!app)
+    return (
+      <div className="flex min-h-screen flex-col bg-ground" data-testid="hosted-unknown">
+        <EdgeDocument html={renderUnavailablePage("Temporary")} docKey={`unknown:${appId}`} title={`${UNAVAILABLE_COPY.Temporary.title} · Endgame`} onAction={async () => {}} />
+      </div>
+    );
   const [org, ...below] = app.path.split("/");
   const state: HostedAppState = world.edgeAnswer?.[app.id] ?? (app.status === "failed" ? "crashed" : app.running === "paused" ? "paused" : app.status === "building" || app.status === "draft" ? "not-published" : app.running === "asleep" ? "asleep" : "running");
   return (

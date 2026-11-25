@@ -8,13 +8,6 @@
     {
       "step": 1,
       "kind": "demo",
-      "act": [
-        {
-          "click": {
-            "text": "Pause"
-          }
-        }
-      ],
       "highlight": {
         "text": "Pause",
         "note": "Pause stops the work between steps."
@@ -24,6 +17,11 @@
       "step": 2,
       "kind": "demo",
       "act": [
+        {
+          "click": {
+            "text": "Pause"
+          }
+        },
         {
           "wait": {
             "text": "Paused"

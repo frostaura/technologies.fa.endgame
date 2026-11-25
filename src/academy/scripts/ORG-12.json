@@ -17,7 +17,7 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "selector": "main",
+        "selector": "main h1",
         "note": "No conversation panel: it needs at least one division."
       }
     }

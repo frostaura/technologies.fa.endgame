@@ -16,7 +16,7 @@
         }
       ],
       "highlight": {
-        "text": "Shift Rota",
+        "selector": "main h1",
         "note": "A notice about an app opens the app. Following an unread one marks it read."
       }
     },
@@ -32,7 +32,7 @@
         }
       ],
       "highlight": {
-        "selector": "main",
+        "selector": "main h1",
         "note": "A budget notice with no record of its own leads to Credits."
       }
     }
