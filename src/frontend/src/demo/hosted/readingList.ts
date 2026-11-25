@@ -134,6 +134,11 @@ export function readingListFor(appId: string): ReadingList {
   return list;
 }
 
+/** A reset of the demo: every app's list starts again from its seed on its next visit. */
+export function forgetReadingLists() {
+  lists.clear();
+}
+
 /** A fresh, seeded list for tests. */
 export function newReadingList(): ReadingList {
   return createReadingList();

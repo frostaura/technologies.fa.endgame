@@ -20,3 +20,8 @@ export function deviceFor(appId: string): DeviceState {
   }
   return state;
 }
+
+/** A reset of the demo: this device holds no app passkey and knows no registered address. */
+export function forgetHostedDevices() {
+  devices.clear();
+}

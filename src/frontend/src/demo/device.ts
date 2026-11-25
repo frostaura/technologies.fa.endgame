@@ -30,6 +30,11 @@ export function setAutoApprove(ms: number | null) {
   autoApproveMs = ms;
 }
 
+/** A reset of the demo: a sheet still open is cancelled, as closing it would. */
+export function cancelDeviceRequest() {
+  current?.resolve(null);
+}
+
 /** Ask "the device"; resolves with the chosen account id (or "ok"), or null when cancelled. */
 export function askDevice(request: Omit<DeviceRequest, "resolve">): Promise<string | null> {
   current?.resolve(null);

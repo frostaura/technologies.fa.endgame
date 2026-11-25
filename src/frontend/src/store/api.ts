@@ -76,9 +76,27 @@ export interface Transport {
   /** The API's base address; every request and the run stream are built from it. */
   base: string;
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  /**
+   * The platform's own address as people outside reach it, for every address the console prints
+   * (an assistant's MCP address, an app's address, a new organisation's host). Unset in the
+   * product, where it is the page's own origin; the demo names its world's host.
+   */
+  publicOrigin?: string;
 }
 
 const transport: Transport = { base: API_BASE, fetch: (input, init) => fetch(input, init) };
+
+/** The platform's origin for printed addresses: `https://endgame.example` in the demo, this page's origin in the product. */
+export function platformOrigin(): string {
+  if (transport.publicOrigin) return transport.publicOrigin;
+  return typeof window === "undefined" ? "" : window.location.origin;
+}
+
+/** The platform's host (no scheme), as a new organisation's address shows it. */
+export function platformHost(): string {
+  const o = platformOrigin();
+  return o.replace(/^[a-z]+:\/\//i, "");
+}
 
 /** Replace the transport (the demo build only). Call it before the first request is made. */
 export function installTransport(next: Partial<Transport>) {

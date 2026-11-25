@@ -12,6 +12,11 @@ import { newId, uuidFor, type World } from "../world";
 /** A registration under way: who it is for (the real one keeps this in a 5-minute cookie). */
 let registering: { kind: "first" | "invitation" | "add"; userId: string; email: string; displayName: string } | null = null;
 
+/** A reset of the demo: no passkey ceremony is half-way through. */
+export function forgetRegistering() {
+  registering = null;
+}
+
 const b64 = (s: string) => btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
 function challenge(world: World) {

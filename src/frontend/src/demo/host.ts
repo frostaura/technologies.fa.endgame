@@ -13,6 +13,7 @@ import "./world/scenarios.s3";
 import "./world/scenarios.s4";
 import "./world/scenarios.s5";
 import { installDevice } from "./device";
+import { pristine } from "./pristine";
 
 /**
  * The demo's host: it owns the world, plugs the fake control plane into the console's transport
@@ -22,6 +23,8 @@ import { installDevice } from "./device";
 
 const KEY = "endgame-demo:world";
 export const DEMO_BASE = "https://endgame.demo.invalid/api";
+/** The platform's address in the story world, as its apps' addresses already are. */
+export const DEMO_ORIGIN = "https://endgame.example";
 
 interface Saved {
   version: number;
@@ -139,7 +142,8 @@ export function startHost(params: URLSearchParams): AppStore {
   const persona = params.get("persona") ?? "";
   begin(scenario, persona, false);
   const cp = createControlPlane({ base: DEMO_BASE, world: () => world, afterChange: changed, latency: (method) => (method === "GET" ? 90 + Math.floor(Math.random() * 120) : 650 + Math.floor(Math.random() * 350)) });
-  installTransport({ base: cp.base, fetch: cp.fetch });
+  // Every address the console prints is the demo world's own host, never the page's (a static site's origin is no Endgame address).
+  installTransport({ base: cp.base, fetch: cp.fetch, publicOrigin: DEMO_ORIGIN });
   Object.defineProperty(window, "EventSource", { value: cp.EventSource, configurable: true, writable: true });
   installDevice(() => world.users.filter((u) => u.passkeys > 0 && world.device.includes(u.id)).map((u) => ({ id: u.id, label: `${u.displayName} · ${u.email}` })));
   store = makeStore();
@@ -162,7 +166,11 @@ export function goto(next: { route?: string; persona?: string; scenario?: string
   const current = [...PERSONAS.values()].find((p) => p.userId !== null && p.userId === world.sessionUserId)?.name;
   const persona = next.persona ?? current ?? session.persona;
   if (scenario !== session.scenario || persona !== session.persona) {
-    if (scenario !== session.scenario) begin(scenario, persona, true);
+    if (scenario !== session.scenario) {
+      // A new world is a first visit to it: nothing kept from the one before.
+      pristine();
+      begin(scenario, persona, true);
+    }
     else {
       const built = buildWorld(scenario, persona);
       // The persona's own edits first: a persona may bring the person it signs in as (first-run, no-role).
@@ -183,6 +191,7 @@ export function goto(next: { route?: string; persona?: string; scenario?: string
 }
 
 export function reset() {
+  pristine();
   begin(session.scenario, session.persona, true);
   store = makeStore();
   clock.playing = true;

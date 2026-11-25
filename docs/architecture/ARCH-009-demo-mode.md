@@ -20,7 +20,7 @@ builds, approvals and conversations move as they do live. It is published as sta
 
 | Component | Where | Owns | Never |
 | --- | --- | --- | --- |
-| Transport seam | `store/api.ts` (`installTransport`, `apiFetch`) | Where requests go: by default the browser's own `fetch` against this origin, unchanged. | Knows the demo exists. The product build tree-shakes `installTransport` away. |
+| Transport seam | `store/api.ts` (`installTransport`, `apiFetch`, `platformOrigin`) | Where requests go: by default the browser's own `fetch` against this origin, unchanged; and the platform's address the console prints (an assistant's MCP addresses, an app's, a new organisation's host), by default this page's origin and in the demo `https://endgame.example`, the story world's host. | Knows the demo exists. The product build tree-shakes `installTransport` away. |
 | Hash routing | `lib/router.ts` (`routeByHash`) | Console addresses after `#`, so a static host needs no rewrites. An address naming the page itself (its path and query, as code that reads `window.location` to come back later writes it) is the console's root. | Changes the product, which stays on the History API. |
 | Entry | `demo/main.tsx` | Boot order: hash routing, the host, the device, the bridge, the first route. | Is imported by `src/main.tsx` — the product entry never imports `src/demo`. |
 | Host | `demo/host.ts` | The world, the clock's 100 ms tick, sessionStorage, telling the console's cache what changed (`api.util.invalidateTags`), persona and scenario switches. | Holds console state: a reset makes a new Redux store. |
@@ -183,7 +183,7 @@ clock | reset` for tests.
 | `highlight` | `{ selector? \| testId? \| text? \| label?, note? }`; `{}` clears | Waits (up to 4 s) until nothing on screen is still loading — no skeleton, no busy region — then scrolls the control into view (a control taller than the view at its top, its heading kept in view) and rings it, with the note beside it; waits up to 5 s for it. The ring stands off the control into the gap around it, never over a neighbour's words; the note goes below, above or beside the ring, wherever it covers least of the page and never the ring. |
 | `act` | `{ actions: Action[], instant? }` | Performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. `press: "Tab"` moves the focus to the next control, as the browser does; `hover` rests the pointer on a target, so what the page shows on hover appears. |
 | `clock` | `{ play?, pause?, speed?, seek? }` | Plays, pauses, sets the speed, or jumps (a moment's name or milliseconds). |
-| `reset` | `{}` | Rebuilds the scenario's world from scratch and opens its route. |
+| `reset` | `{}` | Rebuilds the scenario's world from scratch and opens its route, as a first visit: every key the console keeps in the tab's storage (all named `endgame.…` — the mode, the organisation chosen, the one entered, the address kept across a sign-in) is removed, and so is what the demo holds for the page's life (an open device sheet, a half-way passkey ceremony, the hosted apps' device and reading lists) — `demo/pristine.ts`. A `goto` to another scenario does the same. |
 
 A highlight that finds nothing replies `{ op: "highlight", args: { found: false } }` and draws
 nothing, so a lesson never breaks in front of a learner; an action whose target is missing is an
@@ -333,6 +333,8 @@ repository.
 - The product build contains no demo code — `src/main.tsx` never imports `src/demo`; checked by
   `make demo-check`.
 - No request leaves the demo page — asserted by the demo e2e, from a sub-path and from a file.
+- No address the console prints names the page's own origin: the demo's is `endgame.example` — the demo e2e.
+- A reset leaves nothing of the lesson before it — `demo/pristine.test.ts` (every console storage key is in the `endgame.` namespace it clears) and the demo e2e.
 - Every endpoint in `store/api.ts` and `store/sensitive.ts` has a handler — the coverage test.
 - A secret's value is never kept — the handler drops it; a unit test checks the world.
 - The demo's refusals are the control plane's words — unit tests pin the key ones.

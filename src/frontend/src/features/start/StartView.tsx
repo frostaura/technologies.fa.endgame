@@ -10,7 +10,7 @@ import { ROLE_NAME, effectiveRole, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
-import { useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetMeQuery } from "@/store/api";
+import { platformHost, useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetMeQuery } from "@/store/api";
 import type { Autonomy, IdeaEstimate, MemberRole } from "@/store/types";
 import { isArchived } from "../tree/treeManage";
 import { nextSteps, researchPromise } from "./startModel";
@@ -63,7 +63,7 @@ export function StartView() {
   const text = idea.trim();
   const key = JSON.stringify([text, constraints, scope ?? null]);
   const slug = slugify(orgName);
-  const host = typeof window === "undefined" ? "" : window.location.host;
+  const host = platformHost();
 
   // Ask for the research estimate once the idea has settled; nothing is charged for asking.
   // The state is derived: an answer only counts for the exact text it was given.
