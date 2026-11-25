@@ -10,6 +10,11 @@
       "kind": "demo",
       "act": [
         {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
           "type": {
             "into": {
               "text": "Message Northwind"
@@ -129,6 +134,11 @@
           "step": 1,
           "kind": "demo",
           "act": [
+            {
+              "wait": {
+                "text": "A message here costs at most"
+              }
+            },
             {
               "type": {
                 "into": {

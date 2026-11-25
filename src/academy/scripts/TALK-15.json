@@ -30,6 +30,11 @@
       "kind": "demo",
       "act": [
         {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
           "type": {
             "into": {
               "text": "Message Technologies"
