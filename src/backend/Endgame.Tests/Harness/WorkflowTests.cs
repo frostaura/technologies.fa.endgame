@@ -533,6 +533,86 @@ public sealed class WorkflowTests
         Assert.Single(cp.Types, t => t == "plan.accepted");
     }
 
+    // ---- ideas from the portfolio -------------------------------------------------------------------
+
+    private static JsonObject SuggestionContext() => new()
+    {
+        ["scope"] = "frostaura",
+        ["organisation"] = "FrostAura",
+        ["products"] = Json("""[{"kind":"division","scope":"frostaura/labs","name":"Labs","status":"active"},{"kind":"app","scope":"frostaura/labs/trimix/web","name":"Trimix","status":"running"}]"""),
+        ["ideas"] = Json("""[{"title":"A dive log","status":"building","verdict":"build"}]"""),
+        ["context"] = Json("""["mission: dive safety"]"""),
+        ["alreadySuggested"] = Json("""["Gas planner"]"""),
+        ["maxSuggestions"] = 5,
+    };
+
+    [Fact]
+    public async Task A_suggest_run_reads_the_portfolio_and_records_only_new_complete_ideas_once()
+    {
+        var cp = new FakeControlPlane("frostaura", "suggest") { Headroom = 100m, SuggestionContext = SuggestionContext() };
+        cp.Append("estimate.made", new JsonObject { ["credits"] = 3m, ["basis"] = "suggest" });
+        cp.Append("message", new JsonObject { ["from"] = "owner", ["kind"] = "ideas.suggest", ["text"] = "Suggest ideas." });
+        var model = new ScriptedModel().ThenText(new JsonObject
+        {
+            ["suggestions"] = Json("""
+                [{"title":"Dive buddy finder","idea":"Divers using Trimix find a buddy for a dive.","gap":"Buddies are found in chat groups today.","whyUs":"Trimix already holds every diver's log.","reuses":["Trimix"]},
+                 {"title":"gas  PLANNER","idea":"Plan gas.","gap":"g","whyUs":"w","reuses":[]},
+                 {"title":"A dive log","idea":"Log dives.","gap":"g","whyUs":"w","reuses":[]},
+                 {"title":"Half an idea","idea":"","gap":"g","whyUs":"w"}]
+                """),
+        }.ToJsonString());
+        await EstimateTests.Executor(cp, model, workflows: [new SuggestWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
+        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+
+        // The portfolio and the graph were read; one call on the research route, as the researcher, no web search.
+        Assert.Contains(cp.Requests, r => r == $"GET /internal/runs/{cp.RunId:D}/suggestion-context");
+        Assert.Contains(cp.Addresses, a => a.StartsWith("GET /internal/ontology?scope=frostaura", StringComparison.Ordinal));
+        var call = Assert.Single(model.Calls);
+        Assert.Equal(("research", 0), (call.TaskType, call.MaxSearches!.Value));
+        Assert.Equal(cp.Hires["stage:research:frostaura"]["employeeId"]!.GetValue<string>(), call.EmployeeId.ToString());
+        Assert.Contains("Trimix", System(call), StringComparison.Ordinal);
+        Assert.Contains("Gas planner", System(call), StringComparison.Ordinal);
+
+        // Only the new, complete one is kept: a repeat (any case or spacing), a researched idea and a half-filled one are not.
+        var kept = Assert.Single(cp.Suggestions!);
+        Assert.Equal("Dive buddy finder", kept!["title"]!.GetValue<string>());
+        Assert.Equal(["Trimix"], kept["reuses"]!.AsArray().Select(r => r!.GetValue<string>()));
+        var said = cp.Events.Single(e => e.Payload["milestone"]?.GetValue<string>() == "suggested").Payload;
+        Assert.Equal("A new idea for you", said["title"]!.GetValue<string>());
+        AssertMessagesAreForPeople(cp);
+        AssertOwnerFieldsArePlain(cp);
+        Assert.Equal("run.finished", cp.Types[^1]);
+    }
+
+    [Fact]
+    public async Task A_suggest_run_with_nothing_new_gets_one_corrected_attempt_then_fails_plainly()
+    {
+        var cp = new FakeControlPlane("frostaura", "suggest") { Headroom = 100m, SuggestionContext = SuggestionContext() };
+        cp.Append("estimate.made", new JsonObject { ["credits"] = 3m, ["basis"] = "suggest" });
+        var model = new ScriptedModel { Fallback = _ => ScriptedModel.Text("""{"suggestions":[{"title":"Gas planner","idea":"i","gap":"g","whyUs":"w"}]}""") };
+        await EstimateTests.Executor(cp, model, workflows: [new SuggestWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
+        Assert.Equal("failed", cp.Run["status"]!.GetValue<string>());
+        Assert.Equal(2, model.Calls.Count);
+        Assert.Contains("repeats an idea already suggested", model.Calls[1].Messages[1]!["content"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Null(cp.Suggestions);
+        var ending = cp.Events.Single(e => e.Payload["milestone"]?.GetValue<string>() == "finished").Payload["text"]!.GetValue<string>();
+        Assert.StartsWith("No new idea worth suggesting", ending, StringComparison.Ordinal);
+        Assert.True(Endgame.Harness.Events.OwnerText.IsPlain(ending));
+    }
+
+    [Fact]
+    public async Task A_suggest_run_resumed_after_recording_does_not_record_twice()
+    {
+        var cp = new FakeControlPlane("frostaura", "suggest") { Headroom = 100m, SuggestionContext = SuggestionContext() };
+        cp.Append("estimate.made", new JsonObject { ["credits"] = 3m, ["basis"] = "suggest" });
+        cp.Append("message", new JsonObject { ["kind"] = "workflow.step", ["step"] = "suggestions.recorded", ["agent"] = "workflow", ["data"] = new JsonObject { ["titles"] = Json("[\"Dive buddy finder\"]") } });
+        var model = new ScriptedModel();
+        await EstimateTests.Executor(cp, model, workflows: [new SuggestWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
+        Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
+        Assert.Empty(model.Calls);
+        Assert.Null(cp.Suggestions);
+    }
+
     // ---- conversation --------------------------------------------------------------------------------
 
     [Fact]

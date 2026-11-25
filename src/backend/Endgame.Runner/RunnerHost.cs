@@ -50,6 +50,7 @@ public static class RunnerHost
         services.AddSingleton<IWorkflow>(sp => new BuildWorkflow(sp.GetRequiredService<Estimator>(), sp.GetRequiredService<IPreviewProbe>(), sp.GetRequiredService<IAppCaller>()));
         services.AddSingleton<IWorkflow, ConversationWorkflow>();
         services.AddSingleton<IWorkflow, ReviewWorkflow>();
+        services.AddSingleton<IWorkflow, SuggestWorkflow>();
         services.AddSingleton(sp => new RunExecutor(
             sp.GetRequiredService<ControlPlaneClient>(),
             sp.GetRequiredService<IModelClient>(),

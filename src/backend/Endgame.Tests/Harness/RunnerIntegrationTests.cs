@@ -190,11 +190,60 @@ public sealed class RunnerIntegrationTests(PostgresServer postgres) : IAsyncLife
         Assert.Equal("two\n", workspace.Text("a.txt"));
     }
 
-    private RunnerService Runner(IWorkspaceProvider workspaces)
+    [Fact]
+    public async Task A_suggest_run_queued_by_the_owner_is_claimed_reads_the_portfolio_and_its_ideas_are_listed()
+    {
+        var owner = await app.SignInAsync();
+        var started = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/ideas/suggestions", new { scope = "frostaura" }));
+        var run = started["run"]!["id"]!.GetValue<string>();
+        var suggestions = new JsonObject
+        {
+            ["suggestions"] = JsonNode.Parse("""[{"title":"Release notes from history","idea":"Every app gets plain release notes written from its version history.","gap":"Owners never tell their users what changed.","whyUs":"Endgame already keeps every app's history.","reuses":["Endgame","Notes"]}]"""),
+        };
+        openRouter.Chat = async (request, http) =>
+        {
+            if (request["stream"]?.GetValue<bool>() != true)
+            {
+                await FakeOpenRouter.Completion(0.0003m, suggestions.ToJsonString())(request, http);
+                return;
+            }
+
+            var id = $"gen-{Guid.NewGuid():N}";
+            http.Response.ContentType = "text/event-stream";
+            await Data(http, Chunk(id, new JsonObject { ["role"] = "assistant", ["content"] = suggestions.ToJsonString() }, null, null));
+            await Data(http, Chunk(id, new JsonObject(), "stop", FakeOpenRouter.Usage(0.0003m, 900, 120)));
+            await http.Response.WriteAsync("data: [DONE]\n\n");
+        };
+
+        var runner = Runner(new SharedWorkspace(new FakeWorkspace()), new SuggestWorkflow());
+        await runner.StartAsync(CancellationToken.None);
+        await WaitForAsync(async () => (await RunAsync(run))["status"]!.GetValue<string>() is "succeeded" or "failed", "the suggest run to finish", seconds: 60);
+        await runner.StopAsync(CancellationToken.None);
+
+        var finished = await RunAsync(run);
+        Assert.True(finished["status"]!.GetValue<string>() == "succeeded", finished.ToJsonString());
+        var listed = (await ControlPlaneApp.Ok(owner.GetAsync("/api/ideas/suggestions?scope=frostaura"))).AsArray();
+        var suggestion = Assert.Single(listed)!;
+        Assert.Equal(("Release notes from history", "open"), (suggestion["title"]!.GetValue<string>(), suggestion["status"]!.GetValue<string>()));
+        Assert.Equal(run, suggestion["runId"]!.GetValue<string>());
+
+        // Its estimate came first, its model call went through the gateway on the research route, and the log closed once.
+        var events = await EventsAsync(run);
+        Assert.Equal("estimate.made", events.First(e => e["type"]!.GetValue<string>() is not ("run.started" or "message"))["type"]!.GetValue<string>());
+        var request = events.Single(e => e["type"]!.GetValue<string>() == "model.requested")["payload"]!;
+        Assert.Equal("research", request["taskType"]?.GetValue<string>() ?? request["route"]?.GetValue<string>());
+        Assert.Single(events, e => e["type"]!.GetValue<string>() == "run.finished");
+
+        // Taken, it becomes an idea researched like any other.
+        var idea = await ControlPlaneApp.Created(owner.PostAsJsonAsync($"/api/ideas/suggestions/{suggestion["id"]}/take", new { }));
+        Assert.Contains("plain release notes", idea.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    private RunnerService Runner(IWorkspaceProvider workspaces, IWorkflow? workflow = null)
     {
         var options = new RunnerOptions { Concurrency = 1, LeaseSeconds = 2, PollSeconds = 0.2, ShutdownGraceSeconds = 10 };
         var controlPlane = new ControlPlaneClient(app.Internal());
-        var executor = new RunExecutor(controlPlane, new GatewayModelClient(app.Internal()), workspaces, [new TaskWorkflow()], new AgentFactory(options), new Estimator(options), options,
+        var executor = new RunExecutor(controlPlane, new GatewayModelClient(app.Internal()), workspaces, [workflow ?? new TaskWorkflow()], new AgentFactory(options), new Estimator(options), options,
             NullLogger<RunExecutor>.Instance, null, RunnerResources.Skills());
         return new RunnerService(controlPlane, executor, options, NullLogger<RunnerService>.Instance);
     }
