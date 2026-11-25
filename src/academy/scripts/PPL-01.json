@@ -1,0 +1,112 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "PPL-01",
+  "persona": "admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "People"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "People in Northwind",
+        "note": "From the org chart: People, shown where your role is Admin or Owner."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='People']",
+        "note": "While it loads, “Loading the people”; then one row per grant that holds here."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "(you)",
+        "note": "Each row: the name, “(you)” against yourself, the e-mail, and the role."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Set at Learning",
+        "note": "Where each grant was set. Tobi has no passkey yet, so his code's last day shows."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "li[data-member] code",
+        "note": "Technical mode adds each grant's id."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Normal"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What each role may do",
+        "note": "The four roles, word for word, beside the list."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Builder is refused",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/people",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Only an Admin or the Owner can see the people here",
+            "note": "Lena is a Builder: the server answers 403."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Grants from above, seen inside a division",
+      "persona": "division-admin",
+      "scenario": "established",
+      "start": "/people?scope=northwind/technologies",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "This grant holds here from Northwind",
+            "note": "Ines is Admin of Technologies only. Organisation-wide grants are listed too, to be changed where they were set."
+          }
+        }
+      ]
+    }
+  ]
+}

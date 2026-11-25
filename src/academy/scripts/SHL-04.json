@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHL-04",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "press": "Tab"
+        }
+      ],
+      "highlight": {
+        "text": "Skip to the content",
+        "note": "The first Tab on any screen: top left."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "press": "Enter"
+        }
+      ],
+      "highlight": {
+        "selector": "main#main",
+        "note": "The main area has the keyboard; the header is skipped."
+      }
+    }
+  ]
+}

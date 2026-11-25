@@ -1,0 +1,83 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-06",
+  "persona": "end-user",
+  "scenario": "established",
+  "start": "/__app/{app}/path/_endgame/auth/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in with your passkey"
+          }
+        }
+      ],
+      "note": "An end user of Court booking signs in with the passkey made for it."
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1200
+        }
+      ],
+      "note": "Verified for this app only, and the app may still be opened by them: a new 14-day session."
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "testId": "signed-in-as",
+        "note": "Back at the app, by name."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "No longer shared with them",
+      "persona": "end-user",
+      "scenario": "s1-app-unshared",
+      "start": "/__app/{app}/path/_endgame/auth/sign-in",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Sign in with your passkey"
+              }
+            },
+            {
+              "wait": 1200
+            }
+          ],
+          "highlight": {
+            "text": "This app is not shared with that address.",
+            "note": "The passkey is theirs, but the share was taken away."
+          }
+        }
+      ]
+    },
+    {
+      "title": "The app is now private",
+      "persona": "end-user",
+      "scenario": "s1-app-made-private",
+      "start": "/__app/{app}/path/_endgame/auth/sign-in",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Members of Northwind",
+            "note": "Made private since: the page offers only the members' sign-in, and the server refuses their passkey with the private refusal."
+          }
+        }
+      ]
+    }
+  ]
+}

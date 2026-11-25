@@ -1,0 +1,41 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHL-01",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/assistants",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "[role=group][aria-label='Mode']",
+        "note": "Technical is pressed, and a System link appears beside it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "MCP access tokens",
+        "note": "Screens add ids, raw events and protocol names."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/people",
+      "highlight": {
+        "selector": "li[data-member] code",
+        "note": "Every screen keeps the mode, and this browser remembers it after a reload."
+      }
+    }
+  ]
+}
