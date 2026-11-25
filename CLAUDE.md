@@ -75,6 +75,9 @@ prefix raw `dotnet` commands with `MSBuildEnableWorkloadResolver=false`, and nev
   spec; change them there, with the founder.
 - `docs/use-cases/`, `docs/architecture/`, `docs/testing/` — the house taxonomy. Stale docs block
   feature work.
+- `docs/flows/` — every flow a person, operator, end user or assistant can follow, read from the
+  code; the source for the product documentation and the academy. A change to a screen, an
+  endpoint or an assistant tool changes its flow in the same commit.
 
 ## Never do here
 

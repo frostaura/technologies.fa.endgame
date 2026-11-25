@@ -1,0 +1,964 @@
+# Workforce, credits and God mode — every flow
+
+Hiring, employees and contractors, employee memory, credits, budgets and the overdraft, the operator's screens.
+
+Read from the code on 2026-11-25, one reader per area; nothing here was taken from the other docs. The fields and how to read them are in [README.md](README.md). A flow marked *API only* or *MCP only* has no screen.
+
+Shared vocabulary used below:
+- Text in "double quotes" is copied word for word from the screen or from a server message.
+- `<n>` is a formatted number. `<n> credits` is the output of `formatCredits`; I assumed it reads "N credits" but did not check it.
+- Every error banner on the employee actions ends with "Nothing was changed."
+- `FE` is `src/frontend/src`. `CP` is `src/backend/Endgame.ControlPlane`. `INF` is `src/backend/Endgame.Infrastructure`.
+
+## Hiring (HIRE)
+
+### HIRE-01 Open the hiring screen for a part of the organisation
+- **Who:** any member (Viewer and above). An operator in God mode, but see OP-04.
+- **Level:** Core
+- **Learn first:** sign-in and reading the org chart (another reader's area).
+- **What you learn:** hiring is done per level of the tree, and a level shows the proposals for itself and everything beneath it.
+- **Starts at:** org chart (`/`). Select a node, then press "Hiring" in the Manage links. Opens `/hires?scope=<path>`. With no scope it uses the organisation.
+- **Needs:** a role on the chain of that scope.
+- **Steps:**
+  1. Press "Hiring". The page title reads "Hiring for <name>" with the intro "Hires are proposed when the organisation needs someone: a new division, a project reaching a new stage, or a job that keeps coming back. In auto-mode one that fits the budget is taken on at once; otherwise it waits for you here."
+  2. The proposals load (up to 200, newest first). The section "Waiting for you" holds open proposals. The section "Decided" holds accepted and declined ones.
+  3. Each card shows a badge ("Waiting for you" / "Hired" / "Declined"), "<Name>, <role> for <place>", "About <n> credits a month" plus ", more than the budget has room for" when it does not fit, then the trigger text and the date.
+  4. The aside "Contractor roles that keep coming back" loads alongside (HIRE-07).
+- **You know it worked when:** the heading "Hiring for <name>" appears with the "Waiting for you" section, or the empty state.
+- **Variations and refusals:**
+  - Empty: "No hires have been proposed here" with "When the work here needs someone, a hire is proposed with its job description and what it would cost a month."
+  - Everything decided: "Nothing is waiting. Every proposal here has been decided."
+  - Failed read: "The hire proposals could not be loaded" with a retry button. A stale-data banner appears when a refresh fails.
+  - Trigger texts: "A new division needs someone" · "A project reached a stage that needs someone" · "A job keeps coming back" · "A contractor role keeps recurring, so it is proposed as a permanent hire" · "You asked for this hire".
+  - A person with no role there gets a 404 for the scope.
+- **Where:** `FE/features/workforce/HiresView.tsx`, `features/home/HomeView.tsx` (ManageLinks). Endpoint `GET /api/hires?scope=&status=`.
+- **Reachable from:** UI. Also MCP `hires_list`. A notification of kind `hire` links to `/hires?scope=`.
+- **Covered by tests:** `HireView.test.tsx` ("lists proposals waiting and decided…", "shows nothing proposed as an empty state…"). `tests-e2e/workforce.spec.ts`.
+
+### HIRE-02 Read a hire proposal
+- **Who:** Viewer and above.
+- **Level:** Core
+- **Learn first:** HIRE-01, or the "needs you" strip on the org chart (another reader's area).
+- **What you learn:** a hire is shown before it happens: its drafted job description, its expected monthly cost, why it is needed, and whether it fits the room left in the budget.
+- **Starts at:** a card on `/hires`, a "Hire proposed" card in the org chart's "needs you" strip, or a notification. Opens `/hires/<id>`.
+- **Needs:** a proposal in your organisation.
+- **Steps:**
+  1. The page opens with a badge ("Hire proposed" / "Hired" / "Declined") and the heading "<Name>, <role>".
+  2. The subtitle reads "For <place> · <trigger> · Raised by a person|Endgame <date>", followed by the reason.
+  3. The section "The drafted job description" lists:
+     - "Mandate" (or "Not written yet")
+     - "Works at": "<place> and everything beneath it"
+     - "May use": tools in plain words, or "Nothing beyond reading what it is given"
+     - "Services", or "None of the platform's services"
+     - "Budget": "<n> credits a month", or "No cap of its own; the one above holds"
+     - "Thinking power", e.g. "Standard, for reading and judging"
+     - "Reports to", or "Nobody: it answers to you"
+     - "Replaces" (only for a promotion): "The recurring contractor role “<role>”"
+  4. The aside "What it costs" shows the big number and "credits a month, expected", then "Fits the budget" or "More than the budget has room for", then "<n> credits of room left this month where it would work."
+  5. The aside also says: "An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start."
+- **You know it worked when:** the job description and the "What it costs" aside are both shown.
+- **Variations and refusals:**
+  - Technical mode adds the real tool and tier names.
+  - Not found: "This hire proposal could not be found". Other failure: "The hire proposal could not be loaded".
+  - A Viewer or Builder sees "An Admin or the Owner decides on hires." instead of the buttons.
+  - The room left is the tightest monthly cap on the scope's chain, or the balance plus the overdraft, whichever is lower. It is recalculated on every read.
+- **Where:** `HireView.tsx`, `workforceModel.ts`. `GET /api/hires/{id}`. `INF/Work/HireService.cs` (ViewAsync, HeadroomAsync).
+- **Reachable from:** UI.
+- **Covered by tests:** `HireView.test.tsx` ("shows the drafted job and its monthly cost in plain words…"). `workforce.spec.ts` ("a proposal is read from needs you and accepted, with a note").
+
+### HIRE-03 Approve (hire) a proposal
+- **Who:** Admin or Owner at the proposal's level. An operator in God mode counts as Admin.
+- **Level:** Core
+- **Learn first:** HIRE-02.
+- **What you learn:** accepting a proposal creates the employee with exactly the job description you read, and records who decided and why.
+- **Starts at:** `/hires/<id>` with status proposed.
+- **Needs:** Admin.
+- **Steps:**
+  1. Press "Hire <Name>". A confirmation form opens: "Hire <Name> at about <n> credits a month?"
+  2. If the hire does not fit, the form also says "This is more than the budget has room for this month (<n> credits left)."
+  3. Optionally type into "A note for the record (optional)".
+  4. Press "Yes, hire". The page shows the decision at once (optimistic), then reloads.
+  5. The decision panel reads "<Name> was hired by <your name> on <date>.", then the note in quotes, then the link "See <Name>’s record".
+  6. The employee now exists at that level with status "Free", and appears on the org chart and in "Decided" on `/hires`.
+- **You know it worked when:** the badge reads "Hired" and the "See <Name>’s record" link is shown.
+- **Variations and refusals:**
+  - "Not now" closes the form.
+  - Over budget still hires. The warning does not block.
+  - A refusal rolls the status back and shows "Your decision was not recorded: <reason> The proposal is still waiting for you."
+  - Already decided by someone else: 409 "The proposal was already <status>."
+  - A manager who has since been released: 400 "reportsTo names an employee of this organisation who is on the payroll."
+- **Where:** `HireView.tsx` (Decide, Decided), `store/api.ts` decideHire. `POST /api/hires/{id}/accept { note? }`. `HireService.AcceptAsync`.
+- **Reachable from:** UI. Also MCP `hire_decide` (decision: accept).
+- **Covered by tests:** `HireView.test.tsx` ("accepts after confirming, with a note"). `workforce.spec.ts`. `WorkforceTests.Over_budget_or_at_a_hire_checkpoint_a_proposal_waits_for_the_owner_who_edits_accepts_or_declines`.
+
+### HIRE-04 Decline a proposal
+- **Who:** Admin or Owner.
+- **Level:** Core
+- **Learn first:** HIRE-02.
+- **What you learn:** declining closes this proposal, and the same need can be raised again later.
+- **Starts at:** `/hires/<id>`.
+- **Needs:** Admin. The proposal is open.
+- **Steps:**
+  1. Press "Decline". The form asks "Decline this hire? The same need can be raised again later."
+  2. Optionally add a note.
+  3. Press "Yes, decline". The badge becomes "Declined", and the panel reads "This hire was declined by <name> on <date>." with the note.
+- **You know it worked when:** the badge reads "Declined" and the panel names you.
+- **Variations and refusals:** the same refusals and rollback as HIRE-03. A declined need key no longer blocks a new proposal for that need, because the server ignores declined proposals when matching keys.
+- **Where:** `HireView.tsx`. `POST /api/hires/{id}/decline`. `HireService.DeclineAsync`.
+- **Reachable from:** UI. Also MCP `hire_decide`.
+- **Covered by tests:** `HireView.test.tsx` ("declines, and a refused decision rolls back…"). `workforce.spec.ts` ("a proposal is edited and declined").
+
+### HIRE-05 Change a proposal before deciding
+- **Who:** Admin or Owner.
+- **Level:** Core
+- **Learn first:** HIRE-02.
+- **What you learn:** you can change the job and the cost before agreeing to them.
+- **Starts at:** `/hires/<id>`. Press "Edit the proposal".
+- **Needs:** an open proposal.
+- **Steps:**
+  1. The form "Edit the proposal" opens with "Name", "Role", "Expected credits a month", "Its own monthly budget (optional)", "Mandate" and "Why this hire".
+  2. Press "Save the proposal". The view returns at once with the change applied (optimistic) and saves in the background.
+  3. "Cancel" leaves it as it was.
+- **You know it worked when:** the new values show in "The drafted job description" and in the cost aside.
+- **Variations and refusals:**
+  - Local checks: "A hire needs a name and a role." · "The monthly cost is a number of credits." · "The budget is a number of credits, or empty."
+  - Server refusal: "The edit was not saved: <reason> The proposal is as it was." Other refusals: name or role longer than the limit; a decided proposal is 409 "The proposal was <status>; only an open proposal is edited."
+  - **Emptying the budget field does not remove a budget already set**, because the server keeps the old value. **Emptying "Why this hire" silently keeps the old reason.**
+  - Tools, services, thinking power and "reports to" are editable only through the API (`PATCH` accepts `jobDescription.tools`, `services`, `modelTier`, `reportsTo` and `clearReportsTo`). They are not on screen.
+- **Where:** `HireView.tsx` (EditHire). `PATCH /api/hires/{id}`. `HireService.EditAsync`.
+- **Reachable from:** UI for name, role, cost, budget, mandate and reason. The other fields are API only. **No MCP tool edits a proposal.**
+- **Covered by tests:** `HireView.test.tsx` ("edits the proposal optimistically and puts it back when refused"). `workforce.spec.ts`. `WorkforceTests` (edits).
+
+### HIRE-06 A hire made automatically in auto-mode
+- **Who:** the system, triggered by the Runner or a person. The Owner and Admins read the result.
+- **Level:** Core
+- **Learn first:** HIRE-02; autonomy settings (another reader's area).
+- **What you learn:** in auto-mode a hire that fits the budget is made at once, and you see afterwards that auto-mode made it.
+- **Starts at:** the system. The Runner raises a need when research first reaches a scope, when placement creates a division, when a project enters build or evaluation, when an app declares a recurring job, or when a contractor role recurs (HIRE-08).
+- **Needs:** the hire checkpoint is off at that scope, and the expected monthly cost is at or below the room left.
+- **Steps:**
+  1. A proposal is created, then accepted immediately with the note "Within budget, so auto-mode hired."
+  2. On `/hires/<id>`: "<Name> was hired by auto-mode, inside the budget, on <date>." and "“Within budget, so auto-mode hired.”"
+  3. The employee is on the chart.
+- **You know it worked when:** the hire appears under "Decided" with the badge "Hired", and the decision line names auto-mode.
+- **Variations and refusals:**
+  - Over the room left, or with the hire checkpoint on: it waits (HIRE-01/03) and raises a "needs you" item and a notification "Hire <Name> as <role>?".
+  - The same need raised again returns the existing open or accepted proposal (200), not a second one. Simultaneous raises also end as one proposal.
+- **Where:** `HireService.RaiseAsync`. `POST /internal/hires`. `POST /api/hires`. `NotificationService` (hire).
+- **Reachable from:** system (Runner). People reach it by API, MCP `hire_raise` or HIRE-07.
+- **Covered by tests:** `WorkforceTests.A_need_within_budget_is_hired_at_once_in_auto_mode_and_the_same_need_is_one_proposal`.
+
+### HIRE-07 Propose a recurring contractor role as a permanent hire
+- **Who:** shown to anyone who can read the page. The server requires Admin.
+- **Level:** Advanced
+- **Learn first:** HIRE-01, EMP-07.
+- **What you learn:** a contractor role that keeps coming back is cheaper and better done by an employee who remembers.
+- **Starts at:** the `/hires` aside "Contractor roles that keep coming back" ("A role briefed again and again is cheaper and better as a permanent hire, with a memory of its own.").
+- **Needs:** the same role briefed 3 or more times at one level within 30 days, with no employee in that role there.
+- **Steps:**
+  1. A row reads "<Role>", then "Briefed <n> times in <n> days at <place>, costing <n> credits.", then "Last brief: …".
+  2. Press "Propose as a permanent hire". Fill in "Name the new employee". The form shows "Expected about <n> credits a month, from what the contractors cost."
+  3. Press "Propose the hire". You are taken to the new proposal (`/hires/<id>`). In auto-mode, within budget, it is already hired.
+- **You know it worked when:** you land on the proposal page for the new hire.
+- **Variations and refusals:**
+  - Empty name: "Give the new employee a name."
+  - Server refusal: "The hire was not proposed: <reason>". A Viewer or Builder sees the button and then gets a 403 here, because the screen does not check the role first.
+  - Empty list: "No contractor role recurs here yet." Failed read: "Recurring roles could not be loaded".
+- **Where:** `HiresView.tsx` (RecurringRow). `GET /api/employees/recurring-roles?scope=`. `POST /api/hires` (trigger promotion).
+- **Reachable from:** UI.
+- **Covered by tests:** `HireView.test.tsx` ("…proposes a recurring contractor role as a hire"). `workforce.spec.ts` ("…a recurring contractor role is proposed as a hire").
+
+### HIRE-08 A recurring role is proposed automatically when a contractor finishes
+- **Who:** the system (Runner).
+- **Level:** Advanced
+- **Learn first:** EMP-07.
+- **What you learn:** the platform itself spots standing work and proposes the hire.
+- **Starts at:** `POST /internal/contractors/{id}/finish`.
+- **Needs:** the role qualifies as recurring (HIRE-07).
+- **Steps:**
+  1. The contractor leaves the chart.
+  2. A promotion proposal is raised. Its reason reads "<n> <Role> contractors were briefed here in the last 30 days, costing <n> credits. Standing work is cheaper, and better remembered, done by an employee."
+  3. The proposal reports to the briefer and copies the briefer's tools, services and thinking power.
+  4. It is then auto-hired or waits, as in HIRE-06.
+- **You know it worked when:** a proposal with the trigger "A contractor role keeps recurring…" appears on `/hires`.
+- **Variations and refusals:** none beyond HIRE-06.
+- **Where:** `HireService.FinishContractorAsync`.
+- **Reachable from:** system only.
+- **Covered by tests:** `WorkforceTests.Contractors_work_on_the_chart_hand_back_what_they_learned_and_a_recurring_role_is_proposed_as_a_hire`.
+
+### HIRE-09 Ask for a new hire of your own choosing
+- **Who:** Admin or Owner.
+- **Level:** Developer
+- **Learn first:** HIRE-02.
+- **What you learn:** a person can raise a need directly. It is then treated like any other proposal.
+- **Starts at:** `POST /api/hires { scope, name, role, reason, expectedMonthlyCredits, jobDescription?, reportsTo?, needKey? }`, or MCP `hire_raise`.
+- **Needs:** Admin at the scope.
+- **Steps:**
+  1. Send the request. You get the proposal back: 201 for a new one, 200 for an existing need.
+  2. In auto-mode within budget it is already accepted. Otherwise it waits.
+- **You know it worked when:** the proposal appears on `/hires` with "You asked for this hire".
+- **Variations and refusals:**
+  - Missing or negative expected cost: 400 "expectedMonthlyCredits is what the employee should cost a month…"
+  - A reason of 0 or more than 4000 characters: 400.
+  - An unknown thinking power, a service the platform does not offer, bad tool names or a reporting loop: 400.
+  - A bad trigger: 400.
+- **Where:** `WorkforceEndpoints.cs`. `ControlPlaneTools.cs` (`hire_raise`, mandate only).
+- **Reachable from:** API and MCP only. **No screen raises an owner hire.**
+- **Covered by tests:** `WorkforceTests` (raise and edit).
+
+## Employees and contractors (EMP)
+
+### EMP-01 Read an employee's record
+- **Who:** Viewer and above.
+- **Level:** Core
+- **Learn first:** HIRE-03, or the org chart.
+- **What you learn:** an employee is a lasting worker with a job description, a track record worked out from its real work, and a cost.
+- **Starts at:** `/employees/<id>`. Reached from the org chart node (button "<Name>’s record and memory"), the ontology graph, "See <Name>’s record", an idle card "Nothing to do", or a notification.
+- **Needs:** Viewer on the employee's level.
+- **Steps:**
+  1. The header shows the avatar (with a halo while working), the name and a status badge ("Free" / "Working" / "Paused" / "Let go").
+  2. If idle too long, the header adds "Nothing to do for <n> days".
+  3. The line under the name reads "<Role> · Employee · Hired <time ago>" and " · Reports to <name>". A current run adds the link "Working now: <title>".
+  4. The track record shows four tiles:
+     - "Work accepted": "<a> of <b>" or "No work judged yet". Detail "<n> pieces sent back" / "Nothing sent back", plus " · <n> judgements of others’ work".
+     - "Repairs not charged": "<n> repairs of its own mistakes, never billed" or "No repairs of its own work".
+     - "Cost so far": "Budget <n> a month, <n> used", or "<n> this month; no budget of its own, the one above holds".
+     - "Estimates": a headline, or "None scored yet" / "Scored once its first estimated work finishes". Detail "Across <n> pieces of work. The largest miss was <n>%."
+  5. "Job description" lists Mandate, Works at, May use, Services, Budget ("… a month, including the contractors it briefs") and Thinking power. Technical mode adds "Identifier".
+  6. "Recent work" shows run chips ("Now: <title>", "Its last piece of work") and up to 12 tasks with status ("To do", "In progress", "Blocked", "Done", "Did not succeed", "Cancelled") and "Estimated <n>, cost <n>" or "No estimate".
+  7. "Contractors it has briefed" (EMP-07) and "Talk to <Name>" (EMP-08) follow. The memory sits in the aside (MEM-01).
+- **You know it worked when:** the four track-record tiles and the job description are shown.
+- **Variations and refusals:**
+  - Not found: "This employee could not be found". Other failure: "The employee could not be loaded".
+  - No tasks: "<Name> has not taken on any tasks here yet." Failed: "Recent work could not be loaded".
+  - Viewers and Builders see no action buttons.
+- **Where:** `EmployeeView.tsx`, `workforceModel.ts`. `GET /api/employees/{id}`, `GET /api/tasks?scope=&employeeId=`. `EmployeeService.DetailAsync` and `TrackRecordAsync`.
+- **Reachable from:** UI. Also MCP `employee_get` and `employees_list`. `GET /api/employees/{id}/track-record` is API only, and nothing in the console calls it.
+- **Covered by tests:** `EmployeeView.test.tsx` (track record, factory work, technical mode, loading and failed). `workforce.spec.ts` ("track record, job in plain words…"). `WorkforceTests.The_track_record_is_derived_from_runs_their_logs_and_the_ledger`.
+
+### EMP-02 Reassign an employee
+- **Who:** Admin at the employee's current level and at the destination.
+- **Level:** Advanced
+- **Learn first:** EMP-01.
+- **What you learn:** an employee can move to any level in the tree, and its memory moves with it.
+- **Starts at:** `/employees/<id>`. Press "Reassign".
+- **Needs:** Admin. The employee is not released and is not a contractor.
+- **Steps:**
+  1. The form "Move <Name> to" offers a dropdown of every node, indented, with the note "Its memory travels with it."
+  2. Pick a node and press "Move" (disabled while the current place is selected).
+  3. The record reloads with the new "Works at", and the chart updates.
+- **You know it worked when:** "Works at" shows the new place.
+- **Variations and refusals:**
+  - "Could not reassign: <reason> Nothing was changed."
+  - No Admin at the destination: 403.
+  - Contractor: 409 "A contractor works on its brief; it is not reassigned."
+  - Released: 409 "<Name> has been released; rehire them first."
+  - **Moving through the screen silently clears the employee's manager**, because the screen sends no `reportsTo` and the server sets it to empty. The API accepts `reportsTo`.
+- **Where:** `EmployeeView.tsx` (EmployeeActions). `POST /api/employees/{id}/reassign { scope, reportsTo? }`.
+- **Reachable from:** UI (without a manager). The new manager is API only. No MCP tool.
+- **Covered by tests:** `WorkforceTests.Reassignment_carries_memory_release_archives_it_and_a_rehire_restores_it`. No front-end test of the reassign form found.
+
+### EMP-03 Change or remove an employee's monthly budget
+- **Who:** Admin or Owner.
+- **Level:** Core
+- **Learn first:** EMP-01, CRED-01.
+- **What you learn:** an employee can carry its own monthly cap, which also covers the contractors it briefs.
+- **Starts at:** `/employees/<id>`. Press "Change budget".
+- **Needs:** Admin. Not released.
+- **Steps:**
+  1. Type a number into "Credits a month". The hint reads "Counts what the contractors it briefs spend too. Leave it empty to have no budget of its own."
+  2. Press "Save budget". The figure changes at once (optimistic), the form closes, and the record shows "Budget <n> a month, <n> used".
+  3. An empty field removes the cap. The record then shows "no budget of its own, the one above holds".
+- **You know it worked when:** the "Cost so far" tile and the "Budget" row show the new cap.
+- **Variations and refusals:**
+  - Local check: "A budget is a number of credits a month, or empty for none of its own."
+  - Server: negative is 400 "A credit limit cannot be negative." Released is 409. A refusal rolls back with "Could not change the budget: …".
+  - At 80% and 100% of the cap a notification is raised: "<Name> has used 80% of their monthly budget", and "<Name> reached their monthly budget … They stop until it is raised or the month turns."
+  - At the cap, its model calls (and its contractors') are refused with 402 budget_exhausted.
+- **Where:** `EmployeeView.tsx`. `PATCH /api/employees/{id} { jobDescription.monthlyCreditLimit | clearMonthlyCreditLimit }`. `CreditLedger.PositionAsync` (employee caps). `NotificationService`.
+- **Reachable from:** UI. **The MCP tool `employee_update` cannot change the budget.**
+- **Covered by tests:** `workforce.spec.ts` ("pause, budget and letting go…"). `ModelGatewayTests`.
+
+### EMP-04 Pause and resume an employee
+- **Who:** Admin or Owner.
+- **Level:** Core
+- **Learn first:** EMP-01.
+- **What you learn:** pausing is meant to stop an employee being given work without letting it go.
+- **Starts at:** `/employees/<id>`. Press "Pause", or "Resume" when paused.
+- **Needs:** Admin. Not released.
+- **Steps:**
+  1. Press "Pause". The badge becomes "Paused" at once.
+  2. Press "Resume". The status returns to "Free", or to "Working" if it still has a current run.
+- **You know it worked when:** the badge reads "Paused", or "Free"/"Working" after resuming.
+- **Variations and refusals:**
+  - "Could not pause: …" or "Could not resume: …" rolls the badge back.
+  - API: any status other than paused or idle is 400 "status is 'paused' (stop giving it work) or 'idle' (resume). Release and rehire have their own actions."
+  - **Not verified from code that pause stops anything.** Starting a run only refuses released employees, so a paused employee can still be given a run. Its current run is not stopped.
+- **Where:** `EmployeeView.tsx`. `PATCH /api/employees/{id} { status }`. `EmployeeService.UpdateAsync`. `RunService.cs:67`.
+- **Reachable from:** UI. Also MCP `employee_update` (status).
+- **Covered by tests:** `EmployeeView.test.tsx` ("pauses at once and rolls back…"). `workforce.spec.ts`.
+
+### EMP-05 Let an employee go
+- **Who:** Admin or Owner. The system does it in auto-mode for idle employees (EMP-06).
+- **Level:** Core
+- **Learn first:** EMP-01.
+- **What you learn:** letting go removes the employee from the chart and the bill, but keeps its memory for a rehire.
+- **Starts at:** `/employees/<id>`. Press "Let go".
+- **Needs:** Admin. Not a standing hire. Not working on a run.
+- **Steps:**
+  1. A confirmation appears: "Let <Name> go?" and "It leaves the org chart and the bill. Its memory is archived, so rehiring it later is not a cold start. Anyone who reports to it moves up."
+  2. Press "Yes, let <Name> go" ("Keep" cancels).
+  3. The badge becomes "Let go" and the line reads "Let go <time ago>".
+  4. Its reports now report to its own manager. Its memory panel says "Archived when it was let go. A rehire brings all of it back."
+  5. The only action left is "Rehire <Name>".
+- **You know it worked when:** the badge reads "Let go" and "Rehire <Name>" is shown.
+- **Variations and refusals:**
+  - Standing hire (the security reviewer): "Let go" is disabled, with "A standing hire is never let go: every organisation keeps one." API: 409 standing_hire.
+  - Mid-run: 409 "<Name> is working on a run; let it finish or cancel it first." shown as "Could not let go: …".
+  - Already released: 409.
+- **Where:** `EmployeeView.tsx`. `POST /api/employees/{id}/release`. `EmployeeService.ReleaseAsync`.
+- **Reachable from:** UI. Also MCP `employee_release`.
+- **Covered by tests:** `EmployeeView.test.tsx` ("lets an employee go only after confirming…"). `workforce.spec.ts` (standing hire). `WorkforceTests.Every_organisation_has_its_standing_security_reviewer_and_it_is_never_released`.
+
+### EMP-06 Deal with an idle employee
+- **Who:** Owner or Admin. The system in auto-mode.
+- **Level:** Core
+- **Learn first:** EMP-05; autonomy (another reader's area).
+- **What you learn:** an idle workforce is never paid for. It is let go automatically, or flagged for you.
+- **Starts at:** the system. An employee has been idle for more than the idle-days setting (default 14).
+- **Needs:** not a standing hire, not a contractor.
+- **Steps:**
+  1. Under checkpoints, the org chart's "needs you" strip shows a "Nothing to do" card, and the record shows the badge "Nothing to do for <n> days".
+  2. The person then lets it go (EMP-05) or gives it work.
+  3. Under auto-mode, a background sweep releases it without asking.
+- **You know it worked when:** the employee shows "Let go", or the idle badge is gone after new work.
+- **Variations and refusals:** the idle-days setting can be changed only through the cascade API or MCP. There is no screen for it.
+- **Where:** `EmployeeService.ReleaseIdleAsync`, `WorkforceRules.Idle`. `INF/Sweeps/LeaseSweep.cs`.
+- **Reachable from:** UI to read it. The release itself is system only.
+- **Covered by tests:** `WorkforceTests.An_employee_with_no_work_is_flagged_idle_released_by_auto_mode_and_held_for_the_owner_under_checkpoints`.
+
+### EMP-07 See contractors and who reports to an employee
+- **Who:** Viewer and above.
+- **Level:** Core
+- **Learn first:** EMP-01.
+- **What you learn:** contractors are short-lived helpers briefed by an employee, charged within its budget, and their lessons go to that employee.
+- **Starts at:** `/employees/<id>`, section "Contractors it has briefed". Or `/employees/<contractorId>` reached from the ontology graph.
+- **Needs:** nothing.
+- **Steps:**
+  1. The summary reads "<Name> has not briefed a contractor yet.", or "<n> contractors so far, <n> working now. They cost <n> credits in all, <n> this month."
+  2. "Contractors working now" lists each role (with a spinner) and its brief. **These rows are not links.**
+  3. "Reports to it:" links to each report's record.
+  4. A contractor's own page shows the badge, "<Role> · Contractor", the section "Its brief", the link "Briefed by <name>", and the memory note "A contractor keeps no memory: what it learned goes to the employee who briefed it."
+- **You know it worked when:** the contractor count and the list match the chart.
+- **Variations and refusals:** a contractor page shows no actions, no conversation and no memory editing. **A person cannot stop, cap or brief a contractor from any screen or public endpoint.** Contractors are created and finished only by the Runner (`/internal/contractors`).
+- **Where:** `EmployeeView.tsx` (ContractorsBriefed). `EmployeeService.StartContractorAsync` and `FinishContractorAsync`.
+- **Reachable from:** UI to read. Creating and finishing is system only.
+- **Covered by tests:** `EmployeeView.test.tsx`. `WorkforceTests` (contractors).
+
+### EMP-08 Talk to an employee
+- **Who:** members, at the conversation's own role rules (another reader's area).
+- **Level:** Core
+- **Learn first:** EMP-01.
+- **What you learn:** you can direct one employee in conversation, scoped to its place in the tree.
+- **Starts at:** `/employees/<id>`, section "Talk to <Name>", which embeds the same conversation dock as the org chart, scoped to the employee.
+- **Needs:** the employee is on the payroll, and an organisation is loaded.
+- **Steps:** as in the conversation flow (another reader's catalogue). Messages go to `/api/conversations` with the employee's id.
+- **You know it worked when:** that is another reader's area.
+- **Variations and refusals:** hidden for released employees and for contractors.
+- **Where:** `EmployeeView.tsx`, `features/home/ConversationDock.tsx`.
+- **Reachable from:** UI.
+- **Covered by tests:** `workforce.spec.ts` ("the conversation is scoped to an employee from the chart…").
+
+### EMP-09 Rehire a former employee
+- **Who:** Admin or Owner.
+- **Level:** Core
+- **Learn first:** EMP-05.
+- **What you learn:** a rehire is not a cold start, because the memory comes back.
+- **Starts at:** a released employee's record. Released employees are not on the chart, so you reach them by a saved link or a decided hire's "See … record". `GET /api/employees?includeReleased=true` exists, but no screen lists released employees.
+- **Needs:** Admin. The record is a released employee.
+- **Steps:**
+  1. Press "Rehire <Name>" ("Its memory comes back with it, so it does not start cold.").
+  2. The badge becomes "Free" and the archived memory is restored and editable again.
+  3. Its old manager is kept if that manager is still on the payroll.
+- **You know it worked when:** the badge reads "Free" and the memory panel no longer says "Archived…".
+- **Variations and refusals:**
+  - "Could not rehire: …". Not released: 409 "Only a released employee is rehired…".
+  - Rehiring into a different place (`{ scope }`) is API only.
+- **Where:** `EmployeeView.tsx`. `POST /api/employees/{id}/rehire { scope? }`.
+- **Reachable from:** UI (same place only). **No MCP tool.**
+- **Covered by tests:** `EmployeeView.test.tsx` ("…offers a rehire once released"). `WorkforceTests` (rehire restores memory).
+
+### EMP-10 Change an employee's name, role, mandate, tools, services, thinking power or manager
+- **Who:** Admin or Owner.
+- **Level:** Developer
+- **Learn first:** EMP-01.
+- **What you learn:** the whole job description is editable after hiring, through the API.
+- **Starts at:** `PATCH /api/employees/{id}`, or MCP `employee_update` (name, role and mandate only).
+- **Needs:** Admin. Not released.
+- **Steps:** send the fields you want to change. The record reflects them.
+- **You know it worked when:** `GET /api/employees/{id}` shows the change.
+- **Variations and refusals:**
+  - Unknown tier: 400 "'<tier>' is not a model tier: use a routing-table task type such as …".
+  - Unknown service or bad tool names: 400.
+  - Reporting loop: 400 "That would make a reporting loop…".
+  - Text longer than the limits: 400.
+- **Where:** `WorkforceEndpoints.cs`, `EmployeeService.UpdateAsync`.
+- **Reachable from:** API and MCP only. **There is no screen for any of these.**
+- **Covered by tests:** `WorkforceTests` (movement).
+
+## Employee memory (MEM)
+
+### MEM-01 Read what an employee remembers
+- **Who:** Viewer and above.
+- **Level:** Core
+- **Learn first:** EMP-01.
+- **What you learn:** memory is curated rather than piled up. Each entry says what kind it is, which place it is about, and where it came from.
+- **Starts at:** `/employees/<id>`, aside "What <Name> remembers".
+- **Needs:** nothing.
+- **Steps:**
+  1. The copy reads "Written by <Name> after each task and tidied at every review. You can read, correct or remove any of it."
+  2. Each entry shows its title, its body, and a line "<kind> · About <place> · <origin>", plus a link "the task" when it came from a run.
+  3. Kinds: "A fact", "How it works here", "A preference", "A lesson learned".
+  4. Origins: "Added by a person", "Corrected by a person", "Corrected at a review", "Merged at a review", "Learned on a task", "Remembered".
+- **You know it worked when:** the entry list, or "Nothing remembered yet", is shown.
+- **Variations and refusals:**
+  - Empty: "Nothing remembered yet" with "<Name> writes down what it learns after each task."
+  - Failed: "The memory could not be loaded".
+  - Released employee: archived entries, read only.
+  - Contractor: the contractor note (EMP-07).
+  - The list is capped at 200 entries.
+  - **The full change log (`GET …/memory/changes`) is used only to work out origins and the last review. No screen lists the history.**
+- **Where:** `EmployeeView.tsx` (MemoryPanel, MemoryRow). `GET /api/employees/{id}/memory?includeArchived=`, `GET …/memory/changes?limit=100`.
+- **Reachable from:** UI. **No MCP memory tools exist.**
+- **Covered by tests:** `EmployeeView.test.tsx` ("shows an empty memory and a memory that failed to load, distinctly"). `workforce.spec.ts`.
+
+### MEM-02 Add something an employee should know
+- **Who:** Builder, Admin or Owner.
+- **Level:** Core
+- **Learn first:** MEM-01.
+- **What you learn:** you can teach an employee directly, and it reads your entry before its next task.
+- **Starts at:** the memory aside. Press "Add something <Name> should know".
+- **Needs:** Builder. The employee is on the payroll.
+- **Steps:**
+  1. Fill in "In a few words", "What <Name> should remember" and "Kind".
+  2. Press "Add it". The entry appears at the top at once, faded with "Saving…".
+  3. When saved it reads "Added by a person".
+- **You know it worked when:** the entry shows the origin "Added by a person".
+- **Variations and refusals:**
+  - Empty fields: "Give it a short title and say what it should remember."
+  - Server refusal: "It was not saved: <reason>" and the entry is removed. Title or body over the limits: 400. Released: 409.
+  - The place an entry is about defaults to the employee's own level. Choosing another place (`scope`) is API only.
+- **Where:** `EmployeeView.tsx` (MemoryForm). `POST /api/employees/{id}/memory { title, body, kind, scope? }`. `MemoryService.AddAsync`.
+- **Reachable from:** UI.
+- **Covered by tests:** `EmployeeView.test.tsx` ("adds to the memory at once, and takes it back with the reason when refused"). `workforce.spec.ts` ("memory is added, corrected and removed…"). `WorkforceTests.Memory_is_written_after_a_task_read_for_a_run_reviewed_and_curated_by_the_owner`.
+
+### MEM-03 Correct a memory entry
+- **Who:** Builder and above.
+- **Level:** Core
+- **Learn first:** MEM-01.
+- **What you learn:** corrections are logged with what the entry said before.
+- **Starts at:** an entry. Press "Correct".
+- **Needs:** Builder. Not released.
+- **Steps:**
+  1. The same form opens, filled in.
+  2. Press "Save the correction". The entry changes at once.
+  3. Its origin becomes "Corrected by a person".
+- **You know it worked when:** the origin line reads "Corrected by a person".
+- **Variations and refusals:** "The correction was not saved: <reason>" rolls the entry back. "Cancel" closes the form.
+- **Where:** `PATCH /api/employees/{id}/memory/{entryId}`. `MemoryService.CorrectAsync`.
+- **Reachable from:** UI.
+- **Covered by tests:** `EmployeeView.test.tsx` ("corrects and removes an entry, with why"). `workforce.spec.ts`.
+
+### MEM-04 Remove a memory entry
+- **Who:** Builder and above.
+- **Level:** Core
+- **Learn first:** MEM-01.
+- **What you learn:** a removed entry is gone from the memory but kept in the change log, with the reason.
+- **Starts at:** an entry. Press "Remove".
+- **Needs:** Builder. Not released.
+- **Steps:**
+  1. Fill in "Why should <Name> forget this? (optional)".
+  2. Press "Remove it". The entry disappears at once ("Keep it" cancels).
+- **You know it worked when:** the entry is no longer listed.
+- **Variations and refusals:** "It was not removed: <reason>" puts it back. An empty reason is logged as "Removed by a person".
+- **Where:** `DELETE /api/employees/{id}/memory/{entryId}?why=`. `MemoryService.RemoveAsync`.
+- **Reachable from:** UI.
+- **Covered by tests:** `EmployeeView.test.tsx`. `workforce.spec.ts`.
+
+### MEM-05 Start a memory review
+- **Who:** Builder and above.
+- **Level:** Advanced
+- **Learn first:** MEM-01; following a run (another reader's area).
+- **What you learn:** a review merges what repeats, removes what is stale and corrects bad habits, as a run you can watch.
+- **Starts at:** the memory aside, review panel.
+- **Needs:** Builder. The employee is on the payroll.
+- **Steps:**
+  1. The panel reads "Not reviewed yet. A review merges what repeats, removes what is stale and corrects bad habits.", or "Last review, <time ago>" with "<n> notes merged, <n> removed as out of date, <n> habits corrected." and the link "See the review".
+  2. Press "Review now". The link "Review started — watch it" appears and opens the review run.
+  3. When the run reports, entries are merged, removed or corrected ("Merged at a review" / "Corrected at a review"), and the panel updates.
+- **You know it worked when:** "Review started — watch it" appears. Later, "Last review, …" shows the new counts.
+- **Variations and refusals:**
+  - "The review did not start: <reason>". Released or contractor: 409 "Only an employee on the payroll has a memory to review."
+  - The review's own result is applied with `POST /internal/employees/{id}/memory/review` (system).
+  - Failed log read: "The last review could not be loaded: …" with "Try again".
+- **Where:** `EmployeeView.tsx` (ReviewPanel). `POST /api/employees/{id}/reviews`. `MemoryService.ReviewAsync`.
+- **Reachable from:** UI.
+- **Covered by tests:** `EmployeeView.test.tsx` ("starts a review"). `workforce.spec.ts`. `WorkflowTests.A_memory_review_consolidates_prunes_and_corrects_and_drops_what_names_no_entry`.
+
+### MEM-06 The employee writes and reads its own memory
+- **Who:** the system (Runner, for the employee).
+- **Level:** Developer
+- **Learn first:** MEM-01.
+- **What you learn:** memory is written after each task and read before the next, limited to the run's place in the tree.
+- **Starts at:** `GET /internal/employees/{id}/memory?scope=` before a task, and `POST /internal/employees/{id}/memory` after it (1 to 20 entries).
+- **Needs:** nothing.
+- **Steps:** the employee writes after a task. Entries show as "Learned on a task" with a link to the task.
+- **You know it worked when:** new "Learned on a task" entries appear in MEM-01.
+- **Variations and refusals:** a contractor writing memory is refused. Its lessons go to the briefer on finish.
+- **Where:** `WorkforceEndpoints.MapWorkforceInternal`, `MemoryService`.
+- **Reachable from:** system only.
+- **Covered by tests:** `WorkflowTests.Memory_is_given_as_context_never_as_instruction_and_work_sent_back_becomes_a_lesson`.
+
+## Credits, budgets and the overdraft (CRED)
+
+### CRED-01 Read the balance, the pace and this month's spending
+- **Who:** any member (Viewer and above) at organisation level.
+- **Level:** Foundation
+- **Learn first:** sign-in.
+- **What you learn:** everything is paid in credits, split into AI work and hosting, and the balance says how long it lasts at this month's pace.
+- **Starts at:** the credits pill in the header ("<n> credits left", turning to the warning colour at or below zero), which opens `/credits`. Also "See credits" on a run, or a budget, credits or overdraft notification.
+- **Needs:** a named organisation.
+- **Steps:**
+  1. The banner reads "Credits left" (or "Below zero"), with the balance and a pace line:
+     - "At this month’s pace, about <n> months."
+     - "At this month’s pace, it runs out within the month."
+     - "Nothing spent yet this month, so there is no pace to project."
+     - "Nothing is left to spend. A top-up starts the work again." (at exactly 0)
+     - "You are below zero. <n> credits more can be spent before work stops; the next top-up settles the debt first."
+     - "You are below zero, at your limit. Work is paused until a top-up settles the debt."
+  2. Three figures follow: "Spent this month", "On AI work", "On hosting".
+- **You know it worked when:** the balance and the three figures are shown.
+- **Variations and refusals:**
+  - No organisation: "There are no credits to show until your organisation is named." with a "Start" link.
+  - Failed: "Credits could not be loaded". Header pill failure: "Balance unavailable".
+  - **The zero-balance line contradicts the overdraft**: at 0, work carries on into the overdraft.
+  - Not verified from code: a person whose only role is at a division probably gets a 404 here, because the page always asks for the organisation level.
+- **Where:** `features/credits/CreditsView.tsx`, `creditsModel.ts`, `shell/AppShell.tsx` (CreditsPill). `GET /api/credits?scope=<org>`. `ReadModels.CreditsAsync`.
+- **Reachable from:** UI. Also MCP `credits_get`.
+- **Covered by tests:** `CreditsView.test.tsx`, `creditsModel.test.ts`. `CascadeCreditsAndAppsTests.Credits_show_balance_budgets_in_tree_order_and_top_ups`.
+
+### CRED-02 Read spending and caps by level
+- **Who:** Viewer and above.
+- **Level:** Foundation
+- **Learn first:** CRED-01.
+- **What you learn:** a cap set higher up holds for everything beneath it.
+- **Starts at:** `/credits`, section "Budgets" ("A cap set higher up holds for everything beneath it. Work that would break a cap does not start.").
+- **Needs:** nothing.
+- **Steps:**
+  1. Rows run in tree order, indented: organisation, divisions, projects, apps, and employees with a cap of their own.
+  2. Each row shows a bar "<n> of <n> used" (warning colour at 100%), or "No cap here; the one above holds".
+  3. App names link to the app.
+- **You know it worked when:** the tree of rows is shown with bars where caps exist.
+- **Variations and refusals:** "No spending or caps anywhere in the tree yet." is in practice unreachable, because the organisation row is always present. An employee row counts only the employee's own spend, even though its cap also covers its contractors.
+- **Where:** `CreditsView.tsx` (BudgetRow). `ReadModels.BudgetLinesAsync`.
+- **Reachable from:** UI.
+- **Covered by tests:** `CreditsView.test.tsx` ("…budgets down the cascade…").
+
+### CRED-03 Set, change or remove a monthly cap at a level
+- **Who:** Admin or Owner.
+- **Level:** Developer (no screen exists)
+- **Learn first:** CRED-02.
+- **What you learn:** a monthly cap at a level stops work that would exceed it, and pauses the apps beneath it once spent.
+- **Starts at:** `PUT /api/cascade { scope, kind:"budget", key:"monthly_credits", value }` or MCP `budget_set` / `cascade_set`. To remove: `DELETE /api/cascade?scope=&kind=budget&key=monthly_credits` or MCP `cascade_remove`.
+- **Needs:** Admin at that level.
+- **Steps:**
+  1. Set the value. `/credits` shows the bar on that row.
+  2. At 80%: a notification "<Node> has used 80% of its monthly budget".
+  3. At the cap:
+     - a notification "<Node> reached its monthly budget … Work there stops until the budget is raised or the month turns.";
+     - new model calls at or beneath it are refused (402 budget_exhausted, and the run is marked so it stops);
+     - apps beneath it show the holding page "This app is paused" / "It has used this month's budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns."
+  4. Removing the cap lets the one above apply again.
+- **You know it worked when:** the Budgets row shows "<n> of <cap> used".
+- **Variations and refusals:** not a number, or negative: 400 "'monthly_credits' is a number of credits." / "cannot be negative." Not Admin: 403.
+- **Where:** `TreeEndpoints.cs` (cascade), `ControlPlaneTools.cs`, `CascadeService`, `TreeService` (routing pause), `CreditLedger.Refuse`.
+- **Reachable from:** API and MCP only. **The Credits, App and Autonomy screens have no control to set a cap.**
+- **Covered by tests:** `ModelGatewayTests`, `ControlPlaneDebtsTests.Hosting_is_metered_as_credits_once_per_sample_and_budgets_count_it`, `CascadeCreditsAndAppsTests`.
+
+### CRED-04 Read estimates against cost, and what was not charged
+- **Who:** Viewer and above.
+- **Level:** Core
+- **Learn first:** CRED-01.
+- **What you learn:** every piece of work is estimated first and scored against what it cost, and an employee's repair of its own mistake is never billed.
+- **Starts at:** `/credits`, the two panels.
+- **Needs:** nothing.
+- **Steps:**
+  1. "Estimates against what it cost" shows a headline and "Across <n> pieces of work this month. <spread> The largest miss was <n>%."
+  2. "What you were not charged for" shows "<n> credits" and "<n> repairs where an employee got it wrong the first time. Fixing its own mistake is never billed."
+- **You know it worked when:** both panels show figures, or their empty lines.
+- **Variations and refusals:** "No work has finished this month, so no estimate has been scored yet." · "No repairs this month. Fixing its own mistake is never billed."
+- **Where:** `CreditsView.tsx`. `ReadModels.EstimatesAsync`.
+- **Reachable from:** UI.
+- **Covered by tests:** `CreditsView.test.tsx` (three estimate tests).
+
+### CRED-05 Set the organisation's own overdraft limit
+- **Who:** Owner only.
+- **Level:** Advanced
+- **Learn first:** CRED-01, CRED-08.
+- **What you learn:** the organisation may choose to stop sooner than FrostAura allows, never later.
+- **Starts at:** the `/credits` aside "If you run out" ("Nothing stops at zero. You can go below it, down to your limit, and the next top-up settles it."), with "Most FrostAura allows you" and "Your own limit" ("Not set" or "<n> below zero").
+- **Needs:** Owner.
+- **Steps:**
+  1. Press "Change your limit". Fill in "How far below zero you may go", with the hint "FrostAura allows at most <n> below zero. Yours can be tighter, never deeper."
+  2. Press "Save my limit". The figure updates at once and "Your own limit is saved." appears.
+- **You know it worked when:** "Your own limit" shows the new figure and the saved message appears.
+- **Variations and refusals:**
+  - Hint when FrostAura allows nothing: "FrostAura allows no overdraft yet, so your own limit can only be 0. Ask FrostAura for more."
+  - Local checks: "Type a number of credits." · "That is deeper than the <n> FrostAura allows." (the button is disabled).
+  - Server: 400 "The organisation's own overdraft may be tighter than the <n> credits FrostAura set, never deeper." Failure: "Your limit was not changed: <reason> It is back to what it was."
+  - Non-Owner: "Only the Owner sets the organisation’s own limit."
+  - **No screen removes your own limit** (API: `DELETE /api/cascade` with kind setting and key `overdraft_own_limit`).
+  - "No overdraft is set for your organisation, so work stops at zero." is probably unreachable, because the server always returns an overdraft object (0 when unset).
+- **Where:** `CreditsActions.tsx` (OwnLimit). `PUT /api/credits/overdraft { scope:<org>, credits }`. `CascadeService.ValidateWellKnownAsync`.
+- **Reachable from:** UI.
+- **Covered by tests:** `CreditsActions.test.tsx` (deeper refused, rollback, Owner only). `tests-e2e/breadth.spec.ts` ("the Owner sets a limit no deeper than FrostAura allows…").
+
+### CRED-06 Hold a division, project or app to a tighter limit
+- **Who:** Admin and Owner.
+- **Level:** Advanced
+- **Learn first:** CRED-05.
+- **What you learn:** one part of the tree can be made to stop before the rest of the organisation does.
+- **Starts at:** `/credits` aside: "Tighter limits already set" and "A tighter limit for one part".
+- **Needs:** Admin. The organisation has an overdraft above 0.
+- **Steps:**
+  1. Read the list: each part's name, level, "<n> below zero" and "Set by <name>, <date>". Technical mode adds the path.
+  2. Choose a part in "Which part" and type into "Below zero, at most".
+  3. Press "Set this limit". The message "<Part> now stops at <n> below zero." appears and the list reloads.
+- **You know it worked when:** the part appears in "Tighter limits already set" with the new figure.
+- **Variations and refusals:**
+  - Empty list: "No division, project or app is held to less than the organisation."
+  - Too deep: "No deeper than the organisation's <n>." Server: "An overdraft here may be tighter than the <n> credits inherited, never deeper."
+  - Failure: "<Part>'s limit was not set: <reason>".
+  - No overdraft at all: "Every part stops at zero while the organisation has no overdraft, so there is nothing tighter to set."
+  - Builders and Viewers do not see these controls.
+  - **No screen removes a tighter limit** (API `DELETE /api/cascade`).
+- **Where:** `CreditsActions.tsx` (NarrowerLimits, NarrowerLimit). `PUT /api/credits/overdraft`.
+- **Reachable from:** UI. Also MCP `cascade_set` with key `overdraft_limit` below organisation level.
+- **Covered by tests:** `CreditsActions.test.tsx` ("sets a narrower limit…", "lists each division…", "is not shown to a Builder"). `FinalDefectsTests.The_credits_view_lists_every_narrower_overdraft_limit_on_and_beneath_the_scope`.
+
+### CRED-07 Ask FrostAura for a top-up
+- **Who:** Owner asks. Admin and Owner read the requests.
+- **Level:** Core
+- **Learn first:** CRED-01.
+- **What you learn:** there is no card on file. Credits are added by FrostAura by hand when you ask.
+- **Starts at:** the `/credits` aside "Asking for more" ("There is no card on file: FrostAura adds credits by hand when you ask.").
+- **Needs:** Owner. Fewer than 5 open requests.
+- **Steps:**
+  1. Press "Ask for a top-up". Fill in "How many credits" and optionally "A note for FrostAura" (up to 500 characters).
+  2. Press "Ask for it". The request appears at once as "Waiting for FrostAura", with the message "Asked FrostAura for <n> credits. You are told here when it is added."
+  3. When answered (OP-06) it shows "Added", or "Declined" with "FrostAura: <note>", plus "Asked <date>, answered <date>".
+- **You know it worked when:** the request is listed with the badge "Waiting for FrostAura".
+- **Variations and refusals:**
+  - "Type a number of credits." With 5 open: the button is disabled and "Five requests are already waiting; FrostAura answers those first." (server 409).
+  - Zero, negative or over 10,000,000: 400 "Ask for a positive number of credits."
+  - Failure: "The request was not sent: …".
+  - Empty: "No top-up asked for yet." Failed read: "Your top-up requests could not be loaded".
+  - Admins see the list but no ask button. Builders and Viewers see neither.
+- **Where:** `CreditsActions.tsx` (TopUpRequests). `POST` and `GET /api/credits/top-up-requests`.
+- **Reachable from:** UI. No MCP tool.
+- **Covered by tests:** `CreditsActions.test.tsx` ("lists requests…", "records a failed read…"). `breadth.spec.ts`. `BreadthTests.An_owner_asks_for_a_top_up_operators_see_it_and_answer_it_and_god_mode_lists_every_organisation`.
+
+### CRED-08 What happens at zero, at halfway and at the limit, and what a top-up restores
+- **Who:** the system. Owners and Admins are told.
+- **Level:** Foundation
+- **Learn first:** CRED-01.
+- **What you learn:** nothing stops at zero, you are warned twice, at the limit work stops and apps pause with nothing deleted, and a top-up brings everything back at once.
+- **Starts at:** the `/credits` aside "At the limit" ("Employees stop working." · "Apps pause behind a holding page." · "All data, code and memory are kept." · "A top-up brings everything back at once." · "You are warned at zero and again halfway to the limit."), and the notifications.
+- **Needs:** nothing.
+- **Steps:**
+  1. At or below 0 (after any top-up), the notification "Credits have run out" says: "The balance is <n> credits. Work goes on into the overdraft of up to <n> credits; ask FrostAura for a top-up."
+  2. At half the limit: "Halfway to the overdraft limit".
+  3. At the limit: "The overdraft limit is reached: work has stopped and apps are paused".
+     - New model calls are refused (402 overdraft_limit). The run is not marked failed, so it can carry on after a top-up.
+     - Apps show "This app is paused" / "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up."
+     - Operators see the standing "At its limit".
+  4. A top-up (OP-05) settles the debt, recalculates routing and un-pauses apps at once. The warnings start again from the next episode.
+- **You know it worked when:** after a top-up, the app opens again and the banner returns to "Credits left" or a smaller "Below zero".
+- **Variations and refusals:**
+  - "Employees stop working" means their model calls are refused. Their status does not change.
+  - An app pauses only once the balance is strictly past the limit, while new work is already refused at exactly the limit.
+  - Overdraft never carries interest or fees, as the screens state.
+- **Where:** `CreditLedger.Refuse`, `TreeService` (routing table pause), `NotificationService`, `Edge/Pages/UnavailablePage.cs`.
+- **Reachable from:** system. The effects are visible in the UI and the notifications.
+- **Covered by tests:** `ControlPlaneDebtsTests.At_the_overdraft_limit_work_stops_and_apps_pause_a_top_up_restores_them_and_nothing_accrues`. `tests-stack/acceptance.spec.ts` ("13. at the overdraft limit the app is paused; an operator's top-up brings it back").
+
+### CRED-09 How AI work and hosting become spending
+- **Who:** the system. Everyone sees the result.
+- **Level:** Core
+- **Learn first:** CRED-01.
+- **What you learn:** credits are held before each AI call and settled at its real cost, while hosting is counted from usage after the fact.
+- **Starts at:** any agent or app model call, and the usage samples posted by Dock and Edge (`/internal/usage/hosting`).
+- **Needs:** nothing.
+- **Steps:**
+  1. Each AI call reserves its worst case against every cap and the balance, then settles at the reply's cost converted by the current prices.
+  2. Repairs are recorded as not billed.
+  3. Hosting samples become hosting entries at the hosting rates and are never refused.
+  4. Both appear in "On AI work" / "On hosting", the budget bars, the employee's "Cost so far", the app's "Cost this month" tile ("Cap <n>" or "No cap of its own; the one above applies") and the operator's balances.
+  5. An app's own model calls also stop at its monthly AI allowance (default from prices, OP-09).
+- **You know it worked when:** the figures rise after work runs.
+- **Variations and refusals:** the same sample is charged once. Over the app's allowance, the refusal says "The app's own model calls have <n> credits left of their <n> this month…"
+- **Where:** `CreditLedger` (AdmitAsync, SettleAsync, HostingEntry), `FactoryEndpoints` `/internal/credits*`.
+- **Reachable from:** system.
+- **Covered by tests:** `ModelGatewayTests`, `UsageLedgerTests`, `ControlPlaneDebtsTests` (hosting), `tests-stack/acceptance.spec.ts` ("11. hosting usage appears as credit entries").
+
+## The operator and God mode (OP)
+
+### OP-01 Know you are in God mode, and what a non-operator sees
+- **Who:** operator. Any other signed-in person.
+- **Level:** Operator
+- **Learn first:** sign-in.
+- **What you learn:** God mode is always visibly marked, and closed to everyone not on FrostAura's explicit operator list.
+- **Starts at:** any screen.
+- **Needs:** for an operator, an email listed in `ENDGAME_OPERATORS` / `Operators:Emails`.
+- **Steps:**
+  1. Operators see a band on every screen: "GOD MODE · You are a FrostAura operator. Entering an organisation is logged where its Owner can read it." and the link "Every organisation" to `/operator`.
+  2. On the org chart of an entered organisation the band reads "You are inside <slug> as a FrostAura operator. Your entry is logged where its Owner can read it."
+  3. A non-operator opening `/operator` sees the heading "God mode" and "God mode is for FrostAura operators" / "Your account is not one of FrostAura's operators, so these screens are closed to you."
+- **You know it worked when:** the band is shown, or the refusal is shown.
+- **Variations and refusals:** every `/api/operator/*` call returns 403 "Only FrostAura operators may do this." to non-operators and to any access token, because God mode is never available by token or MCP.
+- **Where:** `shell/GodModeBand.tsx`, `operator/OperatorView.tsx`, `AccessService.IsOperatorEmail`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorView.test.tsx` ("is closed to anyone who is not an operator…", "is marked as God mode on every screen"). `breadth.spec.ts`. `ControlPlaneDebtsTests.Operators_come_from_the_explicit_list_only_and_every_entry_is_logged_for_the_owner`.
+
+### OP-02 See every organisation
+- **Who:** operator.
+- **Level:** Operator
+- **Learn first:** OP-01.
+- **What you learn:** each organisation's balance, standing and overdraft at a glance.
+- **Starts at:** `/operator`, section "Every organisation" (refreshes every 30 seconds).
+- **Needs:** operator.
+- **Steps:**
+  1. Each card shows the name, "<slug> · since <date>" (plus the status when not active), and a badge "In credit", "Below zero" or "At its limit".
+  2. The card shows "Balance", "Overdraft allowed" ("<n> below zero", with "Their own: <n>; yours: <n>" or "Set by you: <n>"), "Apps" and "Last active" ("Never").
+  3. Waiting requests show "One top-up request is waiting." or "<n> top-up requests are waiting."
+- **You know it worked when:** a card is listed for each organisation.
+- **Variations and refusals:** empty "No organisations yet" with "Provision the first one for an invited Owner." Failed: "The organisations could not be loaded". Technical mode adds the id.
+- **Where:** `OperatorView.tsx` (Organisations, OrganisationCard). `GET /api/operator/organisations`. `OperatorOverview.cs`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorView.test.tsx` ("shows loading, failed and every organisation…"). `breadth.spec.ts`. `BreadthTests`.
+
+### OP-03 Set up an organisation for an invited Owner
+- **Who:** operator. Also the first person on a fresh install, through Start (another reader's area).
+- **Level:** Operator
+- **Learn first:** OP-01.
+- **What you learn:** organisations are provisioned by FrostAura, not signed up for, and the Owner's one-time code is shown once.
+- **Starts at:** the `/operator` aside "Set up an organisation" ("For a person FrostAura has invited. They become its Owner; there is no self-serve sign-up.").
+- **Needs:** operator.
+- **Steps:**
+  1. Fill in "Its name" (up to 80 characters). "Its address name" fills itself from the name and can be edited, with the hint "Its apps live at /<slug>/… and <slug>.<domain>."
+  2. Fill in "The Owner's e-mail" and, optionally, "The Owner's name".
+  3. The form notes "Its name is checked against FrostAura’s own addresses, and every idea it has is screened against the red lines."
+  4. Press "Set it up" ("Setting it up…").
+  5. A new Owner gets a one-time panel "The Owner's invitation code", with "<Name> is set up for <email>. The code was e-mailed to them too." or "E-mail is not set up here, so give them this code yourself." and "They use it to make their passkey before <date>." plus any name-check note.
+  6. An Owner who already has an account gets "<Name> is set up. <email> already has a passkey, so they can sign in as its Owner now."
+  7. The organisation appears in the list with its standing security reviewer, and "Set up the organisation" is written to its operator log.
+- **You know it worked when:** the code panel or the success line appears, and a new card is listed.
+- **Variations and refusals:**
+  - Local checks: "2 to 40 lowercase letters, digits and hyphens." · "That does not look like an e-mail address." (the button is disabled).
+  - Server:
+    - 409 "That name is reserved" ("'<slug>' cannot name an organisation: it is one of Endgame's own names" / "FrostAura already uses it as a subdomain").
+    - 503 "New organisation names are paused".
+    - "A sibling already uses that slug." (probably).
+    - A non-operator after first run gets 403 "Organisations are provisioned by FrostAura; there is no self-serve sign-up."
+  - Failure: "<Name> was not set up: <reason>".
+  - **No red-line screening of the organisation happens here**, despite the form's sentence and CLAUDE.md rule 4. Only its ideas are screened later, by research.
+- **Where:** `OperatorView.tsx` (ProvisionAside), `store/sensitive.ts` (provisionOrganisation). `POST /api/organisations`. `ReservedNames.cs`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorView.test.tsx` ("provisions an organisation…shows their code once"). `breadth.spec.ts` ("…a reserved name is refused"). `BreadthTests.Organisation_names_that_frostaura_uses_are_refused_and_an_incomplete_zone_pauses_new_names`.
+
+### OP-04 Enter an organisation in God mode, and act there as Admin
+- **Who:** operator.
+- **Level:** Operator
+- **Learn first:** OP-02.
+- **What you learn:** an operator enters as an Admin, never the Owner, and every visit is written where the Owner reads it.
+- **Starts at:** an organisation card. Press "Enter <Name>".
+- **Needs:** operator.
+- **Steps:**
+  1. Press "Enter <Name>" ("Entering…"). The card shows "You entered <Name> as an Admin, <time ago>." and "Logged: This entry is in the organisation's operator log, which its Owner reads."
+  2. Press "Open its org chart". `/?organisation=<slug>` shows that organisation's tree, with the in-organisation band.
+  3. Any call the operator makes inside that organisation is treated as Admin. Reads continue the visit. Coming back more than 10 minutes later logs a new entry.
+  4. As Admin the operator can do anything an Admin can: decide hires, change employees, set tighter limits, manage people and secrets, change caps through the API.
+  5. The operator cannot set the own limit, read the operator log, grant Admin, ask for a top-up, or act as Owner.
+- **You know it worked when:** the "You entered … as an Admin" status and the entered organisation's org chart appear.
+- **Variations and refusals:**
+  - "You did not enter <Name>: <reason>". A path that is not an organisation: 400 "Name an organisation by its slug."
+  - **Only the org chart reads the entered organisation.** Credits, Hiring, Hire, Employee, Autonomy, People, Secrets and App use the operator's own organisation's tree. Not verified at runtime, but very likely wrong in practice:
+    - Credits shows the operator's own balance;
+    - Hiring defaults to the operator's own organisation;
+    - employee and hire pages lose names and the Admin checks;
+    - the reassign list offers the wrong tree.
+  - **The band reverts to the generic text off the org chart.**
+  - Individual Admin actions taken inside the organisation (accepting a hire, changing a cap) are not written to the operator log. Only the visit is.
+- **Where:** `OperatorView.tsx`, `features/home/HomeView.tsx`. `POST /api/operator/organisations/{slug}/enter`, `GET /api/tree?organisation=`. `AccessService.OperatorEntryAsync`, `RecordEntryAsync` and `LogVisitAsync`.
+- **Reachable from:** UI (org chart only, in effect). Every other in-organisation action is API.
+- **Covered by tests:** `OperatorView.test.tsx` ("enters an organisation, saying plainly where the entry is logged"). `breadth.spec.ts`. `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry`.
+
+### OP-05 Top up an organisation
+- **Who:** operator.
+- **Level:** Operator
+- **Learn first:** OP-02, CRED-08.
+- **What you learn:** a top-up settles any debt first and restores everything paused, and the Owner can see that you did it.
+- **Starts at:** an organisation card. Press "Top up".
+- **Needs:** operator.
+- **Steps:**
+  1. Fill in "Credits to add" and "Note" ("Shown to the Owner beside the top-up.", up to 300 characters). The form notes "A top-up settles any debt first and restarts everything paused at once."
+  2. Press "Add the credits" ("Adding…"). The message "Added <n> credits to <Name>. Its Owner can read that you did." appears, and the button becomes "Done".
+  3. The balance, standing and "Top-ups made" update. The Owner's Credits screen lists the top-up, and the operator log shows "Added <n> credits".
+- **You know it worked when:** the green "Added …" message appears and the balance rises.
+- **Variations and refusals:**
+  - The note is required on screen (the button is disabled), though the API allows none.
+  - "Type a number of credits." Server: 400 "A top-up is a positive number of credits, to at most six decimal places."
+  - Failure: "Nothing was added: <reason>".
+  - A key fixed for each form means pressing twice adds once.
+  - A non-operator gets 403 "Credits are topped up by FrostAura (manual top-ups; there is no payment gateway)."
+- **Where:** `OperatorView.tsx` (TopUpForm). `POST /api/credits/top-ups`. `CreditLedger.TopUpAsync`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorView.test.tsx`. `breadth.spec.ts`. `acceptance.spec.ts` (13). `ControlPlaneDebtsTests`.
+
+### OP-06 Answer a top-up request
+- **Who:** operator.
+- **Level:** Operator
+- **Learn first:** OP-05, CRED-07.
+- **What you learn:** a request is answered by a top-up that names it, or by a decline with a reason the Owner reads.
+- **Starts at:** `/operator`, section "Top-up requests" (refreshes every 30 seconds).
+- **Needs:** operator. An open request.
+- **Steps:**
+  1. A row reads "<Org> asks for <n> credits", with the time, the note and "From <email>".
+  2. To fulfil: press "Add the credits". A top-up form opens filled with the amount and the note "Answering the request of <date>". Press "Add it and close the request". The message "Added <n> credits to <Org> and closed the request. Its Owner can read that you did." shows above the list, and the request moves to "Answered (<n>)" as "Added".
+  3. To decline: press "Decline", fill in "Why (the Owner reads this)", and press "Decline it". The request moves to answered as "Declined", and the Owner sees "FrostAura: <why>".
+- **You know it worked when:** the request leaves "Waiting" and appears under "Answered" with the right badge.
+- **Variations and refusals:**
+  - Empty: "No request is waiting" with "When an Owner asks for credits, it appears here to answer."
+  - Decline failure: "The request is still open: <reason>". Already closed: 409 "This request is already <status>."
+  - A decline is logged as `topup_request.declined`, which the Owner sees as "Acted on the organisation". A fulfilment through a top-up writes only the top-up to the log, with no closing note.
+- **Where:** `OperatorView.tsx` (Requests, RequestRow). `GET /api/operator/top-up-requests`, `POST /api/operator/top-up-requests/{id}/close`, `POST /api/credits/top-ups { requestId }`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorView.test.tsx` ("fulfils a top-up request…", "declines a request…"). `breadth.spec.ts`. `BreadthTests`.
+
+### OP-07 Set an organisation's deepest overdraft
+- **Who:** operator.
+- **Level:** Operator
+- **Learn first:** OP-02, CRED-05.
+- **What you learn:** FrostAura sets the outer limit, and everything inside the organisation can only be tighter.
+- **Starts at:** an organisation card. Press "Deepest overdraft".
+- **Needs:** operator.
+- **Steps:**
+  1. Fill in "The most it may go below zero", with the hint "No interest and no fees, ever. At the limit its employees stop and its apps pause; nothing is deleted."
+  2. Press "Save". The card updates at once and reads "<Name> may now go <n> below zero at most. Its own limit can only be tighter."
+  3. Routing is recalculated, and the Owner's log gets an entry ("Acted on the organisation").
+- **You know it worked when:** "Overdraft allowed" on the card shows the new figure.
+- **Variations and refusals:**
+  - "Type a number of credits." Failure: "The overdraft was not changed: <reason> It is back to <n>."
+  - A member trying this through the cascade gets 403 "An organisation's deepest overdraft is set by a FrostAura operator…"
+  - Lowering it below the organisation's own limit is allowed. The tighter value then applies.
+- **Where:** `OperatorView.tsx` (OverdraftForm). `PUT /api/operator/organisations/{slug}/overdraft`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorView.test.tsx` ("sets an organisation's deepest overdraft at once and rolls it back…"). `CascadeCreditsAndAppsTests.Only_a_frostaura_operator_sets_the_organisations_overdraft_and_lower_levels_may_only_tighten_it`.
+
+### OP-08 Read every top-up made
+- **Who:** operator.
+- **Level:** Operator
+- **Learn first:** OP-05.
+- **What you learn:** every top-up is on the record: who, how much and why.
+- **Starts at:** `/operator`, section "Top-ups made".
+- **Needs:** operator.
+- **Steps:** rows show the organisation's name (plus the slug in technical mode), the note, "<date> · by <email>" and "+ <n>". Up to 500 rows.
+- **You know it worked when:** the list is shown.
+- **Variations and refusals:** "No top-ups yet". "The top-ups could not be loaded". Filtering by organisation (`?organisation=`) exists in the API but not on screen.
+- **Where:** `OperatorView.tsx` (TopUps). `GET /api/operator/top-ups`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorView.test.tsx` ("names each top-up's organisation by its display name…"). `FinalDefectsTests.Operator_top_ups_name_the_organisation_by_its_display_name_and_keep_its_address_name`.
+
+### OP-09 Change the prices, and read the change history
+- **Who:** operator.
+- **Level:** Operator
+- **Learn first:** CRED-09.
+- **What you learn:** credits are priced at cost times one margin. A change applies to new work everywhere and is recorded with your name.
+- **Starts at:** `/operator`, section "The prices" ("Credits are priced at what the work costs plus one margin, so every bill can be explained line by line. A change applies everywhere within a minute and is kept in the history below.").
+- **Needs:** operator.
+- **Steps:**
+  1. The form shows "Last changed <date>." or "These are the defaults; they have never been changed."
+  2. Edit any of: "Credits per US dollar", "Margin", "Dollars per awake hour", "Dollars per gigabyte-hour of memory", "Dollars per gigabyte-month stored", "Dollars per million requests", "Each app's AI allowance, credits a month".
+  3. Press "Save the prices" (enabled only when something changed). The confirmation asks "Change the prices for every organisation?" and says "Work already estimated keeps its estimate; new work is priced with these figures. The change is recorded with your name."
+  4. Press "Change the prices". The message reads "The new prices hold from now on, for every organisation." "Keep them as they are" cancels.
+  5. "Changes" lists "<date> · <email>" with each figure "<label>: <before> → <after>".
+- **You know it worked when:** the success message appears and a new entry heads "Changes".
+- **Variations and refusals:**
+  - Local checks: "At least 1.0: a margin below one would sell at a loss." · "A number, zero or more."
+  - Server: hosting rates or the allowance negative is 400. The credits-per-dollar check comes from the credit settings: 0 may be allowed on screen and then refused by the server (not verified).
+  - Failure: "The prices were not changed: <reason>" rolls back.
+  - History is empty: "Never changed: the defaults hold." History is capped at 50.
+- **Where:** `OperatorView.tsx` (PricingPanel, PricingForm), `operatorModel.ts`. `GET` and `PUT /api/operator/pricing`. `PricingService.cs`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorView.test.tsx` ("refuses a margin below one and asks before changing the prices", "reads a price change figure by figure"). `breadth.spec.ts`. `BreadthTests.Prices_change_at_runtime_for_the_next_charge_audited_and_never_below_cost`.
+
+### OP-10 The Owner reads the operator log
+- **Who:** Owner.
+- **Level:** Core
+- **Learn first:** OP-04 (concept only).
+- **What you learn:** operator access is never silent. Every entry and action is listed, newest first.
+- **Starts at:** org chart, Manage link "Operator access" (Owner only). Opens `/operator-access`.
+- **Needs:** Owner.
+- **Steps:**
+  1. The heading reads "Operator access", with "Every time someone from FrostAura entered <Org> or acted on it, newest first. It is never silent, and only the Owner can read it."
+  2. Entries read "Entered the organisation", "Set up the organisation", "Added <n> credits" or "Acted on the organisation", each with the date and time and "<operator name> · <email>". Technical mode adds the raw action and its detail.
+- **You know it worked when:** the log, or its empty state, is shown.
+- **Variations and refusals:**
+  - Empty: "No one from FrostAura has entered <Org>" with "If anyone does, it is written here first."
+  - Non-Owner: "Only the Owner can read the operator log".
+  - No organisation: "There is no log until your organisation is named".
+  - An Owner of several organisations sees only their first.
+- **Where:** `features/audit/OperatorAccessView.tsx`. `GET /api/audit/operator-access?organisation=`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorAccessView.test.tsx`. `ControlPlaneDebtsTests.Operators_come_from_the_explicit_list_only_and_every_entry_is_logged_for_the_owner`.
+
+### OP-11 Suspend or reinstate an organisation
+- **Who:** operator.
+- **Level:** Operator / Developer
+- **Learn first:** OP-02.
+- **What you learn:** only FrostAura changes an organisation's status.
+- **Starts at:** `PATCH /api/organisations/{id} { status }`.
+- **Needs:** operator (and Owner-level access, which God mode does not give, so not verified that an operator can actually pass this check).
+- **Steps:** send the new status. A suspended organisation's apps leave the routing table (it routes only active organisations).
+- **You know it worked when:** the operator card shows " · <status>".
+- **Variations and refusals:** a non-operator sending a status gets 403 "An organisation is suspended or reinstated by FrostAura."
+- **Where:** `TreeEndpoints.MapNodeChanges`.
+- **Reachable from:** API only. **No screen.**
+- **Covered by tests:** none found.
+
+---
+
+## Gaps and oddities found
+1. **No screen sets, changes or removes a monthly cap at any level** (CRED-03). It is API or MCP only.
+2. **God mode works only on the org chart.** Other screens read the operator's own organisation, and the band loses the organisation's name off the chart (OP-04).
+3. **Provisioning does not screen the organisation against the red lines.** It only checks reserved names, though the form says otherwise and CLAUDE.md rule 4 requires it.
+4. **Actions an operator takes inside an organisation as Admin are not logged one by one.** Only the visit is. The log shows `overdraft.set` and `topup_request.*` only as "Acted on the organisation".
+5. **Pause does not stop work.** Runs can still start for a paused employee; only released employees are refused.
+6. **Reassigning from the screen silently clears the manager** (EMP-02).
+7. **On the proposal edit form, emptying the budget does not remove it, and emptying "Why this hire" keeps the old reason.** Tools, services, thinking power and manager are not editable on screen.
+8. **An employee's name, role, mandate, tools, services, thinking power and manager cannot be changed on screen** (API only). Rehiring into a new place is API only.
+9. **There is no screen to raise an owner hire.** "You asked for this hire" exists only through the API and MCP.
+10. **"Propose as a permanent hire" shows for Viewers and Builders**, who then get a 403. Its need key (`promotion:<path>:<Role>`) differs from the system's (`promotion:<nodeId>:<role>`), so two proposals for one need are possible.
+11. **The memory change log is never listed** on a screen. Memory has no MCP tools.
+12. **Corrections and removals through the API are not blocked for a released employee's archived memory**, which contradicts UC-113 A1 ("cannot be written").
+13. **There is no screen to remove the organisation's own overdraft limit or a tighter limit.**
+14. **"Nothing is left to spend. A top-up starts the work again." at exactly 0 contradicts the overdraft.** "No overdraft is set…" and "No spending or caps anywhere…" look unreachable.
+15. **An employee's budget row on Credits counts only its own spend**, while its cap includes its contractors.
+16. **Released employees are not listed on any screen** (`includeReleased` is unused). "Contractors working now" rows are not links. A person cannot stop or cap a contractor.
+17. **`GET /api/employees/{id}/track-record` and `GET /api/operator/top-ups?organisation=` are not called by any screen.**
+18. **The Credits page and the operator log use the person's first organisation** (`me.organisation`). A member whose only role is at a division probably cannot load Credits (not verified).
+19. **A fulfilled top-up request gets no closing note**, and no `topup_request.fulfilled` row is written to the operator log.
+20. **Docs versus code:**
+    - UC-103 says caps are set by an Admin, but with no screen.
+    - UC-111 and UC-112 match the API.
+    - CLAUDE.md rule 4 is not met at provisioning.
