@@ -262,6 +262,17 @@ export function renderMessagePage(title: string, message: string, link: string, 
   return shell(title, markUrl, body);
 }
 
+/** The outage Worker's page (`src/ops/outage-worker/worker.js`, `outagePage`), in the Edge pages' shell. */
+export const OUTAGE = {
+  status: 503,
+  title: "Endgame is temporarily unavailable",
+  message: "It can't be reached right now. Nothing you have made has been lost — please try again in a few minutes.",
+} as const;
+
+export function renderOutagePage(markUrl: string = MARK_URL): string {
+  return shell(OUTAGE.title, markUrl, `<h1>${htmlEncode(OUTAGE.title)}</h1>\n<p>${htmlEncode(OUTAGE.message)}</p>`);
+}
+
 /** `AuthPages.RedeemAsync`: an unknown, used or older-than-a-minute hand-off code (410). */
 export const HANDOFF_EXPIRED = {
   status: 410,

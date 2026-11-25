@@ -250,6 +250,10 @@ export interface World {
   context?: { path: string; key: string; value: unknown; setAt: string }[];
   /** No model answers (the screening of a new organisation then needs an operator's own decision). */
   modelsOffline?: boolean;
+  /** What the Edge (or, for "outage", Cloudflare in front of it) answers instead of an app, by app id: a wake that could not finish. */
+  edgeAnswer?: Record<string, "slow" | "busy" | "unreachable" | "outage">;
+  /** Apps whose rebuild fails (a restore or "Rebuild and restart" that cannot start the app), by app id. */
+  rebuildFails?: string[];
   /** Organisations an operator acted in as an Admin during the request being answered; never saved. */
   actedAsOperator?: string[];
   /** RTK Query tags changed since the page last refreshed; drained by the host, never saved. */

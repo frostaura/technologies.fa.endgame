@@ -391,30 +391,50 @@ area("WorkforceEndpoints", {
 });
 
 function ontology(world: World, scope: string): Ontology {
+  // `OntologyService.BuildAsync`: ids are "<kind>:<id>", and an app depends on a platform service only once it has used it.
   const nodes: OntologyNode[] = [];
   const edges: OntologyEdge[] = [];
+  const keyOf = (path: string) => {
+    const app = world.apps.find((a) => a.path === path);
+    const n = world.nodes.find((x) => x.path === path);
+    return app ? `app:${app.id}` : n ? `${n.level}:${n.id}` : null;
+  };
   for (const n of world.nodes.filter((x) => within(x.path, scope))) {
     const app = world.apps.find((a) => a.path === n.path);
     if (n.level === "app" && !app) continue;
-    nodes.push({ id: app?.id ?? n.id, type: n.level, name: n.name, scope: n.path, status: app ? app.status : n.stage, attributes: app ? { access: app.access, running: app.running } : null });
+    const id = app ? `app:${app.id}` : `${n.level}:${n.id}`;
+    nodes.push({ id, type: n.level, name: n.name, scope: n.path, status: app ? app.status : n.stage, attributes: app ? { version: app.version } : null });
     const parent = world.nodes.find((p) => n.path.startsWith(`${p.path}/`) && p.path.split("/").length === n.path.split("/").length - 1);
-    if (parent) edges.push({ from: parent.id, to: app?.id ?? n.id, type: "owns", label: null });
+    if (parent) edges.push({ from: `${parent.level}:${parent.id}`, to: id, type: "owns", label: null });
   }
-  for (const e of world.employees.filter((x) => within(x.scope, scope) && x.status !== "released" && x.kind === "employee")) {
-    nodes.push({ id: e.id, type: "employee", name: e.name, scope: e.scope, status: e.status, attributes: { role: e.role } });
-    const at = world.nodes.find((n) => n.path === e.scope);
-    if (at) edges.push({ from: e.id, to: world.apps.find((a) => a.path === at.path)?.id ?? at.id, type: "works-on", label: null });
-    if (e.reportsTo) edges.push({ from: e.id, to: e.reportsTo.id, type: "reports-to", label: null });
+  for (const e of world.employees.filter((x) => within(x.scope, scope) && x.status !== "released")) {
+    const id = `${e.kind}:${e.id}`;
+    nodes.push({ id, type: e.kind, name: e.name, scope: e.scope, status: e.status, attributes: { role: e.role } });
+    const at = keyOf(e.scope);
+    if (at) edges.push({ from: id, to: at, type: "works-on", label: e.role });
+    if (e.reportsTo) edges.push({ from: id, to: `employee:${e.reportsTo.id}`, type: "reports-to", label: null });
   }
-  const services = ["identity", "models", "secrets", "email", "telemetry"];
-  for (const s of services) nodes.push({ id: `service:${s}`, type: "service", name: s, scope: null, status: null, attributes: null });
+  for (const s of world.secrets.filter((x) => within(x.path, scope))) {
+    const id = `secret:${s.path}:${s.name}`;
+    nodes.push({ id, type: "secret", name: s.name, scope: s.path, status: null, attributes: null });
+    const owner = keyOf(s.path);
+    if (owner) edges.push({ from: owner, to: id, type: "owns", label: null });
+  }
+  const service = (name: string) => {
+    const id = `service:${name}`;
+    if (!nodes.some((n) => n.id === id)) nodes.push({ id, type: "service", name, scope: null, status: null, attributes: null });
+    return id;
+  };
   for (const a of world.apps.filter((x) => within(x.path, scope))) {
-    edges.push({ from: a.id, to: "service:identity", type: "depends-on", label: "sign-in" });
-    edges.push({ from: a.id, to: "service:telemetry", type: "data-flows-to", label: "visits and events" });
-    for (const sec of world.secrets.filter((x) => within(a.path, x.path))) {
-      const id = `secret:${sec.path}:${sec.name}`;
-      if (!nodes.some((n) => n.id === id)) nodes.push({ id, type: "secret", name: sec.name, scope: sec.path, status: null, attributes: null });
-      edges.push({ from: a.id, to: id, type: "depends-on", label: null });
+    const id = `app:${a.id}`;
+    if (world.spend.some((s) => s.path === a.path && s.ai > 0)) {
+      edges.push({ from: id, to: service("models"), type: "depends-on", label: null }, { from: id, to: service("models"), type: "data-flows-to", label: "prompts" });
+    }
+    if (a.endUsers > 0 || world.shares.some((s) => s.appId === a.id) || (a.telemetry?.visitsToday ?? 0) > 0) {
+      edges.push({ from: id, to: service("identity"), type: "depends-on", label: null }, { from: service("identity"), to: id, type: "data-flows-to", label: "signed-in people" });
+    }
+    if (a.telemetry) {
+      edges.push({ from: id, to: service("telemetry"), type: "depends-on", label: null }, { from: id, to: service("telemetry"), type: "data-flows-to", label: "operational telemetry" });
     }
   }
   const orgChart = nodes.filter((n) => ["organisation", "division", "project", "app", "employee"].includes(n.type)).map((n) => n.id);

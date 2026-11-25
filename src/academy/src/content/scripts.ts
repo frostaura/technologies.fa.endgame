@@ -19,6 +19,9 @@ export const SCENARIOS = [
   "build-sent-back", "build-security-finding", "build-published", "build-waiting-on-plan", "build-failed", "app-busy", "app-asleep", "app-paused", "app-crashed",
   "app-never-measured", "employee-memory", "hire-pending", "at-overdraft-limit", "budget-spent", "manage-tree", "account", "employee-released", "two-organisations",
   "screening-offline",
+  // Area 05 (scenarios.s5.ts in the demo)
+  "ask-unavailable", "app-private", "app-public", "app-shared-empty", "app-restore-fails", "app-rebuild-fails", "app-not-published", "app-wake-slow",
+  "app-wake-busy", "app-unreachable", "outage", "no-secrets", "dashboard-full",
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 

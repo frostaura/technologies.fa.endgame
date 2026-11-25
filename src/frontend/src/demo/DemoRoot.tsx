@@ -57,7 +57,7 @@ function HostedRoute({ appId, form, rest }: { appId: string; form: "path" | "sub
   }, [appId, app, world, session]);
   if (!app) return null;
   const [org, ...below] = app.path.split("/");
-  const state: HostedAppState = app.status === "failed" ? "crashed" : app.running === "paused" ? "paused" : app.status === "building" || app.status === "draft" ? "not-published" : app.running === "asleep" ? "asleep" : "running";
+  const state: HostedAppState = world.edgeAnswer?.[app.id] ?? (app.status === "failed" ? "crashed" : app.running === "paused" ? "paused" : app.status === "building" || app.status === "draft" ? "not-published" : app.running === "asleep" ? "asleep" : "running");
   return (
     <HostedAppView
       key={`${appId}:${visitor.kind}:${visitor.email ?? ""}`}

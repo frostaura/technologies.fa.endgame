@@ -1,6 +1,6 @@
 /** The contract between the demo and a hosted app's view (see `HostedAppView`). */
 
-export type HostedAppState = "running" | "asleep" | "paused" | "crashed" | "not-published";
+export type HostedAppState = "running" | "asleep" | "paused" | "crashed" | "not-published" | "slow" | "busy" | "unreachable" | "outage";
 
 export interface HostedVisitor {
   /**
