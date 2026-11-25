@@ -44,7 +44,7 @@ public sealed record WorkflowOutcome(WorkflowEnd End, string Summary)
         {
             StopReasons.Paused or StopReasons.LeaseLost => Suspend(result.StopReason),
             StopReasons.Cancelled or StopReasons.RunClosed => new WorkflowOutcome(WorkflowEnd.Cancelled, result.StopReason),
-            StopReasons.BudgetExhausted => Failure("The credit budget is exhausted, so the work stopped. Raise the budget or top up, then start it again."),
+            StopReasons.BudgetExhausted => Failure("The credit budget ran out, so the work stopped. Top up or raise the budget, then try it again; what was finished is kept."),
             _ => null,
         };
     }

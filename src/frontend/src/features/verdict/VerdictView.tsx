@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -11,9 +12,10 @@ import { describeError, viewOf } from "@/lib/queryState";
 import { navigate, paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { api, useDecideIdeaMutation, useGetIdeaQuery, useGetMeQuery, useGetTreeQuery } from "@/store/api";
+import { api, useDecideIdeaMutation, useGetIdeaQuery } from "@/store/api";
 import type { DecisionChoice, ExistingProduct, Idea, Verdict, VerdictOutcome } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
+import { TryAgain } from "../runs/TryAgain";
 import { namesFor } from "../home/treeModel";
 import { decisionOptions, paragraphs, plainProductName, redLineBreached, shortSummary, sourceLabel } from "./verdictModel";
 
@@ -31,13 +33,13 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   const researching = !cached.data || cached.data.status === "researching";
   const query = useGetIdeaQuery(ideaId, { pollingInterval: researching ? RESEARCH_POLL_MS : 0 });
   const view = viewOf(query);
-  const tree = useGetTreeQuery(undefined);
-  const me = useGetMeQuery(undefined);
+  const tree = useActiveTree();
+  const active = useActiveOrganisation();
   const idea = view.kind === "loaded" ? view.data : null;
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
 
   const crumbs: Crumb[] = [];
-  const org = me.data?.organisation;
+  const org = active.organisation;
   if (org) crumbs.push({ label: org.name, href: paths.home() });
   if (idea?.scope) for (const name of namesFor(tree.data, idea.scope).slice(1)) crumbs.push({ label: name });
   crumbs.push({ label: idea?.title ?? "Idea" });
@@ -99,9 +101,36 @@ function NoVerdictYet({ idea }: { idea: Idea }) {
       <p className={failed ? "text-ink" : "text-primary-tint"}>
         {failed ? "Research stopped before it reached a verdict. The trace shows where." : "The case against the idea is argued first. You can watch every step as it happens."}
       </p>
-      <Link href={paths.run(idea.runId)} className={buttonVariants({ variant: failed ? "primary" : "white" })}>
+      <Link href={paths.run(idea.runId)} className={buttonVariants({ variant: failed ? (idea.tryAgain ? "outline" : "primary") : "white" })}>
         {failed ? "See what happened" : "Watch the research"}
       </Link>
+      {failed && idea.tryAgain && <TryAgain runId={idea.tryAgain.runId} ideaId={idea.id} why={idea.tryAgain.why} showCredits={idea.tryAgain.why === "budget"} />}
+      <DecisionHistory idea={idea} />
+    </section>
+  );
+}
+
+/** Decisions taken on earlier verdicts, kept after a new verdict cleared them (VERD-07). */
+function DecisionHistory({ idea }: { idea: Idea }) {
+  if (idea.history.length === 0) return null;
+  return (
+    <section aria-label="Earlier decisions" className="flex w-full flex-col gap-2 rounded-md border bg-surface px-5 py-4 text-ink">
+      <h2 className="text-base font-semibold">Earlier decisions</h2>
+      <ol className="flex flex-col gap-2">
+        {idea.history.map((h) => (
+          <li key={h.runId} className="flex flex-col gap-0.5">
+            <span>
+              {h.choice === "change"
+                ? `${h.by || "Someone"} asked for the idea to be changed${h.verdict ? ` after a “${OUTCOME[h.verdict].toLowerCase()}” verdict` : ""} on ${formatDate(h.at)}.`
+                : `Research that did not finish was started again on ${formatDate(h.at)}.`}
+            </span>
+            {h.note && <span className="text-ink-body">“{h.note}”</span>}
+            <Link href={paths.run(h.runId)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+              See the research that followed
+            </Link>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -236,6 +265,7 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
       <ErrorBoundary name="Your decision">
         <Decisions idea={idea} verdict={verdict} redLine={redLine} />
       </ErrorBoundary>
+      {!idea.decision && <DecisionHistory idea={idea} />}
     </>
   );
 }
@@ -329,15 +359,17 @@ function Decisions({ idea, verdict, redLine }: { idea: Idea; verdict: Verdict; r
             Watch the work that followed
           </Link>
         )}
+        {idea.tryAgain?.what === "build" && <TryAgain runId={idea.tryAgain.runId} ideaId={idea.id} why={idea.tryAgain.why} showCredits={idea.tryAgain.why === "budget"} />}
+        <DecisionHistory idea={idea} />
       </section>
     );
   }
 
-  const submit = async (choice: DecisionChoice, note?: string) => {
+  const submit = async (choice: DecisionChoice, note?: string, applyChange = false) => {
     setError(null);
     setConfirming(null);
     try {
-      const result = await decide({ id: idea.id, choice, ...(note ? { note } : {}) }).unwrap();
+      const result = await decide({ id: idea.id, choice, ...(note ? { note } : {}), ...(applyChange ? { applyChange: true } : {}) }).unwrap();
       if (result.decision?.runId) navigate(paths.run(result.decision.runId));
     } catch (e) {
       setError(describeError(e as never));
@@ -378,7 +410,16 @@ function Decisions({ idea, verdict, redLine }: { idea: Idea; verdict: Verdict; r
             </Button>
           ),
         )}
+        {/* On a "change" verdict research's own change can be accepted and built in, without another round of research (VERD-06). */}
+        {verdict.outcome === "change" && verdict.suggestedChange && !redLine && (
+          <Button size="lg" variant="outline" disabled={state.isLoading} onClick={() => void submit("build", undefined, true)}>
+            Build it with this change
+          </Button>
+        )}
       </div>
+      {verdict.outcome === "change" && verdict.suggestedChange && !redLine && (
+        <p className="text-ink-muted">“Build it with this change” builds the idea with research’s change as part of what is asked for; “Build it as described” builds your own words.</p>
+      )}
       {confirming === "change" && (
         <form onSubmit={changeSubmit} aria-label="Change the idea" className="flex max-w-prose flex-col gap-2 rounded-md border bg-surface p-4">
           <label htmlFor="change-note" className="font-medium">

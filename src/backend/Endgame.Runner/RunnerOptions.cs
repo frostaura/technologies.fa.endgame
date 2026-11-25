@@ -87,6 +87,7 @@ public sealed class RunnerOptions
         ["build"] = 20m,
         ["suggest"] = 2m,
         ["task"] = 1.5m,
+        ["change"] = 10m,
         ["conversation"] = 0.5m,
         ["review"] = 1m,
     };

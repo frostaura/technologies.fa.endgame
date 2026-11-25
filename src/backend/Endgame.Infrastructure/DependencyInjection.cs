@@ -177,6 +177,10 @@ public static class DependencyInjection
         services.AddSingleton(configuration.GetSection(EstimateOptions.SectionName).Get<EstimateOptions>() ?? new EstimateOptions());
         services.AddScoped<IEstimateHistory, Tree.EstimateHistory>();
         services.AddScoped<ResearchEstimator>();
+        services.AddSingleton(configuration.GetSection(Work.FactoryEstimateOptions.SectionName).Get<Work.FactoryEstimateOptions>() ?? new Work.FactoryEstimateOptions());
+        services.AddScoped<Work.FactoryEstimates>();
+        services.AddScoped<Work.ChangeService>();
+        services.AddScoped<Work.RetryService>();
         return services;
     }
 

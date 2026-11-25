@@ -28,14 +28,44 @@ public sealed class ConversationWorkflow : IWorkflow
         ArgumentNullException.ThrowIfNull(run);
         var question = Json.Str(run.OwnerMessage(), "text") ?? run.Run.Title;
         var earlier = await EarlierTurnsAsync(run, cancellationToken);
+        var scope = run.Run.Scope;
         ITool[] tools =
         [
-            new ReadOrganisationTool(run.ControlPlane, run.Run.Scope),
-            new StartIdeaTool(run.ControlPlane, run.Run.Scope),
-            new AdjustSettingTool(run.ControlPlane, run.Run.Scope),
+            new ReadOrganisationTool(run.ControlPlane, scope),
+            new StartIdeaTool(run.ControlPlane, scope),
+            new ChangeAppTool(run.ControlPlane, scope),
+            new TryAgainTool(run.ControlPlane, scope),
+            new AdjustSettingTool(run.ControlPlane, scope),
         ];
+        var agent = run.Agents.Conversation(run, tools);
+        string? speaker = null;
+        if (run.Run.EmployeeId is { } employeeId)
+        {
+            // Talking to an employee is answered by that employee (TALK-05): its job, its mandate, what it remembers, its thinking power.
+            var who = await EmployeeAsync(run, employeeId, cancellationToken);
+            speaker = Json.Str(who, "name");
+            agent = AgentFactory.As(run, agent with
+            {
+                TaskType = Json.Str(who?["jobDescription"] as JsonObject, "modelTier") is { Length: > 0 } tier ? tier : agent.TaskType,
+                SystemPrompt = agent.SystemPrompt.TrimEnd() + "\n\n" + AsEmployee(who),
+            }, employeeId, await Workforce.MemoryBlockAsync(run, employeeId, scope, cancellationToken), canRemember: true, scope);
+        }
+
         var task = earlier.Length == 0 ? question : $"Earlier in this conversation:\n{earlier}\nThe owner now says:\n{question}";
-        var result = await WorkflowSupport.RunAgentAsync(run, run.Agents.Conversation(run, tools), NoWorkspace.Instance, task, cancellationToken);
+        var result = await WorkflowSupport.RunAgentAsync(run, agent, NoWorkspace.Instance, task, cancellationToken);
+        if (result.StopReason == StopReasons.BudgetExhausted && !run.Journal.Done("answered"))
+        {
+            // Said in the conversation itself, not only on the run page (TALK-15): no reply was written, and why.
+            await run.AppendAsync(HarnessEvents.Message, new JsonObject
+            {
+                ["from"] = "runner",
+                ["code"] = "budget_exhausted",
+                ["title"] = "No reply: the budget ran out",
+                ["text"] = "The credit budget ran out before a reply could be written, so nothing was answered and nothing more was charged. Top up or raise the budget, then ask again.",
+            }, cancellationToken);
+            await run.Journal.RecordAsync("answered", new JsonObject { ["budget"] = true }, cancellationToken);
+        }
+
         if (WorkflowOutcome.FromAgent(result) is { } stopped)
         {
             return stopped;
@@ -44,11 +74,41 @@ public sealed class ConversationWorkflow : IWorkflow
         var answer = result.Completed ? result.FinalText ?? "" : "I could not finish answering that. Please ask again.";
         if (!run.Journal.Done("answered"))
         {
-            await run.AppendAsync(HarnessEvents.Message, new JsonObject { ["from"] = "assistant", ["text"] = answer }, cancellationToken);
+            var said = new JsonObject { ["from"] = "assistant", ["text"] = answer };
+            if (speaker is not null)
+            {
+                said["by"] = speaker;
+                said["employeeId"] = run.Run.EmployeeId?.ToString();
+            }
+
+            await run.AppendAsync(HarnessEvents.Message, said, cancellationToken);
             await run.Journal.RecordAsync("answered", new JsonObject(), cancellationToken);
         }
 
         return result.Completed ? WorkflowOutcome.Success(OutputText.Truncate(answer, 500)) : WorkflowOutcome.Failure(answer);
+    }
+
+    private static async Task<JsonObject?> EmployeeAsync(RunContext run, Guid employeeId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return (await run.ControlPlane.EmployeeAsync(employeeId, cancellationToken))["employee"] as JsonObject;
+        }
+        catch (Harness.Model.ServiceProblemException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Who is answering, from the employee's own record: the person they are talking to hears the employee, not a general assistant.</summary>
+    public static string AsEmployee(JsonObject? employee)
+    {
+        var name = Json.Str(employee, "name") ?? "the employee";
+        var role = Json.Str(employee, "role") ?? "employee";
+        var mandate = Json.Str(employee?["jobDescription"] as JsonObject, "mandate");
+        return $"You are {name}, {role} in this organisation, and the owner is talking to you directly. Answer as {name}, in the first person, from your job and from what you remember (below)."
+            + (string.IsNullOrWhiteSpace(mandate) ? "" : $"\nYour job, as written in your job description: {mandate.Trim()}")
+            + "\nIf you learn something worth keeping for your work here, keep it with remember (at most twice).";
     }
 
     /// <summary>The previous turns, followed back through each run's parent; every read has a limit.</summary>

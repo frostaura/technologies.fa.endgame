@@ -135,7 +135,14 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
                 .SetProperty(i => i.Verdict, outcome)
                 .SetProperty(i => i.VerdictSummary, summary)
                 .SetProperty(i => i.VerdictEvidenceJson, document)
-                .SetProperty(i => i.RedLine, redLine), cancellationToken);
+                .SetProperty(i => i.RedLine, redLine)
+                // A new verdict clears the decision that led to it ("change the idea"): it is kept in the decision history,
+                // read from the research runs, and the owner decides again on this verdict (VERD-07).
+                .SetProperty(i => i.Decision, (string?)null)
+                .SetProperty(i => i.DecisionNote, (string?)null)
+                .SetProperty(i => i.DecidedBy, (Guid?)null)
+                .SetProperty(i => i.DecidedVia, (string?)null)
+                .SetProperty(i => i.DecidedAt, (DateTimeOffset?)null), cancellationToken);
         if (changed == 0)
         {
             throw EndgameProblem.Conflict("A verdict can only be recorded for an idea that is being researched.");
@@ -191,11 +198,13 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
                 $"Autonomy at {scope.Path} is 'checkpoints', so the owner decides on the verdict.");
         }
 
-        return await DecideAsync(organisationId, ideaId, decision, "Decided by auto-mode after the verdict.", null, cancellationToken, IdeaDecisions.ByAutoMode);
+        // On a "change" verdict auto-mode builds with research's change applied, and the build says so (VERD-11).
+        return await DecideAsync(organisationId, ideaId, decision, "Decided by auto-mode after the verdict.", null, cancellationToken, IdeaDecisions.ByAutoMode, applyChange: idea.Verdict == Verdicts.Change);
     }
 
     /// <summary>The owner's decision on a verdict: build, change (research again), overrule a "do not build", or drop.</summary>
-    public async Task<(IdeaView Idea, RunView? Run)> DecideAsync(Guid organisationId, Guid ideaId, string decision, string? note, Guid? by, CancellationToken cancellationToken, string via = IdeaDecisions.ByPerson)
+    /// <param name="applyChange">On a "change" verdict, build with research's suggested change as part of what is built.</param>
+    public async Task<(IdeaView Idea, RunView? Run)> DecideAsync(Guid organisationId, Guid ideaId, string decision, string? note, Guid? by, CancellationToken cancellationToken, string via = IdeaDecisions.ByPerson, bool applyChange = false)
     {
         if (!IdeaDecisions.All.Contains(decision))
         {
@@ -237,6 +246,22 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
         switch (decision)
         {
             case IdeaDecisions.Build or IdeaDecisions.Overrule:
+                var suggested = applyChange && idea.Verdict == Verdicts.Change && idea.VerdictEvidenceJson is { } evidence
+                    && JsonNode.Parse(evidence)?["suggestedChange"] is JsonValue sc && sc.TryGetValue<string>(out var change) && change.Trim().Length > 0
+                    ? change.Trim()
+                    : null;
+                if (applyChange && suggested is null)
+                {
+                    throw EndgameProblem.Conflict("There is no change from research to apply: the verdict was not 'change', or it named none.");
+                }
+
+                // What is built is the idea plus every change agreed after research: the owner's own notes, and research's when accepted (VERD-06).
+                var changes = (await OwnerChangesAsync(organisationId, ideaId, cancellationToken)).ToList();
+                if (suggested is not null)
+                {
+                    changes.Add(suggested);
+                }
+
                 idea.Status = IdeaStatuses.Building;
                 idea.Overruled = decision == IdeaDecisions.Overrule;
                 await db.SaveChangesAsync(cancellationToken);
@@ -250,6 +275,8 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
                     ["overruled"] = idea.Overruled,
                     ["note"] = idea.DecisionNote,
                     ["decidedBy"] = via,
+                    ["changes"] = new JsonArray(changes.Distinct(StringComparer.Ordinal).Select(c => (JsonNode)c).ToArray()),
+                    ["appliedChange"] = suggested,
                 })], null, by, cancellationToken);
                 await db.Ideas.Where(i => i.OrganisationId == organisationId && i.Id == ideaId)
                     .ExecuteUpdateAsync(s => s.SetProperty(i => i.BuildRunId, run.Id), cancellationToken);
@@ -274,9 +301,103 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
         return (await GetAsync(organisationId, ideaId, cancellationToken), run);
     }
 
-    private async Task<RunView> StartResearchAsync(ResolvedScope scope, IdeaRecord idea, string text, string constraints, string? change, Guid? by, CancellationToken cancellationToken, string via = "console")
+    /// <summary>The change each round of research was asked for, oldest first: what the owner wanted different after a verdict.</summary>
+    public async Task<IReadOnlyList<string>> OwnerChangesAsync(Guid organisationId, Guid ideaId, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        var research = await db.Runs.AsNoTracking().Where(r => r.OrganisationId == organisationId && r.IdeaId == ideaId && r.Kind == RunKinds.Research)
+            .OrderBy(r => r.CreatedAt).Select(r => r.Id).ToListAsync(cancellationToken);
+        var changes = new List<string>();
+        foreach (var id in research)
+        {
+            if (await OwnerMessageAsync(organisationId, id, cancellationToken) is { } owner && owner["change"] is JsonValue v && v.TryGetValue<string>(out var change)
+                && change.Trim().Length > 0 && !changes.Contains(change.Trim(), StringComparer.Ordinal))
+            {
+                changes.Add(change.Trim());
+            }
+        }
+
+        return changes;
+    }
+
+    /// <summary>A run's first message from the owner: the idea, the change asked for, what a retry carries on from.</summary>
+    public async Task<JsonObject?> OwnerMessageAsync(Guid organisationId, Guid runId, CancellationToken cancellationToken)
+    {
+        var events = await runs.ReadEventsAsync(organisationId, runId, 0, 10, cancellationToken);
+        return events.FirstOrDefault(e => e.Type == RunEventTypes.Message && e.Payload is JsonObject p && p["from"]?.GetValue<string>() == "owner")?.Payload as JsonObject;
+    }
+
+    /// <summary>
+    /// Research that failed or was cancelled, researched again (VERD-12): the same idea, constraints and change, its estimate
+    /// first in the new run's log. Only the idea's latest research, and only once — a second try of the same run is a conflict.
+    /// </summary>
+    public async Task<RunView> RetryResearchAsync(Guid organisationId, Guid ideaId, Guid failedRunId, decimal estimate, string basis, decimal? ceiling, Guid? by, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        var idea = await db.Ideas.AsNoTracking().SingleOrDefaultAsync(i => i.OrganisationId == organisationId && i.Id == ideaId, cancellationToken)
+            ?? throw EndgameProblem.NotFound("The idea");
+        if (idea.Status != IdeaStatuses.Researching || idea.ResearchRunId != failedRunId)
+        {
+            throw EndgameProblem.Conflict("Only the idea's latest research can be tried again, while no verdict has been reached.");
+        }
+
+        var owner = await OwnerMessageAsync(organisationId, failedRunId, cancellationToken);
+        var change = owner?["change"] is JsonValue v && v.TryGetValue<string>(out var c) ? c : null;
+        var scope = await scopes.ForRowAsync(idea.OrganisationId, idea.DivisionId, idea.ProjectId, idea.AppId, cancellationToken);
+        var run = await StartResearchAsync(scope, idea, idea.Text, idea.Constraints, change, by, cancellationToken, "retry", failedRunId);
+        await runs.AppendAsync(organisationId, run.Id, [new NewEvent("estimate.made", new JsonObject { ["credits"] = estimate, ["basis"] = "research", ["reason"] = basis, ["ceiling"] = ceiling })], null, by, cancellationToken);
+        return run;
+    }
+
+    /// <summary>
+    /// A build that failed, was cancelled, stopped for budget or had its plan declined, built again (CHG-03): the same owner
+    /// message, plus <c>retryOf</c>, so the Runner keeps what the earlier attempt placed, agreed and finished. Its estimate — for
+    /// what is left — comes first in the new run's log.
+    /// </summary>
+    public async Task<RunView> RetryBuildAsync(Guid organisationId, Guid ideaId, Guid failedRunId, decimal estimate, string basis, Guid? by, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        var idea = await db.Ideas.AsNoTracking().SingleOrDefaultAsync(i => i.OrganisationId == organisationId && i.Id == ideaId, cancellationToken)
+            ?? throw EndgameProblem.NotFound("The idea");
+        if (idea.Status != IdeaStatuses.Building || idea.BuildRunId != failedRunId)
+        {
+            throw EndgameProblem.Conflict("Only the idea's latest build can be built again.");
+        }
+
+        var failed = await db.Runs.AsNoTracking().SingleAsync(r => r.OrganisationId == organisationId && r.Id == failedRunId, cancellationToken);
+        var owner = (await OwnerMessageAsync(organisationId, failedRunId, cancellationToken))?.DeepClone() as JsonObject ?? new JsonObject { ["from"] = "owner", ["text"] = idea.Text, ["constraints"] = idea.Constraints };
+        owner["retryOf"] = failedRunId.ToString();
+        owner["decidedBy"] = by is null ? "conversation" : IdeaDecisions.ByPerson;
+        var scope = await scopes.ForRowAsync(idea.OrganisationId, idea.DivisionId, idea.ProjectId, idea.AppId, cancellationToken);
+        var run = await runs.CreateAsync(scope, RunKinds.Build, failed.Title, null, idea.Id, null, failed.ParentRunId, by, cancellationToken);
+        session.UseOrganisation(organisationId);
+        var moved = await db.Ideas.Where(i => i.OrganisationId == organisationId && i.Id == ideaId && i.BuildRunId == failedRunId)
+            .ExecuteUpdateAsync(u => u.SetProperty(i => i.BuildRunId, run.Id), cancellationToken);
+        if (moved == 0)
+        {
+            await CloseDuplicateAsync(organisationId, run.Id, cancellationToken);
+            throw EndgameProblem.Conflict("This build was already started again.");
+        }
+
+        await runs.AppendAsync(organisationId, run.Id, [
+            new NewEvent(RunEventTypes.Message, owner),
+            new NewEvent("estimate.made", new JsonObject { ["credits"] = estimate, ["basis"] = "retry", ["reason"] = basis }),
+        ], null, by, cancellationToken);
+        return run;
+    }
+
+    private async Task<RunView> StartResearchAsync(ResolvedScope scope, IdeaRecord idea, string text, string constraints, string? change, Guid? by, CancellationToken cancellationToken, string via = "console", Guid? retryOf = null)
     {
         var run = await runs.CreateAsync(scope, RunKinds.Research, $"Research: {Title(text)}", null, idea.Id, null, idea.ResearchRunId, by, cancellationToken);
+        session.UseOrganisation(scope.OrganisationId);
+        var moved = await db.Ideas.Where(i => i.OrganisationId == scope.OrganisationId && i.Id == idea.Id && (retryOf == null || i.ResearchRunId == retryOf))
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.ResearchRunId, run.Id), cancellationToken);
+        if (moved == 0)
+        {
+            await CloseDuplicateAsync(scope.OrganisationId, run.Id, cancellationToken);
+            throw EndgameProblem.Conflict("This research was already started again.");
+        }
+
         await runs.AppendAsync(scope.OrganisationId, run.Id, [new NewEvent(RunEventTypes.Message, new JsonObject
         {
             ["from"] = "owner",
@@ -284,12 +405,14 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
             ["constraints"] = constraints,
             ["change"] = change,
             ["via"] = via,
+            ["retryOf"] = retryOf?.ToString(),
         })], null, by, cancellationToken);
-        session.UseOrganisation(scope.OrganisationId);
-        await db.Ideas.Where(i => i.OrganisationId == scope.OrganisationId && i.Id == idea.Id)
-            .ExecuteUpdateAsync(s => s.SetProperty(i => i.ResearchRunId, run.Id), cancellationToken);
         return run;
     }
+
+    /// <summary>A second attempt that lost the race to the first: closed at once, before it was given any work.</summary>
+    private Task CloseDuplicateAsync(Guid organisationId, Guid runId, CancellationToken cancellationToken) =>
+        runs.AppendAsync(organisationId, runId, [new NewEvent(RunEventTypes.RunFinished, new JsonObject { ["outcome"] = RunStatuses.Cancelled, ["reason"] = "Another attempt started first." })], null, null, cancellationToken);
 
     private static string Title(string text)
     {

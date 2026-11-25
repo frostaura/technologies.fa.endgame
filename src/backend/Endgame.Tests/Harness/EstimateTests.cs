@@ -84,6 +84,12 @@ public sealed class EstimateTests
         Assert.StartsWith("Start this work? Estimated 1.5 credits.", Assert.Single(cp.Approvals), StringComparison.Ordinal);
         Assert.Equal(status, cp.Run["status"]!.GetValue<string>());
         Assert.Equal(approve, model.Calls.Count > 0);
+        // Declining the start stops the work, and the console says so rather than "the work carries on" (RUN-07).
+        Assert.Equal("stops", cp.ApprovalsAsked.Single()["onDecline"]!.GetValue<string>());
+        if (!approve)
+        {
+            Assert.Contains("You declined to start this work", cp.Events.Last(e => e.Type == "message" && e.Payload["title"]?.GetValue<string>() == "Stopped").Payload["text"]!.GetValue<string>(), StringComparison.Ordinal);
+        }
     }
 
     [Fact]

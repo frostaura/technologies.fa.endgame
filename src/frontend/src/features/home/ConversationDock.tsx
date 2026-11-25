@@ -1,15 +1,18 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useActiveTree } from "@/lib/useActiveOrganisation";
 import { Avatar } from "@/components/Avatar";
 import { Link } from "@/components/Link";
 import { Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
+import { formatCredits } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths, useLocation } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { useGetConversationQuery, useStartConversationMutation } from "@/store/api";
+import { useEstimateMessageQuery, useGetConversationQuery, useGetMeQuery, useStartConversationMutation } from "@/store/api";
 import type { ConversationMessage, Tree } from "@/store/types";
 import { conversationKey, messageQueued, messageSettled, type ChatMessage, type Selection } from "@/store/uiSlice";
+import { ApprovalCard } from "../runs/ApprovalCard";
 import { deriveRun, isTerminal } from "../runs/runModel";
 import { useRunStream } from "../runs/useRunStream";
 import { activeWork } from "./treeModel";
@@ -33,6 +36,11 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
   const inputId = useId();
   const name = selection.trail[selection.trail.length - 1] ?? "";
   const narrowable = selection.kind === "organisation";
+  const me = useGetMeQuery(undefined);
+  const myName = me.data?.user.displayName ?? null;
+  // What a message can cost at most, shown before it is sent (CLAUDE.md rule 11).
+  const estimateQuery = useEstimateMessageQuery({ scope: selection.scope, ...(selection.employeeId ? { employeeId: selection.employeeId } : {}) });
+  const estimate = viewOf(estimateQuery);
   // Who is working: everyone, or only the employee the conversation is with.
   const busy = activeWork(tree).filter((w) => !selection.employeeId || w.id === selection.employeeId);
   const logRef = useRef<HTMLDivElement>(null);
@@ -69,7 +77,13 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
         <div className="flex min-w-0 flex-col">
           <h2 className="truncate font-sans text-base font-semibold tracking-normal">Talking to {name}</h2>
           <span className="text-xs text-ink-muted">
-            {narrowable ? "Select a division, project or employee to narrow this." : onEmployeePage ? `Only ${name} hears this, and answers from what it knows.` : "Select the organisation band to talk to everything again."}
+            {narrowable
+              ? "Select a division, project or employee to narrow this."
+              : onEmployeePage
+                ? `Only ${name} hears this, and answers from its job and what it remembers.`
+                : selection.kind === "app"
+                  ? `About ${name} only: ask about it, or ask for a change to it.`
+                  : "Select the organisation band to talk to everything again."}
           </span>
           {selection.kind === "employee" && selection.employeeId && !onEmployeePage && (
             <Link href={paths.employee(selection.employeeId)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
@@ -106,10 +120,10 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
           </p>
         )}
         {earlier.map((turn) => (
-          <EarlierTurn key={turn.key} turn={turn} />
+          <EarlierTurn key={turn.key} turn={turn} myName={myName} answerer={selection.kind === "employee" ? name : null} />
         ))}
         {messages.map((m) => (
-          <Exchange key={m.id} message={m} onRetry={() => void send(m.text)} />
+          <Exchange key={m.id} message={m} onRetry={() => void send(m.text)} answerer={selection.kind === "employee" ? name : null} />
         ))}
         {busy.slice(0, 2).map((w) => (
           <div key={w.name} className="flex items-center gap-2.5 text-sm text-ink-muted">
@@ -132,10 +146,18 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
             autoComplete="off"
             className="min-h-12 min-w-0 flex-1 rounded-sm border border-border-strong bg-surface px-4"
           />
-          <Button type="submit" className="min-h-12 px-5" disabled={draft.trim().length === 0}>
+          <Button type="submit" className="min-h-12 px-5" disabled={draft.trim().length === 0 || estimate.kind === "loading"}>
             Send
           </Button>
         </div>
+        <p data-testid="message-estimate" className="text-xs text-ink-muted" aria-live="polite">
+          {estimate.kind === "loading" && "Working out what a message costs…"}
+          {estimate.kind === "loaded" &&
+            (estimate.data.ceiling !== null
+              ? `A message here costs at most ${formatCredits(estimate.data.ceiling)}, usually about ${formatCredits(estimate.data.credits)}; it is charged at what it actually costs.`
+              : `A message here is estimated at ${formatCredits(estimate.data.credits)}.`)}
+          {estimate.kind === "failed" && `What a message costs could not be worked out: ${estimate.reason} Its cost is still held before each step and shown with the reply.`}
+        </p>
       </form>
     </section>
   );
@@ -154,32 +176,63 @@ interface Turn {
   runId: string;
   from: string;
   owner: boolean;
+  by: string | null;
+  code: string | null;
   texts: string[];
 }
 
-/** Consecutive messages from the same side of the same run read as one bubble. */
+/** Consecutive messages from the same person on the same run read as one bubble. */
 function groupTurns(messages: ConversationMessage[]): Turn[] {
   const turns: Turn[] = [];
   for (const m of messages) {
     const owner = m.from === "owner";
     const last = turns[turns.length - 1];
-    if (last && last.runId === m.runId && last.owner === owner && last.from === m.from) last.texts.push(m.text);
-    else turns.push({ key: `${m.runId}-${m.seq}`, runId: m.runId, from: m.from, owner, texts: [m.text] });
+    if (last && last.runId === m.runId && last.owner === owner && last.from === m.from && last.by === m.by) last.texts.push(m.text);
+    else turns.push({ key: `${m.runId}-${m.seq}`, runId: m.runId, from: m.from, owner, by: m.by, code: m.code, texts: [m.text] });
   }
   return turns;
 }
 
-function EarlierTurn({ turn }: { turn: Turn }) {
+/** Who a message is from, by name: the conversation at a level is shared by everyone there (TALK-11). */
+function Sender({ name, mine = false }: { name: string; mine?: boolean }) {
+  return <span className={cn("text-xs font-semibold text-ink-muted", mine && "self-end")}>{name}</span>;
+}
+
+function EarlierTurn({ turn, myName, answerer }: { turn: Turn; myName: string | null; answerer: string | null }) {
   if (turn.owner) {
-    return <p className="max-w-bubble self-end whitespace-pre-line rounded-md rounded-br-xs bg-primary px-4 py-2.5 text-primary-ink">{turn.texts.join("\n\n")}</p>;
+    const mine = turn.by === null || turn.by === myName;
+    return (
+      <div className="flex flex-col gap-1 self-end">
+        <Sender name={mine ? "You" : (turn.by ?? "Someone")} mine />
+        <p className="max-w-bubble whitespace-pre-line rounded-md rounded-br-xs bg-primary px-4 py-2.5 text-primary-ink">{turn.texts.join("\n\n")}</p>
+      </div>
+    );
   }
+  if (turn.from === "runner") return <Notice text={turn.texts.join(" ")} budget={turn.code === "budget_exhausted"} />;
   return (
-    <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">
-      {turn.texts.map((text, i) => (
-        <p key={i} className="whitespace-pre-line">
-          {text}
-        </p>
-      ))}
+    <div className="flex flex-col gap-1">
+      <Sender name={turn.by ?? answerer ?? "Endgame"} />
+      <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">
+        {turn.texts.map((text, i) => (
+          <p key={i} className="whitespace-pre-line">
+            {text}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Endgame's own word in the conversation: no reply was written, and why, with the way to more credits when it was the budget. */
+function Notice({ text, budget }: { text: string; budget: boolean }) {
+  return (
+    <div role="status" className="flex max-w-reply flex-col gap-2 rounded-md border border-attention-line bg-attention-tint px-4 py-3 text-sm text-attention-text">
+      {text}
+      {budget && (
+        <Link href={paths.credits()} className="self-start rounded-xs font-semibold underline">
+          See credits
+        </Link>
+      )}
     </div>
   );
 }
@@ -198,10 +251,13 @@ export function TypingDots({ label }: { label?: string }) {
   );
 }
 
-function Exchange({ message, onRetry }: { message: ChatMessage; onRetry: () => void }) {
+function Exchange({ message, onRetry, answerer }: { message: ChatMessage; onRetry: () => void; answerer: string | null }) {
   return (
     <>
-      <p className={cn("max-w-bubble self-end rounded-md rounded-br-xs bg-primary px-4 py-2.5 text-primary-ink", message.state === "sending" && "opacity-70")}>{message.text}</p>
+      <div className="flex flex-col gap-1 self-end">
+        <Sender name="You" mine />
+        <p className={cn("max-w-bubble rounded-md rounded-br-xs bg-primary px-4 py-2.5 text-primary-ink", message.state === "sending" && "opacity-70")}>{message.text}</p>
+      </div>
       {message.state === "failed" && (
         <div role="alert" className="flex flex-col gap-2 self-end rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           Not sent: {message.error}
@@ -210,33 +266,47 @@ function Exchange({ message, onRetry }: { message: ChatMessage; onRetry: () => v
           </button>
         </div>
       )}
-      {message.runId && <Replies runId={message.runId} />}
+      {message.runId && <Replies runId={message.runId} answerer={answerer} />}
     </>
   );
 }
 
-function Replies({ runId }: { runId: string }) {
+function Replies({ runId, answerer }: { runId: string; answerer: string | null }) {
   const [retry, setRetry] = useState(0);
   const log = useRunStream(runId, retry);
   const run = deriveRun(log.events);
   const done = isTerminal(run.status);
-  // The run's log opens with the owner's own message; it is already drawn as their bubble.
-  const replies = run.messages.filter((m) => m.from !== "owner");
+  // The run's log opens with the owner's own message; it is already drawn as their bubble. Endgame's own notices stand apart.
+  const replies = run.messages.filter((m) => m.from !== "owner" && m.from !== "runner");
+  const notices = run.messages.filter((m) => m.from === "runner");
+  const budget = log.events.some((e) => e.type === "message" && e.payload.code === "budget_exhausted");
+  const pending = run.approvals.filter((a) => a.answer === null);
+  const by = log.events.map((e) => (e.type === "message" && e.payload.from === "assistant" && typeof e.payload.by === "string" ? e.payload.by : null)).find((n) => n !== null) ?? answerer;
   return (
     <>
       {replies.length > 0 && (
-        <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">
-          {replies.map((m) => (
-            <p key={m.seq} className="whitespace-pre-line">
-              {m.text}
-            </p>
-          ))}
+        <div className="flex flex-col gap-1">
+          <Sender name={by ?? "Endgame"} />
+          <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">
+            {replies.map((m) => (
+              <p key={m.seq} className="whitespace-pre-line">
+                {m.text}
+              </p>
+            ))}
+          </div>
         </div>
       )}
+      {notices.map((m) => (
+        <Notice key={m.seq} text={m.text} budget={budget} />
+      ))}
+      {/* The conversation's own checkpoints are answered here, in the conversation (TALK-07). */}
+      {pending.map((a) => (
+        <ApprovalCard key={a.id} runId={runId} approval={a} compact />
+      ))}
       {!done && log.stream !== "failed" && (
         <div className="flex items-center gap-2.5 text-sm text-ink-muted">
           <TypingDots />
-          {log.stream === "reconnecting" ? "Reconnecting…" : "Working on it"}
+          {log.stream === "reconnecting" ? "Reconnecting…" : pending.length > 0 ? "Waiting for your answer" : "Working on it"}
         </div>
       )}
       {log.stream === "failed" && (
@@ -254,4 +324,14 @@ function Replies({ runId }: { runId: string }) {
       )}
     </>
   );
+}
+
+/**
+ * The conversation scoped to one app (TALK-04), for the app's own page: the same dock, about that app only. It may answer, start
+ * an idea, ask for a change to the app or try stopped work again — each only once the person approves it here.
+ */
+export function AppConversation({ scope, trail }: { scope: string; trail: string[] }) {
+  const tree = useActiveTree();
+  if (!tree.data) return null;
+  return <ConversationDock tree={tree.data} selection={{ scope, kind: "app", trail }} />;
 }
