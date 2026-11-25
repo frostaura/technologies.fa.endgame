@@ -19,7 +19,7 @@ describe("formatNumber", () => {
 
 describe("possessive", () => {
   it("adds an apostrophe and s, or only the apostrophe after an s", () => {
-    expect(possessive("Northwind")).toBe("Northwind’s");
-    expect(possessive("Northfield Tutors")).toBe("Northfield Tutors’");
+    expect(possessive("Acme")).toBe("Acme’s");
+    expect(possessive("Harbour Tutors")).toBe("Harbour Tutors’");
   });
 });

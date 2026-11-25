@@ -312,3 +312,79 @@ describe("live work", () => {
     expect(w.ideas.length).toBe(ideas + 1);
   });
 });
+
+describe("the workforce, credits and God mode as the academy shows them (S4)", () => {
+  it("works out a hire's room from the tightest cap on its chain, on every read", async () => {
+    const w = as("owner", "hire-pending");
+    const lark = (await call(w, "GET", `hires/${w.hires.find((h) => h.name === "Lark")?.id}`)).body as { headroomCredits: number; withinBudget: boolean };
+    // Technologies: a cap of 450 with 360.9 spent beneath it, tighter than the balance and overdraft.
+    expect(lark.headroomCredits).toBe(89.1);
+    expect(lark.withinBudget).toBe(false);
+  });
+
+  it("refuses to hire under a manager who has been let go", async () => {
+    const w = as("owner", "hire-manager-gone");
+    const r = await call(w, "POST", `hires/${w.hires.find((h) => h.name === "Lark")?.id}/accept`, {});
+    expect(r.status).toBe(400);
+    expect(detail(r)).toBe("reportsTo names an employee of this organisation who is on the payroll.");
+  });
+
+  it("finishes a contractor: its lesson goes to its briefer, and the recurring role is hired in auto-mode", () => {
+    const w = as("owner", "contractor-finishes");
+    seek(w, "s4:contractor-finished", () => undefined);
+    expect(w.employees.find((e) => e.kind === "contractor" && e.role === "Data contractor")?.status).toBe("released");
+    expect(w.memory.some((m) => m.title === "Empty courts cluster on Tuesday and Wednesday" && m.sourceRunId)).toBe(true);
+    const promotion = w.hires.find((h) => h.trigger === "promotion");
+    expect(promotion?.reason).toMatch(/^7 Data contractor contractors were briefed here in the last 30 days, costing 56.7 credits\./);
+    expect(promotion?.status).toBe("accepted");
+  });
+
+  it("keeps a removed memory entry in its employee's change log, newest first", async () => {
+    const w = as("owner", "memory-to-tidy");
+    const kasper = w.employees.find((e) => e.name === "Kasper");
+    const changes = (await call(w, "GET", `employees/${kasper?.id}/memory/changes`)).body as { action: string; at: string }[];
+    expect(changes.some((c) => c.action === "removed")).toBe(true);
+    expect([...changes].sort((a, b) => b.at.localeCompare(a.at))).toEqual(changes);
+  });
+
+  it("logs a new entry when an operator comes back after the visit window, and none within it", async () => {
+    const w = as("operator", "god-mode");
+    const entries = () => w.operatorLog.filter((x) => x.organisation === ORG && x.action === "organisation.entered").length;
+    const before = entries();
+    await call(w, "GET", `hires?scope=${ORG}`);
+    expect(entries()).toBe(before + 1);
+    await call(w, "GET", `hires?scope=${ORG}`);
+    expect(entries()).toBe(before + 1);
+    w.operatorSeen = { [`${PEOPLE.operator.id}:${ORG}`]: new Date(Date.now() - 11 * 60_000).toISOString() };
+    for (const x of w.operatorLog) if (x.action === "organisation.entered") x.at = new Date(Date.now() - 11 * 60_000).toISOString();
+    await call(w, "GET", `hires?scope=${ORG}`);
+    expect(entries()).toBe(before + 2);
+  });
+
+  it("writes a price change to every organisation's log and reprices every app", async () => {
+    const w = as("operator", "god-mode");
+    const app = async () => ((await call(w, "GET", `apps/${IDS.tableBookings}`)).body as { runningCost: { prices: string; alwaysOn: { credits: number } } }).runningCost;
+    const before = await app();
+    expect(before.prices).toMatch(/^Today's prices: 0\.2 credits an awake hour/);
+    const pricing = { ...w.pricing.pricing, hosting: { ...w.pricing.pricing.hosting, usdPerAwakeHour: 0.004 } };
+    expect((await call(w, "PUT", "operator/pricing", pricing as unknown as Record<string, unknown>)).status).toBe(200);
+    expect(w.organisations.every((o) => w.operatorLog.some((x) => x.organisation === o.slug && x.action === "pricing.changed"))).toBe(true);
+    const after = await app();
+    expect(after.prices).toMatch(/^Today's prices: 0\.4 credits an awake hour/);
+    expect(after.alwaysOn.credits).toBeGreaterThan(before.alwaysOn.credits);
+  });
+
+  it("closes a request answered by a top-up with its note, on the record", async () => {
+    const w = as("operator", "god-mode");
+    const request = w.topUpRequests.find((r) => r.status === "open");
+    await call(w, "POST", "credits/top-ups", { organisation: request?.organisation, credits: 1500, note: "Answering the request", idempotencyKey: "k-s4", requestId: request?.id });
+    expect(request?.closeNote).toBe("Answering the request");
+    expect(w.operatorLog.some((x) => x.action === "topup_request.fulfilled" && x.organisation === request?.organisation)).toBe(true);
+  });
+
+  it("refuses one of Endgame's own names as the control plane does", async () => {
+    const r = await call(as("operator", "god-mode"), "POST", "organisations", { name: "Endgame", slug: "endgame", ownerEmail: "ana@harbour.example", description: "Tide tables for a harbour." });
+    expect(r.status).toBe(409);
+    expect(detail(r)).toBe("'endgame' cannot name an organisation: it is one of Endgame's own names.");
+  });
+});

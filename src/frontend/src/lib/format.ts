@@ -13,7 +13,7 @@ export function formatCredits(n: number): string {
   return `${formatNumber(n)} ${n === 1 ? "credit" : "credits"}`;
 }
 
-/** "Northwind’s", and "Northfield Tutors’" for a name that already ends in s. */
+/** "Acme’s", and "Harbour Tutors’" for a name that already ends in s. */
 export function possessive(name: string): string {
   return /s$/i.test(name.trim()) ? `${name}’` : `${name}’s`;
 }
