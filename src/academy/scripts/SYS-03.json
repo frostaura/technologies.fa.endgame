@@ -1,0 +1,88 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SYS-03",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/system",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Check again",
+        "note": "System status, with Check again. On a first load it reads “Checking every service…”."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "[data-state='healthy']",
+        "note": "The summary: all services healthy, and when they were checked."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Services']",
+        "note": "One card for each service, in the platform's own order, each with how long it took to answer."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Check again"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Check again",
+        "note": "It asks again every 10 seconds while you look; Check again asks now."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A service that does not answer",
+      "persona": "owner",
+      "scenario": "status-unhealthy",
+      "start": "/system",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "1 of 8 services unhealthy",
+            "note": "The whole is healthy only if every part is."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "highlight": {
+            "selector": "[data-service='runner']",
+            "note": "The Runner's card says Unhealthy, and why: its probe's own words."
+          }
+        }
+      ]
+    }
+  ]
+}

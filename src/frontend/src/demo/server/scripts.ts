@@ -200,7 +200,9 @@ defineScript("build", (world, run) => {
   const divisionPath = existingProject ? existingProject.path.split("/").slice(0, 2).join("/") : `${org}/${story.division.slug}`;
   const projectPath = existingProject?.path ?? `${divisionPath}/${story.project}`;
   const appPath = `${projectPath}/web`;
-  const divisionExists = !!node(world, divisionPath);
+  // What stood before this run: the script is rebuilt from the world, which its own placement changes.
+  const before = (n: { createdAt: string } | undefined) => !!n && n.createdAt < run.run.createdAt;
+  const divisionExists = before(node(world, divisionPath));
   const s = new Script();
   const eng = { key: `${projectPath}:engineer`, name: pick(["Arlo", "Juniper", "Felix", "Rosa"], projectPath), role: "Software engineer" };
   const qa = { key: `${projectPath}:qa`, name: pick(["Bea", "Otto", "Nell", "Ivo"], projectPath), role: "QA engineer" };
@@ -214,7 +216,7 @@ defineScript("build", (world, run) => {
   s.wait(200).event("message", { data: { autonomy: setting(world, projectPath, "autonomy")?.value ?? "auto", estimate: 120, headroom: 4200 }, kind: "workflow.step", step: "estimate.gate", agent: "workflow" });
   s.wait(500).event("message", {
     from: "builder",
-    text: divisionExists || existingProject ? `${story.name} will live in ${node(world, divisionPath)?.name ?? story.division.name}, as the project ${story.name}.` : `${story.name} will live in a new division, ${story.division.name}, as the project ${story.name}.`,
+    text: divisionExists || before(existingProject) ? `${story.name} will live in ${node(world, divisionPath)?.name ?? story.division.name}, as the project ${story.name}.` : `${story.name} will live in a new division, ${story.division.name}, as the project ${story.name}.`,
     title: "Placed",
     milestone: "placed",
   });

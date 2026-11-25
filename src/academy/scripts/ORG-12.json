@@ -1,0 +1,25 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-12",
+  "persona": "owner",
+  "scenario": "empty-organisation",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Northwind has nothing in it yet",
+        "note": "An organisation with no divisions: the band, “needs you”, and in place of the chart, a way to the first idea."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "main",
+        "note": "No conversation panel: it needs at least one division."
+      }
+    }
+  ]
+}

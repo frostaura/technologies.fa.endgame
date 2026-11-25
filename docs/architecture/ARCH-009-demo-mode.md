@@ -80,6 +80,7 @@ temporarily unavailable".
 | `signed-out` | Nobody | |
 | `first-run` | Kit Marlow, signed in on a fresh install with no organisation | |
 | `two-organisations` | Kai Moreno, a Builder at Northwind and an Admin at Quayside Bakery (the organisation switcher) | `two-orgs` |
+| `no-role` | Sol Hart, signed in with a passkey, no role in any organisation once organisations exist | |
 
 A persona switch keeps the world; a scenario switch builds a new one.
 
@@ -109,6 +110,12 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `employee-released` | An employee who was let go, memory archived | `employee-let-go` |
 | `two-organisations` | A person in two organisations | |
 | `screening-offline` | God mode with no model to screen a new organisation (it needs the operator's own decision) | |
+| `operator-no-organisation` | A FrostAura operator who holds no role in any organisation: home is the God-mode panel | |
+| `tree-unreachable`, `tree-refresh-fails` | Home cannot reach the control plane once (then "Try again" works); or it loads, then every refresh fails | |
+| `ontology-unreachable` | The organisation graph cannot be read once | |
+| `notifications-unreachable`, `notifications-refresh-fails` | The feed cannot be read once; or it loads, then every refresh fails | |
+| `status-unhealthy`, `status-no-services`, `status-unreachable`, `status-refresh-fails` | System status with the Runner not answering; with no services at all; unreadable once; read once, then failing | |
+| `session-unreachable` | The session check cannot reach the control plane once | |
 | `s1-app-public`, `s1-app-private`, `s1-app-not-published` | Tutor Match, as a visitor meets it: public, private, or with no published version yet | |
 | `s1-app-unshared`, `s1-app-made-private` | Court booking after an Admin stopped sharing it, or made it private (for the `end-user` persona) | |
 | `s1-session-check-fails` | The first session check gets a bare 503, as from a gateway with no control plane behind it | |
@@ -124,6 +131,13 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 Scenarios are kept one file per flow file, `world/scenarios.s<n>.ts`, each registered by one
 side-effect import in `host.ts`. Not in `scenarios.ts`: a scenario file calls its `defineScenario`,
 so importing it there is a cycle whose `const` map is not yet initialised.
+
+The academy's organisation, tree, notification and system flows use `world/scenarios.s2.ts`. A
+failed read there is `World.outages`: a request by method and route pattern, answered normally
+`skip` times, then failing `times` times (always, when unset) — as a problem body with `status`, or,
+with none, as a control plane that cannot be reached (the fetch rejects, so the console says "could
+not be reached"). System status follows `World.systemStatus` (services unhealthy in their probe's
+own words, or none), with the server's eight services in `StatusOptions.Probes` order.
 
 ### Named moments (`clock { seek }`)
 

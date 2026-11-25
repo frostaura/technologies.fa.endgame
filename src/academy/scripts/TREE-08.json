@@ -1,0 +1,64 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-08",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/tree?scope=northwind/learning/course-notes/web",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Archive Course Notes"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Archive Course Notes?",
+        "note": "For an app: it stops being served; its code, data and history are kept."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes, archive Course Notes"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Course Notes is archived. Nothing in it was deleted.",
+        "note": "Archived."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "selector": "ul[aria-label='Apps in Course Notes'] li",
+        "note": "On the chart its row reads only Archived."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/tree?scope=northwind/learning/course-notes/web",
+      "act": [
+        {
+          "click": {
+            "text": "Reactivate Course Notes"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Course Notes is active again.",
+        "note": "It had been published, so it comes back asleep and wakes on its next visit."
+      }
+    }
+  ]
+}

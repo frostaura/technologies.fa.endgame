@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-11",
+  "persona": "owner",
+  "scenario": "build-plan",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Kasper · Software engineer",
+        "note": "An employee chip: name and role, with a badge such as Paused or Nothing to do where it applies."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Rosa: building",
+        "note": "A working employee gets a typing line with what they are doing now."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "contractor",
+        "note": "Contractors are one dashed, spinning line: how many, and what they are doing."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Kasper · Software engineer"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Kasper",
+        "note": "Selecting an employee's chip scopes the conversation to that employee."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An employee with nothing to do",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Ruth · Software engineer",
+            "note": "Ruth has had no work for over the idle limit: the badge Nothing to do."
+          }
+        }
+      ]
+    }
+  ]
+}

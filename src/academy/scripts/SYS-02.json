@@ -1,0 +1,39 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SYS-02",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/system",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Normal"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "System status is technical detail",
+        "note": "In normal mode, system status is offered, not shown: it names the services Endgame runs on."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Switch to technical mode"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Every service, asked directly whether it is healthy.",
+        "note": "The button switches mode and shows system status in place."
+      }
+    }
+  ]
+}

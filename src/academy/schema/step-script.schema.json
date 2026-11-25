@@ -35,7 +35,8 @@
         "division-admin",
         "invited",
         "first-run",
-        "two-organisations"
+        "two-organisations",
+        "no-role"
       ]
     },
     "scenario": {
@@ -87,7 +88,36 @@
         "s4-below-zero",
         "s4-top-ups-waiting",
         "s4-operator-log",
-        "s4-operator-log-empty"
+        "s4-operator-log-empty",
+        "default",
+        "empty-organisation",
+        "research-running",
+        "research-verdict",
+        "verdict-do-not-build",
+        "verdict-red-line",
+        "build-plan",
+        "build-sent-back",
+        "build-security-finding",
+        "build-published",
+        "build-waiting-on-plan",
+        "build-failed",
+        "app-busy",
+        "app-never-measured",
+        "budget-spent",
+        "manage-tree",
+        "archived-division",
+        "employee-let-go",
+        "tree-unreachable",
+        "tree-refresh-fails",
+        "ontology-unreachable",
+        "notifications-unreachable",
+        "notifications-refresh-fails",
+        "status-unhealthy",
+        "status-no-services",
+        "status-unreachable",
+        "status-refresh-fails",
+        "session-unreachable",
+        "operator-no-organisation"
       ]
     },
     "start": {
@@ -172,8 +202,11 @@
           ],
           "properties": {
             "seek": {
-              "type": "number",
-              "minimum": 0
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Script milliseconds to move every live run forward by, or a named moment such as \"research:verdict\" (ARCH-009)."
             }
           }
         }
@@ -264,9 +297,16 @@
           ],
           "properties": {
             "wait": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 10000
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                {
+                  "$ref": "#/definitions/target"
+                }
+              ]
             }
           }
         },
@@ -571,7 +611,7 @@
           "items": {
             "$ref": "#/definitions/step"
           },
-          "description": "Numbered 1, 2, … within the variation; each step's note says what it shows."
+          "description": "Numbered 1, 2, \u2026 within the variation; each step's note says what it shows."
         }
       }
     }

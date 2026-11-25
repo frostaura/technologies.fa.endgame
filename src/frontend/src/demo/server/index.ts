@@ -54,6 +54,19 @@ export async function dispatch(world: World, method: string, path: string, query
   }
 }
 
+/** A scenario's outage for this request, if it is one that should fail now (`World.outages`). */
+export function outage(world: World, method: string, path: string): Reply | "unreachable" | null {
+  const hit = match(method, path);
+  const o = hit && world.outages?.find((x) => x.method === method && x.pattern === hit.route.pattern);
+  if (!o) return null;
+  const n = o.served ?? 0;
+  o.served = n + 1;
+  const skip = o.skip ?? 0;
+  if (n < skip || (o.times !== undefined && n >= skip + o.times)) return null;
+  if (o.status === undefined) return "unreachable";
+  return problem(o.status, "unavailable", "Service unavailable", o.detail ?? "The control plane could not answer just now.");
+}
+
 export function createControlPlane(options: ControlPlaneOptions): ControlPlane {
   const base = options.base.replace(/\/$/, "");
   const prefix = new URL(base).pathname.replace(/\/$/, "");
@@ -78,7 +91,9 @@ export function createControlPlane(options: ControlPlaneOptions): ControlPlane {
     }
     const world = options.world();
     await wait(options.latency?.(request.method) ?? 0);
-    const reply = await dispatch(world, request.method, path, url.searchParams, body);
+    const down = outage(world, request.method, path);
+    if (down === "unreachable") return Promise.reject(new TypeError("Failed to fetch"));
+    const reply = down ?? (await dispatch(world, request.method, path, url.searchParams, body));
     const tags = world.changed.splice(0);
     options.afterChange(tags);
     return json(reply);

@@ -1,0 +1,57 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "NOTE-02",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "button[aria-label^='Notifications']"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "[role='dialog'][aria-label='Notifications']",
+        "note": "On anything wider than a phone, the bell opens the latest eight in place, with See all."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "press": "Escape"
+        }
+      ],
+      "highlight": {
+        "selector": "button[aria-label^='Notifications']",
+        "note": "Escape, or a click outside, closes it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "button[aria-label^='Notifications']"
+          }
+        },
+        {
+          "click": {
+            "text": "See all"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What needs you, newest first.",
+        "note": "See all, or following a notice, closes it and goes on."
+      }
+    }
+  ]
+}

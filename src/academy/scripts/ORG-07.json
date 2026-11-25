@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "ORG-07",
   "persona": "owner",
-  "scenario": "established",
+  "scenario": "quiet",
   "start": "/",
   "steps": [
     {
@@ -10,7 +10,7 @@
       "kind": "demo",
       "highlight": {
         "text": "Whole organisation",
-        "note": "On load the selection is the whole organisation."
+        "note": "On load the selection is the whole organisation: the breadcrumb and the conversation say so."
       }
     },
     {
@@ -25,7 +25,7 @@
       ],
       "highlight": {
         "text": "Technologies",
-        "note": "The selected division gains a blue ring."
+        "note": "Select a division header, a project's name or an employee chip. The selected card gains a blue ring."
       }
     },
     {
@@ -39,16 +39,16 @@
         }
       ],
       "highlight": {
-        "text": "Court booking",
-        "note": "The breadcrumb becomes the trail; every step but the last selects that level."
+        "selector": "nav[aria-label='Where you are']",
+        "note": "The breadcrumb becomes the trail: Northwind / Technologies / Court booking. Every step but the last selects that level."
       }
     },
     {
       "step": 4,
       "kind": "demo",
       "highlight": {
-        "text": "Talking to",
-        "note": "The dock re-scopes to what you selected and fetches its history."
+        "text": "Talking to Court booking",
+        "note": "The conversation re-scopes to what is selected, and the shortcut row follows it."
       }
     },
     {
@@ -57,13 +57,32 @@
       "act": [
         {
           "click": {
-            "text": "Northwind"
+            "selector": "section[aria-label='Organisation'] h1 button"
           }
         }
       ],
       "highlight": {
-        "text": "Whole organisation"
+        "text": "Whole organisation",
+        "note": "The organisation's name in the band selects everything again."
       }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An app cannot be selected: its name opens its page",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "ul[aria-label='Apps in Court booking'] a",
+            "note": "An app row is a link to the app's page, not a selection: the conversation is never scoped to an app from home."
+          }
+        }
+      ]
     }
   ]
 }

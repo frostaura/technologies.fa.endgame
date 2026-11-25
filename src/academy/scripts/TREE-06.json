@@ -1,0 +1,100 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-06",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/tree?scope=northwind/technologies/court-booking",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "form[aria-label^='Rename'] input",
+        "note": "Name holds the current name. Its address stays court-booking: an address never changes."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "selector": "form[aria-label^='Rename'] input"
+            },
+            "text": "Court bookings"
+          }
+        },
+        {
+          "click": {
+            "text": "Save the name"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "It is called Court bookings now.",
+        "note": "Type the new name and save it: the outline shows it at once."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/",
+      "act": [
+        {
+          "click": {
+            "text": "Court bookings"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "nav[aria-label='Where you are']",
+        "note": "The chart and the breadcrumb follow the new name."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Viewer reads who may",
+      "persona": "viewer",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind/technologies/court-booking",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "A Builder or above renames a project.",
+            "note": "Priya is a Viewer: she reads who may rename a project."
+          }
+        }
+      ]
+    },
+    {
+      "title": "An empty name",
+      "persona": "owner",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind/technologies/court-booking",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "selector": "form[aria-label^='Rename'] input"
+                },
+                "text": " "
+              }
+            }
+          ],
+          "highlight": {
+            "text": "A name cannot be empty.",
+            "note": "Refused as you type; Save the name stays disabled."
+          }
+        }
+      ]
+    }
+  ]
+}

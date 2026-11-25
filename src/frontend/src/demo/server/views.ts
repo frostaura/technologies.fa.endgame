@@ -127,9 +127,10 @@ export function treeView(world: World, userId: string, org: string): Tree {
           id: p.id,
           slug: p.slug,
           name: p.name,
-          stage: p.stage ?? "live",
+          // ReadModels.ProjectStage: an archived project is "paused", with the note "Archived.".
+          stage: p.status === "archived" ? "paused" : (p.stage ?? "live"),
           ideaId: p.ideaId,
-          note: p.note,
+          note: p.status === "archived" ? "Archived." : p.note,
           progress: progressOf(world, p.path),
           spend: { monthCredits: total(world, p.path) },
           workers: workersAt(world, p.path),
@@ -139,18 +140,30 @@ export function treeView(world: World, userId: string, org: string): Tree {
         })),
     }));
   const projects = divisions.reduce((n, d) => n + d.projects.length, 0);
-  const apps = world.apps.filter((a) => orgOf(a.path) === org).length;
+  // ReadModels.TreeAsync: the summary counts the apps shown, and someone granted part of the tree
+  // sees no organisation-level workers, spend summed from the divisions they see, and only the
+  // needs on what their grants cover.
+  const apps = divisions.reduce((n, d) => n + d.projects.reduce((m, p) => m + p.apps.length, 0), 0);
+  const covered = (path: string) => !!held || world.memberships.some((m) => m.userId === userId && within(path, m.path));
   const people = world.employees.filter((e) => orgOf(e.scope) === org && e.kind === "employee" && e.status !== "released").length;
   const summary = `${divisions.length} ${divisions.length === 1 ? "division" : "divisions"} · ${projects} ${projects === 1 ? "project" : "projects"} · ${apps} ${apps === 1 ? "app" : "apps"} · ${people} ${people === 1 ? "employee" : "employees"}`;
   const viewerRole = held?.role ?? highestIn(world, userId, org) ?? "none";
   return {
     generatedAt: now,
     viewerRole,
-    organisation: { id: o.id, slug: o.slug, name: o.name, summary, spend: { monthCredits: total(world, org) }, workers: workersAt(world, org), role: roleOf(world, userId, org) },
+    organisation: { id: o.id, slug: o.slug, name: o.name, summary, spend: { monthCredits: held ? total(world, org) : divisions.reduce((n, d) => n + d.spend.monthCredits, 0) }, workers: held ? workersAt(world, org) : [], role: roleOf(world, userId, org) },
     divisions,
-    needsYou: needsYou(world, org),
+    needsYou: needsYou(world, org).filter((n) => covered(needScope(world, n))),
     firstRun: false,
   };
+}
+
+/** Where a need sits in the tree: the idea's, the run's, the hire's or the employee's level. */
+function needScope(world: World, n: NeedsYou): string {
+  if (n.kind === "verdict") return world.ideas.find((i) => i.id === n.ideaId)?.scope ?? "";
+  if (n.kind === "approval") return world.runs.find((r) => r.run.id === n.runId)?.run.scope ?? "";
+  if (n.kind === "hire") return n.scope;
+  return world.employees.find((e) => e.id === n.employeeId)?.scope ?? "";
 }
 
 function needsYou(world: World, org: string): NeedsYou[] {

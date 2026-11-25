@@ -45,7 +45,7 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   placed in a track". A learn-first cycle is reported and broken where it closes.
 - **The paths** are the README's tracks (Foundation → Core → Advanced → Developer, and the separate
   Operator handbook), each reordered so every learn-first comes ahead of the flow that needs it.
-- **Step scripts** (`src/academy/scripts/<FLOW-ID>.json`) say what each step shows. Schema:
+- **Step scripts** (`src/academy/scripts/<FLOW-ID>.json`) say what each step shows (and its variations, below). Schema:
   `schema/step-script.schema.json`; TypeScript twin: `src/content/scripts.ts`; a unit test holds the
   enums of the two together. Validated at build against the schema and the parsed flows (flow
   exists, step exists, no step twice, images on disk). Coverage is printed by the build and shown on
@@ -88,11 +88,11 @@ message only when `event.source` is the frame's own window and `source` is `"end
 | `goto` | `{ route, persona, scenario }` | an echo of `id` |
 | `highlight` | `{ selector? , testId? , text?, note? }` — `{}` clears | an echo of `id` |
 | `act` | `{ actions: Action[], instant?: true }` | `step-done { id }` once every action has played (an echo before it is an acknowledgement) |
-| `clock` | `{ play: true }` · `{ pause: true }` · `{ seek: ms }` | an echo of `id` |
+| `clock` | `{ play: true }` · `{ pause: true }` · `{ seek: ms \| moment }` | an echo of `id` |
 | `reset` | `{}` | an echo of `id` |
 
 `Action` is one of `{ click: Target }`, `{ type: { into: Target, text } }`,
-`{ select: { into: Target, value } }`, `{ press: key }`, `{ wait: ms }`, `{ clock: … }`; a `Target`
+`{ select: { into: Target, value } }`, `{ press: key }`, `{ wait: ms | Target }`, `{ clock: … }`; a `Target`
 is `{ selector? | testId? | text? }`, where `text` is the visible label of a control, quoted exactly
 as the flow quotes it. `instant: true` asks for the end state without the motion (catching up).
 
@@ -178,8 +178,8 @@ Nothing is stored server-side. The browser keeps `endgame-academy:progress:v1` i
   described above.
 - Captured screenshots: no step carries an `image` or a `shot` yet, so the print version and the
   degraded stage show text and facts where a picture would go.
-- Scripts for the remaining flows (15 of 321 are scripted); a later lane writes them with
-  `npm run script:new`.
+- Scripts for the flows still without one; the build prints how many are scripted, and the About
+  page shows it.
 - A variation for every refusal in "What else can happen": scripts carry them flow by flow.
 
 ## Links

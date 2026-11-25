@@ -1,0 +1,199 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-02",
+  "persona": "first-run",
+  "scenario": "default",
+  "start": "/start",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "What do you want to build?",
+        "note": "The start screen. The breadcrumb reads Start: there is no organisation yet."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Your organisation",
+        "note": "First run only: the organisation is named here, with the first idea."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Your organisation"
+            },
+            "text": "Northwind"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "The idea"
+            },
+            "text": "A booking sheet for the club's six boats, so members can see which are free on Saturday morning."
+          }
+        },
+        {
+          "click": {
+            "text": "Works on a phone"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Works on a phone",
+        "note": "Kit names the organisation, describes the idea, and picks what it must respect."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Estimated"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research comes first",
+        "note": "Once the idea is 12 characters long, the free estimate appears. Research cannot start until it does."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Research this idea"
+          }
+        }
+      ],
+      "note": "Research this idea: the button reads “Starting research…” while the organisation and the idea are made."
+    },
+    {
+      "step": 6,
+      "kind": "request",
+      "method": "POST",
+      "path": "/api/organisations",
+      "body": {
+        "name": "Northwind",
+        "slug": "northwind"
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": "6f1c2a40-3b7e-4d2a-9c11-5e8f0a7d2b31",
+          "slug": "northwind",
+          "name": "Northwind",
+          "ownerEmail": "kit@northwind.example",
+          "ownerInvitationCode": null,
+          "invitationExpiresAt": null,
+          "invitationEmailed": false,
+          "nameCheck": {
+            "slug": "northwind",
+            "source": "built-in",
+            "note": "No ops service is configured, so FrostAura's own subdomains were checked against the built-in list only."
+          },
+          "screening": null
+        }
+      },
+      "note": "First the organisation: Kit becomes its Owner. Then the idea is sent (POST /api/ideas). The id is illustrative."
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Step by step"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "header",
+        "note": "The research run opens. The header now names Northwind and carries the credits and the bell."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A name too short to make an address",
+      "persona": "first-run",
+      "scenario": "default",
+      "start": "/start",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Your organisation"
+                },
+                "text": "N"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Use at least two letters or digits.",
+            "note": "One letter cannot make an address: the hint turns red and Research this idea stays disabled."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A name Endgame keeps for itself",
+      "persona": "first-run",
+      "scenario": "default",
+      "start": "/start",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Your organisation"
+                },
+                "text": "Admin"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "The idea"
+                },
+                "text": "A booking sheet for the club's six boats."
+              }
+            },
+            {
+              "wait": {
+                "text": "Estimated"
+              }
+            },
+            {
+              "click": {
+                "text": "Research this idea"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Research did not start",
+            "note": "The server refuses a reserved name, and nothing was charged."
+          }
+        }
+      ]
+    }
+  ]
+}

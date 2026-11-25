@@ -1,0 +1,40 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ONT-03",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "How data flows"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Key",
+        "note": "The key: Relies on, and Sends data to."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "#chart-panel",
+        "note": "Apps, the platform services they have actually used, and what each declares coming in or going out, named by what they do."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "#chart-panel",
+        "note": "What travels moves along its line, labelled: outbound mail, prompts, signed-in people."
+      }
+    }
+  ]
+}

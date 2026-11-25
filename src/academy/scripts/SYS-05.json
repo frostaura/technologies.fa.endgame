@@ -1,0 +1,57 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SYS-05",
+  "persona": "signed-out",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/system/status",
+      "response": {
+        "status": 200,
+        "body": {
+          "overall": "healthy",
+          "checkedAt": "2026-11-25T09:30:00Z"
+        }
+      },
+      "note": "Signed out: whether the whole is healthy, and when. Enough for make smoke and a load balancer."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/system/status",
+      "headers": {
+        "Cookie": "endgame.session=…"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "overall": "healthy",
+          "checkedAt": "2026-11-25T09:30:00Z",
+          "services": [
+            {
+              "key": "control-plane",
+              "name": "Control plane",
+              "state": "healthy",
+              "latencyMs": 6,
+              "detail": null
+            },
+            {
+              "key": "edge",
+              "name": "Edge",
+              "state": "healthy",
+              "latencyMs": 3,
+              "detail": null
+            },
+            "… 6 more"
+          ]
+        }
+      },
+      "note": "Signed in to the console: every service, its state, how long it took and what went wrong. Latencies vary."
+    }
+  ]
+}

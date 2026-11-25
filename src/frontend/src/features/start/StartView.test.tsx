@@ -123,6 +123,16 @@ describe("where the idea goes", () => {
   });
 });
 
+describe("someone with no organisation who may not name one", () => {
+  it("says organisations are set up by FrostAura, instead of a form that can never start", async () => {
+    stubApi({ "GET /api/me": json({ ...ME, organisation: null, memberships: [] }), "GET /api/tree": json({ generatedAt: "2026-11-25T09:30:00Z", viewerRole: "none", organisation: null, divisions: [], needsYou: [], firstRun: false }) });
+    renderWithStore(<StartView />);
+    expect(await screen.findByRole("heading", { name: "Organisations are set up by FrostAura" })).toBeTruthy();
+    expect(screen.queryByLabelText("Your organisation")).toBeNull();
+    expect(screen.queryByLabelText("The idea")).toBeNull();
+  });
+});
+
 describe("what happens next", () => {
   it("says what auto-mode does on its own", () => {
     const steps = Object.fromEntries(nextSteps(null, null));

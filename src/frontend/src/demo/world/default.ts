@@ -154,9 +154,9 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   n(`${ORG}/operations/van-tracker`, "Delivery Van Tracker", { stage: "verdict", ideaId: IDS.ideaVans, note: "Research says do not build. Waiting for your call." });
   // Kept but not served: last summer's events, with history, so it can be archived and not deleted.
   n(`${ORG}/events`, "Events", { status: "archived" });
-  n(`${ORG}/events/summer-ladder`, "Summer Ladder", { status: "archived", stage: "paused", note: "Archived after the summer season." });
+  n(`${ORG}/events/summer-ladder`, "Summer Ladder", { status: "archived", stage: "paused", note: "Archived." });
   // Nothing attached yet: this one can be deleted.
-  n(`${ORG}/operations/gift-cards`, "Gift Cards", { stage: "idea", note: "Named, nothing built yet." });
+  n(`${ORG}/operations/gift-cards`, "Gift Cards", { stage: "planning" });
   for (const [slug, name] of [
     ["quayside", "Quayside Bakery"],
     ["quayside/shop", "Shop"],
@@ -348,6 +348,8 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
       record: { total: 0, build: 0, change: 0, doNotBuild: 0, overruled: [] },
       redLine: null,
       ...extra,
+      history: extra.history ?? [],
+      tryAgain: extra.tryAgain ?? null,
     };
     w.ideas.push(i);
     return i;
@@ -460,7 +462,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   const convRun = uuidFor("run:conversation:earlier");
   w.conversations.push({ id: uuidFor("conversation:org"), scope: ORG, employeeId: null, runIds: [convRun] });
   w.runs.push({
-    run: { id: convRun, kind: "conversation", title: "What did we spend on Court booking last month?", scope: ORG, status: "finished", startedAt: a(2 * day), finishedAt: a(2 * day - 1), lastSeq: 4, ideaId: null, estimateCredits: null, spentCredits: 0.03, employeeId: null, conversationId: uuidFor("conversation:org"), budgetExhausted: false, outcome: "succeeded", summary: "Replied.", createdAt: a(2 * day) },
+    run: { id: convRun, kind: "conversation", title: "What did we spend on Court booking last month?", scope: ORG, status: "finished", startedAt: a(2 * day), finishedAt: a(2 * day - 1), lastSeq: 4, ideaId: null, estimateCredits: null, spentCredits: 0.03, employeeId: null, conversationId: uuidFor("conversation:org"), budgetExhausted: false, outcome: "succeeded", summary: "Replied.", createdAt: a(2 * day), canTryAgain: false },
     events: [
       ev(1, "message", { from: "owner", text: "What did we spend on Court booking last month?" }, a(2 * day)),
       ev(2, "run.started", { holder: "runner-demo-1" }, a(2 * day)),
@@ -489,7 +491,7 @@ function ev(seq: number, type: string, payload: Record<string, unknown>, at: str
 function liveRun(id: string, kind: "research" | "build", title: string, scope: string, ideaId: string, estimate: number, script: string, params: Record<string, string>, first: [string, Record<string, unknown>][]): DemoRun {
   const at = new Date().toISOString();
   return {
-    run: { id, kind, title, scope, status: "queued", startedAt: at, finishedAt: null, lastSeq: first.length, ideaId, estimateCredits: estimate, spentCredits: 0, employeeId: null, conversationId: null, budgetExhausted: false, outcome: null, summary: null, createdAt: at },
+    run: { id, kind, title, scope, status: "queued", startedAt: at, finishedAt: null, lastSeq: first.length, ideaId, estimateCredits: estimate, spentCredits: 0, employeeId: null, conversationId: null, budgetExhausted: false, outcome: null, summary: null, createdAt: at, canTryAgain: false },
     events: first.map(([type, payload], i) => ev(i + 1, type, payload, at)),
     playback: { script, params, elapsed: 0, cursor: 0 },
   };
@@ -509,7 +511,7 @@ function historicResearch(i: Idea, a: (m: number) => string, strands: { id: stri
   push("message", { from: "researcher", text: `${String(v?.headline ?? "Research finished")}.`, title: v?.outcome === "build" ? "Verdict: build" : v?.outcome === "change" ? "Verdict: change it" : "Verdict: do not build", milestone: "verdict" }, 1);
   push("estimate.scored", { ratio: 0.8, modelCalls: 14, actualCredits: 9.8, expectedCredits: 12, nonBillableCredits: 0 }, 1);
   push("run.finished", { totals: { credits: 9.8, modelCalls: 14, nonBillableCredits: 0 }, outcome: "succeeded", summary: "Research finished; the verdict waits for your decision." }, 1);
-  return { run: { id: i.runId, kind: "research", title: `Research: ${i.title}`, scope: i.scope ?? "northwind", status: "finished", startedAt: a(start), finishedAt: a(start - 1), lastSeq: events.length, ideaId: i.id, estimateCredits: 12, spentCredits: 9.8, employeeId: null, conversationId: null, budgetExhausted: false, outcome: "succeeded", summary: "Research finished; the verdict waits for your decision.", createdAt: a(start) }, events, playback: null };
+  return { run: { id: i.runId, kind: "research", title: `Research: ${i.title}`, scope: i.scope ?? "northwind", status: "finished", startedAt: a(start), finishedAt: a(start - 1), lastSeq: events.length, ideaId: i.id, estimateCredits: 12, spentCredits: 9.8, employeeId: null, conversationId: null, budgetExhausted: false, outcome: "succeeded", summary: "Research finished; the verdict waits for your decision.", createdAt: a(start), canTryAgain: false }, events, playback: null };
 }
 
 function historicBuild(app: DemoApp, startedAt: string, publishedAt: string): DemoRun {
@@ -525,7 +527,7 @@ function historicBuild(app: DemoApp, startedAt: string, publishedAt: string): De
   push("message", { from: "builder", text: `${app.name} is built and running privately at /${app.path}/. Only you and the people you choose can open it until you make it public.`, title: "Running privately", milestone: "published" }, publishedAt);
   push("estimate.scored", { ratio: 0.21, modelCalls: 190, actualCredits: 18.9, expectedCredits: 90, nonBillableCredits: 1.4 }, publishedAt);
   push("run.finished", { totals: { credits: 18.9, modelCalls: 190, nonBillableCredits: 1.4 }, outcome: "succeeded", summary: `${app.name} is built and running privately.` }, publishedAt);
-  return { run: { id, kind: "build", title: `Build: ${app.name}`, scope: project, status: "finished", startedAt, finishedAt: publishedAt, lastSeq: events.length, ideaId: null, estimateCredits: 90, spentCredits: 18.9, employeeId: null, conversationId: null, budgetExhausted: false, outcome: "succeeded", summary: `${app.name} is built and running privately.`, createdAt: startedAt }, events, playback: null };
+  return { run: { id, kind: "build", title: `Build: ${app.name}`, scope: project, status: "finished", startedAt, finishedAt: publishedAt, lastSeq: events.length, ideaId: null, estimateCredits: 90, spentCredits: 18.9, employeeId: null, conversationId: null, budgetExhausted: false, outcome: "succeeded", summary: `${app.name} is built and running privately.`, createdAt: startedAt, canTryAgain: false }, events, playback: null };
 }
 
 function dashboard(a: (m: number) => string): (SavedQuestion & { appId: string })[] {

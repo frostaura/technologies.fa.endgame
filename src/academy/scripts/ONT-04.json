@@ -1,0 +1,32 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ONT-04",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Who works on what"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "ul[aria-label='Who works on what']",
+        "note": "Below a tablet's width — and always, for a screen reader — the graph is a plain list."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Who works on what'] > li",
+        "note": "Each card: what it is, its name (a link for people and apps), and a line for each relation, such as “works on Court booking”."
+      }
+    }
+  ]
+}

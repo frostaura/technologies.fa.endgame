@@ -289,6 +289,7 @@ export function runClock(args: ClockArgs) {
 export const endgameDemo = {
   goto(args: { route?: string; persona?: string; scenario?: string }) {
     clearSpotlight();
+    keepFocusOut(performance.now() + 2000);
     goto(args);
   },
   async highlight(args: Target & { note?: string }) {
@@ -308,10 +309,13 @@ export const endgameDemo = {
   },
   async act(actions: Action[], instant = false) {
     instantNow = instant;
+    keepFocusOut(Infinity);
     try {
       for (const a of actions) await perform(a);
     } finally {
       instantNow = false;
+      // A screen that focuses a field as it opens (a form shown by the click) does so just after.
+      keepFocusOut(performance.now() + 1500);
     }
   },
   clock: runClock,
@@ -327,8 +331,27 @@ declare global {
   }
 }
 
+/**
+ * Embedded, while the demo plays a step (and just after), the console does not take focus by
+ * itself: focus inside the frame would take the academy's arrow keys, and scroll its page.
+ */
+let focusQuietUntil = 0;
+function keepFocusOut(until: number) {
+  focusQuietUntil = until;
+}
+
 export function installBridge(embedded: boolean) {
   embeddedNow = embedded;
+  if (embedded) {
+    // A screen that focuses a field by itself (a form or a confirmation the step opened) would pull
+    // focus — and the browser's scroll — out of the academy page and into the frame. While a step
+    // plays, and just after, that focus is not taken.
+    const focus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
+      if (performance.now() < focusQuietUntil) return;
+      focus.call(this, options);
+    };
+  }
   window.endgameDemo = endgameDemo;
   window.addEventListener("message", (e: MessageEvent) => {
     const m = e.data as Envelope | null;

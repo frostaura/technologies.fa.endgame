@@ -1,0 +1,89 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TREE-11",
+  "persona": "owner",
+  "scenario": "manage-tree",
+  "start": "/tree?scope=northwind/learning",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "What this is",
+        "note": "Beside the chosen level: what it is, said once. Everything beneath it reads this."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Say something about Learning"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "What it is about"
+            },
+            "text": "House style"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "What it says"
+            },
+            "text": "Warm and plain. Parents read us at the school gate; children read along."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What it is about",
+        "note": "Name what it is about, and say it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add it"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "li[data-context='house-style']",
+        "note": "It shows at once, Said here. Every project and app in Learning reads it."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "selector": "li[data-context='purpose']",
+        "note": "What Northwind says reads “From Northwind”; Say it differently here replaces it for Learning only."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Viewer reads, and is told who may change it",
+      "persona": "viewer",
+      "scenario": "manage-tree",
+      "start": "/tree?scope=northwind/learning",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "A Builder or above changes what is said here.",
+            "note": "Priya sees what Learning is, and who may change it."
+          }
+        }
+      ]
+    }
+  ]
+}

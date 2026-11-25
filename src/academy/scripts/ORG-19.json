@@ -1,0 +1,48 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-19",
+  "persona": "division-admin",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label='Organisation chart']",
+        "note": "Ines is an Admin of Technologies only: the chart shows her branch, and Northwind only as the way down to it."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Talking to Technologies",
+        "note": "Home starts at Technologies, the highest level she holds a role at, so the conversation asks there."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "nav[aria-label='Where you are']",
+        "note": "Northwind in the breadcrumb is a name on the way down, not a button."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Who works on what"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Key",
+        "note": "The graphs ask at the level selected — Technologies — never at the organisation."
+      }
+    }
+  ]
+}

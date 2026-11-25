@@ -1,0 +1,24 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "NOTE-05",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/notifications",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Mark read"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "button[aria-label^='Notifications']",
+        "note": "Mark read: the row loses New and the count drops by one at once, on the page and on the bell. It is read for you alone."
+      }
+    }
+  ]
+}

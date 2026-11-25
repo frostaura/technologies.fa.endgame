@@ -1,0 +1,129 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-06",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Manage",
+        "note": "Manage: the level's name, what is in it, what it is, archiving and deleting (TREE-13)."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Autonomy for Northwind",
+        "note": "Autonomy for the level selected: here the whole organisation."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Hiring",
+        "note": "Hiring at the level selected."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Ideas from your portfolio",
+        "note": "Shown at the organisation or a division: ideas drawn from what you already run."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "People",
+        "note": "People: Admins, the Owner and operators only."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "AI assistants",
+        "note": "AI assistants: not scoped to the level. In technical mode it reads MCP access."
+      }
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "highlight": {
+        "text": "Secrets for Northwind",
+        "note": "Secrets for the level selected: Admins, the Owner and operators."
+      }
+    },
+    {
+      "step": 8,
+      "kind": "demo",
+      "highlight": {
+        "text": "Operator access",
+        "note": "Operator access: the Owner's log of every FrostAura entry."
+      }
+    },
+    {
+      "step": 9,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Kasper · Software engineer"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Kasper’s record and memory",
+        "note": "With an employee selected, their record leads the row, and the rest follow the level they sit on: Court booking."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Builder sees no People, Secrets or Operator access",
+      "persona": "builder",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "nav[aria-label='Manage']",
+            "note": "Lena is a Builder: Manage, Autonomy, Hiring, Ideas and AI assistants, nothing more."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Technical mode names AI assistants MCP access",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "MCP access",
+            "note": "In technical mode the same link reads MCP access."
+          }
+        }
+      ]
+    }
+  ]
+}

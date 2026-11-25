@@ -1,0 +1,50 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SYS-09",
+  "persona": "owner",
+  "scenario": "session-unreachable",
+  "start": "/",
+  "steps": [
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Endgame could not check who you are",
+        "note": "The session check could not reach the control plane. That is not “signed out”: nothing is known until it loads."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Try again"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "section[aria-label='Organisation']",
+        "note": "Try again checks, and the console opens on home."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Signed out goes to sign-in",
+      "persona": "signed-out",
+      "scenario": "quiet",
+      "start": "/apps/x",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Sign in with a passkey",
+            "note": "A 401 is signed out: any address goes to sign-in."
+          }
+        }
+      ]
+    }
+  ]
+}

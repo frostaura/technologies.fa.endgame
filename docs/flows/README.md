@@ -119,7 +119,7 @@ What every person needs on day one: signing in, reading the home screen, startin
 | HOST-01 | A sleeping app wakes on a visit | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | HOST-06 | Reach an app at either of its two addresses | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Core — 127 flows, 117 with a screen
+### Core — 132 flows, 122 with a screen
 
 Running an organisation day to day: people, hiring, credits, the app page, secrets, notifications, autonomy.
 
@@ -145,7 +145,15 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | ORG-13 | Home keeps itself live, and says when a refresh fails | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-01 | Create a division by letting the factory place an idea | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-05 | Put new work into an existing division | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-13 | Manage a division from the console: what is actually there | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-02 | Create a division directly | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-03 | Create a project directly | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-06 | Rename a division, project or app | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-07 | Archive or reactivate a division or project | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-08 | Archive an app, or set an app's status by hand | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-11 | Describe a level: say what it is, for its work to read | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-12 | Read what applies at a level and what a lower level replaces, and remove a value set there | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| ORG-14 | Rename the organisation | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-13 | Manage a division from the console | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-01 | Switch between the three views | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-02 | Read "Who works on what" (desktop) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-03 | Read "How data flows" (desktop) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -253,7 +261,7 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | HOST-05 | A crashed app | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | HOST-07 | An idle app goes to sleep | Automatic | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Advanced — 39 flows, 23 with a screen
+### Advanced — 38 flows, 25 with a screen
 
 For the person who owns the setup: rule sets, tighter limits, assistants, technical mode.
 
@@ -266,9 +274,8 @@ For the person who owns the setup: rule sets, tighter limits, assistants, techni
 | AST-05 | Connect an assistant to the whole organisation | API or assistant only | [Identity and access](01-identity-and-access.md) |
 | AST-06 | Connect an assistant to one app | API or assistant only | [Identity and access](01-identity-and-access.md) |
 | ORG-19 | A person granted only part of the tree uses home | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-07 | Archive or reactivate a division or project | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-11 | Describe a level: set context that its work inherits | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-12 | Read what applies at a level, and remove a value set there | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-04 | Create an app node directly | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-09 | Delete a division, project or app | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-08 | Ask the conversation to change a setting at this level | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-15 | Talk when credits, a budget or the model connection run out | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | SYS-03 | Read system status | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -299,7 +306,7 @@ For the person who owns the setup: rule sets, tighter limits, assistants, techni
 | SEC-05 | Override an inherited secret at a lower level | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | KIT-20 | An AI assistant uses an app's own derived MCP tools | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Developer — 37 flows, 3 with a screen
+### Developer — 33 flows, 3 with a screen
 
 Through the API, an AI assistant or the app kit. Not console lessons.
 
@@ -307,14 +314,7 @@ Through the API, an AI assistant or the app kit. Not console lessons.
 | --- | --- | --- | --- |
 | ID-03 | Use the development sign-in | Screen | [Identity and access](01-identity-and-access.md) |
 | ACC-13 | Use the development sign-in at an app | Screen | [Identity and access](01-identity-and-access.md) |
-| ORG-14 | Rename the organisation | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ORG-16 | Delete the organisation | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-02 | Create a division directly | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-03 | Create a project directly | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-04 | Create an app node directly | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-06 | Rename a division, project or app | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-08 | Archive an app, or set an app's status by hand | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-09 | Delete a division, project or app | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-07 | Read the ontology by API or MCP | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-04 | Talk to an app | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-16 | Talk over MCP or the API | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -402,8 +402,8 @@ Flows that do not exist yet or are purely automatic.
 
 | Reached by | Flows |
 | --- | --- |
-| Screen | 228 |
-| API or assistant only | 43 |
+| Screen | 238 |
+| API or assistant only | 33 |
 | Command line | 24 |
 | Automatic | 22 |
 | No route | 4 |
@@ -420,6 +420,12 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | No second passkey, no way to switch organisation, and the address asked for was lost at sign-in. | ID-08, ID-09, ID-02 | Fixed: "Your account", the "Working in" switcher, and the kept address. |
 | The console and the server disagreed on a person's role where grants at two levels differ. | PPL-01, PPL-03 | Fixed: the tree carries each node's role as the server resolves it. |
 | Signing out left a blank page. | ID-06 | Fixed the same day, found in a browser. |
+| Divisions, projects and apps could not be created, renamed, archived or deleted from a screen. | TREE-02 to TREE-09, TREE-13, ORG-14 | Fixed: "Manage" (`/tree`). Moving is still impossible by any route, on purpose (TREE-10). |
+| A level could not be described from a screen. | TREE-11, TREE-12 | Fixed: "What this is" on "Manage". |
+| The division for a new idea could not be chosen on the start screen. | TREE-05, TREE-01 | Fixed: "Where it goes". |
+| A person granted only one division got "not found" on the home screen. | ORG-19 | Fixed: home starts at their own level. |
+| The system status endpoint named every service to someone signed out. | SYS-05 | Fixed: signed out, only `overall` and `checkedAt`. |
+| Archiving a division or project did not stop its apps being served. | TREE-07 | Fixed: the routing table leaves them out, and the chart draws them archived. |
 
 ### Things the product cannot do from a screen
 
@@ -446,9 +452,6 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | **"Asks you first" rules refuse instead of asking.** | AUTO-05 | Reported |
 | **Two lines on the start screen are untrue in auto-mode:** "Nothing is built until you have seen the verdict", and that hires are "proposed". | IDEA-01, VERD-11, BLD-02 | Reported |
 | **A conversation at a level is shared by everyone there**, each message drawn as "you". | TALK-11 | Reported |
-| **A person granted only one division gets "not found" on the home screen.** | ORG-19 | Reported |
-| **The system status endpoint answers without sign-in.** | SYS-05 | Confirmed |
-| **Archiving a division or project does not stop its apps being served.** | TREE-07 | Reported |
 | **The console's mock-API browser specs are run by nothing** in the Makefile or CI; only the smoke spec runs. | OPS-07 | Reported |
 | **The design stage in the spec does not exist** as a stage in the build. | BLD-12 | Reported |
 
