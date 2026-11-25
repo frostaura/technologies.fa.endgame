@@ -7,7 +7,7 @@
 | **Primary actor** | Viewer (history) · Builder (restore) · Owner (export) |
 | **Scope** | Control plane (`/api/apps/{id}/versions*`, `/api/apps/{id}/export`), proxied to Dock |
 | **Cascade level** | App |
-| **Status** | Built (the data dump needs Dock's `GET /internal/apps/{id}/database/dump`, owed) |
+| **Status** | Built, the data dump included (Dock's `GET /internal/apps/{id}/database/dump`, `pg_dump` 16) |
 
 ## Goal
 
@@ -40,7 +40,7 @@ version restorable, the whole app downloadable by its Owner at no cost.
 
 - Authors are named; the live version is marked; a restore is the person's commit, then build, then start; the archive holds the four parts.
 
-Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `VersionsAndExportTests`.
+Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `VersionsAndExportTests`; [`TEST-010`](../testing/TEST-010-hosting.md) — `HostingIntegrationTests.The_control_plane_takes_an_apps_own_database_as_a_pg_dump_archive…` (the control plane's Dock client against a real Dock; `pg_restore` reads the archive back). The Owner's whole export of a factory-built app on a running stack is in the acceptance run (`TEST-201`).
 
 ## Links
 

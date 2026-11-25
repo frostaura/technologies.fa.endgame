@@ -18,6 +18,7 @@
 | Every `endgame.*` cookie, every client-sent `X-Endgame-*` header and every trace-context header is stripped before an app; the app roots its own traces | `EdgePipelineTests.The_path_form_strips…`, `No_trace_context_reaches_an_app…` · `AppAddressRulesTests.Every_platform_cookie…` |
 | On a subdomain, sign-in moves to the platform's host and returns by hand-off; a hand-off sets a host-only cookie once, then the app admits it; sign-out goes through the control plane | `EdgePipelineTests` (three tests) · `TEST-090` step 4 |
 | A schedule callback on the control listener wakes the app and forwards body and signature unchanged; unsigned → 400, no token → 401, never on the public side | `EdgePipelineTests.A_schedule_callback…` · `TEST-090` step 8 |
+| The control plane's app calls (per-app MCP, the evaluator's signed-in checks): its own `AppGateway` reaches a woken app through the control listener with method, path, query, body, content type and the member's `X-Endgame-Session`; `_platform`/`_endgame` → 400, unknown → 404, paused or unpublished → 409, not woken → 503, no token → 401, never on the public side; Edge's own refusals carry `X-Endgame-Refusal`, the app's answers never do | `EdgePipelineTests.The_control_planes_app_gateway_calls_an_app…` |
 | A spent budget and the overdraft limit each get their own paused page, never a wake | `EdgePipelineTests` (two tests) · `TEST-090` step 13 |
 | Hosting usage: Dock reports awake time, mean memory and storage, Edge the requests, each once per period under a stable id | `UsageLedgerTests` · `EdgePipelineTests.Requests_an_app_served…` · `TEST-090` step 11 |
 | The egress proxy finds a restarted peer again within seconds | `EgressConfigTests` · `TEST-090` (the control plane restarts between runs) |
@@ -25,6 +26,7 @@
 | A crash gets the unavailable page within two seconds, is reported, and the app wakes again after the back-off | `A_crash_gets_the_unavailable_page_at_once_is_reported_and_recovers` |
 | Unavailable pages name no infrastructure and carry the mark | `UnavailablePageTests` |
 | Repositories keep every version; restore adds a commit; archive and export work | `A_repository_keeps_every_version…` |
+| An app's own database leaves as a `pg_dump` custom archive through the control plane's Dock client, `pg_restore` 16 reads it back with the app's rows and nothing of the platform's; an app with no database is `404 not_found` and the export leaves the dump out | `The_control_plane_takes_an_apps_own_database_as_a_pg_dump_archive…` |
 | Workspaces: employee as author; a moved branch is a conflict, nothing lost; the path floor holds against `..`, `.git` and symbolic links; non-root, limits, no socket, zero capabilities; registries only; timeouts and head-and-tail output; lease lapse destroys | five workspace tests · `WorkspacePathsTests` · `OutputCaptureTests` |
 | Apps run hardened on their own internal /28, Dock never on it | `App_containers_run_with_every_hardening_rule_of_ARCH_005` · `SubnetAllocatorTests` |
 | Egress is default-deny, per app by subnet, changeable without a restart; apps reach the platform API only through it | `Egress_is_denied_by_default_and_allowed_per_app_by_subnet` · `EgressRulesTests` |
@@ -73,3 +75,11 @@ Measured on the development Mac (Docker Desktop, 10 CPUs, about 8 GB) on 2026-11
 
 Awake · asleep and woken · crashed and backed off · paused · unpublished · no capacity (unit) ·
 access check unavailable · control plane unreachable for routes (last table kept).
+
+## Isolation between test runs
+
+Every real-Docker test run names its resources `test-endgame-<run id>-*` (a random id per process), labels its Dock
+with that instance, cuts app subnets from a /16 that no network on the engine overlaps (10.64–10.127; the ops
+rehearsal 10.128–10.191), and removes only its own resources, so two runs on one machine never destroy each other.
+The workspace image is shared by content hash (`test-endgame-shared-workspace:<hash>`) and never removed by a run, so
+a warm machine skips the slowest build; `docker images 'test-endgame-shared-*'` lists it for removal by hand.

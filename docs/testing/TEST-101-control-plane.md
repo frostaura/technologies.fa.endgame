@@ -15,6 +15,9 @@ The acceptance statements of UC-101 to UC-115. The ones with the most weight, an
 | N concurrent admissions against a budget that fits K admit exactly K | `DatabaseInvariantTests.Forty_concurrent_admissions...` (ledger, 40 → 13) and `ModelGatewayTests.Concurrent_calls...` (HTTP, 12 → 5, provider reached 5 times) |
 | Two concurrent claimers of one task: exactly one wins | `RunsAndTasksTests.Two_concurrent_claimers...` (five rounds) |
 | Sequence numbers are gapless per run | `RunsAndTasksTests.Sequence_numbers_are_gapless...` (25 concurrent two-event appends → 1..50) |
+| A NUL in any string or key of an event is `400 event_invalid` naming where, never a 500, and nothing is appended | `RunsAndTasksTests.A_nul_character_anywhere_in_an_event_is_refused…` |
+| The evaluator's test-member session resolves at the app as a member with that role, the same person per persona, never the Owner, for that app only, and only with the service token | `PlatformApiTests.The_evaluator_gets_a_session_for_a_test_member…` |
+| The research estimate is the measured starting figure, then the median of the organisation's own past research actuals, under its ceiling, with its basis said | `RunnerContractTests.The_research_estimate_starts_at_a_measured_figure_then_tracks_the_median…` |
 | The development sign-in is absent outside Development + flag | `DevelopmentSignInTests.Is_not_mapped_outside_development_with_the_flag` (Production ± flag, Staging, Development without flag; 404 and absent from OpenAPI) |
 | Real passkeys sign people in | `SignInTests` (software ES256 authenticator, "none" attestation, through Identity's own verification) |
 | Tenancy is enforced by the database | `DatabaseInvariantTests.Row_level_security...`, `A_row_cannot_point_into_another_organisations_tree` |

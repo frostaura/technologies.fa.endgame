@@ -22,7 +22,8 @@ verdict that is not flattering.
    per strand — existing products, the gap, demand — each registered (`POST /internal/contractors`, `briefedBy` the
    researcher) so its model calls carry its own id, and each a titled `subagent.started` ("Looked for existing products").
 3. The strands work **in parallel**, each with its own context, on the research route's server-side web search. Each has a
-   **search budget sized from the estimate**: `floor(estimate × 0.75 ÷ strands ÷ 1.7 credits a search)`, kept within 2 and 7
+   **search budget sized from the estimate's ceiling** (the most research can cost, ARCH-004 *Estimates*; the estimate
+   itself when it states none): `floor(ceiling × 0.75 ÷ strands ÷ 1.7 credits a search)`, kept within 2 and 7
    (`Runner:ResearchSearchesPerStrand`), sent as `limits.maxSearches`, and a credit slice of the same share. Their sources
    (reported and cited) go into one deduplicated pool.
 4. The researcher judges, with search off (`maxSearches: 0`), arguing the case against first; its curated memory is given

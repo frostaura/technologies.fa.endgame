@@ -7,7 +7,7 @@
 | **Primary actor** | Owner · Admin · Builder · Viewer, through an MCP client (an assistant, an agent, a script) |
 | **Scope** | Control plane (`/api/tokens`, `/mcp`, `/mcp/apps/{appId}`); Edge's control listener for app calls |
 | **Cascade level** | The token's organisation; every call at the scope it names, as the cascade resolves it |
-| **Status** | Built (the per-app surface needs Edge's `/internal/apps/{id}/call/*`, owed) |
+| **Status** | Built, the per-app surface included (Edge's `/internal/apps/{id}/call/*`) |
 
 ## Goal
 
@@ -54,6 +54,7 @@ roles and the same human-only rules, and every app answers MCP too, from what it
 ## Acceptance
 
 - The SDK's own client lists and calls control-plane tools and a derived app tool in process.
+- The control plane's app gateway calls a woken app through the real Edge pipeline, forwarding method, path, query, body, content type and the member's session (`EdgePipelineTests.The_control_planes_app_gateway_calls_an_app…`), and the SDK's client calls a factory-built app's derived tool on a running stack (the acceptance run, `TEST-201`).
 - Every tool, called by each role inside and outside its scope, is let through or refused exactly as the public endpoint is.
 
 Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `McpTests`, `AuthorizationMatrixTests`.

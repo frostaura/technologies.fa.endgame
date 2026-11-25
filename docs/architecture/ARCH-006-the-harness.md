@@ -64,8 +64,14 @@ routes by task type itself (`ARCH-003`).
 
 - **Parallel where independent.** A turn of two or more `spawn` calls whose sub-agents only read (the default read-only tool
   set), within the fan-out cap, runs them at once: every call is requested first, they work concurrently, and their results
-  enter the conversation in call order, so replay is unchanged. Anything that writes runs one at a time; builders that work in
-  parallel would each need a workspace of their own, and the factory's builders work one feature at a time.
+  enter the conversation in call order, so replay is unchanged. Anything that writes runs one at a time.
+- **Builders stay sequential — decided, not deferred by accident.** Parallel builders would each need a workspace of their own
+  (Dock holds one per run), a merge by commit order with the checks re-run after each merge, and a resolution when two items
+  touch the same file — and the plans the factory makes are three to six items of one app whose later items use the earlier
+  ones' entities and endpoints (back end before the screens that use it), so few are independent. The gain is minutes on a
+  build that is already short (16–28 minutes live), against a new failure mode in the most expensive stage. The factory's
+  builders therefore work one plan item per session, in plan order; this is revisited when plans with genuinely independent
+  items are common.
 - **Memory is context.** An employee's curated memory follows its rules, framed as notes that never outrank them; `remember`
   keeps a note. A contractor keeps none: what it learned goes to its briefer.
 - **Search budgets.** `AgentLimits.MaxSearchesPerCall` is sent as the call's `limits.maxSearches`; the reply's `searches` and
@@ -85,7 +91,20 @@ the container as the agent's own user. A baseline commit is made first so the ru
 
 Acceptance checks the agent cannot see or edit, run after it finishes: tests it could have gamed
 are restored first; then build, tests, front-end build and tests. Each check must fail on the
-untouched starting state. The production evaluator keeps this shape and adds the live preview.
+untouched starting state. The production evaluator keeps this shape and adds the running app.
+
+**The plan is a faithful contract with the idea.** A live run passed a reading-list app that had no "what everyone is
+reading now" view, because nothing tied the plan to the idea's words and the evaluator judged by tests and a signed-out
+probe. Now (`PlanContract.Faults(idea)`, `ProposePlanTool(idea)`, `EvaluationGate`):
+
+| Rule | Enforced by |
+| --- | --- |
+| The planner lists every requirement of the idea, each quoted in the idea's own words (at least 60 % of its meaningful words appear in the idea). | `propose_plan` refuses, naming the requirement. |
+| Every requirement is covered by an item, or listed in `leftOut` with a reason the owner reads; every item covers at least one requirement. | `propose_plan` refuses with every fault; the planner corrects and sends it again. The build announces what was left out and why. |
+| Item text and the summary are plain words; files and endpoints go in `detail`. | `propose_plan` refuses (`OwnerText`). |
+| The evaluator shows each requirement its item covers working in the **running** app, signed in as a test member (`call_app`: a session from `POST /internal/apps/{id}/test-session`, the call through Edge's `/internal/apps/{id}/call/{path}`), and cites those calls as `METHOD path`. | Code's gate reads the calls the evaluator made from the run log and fails an item whose every requirement is not marked met with evidence naming a call that was made, or that never called the app at all, whatever the evaluator wrote. The failure goes to repair, unbilled, one tier up. |
+
+`check_preview` remains, signed out, to confirm that what needs signing in answers 401.
 
 ## Not verified
 

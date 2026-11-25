@@ -1,7 +1,7 @@
 # ARCH-004 — Service contracts
 
 The interfaces between Endgame's services, as built by the four control-plane passes, the Dock and
-Edge lane, the Runner lane and the app kit. A lane may add to its own service freely; it changes a contract here
+Edge lane, the Runner lane, the app kit and the wiring lane. A lane may add to its own service freely; it changes a contract here
 only by editing this file first. The app-facing half is fixed field for field in
 [`src/appkit/PLATFORM-API.md`](../../src/appkit/PLATFORM-API.md); the shared hosting types are in
 `src/backend/Endgame.Hosting.Contracts`. What runs where is in `MEMORY.md`.
@@ -90,7 +90,7 @@ minutes (`degraded` when more than one response in twenty failed).
 | Access tokens | `GET /api/tokens` → `[AccessToken]`; `POST /api/tokens { name, organisation, role?, expiresInDays? }` → `201 { token, accessToken }` (the token `egp_…` once; role at most the caller's highest in the organisation, never `owner`, default theirs and `admin` for an Owner; `expiresInDays` 1–366 or none); `DELETE /api/tokens/{id}` → `AccessToken` (revoked). `AccessToken { id, name, organisation, role, prefix, createdAt, expiresAt, lastUsedAt, revokedAt, active }` |
 | Secrets | `GET /api/secrets?scope=` → `{ scope, effective: [{ name, setAtLevel, setAtPath, setAt, inherited, overrides }], setBelow: [{ name, setAtPath }] }` — never a value; `PUT /api/secrets { scope, name, value }`; `DELETE /api/secrets?scope=&name=` (Admin and above) |
 | Credits | `GET /api/credits?scope=` (balance, month `{ spent, ai, hosting }`, budgets in tree order, estimates, not charged, overdraft `{ frostauraLimit, ownLimit }`, top-ups, held, available); `POST /api/credits/top-ups { organisation, credits, note, idempotencyKey?, requestId? }` (operators; `requestId` marks that request fulfilled); `PUT /api/credits/overdraft { scope, credits }` → `CreditsView` (at the organisation its own limit, Owner; beneath it a narrower one, Admin; never deeper, 400); `POST /api/credits/top-up-requests { organisation?, credits, note? }` → `201 TopUpRequest` (Owner; at most five open); `GET /api/credits/top-up-requests?organisation=` → `[TopUpRequest]` (Admin). `TopUpRequest { id, organisation, organisationName, credits, note, status: open|fulfilled|declined, requestedBy, requestedByEmail, requestedAt, closedAt, closeNote, topUpEntryId }` |
-| Ideas | `POST /api/ideas/estimate`, `POST /api/ideas`, `GET /api/ideas/{id}`, `POST /api/ideas/{id}/decision` |
+| Ideas | `POST /api/ideas/estimate { text, constraints?, scope? }` → `{ credits, basis }` (with `scope`, an organisation the caller belongs to, the estimate uses its history), `POST /api/ideas`, `GET /api/ideas/{id}`, `POST /api/ideas/{id}/decision`. *Estimates* below says how each figure is made. |
 | Ideas from the portfolio | `POST /api/ideas/suggestions/estimate { scope }` → `{ credits, basis }`; `POST /api/ideas/suggestions { scope }` → `201 { run: PublicRun, estimate }` (Builder; a `suggest` run, its `estimate.made` in the log); `GET /api/ideas/suggestions?scope=` → `[Suggestion]` (Viewer); `POST /api/ideas/suggestions/{id}/take { constraints? }` → `201 PublicIdea` (research queued with its estimate); `POST /api/ideas/suggestions/{id}/dismiss` → `Suggestion` (Builder). `Suggestion { id, scope, runId, title, idea, gap, whyUs, reuses[], status: open|taken|dismissed, ideaId, createdAt }` |
 | Runs | `GET /api/runs?scope=&employeeId=&kind=&status=&limit=` → `[PublicRun]` newest first, at most 100 (Viewer; `employeeId` alone: wherever the employee works); `GET /api/runs/{id}`, `GET /api/runs/{id}/events` (server-sent events, resumable), `POST /api/runs/{id}/{pause,resume,cancel}`, `POST /api/runs/{id}/approvals/{approvalId}` |
 | Tasks | `GET /api/tasks?scope=&status=&limit=` |
@@ -160,7 +160,7 @@ form; anything else is 400 `invalid_return_to`. When it points at the subdomain 
 | `POST /internal/ideas { scope, text, constraints[] }` | `201 { idea, run, estimate }`: research on the owner's confirmed word, proposed to the division (or organisation) the scope sits in. |
 | `PUT /internal/cascade { scope, kind: "setting", key, value }` | An agent changes one allow-listed setting: `autonomy`, `checkpoint.start`, `checkpoint.plan`, `checkpoint.hire`, `sleep.mode`, `sleep.idle_minutes`, `workforce.idle_days`; anything else `403 setting_not_allowed`. Never `access`. |
 | `POST /internal/ideas/{id}/decision { decision: "build", by: "auto-mode" }` | Auto-mode builds after a build or change verdict where autonomy is auto → `{ idea, run }`. A do-not-build or checkpoints is `409 owner_decision_required`; any other decision `403`; a red line `403 red_line`. |
-| `POST /internal/runs`, `POST /internal/runs/claim`, `GET /internal/runs/{id}`, `GET`/`POST /internal/runs/{id}/events`, `POST /internal/runs/{id}/lease` | Runs, their log (gapless sequence numbers) and leases. |
+| `POST /internal/runs`, `POST /internal/runs/claim`, `GET /internal/runs/{id}`, `GET`/`POST /internal/runs/{id}/events`, `POST /internal/runs/{id}/lease` | Runs, their log (gapless sequence numbers) and leases. An append whose payload holds U+0000 anywhere (PostgreSQL's jsonb cannot store it) is `400 event_invalid` naming the first place (`events[1].payload.output.lines[1]: contains a NUL character …`), and nothing is appended. |
 | `POST /internal/tasks`, `POST /internal/tasks/checkout`, `PATCH /internal/tasks/{id}` | The task graph; checkout is one conditional update. |
 | `GET /internal/context?scope=` | The resolved cascade: levels, context, rule sets, budgets, settings, secret names, roles. |
 | `POST /internal/approvals` | A checkpoint the run waits on. |
@@ -173,6 +173,7 @@ form; anything else is 400 `invalid_return_to`. When it points at the subdomain 
 | `GET /internal/routes` | `{ generatedAt, routes: [{ appId, organisationId, scope, pathBase, host, hostPathBase, target, status, sleeping, sleep { mode, idleMinutes, modeSetAt, idleSetAt }, version, access, paused, pausedReason, hooks }] }`. `access` is `private`/`shared`/`public`; `paused` is true when the organisation's settled balance is past its overdraft limit (`pausedReason: overdraft_limit`) or a monthly budget on the app's chain is spent (`budget_exhausted`); `hooks` lists declared webhook names. |
 | `POST /internal/access/check { appId, cookie, path }` | → `{ decision: allow | sign-in | deny, sessionToken, signInUrl, reason }`. `cookie` is the request's whole `Cookie` header; `sessionToken` is app-scoped (`egs_…`, 15 minutes) and never a cookie value; `signInUrl` is null (Edge uses the app's own sign-in page). |
 | `POST /internal/access/handoff { appId, code }` | → `{ cookieName, cookieValue, expiresAt, returnTo }` for Edge to set on the subdomain host, or `410 handoff_invalid` (unknown, used, or older than a minute). |
+| `POST /internal/apps/{id}/test-session { persona, role }` | The factory's evaluator → `{ sessionToken, user: { id, email, displayName, kind: member, role }, expiresAt }`: an app-scoped session (`egs_…`, 15 minutes) for a **test member** who exists only in the token — `persona` a lowercase slug (1–30), `role` `admin`, `builder` or `viewer`, never `owner`; the same app and persona are the same person every time (`<persona>@test-members.endgame.invalid`, display name `Test member (<persona>)`), so ownership can be checked with two. `identity/resolve` answers it as a member with that role, for that app only. `400` for a bad persona or role, `404` for no such app. |
 | `POST /internal/apps/{id}/token` | → `{ token }` (`egt_…`). Mints a fresh app token, stored only as a hash; the previous one keeps working for `AppSessions:TokenGraceSeconds`. |
 | `POST /internal/apps/{id}/published { version }`, `POST /internal/apps/{id}/state { status }` | Dock's reports. A `failed` state raises an `app.crashed` notification. |
 | `GET /internal/runs/{id}/suggestion-context` | For a `suggest` run: `{ scope, organisation, products: [{ kind: division|project|app, scope, name, status }], ideas: [{ title, status, verdict }], context: ["key: value"], alreadySuggested: [title], maxSuggestions: 5 }`; `409` for another kind of run. |
@@ -266,11 +267,14 @@ is published.
   app-scoped member session (`X-Endgame-Session: egs_…`), so the app sees that person as at its door,
   and answers `{ status, body, truncated }` (an app's 4xx/5xx is an error result with its `code`).
 
-**What Edge must serve for it** (control listener, service token): `ANY /internal/apps/{appId}/call/{**path}`
-— wake the app if it sleeps, forward method, query, body, `Content-Type` and the `X-Endgame-Session`
-header unchanged to `http://app-<id:N>:8080/{path}` with the path form's `X-Forwarded-Prefix`, return
-the app's status, `Content-Type` and body; `400` for a `_platform/` path, `404` for an app it does not
-route, `409` paused or unpublished, `503` when it cannot be woken. `AppCalls__Transport=direct` posts
+**What Edge serves for it** (control listener, service token, `Endgame.Edge.Control.AppCalls`):
+`ANY /internal/apps/{appId}/call/{**path}` — wake the app if it sleeps, forward method, query, body (at most
+1 MB), `Content-Type`, `Accept` and the `X-Endgame-Session` header unchanged to the app on its network at its path
+address (`X-Forwarded-Prefix`, `-Host`, `-Proto` set as for any visitor), and return the app's status,
+`Content-Type` and body. Edge's own refusals carry `X-Endgame-Refusal: <code>` so a caller never takes them for the
+app's answer: `400 invalid_path` for a `_platform` or `_endgame` path or one that climbs out, `404 not_found` for an
+app it does not route (after one refresh of its table), `409 app_paused` / `app_unpublished`, `503 app_unavailable`
+when it cannot be woken, `502 app_unreachable` when it does not answer. `AppCalls__Transport=direct` posts
 straight to the container instead.
 
 ## Ask about this app
@@ -317,10 +321,11 @@ posts straight to the container instead.
 `GET /internal/apps` and `…/{id}`, `DELETE …/{id}`; `POST /internal/usage/flush`. Shapes are in
 `Endgame.Hosting.Contracts`.
 
-**Owed by Dock** (the control plane calls it; built and tested against a fake):
-`GET /internal/apps/{id}/database/dump` → `200 application/octet-stream`, a `pg_dump --format=custom`
-of the app's own database (Dock alone knows its opaque name; its image needs `pg_dump` 16), streamed;
-`404 { code: "not_found" }` when the app has no database yet. Until it exists, the export answers `502`. `start` asks the control plane for a fresh app token
+`GET /internal/apps/{id}/database/dump` → `200 application/octet-stream`, a `pg_dump --format=custom --compress=6`
+of the app's own database (Dock alone knows its opaque name; its image carries `pg_dump` 16, Ubuntu 24.04's
+`postgresql-client-16`, matching the server's major version), written to a temporary file first so a dump that fails
+half-way is `503 unavailable` rather than a truncated `200`, then streamed and deleted; `404 { code: "not_found" }`
+when the app has no database yet. `start` asks the control plane for a fresh app token
 (`POST /internal/apps/{id}/token`) unless one is given, and injects it as `ENDGAME_APP_TOKEN`.
 
 ## Edge — control listener (`:8081`, service token)
@@ -328,6 +333,7 @@ of the app's own database (Dock alone knows its opaque name; its image needs `pg
 `POST /internal/routes/refresh` → `{ version, apps }`; `POST /internal/apps/{id}/state` (Dock's crash
 reports); `POST /internal/apps/{id}/platform/schedules/{name}` (platform callbacks, above);
 `POST /internal/usage/flush` (closes the hosting-usage period now);
+`ANY /internal/apps/{id}/call/{**path}` (the per-app MCP surface's and the evaluator's signed-in calls, *MCP* above);
 `POST /internal/apps/{id}/probe { method, path, body? }` → `{ status, contentType, body, truncated }` — the evaluator's
 one request into a running (private) preview: woken if asleep, sent on the app's network at its path address as a
 signed-out visitor (forwarded prefix and host set, no session, no platform cookie), a text body up to 48 KB returned
@@ -370,10 +376,26 @@ What the owner reads (normal mode) and what only technical mode shows:
 | `subagent.started` | `{ subagent, title, brief, role }` — `title` is what the contractor does, for people ("Looked for existing products"); `brief` its objective as a plain string. | Shown, counted as an action |
 | `subagent.finished` | `{ subagent, title, summary, stopReason, searches, report }` — `summary` one plain sentence of what it found; `report` the raw report. | Shown (`summary`); `report` technical only |
 | `tool.requested` | `{ name, arguments }` | Hidden, counted as an action |
-| `plan.proposed`, `plan.accepted` | `{ summary, items: [{ id, text, check }] }`; `plan.accepted` adds `by` (`auto-mode` or `owner`). | Shown |
-| `evaluation.passed`, `evaluation.failed` | `{ item, text, round, tier, evidence, faults[] }` | Shown |
+| `plan.proposed`, `plan.accepted` | `{ summary, requirements: [{ id, text }], items: [{ id, text, detail, check, covers[] }], leftOut: [{ requirement, text, reason }] }`; `plan.accepted` adds `by` (`auto-mode` or `owner`). `requirements` are what the idea asks for, quoted in its own words; each item `covers` requirement ids; `leftOut` is a requirement deliberately not built, with the reason the owner reads. An older plan has items `{ id, text, check }` only. | `summary`, `requirements`, each item's `text`, `leftOut` shown; `detail`, `check` and `covers` technical only |
+| `evaluation.passed`, `evaluation.failed` | `{ item, text, summary, round, tier, requirements: [{ id, text, met, evidence, calls[] }], evidence, faults[] }` — `text` is the item's plain text; `summary` one plain sentence ("Checked and working: … (2 of 2 of your requirements shown working in the running app)" / "Sent back for repair, at no charge: …"); `requirements` what code's gate found for each requirement the item delivers (`calls` the signed-in calls to the running app its evidence names). | `text`, `summary` shown; `tier`, `requirements`, `evidence`, `faults` technical only |
+| `approval.requested` | `{ approvalId, title, detail }` — `title` what the agent or the factory asks, in words ("Start researching an idea: …?", "Let the agent change part of the app?", "Accept this plan?"); `detail` the tool, its command or files, the rule that asked. | `title` shown; `detail` technical |
+| `task.created`, `task.*` | The task's `title`, which the `tasks` tool refuses unless it is plain words. | Shown |
 
 **Actions**, as the console counts them, are `tool.requested` plus `subagent.started` events.
+
+**The normal-mode rule (CLAUDE.md rule 12), for every owner-facing field the Runner writes** — a `message`
+without `kind` (`title`, `text`), `plan.*` (`summary`, item `text`, `leftOut` reasons), `evaluation.*` (`text`,
+`summary`), `approval.requested` (`title`), task titles, a sub-agent's `title`, and hire and contractor messages:
+plain language for the owner, naming no file, path, endpoint, HTTP call, code, raw key (`stage:research:acme`),
+or piece of infrastructure (containers, repositories, commits, servers, the API, migrations). Technical detail
+travels in its own fields (`detail`, `check`, `evidence`, `faults`, `tier`, approval `detail`, `run.finished`'s
+`summary`), which only technical mode shows. One check enforces it, `Endgame.Harness.Events.OwnerText`:
+`propose_plan` refuses a plan whose item text or summary breaks it, the `tasks` tool refuses such a title, a
+sub-agent's technical title becomes "Looked into part of the work", a run's closing message falls back to a plain
+sentence when its summary is technical, and `WorkflowTests` runs every owner-facing field of research, build and
+suggest runs through it. A `milestone` is a word from a closed set — `research.started`, `verdict`, `decided`,
+`placed`, `planned`, `security.reviewed`, `security.rechecked`, `published`, `suggested`, `memory.reviewed`,
+`finished` — never a key; hires are told as plain messages without one.
 
 ## Credits
 
@@ -394,7 +416,7 @@ under both address shapes, exposes `/health` and its OpenAPI description, reache
 through the kit with the token Dock injects, and has no outbound access except through the egress
 proxy. PLATFORM-API.md is the contract.
 
-## The `suggest` run (owed by the Runner)
+## The `suggest` run
 
 A Builder's `POST /api/ideas/suggestions` queues a run of kind `suggest` at the organisation or a
 division, its log opening with `estimate.made { credits, basis: "suggest" }` and a `message`
@@ -405,6 +427,26 @@ they are reserved, attributed and capped as usual, within `Estimates:SuggestCall
 five suggestions to `POST /internal/runs/{id}/suggestions`, then finishes the run (`run.finished`).
 Each suggestion names the gap it fills, why this organisation is placed to build it (from its
 products and ideas), and what it would reuse; none repeats `alreadySuggested` or an existing idea.
+As built (`SuggestWorkflow`): the organisation's researcher (need `stage:research:<scope>`) makes at most two
+attempts of three steps each, with no web search; code keeps only suggestions with every field within the control
+plane's limits and a title that repeats nothing already suggested or researched (compared without case, spacing or
+punctuation), gives one corrected attempt when none is left, records them once (a resumed run never records twice),
+and says so in a plain `message` (milestone `suggested`); a run with nothing new fails with a plain sentence.
+
+## Estimates
+
+What the owner is shown before work starts (CLAUDE.md rule 11) is the **expected** cost; the **ceiling** is the
+most the work could cost, since every model call is reserved at its worst case and a cap is exact.
+
+| Run | Expected | Ceiling |
+| --- | --- | --- |
+| `research`, `suggest` (the control plane, `ResearchEstimator`) | The median of the organisation's own last 20 succeeded runs of that kind (billable settlements), once it has `Estimates:MinimumSamples` (3); before that the measured starting figure — `Estimates:ResearchStartingCredits` 12 (the live research runs of 2026-11-25 cost 9.0–12), `SuggestStartingCredits` 2. Never above the ceiling. | `ResearchCalls` (8) or `SuggestCalls` (6) calls at the route's reservation. |
+| `build`, `task`, `conversation`, `review` (the Runner, `Estimator`) | The median of past succeeded runs of the kind in the organisation once there are 3; before that `Runner:EstimatePriors` — a build 20 credits for a typical four-item plan (the live builds cost 13.35 and 14.56 for three items), scaled by the plan's size once there is one. | The gateway's reservation on every call. |
+
+`estimate.made` is `{ credits, basis, samples?, stage?, source?, reason?, ceiling? }`: the control plane's carry
+`basis: research|suggest`, `reason` (the sentence saying where the figure comes from) and `ceiling`; the Runner's carry
+`basis` as that sentence. History never crosses organisations. Research sizes its search budget from the ceiling, never
+from the expected cost (which history calibrates, and which the budget itself drives).
 
 ## Ports and names (inside the compose network)
 
