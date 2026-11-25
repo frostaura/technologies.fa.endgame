@@ -401,6 +401,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var spent = (await ledger.SpendThisMonthByNodeAsync(scope.OrganisationId, cancellationToken)).Where(s => s.AppId == app.Id).Sum(s => s.Credits);
         var measured = (await telemetry.SummariesAsync(scope.OrganisationId, app.Id, cancellationToken)).GetValueOrDefault(app.Id);
         var sharedWith = await db.AppShares.AsNoTracking().CountAsync(x => x.OrganisationId == scope.OrganisationId && x.AppId == app.Id, cancellationToken);
+        var endUsers = await db.AppEndUsers.AsNoTracking().CountAsync(x => x.OrganisationId == scope.OrganisationId && x.AppId == app.Id, cancellationToken);
         var runningCost = await hosting.RunningCostAsync(scope.OrganisationId, app.Id, cancellationToken);
         var route = (await tree.RoutesAsync(cancellationToken)).Routes.FirstOrDefault(r => r.AppId == app.Id);
         session.UseOrganisation(scope.OrganisationId);
@@ -429,11 +430,10 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             ["latencyP95Ms"] = measured.LatencyP95Ms,
             ["lastVisitAt"] = measured.LastVisitAt,
         };
-        JsonNode? runningCostView = runningCost is { } rc ? new JsonObject { ["sleep"] = rc.Sleep, ["alwaysOn"] = rc.AlwaysOn } : null;
         return new PublicAppView(app.Id, app.Name, scope.Path.ToString(), new HealthView(health, summary), route?.Paused == true ? "paused" : AppRunning(app.Status, alwaysOn),
             new AppAddressesView(addresses.Path, addresses.Subdomain), telemetryView,
             new CostView(spent, cap is null ? null : CascadeService.NumberOf(JsonNode.Parse(cap.Entry.ValueJson))),
-            new AppSettingsView(alwaysOn ? "always-on" : "sleep", access), runningCostView, sharedWith, app.Status, app.CurrentVersion, app.PublishedAt,
+            new AppSettingsView(alwaysOn ? "always-on" : "sleep", access), runningCost, sharedWith, endUsers, app.Status, app.CurrentVersion, app.PublishedAt,
             idle is null ? TreeService.DefaultIdleMinutes : (int)(CascadeService.NumberOf(JsonNode.Parse(idle.Entry.ValueJson)) ?? TreeService.DefaultIdleMinutes));
     }
 
@@ -478,12 +478,35 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var frostaura = CascadeService.OperatorOverdraft(settings);
         var own = settings.Where(e => (e.Key == CascadeKeys.OverdraftOwnLimit && e.Level == NodeLevel.Organisation) || (e.Key == CascadeKeys.OverdraftLimit && e.Level > NodeLevel.Organisation))
             .Select(e => CascadeService.NumberOf(JsonNode.Parse(e.ValueJson)) ?? 0m).DefaultIfEmpty(-1m).Min();
+        var limits = await OverdraftLimitsAsync(scope, cancellationToken);
         var topUps = await db.CreditEntries.AsNoTracking().Where(e => e.OrganisationId == org && e.Kind == "top_up")
             .OrderByDescending(e => e.CreatedAt).Take(50)
             .Select(e => new TopUpView(e.CreatedAt, e.Amount, e.Note ?? "")).ToListAsync(cancellationToken);
         return new CreditsView(scope.Path.ToString(), position.Balance, new MonthView(spent, ai, spent - ai), monthsLeft, budgets, estimates,
-            new NotChargedView(notCharged, repairs), new OverdraftView(frostaura, own < 0 ? null : own), topUps,
+            new NotChargedView(notCharged, repairs), new OverdraftView(frostaura, own < 0 ? null : own, limits), topUps,
             position.HeldOrganisation, position.Balance + position.OverdraftLimit);
+    }
+
+    /// <summary>The narrower overdraft limits (division, project, app) on the scope's chain above it and beneath it, in tree order.</summary>
+    private async Task<IReadOnlyList<OverdraftLimitView>> OverdraftLimitsAsync(ResolvedScope scope, CancellationToken cancellationToken)
+    {
+        var org = scope.OrganisationId;
+        var rows = (await (from e in db.CascadeEntries.AsNoTracking()
+                           join u in db.Users.AsNoTracking() on e.SetBy equals u.Id into people
+                           from u in people.DefaultIfEmpty()
+                           where e.OrganisationId == org && e.Kind == "setting" && e.Key == CascadeKeys.OverdraftLimit && e.DivisionId != null
+                           select new { Entry = e, SetByName = u == null ? null : u.DisplayName }).ToListAsync(cancellationToken))
+            .Where(r => scope.OnChain(r.Entry) || scope.Contains(r.Entry)).ToList();
+        var views = new List<OverdraftLimitView>();
+        foreach (var r in rows)
+        {
+            var node = await scopes.ForRowAsync(org, r.Entry.DivisionId, r.Entry.ProjectId, r.Entry.AppId, cancellationToken);
+            views.Add(new OverdraftLimitView(node.Path.ToString(), node.Node.Name, node.Level.ToWire(), CascadeService.NumberOf(JsonNode.Parse(r.Entry.ValueJson)) ?? 0m,
+                r.Entry.SetAt, r.Entry.SetBy, r.SetByName));
+        }
+
+        session.UseOrganisation(org);
+        return views.OrderBy(v => v.Scope, StringComparer.Ordinal).ToList();
     }
 
     /// <summary>Every node at and beneath the scope, in tree order, with its own cap and this month's spend; employees with a cap follow their node.</summary>

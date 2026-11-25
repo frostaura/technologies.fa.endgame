@@ -40,7 +40,9 @@ and credit.
    own steps folded beneath it, tool and model work summarised ("Read 4 files", "Ran the tests — 12
    passed"), and actions counted as ARCH-004 counts them (tool calls plus contractors briefed). It never
    shows a payload, a model, a tool's arguments or the rule that decided; technical mode (header toggle,
-   remembered) shows every event raw, still grouped under its sub-agent.
+   remembered) shows every event raw, still grouped under its sub-agent. When a **research** run ends it
+   links to its idea ("The verdict is ready" when it finished, "See what research found" otherwise); a
+   build or any other run never offers a verdict, though a build started from an idea carries its `ideaId`.
 5. **Verdict**: the agreed verdict document (ARCH-004, *The verdict document*): the case against, argued
    first; existing products with what each does and its source; the gap; demand and its signals; what to
    change; what would change the verdict; the red-line screen; the method (strands, searches, sources,
@@ -110,11 +112,13 @@ and credit.
     then the suggestions run; each suggestion's gap, why this organisation, and what it would reuse; taking
     one shows its research estimate first, then opens the new idea; setting one aside is optimistic.
 21. **Credits, completed**: the Owner's own overdraft limit, checked against FrostAura's and refused deeper;
-    a narrower limit for a division, project or app (Admin); asking FrostAura for a top-up (Owner); the
+    a narrower limit for a division, project or app (Admin), and the list of those already set with who set
+    them (Owner and Admin; the scope in technical mode); asking FrostAura for a top-up (Owner); the
     requests and what became of them.
 22. **God mode** (`/operator`, operators only; a coral band on every screen says so): every organisation with
     balance, standing, overdraft, apps and last activity; enter one (the answer says where it is logged) and
-    open its org chart (`/?organisation=`); top up, optionally answering a request; decline a request with
+    open its org chart (`/?organisation=`); top up, optionally answering a request; the top-ups made, each
+    named by the organisation's display name (its address name added in technical mode); decline a request with
     a reason; set the deepest overdraft; the prices with confirmation and their change history; provision an
     organisation for an invited Owner, the Owner's code shown once.
 23. **Normal mode in the run view** prints no `:`-separated key, id, model or file: plan items read their
@@ -172,7 +176,7 @@ is camelCase, errors are problem details. What the console relies on beyond ARCH
 | `GET /api/tree` | `{ generatedAt, viewerRole: owner\|admin\|builder\|viewer\|none, organisation \| null, divisions[], needsYou[] }`; app `visitsToday` is null until measured. `viewerRole` gates the secrets and operator-log links. |
 | `GET /api/runs/{id}` | Also `employeeId`, `conversationId`, `budgetExhausted`, `outcome`, `summary`, `createdAt`. A conversation run's log opens with the owner's own `message { from: "owner", text }`. |
 | `GET /api/conversations?scope=&employeeId=` | `{ scope, conversationId \| null, employeeId \| null, messages[] { runId, seq, at, from, text } }`, oldest first, at most 200. |
-| `GET /api/apps/{id}` | `telemetry` and `runningCost` are **null** until measured; also `status`, `version`, `publishedAt`, `idleMinutes`. |
+| `GET /api/apps/{id}` | `telemetry` is **null** until measured; `runningCost` is always an object — `state: not-enough-history` (no figures) until 24 hours are measured; also `status`, `version`, `publishedAt`, `idleMinutes`, `endUsers`. |
 | `GET /api/credits?scope=` | Also `heldCredits` and `available`. A zero or negative balance has no "months left"; the page says what is left of the overdraft instead. |
 | `GET /api/ideas/{id}` | `verdict` is the agreed verdict document (older runs' `{ evidence }` sections and products as text are read too); `redLine` names a breached red line by its code; `decision.via`. |
 | `GET /api/tree` | Workers also carry `status`, `idle`, `standing`, `briefedBy`; `needsYou` adds `hire` and `idle`. Older answers without them still read. |

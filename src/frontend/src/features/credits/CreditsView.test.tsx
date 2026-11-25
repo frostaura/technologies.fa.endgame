@@ -16,7 +16,7 @@ const CREDITS: Credits = {
   ],
   estimates: { pieces: 8, withinPercent: 11, under: 5, over: 3, largestMissPercent: 19 },
   notCharged: { credits: 42, repairs: 3 },
-  overdraft: { frostauraLimit: 2000, ownLimit: null },
+  overdraft: { frostauraLimit: 2000, ownLimit: null, limits: [] },
   topUps: [{ at: "2026-11-01T00:00:00Z", credits: 5000, note: "Added by FrostAura" }],
   heldCredits: 6,
   available: 6321,

@@ -104,7 +104,7 @@ export const OPERATOR_ORGS = [
   { id: "o1", slug: "acme", name: "Acme", status: "active", createdAt: "2026-11-24T23:41:13Z", balance: 4967.01, standing: "in-credit", overdraft: { frostauraLimit: 0, ownLimit: null, effective: 0 }, apps: 1, lastActivityAt: "2026-11-25T02:06:34Z", openTopUpRequests: 1 },
 ];
 
-export const OPERATOR_TOP_UPS = [{ id: "tu1", organisation: "acme", credits: 5000, note: "Opening balance", at: "2026-11-24T23:41:45Z", by: "op1", byEmail: "operator@example.test" }];
+export const OPERATOR_TOP_UPS = [{ id: "tu1", organisation: "acme", organisationName: "Acme", credits: 5000, note: "Opening balance", at: "2026-11-24T23:41:45Z", by: "op1", byEmail: "operator@example.test" }];
 
 export const PRICING = {
   pricing: { creditsPerUsd: 100, margin: 1.0, hosting: { usdPerAwakeHour: 0.002, usdPerGbHourMemory: 0.004, usdPerGbMonthStorage: 0.1, usdPerMillionRequests: 0.2 }, defaultAppModelMonthlyCredits: 500 },

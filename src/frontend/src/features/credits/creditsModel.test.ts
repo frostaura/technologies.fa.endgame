@@ -10,7 +10,7 @@ describe("paceLine", () => {
   });
 
   it("says what is left of the overdraft when below zero, using the tighter of the two limits", () => {
-    expect(paceLine({ balance: -200, monthsLeftAtPace: 0, overdraft: { frostauraLimit: 3000, ownLimit: 1000 } })).toBe("You are below zero. 800 credits more can be spent before work stops; the next top-up settles the debt first.");
-    expect(paceLine({ balance: -1000, monthsLeftAtPace: null, overdraft: { frostauraLimit: 1000, ownLimit: null } })).toContain("at your limit");
+    expect(paceLine({ balance: -200, monthsLeftAtPace: 0, overdraft: { frostauraLimit: 3000, ownLimit: 1000, limits: [] } })).toBe("You are below zero. 800 credits more can be spent before work stops; the next top-up settles the debt first.");
+    expect(paceLine({ balance: -1000, monthsLeftAtPace: null, overdraft: { frostauraLimit: 1000, ownLimit: null, limits: [] } })).toContain("at your limit");
   });
 });

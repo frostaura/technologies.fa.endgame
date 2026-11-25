@@ -20,7 +20,9 @@ public sealed record OperatorOverdraftRequest(decimal Credits);
 
 public sealed record EnteredView(Guid OrganisationId, string Organisation, string Role, DateTimeOffset EnteredAt, string Logged);
 
-public sealed record OperatorTopUpView(Guid Id, string Organisation, decimal Credits, string Note, DateTimeOffset At, Guid? By, string? ByEmail);
+/// <param name="Organisation">The organisation's address name (slug).</param>
+/// <param name="OrganisationName">Its display name: what the console shows.</param>
+public sealed record OperatorTopUpView(Guid Id, string Organisation, string OrganisationName, decimal Credits, string Note, DateTimeOffset At, Guid? By, string? ByEmail);
 
 /// <param name="Status"><c>fulfilled</c> or <c>declined</c>.</param>
 /// <param name="TopUpEntryId">The top-up that answered it, when there was one.</param>
@@ -93,7 +95,7 @@ internal static class OperatorEndpoints
                                   from u in people.DefaultIfEmpty()
                                   where e.Kind == "top_up" && (organisation == null || o.Slug == organisation)
                                   orderby e.CreatedAt descending
-                                  select new OperatorTopUpView(e.Id, o.Slug, e.Amount, e.Note ?? "", e.CreatedAt, e.CreatedBy, u == null ? null : u.Email)).Take(500).ToListAsync(ct);
+                                  select new OperatorTopUpView(e.Id, o.Slug, o.Name, e.Amount, e.Note ?? "", e.CreatedAt, e.CreatedBy, u == null ? null : u.Email)).Take(500).ToListAsync(ct);
                 session.Clear();
                 return Results.Ok(rows);
             })

@@ -62,6 +62,7 @@ public static class DependencyInjection
 
         services.AddScoped<ScopeResolver>();
         services.AddScoped<AccessService>();
+        services.AddSingleton<OperatorVisits>();
         services.AddScoped<CascadeService>();
         services.AddScoped<CreditLedger>();
         services.AddScoped<ICreditLedger>(sp => sp.GetRequiredService<CreditLedger>());

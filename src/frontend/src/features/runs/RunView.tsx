@@ -160,7 +160,8 @@ function RunBody({ run }: { run: Run }) {
         </div>
       )}
 
-      {terminal && run.ideaId && (
+      {/* Only research ends in a verdict: a build run started from an idea carries its ideaId too, and offers none. */}
+      {terminal && run.kind === "research" && run.ideaId && (
         <Link
           href={paths.idea(run.ideaId)}
           className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary bg-primary-tint px-5 py-4 font-semibold text-ink transition hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0"

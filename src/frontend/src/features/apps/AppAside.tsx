@@ -34,8 +34,9 @@ function Chip({ icon, children }: { icon: IconName; children: ReactNode }) {
 }
 
 /**
- * What the app uses: the platform services it depends on (from the organisation graph), the secrets
- * it can read by name, who it is shared with, and that AI assistants can work with it.
+ * What the app uses: the platform services it depends on (from the organisation graph), how many people
+ * have signed up to it, the secrets it can read by name, who it is shared with, and that AI assistants can
+ * work with it.
  */
 export function WhatItUses({ app }: { app: AppDetail }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
@@ -67,6 +68,7 @@ export function WhatItUses({ app }: { app: AppDetail }) {
               {technical ? s : (SERVICE[s]?.label ?? s)}
             </Chip>
           ))}
+          <Chip icon="employee">{app.endUsers === 0 ? "No one has signed up yet" : `${plural(app.endUsers, "person", "people")} signed up`}</Chip>
           {app.settings.access === "shared" && <Chip icon="employee">{`Shared with ${plural(app.sharedWith, "person", "people")}`}</Chip>}
           {secretsView.kind === "loaded" && secretsView.data.effective.length > 0 && <Chip icon="secrets">{plural(secretsView.data.effective.length, "secret")}</Chip>}
           <Chip icon="assistants">Open to AI assistants</Chip>

@@ -14,7 +14,7 @@ const CREDITS: Credits = {
   budgets: [],
   estimates: null,
   notCharged: { credits: 0, repairs: 0 },
-  overdraft: { frostauraLimit: 2000, ownLimit: null },
+  overdraft: { frostauraLimit: 2000, ownLimit: null, limits: [] },
   topUps: [],
   heldCredits: 0,
   available: 6321,
@@ -73,6 +73,50 @@ describe("the Owner's own overdraft", () => {
     stub({ "GET /api/me": json({ ...ME, memberships: [{ ...ME.memberships[0], role: "admin" }] }) });
     renderWithStore(<CreditsView />);
     expect(await screen.findByText("Only the Owner sets the organisation’s own limit.")).toBeTruthy();
+  });
+});
+
+describe("the narrower limits already set", () => {
+  const LIMITS: Credits["overdraft"] = {
+    frostauraLimit: 2000,
+    ownLimit: 300,
+    limits: [
+      { scope: "acme/tools", name: "Tools", level: "division", credits: 200, setAt: "2026-11-20T09:00:00Z", setBy: "u1", setByName: "Ada Owner" },
+      { scope: "acme/tools/ledger/web", name: "Ledger web", level: "app", credits: 50, setAt: "2026-11-21T09:00:00Z", setBy: null, setByName: null },
+    ],
+  };
+
+  it("lists each division, project or app held to less, with its limit and who set it", async () => {
+    stub({ "GET /api/credits": json({ ...CREDITS, overdraft: LIMITS }) });
+    renderWithStore(<CreditsView />);
+    const list = await screen.findByRole("list", { name: "Tighter limits already set" });
+    const [tools, ledger, ...rest] = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
+    expect(rest).toHaveLength(0);
+    expect(tools).toContain("Tools");
+    expect(tools).toContain("division");
+    expect(tools).toContain("200 below zero");
+    expect(tools).toContain("Ada Owner");
+    expect(ledger).toContain("Ledger web");
+    expect(ledger).toContain("50 below zero");
+    expect(list.textContent).not.toContain("acme/tools");
+  });
+
+  it("says when none is set, and shows the scopes in technical mode", async () => {
+    stub();
+    const { unmount } = renderWithStore(<CreditsView />);
+    expect((await screen.findByText("No division, project or app is held to less than the organisation.")).dataset.state).toBe("empty");
+    unmount();
+    localStorage.setItem("endgame.mode", "technical");
+    stub({ "GET /api/credits": json({ ...CREDITS, overdraft: LIMITS }) });
+    renderWithStore(<CreditsView />);
+    expect((await screen.findByRole("list", { name: "Tighter limits already set" })).textContent).toContain("acme/tools/ledger/web");
+  });
+
+  it("is not shown to a Builder", async () => {
+    stub({ "GET /api/me": json({ ...ME, memberships: [{ ...ME.memberships[0], role: "builder" }] }), "GET /api/credits": json({ ...CREDITS, overdraft: LIMITS }) });
+    renderWithStore(<CreditsView />);
+    await screen.findByText("If you run out");
+    expect(screen.queryByRole("list", { name: "Tighter limits already set" })).toBeNull();
   });
 });
 

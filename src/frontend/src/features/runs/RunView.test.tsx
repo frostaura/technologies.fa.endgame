@@ -184,4 +184,14 @@ describe("RunView", () => {
     expect(screen.getByRole("link", { name: /The verdict is ready/ }).getAttribute("href")).toBe("/ideas/i1");
     expect(screen.getByRole("heading", { name: "Outcome" }).nextSibling?.textContent).toBe("Do not build.");
   });
+
+  it("never offers a verdict on a build run, even one that came from an idea", async () => {
+    base({ "GET /api/runs/r1": json({ ...RUN, kind: "build", title: "Building Pager" }) });
+    renderWithStore(<RunView runId="r1" />);
+    await screen.findByRole("heading", { name: "Building Pager" });
+    feed([["run.started"], ["run.finished", { outcome: "succeeded", summary: "Published." }]]);
+    expect(await screen.findByRole("heading", { name: "Outcome" })).toBeTruthy();
+    expect(screen.queryByText(/The verdict is ready/)).toBeNull();
+    expect(screen.queryByText(/See what research found/)).toBeNull();
+  });
 });

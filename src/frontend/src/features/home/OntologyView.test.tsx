@@ -54,7 +54,7 @@ describe("OntologyView", () => {
     renderWithStore(<OntologyView scope="acme" view="data-flow" />);
     const list = await screen.findByRole("list", { name: "How data flows" });
     expect(list.textContent).toContain("sends data to AI inside apps");
-    expect(list.textContent).toContain("signed-in end users");
+    expect(list.textContent).toContain("signed-in people");
     expect(list.textContent).not.toContain("models");
   });
 });
