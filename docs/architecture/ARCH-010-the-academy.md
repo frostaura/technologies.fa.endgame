@@ -173,8 +173,8 @@ Nothing is stored server-side. The browser keeps `endgame-academy:progress:v1` i
   described above.
 - Captured screenshots: no step carries an `image` or a `shot` yet, so the print version and the
   degraded stage show text and facts where a picture would go.
-- Scripts for the remaining flows (15 of 321 are scripted); a later lane writes them with
-  `npm run script:new`.
+- Scripts for the flows still without one; the build prints how many are scripted, and the About
+  page shows it.
 
 ## Links
 
