@@ -10,8 +10,52 @@ namespace Endgame.Tests.Hosting;
 /// </summary>
 public static class DockerCli
 {
-    /// <summary>Everything the tests create starts with this; nothing else is ever touched.</summary>
-    public const string Prefix = "test-endgame-";
+    /// <summary>
+    /// This test run's own id. Two test runs on one machine never share a name, a Dock instance label or a
+    /// subnet pool, so neither removes or collides with what the other made.
+    /// </summary>
+    public static readonly string RunId = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(3)).ToLowerInvariant();
+
+    /// <summary>Everything this run creates starts with this; nothing else is ever touched.</summary>
+    public static readonly string Prefix = $"test-endgame-{RunId}-";
+
+    /// <summary>
+    /// Images every run may reuse, keyed by their content (the workspace image's tag is a hash of what it is
+    /// built from): never removed by a run, so a warm machine skips the slowest build. Remove by hand with
+    /// <c>docker images 'test-endgame-shared-*'</c>.
+    /// </summary>
+    public const string SharedPrefix = "test-endgame-shared-";
+
+    private static readonly Lazy<Task<string>> Pool = new(PickSubnetPoolAsync);
+
+    /// <summary>A private /16 no network on this engine overlaps, chosen once per run, for the Dock under test.</summary>
+    public static Task<string> SubnetPoolAsync() => Pool.Value;
+
+    private static async Task<string> PickSubnetPoolAsync()
+    {
+        var subnets = new List<string>();
+        foreach (var id in (await CheckedAsync("network", "ls", "-q")).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var (exit, stdout, _) = await RunAsync(TimeSpan.FromSeconds(15), "network", "inspect", "--format", "{{range .IPAM.Config}}{{.Subnet}} {{end}}", id);
+            if (exit == 0)
+            {
+                subnets.AddRange(stdout.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            }
+        }
+
+        // 10.64.0.0 to 10.127.255.255: clear of the stacks' own pools (10.213 to 10.219) and of Docker's defaults.
+        var start = System.Security.Cryptography.RandomNumberGenerator.GetInt32(64);
+        for (var i = 0; i < 64; i++)
+        {
+            var octet = 64 + ((start + i) % 64);
+            if (!subnets.Any(s => s.StartsWith($"10.{octet}.", StringComparison.Ordinal)))
+            {
+                return $"10.{octet}.0.0/16";
+            }
+        }
+
+        throw new InvalidOperationException("No free 10.x.0.0/16 between 10.64 and 10.127 on this Docker engine.");
+    }
 
     private static readonly Lazy<string?> Unavailable = new(Probe);
 
