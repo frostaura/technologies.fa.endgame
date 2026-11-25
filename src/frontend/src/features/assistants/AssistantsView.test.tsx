@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { modeSet } from "@/store/uiSlice";
 import { TOKENS } from "@/test/breadth";
-import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
+import { ME, json, problem, renderWithStore, stubApi, type Route } from "@/test/harness";
 import { AssistantsView } from "./AssistantsView";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
@@ -20,8 +20,14 @@ afterEach(() => {
   localStorage.clear();
 });
 
-function stub(tokens: Response | "pending", extra = {}) {
+function stub(tokens: Route, extra = {}) {
   return stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/tree": json(TREE), "GET /api/notifications": json({ organisation: "acme", unread: 0, notifications: [] }), "GET /api/tokens": tokens, ...extra });
+}
+
+/** When the console last received the list of keys from the server. */
+function tokensFetchedAt(store: ReturnType<typeof renderWithStore>["store"]): number {
+  const entry = Object.entries(store.getState().api.queries).find(([key]) => key.startsWith("getTokens"))?.[1];
+  return entry?.fulfilledTimeStamp ?? 0;
 }
 
 describe("AssistantsView", () => {
@@ -68,7 +74,14 @@ describe("AssistantsView", () => {
 
   it("makes a key no higher than the person's role and shows it once, never in the store", async () => {
     const made = { token: "egp_secret_value_shown_once", accessToken: { ...TOKENS[0], id: "t3", name: "Desk assistant", role: "admin" } };
-    const api = stub(json(TOKENS), { "POST /api/tokens": json(made, 201) });
+    // The server keeps what it made: the console invalidates its list after a create and refetches it, and on a fast
+    // machine that refetch lands before the assertions below — a stub that forgot the new key made this test flaky.
+    // The refetch after the create is held until the test lets it land, so its order is fixed.
+    let held: unknown[] = TOKENS;
+    let created = false;
+    let land: (() => void) | null = null;
+    const list = () => (created ? new Promise<Response>((resolve) => (land = () => resolve(json(held)))) : json(held));
+    const api = stub(list, { "POST /api/tokens": () => ((created = true), (held = [made.accessToken, ...TOKENS]), json(made, 201)) });
     const { store } = renderWithStore(<AssistantsView />);
     await screen.findByRole("list", { name: "Keys" });
     const role = screen.getByLabelText("What it may do") as HTMLSelectElement;
@@ -81,6 +94,13 @@ describe("AssistantsView", () => {
     expect(within(once).getByText("egp_secret_value_shown_once")).toBeTruthy();
     expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ name: "Desk assistant", organisation: "acme", role: "admin", expiresInDays: 30 });
     expect(JSON.stringify(store.getState())).not.toContain("egp_secret_value_shown_once");
+    expect(within(screen.getByRole("list", { name: "Keys" })).getByText("Desk assistant")).toBeTruthy();
+    // After the refetch the list is the server's, and the key is still there.
+    await waitFor(() => expect(land).not.toBeNull());
+    const before = tokensFetchedAt(store);
+    act(() => land?.());
+    await waitFor(() => expect(tokensFetchedAt(store)).toBeGreaterThan(before));
+    await act(async () => {});
     expect(within(screen.getByRole("list", { name: "Keys" })).getByText("Desk assistant")).toBeTruthy();
   });
 
