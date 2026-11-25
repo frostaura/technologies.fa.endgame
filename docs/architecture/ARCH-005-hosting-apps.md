@@ -38,6 +38,8 @@ slowdown; each holds 40 to 55 MB idle. A stopped app holds no memory.
   counts in-flight requests so the idle sweep never stops an app that is serving.
 - **Stagger simultaneous wakes.** Twenty at once took 1.3 seconds median, forty 2.8 — and after a
   restart of the host every app is asleep at once.
+- **Every wake rejoins the app's peers to its network** (edge, database, egress proxy; idempotent): a redeployed edge is
+  a new container on no app network, and on the acceptance stack every app answered 503 until this was done.
 - **Fail fast on a crash.** Dock watches for the container exiting; Edge serves a proper
   unavailable page instead of waiting out a timeout.
 

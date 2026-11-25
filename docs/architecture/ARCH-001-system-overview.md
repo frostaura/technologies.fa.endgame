@@ -128,7 +128,8 @@ and removes it.
 ## Not built yet
 
 The offsite copy runs once R2 is configured (ARCH-007). Builders work one plan item at a time in one workspace:
-parallel builders are not built (ARCH-006, *Sub-agents*).
+parallel builders are not built (ARCH-006, *Sub-agents*). The evaluator's test members write into the app's own
+database, and their records stay in the published app: no separate preview database (ARCH-006, *Checking the work*).
 
 ## Links
 

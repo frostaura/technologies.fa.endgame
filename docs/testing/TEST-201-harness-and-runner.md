@@ -116,6 +116,52 @@ page with its note and a Status selector; at phone width the cards stack in one 
 edge's own "Sign in to Book Club Reading List" page. Not built: a separate "what everyone is reading now" section — each
 card shows its status instead; the owner is signed in through the console session, not the app's own form.
 
+### Runs 2026-11-25, the wiring lane: the plan as a contract (`make e2e-factory`, own stack `endgame-wfac`, edge 28195)
+
+Five runs of the same reading-list idea, spend stopped at US$5 each. Every run's step 3 passed from the third on
+(runs 2 and 3 found the two defects below); step 4, the owner's browser walk, failed on the driver until it learnt each
+built app's own controls — every build lays the same features out differently.
+
+| Run | Research (estimate → spent) | Build (estimate → spent) | Requirements | "Reading now" | Repairs, tiers | Calls to the running app | Cost | Wall |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 12 → 9.85 | 15 → 17.6 | 8, none left out | r8, delivered by 2 items, evidenced by `GET api/books/reading` signed in as two test members | 0, `build` | 22 | US$0.27 | 21 min |
+| 4 | 12 → 10.0 | 25 → 23.9 | 5 | r4, evidenced by `POST api/books` then `GET api/books/reading` | 0, `build` | 33 | US$0.37 | 30 min |
+| 5 | — | — | — | the view "What everyone is reading now" lists the book the owner marked reading (browser) | 0, `build` | — | US$0.33 | 28 min |
+
+The built apps: a light "Book club" page, a navigation with "All books" and **"Reading now"**, books as cards with
+"Mark reading" / "Mark finished"; the reading-now page titled "What everyone is reading now". The evaluator's
+test members' books (Dune, Gilead, "Added by Test member (member-a)") are in the published app (ARCH-006, known gap).
+In run 5 the reading-now view also still listed a book the owner had just marked finished — not investigated further.
+
+### The acceptance tests (`make e2e-acceptance`, own stack `endgame-acc`, edge 28295)
+
+1. **Tenant zero** — FrostAura and its divisions Technologies and Labs made through the public API; after the club
+   build its workforce is Iris (market researcher, hired by research), Theo (software engineer) and Nadia (QA engineer,
+   hired as the project entered build and evaluation) and the standing security reviewer; 12 org-chart nodes.
+2. **The club court-booking app** — research said do not build ("crowded market; nobody asked for the one new part",
+   24 searches) and the owner overruled it. First build: 4 of 5 items passed, the webhook-and-e-mail item failed four
+   rounds (`build` → `build-t3`), the evaluator unable to call a signed webhook or see e-mail, out of steps each time; 55
+   minutes, 31.6 credits. Fixed (`call_webhook`, `sent_emails`, 50 steps) and built again: 8 requirements, 5 items, **one
+   repair on `build-t1`** (the webhook and e-mail item) and the rest first time on `build`; 44 signed-in calls; security
+   review passed; published privately; 42.5 minutes; estimate 20 credits, spent 59.1 (a larger plan than the starting
+   figure assumes). Then, in a real browser as the signed-in member: an admin's 60-minute package through the app's MCP
+   tool (`addMemberMinutes`), a court booked in the app's own form, the balance falling by 30, the booking listed; the
+   confirmation e-mail in the mail catcher ("Court booked: Court 1 at … UTC"); a booking starting now made through MCP
+   (`createBooking`), then the hardware's signed call to `hooks/court-status` answering `{"booked":true,"memberName":"Dean
+   (FrostAura)"}`, another court `{"booked":false}`, unsigned 401; the Owner's export holding `manifest.json`,
+   `code.bundle`, `database.dump` (pg_dump custom format) and `platform.json`. **Defects of the built app** (recorded by the
+   driver, not fixed — they are the app's): the "Book a court" link changes the address without showing the form; a
+   member's first package replaced the 120 minutes shown before it.
+3. **An invited organisation** — Harbour Bakery provisioned by the operator for an invited owner, topped up, the
+   invitation e-mailed with its code; the owner registered a **real passkey** (Chromium's virtual authenticator) with it;
+   the specials-board idea (do not build, overruled) built in 16 minutes, 3 requirements, no repairs, 14.6 credits
+   against an estimate of 15; shared with one person by e-mail, who registered a passkey at the app with the code the
+   e-mail carried and opened it ("Today's specials"); FrostAura's owner got 404 for Harbour's tree, app, idea, run,
+   credits and workforce, and in the database (as `endgame_app` pinned to FrostAura) saw 0 of its apps, ideas and runs.
+
+Spend, from the ledgers: FrostAura US$1.56 (of which 0.43 unbilled repairs), Harbour US$0.27, the five factory runs
+US$1.30 — **US$3.12** for the lane.
+
 ### Defects the live runs found, each fixed and pinned
 
 | Defect | Fix | Test |
@@ -127,6 +173,13 @@ card shows its status instead; the owner is signed in through the console sessio
 | Three strands of one research run were promoted as a "recurring" contractor role. | One role per strand | `Research_fans_out_registered_contractors…` |
 | Builders called `mark_item` on a plan only the planner holds. | Tool and instruction removed from builders | — |
 | The build estimate's starting figure was 6 credits. | 120 | — |
+| The evaluator passed a reading list with no "what everyone is reading now" view. | The plan as a contract; the evaluator's signed-in evidence and code's gate | `WorkflowTests.A_plan_that_misses_a_requirement…`, `…passes_an_item_without_showing_it…`, `The_gate_counts_only…` |
+| One evaluation event over 64 KB: the build stopped on a 400. | Every workflow event fitted; the fit reaches strings in arrays | `An_evaluation_whose_evidence_runs_past_the_logs_limit…` |
+| On a fresh stack research finished before the workspace image: "Dock refused: building". | The workspace waits on `workspace_image_not_ready` | `A_workspace_waits_while_dock_prepares_its_image…` |
+| The evaluator could not show a signed webhook or a sent e-mail, and ran out of steps. | `call_webhook`, `sent_emails`, 50 steps | `PlatformApiTests.The_evaluator_reads_the_mail…`, `The_calls_the_gate_counts…` |
+| MCP through the edge answered the console's nginx 405. | Edge routes `/mcp` and `/mcp/*` | `EdgeShippedRoutesTests` |
+| A recreated edge reached no app (503 on every wake). | Every wake rejoins the app's peers | `HostingIntegrationTests.A_recreated_edge_reaches_an_app_again…` |
+| A share was never e-mailed. | The share is queued as e-mail | `PlatformApiTests.Sharing_an_app_e_mails…` |
 
 ### What was changed in the prompts and skills, and why
 

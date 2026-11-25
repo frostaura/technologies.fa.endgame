@@ -104,7 +104,15 @@ probe. Now (`PlanContract.Faults(idea)`, `ProposePlanTool(idea)`, `EvaluationGat
 | Item text and the summary are plain words; files and endpoints go in `detail`. | `propose_plan` refuses (`OwnerText`). |
 | The evaluator shows each requirement its item covers working in the **running** app, signed in as a test member (`call_app`: a session from `POST /internal/apps/{id}/test-session`, the call through Edge's `/internal/apps/{id}/call/{path}`), and cites those calls as `METHOD path`. | Code's gate reads the calls the evaluator made from the run log and fails an item whose every requirement is not marked met with evidence naming a call that was made, or that never called the app at all, whatever the evaluator wrote. The failure goes to repair, unbilled, one tier up. |
 
-`check_preview` remains, signed out, to confirm that what needs signing in answers 401.
+`check_preview` remains, signed out, to confirm that what needs signing in answers 401. Two requirements cannot be shown
+by a signed-in call alone, and the live club build failed on both until the evaluator had: `call_webhook` (a declared
+webhook called as its device would, signed by the control plane with the vault's secret, which the evaluator never
+holds; counted by the gate like a `call_app` call) and `sent_emails` (what the app asked the platform to send). The
+evaluator has 50 steps and is told to answer by its 40th: a live evaluator of a five-requirement item ran out at 30.
+
+**Known gap:** the evaluator's test members write into the app's own database — the preview is the app — so their
+test records stay in the published app (seen in the live builds: the reading list and the bakery's specials show
+"Test member (member-a)" entries). A separate preview database, or cleaning up after evaluation, is not built.
 
 ## Not verified
 
