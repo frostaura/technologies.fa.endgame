@@ -275,6 +275,19 @@ public sealed class ReplayAndContextTests
     }
 
     [Fact]
+    public async Task A_tool_that_prints_binary_never_puts_a_nul_into_the_log()
+    {
+        // The first real build failed on this: grep -a over a DLL printed NUL bytes, and jsonb refused the event.
+        var ws = new FakeWorkspace { Shell = _ => FakeWorkspace.Ok("match\0\u0001here\ttab\n") };
+        var model = new ScriptedModel().ThenTool("run", new { command = "grep -a x lib.dll" }).ThenText("Done.");
+        var (_, log) = await TestAgents.RunAsync(TestAgents.Builder(), model, ws);
+        var content = log.Events.Single(e => e.Type == "tool.result").Payload["content"]!.GetValue<string>();
+        Assert.DoesNotContain('\0', content);
+        Assert.DoesNotContain('\u0001', content);
+        Assert.Contains("match\uFFFD\uFFFDhere\ttab", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task The_fan_out_cap_refuses_more_sub_agents()
     {
         var spawn = new { objective = "o", output_format = "f", boundaries = "b" };

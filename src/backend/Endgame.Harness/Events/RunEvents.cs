@@ -108,7 +108,7 @@ public sealed class AgentEventWriter(IEventSink sink, string agent)
             }
 
             payload[HarnessEvents.AgentField] = Agent;
-            batch.Add(new RunEvent(type, Fit(payload)));
+            batch.Add(new RunEvent(type, Fit(Clean(payload))));
         }
 
         // The control plane takes at most 100 events per append.
@@ -120,6 +120,64 @@ public sealed class AgentEventWriter(IEventSink sink, string agent)
 
         return written;
     }
+
+    /// <summary>
+    /// Replaces the characters a JSON log cannot keep (NUL, and the other C0 controls but tab, newline and
+    /// carriage return) with U+FFFD in every string, in place. A tool that printed a binary file once failed
+    /// a whole build: PostgreSQL's jsonb refuses <c>\u0000</c>.
+    /// </summary>
+    public static JsonObject Clean(JsonObject payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        Scrub(payload);
+        return payload;
+
+        static void Scrub(JsonNode node)
+        {
+            switch (node)
+            {
+                case JsonObject o:
+                    foreach (var key in o.Select(kv => kv.Key).ToList())
+                    {
+                        if (o[key] is JsonValue v && v.TryGetValue<string>(out var text) && NeedsCleaning(text))
+                        {
+                            o[key] = CleanText(text);
+                        }
+                        else if (o[key] is { } child)
+                        {
+                            Scrub(child);
+                        }
+                    }
+
+                    break;
+                case JsonArray a:
+                    for (var i = 0; i < a.Count; i++)
+                    {
+                        if (a[i] is JsonValue v && v.TryGetValue<string>(out var text) && NeedsCleaning(text))
+                        {
+                            a[i] = CleanText(text);
+                        }
+                        else if (a[i] is { } child)
+                        {
+                            Scrub(child);
+                        }
+                    }
+
+                    break;
+            }
+        }
+    }
+
+    private static bool NeedsCleaning(string text) => text.Any(c => c < ' ' && c is not ('\t' or '\n' or '\r'));
+
+    private static string CleanText(string text) => string.Create(text.Length, text, (span, source) =>
+    {
+        for (var i = 0; i < source.Length; i++)
+        {
+            var c = source[i];
+            span[i] = c < ' ' && c is not ('\t' or '\n' or '\r') ? '\uFFFD' : c;
+        }
+    });
 
     /// <summary>Shrinks the largest string fields until the payload fits, marking what was cut.</summary>
     public static JsonObject Fit(JsonObject payload)

@@ -355,3 +355,30 @@ public sealed class ResourceNamesTests
         Assert.Equal("test-endgame", new ResourceNames("test-endgame-", "test-endgame").Labels(ResourceNames.AppKind, app)[ResourceNames.ManagedByLabel]);
     }
 }
+
+/// <summary>
+/// The workspace image carries every command the app kit's contract and the agents' prompts name. The first
+/// real build found `make` missing: every `make build`, `make test` and `make lint` an agent ran failed with
+/// "command not found", and the builder spent its session hunting for a substitute.
+/// </summary>
+public sealed class WorkspaceImageTests
+{
+    [Fact]
+    public void The_workspace_image_installs_every_command_the_kits_contract_uses()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "Endgame.slnx")))
+        {
+            root = root.Parent;
+        }
+
+        Assert.NotNull(root);
+        var dockerfile = File.ReadAllText(Path.Combine(root.FullName, "Endgame.Dock", "Workspaces", "workspace.Dockerfile"));
+        var install = dockerfile[dockerfile.IndexOf("apt-get install", StringComparison.Ordinal)..];
+        install = install[..install.IndexOf("&&", StringComparison.Ordinal)];
+        foreach (var package in new[] { "make", "ripgrep", "git" })
+        {
+            Assert.Contains($" {package}", install, StringComparison.Ordinal);
+        }
+    }
+}

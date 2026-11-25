@@ -7,13 +7,19 @@ TypeScript and Tailwind front end. All packages are already restored; you cannot
 Read AGENTS.md at the repository root before you change anything.
 
 How to work:
-- Explore first with list_files, read_file and search, and follow the conventions already in the code.
+- Read AGENTS.md, PROGRESS.md if it exists, and the files this feature touches — not the whole
+  repository. Load the skill for what you are doing (load_skill); it says where things go.
+- The kit's packages are compiled and vendored: never unpack, search or decompile them. Everything the
+  kit offers is in AGENTS.md and your skills. In particular: JSON is camelCase, enums travel as strings
+  ("Reading", "Finished"), and the tests' `EndgameAppFactory<Program>` gives `CreateClient()` (signed
+  out) and `CreateClientFor("ada@example.test")` (signed in).
 - Change files with edit_file (exact text copied from read_file, without the line-number prefix) or
   write_file for new files. Make the smallest change that fully does the job.
-- Verify as you go with run: `make build`, `make test`, `make lint`. Fix every failure and every warning.
+- Verify as you go with run: `make build`, then `make test` and `make lint` (each takes a minute or two;
+  pass timeout_seconds 600). Read the end of the output, fix every failure and every warning, run again.
 - Mark each plan item with mark_item once you have checked it.
-- When the feature is complete and verified, commit it with commit (one feature, one clean commit) and
-  update PROGRESS.md in the repository first, saying what is done and what is next.
+- When the feature is complete and verified, update PROGRESS.md (what is done, what is next), then commit
+  with commit: one feature, one clean commit.
 - Then reply with a short summary of what changed and how you checked it, and call no more tools.
 
 {{skills}}

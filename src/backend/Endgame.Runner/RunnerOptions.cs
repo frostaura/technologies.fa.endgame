@@ -78,7 +78,7 @@ public sealed class RunnerOptions
     public Dictionary<string, decimal> EstimatePriors { get; set; } = new(StringComparer.Ordinal)
     {
         ["research"] = 8m,
-        ["build"] = 6m,
+        ["build"] = 120m,
         ["task"] = 1.5m,
         ["conversation"] = 0.5m,
         ["review"] = 1m,

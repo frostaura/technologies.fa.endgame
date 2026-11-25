@@ -15,7 +15,7 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
- && apt-get update && apt-get install -y --no-install-recommends ripgrep && rm -rf /var/lib/apt/lists/* \
+ && apt-get update && apt-get install -y --no-install-recommends make git ripgrep && rm -rf /var/lib/apt/lists/* \
  && test "$(id -u app)" = 1654 \
  && mkdir -p /workspace /src /out && chown 1654:1654 /workspace /src /out
 COPY endgame-build.sh /usr/local/bin/endgame-build

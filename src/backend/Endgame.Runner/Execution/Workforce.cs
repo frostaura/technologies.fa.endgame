@@ -63,7 +63,7 @@ public static class Workforce
             {
                 // A hire that cannot be raised never stops the work; it is said plainly instead.
                 recorded = await run.Journal.RecordAsync(step, new JsonObject { ["status"] = "failed", ["detail"] = e.Detail }, cancellationToken);
-                await SayAsync(run, "runner", "A hire could not be raised", $"The factory tried to hire a {need.Role.ToLowerInvariant()} and could not: {OutputText.Truncate(e.Detail, 200)} The work goes ahead without one.", cancellationToken);
+                await SayAsync(run, "runner", "A hire could not be raised", $"The factory tried to hire a {Lower(need.Role)} and could not: {OutputText.Truncate(e.Detail, 200)} The work goes ahead without one.", cancellationToken);
                 return null;
             }
 
@@ -79,8 +79,8 @@ public static class Workforce
             {
                 var credits = need.MonthlyCredits.ToString("0.##", CultureInfo.InvariantCulture);
                 await (hire.EmployeeId is not null
-                    ? SayAsync(run, "runner", $"Hired {need.Name}", $"{need.Name} joins as {Article(need.Role)} {need.Role.ToLowerInvariant()}, at up to {credits} credits a month: {need.Reason}", cancellationToken, $"hired:{need.NeedKey}")
-                    : SayAsync(run, "runner", $"{need.Name} is proposed", $"The factory proposes hiring {need.Name} as {Article(need.Role)} {need.Role.ToLowerInvariant()}, at up to {credits} credits a month. It waits for you; the work goes ahead meanwhile.", cancellationToken, $"proposed:{need.NeedKey}"));
+                    ? SayAsync(run, "runner", $"Hired {need.Name}", $"{need.Name} joins as {Article(need.Role)} {Lower(need.Role)}, at up to {credits} credits a month: {need.Reason}", cancellationToken, $"hired:{need.NeedKey}")
+                    : SayAsync(run, "runner", $"{need.Name} is proposed", $"The factory proposes hiring {need.Name} as {Article(need.Role)} {Lower(need.Role)}, at up to {credits} credits a month. It waits for you; the work goes ahead meanwhile.", cancellationToken, $"proposed:{need.NeedKey}"));
             }
         }
 
@@ -188,6 +188,9 @@ public static class Workforce
 
         await run.AppendAsync(HarnessEvents.Message, payload, cancellationToken);
     }
+
+    /// <summary>"Software engineer" → "software engineer", but "QA engineer" stays.</summary>
+    private static string Lower(string role) => role.Length > 1 && char.IsLower(role[1]) ? char.ToLowerInvariant(role[0]) + role[1..] : role;
 
     private static string Article(string role) => role.Length > 0 && "aeiouAEIOU".Contains(role[0], StringComparison.Ordinal) ? "an" : "a";
 }

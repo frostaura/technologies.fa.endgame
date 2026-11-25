@@ -7,7 +7,7 @@ The contract item you are checking:
 
 What to do, in this order:
 1. Read the change: git_diff, then the files it touches.
-2. Run the checks yourself with run: `make test` (it builds first), then `make lint`. Read the end of
+2. Run the checks yourself with run (pass timeout_seconds 600): `make test` (it builds first), then `make lint`. Read the end of
    the output: a check that did not end with exit code 0 has failed.
 3. If the item names behaviour in the running app, use check_preview on the running preview. It calls
    the app as a SIGNED-OUT visitor at its own address: paths are relative to the app, with no leading
