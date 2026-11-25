@@ -77,7 +77,7 @@ public sealed class InvitationMailer(EndgameDbContext db, TenantSession session,
             TextBody = $"""
                 {app.Nodes[0].Name} shared {app.Node.Name} with you.
 
-                Open {address} and choose "Create an account" with this e-mail address and the code below.
+                Open {address} and choose "Create your sign-in" with this e-mail address and the code below.
                 You sign in with a passkey; no password is ever set.
 
                 Invitation code: {code}

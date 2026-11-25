@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useActiveTree } from "@/lib/useActiveOrganisation";
 import { Avatar } from "@/components/Avatar";
 import { Link } from "@/components/Link";
 import { Skeleton } from "@/components/states";
@@ -8,7 +9,7 @@ import { describeError, viewOf } from "@/lib/queryState";
 import { paths, useLocation } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { useEstimateMessageQuery, useGetConversationQuery, useGetMeQuery, useGetTreeQuery, useStartConversationMutation } from "@/store/api";
+import { useEstimateMessageQuery, useGetConversationQuery, useGetMeQuery, useStartConversationMutation } from "@/store/api";
 import type { ConversationMessage, Tree } from "@/store/types";
 import { conversationKey, messageQueued, messageSettled, type ChatMessage, type Selection } from "@/store/uiSlice";
 import { ApprovalCard } from "../runs/ApprovalCard";
@@ -330,7 +331,7 @@ function Replies({ runId, answerer }: { runId: string; answerer: string | null }
  * an idea, ask for a change to the app or try stopped work again — each only once the person approves it here.
  */
 export function AppConversation({ scope, trail }: { scope: string; trail: string[] }) {
-  const tree = useGetTreeQuery(undefined);
+  const tree = useActiveTree();
   if (!tree.data) return null;
   return <ConversationDock tree={tree.data} selection={{ scope, kind: "app", trail }} />;
 }

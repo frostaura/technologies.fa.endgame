@@ -97,11 +97,18 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "cont
     .ExcludeFromDescription();
 
 var api = app.MapGroup("/api");
-api.MapGet("/system/status", async (GetSystemStatus query, CancellationToken cancellationToken) =>
-        Results.Ok(await query.HandleAsync(cancellationToken)))
+api.MapGet("/system/status", async (HttpContext http, GetSystemStatus query, CancellationToken cancellationToken) =>
+    {
+        var status = await query.HandleAsync(cancellationToken);
+        // Signed out, only whether the whole is healthy and when it was checked: which services exist,
+        // how fast they answer and what went wrong are for a signed-in session (SYS-05).
+        return http.User.Identity?.IsAuthenticated == true
+            ? Results.Ok(status)
+            : Results.Ok(new SystemStatusSummary(status.Overall, status.CheckedAt));
+    })
     .WithTags("System")
     .WithName("GetSystemStatus")
-    .WithSummary("The live health of every Endgame service, measured by asking each one.")
+    .WithSummary("The live health of every Endgame service, measured by asking each one. Signed out, only overall and checkedAt; the services, their latencies and details need a signed-in session.")
     .Produces<SystemStatus>();
 
 api.MapAuth(app.Environment, app.Configuration);
@@ -109,7 +116,8 @@ api.MapDevLoginIfEnabled(app.Environment, app.Configuration);
 
 api.MapAppAuth(app.Environment, app.Configuration);
 
-var members = api.MapGroup("").RequireAuthorization();
+// Every change an operator makes inside an organisation they entered is one entry in its operator log.
+var members = api.MapGroup("").RequireAuthorization().AddEndpointFilter<OperatorActionLog>();
 members.MapTree();
 members.MapWork();
 members.MapPlatformConsole();

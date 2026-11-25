@@ -212,7 +212,7 @@ public sealed class FactoryAttributionTests(PostgresServer postgres) : IAsyncLif
         // Another organisation, provisioned by FrostAura's operator for its own owner.
         var stranger = await app.SignInAsync("stranger@example.com", "Stranger");
         var operatorClient = await app.SignInAsync("dean@frostaura.net");
-        await ControlPlaneApp.Created(operatorClient.PostAsJsonAsync("/api/organisations", new { name = "Harbour", slug = "harbour", ownerEmail = "stranger@example.com" }));
+        await ControlPlaneApp.Created(operatorClient.PostAsJsonAsync("/api/organisations", new { name = "Harbour", slug = "harbour", ownerEmail = "stranger@example.com", description = Provisioning.Description, screening = Provisioning.Manual }));
         await ControlPlaneApp.Expect(await stranger.GetAsync($"/api/employees/{theo}/track-record"), HttpStatusCode.NotFound);
         await ControlPlaneApp.Expect(await stranger.GetAsync($"/api/runs?employeeId={theo}"), HttpStatusCode.NotFound);
         Assert.Empty((await ControlPlaneApp.Ok(stranger.GetAsync($"/api/tasks?scope=harbour&employeeId={theo}"))).AsArray());

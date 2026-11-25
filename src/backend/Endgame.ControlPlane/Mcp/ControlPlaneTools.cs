@@ -117,7 +117,7 @@ internal static class ControlPlaneTools
                 var scope = await c.S<ScopeResolver>().RequireAsync(c.Req("scope"), c.Ct);
                 if (scope.Level == NodeLevel.Organisation)
                 {
-                    throw EndgameProblem.Forbidden("An organisation is renamed by its Owner at the console.");
+                    throw EndgameProblem.Forbidden("An organisation is renamed by its Owner, through PATCH /api/organisations/{id} with a signed-in session; not with an assistant's key.");
                 }
 
                 await access.RequireAsync(c.UserId, scope, scope.Level == NodeLevel.Division ? MemberRole.Admin : MemberRole.Builder, c.Ct);
@@ -457,7 +457,18 @@ internal static class ControlPlaneTools
                 }
 
                 var (scope, mine) = await c.S<AccessService>().RequireAsync(c.UserId, c.Req("scope"), MemberRole.Admin, c.Ct);
-                return await c.S<AccountService>().GrantAsync(scope, mine, c.Req("email"), c.Str("displayName"), role, c.UserId, c.Ct);
+                var invitation = await c.S<AccountService>().GrantAsync(scope, mine, c.Req("email"), c.Str("displayName"), role, c.UserId, c.Ct);
+                // As at the console: a new person's code is e-mailed to them too, when a mail server is configured.
+                if (invitation.InvitationCode is { } code && invitation.ExpiresAt is { } until)
+                {
+                    var inviter = await c.S<UserManager<EndgameUser>>().FindByIdAsync(c.UserId.ToString());
+                    invitation = invitation with
+                    {
+                        Emailed = await c.S<InvitationMailer>().SendAsync(scope, invitation.Member.Email, code, until, role.ToWire(), inviter?.DisplayName ?? "Someone", c.Ct),
+                    };
+                }
+
+                return invitation;
             }),
         Write("member_revoke", "Revokes one role grant (an Admin's, only the Owner).",
             Schema(("membershipId", Uuid("The grant's id."), true)), async c =>

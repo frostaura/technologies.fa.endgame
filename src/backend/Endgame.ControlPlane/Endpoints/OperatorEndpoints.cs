@@ -160,10 +160,20 @@ internal static class OperatorEndpoints
             })
             .WithName("GetPricing").WithSummary("The prices every bill is made from — credits per dollar, the margin, hosting rates, the default monthly model allowance of an app — and their change history.").Produces<PricingView>();
 
-        op.MapPut("/pricing", async (PricingDocument document, ClaimsPrincipal principal, AccessService access, PricingService pricing, CancellationToken ct) =>
+        op.MapPut("/pricing", async (PricingDocument document, ClaimsPrincipal principal, AccessService access, PricingService pricing, EndgameDbContext db, TenantSession session, CancellationToken ct) =>
             {
                 await RequireOperatorAsync(principal, access, ct);
-                return Results.Ok(await pricing.SetAsync(document, principal.Id(), ct));
+                var view = await pricing.SetAsync(document, principal.Id(), ct);
+                // Prices apply to every organisation, so every Owner reads that FrostAura changed them.
+                session.UseSystem();
+                var organisations = await db.Organisations.AsNoTracking().Select(o => o.Id).ToListAsync(ct);
+                foreach (var organisation in organisations)
+                {
+                    await access.LogActionAsync(principal.Id(), organisation, "pricing.changed",
+                        new JsonObject { ["margin"] = document.Margin, ["creditsPerUsd"] = document.CreditsPerUsd }, ct);
+                }
+
+                return Results.Ok(view);
             })
             .WithName("SetPricing").WithSummary("Replaces the prices, at once and for every organisation, audited with what they were. The margin is a factor on cost: 1.0 is none, never below.").Produces<PricingView>();
     }

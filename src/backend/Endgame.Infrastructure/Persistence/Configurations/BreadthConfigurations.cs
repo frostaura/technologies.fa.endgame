@@ -183,3 +183,21 @@ internal sealed class PlatformSettingChangeConfiguration : IEntityTypeConfigurat
         builder.HasIndex(c => new { c.Key, c.ChangedAt });
     }
 }
+
+internal sealed class PlatformCostConfiguration : IEntityTypeConfiguration<PlatformCostRecord>
+{
+    public void Configure(EntityTypeBuilder<PlatformCostRecord> builder)
+    {
+        builder.ToTable("platform_costs");
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Id).HasColumnName("id").ValueGeneratedNever();
+        builder.Property(c => c.Purpose).HasColumnName("purpose").HasMaxLength(60);
+        builder.Property(c => c.Model).HasColumnName("model").HasMaxLength(200);
+        builder.Property(c => c.GenerationId).HasColumnName("generation_id").HasMaxLength(200);
+        builder.Property(c => c.CostUsd).HasColumnName("cost_usd").HasPrecision(18, 8);
+        builder.Property(c => c.DetailJson).HasColumnName("detail").HasColumnType("jsonb");
+        builder.Property(c => c.By).HasColumnName("by");
+        builder.Property(c => c.At).HasColumnName("at");
+        builder.HasIndex(c => new { c.Purpose, c.At });
+    }
+}

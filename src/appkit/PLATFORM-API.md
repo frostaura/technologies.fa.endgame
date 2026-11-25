@@ -16,6 +16,7 @@ change both together.
 | `ENDGAME_EGRESS_PROXY` | yes in production | Forward proxy URL, e.g. `http://egress:8080`. The kit sends every platform call through it and sets it as the process-wide default proxy, so the app's own `HttpClient`s go out the same way. Plain-HTTP absolute-form and `CONNECT` must both be supported. |
 | `ENDGAME_APP_ID` | no | The app's id; the telemetry `service.name` and the OpenAPI title. |
 | `ENDGAME_TELEMETRY_EXPORT` | no | `false` turns OTLP export off. |
+| `ENDGAME_PREVIEW` | no | `true` on the factory evaluator's preview (Dock sets it): no OTLP export and no custom events, so the app's telemetry is its people's use only. |
 | `ASPNETCORE_HTTP_PORTS` | set by the image | `8080`. |
 
 Missing required variables stop the app at start with one message naming all of them. Workspace

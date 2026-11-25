@@ -15,7 +15,9 @@ namespace Endgame.Infrastructure.Identity;
 
 public sealed record NewOrganisation(string Name, string Slug);
 
-public sealed record MemberView(Guid MembershipId, Guid UserId, string Email, string DisplayName, string Scope, string Role, bool HasPasskey, DateTimeOffset GrantedAt);
+/// <param name="InvitationExpiresAt">For someone with no passkey yet: until when their invitation code works.</param>
+public sealed record MemberView(Guid MembershipId, Guid UserId, string Email, string DisplayName, string Scope, string Role, bool HasPasskey, DateTimeOffset GrantedAt,
+    DateTimeOffset? InvitationExpiresAt = null);
 
 /// <param name="Emailed">The code was also e-mailed to the person (only when a mail server is configured).</param>
 public sealed record Invitation(MemberView Member, string? InvitationCode, DateTimeOffset? ExpiresAt, bool Emailed = false);
@@ -161,9 +163,11 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
 
     /// <summary>
     /// Grants a role at a scope. The person is created if they are new, and then gets a one-time
-    /// invitation code (returned once, stored only as a hash) to register their passkey with.
+    /// invitation code (returned once, stored only as a hash) to register their passkey with — unless
+    /// <paramref name="issueInvitation"/> is false (a role change), when the code they already hold is kept.
     /// </summary>
-    public async Task<Invitation> GrantAsync(ResolvedScope scope, MemberRole grantorRole, string email, string? displayName, MemberRole role, Guid grantedBy, CancellationToken cancellationToken)
+    public async Task<Invitation> GrantAsync(ResolvedScope scope, MemberRole grantorRole, string email, string? displayName, MemberRole role, Guid grantedBy, CancellationToken cancellationToken,
+        bool issueInvitation = true)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (role == MemberRole.Owner)
@@ -177,7 +181,9 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
         }
 
         var user = await FindOrCreateAsync(NormaliseEmail(email), displayName, cancellationToken);
-        var (code, expires) = await IssueInvitationIfNeededAsync(user);
+        var (code, expires) = issueInvitation ? await IssueInvitationIfNeededAsync(user) : (null, null);
+        var current = await Fresh(user);
+        var hasPasskey = issueInvitation ? code is null : (await users.GetPasskeysAsync(current)).Count > 0;
 
         session.UseOrganisation(scope.OrganisationId);
         var existing = await db.Memberships.SingleOrDefaultAsync(m => m.OrganisationId == scope.OrganisationId && m.UserId == user.Id
@@ -206,7 +212,27 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
         existing.GrantedAt = clock.GetUtcNow();
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
-        return new Invitation(new MemberView(existing.Id, user.Id, user.Email!, user.DisplayName, scope.Path.ToString(), existing.Role, code is null, existing.GrantedAt), code, expires);
+        return new Invitation(new MemberView(existing.Id, user.Id, user.Email!, user.DisplayName, scope.Path.ToString(), existing.Role, hasPasskey, existing.GrantedAt,
+            hasPasskey ? null : expires ?? current.InvitationExpiresAt), code, expires);
+    }
+
+    /// <summary>
+    /// A new invitation code for someone who was invited and has not made a passkey yet (PPL-05): the old
+    /// code stops working, the new one is returned once. Someone with a passkey is refused: they need none.
+    /// </summary>
+    public async Task<Invitation> ReissueInvitationAsync(ResolvedScope scope, MembershipRecord membership, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(membership);
+        var user = await users.FindByIdAsync(membership.UserId.ToString()) ?? throw EndgameProblem.NotFound("The member");
+        var (code, expires) = await IssueInvitationIfNeededAsync(user);
+        if (code is null)
+        {
+            throw EndgameProblem.Conflict($"{user.DisplayName} already has a passkey, so they sign in with it and need no code.");
+        }
+
+        session.UseOrganisation(scope.OrganisationId);
+        return new Invitation(new MemberView(membership.Id, user.Id, user.Email!, user.DisplayName, scope.Path.ToString(), membership.Role, false, membership.GrantedAt, expires), code, expires);
     }
 
     /// <summary>
@@ -234,17 +260,23 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
     private async Task<EndgameUser> Fresh(EndgameUser user) =>
         await users.FindByIdAsync(user.Id.ToString()) ?? throw EndgameProblem.NotFound("The account");
 
-    /// <summary>Everyone granted a role at the scope or beneath it.</summary>
+    /// <summary>
+    /// Everyone whose grant holds at the scope: granted there or beneath it, and granted above it on its
+    /// chain (the Owner, organisation-wide Admins), each with where the grant was set (PPL-01).
+    /// </summary>
     public async Task<IReadOnlyList<MemberView>> MembersAsync(ResolvedScope scope, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);
         var rows = await (from m in db.Memberships.AsNoTracking()
                           join u in db.Users.AsNoTracking() on m.UserId equals u.Id
                           where m.OrganisationId == scope.OrganisationId
-                                && (scope.DivisionId == null || m.DivisionId == scope.DivisionId)
-                                && (scope.ProjectId == null || m.ProjectId == scope.ProjectId)
-                                && (scope.AppId == null || m.AppId == scope.AppId)
-                          select new { Membership = m, u.Email, u.DisplayName, HasPasskey = db.Set<IdentityUserPasskey<Guid>>().Any(p => p.UserId == u.Id) })
+                                && (((scope.DivisionId == null || m.DivisionId == scope.DivisionId)
+                                     && (scope.ProjectId == null || m.ProjectId == scope.ProjectId)
+                                     && (scope.AppId == null || m.AppId == scope.AppId))
+                                    || m.DivisionId == null
+                                    || (m.DivisionId == scope.DivisionId && m.ProjectId == null)
+                                    || (scope.ProjectId != null && m.ProjectId == scope.ProjectId && m.AppId == null))
+                          select new { Membership = m, u.Email, u.DisplayName, u.InvitationExpiresAt, HasPasskey = db.Set<IdentityUserPasskey<Guid>>().Any(p => p.UserId == u.Id) })
             .ToListAsync(cancellationToken);
         var resolver = new Dictionary<(Guid?, Guid?, Guid?), string>();
         var views = new List<MemberView>();
@@ -262,7 +294,7 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
                 resolver[(m.DivisionId, m.ProjectId, m.AppId)] = path;
             }
 
-            views.Add(new MemberView(m.Id, m.UserId, row.Email ?? "", row.DisplayName, path, m.Role, row.HasPasskey, m.GrantedAt));
+            views.Add(new MemberView(m.Id, m.UserId, row.Email ?? "", row.DisplayName, path, m.Role, row.HasPasskey, m.GrantedAt, row.HasPasskey ? null : row.InvitationExpiresAt));
         }
 
         session.UseOrganisation(scope.OrganisationId);

@@ -18,7 +18,9 @@ Owners are warned on the way down (spec, *Credits*), and anything waiting on a p
 1. Every 30 seconds the sweep derives, per organisation: a verdict waiting, an approval, a hire proposal,
    a budget at 80 % and at its cap (nodes and employees), the balance at zero, halfway to the overdraft
    limit and at it, a security review's finding. Dock's crash report raises "an app crashed" at once.
-2. Each is raised once per episode (a key per organisation; a top-up starts a new balance episode).
+2. Each is raised once per episode (a key per organisation; a top-up starts a new balance episode). When an
+   Owner asks for a top-up, `topup.requested` is raised at once in each organisation where a FrostAura operator
+   holds a role at the top, and only operators see it there; it leads to `/operator`.
 3. Urgent ones — a cap reached, credits at zero, the overdraft, a crash, a security finding — are queued
    by e-mail to the Owner and the organisation's Admins, only when a mail server is configured.
 4. `GET /api/notifications` → `{ organisation, unread, notifications[] }`; `POST …/{id}/read`; `POST …/read-all`.

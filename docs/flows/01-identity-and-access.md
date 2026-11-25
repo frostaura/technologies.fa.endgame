@@ -192,7 +192,7 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 
 ### ID-10 Read the operator access log
 - **Who:** owner
-- **Starts at:** home screen, with the organisation selected: the **"Operator access"** link (shown only when your role at the selection is Owner). Or `/operator-access` directly.
+- **Starts at:** home screen: the **"Operator access"** link (shown only when your role at the organisation is Owner). Or `/operator-access` directly.
 - **Needs:** the Owner role. The organisation has been named.
 - **Level:** Core
 - **Learn first:** ID-02; SHL-05 (what God mode is)
@@ -204,15 +204,15 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   4. In technical mode each card also shows the raw action and its JSON detail.
 - **You know it worked when:** the list labelled "Operator log" shows entries, or the empty state.
 - **Variations and refusals:**
-  - The plain-words titles are "Entered the organisation", "Set up the organisation" and "Added {credits}" (or "Added credits"). Every other action, including an overdraft change and a top-up request closed by an operator, shows as "Acted on the organisation".
-  - A burst of operator reads within 10 minutes is one "entered" entry. An explicit entry always writes one.
+  - The plain-words titles are "Entered the organisation", "Set up the organisation", "Screened against the red lines: it crosses none (by a model)" or "(by hand: {reason})", "Added {credits}" (or "Added credits"), "Changed the deepest overdraft to {credits} below zero", "Answered a top-up request with {credits}", "Declined a top-up request for {credits}: {why}", "Changed the prices for every organisation", and, for every change an operator made inside the organisation as an Admin, "As an Admin: {what}" — for example "As an Admin: Added a division", "As an Admin: Changed a setting, budget or rule", "As an Admin: Accepted a hire". One change is one entry. "Acted on the organisation" is left only for an action this console does not know.
+  - A burst of operator reads within 10 minutes is one "entered" entry. An explicit entry always writes one. Reads are covered by the visit; only changes are listed one by one, and a refused change is not listed.
   - Empty: "No one from FrostAura has entered {Org}" and "If anyone does, it is written here first."
   - Anyone but the Owner: 403, shown as **"Only the Owner can read the operator log"**, with **"Try again"**.
   - No organisation yet: "There is no log until your organisation is named".
-  - An operator reading it sees the log of their own first organisation, not the one they entered.
-- **Where:** `features/audit/OperatorAccessView.tsx`, `features/home/HomeView.tsx` (`ManageLinks`). `GET /api/audit/operator-access?organisation=`. `AccessService.LogVisitAsync` and `RecordEntryAsync`.
+  - An operator inside an organisation they entered asks for that organisation's log and is refused as anyone but the Owner is: God mode is never the Owner.
+- **Where:** `features/audit/OperatorAccessView.tsx`, `features/home/HomeView.tsx` (`ManageLinks`), `lib/useActiveOrganisation.ts`. `GET /api/audit/operator-access?organisation=`. `AccessService.LogVisitAsync`, `RecordEntryAsync` and `LogActionAsync`; `Endpoints/OperatorActionLog.cs` (one entry per change).
 - **Reachable from:** UI
-- **Covered by tests:** `OperatorAccessView.test.tsx` (all five); `console.spec.ts` "the Owner reads every operator entry; anyone else is refused…"; `ControlPlaneDebtsTests.Operators_come_from_the_explicit_list_only_and_every_entry_is_logged_for_the_owner`; `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry` and `Reads_with_no_entry_before_them_log_one_entry…`.
+- **Covered by tests:** `OperatorAccessView.test.tsx` (all six, including "titles every action plainly…"); `console.spec.ts` "the Owner reads every operator entry; anyone else is refused…"; `ControlPlaneDebtsTests.Operators_come_from_the_explicit_list_only_and_every_entry_is_logged_for_the_owner`; `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry` and `Reads_with_no_entry_before_them_log_one_entry…`; `ScreensAndRolesTests.Every_change_an_operator_makes_inside_an_entered_organisation_is_one_entry_in_its_log` and `An_owners_top_up_request_reaches_the_operators_and_its_answer_is_on_the_record`.
 
 ### ID-11 Set who is an operator, and whether the development sign-in can exist
 - **Who:** host administrator
@@ -250,8 +250,8 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   - Viewer: "Sees everything there — the org chart, dashboards and apps — and changes nothing."
 
 ### PPL-01 See the people at a level, and what each role may do
-- **Who:** admin / owner / operator
-- **Starts at:** home screen, with a node selected: **"People"** (shown to Admin, Owner or operator). Or `/people?scope={path}`.
+- **Who:** admin / owner / operator (inside an organisation they entered, as its Admin)
+- **Starts at:** home screen, with a node selected: **"People"** (shown where your role at that node is Admin or Owner). Or `/people?scope={path}`; without a scope, the organisation being shown — in God mode, the one entered.
 - **Needs:** Admin or higher at the scope
 - **Level:** Core
 - **Learn first:** ID-02
@@ -260,7 +260,7 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   1. The heading reads **"People in {name}"**, with the line "Everyone with a role here, and where each grant was set. A grant holds for everything beneath where it is set."
   2. While loading: "Loading the people".
   3. Each row shows the person's name (with "(you)" against yourself), their e-mail, and the role as a badge or a drop-down.
-  4. Each row says "Set here" or "Set at {node}". It also says "Since {date}", or **"No passkey yet: they sign in with the code they were given"** for a person still to register. This is the only way pending invitations are shown.
+  4. Each row says "Set here" or "Set at {node}" — a node above (the Owner and organisation-wide grants hold here too and are listed) or beneath. It also says "Since {date}" or, for a person still to register, **"No passkey yet: their code works until {date}"** (or "No passkey yet, and their code expired on {date}: send a new one"). This is the only way pending invitations are shown.
   5. Technical mode adds the grant's id.
   6. The side panel **"What each role may do"** lists the four roles with the text above, followed by "A role can be granted at the organisation, a division, a project or an app, and holds for everything beneath it — so one person can be a Builder in one division and a Viewer elsewhere."
 - **You know it worked when:** the list labelled "People" shows rows.
@@ -268,10 +268,11 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   - Empty: "No one holds a role in {name} yet" and "Invite someone and they appear here once they accept."
   - 403: **"Only an Admin or the Owner can see the people here"**, with **"Try again"**.
   - No organisation yet: "There is no one to show until your organisation is named".
-  - The server lists grants set *at or beneath* the scope only. Below the organisation, the Owner and organisation-wide grants are **not** listed, so the empty-state text can be untrue. "Set at {node}" therefore always means a node beneath.
-- **Where:** `features/people/PeopleView.tsx`, `lib/roles.ts`. `GET /api/members?scope=`.
+  - The server lists every grant that holds at the scope: set at it or beneath it, and set above it on its chain. A grant from above shows "This grant holds here from {node}; change it there." to someone who may change it.
+  - Whether you may manage people here is your role at this level exactly as the server resolves it — the deepest grant on the chain wins, and the organisation's Owner is the Owner everywhere. The tree carries it for every node, so an organisation Admin who is a Viewer in one division is not offered **"Invite someone"** there.
+- **Where:** `features/people/PeopleView.tsx`, `lib/roles.ts` (`effectiveRole`, `roleInTree`, `roleAt`), `lib/useActiveOrganisation.ts`. `GET /api/members?scope=` (`AccountService.MembersAsync`), `GET /api/tree` (each node's `role`).
 - **Reachable from:** UI
-- **Covered by tests:** `PeopleView.test.tsx` ("shows a skeleton…", "records a refusal…", "says when no one holds a role", "lists each person…").
+- **Covered by tests:** `PeopleView.test.tsx` ("shows a skeleton…", "records a refusal…", "says when no one holds a role", "lists each person…", "below the organisation, shows the Owner and grants from above…", "does not offer inviting where the role is below Admin…"); `roles.test.ts`; `ScreensAndRolesTests.People_below_the_organisation_include_grants_from_above…` and `The_tree_carries_each_nodes_effective_role…`.
 
 ### PPL-02 Switch the level being viewed
 - **Who:** admin / owner
@@ -298,12 +299,12 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   1. The person fills in **"E-mail address"** and, optionally, **"Their name"** (hint: "Optional. Shown to everyone in the organisation.").
   2. They choose a **"Role"**: Viewer, Builder, or Admin (Admin is offered only to the Owner).
   3. They choose **"Where"** (hint: "The role holds here and beneath."). Only this node and the nodes beneath it are offered.
-  4. The text of the chosen role from the roles panel is shown under the form.
+  4. The text of the chosen role from the roles panel is shown under the form, then "Someone new gets a one-time code to make their passkey with. It works for 7 days; a new one can be sent from their row."
   5. They click **"Invite"**. While it works it reads **"Inviting…"**.
   6. The server creates the person if they are new and grants the role. If they have no passkey, it issues a one-time code that lasts 7 days and is stored only as a hash. If mail is configured it queues the e-mail "You are invited to {Org} on Endgame".
   7. A green box appears: "{name} is invited as {Role} at {node}." It then says either "The code was e-mailed to them too." or "E-mail is not set up here, so give them this code yourself.", followed by "They use it to make their passkey before {date}."
   8. The box shows the code with **"Copy"** (**"Copied"** once copied), the line **"It will not be shown again."**, and **"Done"**.
-  9. The person appears in the list with "No passkey yet…".
+  9. The person appears in the list with "No passkey yet: their code works until {date}".
 - **You know it worked when:** the green box with the code appears and the person is in the list.
 - **Variations and refusals:**
   - Invalid e-mail: "That does not look like an e-mail address." The button is disabled.
@@ -331,17 +332,24 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 
 ### PPL-05 Send a fresh code to a pending invitee
 - **Who:** admin / owner
-- **Starts at:** the **"Invite someone"** panel
-- **Needs:** the person has no passkey yet
+- **Starts at:** People screen, the pending person's row: **"Send a new code"**
+- **Needs:** the person has no passkey yet; the grant was set at this level; you may change it (Admin, or the Owner for an Admin's grant)
 - **Level:** Core
 - **Learn first:** PPL-03
-- **What you learn:** inviting the same address again replaces the old code with a new one.
-- **Steps:** invite the same e-mail again. A new code that lasts 7 days replaces the old one, which stops working. The new code is shown once and e-mailed if mail is set up.
-- **You know it worked when:** a new code box appears.
-- **Variations and refusals:** there is no dedicated **"Resend"** control.
-- **Where:** `AccountService.IssueInvitationIfNeededAsync`.
-- **Reachable from:** UI (indirectly); MCP
-- **Covered by tests:** none found.
+- **What you learn:** a code lasts 7 days, and a new one replaces the old.
+- **Steps:**
+  1. The row says "No passkey yet: their code works until {date}", or that it expired.
+  2. Press **"Send a new code"** (**"Sending a new code…"**).
+  3. A box **"New invitation code for {name}"** shows the code once, with **"Copy"** and **"Done"**, and says "It was e-mailed to them too." or "E-mail is not set up here, so give them this code yourself.", then "It works until {date}; the code they had before no longer does."
+- **You know it worked when:** the new code box appears and the row's date moves on.
+- **Variations and refusals:**
+  - Refused: "No new code was sent: {reason} The code {name} has still works."
+  - Someone who already has a passkey has no such control; the API answers 409 "{name} already has a passkey, so they sign in with it and need no code."
+  - Inviting the same address again from **"Invite someone"** also replaces the code.
+  - The code never reaches the console's data store.
+- **Where:** `PeopleView.tsx` (`MemberRow`), `store/sensitive.ts` (`reissueInvitation`). `POST /api/members/{membershipId}/invitation`, `AccountService.ReissueInvitationAsync`, `InvitationMailer.SendAsync`.
+- **Reachable from:** UI; API. Over MCP, `member_invite` again.
+- **Covered by tests:** `PeopleView.test.tsx` "sends a pending person a new code, shown once, and says how long a code works"; `ScreensAndRolesTests.People_below_the_organisation_include_grants_from_above_and_a_pending_persons_code_is_kept_or_renewed`; `AuthorizationMatrixTests` (the row for `POST /api/members/{membershipId}/invitation`).
 
 ### PPL-06 Change someone's role
 - **Who:** admin (between Builder and Viewer) / owner (to or from Admin too)
@@ -359,10 +367,10 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   - Refused: the role goes back and "The role was not changed: {reason} It is back to {Role}." appears.
   - A grant set beneath shows "Change this grant at {node}." and has no drop-down.
   - The Owner's row and your own row show a badge only.
-  - **Side effect:** if the person has no passkey yet, the server issues a new invitation code. The one they were sent stops working, and the console throws the new code away without showing or e-mailing it.
-- **Where:** `PeopleView.tsx` (`MemberRow`), `store/api.ts` (`changeRole`). `PATCH /api/members/{membershipId}`.
-- **Reachable from:** UI. Over MCP, `member_invite` at the same scope does the same thing.
-- **Covered by tests:** `PeopleView.test.tsx` "changes a role at once and puts it back when refused"; `breadth.spec.ts` "an Admin who asks for the Admin role is refused…"; `BreadthTests.A_role_is_changed_where_it_was_set_and_admins_are_the_owners_to_make`.
+  - A person with no passkey yet keeps the code they were sent: a role change never touches it. To send a new one, see PPL-05.
+- **Where:** `PeopleView.tsx` (`MemberRow`), `store/api.ts` (`changeRole`). `PATCH /api/members/{membershipId}` (`AccountService.GrantAsync` with `issueInvitation: false`).
+- **Reachable from:** UI. Over MCP, `member_invite` at the same scope changes the role too — and, unlike the console, sends a pending person a new code.
+- **Covered by tests:** `PeopleView.test.tsx` "changes a role at once and puts it back when refused"; `breadth.spec.ts` "an Admin who asks for the Admin role is refused…"; `BreadthTests.A_role_is_changed_where_it_was_set_and_admins_are_the_owners_to_make`; `ScreensAndRolesTests.People_below_the_organisation_include_grants_from_above_and_a_pending_persons_code_is_kept_or_renewed` (the code still works after the change).
 
 ### PPL-07 Remove someone's grant
 - **Who:** admin / owner (Admin grants: Owner only)
@@ -542,7 +550,7 @@ All need AST-05. All are MCP only, Level Advanced. Covered by `McpTests` and `Au
   - *Teaches:* the org chart as one document.
 - **AST-08 Shape the tree:**
   - `node_create` (division: Admin; project or app: Builder; the parent must be one level up).
-  - `node_update` (rename, or status active/archived; division: Admin, otherwise Builder; an organisation is refused with "An organisation is renamed by its Owner at the console.").
+  - `node_update` (rename, or status active/archived; division: Admin, otherwise Builder; an organisation is refused with "An organisation is renamed by its Owner, through PATCH /api/organisations/{id} with a signed-in session; not with an assistant's key.").
 - **AST-09 Values, budgets and credits:**
   - `cascade_get` (Viewer; secret and permission kinds need Admin).
   - `cascade_set` and `cascade_remove` (budget, rule_set, context, setting. The role depends on the key: context and `sleep.*` need Builder, the overdraft own-limit needs Owner and so is unreachable, everything else needs Admin. Secret and permission kinds are refused with "Secrets are set with secret_set and roles with member_invite.").
@@ -574,7 +582,7 @@ All need AST-05. All are MCP only, Level Advanced. Covered by `McpTests` and `Au
   - `rule_set_set` (Admin; deny, ask, allow and checkpoints per stage).
 - **AST-14 People:**
   - `members_list` (Admin).
-  - `member_invite` (Admin; Admin roles only if the person behind the key is the Owner. The cap of Admin still passes, because the check uses the person's role capped at Admin, and Admin is not Owner. **Not verified: an Owner's key probably cannot grant Admin**, because the capped role becomes Admin and "Only the Owner manages Admins." follows). The code is returned **in the tool result and never e-mailed**.
+  - `member_invite` (Admin; Admin roles only if the person behind the key is the Owner. The cap of Admin still passes, because the check uses the person's role capped at Admin, and Admin is not Owner. **Not verified: an Owner's key probably cannot grant Admin**, because the capped role becomes Admin and "Only the Owner manages Admins." follows). The code is returned in the tool result, and e-mailed too when a mail server is configured.
   - `member_revoke` (Admin; an Admin's grant needs Owner, which is unreachable by key).
 - **AST-15 Secrets:**
   - `secrets_list` (Admin; names only).
@@ -653,7 +661,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 
 ### ACC-04 Register at a shared app as an invited person
 - **Who:** invited person, who becomes an app end user
-- **Starts at:** the e-mail "{Org} shared {App} with you" (it says to open the path-form address and choose "Create an account"), or a code handed over by an Admin
+- **Starts at:** the e-mail "{Org} shared {App} with you" (it says to open the path-form address and choose "Create your sign-in"), or a code handed over by an Admin
 - **Needs:** the app is shared with this address. The code is open (14 days, single use).
 - **Level:** Foundation
 - **Learn first:** ACC-02. The other reader covers how an Admin shares an app.
@@ -673,7 +681,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
   - Passkey made for a different registration: "The passkey was not created for this registration."
   - Took longer than five minutes: "The passkey ceremony has expired or is not valid; start again."
   - **"Already registered? Sign in"** goes back to the sign-in page.
-  - The e-mail's wording ("Create an account") matches only template apps' own button; Edge's link says "Create your sign-in".
+  - The e-mail says "Create your sign-in", as Edge's link does; a template app's own button reads "Create an account".
 - **Where:** `AuthPage.cs`, `AppAuthEndpoints.cs`, `AppIdentityService.SignUpOptionsAsync` and `SignUpCompleteAsync`, `InvitationMailer.SendShareAsync`. `POST /api/app-auth/{appId}/sign-up/options|complete`.
 - **Reachable from:** UI
 - **Covered by tests:** `AppAccessTests.A_shared_app_admits_the_people_it_was_shared_with_once_they_register…`; `console.spec.ts` "a shared app lists its people, invites by e-mail…" (inviter side).
@@ -770,7 +778,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** ACC-01
 - **What you learn:** being signed in is not the same as having access.
-- **Steps:** Edge's check answers deny. The page reads **"You don't have access to this app"**, "You are signed in, but this app has not been shared with you. Ask its owner for access." (403).
+- **Steps:** Edge's check answers deny. The page reads **"You don't have access to this app"**, "You are signed in, but your account has no access to this app. Ask its owner for access." (403) — true of a private app as of an unshared one.
 - **You know it worked when:** that page shows.
 - **Variations and refusals:**
   - The same wording is used when the app is private and sharing is irrelevant.
@@ -955,13 +963,16 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Needs:** your e-mail is in the operator list (ID-11)
 - **Level:** Operator
 - **Learn first:** ID-11
-- **What you learn:** operators always know they are in God mode, and that every entry is logged for the Owner.
-- **Steps:** a coral band labelled "God mode" shows **"GOD MODE"**. Outside an organisation it reads "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it." On `/?organisation={slug}` it reads "You are inside {slug} as a FrostAura operator. Your entry is logged where its Owner can read it." Everywhere except `/operator` there is an **"Every organisation"** link.
-- **You know it worked when:** the band is visible.
-- **Variations and refusals:** on every screen other than `/`, the band does not name the organisation you are inside, even while you are in one.
-- **Where:** `features/shell/GodModeBand.tsx`.
+- **What you learn:** operators always know they are in God mode, which organisation every screen is showing, and that what they do there is logged for the Owner.
+- **Steps:**
+  1. A coral band labelled "God mode" shows **"GOD MODE"**. Outside an organisation it reads "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it."
+  2. Inside an organisation you entered it reads, on every screen, "You are inside {Name} as a FrostAura operator, acting as an Admin. Your entry and everything you change here are logged where its Owner can read them.", with **"Leave {Name}"**.
+  3. **"Leave {Name}"** returns every screen to your own organisation and opens `/operator`. **"Every organisation"** does the same; it is shown everywhere except on `/operator` while you are in no organisation.
+- **You know it worked when:** the band is visible, naming the organisation you are inside.
+- **Variations and refusals:** the organisation entered is named in the address (`?organisation={slug}`) and remembered for the tab, so a link that does not carry it — the balance, the bell, Autonomy, People — still shows it until you leave.
+- **Where:** `features/shell/GodModeBand.tsx`, `lib/useActiveOrganisation.ts` (`useActiveOrganisation`, `useLeaveOrganisation`), `store/uiSlice.ts` (`entered`).
 - **Reachable from:** UI
-- **Covered by tests:** `breadth.spec.ts` God-mode tests (`provisions an organisation…`, `is closed to anyone who is not an operator`); not verified whether they check the band's text.
+- **Covered by tests:** `GodModeBand.test.tsx` ("names the organisation entered, and the balance and the bell are its own", "keeps working on it on a screen whose address does not name it, until the operator leaves"); `OperatorView.test.tsx` "is marked as God mode on every screen".
 
 ### SHL-06 Arrive at an unknown console address
 - **Who:** any signed-in person
@@ -986,28 +997,22 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
    - The invitation e-mail, the People screen ("They use it to make their passkey") and the pending-row text ("they sign in with the code they were given") all point to a step that does not exist.
    - The control plane supports it (`SignInTests`).
    - The same blocks the Owner of an organisation an operator provisions.
-2. **Changing the role of someone with no passkey silently issues a new code.** The one they were e-mailed stops working, and the console throws the new code away (`PATCH /api/members` calls `GrantAsync`, which issues the code; `api.ts` keeps only `member`).
-3. **The console and the server disagree on what your role is.**
-   - The console takes your *highest* grant on the chain (`lib/roles.ts` `roleAt`); the server takes the *deepest* (`RoleResolver`).
-   - Example: an organisation Admin who is a Viewer in one division sees the **"Invite someone"** form at that division, but the list fails with "Only an Admin or the Owner can see the people here", and invites are refused.
-4. **People below the organisation omit grants set above** (the Owner, organisation-wide Admins).
-   - "No one holds a role in X yet" can be untrue.
-   - "Set at {node}" only ever means a node *beneath*.
+2. **Fixed:** changing the role of someone with no passkey no longer issues a new code (PPL-06).
+3. **Fixed:** the console resolves a role as the server does — the tree carries each node's effective role, and `lib/roles.ts` `roleAt` takes the deepest grant (PPL-01). Screens outside People, Autonomy and home still call `roleAt` or read the tree's single `viewerRole` (Credits, App, Suggestions, Hire, Employee); they now get the server's rule from `roleAt`, but should read `effectiveRole` for the node.
+4. **Fixed:** People below the organisation lists the Owner and grants set above, as "Set at {node}" (PPL-01).
 5. **Add-another-passkey exists only in the API.** The passkey count in `/api/me` is never shown, and UC-101 lists the feature as built.
 6. **After sign-in the console always lands on `/`.** The address you asked for is lost.
 7. **One organisation per person in the console.** It opens the first membership and has no switcher.
 8. **The AI assistants list shows keys from every organisation** without naming which organisation each belongs to.
 9. **MCP does not match "anything possible in the UI is possible over MCP":**
    - no tools for sharing an app, keys, notification read marks, top-up requests, the operator log, employee memory or the dashboard;
-   - `member_invite` never e-mails the code and returns it to the assistant;
+   - `member_invite` returns the code to the assistant (it now also e-mails it, as the console does, when a mail server is configured);
    - not verified: an Owner's key probably cannot grant Admin, because it is capped at Admin.
-10. **Edge wording:**
-    - the share e-mail says choose "Create an account", but Edge's link says "Create your sign-in";
-    - the access-denied page says "has not been shared with you" even for a private app.
+10. **Fixed:** Edge wording — the share e-mail says "Create your sign-in", as Edge's link does, and the access-denied page no longer says "has not been shared with you" of a private app.
 11. **"Continue without a passkey" is hidden on shared apps**, although the server would admit a shared address.
 12. **A member signing out from inside an app also ends their console session** and all app sessions (on the platform's host). It is a plain link with no confirmation.
-13. **The operator log's normal-mode text** shows overdraft changes and top-up request decisions only as "Acted on the organisation".
-14. **The God-mode band names the organisation you entered only on `/`.**
-15. **Code lifetimes differ:** member invitations last 7 days, app shares 14 days. Neither screen says which.
-16. **There is no "resend invitation" control.** Re-inviting is the only way to send a new code.
-17. **Not verified:** an archived app, if still routed, shows anonymous visitors the "You are signed in…" refusal. A role-less account made by the development sign-in probably reaches a first-run screen whose naming step the server refuses.
+13. **Fixed:** the operator log titles every action plainly, and lists each change an operator makes inside as an Admin (ID-10).
+14. **Fixed:** the God-mode band names the organisation entered on every screen, with "Leave {Name}" (SHL-05).
+15. **Partly fixed:** People says a member's code works for 7 days and shows each pending code's date. The share screen (app shares, 14 days) does not say yet.
+16. **Fixed:** "Send a new code" on a pending person's row (PPL-05).
+17. **Not verified:** an archived app, if still routed, shows anonymous visitors the "You are signed in…" refusal (archived apps, and apps in an archived division or project, are no longer routed: TREE-07). **Fixed:** a role-less account after the first organisation exists is told organisations are set up by FrostAura, not offered the first-run screen (ORG-03).

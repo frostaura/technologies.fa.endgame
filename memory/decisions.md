@@ -2,7 +2,7 @@
 name: technologies-fa-endgame-decisions
 description: "Both governance gates passed 2026-11-24, red lines on four conditions. Founder: own agent harness, only Cloudflare and OpenRouter external, own model gateway in place of LiteLLM, first version is the whole product."
 type: decision
-last_verified: 2026-11-24
+last_verified: 2026-11-25
 ---
 
 # Live decisions
@@ -46,3 +46,10 @@ $50 to $150 a month in credits. If that fails, re-score.
 - **The repository is public, for now** (founder, 2026-11-24). Why: free CI minutes. He accepts
   the risk of it being cloned before he makes it private later. No licence file is added, because
   a repository meant to go private is not being offered as open source.
+
+**The academy is part of the product (founder, 2026-11-25).** Every flow is documented, scripted
+against the demo build, walked in a real browser and published to GitHub Pages, and it must
+always be kept current as things change, as thoroughly as the first pass. Why: it is what clients
+and FrostAura's own operators learn the product from, and it was built by reading the code flow by
+flow — which is also how it found two blockers and about thirty gaps. Rule 14 in `CLAUDE.md`.
+

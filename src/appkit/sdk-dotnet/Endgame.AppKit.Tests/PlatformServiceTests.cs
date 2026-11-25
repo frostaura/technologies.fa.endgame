@@ -85,6 +85,20 @@ public sealed class PlatformServiceTests
     }
 
     [Fact]
+    public async Task A_preview_records_no_custom_events_and_exports_nothing()
+    {
+        // The factory evaluates on a preview of the app; its test members' "book.created" were counted as the app's own.
+        await using var host = await KitHost.StartAsync(environment: e => e[EndgameEnvironment.Preview] = "true");
+        var telemetry = host.Services.GetRequiredService<IEndgameTelemetry>();
+        telemetry.Track("note.created");
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Platform.Events);
+        // OTLP export is off (this host swaps the exporter's handler for the dev platform's, so the setting is what is checked).
+        Assert.False(host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<EndgameSettings>>().Value.TelemetryExport);
+        Assert.Throws<ArgumentException>(() => telemetry.Track("Note Created"));
+    }
+
+    [Fact]
     public async Task Traces_metrics_and_logs_are_exported_to_the_platform_collector()
     {
         await using var host = await KitHost.StartAsync();

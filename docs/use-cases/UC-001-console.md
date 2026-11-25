@@ -97,10 +97,12 @@ and credit.
     shared with, and that AI assistants can use it (the per-app address in technical mode). *It is yours*:
     the Owner downloads the export; anyone else is told only the Owner can. Technical mode adds what the app
     is underneath: lifecycle, container state, version, addresses, ids.
-17. **People** (`/people?scope=`, Admin): each person with their role and the level the grant was set at;
-    invite by e-mail to a role at any level beneath — the one-time code is shown once and the page says
-    whether it was e-mailed; change a role (to or from Admin, the Owner only) and remove a grant, both
-    optimistic; what each of the four roles may do, in plain words.
+17. **People** (`/people?scope=`, Admin at that level as the server resolves it): each person whose grant
+    holds there — set there, beneath, or above (the Owner) — with their role and the level it was set at;
+    invite by e-mail to a role at any level beneath — the one-time code is shown once, the page says
+    whether it was e-mailed and that a code works for 7 days; a pending person's row says until when their
+    code works and offers "Send a new code"; change a role (to or from Admin, the Owner only; it keeps the
+    pending person's code) and remove a grant, both optimistic; what each of the four roles may do.
 18. **AI assistants** (`/assistants`): "Let an AI assistant work with your organisation" in normal mode,
     "MCP access tokens" in technical. Make a key (name, a role no higher than yours — an Owner's is an
     Admin's — and when it stops working); the key is shown once with a copy button and never stored; the
@@ -117,10 +119,12 @@ and credit.
     requests and what became of them.
 22. **God mode** (`/operator`, operators only; a coral band on every screen says so): every organisation with
     balance, standing, overdraft, apps and last activity; enter one (the answer says where it is logged) and
-    open its org chart (`/?organisation=`); top up, optionally answering a request; the top-ups made, each
+    open its org chart (`/?organisation=`) — from then on every screen works on that organisation and the band
+    names it, with "Leave {Name}", until the operator leaves; top up, optionally answering a request; the top-ups made, each
     named by the organisation's display name (its address name added in technical mode); decline a request with
     a reason; set the deepest overdraft; the prices with confirmation and their change history; provision an
-    organisation for an invited Owner, the Owner's code shown once.
+    organisation for an invited Owner — "What it does" is required and screened against the red lines, and
+    when no model can be reached the operator screens it themselves with a reason — the Owner's code shown once.
 23. **Normal mode in the run view** prints no `:`-separated key, id, model or file: plan items read their
     plain `text` (an older plan whose `text` names files reads as its place in the plan, the detail in
     technical mode), hires read from their people, and the factory's agents are named for what they did.
@@ -184,7 +188,7 @@ is camelCase, errors are problem details. What the console relies on beyond ARCH
 | `GET/PUT/DELETE /api/secrets` | `{ scope, effective[] { name, setAtLevel, setAtPath, setAt, inherited, overrides[] }, setBelow[] { name, setAtPath } }`; `PUT { scope, name, value }` is sent with `fetch`, never through the store. |
 | `GET/POST/DELETE /api/apps/{id}/shares` | `[{ email, invitedAt, registered }]`; `POST { email }` → `{ email, invitationCode, expiresAt }`, sent with `fetch` so the code never reaches the store. |
 | `GET /api/audit/operator-access?organisation=` | `[{ id, at, action, operator { id, email, displayName }, detail }]`; 403 for anyone but the Owner. |
-| Breadth (ask, dashboard, versions, export, members, tokens, notifications, suggestions, top-up requests, overdraft, God mode) | As ARCH-004, field for field, read from a running stack on 2026-11-25. Differences: `POST …/enter` answers `logged` as **text** (where the entry is written), not a flag; `PATCH /api/members/{id}` answers the invitation shape, of which the console keeps only `member`; `POST /api/credits/top-ups` answers `{ id, amount, createdAt, organisation }`; a `suggest` run is a run kind. One-time values go through `store/sensitive.ts`. |
+| Breadth (ask, dashboard, versions, export, members, tokens, notifications, suggestions, top-up requests, overdraft, God mode) | As ARCH-004, field for field, read from a running stack on 2026-11-25. Differences: `POST …/enter` answers `logged` as **text** (where the entry is written), not a flag; `PATCH /api/members/{id}` answers the invitation shape (never with a new code), of which the console keeps only `member`; `POST /api/credits/top-ups` answers `{ id, amount, createdAt, organisation }`; a `suggest` run is a run kind. One-time values go through `store/sensitive.ts`. |
 
 ## Not built, because the contract has no backend for it
 

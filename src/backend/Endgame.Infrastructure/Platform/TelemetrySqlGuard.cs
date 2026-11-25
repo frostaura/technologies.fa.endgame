@@ -25,7 +25,7 @@ public static class TelemetrySqlGuard
 
     public static readonly IReadOnlySet<string> Functions = new HashSet<string>(StringComparer.Ordinal)
     {
-        "count", "sum", "avg", "min", "max", "stddev", "variance", "percentile_cont", "percentile_disc", "bool_and", "bool_or",
+        "count", "sum", "avg", "min", "max", "stddev", "variance", "percentile_cont", "percentile_disc", "bool_and", "bool_or", "array_agg", "string_agg",
         "date_trunc", "date_part", "extract", "date_bin", "to_char", "now", "age",
         "coalesce", "nullif", "greatest", "least", "round", "floor", "ceil", "ceiling", "abs", "trunc",
         "lower", "upper", "length", "left", "right", "split_part", "concat", "replace", "position", "strpos",

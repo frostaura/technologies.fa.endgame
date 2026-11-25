@@ -53,6 +53,7 @@ public sealed class ChangeService(EndgameDbContext db, TenantSession session, Ru
                 "Another build or change of this app is under way. Wait for it to finish, or cancel it, then ask for this change.");
         }
 
+        await RefusePausedAsync(db, app.OrganisationId, app.ProjectId, cancellationToken);
         var estimate = await estimates.ChangeAsync(app.OrganisationId, 1, 1, cancellationToken);
         var run = await runs.CreateAsync(app, RunKinds.Task, $"Change: {Title(text)}", null, null, null, null, by, cancellationToken);
         await runs.AppendAsync(app.OrganisationId, run.Id, [
@@ -60,6 +61,29 @@ public sealed class ChangeService(EndgameDbContext db, TenantSession session, Ru
             new NewEvent("estimate.made", new JsonObject { ["credits"] = estimate.Credits, ["basis"] = ChangeKind, ["reason"] = estimate.Basis }),
         ], null, by, cancellationToken);
         return await runs.GetAsync(app.OrganisationId, run.Id, cancellationToken);
+    }
+
+    /// <summary>
+    /// A person's change or try again is refused, plainly, while an employee who works on that project is paused: pausing an
+    /// employee gives them no new work (EMP-04), and the factory's build and change stages are theirs.
+    /// </summary>
+    public static async Task RefusePausedAsync(EndgameDbContext db, Guid organisationId, Guid? projectId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        if (projectId is null)
+        {
+            return;
+        }
+
+        var paused = await db.Employees.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && e.ProjectId == projectId && e.Status == Domain.Runs.EmployeeStatuses.Paused)
+            .OrderBy(e => e.Name).Select(e => e.Name).ToListAsync(cancellationToken);
+        if (paused.Count > 0)
+        {
+            var who = string.Join(" and ", paused);
+            throw new EndgameProblem(409, "employee_paused", $"{who} {(paused.Count == 1 ? "is" : "are")} paused",
+                $"{who}, who {(paused.Count == 1 ? "works" : "work")} on this app, {(paused.Count == 1 ? "is" : "are")} paused, so no new work is started for {(paused.Count == 1 ? "them" : "them")}. Resume {(paused.Count == 1 ? "them" : "them")} first.");
+        }
     }
 
     private static string Validate(ResolvedScope app, string? request)

@@ -50,6 +50,13 @@ public sealed class RetryService(EndgameDbContext db, TenantSession session, Run
     public async Task<RunView> RetryAsync(Guid runId, Guid? by, CancellationToken cancellationToken)
     {
         var (run, owner, what) = await RequireAsync(runId, cancellationToken);
+        if (what != "research")
+        {
+            // A build or change is the project's employees' work: while one of them is paused, it is not started again.
+            session.UseOrganisation(run.OrganisationId);
+            await ChangeService.RefusePausedAsync(db, run.OrganisationId, run.ProjectId ?? await PlacedProjectAsync(run, cancellationToken), cancellationToken);
+        }
+
         var estimate = await EstimateAsync(runId, cancellationToken);
         switch (what)
         {
@@ -84,6 +91,35 @@ public sealed class RetryService(EndgameDbContext db, TenantSession session, Run
                 ], null, by, cancellationToken);
                     return await runs.GetAsync(run.OrganisationId, again.Id, cancellationToken);
                 }
+        }
+    }
+
+    /// <summary>The project an earlier build placed its app in, from its journal; null before placement.</summary>
+    private async Task<Guid?> PlacedProjectAsync(RunRecord run, CancellationToken cancellationToken)
+    {
+        long after = 0;
+        while (true)
+        {
+            var page = await runs.ReadEventsAsync(run.OrganisationId, run.Id, after, RunService.MaxEventsPerRead, cancellationToken);
+            foreach (var e in page)
+            {
+                after = e.Seq;
+                if (e.Type == RunEventTypes.Message && e.Payload is JsonObject p && Str(p, "kind") == "workflow.step" && Str(p, "step") == "placement"
+                    && p["data"] is JsonObject data && Str(data, "projectPath") is { } path)
+                {
+                    session.UseOrganisation(run.OrganisationId);
+                    var slugs = path.Split('/');
+                    return await (from proj in db.Projects.AsNoTracking()
+                                  join div in db.Divisions.AsNoTracking() on proj.DivisionId equals div.Id
+                                  where proj.OrganisationId == run.OrganisationId && slugs.Length == 3 && div.Slug == slugs[1] && proj.Slug == slugs[2]
+                                  select (Guid?)proj.Id).FirstOrDefaultAsync(cancellationToken);
+                }
+            }
+
+            if (page.Count < RunService.MaxEventsPerRead)
+            {
+                return null;
+            }
         }
     }
 

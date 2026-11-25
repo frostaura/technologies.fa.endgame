@@ -118,7 +118,7 @@ public sealed class McpTests(PostgresServer postgres) : IAsyncLifetime
         await ControlPlaneApp.Expect(await viewer.PostAsJsonAsync("/api/tokens", new { name = "x", organisation = "frostaura", role = "admin" }), HttpStatusCode.Forbidden);
         Assert.Equal("viewer", (await ControlPlaneApp.Created(viewer.PostAsJsonAsync("/api/tokens", new { name = "x", organisation = "frostaura" })))["accessToken"]!["role"]!.GetValue<string>());
         // A person with no role in an organisation is told it does not exist.
-        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example" }));
+        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = Provisioning.Description, screening = Provisioning.Manual }));
         await ControlPlaneApp.Expect(await viewer.PostAsJsonAsync("/api/tokens", new { name = "x", organisation = "acme" }), HttpStatusCode.NotFound);
 
         // Revoked: refused at once. A console cookie never reaches /mcp, and a token never reaches /api.
@@ -166,7 +166,7 @@ public sealed class McpTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal(403, overdraft["status"]!.GetValue<int>());
 
         // God mode is a person at the console: an operator's token sees only its organisation.
-        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example" }));
+        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = Provisioning.Description, screening = Provisioning.Manual }));
         var foreign = await CallAsync(client, "credits_get", new { scope = "acme" }, expectError: true);
         Assert.Equal(404, foreign["status"]!.GetValue<int>());
 

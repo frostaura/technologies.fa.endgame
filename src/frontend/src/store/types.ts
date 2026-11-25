@@ -91,6 +91,10 @@ export interface TreeApp {
   lastVisitAt: string | null;
   spend: Spend;
   workers: Worker[];
+  /** The viewer's effective role here, as the server resolves it; null where they hold none. Absent from an older control plane. */
+  role?: MemberRole | null;
+  /** Archived: kept, but not served. */
+  archived?: boolean;
 }
 
 export interface ProjectProgress {
@@ -115,6 +119,10 @@ export interface TreeProject {
   spend: Spend;
   workers: Worker[];
   apps: TreeApp[];
+  /** The viewer's effective role here, as the server resolves it; null where they hold none. Absent from an older control plane. */
+  role?: MemberRole | null;
+  /** Archived: kept, but its apps are not served. */
+  archived?: boolean;
 }
 
 export interface TreeDivision {
@@ -124,6 +132,10 @@ export interface TreeDivision {
   spend: Spend;
   workers: Worker[];
   projects: TreeProject[];
+  /** The viewer's effective role here, as the server resolves it; null where they hold none. Absent from an older control plane. */
+  role?: MemberRole | null;
+  /** Archived: kept, but its apps are not served. */
+  archived?: boolean;
 }
 
 export type NeedsYou =
@@ -136,10 +148,12 @@ export interface Tree {
   generatedAt: string;
   /** The signed-in person's role over the whole tree as shown; "none" on first run. */
   viewerRole: MemberRole | "none";
-  /** Null on first run. */
-  organisation: (OrganisationRef & { summary: string | null; spend: Spend; workers: Worker[] }) | null;
+  /** Null on first run. `role` is the viewer's role at the organisation itself: null when their grants all sit lower. */
+  organisation: (OrganisationRef & { summary: string | null; spend: Spend; workers: Worker[]; role?: MemberRole | null }) | null;
   divisions: TreeDivision[];
   needsYou: NeedsYou[];
+  /** With no organisation: true only while none exists anywhere, so this person may name the first. */
+  firstRun?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -904,6 +918,8 @@ export interface Member {
   role: MemberRole;
   hasPasskey: boolean;
   grantedAt: string;
+  /** For someone with no passkey yet: until when their invitation code works. */
+  invitationExpiresAt: string | null;
 }
 
 /** `POST /api/members` → the one-time code, shown once and never stored. */
@@ -947,7 +963,7 @@ export interface AccessTokenCreated {
 
 export interface NotificationItem {
   id: string;
-  /** verdict, approval, hire, budget.80, budget.cap, credits.zero, overdraft.half, overdraft.limit, app.crashed, security.finding */
+  /** verdict, approval, hire, budget.80, budget.cap, credits.zero, overdraft.half, overdraft.limit, app.crashed, security.finding, topup.requested (operators only) */
   kind: string;
   severity: "info" | "urgent";
   title: string;
@@ -1077,4 +1093,12 @@ export interface OrganisationProvisioned {
   invitationExpiresAt: string | null;
   invitationEmailed: boolean;
   nameCheck: { slug: string; source: string; note: string | null } | null;
+  /** How what it does was screened against the red lines: by the model, or by the operator when no model answered. */
+  screening: { method: "model" | "manual"; result: "clear"; reason: string } | null;
+}
+
+/** An operator's own red-line screening, sent only when no model could be reached. */
+export interface ManualScreening {
+  decision: "clear" | "breach";
+  reason: string;
 }

@@ -1036,6 +1036,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **You know it worked when:** the run reads "Finished", and the app's history (CHG-04) shows the change's versions by the employee who made them, the newest live.
 - **Variations and refusals:**
   - Never built: 409 "This app has not been built yet". Another build or change under way: 409 "This app is already being worked on". The panel says "The change was not started: {reason}".
+  - An employee who works on the app is paused: 409 "{Name}, who works on this app, is paused, so no new work is started for them. Resume them first."
   - A request that crosses a red line: the run stops with "This change crosses a red line ({line}). FrostAura never builds it, and no one can overrule that, so nothing was changed."
   - Something that worked before is broken by the change: "Sent back for repair, at no charge: Everything the app did before still works…", repaired one tier up, at most 3 rounds; still broken, the run stops and the app keeps running its previous version.
   - With the plan checkpoint on, "Accept this plan for the change?" waits for you (BLD-04).
@@ -1072,7 +1073,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   3. Press **"Start it again"** ("Starting…") or **"Not now"**. You are taken to the new run.
   4. The new run says "Endgame · Carrying on": "This picks up where the earlier attempt stopped: {n} of {m} parts were already built and checked, so they are kept, not rebuilt or charged again." The plan shows those parts as "Built and checked in the earlier attempt; kept, not built or charged again."
 - **You know it worked when:** the new run finishes; the idea's "Watch the work that followed" now opens it.
-- **Variations and refusals:** a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable".
+- **Variations and refusals:** a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable". While an employee on the project is paused, a build or change is not started again: "It was not started again: {Name}, who works on this app, is paused…".
 - **Where:** `runs/TryAgain.tsx`, `RunView.tsx` `StoppedPanel`, `VerdictView.tsx`; `POST /api/runs/{id}/retry/estimate`, `POST /api/runs/{id}/retry`; `RetryService`, `IdeaService.RetryBuildAsync`, `FactoryEstimates`; `BuildWorkflow.CarryOverAsync`.
 - **Reachable from:** UI; MCP `run_retry_estimate`, `run_retry`; the conversation (`try_again`, TALK-18).
 - **Covered by tests:** `WorkflowTests.A_build_tried_again_keeps_its_placement_plan_and_finished_parts_and_builds_only_the_rest`, `…A_declined_plan_says_so_and_a_try_again_plans_afresh`; `TryAgainAndChangesTests.A_stopped_build_is_built_again_priced_for_what_is_left_and_carrying_on_from_the_earlier_attempt`; `TryAgainAndChanges.test.tsx`.

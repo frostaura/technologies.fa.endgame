@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
@@ -11,7 +12,7 @@ import { paths } from "@/lib/router";
 import { plainOrNull } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { useControlRunMutation, useGetMeQuery, useGetRunQuery } from "@/store/api";
+import { useControlRunMutation, useGetRunQuery } from "@/store/api";
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
@@ -43,8 +44,8 @@ const TONE_CLASS: Record<StepTone, string> = {
 export function RunView({ runId }: { runId: string }) {
   const query = useGetRunQuery(runId);
   const view = viewOf(query);
-  const me = useGetMeQuery(undefined);
-  const org = me.data?.organisation;
+  // The active organisation: the entered one in God mode, the person's own otherwise.
+  const org = useActiveOrganisation().organisation;
   const title = view.kind === "loaded" ? view.data.title : "Work";
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: title }]} aside={view.kind === "loaded" ? <RunAside runId={runId} /> : undefined}>
@@ -457,7 +458,7 @@ function RunAside({ runId }: { runId: string }) {
   const log = useAppSelector((s) => s.runs[runId]);
   const run = useGetRunQuery(runId).data;
   const derived = deriveRun(log?.events ?? []);
-  const me = useGetMeQuery(undefined);
+  const active = useActiveOrganisation();
   return (
     <>
       <section aria-labelledby="tasks-title" className="flex flex-col gap-3">
@@ -479,7 +480,7 @@ function RunAside({ runId }: { runId: string }) {
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">Where the credits go</h2>
         <p className="text-ink-body">Credits are held before each step and settled from what it really cost. Repairing a mistake of its own is never billed.</p>
-        {me.data?.organisation && (
+        {active.organisation && (
           <Link href={paths.credits()} className={cn(buttonVariants({ variant: "outline" }), "self-start")}>
             See credits
           </Link>

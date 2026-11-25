@@ -4,7 +4,7 @@ import { API_BASE, api } from "./api";
 import type { AppDispatch } from "./index";
 import { check, type Guard } from "@/lib/guards";
 import { accessTokenCreatedGuard, invitationGuard, provisionedGuard } from "./guards";
-import type { AccessTokenCreated, AppShareCreated, MemberInvitation, MemberRole, OrganisationProvisioned, ScopeLevel, SecretName, TokenRole } from "./types";
+import type { AccessTokenCreated, AppShareCreated, ManualScreening, MemberInvitation, MemberRole, OrganisationProvisioned, ScopeLevel, SecretName, TokenRole } from "./types";
 
 /**
  * Writes that carry something no one may read back: a secret's value going in, an invitation's
@@ -132,6 +132,21 @@ export function inviteMember(scope: string, email: string, displayName: string, 
   };
 }
 
+/**
+ * Sends a pending person a new invitation code (PPL-05). The one they had stops working; the new
+ * one comes back to the caller only, to be shown once.
+ */
+export function reissueInvitation(scope: string, membershipId: string) {
+  return async (dispatch: AppDispatch): Promise<Outcome<MemberInvitation>> => {
+    const outcome = await send<MemberInvitation>("POST", `members/${encodeURIComponent(membershipId)}/invitation`, {}, invitationGuard);
+    if (outcome.ok) {
+      const { member } = outcome.data;
+      dispatch(api.util.updateQueryData("getMembers", scope, (list) => list.map((m) => (m.membershipId === member.membershipId ? { ...m, invitationExpiresAt: member.invitationExpiresAt } : m))));
+    }
+    return outcome;
+  };
+}
+
 /** Makes an access token for an AI assistant. The token itself is returned this once, to the caller only. */
 export function createToken(name: string, organisation: string, role: TokenRole, expiresInDays: number | null) {
   return async (dispatch: AppDispatch): Promise<Outcome<AccessTokenCreated>> => {
@@ -145,13 +160,24 @@ export function createToken(name: string, organisation: string, role: TokenRole,
   };
 }
 
-/** God mode: provisions an organisation for an invited Owner. The Owner's one-time code comes back once. */
-export function provisionOrganisation(name: string, slug: string, ownerEmail: string, ownerDisplayName: string) {
+/**
+ * God mode: provisions an organisation for an invited Owner. What it does is screened against the red
+ * lines first; `screening` is the operator's own decision, used only when no model can be reached.
+ * The Owner's one-time code comes back once.
+ */
+export function provisionOrganisation(name: string, slug: string, ownerEmail: string, ownerDisplayName: string, description: string, screening: ManualScreening | null = null) {
   return async (dispatch: AppDispatch): Promise<Outcome<OrganisationProvisioned>> => {
     const outcome = await send<OrganisationProvisioned>(
       "POST",
       "organisations",
-      { name: name.trim(), slug, ownerEmail: ownerEmail.trim().toLowerCase(), ...(ownerDisplayName.trim() ? { ownerDisplayName: ownerDisplayName.trim() } : {}) },
+      {
+        name: name.trim(),
+        slug,
+        ownerEmail: ownerEmail.trim().toLowerCase(),
+        description: description.trim(),
+        ...(ownerDisplayName.trim() ? { ownerDisplayName: ownerDisplayName.trim() } : {}),
+        ...(screening ? { screening: { decision: screening.decision, reason: screening.reason.trim() } } : {}),
+      },
       provisionedGuard,
     );
     if (outcome.ok) dispatch(api.util.invalidateTags(["Operator"]));

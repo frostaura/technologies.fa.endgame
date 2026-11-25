@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -11,7 +12,7 @@ import { describeError, viewOf } from "@/lib/queryState";
 import { navigate, paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { api, useDecideIdeaMutation, useGetIdeaQuery, useGetMeQuery, useGetTreeQuery } from "@/store/api";
+import { api, useDecideIdeaMutation, useGetIdeaQuery } from "@/store/api";
 import type { DecisionChoice, ExistingProduct, Idea, Verdict, VerdictOutcome } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { TryAgain } from "../runs/TryAgain";
@@ -32,13 +33,13 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   const researching = !cached.data || cached.data.status === "researching";
   const query = useGetIdeaQuery(ideaId, { pollingInterval: researching ? RESEARCH_POLL_MS : 0 });
   const view = viewOf(query);
-  const tree = useGetTreeQuery(undefined);
-  const me = useGetMeQuery(undefined);
+  const tree = useActiveTree();
+  const active = useActiveOrganisation();
   const idea = view.kind === "loaded" ? view.data : null;
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
 
   const crumbs: Crumb[] = [];
-  const org = me.data?.organisation;
+  const org = active.organisation;
   if (org) crumbs.push({ label: org.name, href: paths.home() });
   if (idea?.scope) for (const name of namesFor(tree.data, idea.scope).slice(1)) crumbs.push({ label: name });
   crumbs.push({ label: idea?.title ?? "Idea" });

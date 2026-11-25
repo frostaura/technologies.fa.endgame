@@ -195,3 +195,27 @@ public sealed class PlatformSettingChangeRecord
 
     public DateTimeOffset ChangedAt { get; set; }
 }
+
+/// <summary>
+/// A model call FrostAura made for itself, charged to no organisation — screening an organisation
+/// against the red lines before it exists (OP-03). Kept so every platform cost can be explained.
+/// </summary>
+public sealed class PlatformCostRecord
+{
+    public Guid Id { get; set; }
+
+    /// <summary>What the call was for, e.g. <c>organisation.screening</c>.</summary>
+    public string Purpose { get; set; } = "";
+
+    public string? Model { get; set; }
+
+    public string? GenerationId { get; set; }
+
+    public decimal CostUsd { get; set; }
+
+    public string DetailJson { get; set; } = "{}";
+
+    public Guid? By { get; set; }
+
+    public DateTimeOffset At { get; set; }
+}

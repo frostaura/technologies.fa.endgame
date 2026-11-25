@@ -169,6 +169,24 @@ public sealed class TryAgainAndChangesTests(PostgresServer postgres) : IAsyncLif
     }
 
     [Fact]
+    public async Task A_change_is_refused_plainly_while_an_employee_on_the_app_is_paused()
+    {
+        var owner = await app.OwnerWithOrganisationAsync();
+        await owner.DivisionAsync("frostaura", "labs");
+        await owner.ProjectAsync("frostaura/labs", "dives");
+        var appId = await owner.AppAsync("frostaura/labs/dives", "web");
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/published", new { version = "abc123" }));
+        var theo = await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/employees", new { scope = "frostaura/labs/dives", name = "Theo", role = "Software engineer" }));
+        await ControlPlaneApp.Ok(owner.PatchAsJsonAsync($"/api/employees/{theo["id"]}", new { status = "paused" }));
+
+        var refused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync($"/api/apps/{appId}/changes", new { request = "Add a depth field." }), HttpStatusCode.Conflict);
+        Assert.Contains("Theo, who works on this app, is paused", refused["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+
+        await ControlPlaneApp.Ok(owner.PatchAsJsonAsync($"/api/employees/{theo["id"]}", new { status = "idle" }));
+        await ControlPlaneApp.Created(owner.PostAsJsonAsync($"/api/apps/{appId}/changes", new { request = "Add a depth field." }));
+    }
+
+    [Fact]
     public async Task A_message_shows_what_it_can_cost_first_and_the_conversation_names_who_said_what()
     {
         var owner = await app.OwnerWithOrganisationAsync();

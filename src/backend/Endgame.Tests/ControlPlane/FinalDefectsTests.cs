@@ -26,7 +26,7 @@ public sealed class FinalDefectsTests(PostgresServer postgres) : IAsyncLifetime
     [Fact]
     public async Task Entering_an_organisation_and_then_reading_it_is_one_logged_entry()
     {
-        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example" }));
+        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = Provisioning.Description, screening = Provisioning.Manual }));
         var dean = await app.SignInAsync("dean@frostaura.net");
 
         // The console enters, then opens the org chart, whose page fires several reads at once.
@@ -44,7 +44,7 @@ public sealed class FinalDefectsTests(PostgresServer postgres) : IAsyncLifetime
     [Fact]
     public async Task Reads_with_no_entry_before_them_log_one_entry_even_when_they_arrive_at_once()
     {
-        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example" }));
+        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = Provisioning.Description, screening = Provisioning.Manual }));
         var dean = await app.SignInAsync("dean@frostaura.net");
 
         // A bookmarked org chart: no explicit entry, a burst of reads. Operator access is never silent, and never doubled.
@@ -59,7 +59,7 @@ public sealed class FinalDefectsTests(PostgresServer postgres) : IAsyncLifetime
     [Fact]
     public async Task Operator_top_ups_name_the_organisation_by_its_display_name_and_keep_its_address_name()
     {
-        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme Holdings", slug = "acme", ownerEmail = "ceo@acme.example" }));
+        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme Holdings", slug = "acme", ownerEmail = "ceo@acme.example", description = Provisioning.Description, screening = Provisioning.Manual }));
         await owner.TopUpAsync("acme", 40m);
         var row = Assert.Single((await ControlPlaneApp.Ok(owner.GetAsync("/api/operator/top-ups?organisation=acme"))).AsArray())!;
         Assert.Equal("acme", row["organisation"]!.GetValue<string>());

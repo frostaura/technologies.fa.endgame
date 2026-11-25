@@ -130,6 +130,8 @@ public sealed class AskViewCatalog(IServiceScopeFactory scopes)
                             + "the same number the app's page shows. \"Requests\" is every row of requests.");
         }
 
+        text.AppendLine("The slowest requests are rows of requests ordered by duration_ms DESC (show method, path or route, status and duration_ms, LIMIT 10); "
+                        + "\"people\" or \"users\" are count(DISTINCT user_id) over events (requests carry no person).");
         text.AppendLine("\"Today\" is at >= date_trunc('day', now()); \"by hour\" groups by date_trunc('hour', at); \"this week\" is at >= now() - interval '7 days'.");
         text.AppendLine("Rules: one SELECT (WITH is allowed), only these views, no comments, no semicolons, no quoted identifiers.");
         text.Append("Functions (no others): ").AppendJoin(", ", TelemetrySqlGuard.Functions.Order(StringComparer.Ordinal)).AppendLine(".");

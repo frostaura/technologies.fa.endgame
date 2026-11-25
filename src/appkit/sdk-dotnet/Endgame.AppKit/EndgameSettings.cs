@@ -27,6 +27,12 @@ public static class EndgameEnvironment
 
     /// <summary>Set to <c>false</c> to switch OpenTelemetry export off (tests do). Optional.</summary>
     public const string TelemetryExport = "ENDGAME_TELEMETRY_EXPORT";
+
+    /// <summary>
+    /// <c>true</c> when this instance is the factory evaluator's preview (Dock sets it): it records nothing as the app — no
+    /// OpenTelemetry and no custom events — so what the app measures is its people's use only. Optional.
+    /// </summary>
+    public const string Preview = "ENDGAME_PREVIEW";
 }
 
 /// <summary>The injected environment, read once and validated when the app starts.</summary>
@@ -49,6 +55,9 @@ public sealed class EndgameSettings
 
     /// <summary>See <see cref="EndgameEnvironment.TelemetryExport"/>.</summary>
     public bool TelemetryExport { get; set; } = true;
+
+    /// <summary>See <see cref="EndgameEnvironment.Preview"/>.</summary>
+    public bool Preview { get; set; }
 
     internal string RequiredAppToken => AppToken ?? throw new InvalidOperationException($"{EndgameEnvironment.AppToken} is not set.");
 
@@ -78,7 +87,8 @@ internal sealed class EndgameSettingsSetup(IConfiguration configuration) : IConf
         options.PlatformUrl = AbsoluteUri(EndgameEnvironment.PlatformUrl);
         options.EgressProxy = AbsoluteUri(EndgameEnvironment.EgressProxy);
         options.AppId = Value(EndgameEnvironment.AppId) ?? options.AppId;
-        options.TelemetryExport = !string.Equals(Value(EndgameEnvironment.TelemetryExport), "false", StringComparison.OrdinalIgnoreCase);
+        options.Preview = string.Equals(Value(EndgameEnvironment.Preview), "true", StringComparison.OrdinalIgnoreCase);
+        options.TelemetryExport = !options.Preview && !string.Equals(Value(EndgameEnvironment.TelemetryExport), "false", StringComparison.OrdinalIgnoreCase);
     }
 
     private string? Value(string key)

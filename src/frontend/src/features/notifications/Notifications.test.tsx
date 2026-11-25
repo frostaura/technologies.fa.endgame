@@ -97,3 +97,11 @@ describe("notification model", () => {
     expect(notificationLines(budget).kind).toBe("Budget");
   });
 });
+
+describe("a top-up request, for operators", () => {
+  it("is labelled as one and leads to where it is answered", () => {
+    const item: NotificationItem = { id: "n9", kind: "topup.requested", severity: "info", title: "Acme asks for 250 credits", detail: "Launch week.", scope: "frostaura", subject: { kind: "topup_request", id: "q1" }, createdAt: "2026-11-25T01:00:00Z", read: false, emailedAt: null };
+    expect(notificationLines(item).kind).toBe("Top-up request");
+    expect(notificationHref(item)).toBe("/operator");
+  });
+});
