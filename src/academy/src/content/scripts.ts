@@ -46,6 +46,8 @@ export interface DemoStep {
   clock?: ClockOp;
   /** The caption shown under the frame. */
   note?: string;
+  /** A captured image of this step: shown in print, and whenever the live console cannot load. */
+  shot?: { file: string; alt: string };
 }
 
 export interface TerminalStep {

@@ -1,4 +1,4 @@
-import MiniSearch, { type Options, type SearchResult } from "minisearch";
+import MiniSearch, { type AsPlainObject, type Options, type SearchResult } from "minisearch";
 import type { Flow } from "./types.ts";
 import { plain } from "./text.ts";
 
@@ -67,8 +67,8 @@ export function buildIndex(flows: Flow[]): MiniSearch<SearchDoc> {
   return index;
 }
 
-export function loadIndex(json: string): MiniSearch<SearchDoc> {
-  return MiniSearch.loadJSON<SearchDoc>(json, searchOptions);
+export function loadIndex(index: AsPlainObject): MiniSearch<SearchDoc> {
+  return MiniSearch.loadJS<SearchDoc>(index, searchOptions);
 }
 
 export interface Hit {

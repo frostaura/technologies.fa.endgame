@@ -1,0 +1,48 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-01",
+  "persona": "viewer",
+  "scenario": "researching",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "pause": true
+      },
+      "highlight": {
+        "text": "Loading the work"
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "play": true
+      },
+      "highlight": {
+        "text": "Live",
+        "note": "The status badge, the stream state, the title and when it started."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Step by step",
+        "note": "Steps arrive as they happen, without a reload."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "clock": {
+        "seek": 600000
+      },
+      "highlight": {
+        "text": "Finished"
+      }
+    }
+  ]
+}

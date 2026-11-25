@@ -365,7 +365,9 @@ export function parseFlows(docsDir: string): Content {
         for (let n = Number(from) + 1; n <= to; n++) aliases.push(`${prefix}-${String(n).padStart(2, "0")}`);
       }
       const report = (message: string, fatal = false) => problems.push({ flow: r.id, file, line: r.line, message, fatal });
-      let { steps, note } = stepsFrom(fields);
+      const parsed = stepsFrom(fields);
+      const note = parsed.note;
+      let steps = parsed.steps;
       let intro = fields.intro;
       // A grouped entry (AST-07 to AST-16) is a paragraph then one bullet per capability.
       if (!fields.values.size && fields.loose.length) {

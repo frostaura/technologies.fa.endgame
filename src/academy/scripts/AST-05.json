@@ -1,0 +1,126 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AST-05",
+  "persona": "assistant",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…",
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "your-assistant",
+            "version": "1.0"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "serverInfo": {
+              "name": "endgame",
+              "version": "1.0"
+            },
+            "capabilities": {
+              "tools": {}
+            }
+          }
+        }
+      },
+      "note": "Streamable HTTP, stateless, with the key as a bearer token. A key works only on /mcp."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "tools": [
+              {
+                "name": "tree_get",
+                "annotations": {
+                  "readOnlyHint": true
+                }
+              },
+              {
+                "name": "idea_submit"
+              },
+              {
+                "name": "cascade_remove",
+                "annotations": {
+                  "destructiveHint": true
+                }
+              },
+              "… 45 tools in all"
+            ]
+          }
+        }
+      },
+      "note": "Read-only tools are marked read-only; tools whose name contains “remove” are marked destructive."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "tree_get",
+          "arguments": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ \"organisation\": { \"name\": \"Northwind\", … } }"
+              }
+            ]
+          }
+        }
+      },
+      "note": "Each call runs the same service as the console, behind the same role check, capped by the key."
+    }
+  ]
+}

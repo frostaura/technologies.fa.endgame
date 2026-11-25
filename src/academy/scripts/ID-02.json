@@ -1,0 +1,50 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-02",
+  "persona": "signed-out",
+  "scenario": "established",
+  "start": "/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in with a passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Waiting for your device…"
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Waiting for your device…",
+        "note": "No e-mail is asked for, so the device offers any Endgame passkey it holds."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 900
+        }
+      ],
+      "note": "You choose a key and approve; the server verifies it and signs you in."
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "text": "Sign out",
+        "note": "Signed in: the org chart and the header with Sign out."
+      }
+    }
+  ]
+}

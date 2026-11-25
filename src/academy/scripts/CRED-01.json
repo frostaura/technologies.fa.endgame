@@ -1,0 +1,32 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CRED-01",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "credits left"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Credits left",
+        "note": "The balance, and how long it lasts at this month's pace."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Spent this month",
+        "note": "Then On AI work and On hosting."
+      }
+    }
+  ]
+}

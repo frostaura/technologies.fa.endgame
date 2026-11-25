@@ -1,0 +1,32 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-02",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Every organisation",
+        "note": "One card per organisation, with its standing badge."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Overdraft allowed"
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "top-up request",
+        "note": "Waiting top-up requests are counted on the card."
+      }
+    }
+  ]
+}

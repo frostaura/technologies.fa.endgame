@@ -14,7 +14,7 @@ export const academy = {
     step: ["17px", { lineHeight: "1.6", letterSpacing: "-0.005em" }],
   },
   width: { rail: "17rem", steps: "34rem", qr: "13rem", "qr-sm": "9rem", read: "42rem", search: "40rem" },
-  height: { stage: "calc(100vh - 7rem)", "stage-sm": "70vh", frame: "38rem", "frame-sm": "26rem", shot: "24rem" },
+  height: { stage: "calc(100vh - 7rem)", "stage-sm": "52vh", frame: "38rem", "frame-sm": "26rem", shot: "24rem" },
   /** The stepper's sticky offset under the header. */
-  inset: { header: "4.5rem" },
+  inset: { header: "4.5rem", "header-sm": "7.75rem" },
 } as const;

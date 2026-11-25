@@ -8,3 +8,8 @@ export function plain(text: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/** Typographer's quotes for prose: "Sign in" → “Sign in”, it's → it’s. Code spans are left alone. */
+export function curly(text: string): string {
+  return text.replace(/"([^"]*)"/g, "“$1”").replace(/(\w)'(\w)/g, "$1’$2");
+}

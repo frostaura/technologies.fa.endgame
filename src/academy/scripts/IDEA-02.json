@@ -1,0 +1,64 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-02",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "New idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "New idea",
+        "note": "The breadcrumb shows where the idea will go. There is no organisation field."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "selector": "textarea"
+            },
+            "text": "A court-booking app for our squash club, sold in playing minutes."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Estimated",
+        "note": "The estimate appears before anything is charged."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Research this idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research:"
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/start",
+      "highlight": {
+        "text": "Back to the org chart"
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-04",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "header",
+        "note": "The header: the mark, the breadcrumb, Normal / Technical, the credits pill, the bell and Sign out."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "New idea",
+        "note": "The band totals the whole organisation; New idea starts the factory."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "clock": {
+        "seek": 15000
+      },
+      "note": "Every 15 seconds the tree is fetched again while the tab is in focus."
+    }
+  ]
+}

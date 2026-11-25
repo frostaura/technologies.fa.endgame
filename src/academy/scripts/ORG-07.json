@@ -1,0 +1,69 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ORG-07",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Whole organisation",
+        "note": "On load the selection is the whole organisation."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technologies"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Technologies",
+        "note": "The selected division gains a blue ring."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Court booking"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Court booking",
+        "note": "The breadcrumb becomes the trail; every step but the last selects that level."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Talking to",
+        "note": "The dock re-scopes to what you selected and fetches its history."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Northwind"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Whole organisation"
+      }
+    }
+  ]
+}
