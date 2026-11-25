@@ -874,16 +874,18 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** an app never handles passwords; it is told who the person is.
 - **You know it worked when:** `GET api/me` returns `{"user": {...}}` for a signed-in person.
 - **Steps:**
-  1. Edge forwards `X-Endgame-Session`. The kit resolves it with `POST /platform/v1/identity/resolve` and caches the result for 30 seconds at most.
+  1. Edge forwards `X-Endgame-Session`. The kit resolves it with `POST /platform/v1/identity/resolve` and caches the result for 30 seconds at most, and never past its `expiresAt`.
   2. The user has a kind (`member` or `endUser`) and a role (`owner`, `admin`, `builder`, `viewer`, or null for an end user).
   3. `IEndgameIdentity.CurrentUser`, `.RequireUser()` (a browser is redirected to sign in), and the web hooks `useCurrentUser()`, `signInUrl()` and `signUpUrl()` expose it.
 - **Variations and refusals:**
-  - An invalid session: 401 `session_invalid`.
-  - A missing or wrong app token: 401 `app_token_invalid`.
-  - A call that came through Edge's public side: 404.
+  - An invalid session: 401 `session_invalid` "The session is unknown, has expired, or is not a session for this app."; the kit treats the person as signed out.
+  - An API call to a `.RequireUser()` endpoint with nobody signed in: 401 "Sign in required" with a `signInUrl`; the web kit throws `NotSignedInError`.
+  - A missing or wrong app token: 401 `app_token_invalid` "The platform API needs the app's token (ENDGAME_APP_TOKEN) as a bearer token; this one is missing, unknown or superseded."
+  - A call that came through Edge's public side: 404 `not_found` "There is nothing at this address."
+  - A handler that takes a non-nullable `EndgameUser` without `.RequireUser()` stops the app at start.
 - **Where:** `appkit/sdk-dotnet/Endgame.AppKit/Identity/*`; `sdk-web/src/hooks.ts`, `router.ts`; `PlatformEndpoints.cs`; `AppTokenFilter`
 - **Reachable from:** inside the app (API only)
-- **Covered by tests:** `PlatformApiTests.Identity_resolves_a_member_and_an_end_user…`; `IdentityTests` (kit); `PlatformApiTests.The_app_token_is_required…`
+- **Covered by tests:** `PlatformApiTests.Identity_resolves_a_member_and_an_end_user…`; `IdentityTests` (kit); `PlatformApiTests.The_app_token_is_required…`; `ApiContractTests.A_required_user_without_RequireUser_stops_start_up`
 
 ### KIT-11 An app keeps its own data
 - **Who:** the app, and its developer
@@ -897,11 +899,13 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. The developer adds an entity and runs `make migration name=AddThing`.
   2. Migrations run at start. A first start takes an empty database to the latest schema.
 - **Variations and refusals:**
-  - Missing environment variables stop the app with one message naming all of them.
+  - Missing environment variables stop the app with one message naming all of them: "Endgame app kit: missing environment variable(s) …".
+  - A database that cannot be migrated stops the app: "Endgame app kit: could not migrate the database at … (ENDGAME_DATABASE): …", naming the host and database, never the password.
+  - A database that cannot be reached makes `GET health` answer 503 with `"database":"unreachable"`.
   - `make migration` with no name prints "usage: make migration name=AddSomething".
-- **Where:** `EndgameApp.cs`; `template/Makefile`
+- **Where:** `EndgameApp.cs`; `EndgameSettings.cs`; `Hosting/EndgameStartup.cs`; `template/Makefile`
 - **Reachable from:** command line / app code
-- **Covered by tests:** `HostingIntegrationTests.Apps_cannot_read_each_others_data_or_the_platforms`; `template/api.tests`
+- **Covered by tests:** `HostingIntegrationTests.Apps_cannot_read_each_others_data_or_the_platforms`; `HostingTests.Health_reports_the_database`, `Missing_environment_is_named_in_one_message` (kit); `template/api.tests`
 
 ### KIT-12 An app sends e-mail
 - **Who:** the app, on behalf of a user
@@ -916,12 +920,12 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   2. It sends `POST /platform/v1/email`, which answers 202 with an id.
   3. The message is queued in the outbox and the dispatcher delivers it through SMTP.
 - **Variations and refusals:**
-  - The kit refuses no recipients, a bad address, or a missing subject or text.
-  - The server refuses more than 50 recipients, a subject that is not one line of 1 to 300 characters, text over 256 KB, or HTML over 512 KB.
+  - The kit refuses no recipients or a bad address ("An email needs at least one recipient, and every recipient must be an address.") and a missing subject or text ("An email needs a subject and a plain-text body.") before anything is sent.
+  - The server answers 400 `invalid_request`: "to is a list of 1 to 50 addresses.", "subject is one line of 1 to 300 characters.", "text is required, at most 256 KB." or "html is at most 512 KB."; the kit throws `EndgamePlatformException` with that code.
   - Without SMTP configured, nothing is sent.
 - **Where:** `Services/PlatformServices.cs`; `AppEmailService`; `EmailDispatcher`; `SmtpEmailSender`
 - **Reachable from:** API only (inside the app)
-- **Covered by tests:** `PlatformApiTests.Email_is_queued_and_delivered_through_smtp_and_bad_mail_is_refused`; `tests-stack/acceptance.spec.ts` test 7
+- **Covered by tests:** `PlatformApiTests.Email_is_queued_and_delivered_through_smtp_and_bad_mail_is_refused`; `PlatformServiceTests.Email_is_handed_to_the_platform` (kit); `tests-stack/acceptance.spec.ts` test 7
 
 ### KIT-13 An app calls a model within its AI allowance
 - **Who:** the app
@@ -936,14 +940,15 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   2. The gateway reserves the most the call could cost, checked against the budgets above the app and the app's own model allowance.
   3. The call is made and settled at its real cost.
 - **Variations and refusals:**
-  - The budget is spent: 402 `budget_exhausted`; the kit throws `EndgameBudgetExhaustedException` and never retries.
-  - The overdraft limit is reached: 402 `overdraft_limit`.
-  - The allowance is exceeded: refused with "The app's own model calls have <n> credits left of their <cap> this month; this call needs up to <m>."
-  - No model fits the price ceiling: 422 `ceiling_unreachable`.
-  - Bad input: "taskType is one of …", "messages is a list of 1 to 100 messages.", "Each message has a role…", "maxTokens is a positive number.".
+  - The budget is spent: 402 `budget_exhausted` "The monthly budget at <scope> has <n> credits left; this call needs up to <m>. This is terminal for the run: do not retry it."; the kit throws `EndgameBudgetExhaustedException` and never retries, and an unhandled one reaches the app's caller as 402 "The credit budget is spent".
+  - The overdraft limit is reached: 402 `overdraft_limit` "The organisation has <n> credits available including its overdraft of <o>; this call needs up to <m>. Work stops until the organisation is topped up; do not retry it." The kit throws a plain `EndgamePlatformException` with that code, which reaches the app's caller as 502 "A platform service failed".
+  - The allowance is exceeded: 402 `budget_exhausted` with `bindingScope` "app models": "The app's own model calls have <n> credits left of their <cap> this month; this call needs up to <m>. This is terminal for the run: do not retry it."
+  - No model fits the price ceiling: 422 `ceiling_unreachable` "At the route's price ceiling this call could cost US$<x>, above the US$<y> allowed for one '<task type>' call. Send a shorter prompt or a lower max_tokens."
+  - No model provider key on the control plane: 503 `model_provider_unconfigured`.
+  - Bad input: 400 `invalid_request` "taskType is one of chat, classify, summarise, extract.", "messages is a list of 1 to 100 messages.", "Each message has a role (system, user or assistant) and non-empty content.", "maxTokens is a positive number."; the kit itself refuses an empty message list with "A chat request needs at least one message."
 - **Where:** `PlatformServices.cs`; `AppModelService`; `ModelGateway`; `CreditLedger`
 - **Reachable from:** API only
-- **Covered by tests:** `PlatformApiTests.Models_go_through_the_same_gateway…held_to_its_cap`; `PlatformServiceTests` (kit)
+- **Covered by tests:** `PlatformApiTests.Models_go_through_the_same_gateway…held_to_its_cap`; `PlatformServiceTests.Models_answer_through_the_platform_and_a_spent_budget_is_terminal` (kit)
 
 ### KIT-14 An app reads a secret by name
 - **Who:** the app
@@ -957,11 +962,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. The kit checks the name format and sends `GET /platform/v1/secrets/{name}`.
   2. The reply is `{name, value, scope}`, resolved from the app upwards.
 - **Variations and refusals:**
-  - A bad name: "A secret name is UPPER_SNAKE_CASE, for example STRIPE_API_KEY."
-  - Not set anywhere: 404 `secret_not_found` "No secret named X is set at any level searched: …"; the kit throws `EndgameSecretNotFoundException`.
+  - A bad name: the kit refuses it before sending, "Secret name '<name>' must be UPPER_SNAKE_CASE (e.g. 'STRIPE_API_KEY')."; the platform's own check answers 400 "A secret name is UPPER_SNAKE_CASE, for example STRIPE_API_KEY."
+  - Not set anywhere: 404 `secret_not_found` "No secret named X is set at any level searched: app …, project …, division …, organisation …."; the kit throws `EndgameSecretNotFoundException`, whose `Name` is the name asked for.
 - **Where:** `PlatformServices.cs`; `AppSecretService`; `CascadeService.RevealSecretAsync`
 - **Reachable from:** API only
-- **Covered by tests:** `PlatformApiTests.Secrets_cascade…`; `tests-stack/acceptance.spec.ts` test 5
+- **Covered by tests:** `PlatformApiTests.Secrets_cascade…`; `PlatformServiceTests.Secrets_resolve_by_name_and_a_missing_one_says_where_it_looked` (kit); `tests-stack/acceptance.spec.ts` test 5
 
 ### KIT-15 An app records telemetry, automatic and custom
 - **Who:** the app
@@ -973,14 +978,16 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** the app page's Visits and Typical response tiles show figures, and ASK-02 can answer questions about the events.
 - **Steps:**
   1. Traces, metrics (every 15 seconds) and logs go to `POST /platform/v1/otlp/v1/{signal}` as OTLP, in protobuf or JSON.
-  2. `Track` never blocks or throws. Events are batched (at most 100, about once a second) to `POST /platform/v1/telemetry/events`.
+  2. `Track` never blocks, and never throws once the name is valid. Events are batched (at most 100, about once a second) to `POST /platform/v1/telemetry/events`, which answers 202.
   3. The intake attributes everything to the app by its token.
 - **Variations and refusals:**
-  - A body over the limit: 413 "An export is at most <n> bytes."
-  - `ENDGAME_TELEMETRY_EXPORT=false` records and drops everything.
+  - A bad event name throws at once, in the app: "Event name '<name>' must be lowercase dot-separated words (e.g. 'note.created')."
+  - A batch the platform refuses (for example properties over 8 KB: "An event's properties are at most 8192 bytes.") is dropped and logged: "Endgame telemetry: <n> custom event(s) could not be sent and were dropped: …".
+  - An OTLP body over the limit: 413 `too_large` "An export is at most 4194304 bytes."
+  - `ENDGAME_TELEMETRY_EXPORT=false` records and drops the OTLP signals. On the evaluator's preview (`ENDGAME_PREVIEW=true`) nothing is exported and `Track` records nothing.
 - **Where:** `Services/EndgameTelemetry.cs`; `PlatformEndpoints.cs`; `TelemetryService`
 - **Reachable from:** API only
-- **Covered by tests:** `PlatformApiTests.Telemetry_is_stored_per_app…`, `Otlp_json_is_accepted_too`; `tests-stack/acceptance.spec.ts` test 10
+- **Covered by tests:** `PlatformApiTests.Telemetry_is_stored_per_app…`, `Otlp_json_is_accepted_too`; `PlatformServiceTests.Custom_events_arrive_in_batches_without_blocking`, `A_preview_records_no_custom_events_and_exports_nothing` (kit); `tests-stack/acceptance.spec.ts` test 10
 
 ### KIT-16 An app runs a recurring job on a schedule
 - **Who:** the app; the platform calls it
@@ -991,21 +998,22 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** the platform calls the app on a cron, signed, and wakes it if it is asleep.
 - **You know it worked when:** the handler runs at the cron time and the platform records the call as answered 204.
 - **Steps:**
-  1. At start, the kit declares every schedule with `PUT /platform/v1/schedules`, replacing the whole set.
-  2. A leased scheduler finds due rows and posts a signed body to Edge's control listener.
+  1. Once the app has started, the kit declares every schedule with `PUT /platform/v1/schedules`, replacing the whole set; the platform answers with each schedule's `nextRunAt`.
+  2. A leased scheduler finds due rows and posts a signed body, `{"scheduledFor": …}`, to Edge's control listener.
   3. Edge wakes the app and forwards the call to `_platform/schedules/<name>`.
   4. The kit checks the signature and runs the handler. The app answers 204, and the schedule moves to its next time.
 - **Variations and refusals:**
-  - A bad cron fails at start: "Schedule '<n>' has cron '<c>'. Use five fields…".
-  - The server refuses more than 50 schedules or duplicate names.
-  - An unsigned or stale call (over 5 minutes): 401 "Unsigned schedule call".
+  - A bad cron fails where `MapSchedule` is written: "Schedule '<n>' has cron '<c>'. Use five fields — minute hour day-of-month month day-of-week — with digits, *, /, ',' and '-' only, e.g. '0 7 * * *'."
+  - The server answers 400 to more than 50 schedules ("An app declares at most 50 schedules."), duplicate names ("Two schedules have the same name."), a cron it cannot read, or an unknown time zone ("'<zone>' is not a time zone this platform knows (use an IANA name such as UTC or Europe/London)."). The kit retries the declaration five times, then logs "Endgame app kit: the platform never accepted this app's …; they will not run until the app restarts: …".
+  - An unsigned or stale call (over 5 minutes): 401 "Unsigned schedule call", "Only the platform may run schedules."
   - A run while the app has never started: "The app has no platform token yet (it has not been started)."
-  - A non-204 answer is recorded as "The app answered <status>."
+  - A paused app is not called: Edge answers 409, recorded as "The app answered 409."
+  - A non-204 answer is recorded as "The app answered <status>."; a handler that throws makes the run fail.
   - Runs missed during downtime run once, not once per miss.
   - The public side never routes `_platform/*`; it returns 404.
 - **Where:** `Services/CallbackEndpoints.cs`; `AppDeclarationService`; `Workers.cs` Scheduler; Edge `Control/PlatformCallbacks.cs`
 - **Reachable from:** API only. Schedules are not listed in the console beyond the "Schedules" chip.
-- **Covered by tests:** `PlatformApiTests.Schedules_are_declared_called_back_signed_through_edge…`; `EdgePipelineTests.A_schedule_callback_on_the_control_listener_wakes_the_app…`; `tests-stack/acceptance.spec.ts` test 8
+- **Covered by tests:** `PlatformApiTests.Schedules_are_declared_called_back_signed_through_edge…`; `EdgePipelineTests.A_schedule_callback_on_the_control_listener_wakes_the_app…`; `PlatformServiceTests.Schedules_are_declared_at_start_and_only_signed_runs_execute`, `A_bad_cron_is_refused_where_it_is_written`, `Callback_signatures_verify_only_fresh_matching_bodies` (kit); `tests-stack/acceptance.spec.ts` test 8
 
 ### KIT-17 An outside device posts to a signed (HMAC) webhook
 - **Who:** an outside device or service
@@ -1022,11 +1030,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   4. The handler can read the body with `ReadJson<T>()` or `ReadText()`.
 - **Variations and refusals:**
   - A missing or wrong header: 401 "Webhook verification failed" / "The <header> header did not verify."
-  - The secret is not set: the kit throws `EndgameSecretNotFoundException`. Not verified what status the caller then sees.
-  - More than 50 webhooks, a path other than `hooks/<name>`, or duplicate names are refused at declaration.
+  - The secret is not set (and the call carries the header): the kit throws `EndgameSecretNotFoundException`, and its error handler answers the caller 502 "A platform service failed" with `code` `secret_not_found`.
+  - More than 50 webhooks ("An app declares at most 50 webhooks."), a path other than `hooks/<name>` ("A webhook's path is hooks/<name>."), or duplicate names ("Two webhooks have the same name.") are refused at declaration with 400.
 - **Where:** `CallbackEndpoints.cs`; `AppDeclarationService`; Edge `AppGate.cs`
 - **Reachable from:** API only
-- **Covered by tests:** `EdgePipelineTests.Declared_webhooks_and_only_those_reach_a_private_app_without_a_session`; `PlatformApiTests.The_evaluator_…calls_its_declared_webhook_signed_with_the_vaults_secret`; `tests-stack/acceptance.spec.ts` test 9
+- **Covered by tests:** `EdgePipelineTests.Declared_webhooks_and_only_those_reach_a_private_app_without_a_session`; `PlatformApiTests.The_evaluator_…calls_its_declared_webhook_signed_with_the_vaults_secret`; `PlatformServiceTests.Webhooks_are_declared_and_only_verified_calls_reach_the_handler` (kit); `tests-stack/acceptance.spec.ts` test 9
 
 ### KIT-18 A simple device posts to a shared-token webhook
 - **Who:** an outside device
@@ -1037,10 +1045,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** a device that cannot sign can prove itself with a shared token from the vault.
 - **You know it worked when:** the handler's answer comes back.
 - **Steps:** as KIT-17, but the header value is compared with the secret in constant time.
-- **Variations and refusals:** a mismatch gets 401 "Webhook verification failed".
+- **Variations and refusals:** a mismatch or a missing header gets 401 "Webhook verification failed", "The <header> header did not verify."
 - **Where:** `CallbackEndpoints.cs`
 - **Reachable from:** API only
-- **Covered by tests:** kit `PlatformServiceTests` (not checked line by line)
+- **Covered by tests:** `PlatformServiceTests.Webhooks_are_declared_and_only_verified_calls_reach_the_handler` (kit; its `door` hook posts the right token and gets 204; the wrong-token case is not tested)
 
 ### KIT-19 Unsigned or undeclared webhook calls are refused
 - **Who:** an outside caller
@@ -1051,12 +1059,12 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** there is deliberately no "no verification" option.
 - **You know it worked when:** the caller gets 401.
 - **Steps:**
-  1. If the hook is declared but the call is unsigned, the kit refuses it with 401.
-  2. If the hook is undeclared on a private app, Edge treats the call as needing sign-in: 401 with a Location header for a POST.
+  1. If the hook is declared but the call is unsigned, the kit refuses it with 401 "Webhook verification failed", before the handler runs.
+  2. If the hook is undeclared on a private app, Edge treats the call as needing sign-in: a signed-out POST gets 401 with a `Location` header pointing at the app's `_endgame/auth/sign-in?returnTo=…`.
 - **Variations and refusals:** an undeclared hook on a public app passes through to the app. Not verified what the app answers.
 - **Where:** `CallbackEndpoints.cs` (`WebhookVerification` has no "none"); `AppGate.cs`
 - **Reachable from:** API only
-- **Covered by tests:** `tests-stack/acceptance.spec.ts` test 9 ("…an undeclared one does not")
+- **Covered by tests:** `EdgePipelineTests.Declared_webhooks_and_only_those_reach_a_private_app_without_a_session`; `tests-stack/acceptance.spec.ts` test 9 ("…an undeclared one does not")
 
 ### KIT-20 An AI assistant uses an app's own derived MCP tools
 - **Who:** an AI assistant, using a person's access token (tokens are another reader's area)
@@ -1070,9 +1078,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. The assistant lists the tools. One tool is derived per OpenAPI operation, named by its `operationId` and described by its `description`, and cached with the published version. GET operations are marked read-only.
   2. The assistant calls a tool. The control plane mints an app-scoped member session and calls the app through Edge.
 - **Variations and refusals:**
-  - The app answers 400 or worse: the tool fails with "The app refused the call" and the app's code and detail.
-  - An unknown tool: "There is no tool '<name>'."
-  - No role on the app: refused.
+  - The app answers 400 or worse: the tool result is an error (`isError: true`) with the app's status, "The app refused the call", and the app's `code` (or `app_error`) and `detail`.
+  - An unknown tool: a JSON-RPC error, "There is no tool '<name>'."
+  - No role on the app: a call fails with 404 `not_found` "The scope '<path>' was not found, or you cannot see it."
+  - The app's OpenAPI document cannot be read: 502 `app_openapi_unavailable` "Its OpenAPI document (openapi/v1.json) answered <status>."
 - **Where:** `Mcp/AppTools.cs`, `McpSetup.cs`; `AppGateway`; the kit's `ApiContract.cs` (operationId and description are required at start)
 - **Reachable from:** MCP only
 - **Covered by tests:** `McpTests.An_apps_own_api_is_derived_from_its_openapi_and_called_through_edge_with_a_member_session`
@@ -1123,6 +1132,28 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Where:** `src/appkit/Makefile`
 - **Reachable from:** command line only
 - **Covered by tests:** CI `appkit` job
+
+### KIT-23 An app's API refuses bad input, and its front end tells each failure apart
+- **Who:** the app, and its developer
+- **Starts at:** a request record with DataAnnotations, mapped on the `api` group from `UseEndgameApp()`; `api()` and `useApiQuery()` in `@endgame/appkit`
+- **Needs:** the kit
+- **Level:** Developer
+- **Learn first:** KIT-21
+- **What you learn:** a handler only ever sees valid input, every failure is a problem document, and the front end branches on the error's type, never on its message.
+- **You know it worked when:** a bad form gets 400 with one entry per field, and the page shows each field's message.
+- **Steps:**
+  1. The developer puts `[Required]`, `[StringLength]` or `[Range]` on the request record's properties.
+  2. Before the handler runs, the kit checks every such body and answers 400 "Some fields need fixing" with `errors` mapping each field to what is wrong.
+  3. A platform failure the app does not catch becomes a problem with a `code`: 402 "The credit budget is spent", 503 "A platform service is unavailable", or 502 "A platform service failed". Every problem carries a `traceId`.
+  4. In the browser, `api()` throws the matching error: `ValidationError` (with `errors`), `NotSignedInError` (with `signInUrl`), `ForbiddenError`, `NotFoundError`, `BudgetExhaustedError`, or `NetworkError` when nothing answered.
+  5. `useApiQuery()` reports `loading`, `loaded` or `failed`, so a failed read is never shown as an empty one.
+- **Variations and refusals:**
+  - A 402 from the kit says "This feature is paused until the organisation tops up its credits."
+  - `api("/notes")` throws at once: "drop the leading slash"; `api("api/notes")` throws "paths are already inside api/"; an absolute URL throws "api() calls this app's own API only."
+  - Nothing answers: `NetworkError` "The app could not be reached. Check the connection and try again."
+- **Where:** `Hosting/InputValidation.cs`; `Hosting/EndgameErrors.cs`; `EndgameApp.cs`; `sdk-web/src/api.ts`, `errors.ts`, `hooks.ts`
+- **Reachable from:** API only (inside the app)
+- **Covered by tests:** `ApiContractTests.Input_is_validated_before_the_handler_runs_with_one_entry_per_field`; `HostingTests.Errors_are_problem_details_with_a_trace_id` (kit); `sdk-web/src/api.test.ts`, `hooks.test.tsx`
 
 ## HOST — sleep, wake, pause and crash, as a person meets them
 
