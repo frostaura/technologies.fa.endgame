@@ -89,7 +89,7 @@ internal static class BreadthEndpoints
         apps.MapPost("/ask/estimate", async (Guid id, AskRequest request, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, AskService ask, CancellationToken ct) =>
             {
                 var app = await AppAsync(id, principal, access, scopes, MemberRole.Viewer, ct);
-                return Results.Ok(ask.Estimate(app, request.Question));
+                return Results.Ok(await ask.EstimateAsync(app, request.Question, ct));
             })
             .WithName("EstimateAsk").WithSummary("The most asking this question about the app can cost, before anything is charged.").Produces<AskEstimate>();
         apps.MapPost("/ask", async (Guid id, AskRequest request, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, AskService ask, CancellationToken ct) =>

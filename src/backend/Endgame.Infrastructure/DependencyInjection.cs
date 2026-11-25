@@ -132,6 +132,7 @@ public static class DependencyInjection
         services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
         services.AddScoped<TelemetryQueryRunner>();
         services.AddScoped<AskService>();
+        services.AddSingleton<AskViewCatalog>();
         services.AddSingleton<DockClient>();
         services.AddHttpClient(DockClient.ClientName, client => client.Timeout = Timeout.InfiniteTimeSpan);
         services.AddScoped<AppVersionService>();
