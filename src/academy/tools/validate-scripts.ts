@@ -17,6 +17,8 @@ export interface Coverage {
   stepsWithMedia: number;
   byKind: Record<string, number>;
   scripted: string[];
+  /** Branches of "What else can happen" shown live. */
+  variations: number;
 }
 
 export interface ScriptReport {
@@ -68,6 +70,16 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
       if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.file}, which does not exist`);
       if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${file}: step ${step.step} is a demo step that sends the console nothing`);
     }
+    for (const [i, v] of (script.variations ?? []).entries()) {
+      const where = `${file}: variation ${i + 1} ("${v.title}")`;
+      v.steps.forEach((step, j) => {
+        if (step.step !== j + 1) problems.push(`${where}: its steps are numbered from 1 in order; step ${j + 1} says ${step.step}`);
+        if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${where}: step ${step.step} sends the console nothing`);
+        if (step.kind === "demo" && !step.note && !step.highlight?.note) problems.push(`${where}: step ${step.step} says nothing; a variation's step is read from its note`);
+        if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${where}: step ${step.step} names public/shots/${step.shot.file}, which does not exist`);
+        if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${where}: step ${step.step} names public/shots/${step.file}, which does not exist`);
+      });
+    }
     scripts[id] = script;
   }
   const byKind: Record<string, number> = {};
@@ -87,6 +99,7 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
       stepsWithMedia,
       byKind,
       scripted: Object.keys(scripts),
+      variations: Object.values(scripts).reduce((n, s) => n + (s.variations?.length ?? 0), 0),
     },
   };
 }

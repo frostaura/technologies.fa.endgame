@@ -31,7 +31,12 @@
         "signed-out",
         "end-user",
         "assistant",
-        "host-admin"
+        "host-admin",
+        "division-admin",
+        "first-run",
+        "two-organisations",
+        "invited",
+        "no-role"
       ]
     },
     "scenario": {
@@ -45,7 +50,48 @@
         "building",
         "app-live",
         "low-credits",
-        "god-mode"
+        "god-mode",
+        "default",
+        "quiet",
+        "empty-organisation",
+        "research-running",
+        "research-verdict",
+        "verdict-do-not-build",
+        "verdict-red-line",
+        "build-running",
+        "build-plan",
+        "build-sent-back",
+        "build-security-finding",
+        "build-published",
+        "build-waiting-on-plan",
+        "build-failed",
+        "app-busy",
+        "app-asleep",
+        "app-paused",
+        "app-crashed",
+        "app-never-measured",
+        "employee-memory",
+        "hire-pending",
+        "at-overdraft-limit",
+        "budget-spent",
+        "manage-tree",
+        "archived-division",
+        "account",
+        "employee-released",
+        "employee-let-go",
+        "two-organisations",
+        "screening-offline",
+        "tree-unreachable",
+        "tree-refresh-fails",
+        "ontology-unreachable",
+        "notifications-unreachable",
+        "notifications-refresh-fails",
+        "status-unhealthy",
+        "status-no-services",
+        "status-unreachable",
+        "status-refresh-fails",
+        "session-unreachable",
+        "operator-no-organisation"
       ]
     },
     "start": {
@@ -56,6 +102,13 @@
       "minItems": 1,
       "items": {
         "$ref": "#/definitions/step"
+      }
+    },
+    "variations": {
+      "type": "array",
+      "description": "What else can happen: each refusal, limit or other branch that matters, played on its own beside the flow's \"What else can happen\". Each has its own person, world and starting address, and its steps are numbered from 1.",
+      "items": {
+        "$ref": "#/definitions/variation"
       }
     }
   },
@@ -123,8 +176,11 @@
           ],
           "properties": {
             "seek": {
-              "type": "number",
-              "minimum": 0
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Script milliseconds to move every live run forward by, or a named moment such as \"research:verdict\" (ARCH-009)."
             }
           }
         }
@@ -215,9 +271,16 @@
           ],
           "properties": {
             "wait": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 10000
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                {
+                  "$ref": "#/definitions/target"
+                }
+              ]
             }
           }
         },
@@ -485,6 +548,41 @@
         }
       },
       "description": "A captured image of this step, shown in print and whenever the live console cannot load."
+    },
+    "variation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "persona",
+        "scenario",
+        "start",
+        "steps"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "What this branch is, in a few plain words: \"A Viewer is told who may\"."
+        },
+        "persona": {
+          "$ref": "#/properties/persona"
+        },
+        "scenario": {
+          "$ref": "#/properties/scenario"
+        },
+        "start": {
+          "$ref": "#/definitions/route"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/step"
+          }
+        }
+      }
     }
   }
 }

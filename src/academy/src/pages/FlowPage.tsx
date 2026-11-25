@@ -12,6 +12,7 @@ import { Eyebrow } from "../components/Shell.tsx";
 import { sentence } from "../content/text.ts";
 import { Stage } from "../stage/Stage.tsx";
 import { mediaOf, type Media } from "../stage/media.ts";
+import { LiveVariations } from "../stage/VariationPlayer.tsx";
 import { NotFound } from "./NotFound.tsx";
 
 const MEDIA_LABEL: Record<Media, string> = {
@@ -315,7 +316,8 @@ function Finish({ flow: f, done, next }: { flow: Flow; done: boolean; next: Flow
 }
 
 function Variations({ flow: f }: { flow: Flow }) {
-  if (!f.variations.length && !f.extras.length) return null;
+  const live = scripts[f.id]?.variations ?? [];
+  if (!f.variations.length && !f.extras.length && !live.length) return null;
   return (
     <section className="mt-12 max-w-prose">
       <details className="group rounded-lg border bg-surface" open={f.steps.length === 0}>
@@ -325,6 +327,7 @@ function Variations({ flow: f }: { flow: Flow }) {
         </summary>
         <div className="border-t px-6 pb-6 pt-2">
           <Blocks blocks={f.variations} self={f.id} />
+          {live.length > 0 && <LiveVariations flow={f} variations={live} />}
           {f.extras.map((x) => (
             <div key={x.label} className="mt-4 rounded-md bg-attention-wash p-4">
               <p className="text-eyebrow font-semibold uppercase text-attention-text">{x.label}</p>

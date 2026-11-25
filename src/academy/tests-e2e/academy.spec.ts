@@ -106,6 +106,27 @@ test("stepping through a scripted flow sends the live console each op in order",
   expect(replay.at(-1)).toBe("highlight");
 });
 
+test("a branch of what else can happen plays live, as its own person in its own world", async ({ page }) => {
+  await withDemo(page);
+  await page.goto("./#/flow/TREE-02");
+  await page.getByText("What else can happen", { exact: true }).click();
+  const branches = page.getByRole("list", { name: "Branches shown live" });
+  await expect(branches.getByRole("listitem")).toHaveCount(3);
+  await branches.getByRole("button", { name: "Show me" }).first().click();
+  const frame = page.frameLocator('[title="Live demo console: An address that is not one"]');
+  await expect
+    .poll(() => frame.locator("#log li").allTextContents())
+    .toEqual([
+      "reset {}",
+      'goto {"route":"/tree?scope=northwind&add=1","persona":"owner","scenario":"manage-tree"}',
+      expect.stringMatching(/^act \{"actions":\[\{"type"/),
+      expect.stringMatching(/^highlight \{"text":"Use 2 to 40 lower-case letters"/),
+    ]);
+  await expect(branches.getByText("An address that is not one is refused as you type")).toBeVisible();
+  await branches.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator('[title="Live demo console: An address that is not one"]')).toHaveCount(0);
+});
+
 test("a terminal step types its command and prints its output", async ({ page }) => {
   await page.goto("./#/flow/OPS-12/step/2");
   await expect(page.getByTestId("terminal")).toContainText("BACKUP_ID=", { timeout: 10_000 });
