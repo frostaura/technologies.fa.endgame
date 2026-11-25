@@ -65,4 +65,12 @@ describe("the step-script validator", () => {
     expect(schema.properties.persona.enum).toEqual([...PERSONAS]);
     expect(schema.properties.scenario.enum).toEqual([...SCENARIOS]);
   });
+
+  it("checks a script's variations: numbered from 1, each step saying what it shows", () => {
+    const branch = { title: "A stranger is refused", persona: "signed-out", scenario: "established", start: "/sign-in", steps: [{ step: 1, kind: "demo", highlight: { text: "invite-only", note: "Refused." } }] };
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [branch] } }).problems).toEqual([]);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, steps: [{ step: 2, kind: "demo", highlight: { text: "a", note: "b" } }] }] } }).problems.join()).toMatch(/number them 1 to 1/);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, steps: [{ step: 1, kind: "demo", highlight: { text: "a" } }] }] } }).problems.join()).toMatch(/has no note/);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, persona: "nobody" }] } }).problems.length).toBeGreaterThan(0);
+  });
 });
