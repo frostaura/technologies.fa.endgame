@@ -1,0 +1,62 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-12",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "Who is working on what?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "See how it got there"
+          }
+        },
+        {
+          "click": {
+            "text": "See how it got there"
+          }
+        },
+        {
+          "wait": {
+            "text": "Step by step"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "“See how it got there” opens the reply’s run."
+      }
+    }
+  ]
+}

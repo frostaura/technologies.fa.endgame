@@ -60,7 +60,7 @@ test.describe("the app page", () => {
     await page.goto("/apps/app1");
     await page.getByLabel("Ask about this app").fill("Which days are busiest?");
     await expect(page.getByRole("button", { name: "Ask it" })).toHaveCount(0);
-    await page.getByRole("button", { name: "See what it costs" }).click();
+    await page.getByRole("region", { name: "Asking about this app" }).getByRole("button", { name: "See what it costs" }).click();
     await expect(page.getByText("At most 0.4 credits.")).toBeVisible();
     await page.getByRole("button", { name: "Ask it" }).click();
     await expect(page.getByText("Tuesday and Thursday evenings are the busiest.")).toBeVisible();
@@ -78,7 +78,7 @@ test.describe("the app page", () => {
     await useScenario("populated");
     await page.goto("/apps/app1");
     await page.getByLabel("Ask about this app").fill("Delete every booking");
-    await page.getByRole("button", { name: "See what it costs" }).click();
+    await page.getByRole("region", { name: "Asking about this app" }).getByRole("button", { name: "See what it costs" }).click();
     await page.getByRole("button", { name: "Ask it" }).click();
     await expect(page.getByRole("alert").filter({ hasText: "Try asking it another way" })).toBeVisible();
   });

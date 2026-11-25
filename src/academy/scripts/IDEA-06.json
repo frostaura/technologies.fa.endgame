@@ -1,0 +1,95 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-06",
+  "persona": "assistant",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/api/ideas",
+      "body": {
+        "text": "A booking sheet for the rowing club's six boats.",
+        "constraints": [
+          "Members sign in"
+        ],
+        "scope": "northwind/technologies"
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": "f1c2d0a7-5b3e-4c1a-9e8d-1f2a3b4c5d6e",
+          "title": "A booking sheet for the rowing club's six boats.",
+          "status": "researching",
+          "runId": "8a7b6c5d-4e3f-4a2b-9c1d-0e1f2a3b4c5d",
+          "scope": null,
+          "verdict": null,
+          "decision": null
+        }
+      },
+      "note": "The idea is proposed to a division; the answer is the idea with the research run that follows it."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/ideas/f1c2d0a7-5b3e-4c1a-9e8d-1f2a3b4c5d6e",
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "f1c2d0a7-5b3e-4c1a-9e8d-1f2a3b4c5d6e",
+          "status": "researching",
+          "runId": "8a7b6c5d-4e3f-4a2b-9c1d-0e1f2a3b4c5d",
+          "research": {
+            "estimatedCredits": 12,
+            "spentCredits": 0.6,
+            "by": "Wren"
+          }
+        }
+      },
+      "note": "It says “researching”, with the run to follow."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/runs/8a7b6c5d-4e3f-4a2b-9c1d-0e1f2a3b4c5d/events?after=0",
+      "response": {
+        "status": 200
+      },
+      "note": "Follow the run as server-sent events (or MCP run_events); each event carries its sequence number to resume from."
+    }
+  ],
+  "variations": [
+    {
+      "title": "A project scope is refused",
+      "persona": "assistant",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/api/ideas",
+          "body": {
+            "text": "A booking sheet for the rowing club's six boats.",
+            "scope": "northwind/technologies/court-booking"
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "title": "The request is not valid",
+              "status": 400,
+              "code": "invalid_request",
+              "detail": "An idea is proposed to the organisation or to a division; placement into a project comes after the verdict."
+            }
+          },
+          "note": "Ideas go to the organisation or a division, never deeper."
+        }
+      ]
+    }
+  ]
+}

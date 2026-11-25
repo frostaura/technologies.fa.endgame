@@ -40,7 +40,7 @@
             "into": {
               "text": "Move Kasper to"
             },
-            "value": "northwind/technologies/allergen-labels"
+            "value": "northwind/learning/tutor-match"
           }
         },
         {
@@ -53,7 +53,7 @@
         }
       ],
       "highlight": {
-        "text": "Allergen Labels and everything beneath it",
+        "text": "Tutor Match and everything beneath it",
         "note": "Moved: “Works at” shows the new place, and the chart follows."
       }
     }

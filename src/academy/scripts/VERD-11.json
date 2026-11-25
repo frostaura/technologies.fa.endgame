@@ -1,0 +1,86 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-11",
+  "persona": "viewer",
+  "scenario": "research-verdict",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Verdict: build"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research · Verdict: build",
+        "note": "A build verdict, in auto-mode."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:decided"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Building has started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Endgame · Building has started",
+        "note": "Auto-mode builds it now, on that verdict."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/ideas/{idea}",
+      "act": [
+        {
+          "wait": {
+            "text": "Auto-mode chose to build it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Auto-mode chose to build it",
+        "note": "On the idea’s page: who decided, and the work that followed."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Checkpoints mode: the verdict waits for you",
+      "persona": "viewer",
+      "scenario": "s3-checkpoints",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "clock": {
+            "seek": "research:finished"
+          },
+          "act": [
+            {
+              "wait": {
+                "text": "Waiting for your decision"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Endgame · Waiting for your decision",
+            "note": "Autonomy is “checkpoints”, so the owner decides on the verdict."
+          }
+        }
+      ]
+    }
+  ]
+}

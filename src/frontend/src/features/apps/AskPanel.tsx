@@ -105,7 +105,7 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
   };
 
   return (
-    <section className={cn("flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card sm:p-6", RISE)}>
+    <section aria-label="Asking about this app" className={cn("flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card sm:p-6", RISE)}>
       <form onSubmit={(e) => void getEstimate(e)} className="flex flex-col gap-2">
         <label htmlFor={inputId} className="flex items-center gap-2 font-display text-lg font-semibold">
           <Icon name="research" tinted />

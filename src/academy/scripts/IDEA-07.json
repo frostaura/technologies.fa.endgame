@@ -1,0 +1,124 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-07",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Ideas from your portfolio"
+          }
+        },
+        {
+          "wait": {
+            "text": "Ask for ideas"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Ideas from your portfolio",
+        "note": "From the home page, with the organisation selected."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Suggest for",
+        "note": "Ideas for the whole organisation, or for one division."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "See what it costs"
+          }
+        },
+        {
+          "wait": {
+            "text": "At most"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "At most",
+        "note": "The cost first."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Suggest ideas"
+          }
+        },
+        {
+          "wait": {
+            "text": "Watch it work"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Watch it work",
+        "note": "Then start it: the page checks for new suggestions while Endgame reads what Northwind holds."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "clock": {
+        "speed": 4
+      },
+      "highlight": {
+        "text": "Watch it work",
+        "note": "The page checks for new suggestions while Endgame reads what Northwind holds."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "clock": {
+        "seek": 20000
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "The gap it fills"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The gap it fills",
+        "note": "Each card: the idea, the gap it fills, why you are placed to build it, and what it would reuse."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A Viewer reads, but cannot ask",
+      "persona": "viewer",
+      "scenario": "established",
+      "start": "/suggestions?scope=northwind",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Asking for ideas spends credits, so it needs the Builder role here.",
+            "note": "Asking spends credits, so a Viewer is told plainly."
+          }
+        }
+      ]
+    }
+  ]
+}

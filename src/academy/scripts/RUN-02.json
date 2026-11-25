@@ -1,0 +1,95 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-02",
+  "persona": "viewer",
+  "scenario": "build-sent-back",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "actions taken",
+        "note": "Normal mode counts the actions; refusals would be counted too."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "The builder · Placed",
+        "note": "Plain messages read “speaker · title”."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Built:",
+        "note": "Agent groups fold away: “Built: …”, “Checked: …”, “Drew up the plan”."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Changed",
+        "note": "Mechanics are summarised in plain words: files read and changed, tests run."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sent back",
+        "note": "A part sent back is said plainly — no file names, ids or models."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:finished"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Outcome"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Outcome",
+        "note": "When it finishes, “Outcome” carries its closing message."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An action refused by your rules",
+      "persona": "viewer",
+      "scenario": "s3-stage-rules",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "clock": {
+            "seek": "build:security-review"
+          },
+          "act": [
+            {
+              "wait": {
+                "text": "refused by your rules"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "refused by your rules",
+            "note": "A stage rule refused one step: counted, said as “An action was refused by your rules”, and the work goes on."
+          }
+        }
+      ]
+    }
+  ]
+}

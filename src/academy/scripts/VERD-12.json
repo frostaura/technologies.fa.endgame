@@ -1,0 +1,121 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-12",
+  "persona": "owner",
+  "scenario": "s3-research-failed",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Research did not finish",
+        "note": "No verdict was recorded and nothing will be built; the trace shows where it stopped."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "It picks up where this stopped; you see what it costs first.",
+        "note": "Why it stopped, and the offer to try again."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Try again"
+          }
+        },
+        {
+          "wait": {
+            "text": "Research starts again with the same idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Estimated",
+        "note": "The estimate first."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Start it again"
+          }
+        },
+        {
+          "wait": {
+            "text": "Research:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "“Start it again” opens the new research run."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Research that was cancelled",
+      "persona": "owner",
+      "scenario": "s3-research-cancelled",
+      "start": "/ideas/{idea}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "This work was cancelled. What was finished is kept.",
+            "note": "A cancelled research run is offered again the same way."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Only the latest research can be tried, once",
+      "persona": "owner",
+      "scenario": "s3-research-failed",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Try again"
+              }
+            },
+            {
+              "wait": {
+                "text": "Start it again"
+              }
+            },
+            {
+              "click": {
+                "text": "Start it again"
+              }
+            },
+            {
+              "wait": {
+                "text": "Research:"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Try again",
+            "note": "On the failed run’s own page the same offer stands — until it has been tried once."
+          }
+        }
+      ]
+    }
+  ]
+}

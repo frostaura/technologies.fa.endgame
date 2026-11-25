@@ -1,0 +1,68 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-10",
+  "persona": "owner",
+  "scenario": "s3-budget-runs-out",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:part-1"
+      },
+      "act": [
+        {
+          "clock": {
+            "speed": 4
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "The build starts; Learning has very little budget left."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": 60000
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "The credit budget is exhausted"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The credit budget is exhausted, so this run cannot call a model again.",
+        "note": "The gateway refuses to hold credits for the next call."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "clock": {
+            "speed": 1
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Did not succeed",
+        "note": "The run stops, keeping what was finished."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged.",
+        "note": "Said plainly, with “See credits” and “Try again”."
+      }
+    }
+  ]
+}

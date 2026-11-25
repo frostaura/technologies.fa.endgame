@@ -107,7 +107,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   3. Press **"Approve"** on the card in the dock (TALK-17), or on the run page (RUN-07).
   4. The idea is created through `POST /internal/ideas`. From a project or app scope it is proposed to the division above.
   5. The assistant's reply arrives in the dock, starting "Research started…".
-- **You know it worked when:** a new research run exists and the home page lists the idea under research.
+- **You know it worked when:** a new research run exists: the org chart shows the researcher "researching an idea", and once research ends its verdict waits on the home strip ("Verdict waiting").
 - **Variations and refusals:** pressing "Decline" refuses the call ("Declined. It was not done; the work continues without it."), and the assistant says it did not start it.
 - **Where:** `ConversationWorkflow.cs`, `RunnerTools.cs` `StartIdeaTool`, `AgentFactory.Conversation` (checkpoints `start_idea`, `adjust_setting`); `POST /internal/ideas` (FactoryEndpoints).
 - **Reachable from:** UI (conversation) and MCP `conversation_post`.
@@ -239,7 +239,6 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Starts at:** any of these lead to `/ideas/{id}`:
   - **"Read it"** on a finished research run;
   - the home strip's **"Verdict waiting"** card;
-  - the org chart's **"Read the verdict"**;
   - a notification;
   - "Taken — see its research".
 - **Needs:** an idea.
@@ -749,7 +748,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   3. **"What you asked for"**: the requirements in your words.
   4. **"Parts of the plan"**: each with "To do", "Passed its check" or "Sent back", and a plain outcome line. In technical mode: the id, detail, "Covers …", "Check: …" and evidence.
   5. **"Left out, on purpose"**: each requirement with its reason.
-  6. "The files and tests behind each part are in technical mode."
+  6. Technical mode shows the files, tests and check behind each part; a part the planner wrote no plain words for says "The files and tests behind each part are in technical mode."
   7. "The builder · The plan" message: "{summary}. {n} parts, each built, then checked in the running app against what you asked for. All {n} things the idea asks for are covered." (or "Left out: … because …").
 - **You know it worked when:** the badge reads "Agreed".
 - **Variations and refusals:**
@@ -900,7 +899,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Who:** Viewer or above.
 - **Starts at:** the home page's **"Autonomy for {node}"**, which opens `/autonomy?scope=…`.
 - **Needs:** an organisation.
-- **Level:** Core. **Learn first:** VERD-11.
+- **Level:** Core. **Learn first:** IDEA-02.
 - **What you learn:** a setting made higher up holds for everything beneath it, and each value says where it was set.
 - **Steps:**
   1. The heading reads "How much {name} does on its own", with "Set once for the organisation, narrowed for a division, project or app. The credit budget is the limit that is always on."

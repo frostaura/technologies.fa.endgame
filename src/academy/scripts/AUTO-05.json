@@ -1,0 +1,156 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AUTO-05",
+  "persona": "admin",
+  "scenario": "established",
+  "start": "/autonomy?scope=northwind/learning",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        },
+        {
+          "click": {
+            "selector": "li[data-stage='build'] button"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Building",
+        "note": "On the Building card, “Set rules here”."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "selector": "li[data-stage='build'] fieldset:nth-of-type(2) input"
+            },
+            "text": "edit_file(docs/app.md)"
+          }
+        },
+        {
+          "click": {
+            "selector": "li[data-stage='build'] fieldset:nth-of-type(2) span > button"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "li[data-stage='build'] fieldset:nth-of-type(2)",
+        "note": "In technical mode a rule is typed as tool or tool(pattern): here, ask before the app’s description changes."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Save for Learning"
+          }
+        },
+        {
+          "wait": {
+            "text": "Replaces the rules set at"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "edit_file(docs/app.md)",
+        "note": "Saved for Learning: from now on that step of a build here waits for your sign-off."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "What it changes in a run: the step waits for you",
+      "persona": "owner",
+      "scenario": "s3-stage-rules",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "clock": {
+            "seek": "build:part-3"
+          },
+          "act": [
+            {
+              "clock": {
+                "seek": 20000
+              }
+            },
+            {
+              "wait": {
+                "text": "Let the agent change part of the app?"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Let the agent change part of the app?",
+            "note": "When the builder reaches that file the run stops for your answer, even unattended."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A malformed rule is refused",
+      "persona": "admin",
+      "scenario": "established",
+      "start": "/autonomy?scope=northwind/learning",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Technical"
+              }
+            },
+            {
+              "click": {
+                "selector": "li[data-stage='build'] button"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "selector": "li[data-stage='build'] fieldset:nth-of-type(1) input"
+                },
+                "text": "Edit Files!"
+              }
+            },
+            {
+              "click": {
+                "selector": "li[data-stage='build'] fieldset:nth-of-type(1) span > button"
+              }
+            },
+            {
+              "click": {
+                "text": "Save for Learning"
+              }
+            },
+            {
+              "wait": {
+                "text": "The rules were not saved"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The rules were not saved",
+            "note": "A rule that is not tool or tool(pattern) is refused, and the rules stay as they were."
+          }
+        }
+      ]
+    }
+  ]
+}

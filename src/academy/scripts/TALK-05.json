@@ -1,0 +1,88 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-05",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Kasper · Software engineer"
+          }
+        },
+        {
+          "wait": {
+            "text": "Talking to Kasper"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Kasper",
+        "note": "Select an employee on the chart."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "See Kasper’s job, record and memory",
+        "note": "A link to their record."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "A message here costs at most",
+        "note": "Priced on Kasper’s own thinking power."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Kasper"
+            },
+            "text": "What do you remember about leagues?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "I'm Kasper"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "I'm Kasper",
+        "note": "Kasper answers himself, from his job and what he remembers."
+      }
+    }
+  ]
+}

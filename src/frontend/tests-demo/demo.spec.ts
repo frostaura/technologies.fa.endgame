@@ -46,10 +46,12 @@ async function walk(page: Page, start: string) {
   await demo(page, "clock", { seek: 120_000 });
   await expect(page.getByText(/Verdict: build/).first()).toBeVisible({ timeout: 20_000 });
 
-  // The verdict → build it → the build plays to "Running privately".
+  // Northwind is in auto-mode, so a "build" verdict is built on its own (VERD-11): the verdict → the work that followed → "Running privately".
+  await expect(page.getByText("Building has started").first()).toBeVisible({ timeout: 20_000 });
   await page.getByRole("link", { name: /verdict/i }).first().click();
   await expect(page.getByText(/Verdict ·/).first()).toBeVisible();
-  await page.getByRole("button", { name: "Build it" }).first().click();
+  await expect(page.getByText(/Auto-mode chose to build it/).first()).toBeVisible();
+  await page.getByRole("link", { name: "Watch the work that followed" }).first().click();
   await expect(page.getByText(/Build:/).first()).toBeVisible({ timeout: 20_000 });
   await demo(page, "clock", { seek: 600_000 });
   await expect(page.getByText("Running privately").first()).toBeVisible({ timeout: 30_000 });
@@ -65,7 +67,7 @@ async function walk(page: Page, start: string) {
   // Asking about a busy app, in plain words.
   await demo(page, "goto", { route: "/apps/{app}", scenario: "app-busy" });
   await page.getByLabel("Ask about this app").fill("Which hour was busiest today?");
-  await page.getByRole("button", { name: "See what it costs" }).click();
+  await page.getByRole("region", { name: "Asking about this app" }).getByRole("button", { name: "See what it costs" }).click();
   await expect(page.getByText(/^At most/).first()).toBeVisible();
   await page.getByRole("button", { name: "Ask it" }).click();
   await expect(page.getByText(/busiest hour today/).first()).toBeVisible({ timeout: 10_000 });

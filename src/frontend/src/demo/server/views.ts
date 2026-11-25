@@ -1,5 +1,6 @@
 import type { AppDetail, BudgetLine, Credits, Idea, Me, Membership, NeedsYou, OperatorOrganisation, Pricing, RunningCost, Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import { highestIn, homeOrganisation, roleAt } from "./access";
+import { ideaState } from "./tryAgain";
 import { DEFAULT_PRICING, appAt, chain, levelOf, node, orgOf, organisation, spentBelow, within, type DemoApp, type DemoUser, type World } from "./world";
 
 /**
@@ -193,6 +194,10 @@ export function ideaView(world: World, idea: Idea): Idea {
   const decided = world.ideas.filter((i) => i.verdict && orgOf(world.runs.find((r) => r.run.id === i.runId)?.run.scope ?? i.scope ?? "") === org);
   return {
     ...idea,
+    ...ideaState(world, idea),
+    history: idea.history ?? [],
+    // What research has cost so far, read from its run while no verdict is recorded.
+    research: idea.verdict ? idea.research : { ...idea.research, spentCredits: Math.round((world.runs.find((r) => r.run.id === idea.runId)?.run.spentCredits ?? idea.research.spentCredits) * 100) / 100 },
     record: {
       total: decided.length,
       build: decided.filter((i) => i.verdict?.outcome === "build").length,

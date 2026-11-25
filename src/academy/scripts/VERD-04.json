@@ -1,0 +1,33 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-04",
+  "persona": "viewer",
+  "scenario": "verdict-build",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "How often research says no",
+        "note": "Research that never refuses is worthless, so its record is shown."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "When you overruled",
+        "note": "Every overrule, and how it turned out."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "How this was researched",
+        "note": "Strands, searches, sources, confidence, and every step."
+      }
+    }
+  ]
+}

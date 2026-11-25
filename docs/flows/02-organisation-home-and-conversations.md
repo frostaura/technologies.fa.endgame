@@ -836,7 +836,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 
 ### TALK-04 Talk to an app
 - **Who:** Builder or above at the app.
-- **Starts at:** the app's page, where the app page mounts the conversation for that app (`AppConversation`, exported by `ConversationDock.tsx`); or API `POST /api/conversations {scope: "{org}/{division}/{project}/{app}", message}`, or MCP `conversation_post`.
+- **Starts at:** the app's page `/apps/{id}`, below "Change {app}" and the dashboard (`AppConversation`, exported by `ConversationDock.tsx`); or API `POST /api/conversations {scope: "{org}/{division}/{project}/{app}", message}`, or MCP `conversation_post`.
 - **Needs:** an app.
 - **Level:** Core · **Learn first:** TALK-03 · **What you learn:** the app has a conversation of its own, about it only, which can ask for a change to it.
 - **Steps:**
@@ -846,7 +846,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **You know it worked when:** "Talking to {app}" heads the dock and replies arrive.
 - **Variations and refusals:** the app page's "Ask about this app" is a different feature (questions answered from the app's telemetry; apps reader). An idea started here is raised at the division above.
 - **Where:** `ConversationDock.tsx` (`AppConversation`, the `app` selection); `WorkEndpoints` `/conversations`; `ControlPlaneTools` `conversation_post`.
-- **Reachable from:** UI (once the app page mounts it); API / MCP.
+- **Reachable from:** UI; API / MCP.
 - **Covered by tests:** `TryAgainAndChanges.test.tsx` ("the conversation… shows the cost first, answers its own approval inline…"); `IdeasAndConversationsTests` (per scope); `McpTests`.
 
 ### TALK-05 Talk to an employee from the chart
@@ -889,7 +889,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   3. Home's "needs you" strip gains an "Approval needed" card too, and within the sweep interval a notification.
   4. Press **"Approve"** (TALK-17). The idea is recorded (at the division, or at the division above for a project or app scope) with its research estimate, and research is queued.
   5. The assistant replies in the dock, for example confirming research has started.
-- **You know it worked when:** the reply confirms it, and a "Researching" card or run appears, then a "Verdict waiting" card once research ends.
+- **You know it worked when:** the reply confirms it, the org chart shows the researcher "researching an idea", and a "Verdict waiting" card appears once research ends.
 - **Variations and refusals:**
   - Declined: TALK-09.
   - The idea is refused (for example a red line, or no credits): the tool reports "The idea could not be started ({status}): …" and the assistant must say it did not happen.
@@ -1429,4 +1429,4 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
     - UC-102 and UC-001 describe `needsYou` as "verdicts and approvals" only; hires and idle employees are also sent.
     - UC-001 says selecting "a node or an employee" scopes the conversation; apps cannot be selected.
     - MCP lacks mark-read for notifications and delete for nodes.
-14. **The academy's demo world has research projects the product never draws.** Northwind's demo tree carries project cards for ideas at a verdict or in research ("Idea · paused at verdict", "Researching"), which the real tree never sends (ORG-09). The academy's scripts do not point at them.
+14. ~~**The academy's demo world has research projects the product never draws.**~~ Fixed: ideas in research or at a verdict are no longer drawn on the demo's chart; they wait on the home strip, as in the product (ORG-09).

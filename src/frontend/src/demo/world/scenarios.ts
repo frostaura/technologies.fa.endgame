@@ -44,18 +44,15 @@ export function scenarioNamed(name: string): Scenario | undefined {
 
 const BASE_FEATURED: Featured = { idea: IDS.ideaAllergen, run: IDS.runBuildReadingList, app: IDS.tableBookings, employee: uuidFor(`employee:${ORG}/technologies/court-booking:engineer`), hire: uuidFor("hire:analyst") };
 
-/** Live runs stop playing (a quiet world, or one where work has stopped). */
-function stopLiveRuns(w: World, summary: string) {
+/**
+ * At the overdraft limit new model calls are refused (402 overdraft_limit), but a run is not marked failed (CRED-08): live
+ * work holds where it is, paused, and carries on once it is resumed after a top-up.
+ */
+function holdLiveRuns(w: World) {
   for (const r of w.runs) {
     if (!r.playback) continue;
-    r.playback = null;
-    r.run.status = "failed";
-    r.run.outcome = "failed";
-    r.run.summary = summary;
-    r.run.budgetExhausted = true;
-    r.run.finishedAt = new Date().toISOString();
-    r.events.push({ seq: r.events.length + 1, type: "message", at: r.run.finishedAt, payload: { text: "The credit budget is exhausted, so this run cannot call a model again. Top up or raise the budget, then start new work.", code: "budget_exhausted" } });
-    r.events.push({ seq: r.events.length + 1, type: "run.finished", at: r.run.finishedAt, payload: { outcome: "failed", summary, totals: { credits: 0, modelCalls: 0, nonBillableCredits: 0 } } });
+    r.run.status = "paused";
+    r.events.push({ seq: r.events.length + 1, type: "run.paused", at: new Date().toISOString(), payload: { by: "runner", reason: "overdraft_limit" } });
     r.run.lastSeq = r.events.length;
   }
 }
@@ -152,7 +149,7 @@ defineScenario({
     if (!o) return;
     o.balance = -(o.ownLimit ?? o.frostauraLimit);
     for (const a of w.apps) if (a.path.startsWith(`${ORG}/`) && a.status !== "failed") Object.assign(a, { running: "paused", status: "stopped", pausedReason: "overdraft", health: "unknown", healthSummary: "Paused: the organisation reached its overdraft limit. A top-up restores it at once." });
-    stopLiveRuns(w, "Stopped at the overdraft limit.");
+    holdLiveRuns(w);
     w.notifications.unshift({ id: uuidFor("notification:overdraft.limit:northwind"), kind: "overdraft.limit", severity: "urgent", title: "The overdraft limit is reached: work has stopped and apps are paused", detail: `The balance is ${o.balance} credits. Nothing is deleted; a top-up restores everything at once.`, scope: ORG, subject: null, createdAt: new Date().toISOString(), read: false, emailedAt: new Date().toISOString(), organisation: ORG });
   },
   route: "/credits",

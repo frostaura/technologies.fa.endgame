@@ -1,0 +1,57 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-03",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Court booking"
+          }
+        },
+        {
+          "wait": {
+            "text": "Talking to Court booking"
+          }
+        },
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Court booking"
+            },
+            "text": "What has this cost this month?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Court booking",
+        "note": "Select a project by its name: the conversation is about it, and what is beneath it."
+      }
+    }
+  ]
+}

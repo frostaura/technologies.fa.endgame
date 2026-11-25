@@ -1,0 +1,96 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-07",
+  "persona": "owner",
+  "scenario": "verdict-change",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Change the idea"
+          }
+        },
+        {
+          "wait": {
+            "text": "What should change?"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What should change?",
+        "note": "The form opens, pre-filled with research’s change."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Research runs again with your change, and you see a new verdict before anything is built.",
+        "note": "A change is a new round of research with your note."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Research it again with this change"
+          }
+        },
+        {
+          "wait": {
+            "text": "Research:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "Sent: the idea goes back to research, and you are taken to the new run."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Research started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research · Research started",
+        "note": "The note reaches research as the owner’s change after the last verdict."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "goto": "/ideas/{idea}",
+      "act": [
+        {
+          "clock": {
+            "seek": "research:verdict"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Earlier decisions",
+        "note": "Back on the idea, your change is kept under “Earlier decisions”."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "Build it",
+        "note": "The new verdict brings the decisions back; whatever is built next holds your change too."
+      }
+    }
+  ]
+}

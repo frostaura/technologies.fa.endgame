@@ -1,0 +1,100 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AUTO-07",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Learning"
+          }
+        },
+        {
+          "wait": {
+            "text": "Talking to Learning"
+          }
+        },
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Learning"
+            },
+            "text": "Turn on the plan checkpoint here."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Learning",
+        "note": "Select Learning, then ask."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:approval"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Turn on the “Before the plan is carried out” checkpoint here?",
+        "note": "The approval is in the conversation, titled with what will change."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "Done. The change applies here"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Done. The change applies here",
+        "note": "Approved: the setting is written at Learning, marked as set by an agent."
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-11",
+  "persona": "viewer",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "What did we spend on Court booking last month?",
+        "note": "The history at this level loads from the server."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Mara Ellison",
+        "note": "Each message is named: Priya reads Mara’s question under Mara’s name."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Court booking cost 296 credits last month",
+        "note": "Replies keep their place after a reload."
+      }
+    }
+  ]
+}

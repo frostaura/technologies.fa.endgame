@@ -1,0 +1,107 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-01",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Talking to Northwind",
+        "note": "The dock talks to the whole organisation."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "What did we spend on Court booking last month?",
+        "note": "What was said before loads first."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Select a division, project or employee to narrow this.",
+        "note": "Selecting a node narrows it."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "A message here costs at most",
+        "note": "Before sending, what a message can cost at most."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "What is over budget?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Working on it",
+        "note": "Send: your bubble, then “Working on it”."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:replied"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "See how it got there"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Endgame",
+        "note": "The reply streams in, headed “Endgame”."
+      }
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "highlight": {
+        "text": "is researching an idea",
+        "note": "Who is working, under the log."
+      }
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-07",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "Start researching a booking app for dive centres."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Message Northwind",
+        "note": "Ask it to start researching an idea."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:approval"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Start researching an idea: a booking app for dive centres.?",
+        "note": "It asks first, in the dock."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Approval needed",
+        "note": "The home strip gains an “Approval needed” card too."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "Research has started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research has started",
+        "note": "Approved: the idea is recorded with its research estimate, and the reply confirms it."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:started"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "researching an idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "researching an idea",
+        "note": "Research is under way; a “Verdict waiting” card follows when it ends."
+      }
+    }
+  ]
+}

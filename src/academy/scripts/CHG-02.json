@@ -1,0 +1,163 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CHG-02",
+  "persona": "owner",
+  "scenario": "app-busy",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Court booking"
+            },
+            "text": "Let members cancel a booking up to an hour before it starts."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Court booking",
+        "note": "The app’s own conversation, about it only."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:approval"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Change the app: Let members cancel a booking up to an hour before it starts.?",
+        "note": "It asks for the change on your word."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "The change has started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The change has started",
+        "note": "Approved: the change’s run starts with its estimate first."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Declined, nothing changes",
+      "persona": "owner",
+      "scenario": "app-busy",
+      "start": "/apps/{app}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "A message here costs at most"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Message Court booking"
+                },
+                "text": "Let members cancel a booking up to an hour before it starts."
+              }
+            },
+            {
+              "click": {
+                "text": "Send"
+              }
+            },
+            {
+              "wait": {
+                "text": "Working on it"
+              }
+            },
+            {
+              "clock": {
+                "seek": "conversation:approval"
+              }
+            },
+            {
+              "wait": {
+                "text": "Needs you"
+              }
+            },
+            {
+              "click": {
+                "text": "Decline"
+              }
+            },
+            {
+              "wait": {
+                "text": "Working on it"
+              }
+            },
+            {
+              "clock": {
+                "seek": "conversation:replied"
+              }
+            },
+            {
+              "wait": {
+                "text": "I have not asked for the change"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "I have not asked for the change",
+            "note": "Declined: it says plainly that it did not."
+          }
+        }
+      ]
+    }
+  ]
+}

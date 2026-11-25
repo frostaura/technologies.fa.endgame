@@ -53,13 +53,16 @@ function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {})
   });
 }
 
+/** The ask panel: the app page also carries "Change {app}", whose own "See what it costs" prices a change. */
+const askPanel = () => screen.getByRole("region", { name: "Asking about this app" });
+
 describe("asking about an app", () => {
   it("shows what it costs before anything is asked, then the answer and its chart, without the query in normal mode", async () => {
     const api = stub({ "POST /api/apps/a1/ask/estimate": json(ASK_ESTIMATE), "POST /api/apps/a1/ask": json(ASK_ANSWER) });
     renderWithStore(<AppView appId="a1" />);
     fireEvent.change(await screen.findByLabelText("Ask about this app"), { target: { value: "Which days are busiest?" } });
     expect(screen.queryByRole("button", { name: "Ask it" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "See what it costs" }));
+    fireEvent.click(within(askPanel()).getByRole("button", { name: "See what it costs" }));
     expect(await screen.findByText("At most 0.4 credits.")).toBeTruthy();
     expect(api.calls.some((c) => c.path === "/api/apps/a1/ask")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Ask it" }));
@@ -73,7 +76,7 @@ describe("asking about an app", () => {
     stub({ "POST /api/apps/a1/ask/estimate": json(ASK_ESTIMATE), "POST /api/apps/a1/ask": json({ title: "That question could not be turned into a safe query", status: 422, code: "ask_unanswerable" }, 422) });
     renderWithStore(<AppView appId="a1" />);
     fireEvent.change(await screen.findByLabelText("Ask about this app"), { target: { value: "Drop everything" } });
-    fireEvent.click(screen.getByRole("button", { name: "See what it costs" }));
+    fireEvent.click(within(askPanel()).getByRole("button", { name: "See what it costs" }));
     fireEvent.click(await screen.findByRole("button", { name: "Ask it" }));
     expect((await screen.findByText(/Try asking it another way/)).getAttribute("role")).toBe("alert");
   });
@@ -83,7 +86,7 @@ describe("asking about an app", () => {
     renderWithStore(<AppView appId="a1" />);
     expect(await screen.findByText("Nothing is kept on the dashboard yet")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Ask about this app"), { target: { value: "Which days are busiest?" } });
-    fireEvent.click(screen.getByRole("button", { name: "See what it costs" }));
+    fireEvent.click(within(askPanel()).getByRole("button", { name: "See what it costs" }));
     fireEvent.click(await screen.findByRole("button", { name: "Ask it" }));
     fireEvent.click(await screen.findByRole("button", { name: "Keep this on the dashboard" }));
     expect(await screen.findByText(/It was not kept: This needs the builder role/)).toBeTruthy();
@@ -94,9 +97,9 @@ describe("asking about an app", () => {
     stub({ "POST /api/apps/a1/ask/estimate": json(ASK_ESTIMATE), "POST /api/apps/a1/ask": json(body, 422) });
     const rendered = renderWithStore(<AppView appId="a1" />);
     fireEvent.change(await screen.findByLabelText("Ask about this app"), { target: { value: "How many visits did it get today, by hour?" } });
-    fireEvent.click(screen.getByRole("button", { name: "See what it costs" }));
+    fireEvent.click(within(askPanel()).getByRole("button", { name: "See what it costs" }));
     fireEvent.click(await screen.findByRole("button", { name: "Ask it" }));
-    return { ...rendered, alert: await screen.findByRole("alert") };
+    return { ...rendered, alert: await within(askPanel()).findByRole("alert") };
   }
 
   it("says a query that could not run in plain words in normal mode, never the database's message", async () => {
@@ -131,7 +134,7 @@ describe("asking about an app", () => {
     stub({ "GET /api/me": json(VIEWER), "GET /api/tree": json(VIEWER_TREE), "POST /api/apps/a1/ask/estimate": json(ASK_ESTIMATE) });
     renderWithStore(<AppView appId="a1" />);
     fireEvent.change(await screen.findByLabelText("Ask about this app"), { target: { value: "Visits?" } });
-    fireEvent.click(screen.getByRole("button", { name: "See what it costs" }));
+    fireEvent.click(within(askPanel()).getByRole("button", { name: "See what it costs" }));
     expect(await screen.findByText(/needs the Builder role here/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Ask it" })).toBeNull();
   });

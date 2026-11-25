@@ -119,7 +119,7 @@ What every person needs on day one: signing in, reading the home screen, startin
 | HOST-01 | A sleeping app wakes on a visit | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | HOST-06 | Reach an app at either of its two addresses | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Core — 132 flows, 122 with a screen
+### Core — 133 flows, 123 with a screen
 
 Running an organisation day to day: people, hiring, credits, the app page, secrets, notifications, autonomy.
 
@@ -159,6 +159,7 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | ONT-03 | Read "How data flows" (desktop) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-05 | Open an employee or app from a graph | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-06 | A graph that fails to load | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TALK-04 | Talk to an app | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-05 | Talk to an employee from the chart | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-06 | Talk to an employee on their own page | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-07 | Ask the conversation to start researching an idea | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -289,7 +290,7 @@ For the person who owns the setup: rule sets, tighter limits, assistants, techni
 | AUTO-05 | Set rules for a stage | Screen | [The factory](03-the-factory.md) |
 | AUTO-06 | Remove the rules set here | Screen | [The factory](03-the-factory.md) |
 | AUTO-07 | Change autonomy by asking the conversation | Screen | [The factory](03-the-factory.md) |
-| CHG-02 | Describe a new idea about an existing app | Screen | [The factory](03-the-factory.md) |
+| CHG-02 | Ask the conversation to change an app | Screen | [The factory](03-the-factory.md) |
 | HIRE-07 | Propose a recurring contractor role as a permanent hire | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | HIRE-08 | A recurring role is proposed automatically when a contractor finishes | Automatic | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | EMP-02 | Reassign an employee | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
@@ -316,7 +317,6 @@ Through the API, an AI assistant or the app kit. Not console lessons.
 | ACC-13 | Use the development sign-in at an app | Screen | [Identity and access](01-identity-and-access.md) |
 | ORG-16 | Delete the organisation | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-07 | Read the ontology by API or MCP | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TALK-04 | Talk to an app | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-16 | Talk over MCP or the API | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | NOTE-10 | Read notices over MCP | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | SYS-05 | Read system status by API | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -428,18 +428,20 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | A person granted only one division got "not found" on the home screen. | ORG-19 | Fixed: home starts at their own level. |
 | The system status endpoint named every service to someone signed out. | SYS-05 | Fixed: signed out, only `overall` and `checkedAt`. |
 | Archiving a division or project did not stop its apps being served. | TREE-07 | Fixed: the routing table leaves them out, and the chart draws them archived. |
+| A built app could not be changed, and stopped work could not be tried again. | CHG-01, CHG-02, CHG-03, VERD-12, RUN-10, RUN-11 | Fixed: "Change {app}" on the app page and in its conversation; "Try again" on the run and the idea, priced for what is left. |
+| An app had no conversation of its own, and a conversation's approval could only be answered on the run page. | TALK-04, TALK-07, TALK-17 | Fixed: the app page carries its conversation, and approvals are answered in the dock. |
+| Talking to an employee was answered by the general assistant, and a shared conversation drew everyone's message as "you". | TALK-05, TALK-06, TALK-11 | Fixed: the employee answers from its job and memory, and each message is named by sender. |
+| After "Change the idea" the second verdict had no decision buttons, and the change never reached the build. | VERD-06, VERD-07, VERD-11 | Fixed: the decisions return, "Earlier decisions" keeps the change, and the build is held to it. |
+| "Asks you first" rules refused instead of asking. | AUTO-05 | Fixed: a matching call raises an approval and waits for the answer. |
+| Two lines on the start screen were untrue in auto-mode. | IDEA-01, VERD-11, BLD-02 | Fixed: "What happens next" follows the autonomy at the place chosen. |
 
 ### Things the product cannot do from a screen
 
 | What | Flows | Status |
 | --- | --- | --- |
-| **Change an app after it is built.** No screen, endpoint or assistant tool asks the factory to change an existing app. The Runner has a workflow that edits an app's code; nothing a person can reach starts it, and it does not republish. | CHG-01, CHG-02, CHG-05 | Confirmed |
-| **Try again.** A failed or cancelled build, a rejected plan and a failed research run cannot be restarted, though several messages say they can. | CHG-03, VERD-12, RUN-10, RUN-11 | Confirmed |
 | **Create, rename, archive or delete a division, project or app.** They appear when the factory places a built idea, or through the API or an assistant. Nothing can be moved by any route. | TREE-02 to TREE-10, TREE-13, ORG-14 | Confirmed |
 | **Set a budget cap** at any level, or an app's own. Caps are shown and enforced; they can only be set through the API or an assistant. | CRED-03, APP-11, APP-12 | Fixed: caps are set, changed and removed on Credits (CRED-03) and on an app's page (APP-11). |
 | **Describe a level.** Context is set only through the API or an assistant. | TREE-11 | Reported |
-| **Choose the division for a new idea** on the start screen. | IDEA-02, TREE-01 | Reported |
-| **Talk to an app**, or answer a conversation's own approval inside the conversation. | TALK-04, TALK-07 | Reported |
 | **Edit an employee** (name, role, mandate, tools, manager), raise a hire by hand, list released employees. | EMP-10, HIRE-09, EMP-09 | Fixed: "Edit the job" on the record, "Ask for a hire" and "People let go" on Hiring. |
 
 ### Things that do not do what the screen says
@@ -448,12 +450,7 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | --- | --- | --- |
 | **God mode follows the operator only onto the org chart.** Credits, Hiring, People, Secrets and the rest read the operator's own organisation. | OP-04 | Fixed: every screen but "Ideas from your portfolio" works on the organisation entered. |
 | **Setting up an organisation does not screen it against the red lines**, though the form says so and the project's rule 4 requires it. Only its name is checked. | OP-03 | Fixed: what it does is screened by a model, or by the operator with a reason when none answers. |
-| **Talking to an employee is not answered by that employee.** The same general assistant answers, without the employee's memory or job; only the cost is charged to them. | TALK-05, TALK-06 | Confirmed |
 | **Pausing an employee does not stop it being given work.** | EMP-04 | Fixed: its work pauses, and new work for it waits until it is resumed. |
-| **After "Change the idea", the second verdict has no decision buttons**, and the requested change never reaches the build, which plans from the original wording. | VERD-06, VERD-07, VERD-11 | Reported |
-| **"Asks you first" rules refuse instead of asking.** | AUTO-05 | Reported |
-| **Two lines on the start screen are untrue in auto-mode:** "Nothing is built until you have seen the verdict", and that hires are "proposed". | IDEA-01, VERD-11, BLD-02 | Reported |
-| **A conversation at a level is shared by everyone there**, each message drawn as "you". | TALK-11 | Reported |
 | **The console's mock-API browser specs are run by nothing** in the Makefile or CI; only the smoke spec runs. | OPS-07 | Reported |
 | **The design stage in the spec does not exist** as a stage in the build. | BLD-12 | Reported |
 

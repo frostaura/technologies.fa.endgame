@@ -1,0 +1,113 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-08",
+  "persona": "owner",
+  "scenario": "s3-start-checkpoint",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "seek": 2000
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Start this work?"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Start this work? Estimated 12 credits.",
+        "note": "With the start checkpoint on, you approve the cost before anything begins."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "clock": {
+            "seek": 3000
+          }
+        },
+        {
+          "wait": {
+            "text": "Research started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Work started",
+        "note": "Approve, and the work starts."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Research · Research started",
+        "note": "Research is under way."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Decline the estimate",
+      "persona": "owner",
+      "scenario": "s3-start-checkpoint",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "clock": {
+            "seek": 2000
+          },
+          "act": [
+            {
+              "wait": {
+                "text": "Start this work?"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Start this work? Estimated 12 credits.",
+            "note": "The same question."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Decline"
+              }
+            },
+            {
+              "clock": {
+                "seek": 1000
+              }
+            },
+            {
+              "wait": {
+                "text": "You declined to start"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "You declined to start this work at its estimate, so nothing was done and nothing was charged.",
+            "note": "Declined: it ends “Did not succeed”, and nothing was charged."
+          }
+        }
+      ]
+    }
+  ]
+}

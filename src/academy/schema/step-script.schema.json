@@ -132,7 +132,18 @@
         "no-secrets",
         "dashboard-full",
         "app-long-history",
-        "wake-failures"
+        "wake-failures",
+        "s3-research-failed",
+        "s3-research-cancelled",
+        "s3-checkpoints",
+        "s3-start-checkpoint",
+        "s3-waiting-for-budget",
+        "s3-budget-runs-out",
+        "s3-change-running",
+        "s3-change-failed",
+        "s3-stage-rules",
+        "s3-suggestions",
+        "s3-employee-paused"
       ]
     },
     "start": {
@@ -217,11 +228,32 @@
           ],
           "properties": {
             "seek": {
-              "type": [
-                "number",
-                "string"
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[a-z]+:[a-z0-9-]+$"
+                }
               ],
               "description": "Script milliseconds to move every live run forward by, or a named moment such as \"research:verdict\" (ARCH-009)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "speed"
+          ],
+          "properties": {
+            "speed": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 20,
+              "description": "How fast live runs play: 1 is real time, 4 is four times as fast."
             }
           }
         }
@@ -670,7 +702,7 @@
           "items": {
             "$ref": "#/definitions/step"
           },
-          "description": "Numbered 1, 2, \u2026 within the variation; each step's note says what it shows."
+          "description": "Numbered 1, 2, … within the variation; each step's note says what it shows."
         }
       }
     }

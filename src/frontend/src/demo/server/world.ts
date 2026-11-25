@@ -149,7 +149,16 @@ export interface DemoApproval {
   detail: string;
   answer: "approved" | "rejected" | null;
   /** What approving it does, by name; read by the run engine. */
-  onApprove: { kind: "start-idea"; text: string; scope: string } | { kind: "setting"; key: string; value: string; scope: string } | { kind: "continue" };
+  onApprove:
+    | { kind: "start-idea"; text: string; scope: string }
+    | { kind: "setting"; key: string; value: string; scope: string }
+    | { kind: "change-app"; scope: string; request: string }
+    | { kind: "try-again"; runId: string; scope: string }
+    | { kind: "continue" };
+  /** What declining does: the step is skipped and the work goes on (the default), or the work stops. */
+  onDecline?: "continues" | "stops";
+  /** Which step of its run raised it, so the step after it can read the answer. */
+  key?: string;
 }
 
 /** A run's playback: which script it follows and how far it has got. */
@@ -166,6 +175,8 @@ export interface DemoRun {
   run: Run;
   events: RunEvent[];
   playback: DemoPlayback | null;
+  /** The playback a finished run followed, kept so it can be tried again with the same script and story. */
+  ended?: DemoPlayback | null;
 }
 
 export interface DemoConversation {

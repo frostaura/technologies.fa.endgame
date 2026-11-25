@@ -1,7 +1,7 @@
 {
   "$schema": "../schema/step-script.schema.json",
   "flow": "VERD-03",
-  "persona": "owner",
+  "persona": "viewer",
   "scenario": "verdict-change",
   "start": "/ideas/{idea}",
   "steps": [
@@ -18,14 +18,15 @@
       "kind": "demo",
       "highlight": {
         "text": "No red line is crossed",
-        "note": "A red-line alert appears here only when one is breached."
+        "note": "A red-line alert would sit at the top when one is breached; here none is."
       }
     },
     {
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "text": "The case against, argued first"
+        "text": "The case against, argued first",
+        "note": "The case against the idea, argued first."
       }
     },
     {
@@ -33,7 +34,7 @@
       "kind": "demo",
       "highlight": {
         "text": "Who already does this",
-        "note": "Then “What gap is left” and “Who would want it”."
+        "note": "Who already does it; then “What gap is left” and “Who would want it”."
       }
     },
     {
@@ -41,29 +42,31 @@
       "kind": "demo",
       "highlight": {
         "text": "What to change",
-        "note": "Shown on a “change” verdict."
+        "note": "On a “change” verdict, research’s change."
       }
     },
     {
       "step": 6,
       "kind": "demo",
       "highlight": {
-        "text": "What would change the verdict"
+        "text": "What would change the verdict",
+        "note": "What would change the verdict."
       }
     },
     {
       "step": 7,
       "kind": "demo",
       "highlight": {
-        "text": "No red line is crossed"
+        "text": "No red line is crossed",
+        "note": "The red-line screen, with its reasoning."
       }
     },
     {
       "step": 8,
       "kind": "demo",
       "highlight": {
-        "text": "Build it",
-        "note": "The decision controls."
+        "text": "Build it with this change",
+        "note": "Then the decisions (a Viewer sees them; only a Builder may take them)."
       }
     }
   ]

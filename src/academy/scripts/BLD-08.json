@@ -1,0 +1,57 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-08",
+  "persona": "viewer",
+  "scenario": "build-sent-back",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Sent back"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Sent back for repair, at no charge",
+        "note": "A part failed its check: sent back, at no charge."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:repaired"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Rebuilt after a check"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Rebuilt after a check",
+        "note": "Rebuilt one tier up, on a stronger model."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Checked and passed"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Checked and passed",
+        "note": "Then checked again — and passed."
+      }
+    }
+  ]
+}

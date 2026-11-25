@@ -1,0 +1,39 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-05",
+  "persona": "owner",
+  "scenario": "verdict-build",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Build it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Build it",
+        "note": "No confirmation: your decision starts the factory."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Build:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "The build run opens and plays from placement."
+      }
+    }
+  ]
+}

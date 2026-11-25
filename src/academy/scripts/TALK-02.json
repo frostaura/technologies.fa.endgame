@@ -1,0 +1,57 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-02",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technologies"
+          }
+        },
+        {
+          "wait": {
+            "text": "Talking to Technologies"
+          }
+        },
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Technologies"
+            },
+            "text": "Who is working on what?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Technologies",
+        "note": "Select a division: reads and actions are limited to it."
+      }
+    }
+  ]
+}

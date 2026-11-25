@@ -4,6 +4,7 @@ import { homeOrganisation, me, requireRole, scopeOf } from "../access";
 import { area, conflict, created, invalid, notFound, num, ok, problem, Refusal, str, strings, titleOf } from "../http";
 import { setStage, startRun } from "../mutations";
 import { startResearch } from "../scripts";
+import { changeEstimate, changeText, conversationEstimate, retryEstimate, retryRun, runView, startChange } from "../tryAgain";
 import { appView, ideaView } from "../views";
 import { newId, orgOf, runRecord, setting, type World } from "../world";
 
@@ -35,6 +36,14 @@ export function answerApproval(world: World, approvalId: string, decision: "appr
   if (a.answer === "approved") {
     const act = a.onApprove;
     if (act.kind === "start-idea") createIdea(world, act.text, [], act.scope, "conversation");
+    if (act.kind === "change-app") {
+      const app = world.apps.find((x) => x.path === act.scope);
+      if (app) startChange(world, app, act.request, null, "conversation");
+    }
+    if (act.kind === "try-again") {
+      const stopped = runRecord(world, act.runId);
+      if (stopped) retryRun(world, stopped, null, startResearch);
+    }
     if (act.kind === "setting") {
       const key = act.key === "sleep.mode" ? "sleep.mode" : act.key;
       world.settings = world.settings.filter((s) => !(s.path === act.scope && s.key === key));
@@ -116,22 +125,30 @@ area("WorkEndpoints", {
     const u = me(world);
     const note = str(req.body, "note") ?? null;
     const at = new Date().toISOString();
+    const applyChange = req.body.applyChange === true;
+    const suggested = applyChange && verdict === "change" && typeof i.verdict.suggestedChange === "string" && i.verdict.suggestedChange.trim() ? i.verdict.suggestedChange.trim() : null;
+    if (applyChange && !suggested) throw conflict("There is no change from research to apply: the verdict was not 'change', or it named none.");
+    // What is built is the idea plus every change agreed after research: the owner's own notes, and research's when accepted.
+    const changes = [...new Set([...(i.history ?? []).filter((h) => h.choice === "change" && h.note).map((h) => String(h.note)), ...(suggested ? [suggested] : [])])];
     const project = world.nodes.find((n) => n.ideaId === i.id && n.level === "project");
     if (choice === "build" || choice === "overrule") {
       const runId = newId(world, "run");
       const r = startRun(world, { id: runId, kind: "build", title: `Build: ${titleOf(i.text)}`, scope: project?.path ?? scope, ideaId: i.id, estimateCredits: 120, employeeId: null, conversationId: null }, "build", { ideaId: i.id });
-      append(world, r, "message", { from: "owner", text: i.text, constraints: i.constraints.join("\n"), verdict, overruled: choice === "overrule", note, decidedBy: "person" });
+      append(world, r, "message", { from: "owner", text: i.text, constraints: i.constraints.join("\n"), verdict, overruled: choice === "overrule", note, decidedBy: "person", changes, appliedChange: suggested });
       i.status = "decided";
       i.decision = { choice, at, by: u.displayName, overruled: choice === "overrule", runId, via: "person" };
       if (project) setStage(world, project.path, "planning", null);
     } else if (choice === "change") {
+      const before = i.verdict;
       i.status = "researching";
       i.verdict = null;
       i.redLine = null;
       const text = note ? `${i.text}\n\nThe change: ${note}` : i.text;
       const r = startResearch(world, i.id, orgOf(scope) === scope ? scope : scope.split("/").slice(0, 2).join("/"), text, i.constraints, "console", null, note);
       i.runId = r.run.id;
-      i.decision = null;
+      // The change stays the decision until the new verdict lands (`ReadModels`: a change follows its research run), then it is kept in the history.
+      i.decision = { choice, at, by: u.displayName, overruled: false, runId: r.run.id, via: "person" };
+      i.history = [...(i.history ?? []), { verdict: before.outcome, headline: before.headline ?? null, choice: "change", note, by: u.displayName, at, runId: r.run.id }];
       if (project) setStage(world, project.path, "researching", "Research is under way.");
     } else {
       i.status = "decided";
@@ -147,7 +164,23 @@ area("WorkEndpoints", {
     const r = runRecord(world, req.params.id ?? "");
     if (!r) throw notFound("The run");
     requireRole(world, r.run.scope, "viewer");
-    return ok(r.run);
+    return ok(runView(world, r));
+  },
+
+  "POST runs/{id}/retry/estimate": (req, { world }) => {
+    const r = runRecord(world, req.params.id ?? "");
+    if (!r) throw notFound("The run");
+    requireRole(world, r.run.scope, "builder");
+    return ok(retryEstimate(world, r));
+  },
+
+  "POST runs/{id}/retry": (req, { world }) => {
+    const r = runRecord(world, req.params.id ?? "");
+    if (!r) throw notFound("The run");
+    requireRole(world, r.run.scope, "builder");
+    const u = me(world);
+    const again = retryRun(world, r, { id: u.id, name: u.displayName }, startResearch);
+    return created(runView(world, again));
   },
 
   "POST runs/{id}/{action}": (req, { world }) => {
@@ -176,7 +209,7 @@ area("WorkEndpoints", {
         throw new Refusal(problem(404, "not_found", "Not found", "There is nothing at this address."));
     }
     world.changed.push("Run", "Tree");
-    return ok(r.run);
+    return ok(runView(world, r));
   },
 
   "POST runs/{runId}/approvals/{approvalId}": (req, { world }) => {
@@ -204,6 +237,21 @@ area("WorkEndpoints", {
     return ok(appView(world, a));
   },
 
+  "POST apps/{id}/changes/estimate": (req, { world }) => {
+    const a = world.apps.find((x) => x.id === req.params.id);
+    if (!a) throw notFound("The app");
+    requireRole(world, a.path, "builder");
+    changeText(str(req.body, "request"));
+    return ok(changeEstimate(world, a));
+  },
+
+  "POST apps/{id}/changes": (req, { world }) => {
+    const a = world.apps.find((x) => x.id === req.params.id);
+    if (!a) throw notFound("The app");
+    requireRole(world, a.path, "builder");
+    return created(runView(world, startChange(world, a, str(req.body, "request") ?? "", me(world), "console")));
+  },
+
   "POST apps/{id}/settings": (req, { world }) => {
     const running = str(req.body, "running");
     const access = str(req.body, "access");
@@ -227,44 +275,13 @@ area("WorkEndpoints", {
     return ok(appView(world, a));
   },
 
-  // Lane C's estimates (FactoryEstimates): free, before anything starts; the starting figures until 3 runs have finished.
   "POST conversations/estimate": (req, { world }) => {
     const scope = scopeOf(world, str(req.body, "scope"));
     requireRole(world, scope, "viewer");
-    return ok({ credits: 0.4, ceiling: 1.2, basis: "The measured starting figure for conversation runs, used until 3 have finished here to learn from. It can never cost more than 1.2 credits: up to 12 steps, each priced at the most it could cost, and it is charged at what it actually costs." });
-  },
-
-  "POST runs/{id}/retry/estimate": (req, { world }) => {
-    const r = runRecord(world, req.params.id ?? "");
-    if (!r) throw notFound("The run");
-    requireRole(world, r.run.scope, "builder");
-    const what = r.run.kind === "research" ? "research" : r.run.kind === "build" ? "build" : "change";
-    const credits = what === "research" ? 12 : what === "build" ? 120 : 40;
-    return ok({ runId: r.run.id, what, credits, basis: `The measured starting figure for ${what} runs, used until 3 have finished here to learn from.`, partsDone: null, parts: null });
-  },
-
-  "POST apps/{id}/changes/estimate": (req, { world }) => {
-    const a = world.apps.find((x) => x.id === req.params.id);
-    if (!a) throw notFound("The app");
-    requireRole(world, a.path, "builder");
-    return ok({ credits: 40, basis: "The measured starting figure for change runs, used until 3 have finished here to learn from." });
-  },
-
-  "POST apps/{id}/changes": (req, { world }) => {
-    const a = world.apps.find((x) => x.id === req.params.id);
-    if (!a) throw notFound("The app");
-    requireRole(world, a.path, "builder");
-    const request = (str(req.body, "request") ?? "").trim();
-    // ChangeService.CreateAsync's own refusals.
-    if (!request || request.length > 20000) throw invalid("Describe the change in 1 to 20000 characters.");
-    if (a.publishedAt === null) throw new Refusal(problem(409, "app_not_built", "This app has not been built yet", "An app is changed once it has been built and published. Finish or try again its build first."));
-    if (world.runs.some((x) => x.run.scope === a.path && (x.run.kind === "build" || x.run.kind === "task") && !["finished", "failed", "cancelled"].includes(x.run.status)))
-      throw new Refusal(problem(409, "app_busy", "This app is already being worked on", "Another build or change of this app is under way. Wait for it to finish, or cancel it, then ask for this change."));
-    // The change workflow itself is not played in the demo yet: the run is recorded, queued, with the request as its first event.
-    const r = startRun(world, { id: newId(world, "run"), kind: "task", title: `Change ${a.name}: ${titleOf(request)}`, scope: a.path, ideaId: null, estimateCredits: 40, employeeId: null, conversationId: null }, null);
-    append(world, r, "message", { from: "owner", kind: "change", text: request });
-    world.changed.push("Run", "App");
-    return created(r.run);
+    const employeeId = str(req.body, "employeeId") ?? null;
+    const worker = employeeId ? world.employees.find((e) => e.id === employeeId) : undefined;
+    if (employeeId && !worker) throw notFound("The employee");
+    return ok(conversationEstimate(world, scope, worker?.jobDescription.modelTier ?? null));
   },
 
   "POST conversations": (req, { world }) => {
@@ -289,7 +306,7 @@ area("WorkEndpoints", {
     append(world, r, "message", { from: "owner", userId: me(world).id, text: message });
     conversation.runIds.push(r.run.id);
     world.changed.push("Conversation");
-    return created(r.run);
+    return created(runView(world, r));
   },
 
   "GET conversations": (req, { world }) => {
@@ -299,7 +316,13 @@ area("WorkEndpoints", {
     const c = world.conversations.find((x) => x.scope === scope && x.employeeId === (employeeId ?? null));
     const messages = (c?.runIds ?? []).flatMap((id) => {
       const r = runRecord(world, id);
-      return (r?.events ?? []).filter((e) => e.type === "message" && typeof e.payload.text === "string" && !e.payload.kind).map((e) => ({ runId: id, seq: e.seq, at: e.at, from: String(e.payload.from ?? "assistant"), text: String(e.payload.text) }));
+      return (r?.events ?? [])
+        .filter((e) => e.type === "message" && typeof e.payload.text === "string" && !e.payload.kind)
+        .map((e) => {
+          const from = String(e.payload.from ?? "assistant");
+          const by = from === "owner" ? (world.users.find((x) => x.id === e.payload.userId)?.displayName ?? null) : typeof e.payload.by === "string" ? e.payload.by : null;
+          return { runId: id, seq: e.seq, at: e.at, from, text: String(e.payload.text), by, code: typeof e.payload.code === "string" ? e.payload.code : null };
+        });
     });
     return ok({ scope, conversationId: c?.id ?? null, employeeId: employeeId ?? null, messages: messages.slice(-200) });
   },

@@ -139,19 +139,14 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   n(`${ORG}/operations`, "Operations");
   n(`${ORG}/technologies/court-booking`, "Court booking");
   n(`${ORG}/technologies/court-booking/web`, "Court booking");
-  n(`${ORG}/technologies/allergen-labels`, "Allergen Labels", { stage: "verdict", ideaId: IDS.ideaAllergen, note: "Research finished. Waiting for your call." });
-  n(`${ORG}/technologies/staff-locator`, "Staff Locator", { stage: "verdict", ideaId: IDS.ideaLocator, note: "Research found a red line. It cannot be built." });
   n(`${ORG}/learning/course-notes`, "Course Notes");
   n(`${ORG}/learning/course-notes/web`, "Course Notes");
   n(`${ORG}/learning/tutor-match`, "Tutor Match");
   n(`${ORG}/learning/tutor-match/web`, "Tutor Match");
-  n(`${ORG}/learning/tide-board`, "Harbour Tide Board", { stage: "researching", ideaId: IDS.ideaTides, note: "Research is under way." });
-  n(`${ORG}/learning/cookery-club`, "Kids' Cookery Club", { stage: "verdict", ideaId: IDS.ideaCookery, note: "Research suggests a change. Waiting for your call." });
   n(`${ORG}/operations/stock-counter`, "Stock Counter", { stage: "paused", note: "Paused: its monthly budget is spent." });
   n(`${ORG}/operations/stock-counter/web`, "Stock Counter");
   n(`${ORG}/operations/shift-rota`, "Shift Rota");
   n(`${ORG}/operations/shift-rota/web`, "Shift Rota");
-  n(`${ORG}/operations/van-tracker`, "Delivery Van Tracker", { stage: "verdict", ideaId: IDS.ideaVans, note: "Research says do not build. Waiting for your call." });
   // Kept but not served: last summer's events, with history, so it can be archived and not deleted.
   n(`${ORG}/events`, "Events", { status: "archived" });
   n(`${ORG}/events/summer-ladder`, "Summer Ladder", { status: "archived", stage: "paused", note: "Archived." });
@@ -220,11 +215,11 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   sp(`${ORG}`, 61.4, 0);
   sp(`${ORG}/technologies`, 22.1, 0);
   sp(`${ORG}/technologies/court-booking/web`, 310.6, 14.3);
-  sp(`${ORG}/technologies/allergen-labels`, 9.8, 0);
-  sp(`${ORG}/technologies/staff-locator`, 4.1, 0);
+  // Research is charged where it ran: the division the idea was proposed to (nothing is placed until it is built).
+  sp(`${ORG}/technologies`, 13.9, 0);
   sp(`${ORG}/learning/course-notes/web`, 44.9, 1.8);
   sp(`${ORG}/learning/tutor-match/web`, 88.2, 0.2);
-  sp(`${ORG}/learning/cookery-club`, 11.3, 0);
+  sp(`${ORG}/learning`, 11.3, 0);
   sp(`${ORG}/operations/stock-counter/web`, 116.8, 3.2);
   sp(`${ORG}/operations/shift-rota/web`, 71.5, 4.4);
   sp(`${ORG}/operations/van-tracker`, 8.7, 0);
@@ -333,7 +328,10 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   w.recurringRoles.push({ scope: `${ORG}/technologies`, role: "Data contractor", contractors: 6, windowDays: 30, costCredits: 48.6, lastBriefedBy: odile.name, lastBrief: "Count booked minutes by weekday for the last four weeks and say which evenings have empty courts." });
 
   // Ideas and their verdicts -----------------------------------------------------------------
+  // Where each idea was proposed: its research ran there (an idea is placed in the tree only when it is built).
+  const proposed = new Map<string, string>();
   const idea = (id: string, text: string, constraints: string[], scope: string, extra: Partial<Idea>): Idea => {
+    proposed.set(id, scope);
     const i: Idea = {
       id,
       title: text.length > 120 ? `${text.slice(0, 117)}...` : text,
@@ -355,20 +353,20 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     return i;
   };
   const verdicts = verdictDocs();
-  idea(IDS.ideaAllergen, "Allergen labels for the kitchen: pick a dish, print its allergen label with today's date and use-by.", ["Works on the kitchen tablet"], `${ORG}/technologies/allergen-labels`, { verdict: verdicts.build as never });
-  idea(IDS.ideaCookery, "Paid online bookings for the kids' cookery club, with a parent account for each family.", ["Parents pay when they book"], `${ORG}/learning/cookery-club`, { verdict: verdicts.change as never });
-  idea(IDS.ideaVans, "A live map of our two delivery vans for customers waiting on an order.", [], `${ORG}/operations/van-tracker`, { verdict: verdicts.doNotBuild as never });
-  idea(IDS.ideaLocator, "Track where staff go after their shift from their phones, so we know if they work for competitors.", [], `${ORG}/technologies/staff-locator`, { verdict: verdicts.redLine as never, redLine: "surveillance" });
-  idea(IDS.ideaTides, "A tide-times board for the harbour café: the next high and low water beside our opening hours, on the screen by the door.", ["Readable from across the room"], `${ORG}/learning/tide-board`, { status: "researching", verdict: null, research: { estimatedCredits: 12, spentCredits: 0, by: wren.name }, runId: IDS.runResearchTides });
+  idea(IDS.ideaAllergen, "Allergen labels for the kitchen: pick a dish, print its allergen label with today's date and use-by.", ["Works on the kitchen tablet"], `${ORG}/technologies`, { scope: null,  verdict: verdicts.build as never });
+  idea(IDS.ideaCookery, "Paid online bookings for the kids' cookery club, with a parent account for each family.", ["Parents pay when they book"], `${ORG}/learning`, { scope: null,  verdict: verdicts.change as never });
+  idea(IDS.ideaVans, "A live map of our two delivery vans for customers waiting on an order.", [], `${ORG}/operations`, { scope: null,  verdict: verdicts.doNotBuild as never });
+  idea(IDS.ideaLocator, "Track where staff go after their shift from their phones, so we know if they work for competitors.", [], `${ORG}/technologies`, { scope: null,  verdict: verdicts.redLine as never, redLine: "surveillance" });
+  idea(IDS.ideaTides, "A tide-times board for the harbour café: the next high and low water beside our opening hours, on the screen by the door.", ["Readable from across the room"], `${ORG}/learning`, { scope: null,  status: "researching", verdict: null, research: { estimatedCredits: 12, spentCredits: 0, by: wren.name }, runId: IDS.runResearchTides });
   const rl = idea(IDS.ideaReadingList, "A reading list for the supper club: members sign in, add books with a title, author and a one-line note, mark a book as reading or finished, and see what everyone is reading now.", ["Members sign in", "Works on a phone"], ORG, {
     status: "decided",
-    verdict: { ...STORIES["reading-list"]?.verdict, method: { strands: (STORIES["reading-list"]?.strands ?? []).map((s) => ({ id: s.id, title: s.title, sources: s.sources.length + 4, searches: 7, confidence: "high" })), searches: 14, confidence: "high", contractors: 3 } } as never,
+    verdict: { ...STORIES["reading-list"]?.verdict, method: { strands: (STORIES["reading-list"]?.strands ?? []).map((s) => ({ id: s.id, title: s.title, sources: s.sources.length + 4, searches: 7, confidence: "high" })), searches: 14, confidence: "high" } } as never,
     decision: { choice: "build", at: a(2), by: PEOPLE.owner.displayName, overruled: false, runId: IDS.runBuildReadingList, via: "person" },
     research: { estimatedCredits: 12, spentCredits: 10.4, by: wren.name },
   });
   void rl;
   // Finished research runs behind each verdict, so "how research got there" opens.
-  for (const i of w.ideas.filter((x) => x.verdict)) w.runs.push(historicResearch(i, a, storyFor(i.text, i.id === IDS.ideaReadingList ? "reading-list" : null).strands));
+  for (const i of w.ideas.filter((x) => x.verdict)) w.runs.push(historicResearch(i, a, storyFor(i.text, i.id === IDS.ideaReadingList ? "reading-list" : null).strands, proposed.get(i.id) ?? ORG));
 
   // Finished builds behind the live apps ------------------------------------------------------
   for (const x of w.apps) w.runs.push(historicBuild(x, a(Number(new Date(T).getTime() - new Date(x.publishedAt ?? a(0)).getTime()) / 60000 + 25), x.publishedAt ?? a(0)));
@@ -464,7 +462,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   w.runs.push({
     run: { id: convRun, kind: "conversation", title: "What did we spend on Court booking last month?", scope: ORG, status: "finished", startedAt: a(2 * day), finishedAt: a(2 * day - 1), lastSeq: 4, ideaId: null, estimateCredits: null, spentCredits: 0.03, employeeId: null, conversationId: uuidFor("conversation:org"), budgetExhausted: false, outcome: "succeeded", summary: "Replied.", createdAt: a(2 * day), canTryAgain: false },
     events: [
-      ev(1, "message", { from: "owner", text: "What did we spend on Court booking last month?" }, a(2 * day)),
+      ev(1, "message", { from: "owner", userId: PEOPLE.owner.id, text: "What did we spend on Court booking last month?" }, a(2 * day)),
       ev(2, "run.started", { holder: "runner-demo-1" }, a(2 * day)),
       ev(3, "message", { from: "assistant", text: "Court booking cost 296 credits last month: 281 on work by Kasper and Mina, and 15 on keeping it running always on." }, a(2 * day - 0.5)),
       ev(4, "run.finished", { outcome: "succeeded", summary: "Replied.", totals: { credits: 0.03, modelCalls: 2, nonBillableCredits: 0 } }, a(2 * day - 1)),
@@ -497,7 +495,7 @@ function liveRun(id: string, kind: "research" | "build", title: string, scope: s
   };
 }
 
-function historicResearch(i: Idea, a: (m: number) => string, strands: { id: string; title: string; brief: string; findings: string[]; sources: string[] }[]): DemoRun {
+function historicResearch(i: Idea, a: (m: number) => string, strands: { id: string; title: string; brief: string; findings: string[]; sources: string[] }[], scope: string): DemoRun {
   const start = 3 * 24 * 60;
   const events: RunEvent[] = [];
   const push = (type: string, payload: Record<string, unknown>, m: number) => events.push(ev(events.length + 1, type, payload, a(start - m)));
@@ -511,7 +509,7 @@ function historicResearch(i: Idea, a: (m: number) => string, strands: { id: stri
   push("message", { from: "researcher", text: `${String(v?.headline ?? "Research finished")}.`, title: v?.outcome === "build" ? "Verdict: build" : v?.outcome === "change" ? "Verdict: change it" : "Verdict: do not build", milestone: "verdict" }, 1);
   push("estimate.scored", { ratio: 0.8, modelCalls: 14, actualCredits: 9.8, expectedCredits: 12, nonBillableCredits: 0 }, 1);
   push("run.finished", { totals: { credits: 9.8, modelCalls: 14, nonBillableCredits: 0 }, outcome: "succeeded", summary: "Research finished; the verdict waits for your decision." }, 1);
-  return { run: { id: i.runId, kind: "research", title: `Research: ${i.title}`, scope: i.scope ?? "northwind", status: "finished", startedAt: a(start), finishedAt: a(start - 1), lastSeq: events.length, ideaId: i.id, estimateCredits: 12, spentCredits: 9.8, employeeId: null, conversationId: null, budgetExhausted: false, outcome: "succeeded", summary: "Research finished; the verdict waits for your decision.", createdAt: a(start), canTryAgain: false }, events, playback: null };
+  return { run: { id: i.runId, kind: "research", title: `Research: ${i.title}`, scope, status: "finished", startedAt: a(start), finishedAt: a(start - 1), lastSeq: events.length, ideaId: i.id, estimateCredits: 12, spentCredits: 9.8, employeeId: null, conversationId: null, budgetExhausted: false, outcome: "succeeded", summary: "Research finished; the verdict waits for your decision.", createdAt: a(start), canTryAgain: false }, events, playback: null };
 }
 
 function historicBuild(app: DemoApp, startedAt: string, publishedAt: string): DemoRun {
@@ -628,8 +626,6 @@ function verdictDocs() {
     ],
     searches,
     confidence,
-    contractors: 3,
-    argued: "The case against was argued first.",
   });
   return {
     build: {
@@ -655,7 +651,7 @@ function verdictDocs() {
       gap: { evidence: "Families complain about missing out when places open, not about paying." },
       demand: { evidence: "Twelve families asked to be told when the next term opens.", signals: [{ text: "Twelve families asked at the counter to be told when places open.", source: null }] },
       suggestedChange: "Start with a waiting list: families leave an email, and the club emails them weekly when places open. Add payments only if the list outgrows the counter.",
-      wouldChange: { text: "If the waiting list passes 60 families, paid online booking would be worth researching again.", changeLabel: "start with a waiting list", estimateCredits: 12 },
+      wouldChange: { text: "If the waiting list passes 60 families, paid online booking would be worth researching again.", changeLabel: null, estimateCredits: null },
       placement: { division: "learning", project: "cookery-club", app: "web", name: "Cookery Club" },
       redLines: { breached: false, line: null, reasoning: null },
       method: method(13, "medium"),
@@ -669,7 +665,7 @@ function verdictDocs() {
       gap: { evidence: "Customers ask for a time window by text, not a map." },
       demand: { evidence: "No evidence of demand was found for a map beyond what the couriers already give." },
       suggestedChange: null,
-      wouldChange: { text: "If the delivery firm stopped sharing its map, this would be worth researching again.", changeLabel: null, estimateCredits: 12 },
+      wouldChange: { text: "If the delivery firm stopped sharing its map, this would be worth researching again.", changeLabel: null, estimateCredits: null },
       redLines: { breached: false, line: null, reasoning: "Van positions are the business's own; no one is watched." },
       method: method(12, "high"),
       rulesApplied: ["No evidence of demand was found, so the verdict is do not build."],
@@ -683,7 +679,7 @@ function verdictDocs() {
       gap: { evidence: "Not looked into." },
       demand: { evidence: "No evidence was gathered for an idea that crosses a red line.", evidenceFound: false },
       suggestedChange: null,
-      wouldChange: { text: "Nothing would change this verdict while it watches people without their consent. A clear conflict-of-interest policy, agreed with staff, answers the worry without watching anyone.", changeLabel: "write a conflict-of-interest policy", estimateCredits: null },
+      wouldChange: { text: "Nothing would change this verdict while it watches people without their consent. A clear conflict-of-interest policy, agreed with staff, answers the worry without watching anyone.", changeLabel: null, estimateCredits: null },
       redLines: { breached: true, line: "surveillance", reasoning: "Following employees' phones after hours to see who else they work for is surveillance and authoritarian tooling: it watches people without their meaningful consent." },
       method: method(3, "high"),
       rulesApplied: ["A red line was found, so nothing may be built."],

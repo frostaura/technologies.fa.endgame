@@ -1,0 +1,209 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "IDEA-05",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "Start researching a booking app for the club's two rowing boats."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Northwind",
+        "note": "The conversation docked beside the org chart, talking to all of Northwind."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:approval"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Needs you",
+        "note": "The assistant asked to start research: a checkpoint, so it waits for your answer here."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "Research has started"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research has started",
+        "note": "Approved in the dock: the idea is recorded, with its own estimate, and the reply says so."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:started"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "researching an idea"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "researching an idea",
+        "note": "Research is queued: Wren and three contractors start on it, and its verdict will wait on the home strip."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "clock": {
+        "seek": "research:finished"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Verdict waiting"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Verdict waiting",
+        "note": "When research ends, the verdict waits for you on the home strip."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Declined, nothing starts",
+      "persona": "owner",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "A message here costs at most"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Message Northwind"
+                },
+                "text": "Start researching a booking app for the club's two rowing boats."
+              }
+            },
+            {
+              "click": {
+                "text": "Send"
+              }
+            },
+            {
+              "wait": {
+                "text": "Working on it"
+              }
+            },
+            {
+              "clock": {
+                "seek": "conversation:approval"
+              }
+            },
+            {
+              "wait": {
+                "text": "Needs you"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Needs you",
+            "note": "The same request; this time it is declined."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Decline"
+              }
+            },
+            {
+              "wait": {
+                "text": "Working on it"
+              }
+            },
+            {
+              "clock": {
+                "seek": "conversation:replied"
+              }
+            },
+            {
+              "wait": {
+                "text": "I have not started it"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "I have not started it",
+            "note": "Declined: the call is refused, and the assistant says plainly it did not start it."
+          }
+        }
+      ]
+    }
+  ]
+}

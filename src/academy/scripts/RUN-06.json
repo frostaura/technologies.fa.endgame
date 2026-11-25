@@ -1,0 +1,52 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-06",
+  "persona": "owner",
+  "scenario": "building",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Cancel"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Cancel",
+        "note": "Cancelling ends the work for good."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Stop this work for good?",
+        "note": "A confirmation first."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes, cancel it"
+          }
+        },
+        {
+          "wait": {
+            "text": "This work was cancelled"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Cancelled",
+        "note": "The controls go, the badge reads “Cancelled”, and a cancelled build can be tried again."
+      }
+    }
+  ]
+}

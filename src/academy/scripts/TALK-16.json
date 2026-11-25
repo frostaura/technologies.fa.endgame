@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-16",
+  "persona": "assistant",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/api/conversations",
+      "body": {
+        "scope": "northwind",
+        "message": "What is over budget?"
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": "5e4d3c2b-1a09-4f8e-b7d6-c5b4a3928170",
+          "kind": "conversation",
+          "title": "What is over budget?",
+          "scope": "northwind",
+          "status": "queued",
+          "conversationId": "0f1e2d3c-4b5a-4968-8776-655443322110",
+          "employeeId": null,
+          "estimateCredits": 0.5,
+          "spentCredits": 0,
+          "canTryAgain": false
+        }
+      },
+      "note": "The docked conversation from outside: send it, get the run back, then read its events (MCP run_events, conversation_history, conversation_estimate)."
+    }
+  ]
+}

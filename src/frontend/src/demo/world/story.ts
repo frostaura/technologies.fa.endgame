@@ -114,7 +114,7 @@ export const STORIES: Record<string, Story> = {
       wouldChange: null,
       placement: { division: "learning", project: "book-club", app: "web", name: "Club Reading List" },
       redLines: { breached: false, line: null, reasoning: "A private reading list harms no one and watches no one." },
-      method: { strands: [], searches: 14, confidence: "high", contractors: 3, argued: "The case against was argued first." },
+      method: { strands: [], searches: 14, confidence: "high" },
     },
     plan: {
       summary:
@@ -209,7 +209,7 @@ export const STORIES: Record<string, Story> = {
       wouldChange: null,
       placement: { division: "learning", project: "tide-board", app: "web", name: "Harbour Tide Board" },
       redLines: { breached: false, line: null, reasoning: null },
-      method: { strands: [], searches: 9, confidence: "medium", contractors: 3 },
+      method: { strands: [], searches: 9, confidence: "medium" },
     },
     plan: generic("Harbour Tide Board").plan,
     sentBack: null,
@@ -234,7 +234,7 @@ export function storyFor(text: string, key?: string | null): Story {
       demand: { evidence: "No evidence was gathered for an idea that crosses a red line.", evidenceFound: false },
       wouldChange: { text: "Nothing would change this verdict while the idea watches people without their consent.", changeLabel: null, estimateCredits: null },
       redLines: { breached: true, line: red.line, reasoning: red.reasoning },
-      method: { strands: [], searches: 3, confidence: "high", contractors: 3 },
+      method: { strands: [], searches: 3, confidence: "high" },
       rulesApplied: ["A red line was found, so nothing may be built."],
     };
     g.headline = "Not on Endgame: this crosses a red line";
@@ -310,7 +310,7 @@ function generic(name: string): Story {
       wouldChange: null,
       placement: { division: "studio", project: slug, app: "web", name },
       redLines: { breached: false, line: null, reasoning: null },
-      method: { strands: [], searches: 12, confidence: "medium", contractors: 3 },
+      method: { strands: [], searches: 12, confidence: "medium" },
     },
     plan: {
       summary: `${name}: what it keeps first, then the screens to use it on a phone, then the app's own documents.`,

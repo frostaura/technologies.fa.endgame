@@ -1,0 +1,63 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-02",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Verdict waiting"
+          }
+        },
+        {
+          "wait": {
+            "text": "Research by"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Research by",
+        "note": "A “Verdict waiting” card on the home strip (or the chart, or a notification) opens the idea’s own page."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Research by Wren",
+        "note": "Who researched it and what it cost against its estimate."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Verdict ·",
+        "note": "The dark banner: Verdict · build, change or do not build."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Research still running",
+      "persona": "viewer",
+      "scenario": "researching",
+      "start": "/ideas/{idea}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Research in progress",
+            "note": "The verdict is being worked out; “Watch the research” opens the run."
+          }
+        }
+      ]
+    }
+  ]
+}

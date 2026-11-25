@@ -1,0 +1,151 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CHG-03",
+  "persona": "owner",
+  "scenario": "build-failed",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "This work stopped before it finished. What was finished is kept.",
+        "note": "The build stopped: why, said plainly."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Try again"
+          }
+        },
+        {
+          "wait": {
+            "text": "Start it again"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "of its 3 parts are already built and checked",
+        "note": "“Try again”: what is kept, and the estimate for what is left."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Start it again"
+          }
+        },
+        {
+          "wait": {
+            "text": "Build:"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Step by step",
+        "note": "Started again: a new run."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:carried"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Carrying on"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Endgame · Carrying on",
+        "note": "It keeps the plan and the finished part, and builds only the rest."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A budget-stopped build, tried again",
+      "persona": "owner",
+      "scenario": "s3-budget-runs-out",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "clock": {
+            "seek": 60000
+          },
+          "act": [
+            {
+              "clock": {
+                "seek": "build:part-3"
+              }
+            },
+            {
+              "wait": {
+                "text": "The credit budget ran out"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "See credits",
+            "note": "Stopped for budget: “See credits”, and “Try again”."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A change that failed, tried again",
+      "persona": "owner",
+      "scenario": "s3-change-failed",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "still did not work"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "still did not work after 3 rounds of repair",
+            "note": "The change broke what worked before and could not be repaired: the app keeps its previous version."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Try again"
+              }
+            },
+            {
+              "wait": {
+                "text": "Start it again"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "1 of its 2 parts are already built and checked",
+            "note": "Tried again, only the check of what worked before is left."
+          }
+        }
+      ]
+    }
+  ]
+}

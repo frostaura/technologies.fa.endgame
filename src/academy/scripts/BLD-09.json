@@ -1,0 +1,50 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-09",
+  "persona": "viewer",
+  "scenario": "build-security-finding",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Security review found problems"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Reviewed the app for misuse of the platform",
+        "note": "Every part passed; the security review runs."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Security review · Security review found problems",
+        "note": "A finding blocks publishing; it is fixed now, at no charge."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:security-passed"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Security review passed"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Security review · Security review passed",
+        "note": "Fixed, reviewed again, and passed."
+      }
+    }
+  ]
+}

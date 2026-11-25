@@ -1,0 +1,103 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-08",
+  "persona": "admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Learning"
+          }
+        },
+        {
+          "wait": {
+            "text": "Talking to Learning"
+          }
+        },
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Learning"
+            },
+            "text": "Let apps sleep after 30 minutes."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Learning",
+        "note": "Select Learning and ask for a setting."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:approval"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Let the apps here sleep after 30 minutes without a visitor?",
+        "note": "The card says what will change, in the screens’ words."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Approve"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Learning",
+        "note": "Approved in the dock: set at Learning and beneath it, marked as set by an agent."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "clock": {
+        "seek": "conversation:replied"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Done."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Done. The change applies here",
+        "note": "The reply confirms it."
+      }
+    }
+  ]
+}

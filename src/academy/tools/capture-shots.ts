@@ -110,7 +110,8 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
     let previous: { hash: string; file: string } | null = null;
     for (const [i, step] of demo.entries()) {
       try {
-        if (step.goto) await call("goto", { route: step.goto });
+        // A step may hand the same world to someone else (the operator acts, the Owner reads), as the flow page plays it.
+        if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}) });
         if (step.clock) await call("clock", step.clock);
         if (step.act) await call("act", step.act, true);
         await settle(page);

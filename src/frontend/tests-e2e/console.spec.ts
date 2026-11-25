@@ -92,7 +92,7 @@ test.describe("home — the living org chart", () => {
   test("the header is at most two rows, and keeps the mode, the balance and sign-out", async ({ page }) => {
     await useScenario("populated");
     await page.goto("/apps/app1");
-    await expect(page.getByRole("heading", { name: "Booking desk" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Booking desk", exact: true })).toBeVisible();
     const phone = isPhone(page);
     // The narrowest phone in common use as well as the project's own.
     for (const [mode, width] of phone ? ([["Normal", 0], ["Technical", 0], ["Normal", 375], ["Technical", 375]] as const) : ([["Normal", 0], ["Technical", 0]] as const)) {
@@ -210,7 +210,7 @@ test.describe("app and credits", () => {
     await useScenario("populated");
     await page.goto("/");
     await page.getByRole("link", { name: "Booking desk" }).click();
-    await expect(page.getByRole("heading", { name: "Booking desk" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Booking desk", exact: true })).toBeVisible();
     await expect(page.getByText("https://northwind.example.test/booking · also at https://endgame.example.test/northwind/software/booking")).toBeVisible();
     await expect(page.getByText("Slowest 1 in 20: 540 ms")).toBeVisible();
     await page.getByRole("radio", { name: /Sleeps when unused/ }).check();
@@ -231,7 +231,7 @@ test.describe("app and credits", () => {
     await useScenario("populated");
     await page.goto("/");
     await page.getByRole("link", { name: "Tide board" }).click();
-    await expect(page.getByRole("heading", { name: "Tide board" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Tide board", exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Today" }).getByText("Not measured yet")).toHaveCount(2);
     await expect(page.getByText(/Not enough history yet to say what it costs a month/)).toHaveCount(2);
     await page.goto("/");
@@ -382,7 +382,8 @@ test.describe("every screen, every width", () => {
     test(`${name} never scrolls sideways and every control is reachable`, async ({ page }) => {
       await useScenario(scenario);
       await page.goto(path);
-      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      // Exact: an app page also heads its "Change {app}" panel and its conversation with the app's name.
+      await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
       await expectNoSidewaysScroll(page);
       // Every button and link has a name a screen reader can read out.
       const unnamed = await page.locator("button, a[href]").evaluateAll((els) => els.filter((el) => !(el.textContent ?? "").trim() && !el.getAttribute("aria-label")).length);

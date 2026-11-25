@@ -1,0 +1,83 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AUTO-01",
+  "persona": "viewer",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Autonomy for Northwind"
+          }
+        },
+        {
+          "wait": {
+            "text": "How it works"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "How much Northwind does on its own",
+        "note": "From home, “Autonomy for Northwind”."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Level"
+            },
+            "value": "northwind/operations"
+          }
+        },
+        {
+          "wait": {
+            "text": "Set here"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Level",
+        "note": "Pick a level: a setting made above holds beneath it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Level"
+            },
+            "value": "northwind/operations/stock-counter"
+          }
+        },
+        {
+          "wait": {
+            "text": "Inherited from Operations"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Inherited from Operations",
+        "note": "Each value says where it was set: Stock Counter inherits from Operations."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "What never changes",
+        "note": "What no setting changes: the budget, going public, red lines, free repairs."
+      }
+    }
+  ]
+}

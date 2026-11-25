@@ -1,0 +1,80 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-09",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "Keep apps always on."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:approval"
+          }
+        },
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Add a note (optional)"
+            },
+            "text": "Not this month."
+          }
+        },
+        {
+          "click": {
+            "text": "Decline"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "Left as it was."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Left as it was.",
+        "note": "A note, then Decline: nothing is done, the note goes back, and the reply says so."
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "RUN-11",
+  "persona": "viewer",
+  "scenario": "build-failed",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Did not succeed",
+        "note": "A failed run says so in its badge."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Endgame · Stopped",
+        "note": "And why, in plain words — here, a part that still failed after its repairs."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Outcome",
+        "note": "The outcome repeats the reason; “Try again” carries on from the work saved."
+      }
+    }
+  ]
+}

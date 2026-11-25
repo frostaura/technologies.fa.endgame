@@ -1,0 +1,44 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-01",
+  "persona": "viewer",
+  "scenario": "build-running",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "clock": {
+        "seek": "build:placed"
+      },
+      "highlight": {
+        "text": "Step by step",
+        "note": "A build begins by finding the app a home: no one is asked."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Placed"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The builder · Placed",
+        "note": "The division, the project and the app — created when new."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "text": "Club Reading List",
+        "note": "The org chart shows the new project."
+      }
+    }
+  ]
+}
