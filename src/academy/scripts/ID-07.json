@@ -1,0 +1,115 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-07",
+  "persona": "signed-out",
+  "scenario": "established",
+  "start": "/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "First time here? Create your passkey"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Your name"
+            },
+            "text": "Sam Okafor"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Email address"
+            },
+            "text": "sam@northwind.example"
+          }
+        },
+        {
+          "click": {
+            "text": "Create passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Invitation code",
+        "note": "A stranger leaves the invitation code empty."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Endgame is invite-only",
+        "note": "Refused with 403; nothing is created."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A code that is wrong, used or expired",
+      "persona": "invited",
+      "scenario": "established",
+      "start": "/sign-in",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "First time here? Create your passkey"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Your name"
+                },
+                "text": "Tobi Adeyemi"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Email address"
+                },
+                "text": "tobi@northwind.example"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Invitation code"
+                },
+                "text": "LARK-0000-0000"
+              }
+            },
+            {
+              "click": {
+                "text": "Create passkey"
+              }
+            },
+            {
+              "wait": 1200
+            }
+          ],
+          "highlight": {
+            "text": "That invitation code is not valid",
+            "note": "Refused with 403: the code does not match this address, or it has run out."
+          }
+        }
+      ]
+    }
+  ]
+}

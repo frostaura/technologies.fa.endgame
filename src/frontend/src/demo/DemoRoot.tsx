@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Provider } from "react-redux";
 import { App } from "@/App";
 import { navigate, useLocation } from "@/lib/router";
 import { announceReady, announceRoute } from "./bridge";
 import { DemoStrip, DeviceSheet } from "./Chrome";
 import { askDevice } from "./device";
-import { getSession, getStore, getWorld, markWoken, onHostChange, registerShare } from "./host";
+import { endConsoleSession, getSession, getStore, getWorld, markWoken, onHostChange, registerShare } from "./host";
 import { HostedAppView } from "./hosted/HostedAppView";
 import type { HostedAppState, HostedVisitor } from "./hosted/types";
-import { authProblems } from "./hosted/edgePages";
+import { EdgeDocument } from "./hosted/EdgeDocument";
+import { authProblems, renderUnavailablePage, UNAVAILABLE_COPY } from "./hosted/edgePages";
 import { roleAt } from "./server/access";
 import { orgOf, organisation } from "./server/world";
 
@@ -34,19 +35,38 @@ function Outbound() {
 
 const visitors = new Map<string, HostedVisitor>();
 
+/** The end user whose passkey for this app this device holds: the persona's own registration, or one whose share ended. */
+function returningEndUser(appId: string, access: string): HostedVisitor {
+  const share = getWorld().shares.find((s) => s.appId === appId && s.registered);
+  if (share) return { kind: "end-user", displayName: share.email.split("@")[0] ?? null, email: share.email };
+  return { kind: "end-user", displayName: null, email: null, stillShared: access !== "shared" };
+}
+
+/** The console account this device's passkey signs in: one with a role on the app first. */
+function memberOnDevice(path: string): HostedVisitor | undefined {
+  const world = getWorld();
+  const people = world.device.flatMap((id) => world.users.filter((u) => u.id === id && u.passkeys > 0));
+  const withRole = people.find((u) => roleAt(world, u.id, path));
+  const u = withRole ?? people[0];
+  return u ? { kind: withRole ? "member" : "member-without-access", displayName: u.displayName, email: u.email } : undefined;
+}
+
 function HostedRoute({ appId, form, rest }: { appId: string; form: "path" | "subdomain"; rest: string }) {
   const [, bump] = useState(0);
   useEffect(() => onHostChange(() => bump((n) => n + 1)), []);
   const world = getWorld();
   const app = world.apps.find((a) => a.id === appId);
   const session = getSession();
-  const visitor = useMemo<HostedVisitor>(() => {
+  // Read on every render, so a sign-in, a registration or a sign-out shows at once.
+  const visitor = ((): HostedVisitor => {
     const kept = visitors.get(appId);
     if (kept) return kept;
     const u = world.users.find((x) => x.id === world.sessionUserId);
     if (u && app) return { kind: roleAt(world, u.id, app.path) ? "member" : "member-without-access", displayName: u.displayName, email: u.email };
     if (session.personaInfo.visitor === "end-user") {
       const share = world.shares.find((s) => s.appId === appId && s.registered);
+      // No longer shared with them (ACC-12): their sessions ended with the share.
+      if (!share && app?.access === "shared") return { kind: "signed-out", displayName: null, email: null };
       return { kind: "end-user", displayName: share ? (share.email.split("@")[0] ?? null) : "A visitor", email: share?.email ?? "visitor@example.com" };
     }
     if (session.personaInfo.visitor === "invited") {
@@ -54,8 +74,9 @@ function HostedRoute({ appId, form, rest }: { appId: string; form: "path" | "sub
       return { kind: "invited", displayName: null, email: share?.email ?? null };
     }
     return { kind: "signed-out", displayName: null, email: null };
-  }, [appId, app, world, session]);
-  if (!app) return null;
+  })();
+  // An address Edge knows nothing about (ACC-16).
+  if (!app) return <EdgeDocument html={renderUnavailablePage("Temporary")} docKey={`unknown:${appId}`} title={`${UNAVAILABLE_COPY.Temporary.title} · Endgame`} onAction={async () => {}} />;
   const [org, ...below] = app.path.split("/");
   const state: HostedAppState = app.status === "failed" ? "crashed" : app.running === "paused" ? "paused" : app.status === "building" || app.status === "draft" ? "not-published" : app.running === "asleep" ? "asleep" : "running";
   return (
@@ -73,6 +94,8 @@ function HostedRoute({ appId, form, rest }: { appId: string; form: "path" | "sub
           return share.code === code.trim() ? null : authProblems.invitation;
         },
         onVisitorChange: (next) => {
+          // A member signing out at an app on the platform's host ends their console session too (ACC-11).
+          if (next.kind === "signed-out" && form === "path" && (visitor.kind === "member" || visitor.kind === "member-without-access")) endConsoleSession();
           visitors.set(appId, next);
           if (next.kind === "end-user" && next.email) registerShare(appId, next.email);
           bump((n) => n + 1);
@@ -80,6 +103,18 @@ function HostedRoute({ appId, form, rest }: { appId: string; form: "path" | "sub
         navigate: (r) => navigate(`/__app/${appId}/${form}/${r}`),
         exit: () => navigate(`/apps/${appId}`),
         onWake: () => markWoken(appId),
+        // Signed out, "Sign in with a passkey" signs in whoever this device holds a console passkey for (ACC-03).
+        ...(visitor.kind === "signed-out" ? { memberAccount: memberOnDevice(app.path) } : {}),
+        // An end user's device holds their passkey for this app — still, after the share was taken away (ACC-06, ACC-12).
+        ...(session.personaInfo.visitor === "end-user" ? { returningEndUser: returningEndUser(appId, app.access) } : {}),
+        isRegistered: (email) => world.shares.some((s) => s.appId === appId && s.email === email && s.registered),
+        isShared: (email) => world.shares.some((s) => s.appId === appId && s.email === email),
+        developmentSignIn: !!world.developmentSignIn,
+        developmentMember: (email) => {
+          const address = email || (world.developmentSignIn?.email ?? "");
+          const u = world.users.find((x) => x.email === address);
+          return { kind: u && roleAt(world, u.id, app.path) ? "member" : "member-without-access", displayName: u?.displayName ?? (address.split("@")[0] ?? address), email: address };
+        },
       }}
     />
   );

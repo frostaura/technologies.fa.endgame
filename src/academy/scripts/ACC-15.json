@@ -1,0 +1,48 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-15",
+  "persona": "builder",
+  "scenario": "app-asleep",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-waiting",
+        "note": "Course Notes is asleep: the request waits while Edge wakes it. There is no “waking up” page."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 2600
+        }
+      ],
+      "highlight": {
+        "testId": "signed-in-as",
+        "note": "Awake: the page loads."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A crashed app",
+      "persona": "builder",
+      "scenario": "app-crashed",
+      "start": "/__app/{app}/path/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "This app has stopped for a moment",
+            "note": "Shift Rota crashed: it is started again shortly."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHL-05",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "[data-god-mode]",
+        "note": "On every screen. Outside an organisation, it says entering one is logged."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Enter Northwind"
+          }
+        },
+        {
+          "wait": 1500
+        },
+        {
+          "click": {
+            "text": "Open its org chart"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "selector": "[data-god-mode]",
+        "note": "Inside Northwind, acting as an Admin; everything changed here is logged for its Owner."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Leave Northwind"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "selector": "[data-god-mode]",
+        "note": "Back to every organisation; every screen reads Nell's own again."
+      }
+    }
+  ]
+}

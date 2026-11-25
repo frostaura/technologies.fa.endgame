@@ -60,24 +60,17 @@ describe("the step-script validator", () => {
     expect(sandbox({ "ID-02.json": image }, ["id-02-1.png"]).problems).toEqual([]);
   });
 
-  it("accepts live branches of what else can happen, each numbered from 1 and saying what it shows", () => {
-    const branch = { title: "A Viewer is told who may", persona: "viewer", scenario: "manage-tree", start: "/tree", steps: [{ step: 1, kind: "demo", highlight: { text: "Sign in", note: "Who may." } }] };
-    const report = sandbox({ "ID-02.json": { ...ok, variations: [branch] } });
-    expect(report.problems).toEqual([]);
-    expect(report.coverage.variations).toBe(1);
-  });
-
-  it("refuses a branch whose steps are out of order, say nothing, or name an unknown person", () => {
-    const branch = { title: "A branch", persona: "viewer", scenario: "manage-tree", start: "/tree", steps: [{ step: 2, kind: "demo", highlight: { text: "Sign in" } }] };
-    const p = sandbox({ "ID-02.json": { ...ok, variations: [branch] } }).problems.join("\n");
-    expect(p).toMatch(/numbered from 1 in order/);
-    expect(p).toMatch(/says nothing/);
-    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, persona: "nobody" }] } }).problems.length).toBeGreaterThan(0);
-  });
-
   it("keeps the TypeScript types and the JSON Schema in step", () => {
     const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as { properties: { persona: { enum: string[] }; scenario: { enum: string[] } } };
     expect(schema.properties.persona.enum).toEqual([...PERSONAS]);
     expect(schema.properties.scenario.enum).toEqual([...SCENARIOS]);
+  });
+
+  it("checks a script's variations: numbered from 1, each step saying what it shows", () => {
+    const branch = { title: "A stranger is refused", persona: "signed-out", scenario: "established", start: "/sign-in", steps: [{ step: 1, kind: "demo", highlight: { text: "invite-only", note: "Refused." } }] };
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [branch] } }).problems).toEqual([]);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, steps: [{ step: 2, kind: "demo", highlight: { text: "a", note: "b" } }] }] } }).problems.join()).toMatch(/number them 1 to 1/);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, steps: [{ step: 1, kind: "demo", highlight: { text: "a" } }] }] } }).problems.join()).toMatch(/has no note/);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, persona: "nobody" }] } }).problems.length).toBeGreaterThan(0);
   });
 });

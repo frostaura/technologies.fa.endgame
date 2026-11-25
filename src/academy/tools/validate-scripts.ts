@@ -17,7 +17,7 @@ export interface Coverage {
   stepsWithMedia: number;
   byKind: Record<string, number>;
   scripted: string[];
-  /** Branches of "What else can happen" shown live. */
+  /** Branches under "What else can happen" that play in the console. */
   variations: number;
 }
 
@@ -70,16 +70,17 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
       if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.file}, which does not exist`);
       if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${file}: step ${step.step} is a demo step that sends the console nothing`);
     }
-    for (const [i, v] of (script.variations ?? []).entries()) {
+    (script.variations ?? []).forEach((v, i) => {
       const where = `${file}: variation ${i + 1} ("${v.title}")`;
-      v.steps.forEach((step, j) => {
-        if (step.step !== j + 1) problems.push(`${where}: its steps are numbered from 1 in order; step ${j + 1} says ${step.step}`);
-        if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${where}: step ${step.step} sends the console nothing`);
-        if (step.kind === "demo" && !step.note && !step.highlight?.note) problems.push(`${where}: step ${step.step} says nothing; a variation's step is read from its note`);
+      const numbers = v.steps.map((s) => s.step);
+      if (numbers.some((n, k) => n !== k + 1)) problems.push(`${where}: its steps are numbered ${numbers.join(", ")}; number them 1 to ${numbers.length} in order`);
+      for (const step of v.steps) {
+        if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${where}: step ${step.step} is a demo step that sends the console nothing`);
+        if (!step.note && !(step.kind === "demo" && step.highlight?.note)) problems.push(`${where}: step ${step.step} has no note, and a variation's steps have no flow text to show beside them`);
         if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${where}: step ${step.step} names public/shots/${step.shot.file}, which does not exist`);
         if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${where}: step ${step.step} names public/shots/${step.file}, which does not exist`);
-      });
-    }
+      }
+    });
     scripts[id] = script;
   }
   const byKind: Record<string, number> = {};

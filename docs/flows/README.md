@@ -35,7 +35,7 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 
 Five tracks, each in the order the files give them. A lesson can only teach what has a screen, so each track lists the flows a learner can do in the console and counts the rest separately. The **Operator** track is FrostAura's own handbook and is not for clients.
 
-### Foundation — 76 flows, 73 with a screen
+### Foundation — 77 flows, 75 with a screen
 
 What every person needs on day one: signing in, reading the home screen, starting an idea, reading a verdict, opening an app.
 
@@ -47,7 +47,8 @@ What every person needs on day one: signing in, reading the home screen, startin
 | ID-05 | Recover from a failed session check | Screen | [Identity and access](01-identity-and-access.md) |
 | ID-06 | Sign out of the console | Screen | [Identity and access](01-identity-and-access.md) |
 | ID-07 | Try to register without an invitation, or with one through the console | Screen | [Identity and access](01-identity-and-access.md) |
-| PPL-08 | Accept an invitation and register as an invited member | API or assistant only | [Identity and access](01-identity-and-access.md) |
+| ID-09 | See who you are and every role you hold, and switch organisation | Screen | [Identity and access](01-identity-and-access.md) |
+| PPL-08 | Accept an invitation and register as an invited member | Screen | [Identity and access](01-identity-and-access.md) |
 | ACC-01 | Open a private app as a member who has a role | Screen | [Identity and access](01-identity-and-access.md) |
 | ACC-02 | Arrive signed out at a private or shared app | Screen | [Identity and access](01-identity-and-access.md) |
 | ACC-03 | A member signs in at an app's sign-in page | Screen | [Identity and access](01-identity-and-access.md) |
@@ -118,12 +119,13 @@ What every person needs on day one: signing in, reading the home screen, startin
 | HOST-01 | A sleeping app wakes on a visit | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | HOST-06 | Reach an app at either of its two addresses | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Core — 131 flows, 121 with a screen
+### Core — 132 flows, 122 with a screen
 
 Running an organisation day to day: people, hiring, credits, the app page, secrets, notifications, autonomy.
 
 | Flow | What | Reached by | Area |
 | --- | --- | --- | --- |
+| ID-08 | Add another passkey to your own account | Screen | [Identity and access](01-identity-and-access.md) |
 | ID-10 | Read the operator access log | Screen | [Identity and access](01-identity-and-access.md) |
 | PPL-01 | See the people at a level, and what each role may do | Screen | [Identity and access](01-identity-and-access.md) |
 | PPL-02 | Switch the level being viewed | Screen | [Identity and access](01-identity-and-access.md) |
@@ -256,13 +258,12 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | HOST-05 | A crashed app | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | HOST-07 | An idle app goes to sleep | Automatic | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Advanced — 39 flows, 25 with a screen
+### Advanced — 38 flows, 25 with a screen
 
 For the person who owns the setup: rule sets, tighter limits, assistants, technical mode.
 
 | Flow | What | Reached by | Area |
 | --- | --- | --- | --- |
-| ID-08 | Add another passkey to your own account | API or assistant only | [Identity and access](01-identity-and-access.md) |
 | AST-01 | Open the AI assistants screen and copy the addresses | Screen | [Identity and access](01-identity-and-access.md) |
 | AST-02 | Make a key for an assistant | Screen | [Identity and access](01-identity-and-access.md) |
 | AST-03 | See and revoke keys | Screen | [Identity and access](01-identity-and-access.md) |
@@ -302,14 +303,13 @@ For the person who owns the setup: rule sets, tighter limits, assistants, techni
 | SEC-05 | Override an inherited secret at a lower level | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | KIT-20 | An AI assistant uses an app's own derived MCP tools | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Developer — 34 flows, 3 with a screen
+### Developer — 33 flows, 3 with a screen
 
 Through the API, an AI assistant or the app kit. Not console lessons.
 
 | Flow | What | Reached by | Area |
 | --- | --- | --- | --- |
 | ID-03 | Use the development sign-in | Screen | [Identity and access](01-identity-and-access.md) |
-| ID-09 | See who you are and every role you hold | API or assistant only | [Identity and access](01-identity-and-access.md) |
 | ACC-13 | Use the development sign-in at an app | Screen | [Identity and access](01-identity-and-access.md) |
 | ORG-16 | Delete the organisation | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-07 | Read the ontology by API or MCP | API or assistant only | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -402,8 +402,8 @@ Flows that do not exist yet or are purely automatic.
 
 | Reached by | Flows |
 | --- | --- |
-| Screen | 235 |
-| API or assistant only | 36 |
+| Screen | 238 |
+| API or assistant only | 33 |
 | Command line | 24 |
 | Automatic | 22 |
 | No route | 4 |
@@ -416,7 +416,9 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 
 | What | Flow | Status |
 | --- | --- | --- |
-| An invited person could not register: the sign-in screen had no field for the invitation code. | ID-07, PPL-08 | Fixed the same day; the two flows describe the screen as it was. |
+| An invited person could not register: the sign-in screen had no field for the invitation code. | ID-07, PPL-08 | Fixed the same day; both flows now describe the screen with the field. |
+| No second passkey, no way to switch organisation, and the address asked for was lost at sign-in. | ID-08, ID-09, ID-02 | Fixed: "Your account", the "Working in" switcher, and the kept address. |
+| The console and the server disagreed on a person's role where grants at two levels differ. | PPL-01, PPL-03 | Fixed: the tree carries each node's role as the server resolves it. |
 | Signing out left a blank page. | ID-06 | Fixed the same day, found in a browser. |
 | Divisions, projects and apps could not be created, renamed, archived or deleted from a screen. | TREE-02 to TREE-09, TREE-13, ORG-14 | Fixed: "Manage" (`/tree`). Moving is still impossible by any route, on purpose (TREE-10). |
 | A level could not be described from a screen. | TREE-11, TREE-12 | Fixed: "What this is" on "Manage". |
@@ -434,7 +436,6 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | **Set a budget cap** at any level, or an app's own. Caps are shown and enforced; they can only be set through the API or an assistant. | CRED-03, APP-11, APP-12 | Confirmed |
 | **Talk to an app**, or answer a conversation's own approval inside the conversation. | TALK-04, TALK-07 | Reported |
 | **Edit an employee** (name, role, mandate, tools, manager), raise a hire by hand, list released employees. | EMP-10, HIRE-09, EMP-09 | Reported |
-| **Add a second passkey**, switch between organisations, land where you were going after signing in. | ID-08, ID-02 | Reported |
 
 ### Things that do not do what the screen says
 
@@ -448,7 +449,6 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | **"Asks you first" rules refuse instead of asking.** | AUTO-05 | Reported |
 | **Two lines on the start screen are untrue in auto-mode:** "Nothing is built until you have seen the verdict", and that hires are "proposed". | IDEA-01, VERD-11, BLD-02 | Reported |
 | **A conversation at a level is shared by everyone there**, each message drawn as "you". | TALK-11 | Reported |
-| **The console and the server disagree on a person's role** where grants at two levels differ: the console takes the highest, the server the deepest. | PPL-01, PPL-03 | Reported |
 | **The console's mock-API browser specs are run by nothing** in the Makefile or CI; only the smoke spec runs. | OPS-07 | Reported |
 | **The design stage in the spec does not exist** as a stage in the build. | BLD-12 | Reported |
 

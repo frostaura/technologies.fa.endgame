@@ -1,0 +1,38 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "PPL-02",
+  "persona": "admin",
+  "scenario": "established",
+  "start": "/people",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Show people at",
+        "note": "Shown because Northwind has more than one level."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Show people at"
+            },
+            "value": "Technologies"
+          }
+        },
+        {
+          "wait": 900
+        }
+      ],
+      "highlight": {
+        "selector": "main h1",
+        "note": "The address becomes /people?scope=northwind/technologies; the heading and the list follow."
+      }
+    }
+  ]
+}

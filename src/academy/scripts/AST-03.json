@@ -1,0 +1,68 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AST-03",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/assistants",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Keys'] li",
+        "note": "Each key: its name, its role and organisation, when it ends, when it was last used, and a badge."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Revoke"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The assistant using it is shut out at once",
+        "note": "Asked first: it cannot be undone."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Revoke it"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "selector": "ul[aria-label='Keys'] li",
+        "note": "Revoked at once: its next call gets 401. Revoke has gone from its row."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "No key yet",
+      "persona": "admin",
+      "scenario": "established",
+      "start": "/assistants",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "No assistant has a key yet",
+            "note": "Ada has made no key: the list says so, and how to start."
+          }
+        }
+      ]
+    }
+  ]
+}

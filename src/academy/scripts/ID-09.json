@@ -1,0 +1,64 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-09",
+  "persona": "two-organisations",
+  "scenario": "two-organisations",
+  "start": "/account",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "main h1",
+        "note": "Kai Moreno and the e-mail they sign in with."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Your roles in each organisation']",
+        "note": "A Builder of the whole of Northwind, an Admin of the whole of Quayside Bakery — each with what that role may do."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Working in"
+            },
+            "value": "Quayside Bakery"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "selector": "header select",
+        "note": "Quayside Bakery's org chart opens; every screen now reads it, and this device remembers the choice."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Someone with no role yet",
+      "persona": "first-run",
+      "scenario": "established",
+      "start": "/account",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "You hold no role in any organisation yet",
+            "note": "Signed in, with no grant anywhere: whoever invited them grants one."
+          }
+        }
+      ]
+    }
+  ]
+}

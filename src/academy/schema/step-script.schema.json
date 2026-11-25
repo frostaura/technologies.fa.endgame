@@ -33,9 +33,9 @@
         "assistant",
         "host-admin",
         "division-admin",
+        "invited",
         "first-run",
         "two-organisations",
-        "invited",
         "no-role"
       ]
     },
@@ -51,6 +51,21 @@
         "app-live",
         "low-credits",
         "god-mode",
+        "account",
+        "two-organisations",
+        "app-asleep",
+        "app-paused",
+        "app-crashed",
+        "at-overdraft-limit",
+        "s1-app-made-private",
+        "s1-app-not-published",
+        "s1-app-private",
+        "s1-app-public",
+        "s1-app-unshared",
+        "s1-development-apps",
+        "s1-development-sign-in",
+        "s1-keys-at-limit",
+        "s1-session-check-fails",
         "default",
         "quiet",
         "empty-organisation",
@@ -66,20 +81,14 @@
         "build-waiting-on-plan",
         "build-failed",
         "app-busy",
-        "app-asleep",
-        "app-paused",
-        "app-crashed",
         "app-never-measured",
         "employee-memory",
         "hire-pending",
-        "at-overdraft-limit",
         "budget-spent",
         "manage-tree",
         "archived-division",
-        "account",
         "employee-released",
         "employee-let-go",
-        "two-organisations",
         "screening-offline",
         "tree-unreachable",
         "tree-refresh-fails",
@@ -106,7 +115,7 @@
     },
     "variations": {
       "type": "array",
-      "description": "What else can happen: each refusal, limit or other branch that matters, played on its own beside the flow's \"What else can happen\". Each has its own person, world and starting address, and its steps are numbered from 1.",
+      "description": "What else can happen: each refusal or branch that matters, played in the live console from its own start, as its own person and world. Shown under \"What else can happen\" on the flow's page.",
       "items": {
         "$ref": "#/definitions/variation"
       }
@@ -563,8 +572,8 @@
         "title": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 120,
-          "description": "What this branch is, in a few plain words: \"A Viewer is told who may\"."
+          "maxLength": 140,
+          "description": "The branch in a few words, as the learner picks it."
         },
         "persona": {
           "$ref": "#/properties/persona"
@@ -580,7 +589,8 @@
           "minItems": 1,
           "items": {
             "$ref": "#/definitions/step"
-          }
+          },
+          "description": "Numbered 1, 2, … within the variation; each step's note says what it shows."
         }
       }
     }

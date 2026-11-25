@@ -1,0 +1,42 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "PPL-05",
+  "persona": "admin",
+  "scenario": "established",
+  "start": "/people?scope=northwind/learning",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "No passkey yet: their code works until",
+        "note": "Tobi was invited to Learning two hours ago and has not made a passkey yet."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Send a new code"
+          }
+        }
+      ],
+      "note": "“Sending a new code…” while the server replaces the code."
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "New invitation code for Tobi Adeyemi",
+        "note": "Shown once. The code he had before no longer works."
+      }
+    }
+  ]
+}

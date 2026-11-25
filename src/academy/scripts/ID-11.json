@@ -1,0 +1,38 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-11",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "grep -A1 'God mode' .env",
+      "output": [
+        "# God mode: comma-separated e-mail addresses, an explicit list. [prod]",
+        "ENDGAME_OPERATORS=nell@frostaura.example"
+      ],
+      "note": "The address is illustrative: list your own operators. A domain is never enough."
+    },
+    {
+      "step": 2,
+      "kind": "terminal",
+      "command": "docker compose -f docker-compose.prod.yml up -d control-plane",
+      "output": [
+        "[+] Running 1/1",
+        " ✔ Container endgame-control-plane-1  Started"
+      ],
+      "note": "Compose's own output; the container's name depends on your project. Those people now see the God-mode band."
+    },
+    {
+      "step": 3,
+      "kind": "terminal",
+      "command": "make prod-config",
+      "output": [
+        "prod-config: parses; development sign-in pinned off; every service Production; backup key required."
+      ],
+      "note": "Fails, naming the problem, if production could ever turn the development sign-in on."
+    }
+  ]
+}

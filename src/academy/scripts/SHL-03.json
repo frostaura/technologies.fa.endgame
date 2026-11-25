@@ -1,0 +1,62 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHL-03",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/credits",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Endgame home"
+          }
+        },
+        {
+          "wait": 600
+        }
+      ],
+      "highlight": {
+        "text": "Endgame home",
+        "note": "The mark always goes home."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technologies"
+          }
+        },
+        {
+          "wait": 500
+        }
+      ],
+      "highlight": {
+        "selector": "nav[aria-label='Where you are']",
+        "note": "Where you are: the earlier steps are links; on the home screen they select a level in place."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/runs/{run}",
+      "highlight": {
+        "selector": "nav[aria-label='Where you are'] li:last-child",
+        "note": "A label longer than 48 characters is cut, with the full text on hover."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "selector": "header",
+        "note": "On a phone: only the last two steps after “…”, and at most two rows."
+      }
+    }
+  ]
+}

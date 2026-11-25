@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-05",
+  "persona": "owner",
+  "scenario": "s1-session-check-fails",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Endgame could not check who you are",
+        "note": "The check itself failed, so this is not “signed out”: the reason is shown."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Try again"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Sign out",
+        "note": "The check answers this time, and the console opens as usual."
+      }
+    }
+  ]
+}

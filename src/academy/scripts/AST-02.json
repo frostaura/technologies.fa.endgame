@@ -1,0 +1,145 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AST-02",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/assistants",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Which assistant is it for?"
+            },
+            "text": "Kitchen tablet assistant"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Which assistant is it for?",
+        "note": "A name you will recognise later."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "What it may do"
+            },
+            "value": "Builder"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "As Owner, the most a key can carry is Admin.",
+        "note": "Never Owner, never higher than your own role."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "It stops working"
+            },
+            "value": "In 30 days"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "It stops working",
+        "note": "In 30 days, 90 days, a year, or never."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Make the key"
+          }
+        }
+      ],
+      "note": "“Making the key…” while the server makes it."
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1500
+        }
+      ],
+      "note": "The server keeps only the key's hash: it can never be shown again."
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "Give this key to Kitchen tablet assistant",
+        "note": "Shown once, with Copy. The list now has it as Active."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Fifty live keys already",
+      "persona": "owner",
+      "scenario": "s1-keys-at-limit",
+      "start": "/assistants",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "Which assistant is it for?"
+                },
+                "text": "One more assistant"
+              }
+            },
+            {
+              "click": {
+                "text": "Make the key"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "No key was made",
+            "note": "Refused with 409: revoke one first."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A Viewer's key is a Viewer's",
+      "persona": "viewer",
+      "scenario": "established",
+      "start": "/assistants",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "No more than your own role.",
+            "note": "Priya is a Viewer, so Viewer is the only role offered."
+          }
+        }
+      ]
+    }
+  ]
+}

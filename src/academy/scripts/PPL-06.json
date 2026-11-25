@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "PPL-06",
+  "persona": "admin",
+  "scenario": "established",
+  "start": "/people",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Role for Lena Fischer"
+            },
+            "value": "Viewer"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "li[data-member='lena@northwind.example'] select",
+        "note": "Lena's role, chosen in her row."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "li[data-member='lena@northwind.example'] select",
+        "note": "The list shows Viewer at once."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "selector": "li[data-member='lena@northwind.example'] select",
+        "note": "The server checked Admin was enough — a change to or from Admin needs the Owner — and the role stays Viewer."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "The Owner's row and your own show a badge only",
+      "persona": "admin",
+      "scenario": "established",
+      "start": "/people",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "li[data-member='mara@northwind.example']",
+            "note": "Mara is the Owner: her role is never changed here, so there is no drop-down. Ada's own row is the same."
+          }
+        }
+      ]
+    }
+  ]
+}

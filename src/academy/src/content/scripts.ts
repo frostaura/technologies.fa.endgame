@@ -5,7 +5,7 @@
  */
 
 /** Who the embedded console is signed in as. */
-export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin", "division-admin", "first-run", "two-organisations", "invited", "no-role"] as const;
+export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin", "division-admin", "invited", "first-run", "two-organisations", "no-role"] as const;
 export type Persona = (typeof PERSONAS)[number];
 
 /**
@@ -13,12 +13,7 @@ export type Persona = (typeof PERSONAS)[number];
  * script may name its records as `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}`, which the
  * demo resolves inside the scenario.
  */
-export const SCENARIOS = [
-  "fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode",
-  "default", "quiet", "empty-organisation", "research-running", "research-verdict", "verdict-do-not-build", "verdict-red-line", "build-running", "build-plan", "build-sent-back", "build-security-finding", "build-published", "build-waiting-on-plan", "build-failed",
-  "app-busy", "app-asleep", "app-paused", "app-crashed", "app-never-measured", "employee-memory", "hire-pending", "at-overdraft-limit", "budget-spent", "manage-tree", "archived-division", "account", "employee-released", "employee-let-go", "two-organisations", "screening-offline",
-  "tree-unreachable", "tree-refresh-fails", "ontology-unreachable", "notifications-unreachable", "notifications-refresh-fails", "status-unhealthy", "status-no-services", "status-unreachable", "status-refresh-fails", "session-unreachable", "operator-no-organisation",
-] as const;
+export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode", "account", "two-organisations", "app-asleep", "app-paused", "app-crashed", "at-overdraft-limit", "s1-app-made-private", "s1-app-not-published", "s1-app-private", "s1-app-public", "s1-app-unshared", "s1-development-apps", "s1-development-sign-in", "s1-keys-at-limit", "s1-session-check-fails", "default", "quiet", "empty-organisation", "research-running", "research-verdict", "verdict-do-not-build", "verdict-red-line", "build-running", "build-plan", "build-sent-back", "build-security-finding", "build-published", "build-waiting-on-plan", "build-failed", "app-busy", "app-never-measured", "employee-memory", "hire-pending", "budget-spent", "manage-tree", "archived-division", "employee-released", "employee-let-go", "screening-offline", "tree-unreachable", "tree-refresh-fails", "ontology-unreachable", "notifications-unreachable", "notifications-refresh-fails", "status-unhealthy", "status-no-services", "status-unreachable", "status-refresh-fails", "session-unreachable", "operator-no-organisation"] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 /** Where a spotlight lands: a CSS selector, a `data-testid`, or the visible text of a control. */
@@ -109,18 +104,22 @@ export interface StepScript {
   /** The console address the frame opens at before step 1. */
   start: string;
   steps: ScriptStep[];
-  /** What else can happen: refusals, limits and other branches, each played on its own. */
+  /** What else can happen: refusals and branches, each played from its own start (shown under the steps). */
   variations?: Variation[];
 }
 
-/**
- * One branch of "What else can happen", shown live: its own person, world and starting address,
- * and steps numbered from 1 whose notes say what each shows.
- */
+/** One branch of a flow, played on its own: its steps are numbered 1, 2, … within it. */
 export interface Variation {
+  /** The branch in a few words, as the learner picks it. */
   title: string;
   persona: Persona;
   scenario: Scenario;
   start: string;
   steps: ScriptStep[];
+}
+
+/** A variation as a script of its own, so the stage and the player play it like any flow. */
+export function variationScript(script: StepScript, index: number): StepScript | undefined {
+  const v = script.variations?.[index];
+  return v ? { flow: script.flow, persona: v.persona, scenario: v.scenario, start: v.start, steps: v.steps } : undefined;
 }

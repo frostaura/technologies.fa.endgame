@@ -1,0 +1,324 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AST-04",
+  "persona": "assistant",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/me",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "status": 401,
+          "code": "unauthenticated",
+          "title": "Sign in first",
+          "detail": "This needs a signed-in member."
+        }
+      },
+      "note": "A key works on /mcp only: on /api it is no one. A console cookie is not accepted on /mcp either."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "members_list",
+          "arguments": {
+            "scope": "quayside"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "…"
+              }
+            ],
+            "structuredContent": {
+              "status": 404,
+              "code": "not_found",
+              "title": "Not found",
+              "detail": "The scope 'quayside' was not found, or you cannot see it."
+            },
+            "isError": true
+          }
+        }
+      },
+      "note": "A key reaches its own organisation only; anywhere else answers 404, as if it did not exist."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "members_list",
+          "arguments": {
+            "scope": "northwind"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "…"
+              }
+            ],
+            "structuredContent": {
+              "status": 403,
+              "code": "forbidden",
+              "title": "Forbidden",
+              "detail": "This needs the admin role at 'northwind'; this access token acts as a builder at most."
+            },
+            "isError": true
+          }
+        }
+      },
+      "note": "A Builder's key, even when the person behind it is the Owner."
+    },
+    {
+      "step": 4,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+          "name": "members_list",
+          "arguments": {
+            "scope": "northfield"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "…"
+              }
+            ],
+            "structuredContent": {
+              "status": 404,
+              "code": "not_found",
+              "title": "Not found",
+              "detail": "The scope 'northfield' was not found, or you cannot see it."
+            },
+            "isError": true
+          }
+        }
+      },
+      "note": "An operator's key is never an operator: no God mode, so other organisations stay out of reach."
+    },
+    {
+      "step": 5,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+          "name": "app_settings",
+          "arguments": {
+            "id": "…",
+            "access": "public"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "…"
+              }
+            ],
+            "structuredContent": {
+              "status": 403,
+              "code": "human_only",
+              "title": "Only a person can make an app public",
+              "detail": "Making an app public is a human act; an agent or a service can never set it."
+            },
+            "isError": true
+          }
+        }
+      },
+      "note": "Its actor is recorded as mcp, so going public is refused."
+    },
+    {
+      "step": 6,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/call",
+        "params": {
+          "name": "credits_top_up",
+          "arguments": {
+            "credits": 500
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "error": {
+            "code": -32602,
+            "message": "There is no tool 'credits_top_up'."
+          }
+        }
+      },
+      "note": "There are no tools for top-ups, the overdraft, export, keys or the operator log."
+    },
+    {
+      "step": 7,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "tools/call",
+        "params": {
+          "name": "cascade_set",
+          "arguments": {
+            "scope": "northwind",
+            "kind": "setting",
+            "key": "overdraft_own_limit",
+            "value": 500
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "…"
+              }
+            ],
+            "structuredContent": {
+              "status": 403,
+              "code": "forbidden",
+              "title": "Forbidden",
+              "detail": "This needs the owner role at 'northwind'; this access token acts as a admin at most."
+            },
+            "isError": true
+          }
+        }
+      },
+      "note": "The organisation's own overdraft is the Owner's, and a key is an Admin's at most — even the Owner's key."
+    },
+    {
+      "step": 8,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 8,
+        "method": "tools/call",
+        "params": {
+          "name": "idea_decide",
+          "arguments": {
+            "id": "…",
+            "decision": "build"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "…"
+              }
+            ],
+            "structuredContent": {
+              "status": 403,
+              "code": "red_line",
+              "title": "This idea crosses a red line",
+              "detail": "The research found it crosses a red line (surveillance). FrostAura never builds it, and no one can overrule that. Change the idea, or drop it.",
+              "redLine": "surveillance"
+            },
+            "isError": true
+          }
+        }
+      },
+      "note": "A breached red line refuses build and overrule for everyone: a person at the console is refused the same."
+    }
+  ]
+}

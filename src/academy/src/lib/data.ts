@@ -16,7 +16,7 @@ export const scripts = scriptsJson as unknown as Record<string, StepScript>;
 export const site = siteJson as {
   siteUrl: string;
   qr: { size: number; path: string };
-  coverage: { flows: number; flowsWithScript: number; steps: number; stepsWithMedia: number; byKind: Record<string, number>; scripted: string[]; variations?: number };
+  coverage: { flows: number; flowsWithScript: number; steps: number; stepsWithMedia: number; byKind: Record<string, number>; scripted: string[]; variations: number };
   builtFrom: string[];
 };
 
