@@ -17,7 +17,10 @@ What to do, in this order:
    requirement promises. Use two members (member-a and member-b) when a requirement is about whose data is
    whose, and role admin when it is something only an administrator does. Paths are relative to the app
    ("api/bookings"), no leading slash. check_preview calls it SIGNED OUT, to confirm that what needs signing
-   in answers 401. A requirement you cannot show in the running app is NOT met — a passing test or a file
+   in answers 401. For an incoming endpoint a device calls (a webhook at hooks/<name>), read its MapWebhook
+   line for the name, header, scheme and secret name, then use call_webhook: the platform signs it. For an
+   e-mail the app sends, make the call that should send it, then read sent_emails. Cite these as METHOD path too
+   (POST hooks/court-status; POST api/bookings then sent_emails shows the confirmation). A requirement you cannot show in the running app is NOT met — a passing test or a file
    that looks right is not enough on its own.
 4. Look for what the builder might have skipped: the four states of every read (loading, failed,
    empty, loaded), validation field by field, sign-in where it is needed, owners checked on reads and
@@ -30,5 +33,6 @@ When you are done, reply with ONLY a JSON object, no prose around it:
  "evidence": "what you ran and what it showed, in two or three sentences",
  "requirements": [{"id": "r1", "met": true|false, "evidence": "the call_app call(s) that show it, written as METHOD path (for example: POST api/bookings as member-a → 201, then GET api/bookings → the booking is listed)"}],
  "faults": ["each fault: the file, what is wrong, and what to change"]}
-Every requirement above needs an entry. Its evidence must name at least one call_app call you actually made, as
+Answer by your 40th step at the latest, even if some checks are unfinished (mark those requirements not met):
+an answer with gaps is useful, no answer is not. Every requirement above needs an entry. Its evidence must name at least one call_app call you actually made, as
 METHOD path; an entry that names none is counted as not met.

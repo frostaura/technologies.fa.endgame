@@ -720,6 +720,22 @@ public sealed class WorkflowTests
         Assert.Contains("was not checked in the running app", gated["faults"]!.ToJsonString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_calls_the_gate_counts_are_the_evaluators_own_signed_in_and_webhook_calls_that_answered()
+    {
+        static Endgame.Harness.Events.RunEvent Result(string agent, string name, string content, bool error = false) =>
+            new("tool.result", new JsonObject { ["agent"] = agent, ["name"] = name, ["content"] = content, ["isError"] = error });
+        var log = new[]
+        {
+            Result("evaluator-a-0", "call_app", "HTTP 201 application/json — POST api/bookings?x=1 as member-a (member)\n\n{}"),
+            Result("evaluator-a-0", "call_webhook", "HTTP 200 application/json — POST hooks/court-status as device (signed)\n\n{}"),
+            Result("evaluator-a-0", "call_app", "The running app could not be called", error: true),
+            Result("evaluator-b-0", "call_app", "HTTP 200 application/json — GET api/other as member-a (member)\n\n[]"),
+            Result("evaluator-a-0", "check_preview", "HTTP 401 application/json\n\n{}"),
+        };
+        Assert.Equal(["POST api/bookings", "POST hooks/court-status"], CallAppTool.CallsIn(log, "evaluator-a-0"));
+    }
+
     [Theory]
     [InlineData("Members see what everyone is reading now", true)]
     [InlineData("see what everyone is reading now", true)]

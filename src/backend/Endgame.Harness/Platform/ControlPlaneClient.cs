@@ -300,6 +300,20 @@ public sealed class ControlPlaneClient(HttpClient http)
         return Json.Str(await ReadAsync<JsonObject>(response, cancellationToken), "sessionToken") ?? throw new InvalidOperationException("The control plane minted no session.");
     }
 
+    /// <summary><c>GET /internal/apps/{id}/emails</c>: what the app asked the platform to send, newest first.</summary>
+    public async Task<JsonArray> SentEmailsAsync(Guid appId, int limit, CancellationToken cancellationToken)
+    {
+        using var response = await Http.GetAsync($"/internal/apps/{appId:D}/emails?limit={limit}", cancellationToken);
+        return await ReadAsync<JsonArray>(response, cancellationToken);
+    }
+
+    /// <summary><c>POST /internal/apps/{id}/webhook-test</c>: a declared webhook called as its device would, signed by the control plane.</summary>
+    public async Task<JsonObject> TestWebhookAsync(Guid appId, JsonObject request, CancellationToken cancellationToken)
+    {
+        using var response = await Http.PostAsJsonAsync($"/internal/apps/{appId:D}/webhook-test", request, Json.Web, cancellationToken);
+        return await ReadAsync<JsonObject>(response, cancellationToken);
+    }
+
     /// <summary><c>GET /internal/runs/{id}/suggestion-context</c>: what a <c>suggest</c> run reads (ARCH-004).</summary>
     public async Task<JsonObject> SuggestionContextAsync(Guid runId, CancellationToken cancellationToken)
     {

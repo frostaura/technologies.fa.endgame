@@ -309,7 +309,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         }
 
         var evaluatorId = $"evaluator-{item.Id}-{round}";
-        var evaluator = AgentFactory.As(run, run.Agents.Evaluator(run, evaluatorId, item, plan.RequirementsOf(item), workspace.Root, probe, callApp), crew.Qa, crew.QaMemory, canRemember: true, crew.ProjectPath);
+        var evaluator = AgentFactory.As(run, run.Agents.Evaluator(run, evaluatorId, item, plan.RequirementsOf(item), workspace.Root, probe, callApp, appId), crew.Qa, crew.QaMemory, canRemember: true, crew.ProjectPath);
         var result = await WorkflowSupport.RunAgentAsync(run, evaluator, workspace,
             $"Evaluate the item now (round {round}, built on {tier}).{(previewNote is null ? "" : "\n\n" + previewNote)}", cancellationToken);
         if (WorkflowOutcome.FromAgent(result) is not null)

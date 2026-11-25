@@ -111,6 +111,7 @@ public static class DependencyInjection
         services.AddScoped<AppModelService>();
         services.AddScoped<AppSecretService>();
         services.AddScoped<AppEmailService>();
+        services.AddScoped<EvaluatorAids>();
         services.AddScoped<AppDeclarationService>();
         services.AddScoped<TelemetryService>();
         services.AddScoped<HostingMeter>();

@@ -125,9 +125,10 @@ public sealed partial class CallAppTool(IAppCaller caller, Guid appId) : ITool
         }
     }
 
-    /// <summary>The calls the agent made that the app answered, as <c>"GET api/books"</c> (query dropped), read back from the run log.</summary>
+    /// <summary>The calls the agent made that the app answered (signed in, or to a webhook as its device), as <c>"GET api/books"</c> (query dropped), read back from the run log.</summary>
     public static IReadOnlyList<string> CallsIn(IEnumerable<RunEvent> log, string agentId) =>
-        log.Where(e => e.Type == HarnessEvents.ToolResult && Json.Str(e.Payload, HarnessEvents.AgentField) == agentId && Json.Str(e.Payload, "name") == ToolName && Json.Bool(e.Payload, "isError") != true)
+        log.Where(e => e.Type == HarnessEvents.ToolResult && Json.Str(e.Payload, HarnessEvents.AgentField) == agentId
+                && Json.Str(e.Payload, "name") is ToolName or CallWebhookTool.ToolName && Json.Bool(e.Payload, "isError") != true)
             .Select(e => CallLine().Match((Json.Str(e.Payload, "content") ?? "").Split('\n')[0]))
             .Where(m => m.Success)
             .Select(m => $"{m.Groups[1].Value} {m.Groups[2].Value.Split('?')[0]}")
@@ -136,6 +137,89 @@ public sealed partial class CallAppTool(IAppCaller caller, Guid appId) : ITool
 
     [System.Text.RegularExpressions.GeneratedRegex(@"^HTTP \d{3} .*? — (GET|POST|PUT|PATCH|DELETE) (\S*) as ")]
     private static partial System.Text.RegularExpressions.Regex CallLine();
+}
+
+/// <summary>
+/// <c>call_webhook</c>: one of the app's declared webhooks called the way its device would — the control plane signs it
+/// with the vault's secret (and makes the secret at the app when nobody has set it), so the evaluator never holds one.
+/// Its result's first line has <c>call_app</c>'s shape, so the gate counts it as a call to the running app.
+/// </summary>
+public sealed class CallWebhookTool(ControlPlaneClient controlPlane, Guid appId) : ITool
+{
+    public const string ToolName = "call_webhook";
+
+    public string Name => ToolName;
+
+    public string Description => "Call one of the app's declared webhooks (an incoming endpoint for a device or another service, at hooks/<name>) exactly as the device would: the platform signs the request with the vault secret the app verifies with. Read the app's code for the webhook's name, the header it checks, its scheme (MapWebhook with WebhookVerification.HmacSha256(header, secretName, prefix) or SharedToken(header, secretName)) and the body it expects.";
+
+    public JsonObject Parameters => Schema.Object(new JsonObject
+    {
+        ["name"] = Schema.Str("The webhook's declared name, as in MapWebhook(\"name\", …)."),
+        ["header"] = Schema.Str("The header the app verifies, for example X-Court-Signature."),
+        ["scheme"] = Schema.Enum("How it is verified.", "hmac-sha256", "shared-token"),
+        ["secret_name"] = Schema.Str("The vault secret the app verifies with, in UPPER_SNAKE_CASE."),
+        ["prefix"] = Schema.Str("For hmac-sha256: what comes before the hex signature (the kit's default is sha256=)."),
+        ["body"] = Schema.Str("The JSON body the device sends."),
+    }, "name", "header", "scheme", "secret_name", "body");
+
+    public ToolEffect Effect => ToolEffect.ReadOnly;
+
+    public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root) => (ToolTargets.None, null);
+
+    public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var name = (Json.Str(call.Arguments, "name") ?? "").Trim();
+        var scheme = Json.Str(call.Arguments, "scheme") ?? "hmac-sha256";
+        try
+        {
+            var answer = await controlPlane.TestWebhookAsync(appId, new JsonObject
+            {
+                ["name"] = name,
+                ["header"] = Json.Str(call.Arguments, "header"),
+                ["scheme"] = scheme,
+                ["secretName"] = Json.Str(call.Arguments, "secret_name"),
+                ["prefix"] = Json.Str(call.Arguments, "prefix") ?? (scheme == "hmac-sha256" ? "sha256=" : ""),
+                ["body"] = Json.Str(call.Arguments, "body") ?? "",
+            }, cancellationToken);
+            var made = Json.Bool(answer, "secretCreated") == true ? $" (the secret {Json.Str(answer, "secretName")} was not set, so the platform made one at the app)" : "";
+            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {Json.Int(answer, "status")} {Json.Str(answer, "contentType")} — POST hooks/{name} as device (signed){made}\n\n{OutputText.Truncate(Json.Str(answer, "body") ?? "", 8000)}"));
+        }
+        catch (Exception e) when (e is ServiceProblemException or HttpRequestException)
+        {
+            return ToolOutcome.Error($"The webhook could not be called: {e.Message}.", "app_unreachable");
+        }
+    }
+}
+
+/// <summary><c>sent_emails</c>: the e-mail the running app asked the platform to send, newest first — the evidence for an e-mail requirement.</summary>
+public sealed class SentEmailsTool(ControlPlaneClient controlPlane, Guid appId) : ITool
+{
+    public string Name => "sent_emails";
+
+    public string Description => "List the e-mail the running app has asked the platform to send, newest first: recipients, subject, text and delivery status. Use it after the call_app call that should send one.";
+
+    public JsonObject Parameters => Schema.Object(new JsonObject { ["limit"] = Schema.Int("At most this many (1-20).") });
+
+    public ToolEffect Effect => ToolEffect.ReadOnly;
+
+    public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root) => (ToolTargets.None, null);
+
+    public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        try
+        {
+            var mails = await controlPlane.SentEmailsAsync(appId, Math.Clamp(Json.Int(call.Arguments, "limit") ?? 10, 1, 20), cancellationToken);
+            return new ToolOutcome(mails.Count == 0
+                ? "The app has sent no e-mail."
+                : string.Join("\n\n", mails.OfType<JsonObject>().Select(m => $"To: {string.Join(", ", Json.Strings(m, "to"))}\nSubject: {Json.Str(m, "subject")}\nStatus: {Json.Str(m, "status")} at {Json.Str(m, "createdAt")}\n{OutputText.Truncate(Json.Str(m, "text") ?? "", 1500)}")));
+        }
+        catch (ServiceProblemException e)
+        {
+            return ToolOutcome.Error($"The sent e-mail could not be read: {e.Detail}. Count an e-mail requirement as not shown.", "unavailable");
+        }
+    }
 }
 
 /// <summary><c>check_preview</c>: the evaluator's view of the running app.</summary>

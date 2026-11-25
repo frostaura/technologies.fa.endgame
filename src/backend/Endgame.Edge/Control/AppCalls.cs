@@ -85,6 +85,17 @@ public static class AppCalls
                 forward.Headers.TryAddWithoutValidation(HostingConventions.SessionHeader, session);
             }
 
+            // A device's own headers (a webhook's signature) pass; the platform's, forwarding, credentials and hop-by-hop never do.
+            foreach (var (name, values) in context.Request.Headers)
+            {
+                if (!Forwardable(name))
+                {
+                    continue;
+                }
+
+                forward.Headers.TryAddWithoutValidation(name, values.ToArray());
+            }
+
             var accept = context.Request.Headers.Accept.ToString();
             forward.Headers.TryAddWithoutValidation("Accept", accept.Length > 0 ? accept : "application/json");
             if (body.Length > 0 || !HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method) && !HttpMethods.IsDelete(context.Request.Method))
@@ -125,6 +136,18 @@ public static class AppCalls
             app.Leave();
         }
     }
+
+    private static readonly HashSet<string> NotForwarded = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Authorization", "Cookie", "Host", "Accept", "Connection", "Keep-Alive", "Transfer-Encoding", "TE", "Trailer", "Upgrade",
+        "Proxy-Authorization", "Proxy-Connection", "Content-Length", "Content-Type", "traceparent", "tracestate",
+    };
+
+    private static bool Forwardable(string name) =>
+        !NotForwarded.Contains(name)
+        && !name.StartsWith(HostingConventions.PlatformHeaderPrefix, StringComparison.OrdinalIgnoreCase)
+        && !name.StartsWith("X-Forwarded-", StringComparison.OrdinalIgnoreCase)
+        && !name.StartsWith(":", StringComparison.Ordinal);
 
     /// <summary>Edge's own refusal: a problem with a stable code, marked so a caller never mistakes it for the app's answer.</summary>
     private static IResult Refuse(HttpContext context, int status, string title, string code)

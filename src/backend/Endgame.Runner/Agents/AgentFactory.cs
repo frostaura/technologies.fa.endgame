@@ -50,7 +50,7 @@ public sealed class AgentFactory(RunnerOptions options)
         Limits = new AgentLimits { MaxSteps = 30 },
     };
 
-    public AgentDefinition Evaluator(RunContext run, string id, PlanItem item, IReadOnlyList<PlanRequirement> requirements, string root, ITool? preview, ITool? callApp) => Base(run, id, options.EvaluateTaskType) with
+    public AgentDefinition Evaluator(RunContext run, string id, PlanItem item, IReadOnlyList<PlanRequirement> requirements, string root, ITool? preview, ITool? callApp, Guid? appId = null) => Base(run, id, options.EvaluateTaskType) with
     {
         SystemPrompt = RunnerResources.Prompt("evaluator", new Dictionary<string, string>
         {
@@ -58,11 +58,17 @@ public sealed class AgentFactory(RunnerOptions options)
             ["item"] = $"[{item.Id}] {item.Deliverable}\nChecked by: {item.Check}",
             ["requirements"] = requirements.Count == 0 ? "(none listed: judge the item as written)" : string.Join("\n", requirements.Select(r => $"- {r.Id}: {r.Text}")),
         }),
-        Tools = new ToolRegistry(new ITool?[] { new ReadFileTool(), new ListFilesTool(), new SearchTool(), new GitDiffTool(), new RunTool(), preview, callApp }.OfType<ITool>()),
+        Tools = new ToolRegistry(new ITool?[]
+        {
+            new ReadFileTool(), new ListFilesTool(), new SearchTool(), new GitDiffTool(), new RunTool(), preview, callApp,
+            callApp is not null && appId is { } app ? new CallWebhookTool(run.ControlPlane, app) : null,
+            callApp is not null && appId is { } mailApp ? new SentEmailsTool(run.ControlPlane, mailApp) : null,
+        }.OfType<ITool>()),
         // The evaluator may run checks but never change files: no write tool, and file writes denied outright.
         Permissions = Policy(run, "evaluate", ["run"], deny: ["edit_file", "write_file", "commit"]),
         StopHooks = [],
-        Limits = new AgentLimits { MaxSteps = 30 },
+        // Reading the change, two checks and every requirement in the running app: a live evaluator of a five-requirement item ran out at 30.
+        Limits = new AgentLimits { MaxSteps = 50 },
     };
 
     public AgentDefinition SecurityReviewer(RunContext run, string root) => Base(run, "security-reviewer", options.ReviewTaskType) with

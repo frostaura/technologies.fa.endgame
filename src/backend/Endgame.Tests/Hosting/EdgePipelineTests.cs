@@ -507,6 +507,11 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         Assert.Equal("endgame.test", seen["forwardedHost"]!.GetValue<string>());
         Assert.Equal(wakes + 1, backend.WakeCalls); // a sleeping app is woken first
 
+        // A declared webhook, called as its device would: the device's own header passes, the service token never reaches the app.
+        var hook = await gateway.CallHookAsync(privateApp, "court-status", "X-Court-Signature", "sha256=00ff", "{\"courtId\":\"2\"}", CancellationToken.None);
+        var atApp = hook.Json!.AsObject();
+        Assert.Equal(("/hooks/court-status", "sha256=00ff", ""), (atApp["path"]!.GetValue<string>(), atApp["signature"]!.GetValue<string>(), atApp["authorization"]!.GetValue<string>()));
+
         // The app's own OpenAPI document, as the gateway reads it to derive the tools.
         using var control = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{controlPort}") };
         async Task<HttpStatusCode> Call(HttpMethod method, string path, bool token = true, HttpClient? via = null)
@@ -739,6 +744,8 @@ public sealed class EdgePipelineTests : IAsyncLifetime
             forwardedProto = c.Request.Headers["X-Forwarded-Proto"].ToString(),
             session = c.Request.Headers[HostingConventions.SessionHeader].ToString(),
             other = c.Request.Headers["X-Endgame-Anything"].ToString(),
+            signature = c.Request.Headers["X-Court-Signature"].ToString(),
+            authorization = c.Request.Headers.Authorization.ToString(),
             cookie = c.Request.Headers.Cookie.ToString(),
             traceparent = c.Request.Headers["traceparent"].ToString(),
             tracestate = c.Request.Headers["tracestate"].ToString(),
