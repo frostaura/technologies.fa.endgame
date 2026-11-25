@@ -135,6 +135,21 @@ The built apps: a light "Book club" page, a navigation with "All books" and **"R
 test members' books (Dune, Gilead, "Added by Test member (member-a)") are in the published app (ARCH-006, known gap).
 In run 5 the reading-now view also still listed a book the owner had just marked finished — not investigated further.
 
+### Runs 2026-11-25, the final defects lane (`make e2e-factory`, own stack `endgame-lf`, edge 28495)
+
+| Run | What happened |
+| --- | --- |
+| 1 | The planner's read of the template's JSX stopped the build: "An event's payload is at most 65536 bytes" (the writer measured relaxed escaping; fixed, `A_payload_of_markup_is_fitted…`). US$0.12. |
+| 2 | Research do-not-build, overruled; a four-item plan with test ids; 6 builder sessions, every evaluation on a preview (45 signed-in calls, 12 probes), 2 repairs on `build-t1` (the evaluator gave no verdict — out of steps), security review passed, published privately; **estimate 25.5, cost 29.0** (the plan-weighted figure). The published app's database held only the owner's books — no test member's record. Attributed: Theo 4 of 6 accepted, 2 sent back, 6.5 credits of repairs not charged, "usually 14% over"; Nadia 6 judgements; the reviewer's review; each in `GET /api/runs?employeeId=` and recent work. Step 4 failed on the driver (a status already set; "reading now" shown on the home page); the driver was corrected and the browser step then passed three times in a row against that app. US$0.46, 40 minutes. |
+| 3 | Stopped by the lane's own disk guard (the Mac's disk under 900 MB) during the build; not repeated. |
+
+"Ask about this app" on run 2's app with the live `ask` route: 11 questions, each checked against the database —
+visits by hour (40) and by day, the slowest requests, the 95th percentile (8.7 ms), the most requested routes (`api/me`
+76, `api/books/` 52), books added (21), status changes by status (Finished 11, Reading 4) and people today (3) answered
+correctly; browsers and revenue declined in plain words; "how many errors today, and what were they?" failed (the model's
+`array_agg`, refused by the guard, then an empty reply; both fixed or reported plainly, and "How many errors were there
+today?" answered 1, correctly). 10 of 11 before the last fixes.
+
 ### The acceptance tests (`make e2e-acceptance`, own stack `endgame-acc`, edge 28295)
 
 1. **Tenant zero** — FrostAura and its divisions Technologies and Labs made through the public API; after the club
