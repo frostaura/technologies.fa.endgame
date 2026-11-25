@@ -153,9 +153,9 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   n(`${ORG}/operations/van-tracker`, "Delivery Van Tracker", { stage: "verdict", ideaId: IDS.ideaVans, note: "Research says do not build. Waiting for your call." });
   // Kept but not served: last summer's events, with history, so it can be archived and not deleted.
   n(`${ORG}/events`, "Events", { status: "archived" });
-  n(`${ORG}/events/summer-ladder`, "Summer Ladder", { status: "archived", stage: "paused", note: "Archived after the summer season." });
+  n(`${ORG}/events/summer-ladder`, "Summer Ladder", { status: "archived", stage: "paused", note: "Archived." });
   // Nothing attached yet: this one can be deleted.
-  n(`${ORG}/operations/gift-cards`, "Gift Cards", { stage: "idea", note: "Named, nothing built yet." });
+  n(`${ORG}/operations/gift-cards`, "Gift Cards", { stage: "planning" });
   for (const [slug, name] of [
     ["quayside", "Quayside Bakery"],
     ["quayside/shop", "Shop"],

@@ -96,18 +96,28 @@ area("PlatformConsoleEndpoints", {
 
   "GET system/status": (_req, { world }) => {
     const at = new Date().toISOString();
+    // StatusOptions.Probes and DatabaseHealthProbe: the platform's peers, in the server's own order and names.
     const services = [
-      ["edge", "Edge", 3],
       ["control-plane", "Control plane", 6],
+      ["edge", "Edge", 3],
       ["runner", "Runner", 9],
       ["dock", "Dock", 4],
-      ["database", "PostgreSQL", 2],
-      ["egress", "Egress proxy", 5],
-      ["tunnel", "Tunnel", 18],
-      ["backup", "Backup", 7],
+      ["database", "Database", 2],
+      ["console", "Console", 3],
+      ["ops", "Cloudflare and backups", 18],
+      ["collector", "Telemetry collector", 5],
     ] as const;
+    const set = world.systemStatus ?? {};
+    const rows = set.none
+      ? []
+      : services.map(([key, name, latencyMs]) => {
+          const down = set.unhealthy?.[key];
+          return { key, name, state: down ? "unhealthy" : "healthy", latencyMs: down ? 2000 : latencyMs, detail: down ?? null };
+        });
+    // GetSystemStatus: the whole is healthy only if there is at least one part and every part is.
+    const overall = rows.length > 0 && rows.every((r) => r.state === "healthy") ? "healthy" : "unhealthy";
     // Signed out, only whether the whole is healthy and when it was checked (SYS-05).
-    if (!world.sessionUserId) return ok({ overall: "healthy", checkedAt: at });
-    return ok({ overall: "healthy", checkedAt: at, services: services.map(([key, name, latencyMs]) => ({ key, name, state: "healthy", latencyMs, detail: key === "backup" ? "Last backup 3 hours ago." : null })) });
+    if (!world.sessionUserId) return ok({ overall, checkedAt: at });
+    return ok({ overall, checkedAt: at, services: rows });
   },
 });

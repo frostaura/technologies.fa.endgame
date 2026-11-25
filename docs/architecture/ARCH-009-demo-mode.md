@@ -70,6 +70,7 @@ app's address opens its pages inside the demo; anything else shows a small notic
 | `signed-out` | Nobody | |
 | `first-run` | Kit Marlow, signed in on a fresh install with no organisation | |
 | `two-organisations` | Kai Moreno, a Builder at Northwind and an Admin at Quayside Bakery (the organisation switcher) | `two-orgs` |
+| `no-role` | Sol Hart, signed in with a passkey, no role in any organisation once organisations exist | |
 
 A persona switch keeps the world; a scenario switch builds a new one.
 
@@ -99,6 +100,21 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `employee-released` | An employee who was let go, memory archived | `employee-let-go` |
 | `two-organisations` | A person in two organisations | |
 | `screening-offline` | God mode with no model to screen a new organisation (it needs the operator's own decision) | |
+| `operator-no-organisation` | A FrostAura operator who holds no role in any organisation: home is the God-mode panel | |
+| `tree-unreachable`, `tree-refresh-fails` | Home cannot reach the control plane once (then "Try again" works); or it loads, then every refresh fails | |
+| `ontology-unreachable` | The organisation graph cannot be read once | |
+| `notifications-unreachable`, `notifications-refresh-fails` | The feed cannot be read once; or it loads, then every refresh fails | |
+| `status-unhealthy`, `status-no-services`, `status-unreachable`, `status-refresh-fails` | System status with the Runner not answering; with no services at all; unreadable once; read once, then failing | |
+| `session-unreachable` | The session check cannot reach the control plane once | |
+
+The scenarios for the academy's organisation, tree, notification and system flows live in
+`world/scenarios.s2.ts`, registered by one import in `host.ts` after `scenarios.ts` has run (an
+import from inside `scenarios.ts` would run first, before its registries exist). A failed read is
+`World.outages`: a request by method and route pattern, answered normally `skip` times, then failing
+`times` times (always, when unset) — as a problem body with `status`, or, with none, as a control
+plane that cannot be reached (the fetch rejects, so the console says "could not be reached"). System
+status follows `World.systemStatus` (services unhealthy in their probe's own words, or none), with the
+server's eight services in `StatusOptions.Probes` order.
 
 ### Named moments (`clock { seek }`)
 
@@ -133,7 +149,10 @@ nothing, so a lesson never breaks in front of a learner; an action whose target 
 `error`. Drift is caught at build instead: `tests-demo/academy-scripts.spec.ts` plays every academy
 step script against the built demo and fails, naming flow and step, on any action that errors or
 any highlight that finds nothing, unless `tests-demo/academy-allowlist.json` lists that step with
-its reason; an allow-listed step that passes again fails too, so the list stays true.
+its reason; an allow-listed step that passes again fails too, so the list stays true. Each script's
+`variations` are played the same way, each from its own person, world and start (an allow-list
+entry for one names step 100 × its number + its step). `ACADEMY_FLOWS=ORG,TREE` plays only the flows
+whose id starts with one of those prefixes.
 
 A target is a CSS `selector`, a `testId`, or visible `text` / accessible `label`, matched in that
 order of preference: buttons, links and other controls by accessible name (exact, then prefix,

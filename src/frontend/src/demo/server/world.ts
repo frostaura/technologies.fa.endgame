@@ -250,6 +250,15 @@ export interface World {
   context?: { path: string; key: string; value: unknown; setAt: string }[];
   /** No model answers (the screening of a new organisation then needs an operator's own decision). */
   modelsOffline?: boolean;
+  /**
+   * Reads a scenario makes fail, to show what a failed read looks like: a request by method and
+   * route pattern (`GET tree`), answered normally `skip` times, then failing `times` times (always,
+   * when unset) — with `status` as a problem body, or, with none, as a control plane that cannot be
+   * reached. `served` counts the requests seen.
+   */
+  outages?: { method: string; pattern: string; skip?: number; times?: number; status?: number; detail?: string; served?: number }[];
+  /** System status as a scenario sets it: services reporting unhealthy (key → the probe's words), or none at all. */
+  systemStatus?: { unhealthy?: Record<string, string>; none?: boolean };
   /** Organisations an operator acted in as an Admin during the request being answered; never saved. */
   actedAsOperator?: string[];
   /** RTK Query tags changed since the page last refreshed; drained by the host, never saved. */
