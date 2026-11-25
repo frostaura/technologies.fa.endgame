@@ -94,6 +94,14 @@ describe("the control plane's rules", () => {
     expect((log.body as { action: string }[])[0]?.action).toBe("organisation.entered");
   });
 
+  it("lists the operator log newest first, as the control plane does, whatever order the world holds it in", async () => {
+    const w = as("owner");
+    const at = (log: { at: string }[]) => log.map((x) => Date.parse(x.at));
+    const log = (await call(w, "GET", `audit/operator-access?organisation=${ORG}`)).body as { at: string }[];
+    expect(log.length).toBeGreaterThan(1);
+    expect(at(log)).toEqual([...at(log)].sort((a, b) => b - a));
+  });
+
   it("keeps one Owner", async () => {
     const r = await call(as("owner"), "POST", "members", { scope: ORG, email: "a@b.example", displayName: "A", role: "owner" });
     expect(detail(r)).toBe("An organisation has one Owner, the person it was provisioned for.");

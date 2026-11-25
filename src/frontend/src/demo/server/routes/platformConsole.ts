@@ -92,7 +92,9 @@ area("PlatformConsoleEndpoints", {
     const org = scopeOf(world, req.query.get("organisation"));
     requireRole(world, org, "owner");
     if (org.includes("/")) throw invalid("The operator log belongs to an organisation; pass its slug.");
-    return ok(world.operatorLog.filter((x) => x.organisation === org).slice(0, 500).map((x) => omit(x, "organisation")));
+    // Newest first, as the control plane orders it (`orderby a.At descending`), however the world was seeded.
+    const entries = world.operatorLog.filter((x) => x.organisation === org).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+    return ok(entries.slice(0, 500).map((x) => omit(x, "organisation")));
   },
 
   "GET system/status": (_req, { world }) => {
