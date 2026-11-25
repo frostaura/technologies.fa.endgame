@@ -221,7 +221,7 @@ export const STORIES: Record<string, Story> = {
 export function storyFor(text: string, key?: string | null): Story {
   if (key && STORIES[key]) return STORIES[key];
   const name = nameFrom(text);
-  const red = redLineIn(text);
+  const red = redLineOf(text);
   const g = generic(name);
   if (red) {
     g.verdict = {
@@ -252,7 +252,7 @@ function nameFrom(text: string): string {
   return name || "New App";
 }
 
-function redLineIn(text: string): { line: string; reasoning: string } | null {
+export function redLineOf(text: string): { line: string; reasoning: string } | null {
   const t = text.toLowerCase();
   if (/(track|follow|monitor|watch|locat).{0,40}(staff|employee|worker|people|phone)|(staff|employee).{0,40}(track|follow|locat|whereabouts)|surveil/.test(t))
     return { line: "surveillance", reasoning: "It follows people without their meaningful consent, which is surveillance tooling." };

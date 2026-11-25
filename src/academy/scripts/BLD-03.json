@@ -46,7 +46,8 @@
       "step": 6,
       "kind": "demo",
       "highlight": {
-        "text": "The files and tests behind each part are in technical mode."
+        "text": "Technical",
+        "note": "Each part's files and tests are shown in technical mode."
       }
     },
     {

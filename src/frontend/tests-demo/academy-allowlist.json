@@ -1,0 +1,4 @@
+{
+  "about": "Academy step-script steps allowed to fail against the demo, each with its reason. tests-demo/academy-scripts.spec.ts plays every script in src/academy/scripts against the built demo and fails, naming the flow and step, on any action that errors or any highlight that finds nothing — unless the step is listed here. An entry that no longer fails is itself a failure, so the list only ever holds what is still true. Format: { \"flow\": \"BLD-03\", \"step\": 6, \"reason\": \"...\" }.",
+  "entries": []
+}

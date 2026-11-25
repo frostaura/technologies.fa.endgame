@@ -174,6 +174,7 @@ defineScenario({
   featured: BASE_FEATURED,
 });
 
+defineScenario({ name: "screening-offline", title: "God mode with no model to screen a new organisation", apply: (w) => (w.modelsOffline = true), route: "/operator", persona: "operator", featured: BASE_FEATURED });
 defineScenario({ name: "god-mode", title: "God mode: every organisation", route: "/operator", persona: "operator", featured: BASE_FEATURED });
 
 // ---------------------------------------------------------------------------------------------

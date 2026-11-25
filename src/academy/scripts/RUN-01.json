@@ -12,7 +12,8 @@
         "pause": true
       },
       "highlight": {
-        "text": "Loading the work"
+        "text": "Started",
+        "note": "The work opens on its title and when it started; the live log follows."
       }
     },
     {

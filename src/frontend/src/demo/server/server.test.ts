@@ -146,6 +146,73 @@ describe("the control plane's rules", () => {
   });
 });
 
+describe("lane A's control plane: roles per node, invitations, screening, pauses, God mode on record", () => {
+  it("gives every node the viewer's role, and says when nobody may name the first organisation", async () => {
+    const tree = (await call(as("division-admin"), "GET", "tree")).body as { organisation: { role: string | null }; divisions: { slug: string; role: string | null; archived: boolean }[]; firstRun: boolean };
+    expect(tree.organisation.role).toBeNull();
+    expect(tree.divisions.find((d) => d.slug === "technologies")).toMatchObject({ role: "admin", archived: false });
+    const fresh = (await call(as("first-run"), "GET", "tree")).body as { firstRun: boolean };
+    expect(fresh.firstRun).toBe(true);
+  });
+
+  it("lists grants from above, with a pending person's code expiry, and sends a new code", async () => {
+    const w = as("owner");
+    const people = (await call(w, "GET", `members?scope=${ORG}/learning`)).body as { email: string; invitationExpiresAt: string | null; membershipId: string; hasPasskey: boolean }[];
+    expect(people.some((p) => p.email === PEOPLE.owner.email)).toBe(true);
+    const tobi = people.find((p) => p.email === PEOPLE.invited.email);
+    expect(tobi?.invitationExpiresAt).not.toBeNull();
+    const again = await call(w, "POST", `members/${tobi?.membershipId ?? ""}/invitation`);
+    expect((again.body as { invitationCode: string }).invitationCode).not.toBe("LARK-7Q4M-2PXD");
+    const ada = people.find((p) => p.email === PEOPLE.admin.email);
+    expect(detail(await call(w, "POST", `members/${ada?.membershipId ?? ""}/invitation`))).toBe("Ada Lovelace already has a passkey, so they sign in with it and need no code.");
+  });
+
+  it("screens a provisioned organisation, and records it in its operator log", async () => {
+    const w = as("operator");
+    const base = { name: "Harbour Watch", slug: "harbour-watch", ownerEmail: "owner@harbour.example" };
+    expect(detail(await call(w, "POST", "organisations", base))).toBe("Say what the organisation does, in 10 to 1000 characters: it is screened against FrostAura's red lines before it is set up.");
+    const breach = await call(w, "POST", "organisations", { ...base, description: "We track where employees go after work using their phones." });
+    expect(breach.status).toBe(422);
+    expect(detail(breach)).toMatch(/^What it does crosses a red line — surveillance and authoritarian tooling: /);
+    const made = await call(w, "POST", "organisations", { ...base, description: "Tide tables and a booking desk for a small harbour." });
+    expect((made.body as { screening: { method: string } }).screening.method).toBe("model");
+    expect(w.operatorLog.filter((x) => x.organisation === "harbour-watch").map((x) => x.action)).toEqual(expect.arrayContaining(["organisation.screened", "organisation.provisioned"]));
+    const offline = buildWorld("screening-offline", "operator").world;
+    const unscreened = await call(offline, "POST", "organisations", { ...base, description: "Tide tables and a booking desk for a small harbour." });
+    expect((unscreened.body as { code: string }).code).toBe("screening_unavailable");
+    const manual = await call(offline, "POST", "organisations", { ...base, description: "Tide tables and a booking desk for a small harbour.", screening: { decision: "clear", reason: "Read it myself: tide tables and bookings." } });
+    expect((manual.body as { screening: { method: string } }).screening.method).toBe("manual");
+  });
+
+  it("pauses an employee's work with them, and refuses them new work", async () => {
+    const w = as("owner");
+    seek(w, "build:part-1", () => undefined);
+    const engineer = w.employees.find((e) => e.status === "working" && e.role === "Software engineer");
+    expect(engineer).toBeDefined();
+    await call(w, "PATCH", `employees/${engineer?.id ?? ""}`, { status: "paused" });
+    const run = w.runs.find((r) => r.run.id === IDS.runBuildReadingList);
+    expect(run?.run.status).toBe("paused");
+    const refused = await call(w, "POST", "conversations", { scope: engineer?.scope ?? ORG, message: "Hello", employeeId: engineer?.id });
+    expect(detail(refused)).toBe(`${engineer?.name ?? ""} is paused, so they are given no new work. Resume them first.`);
+    await call(w, "PATCH", `employees/${engineer?.id ?? ""}`, { status: "idle" });
+    expect(run?.run.status).toBe("running");
+  });
+
+  it("tells a signed-out visitor only whether the whole is healthy", async () => {
+    expect(Object.keys((await call(as("signed-out"), "GET", "system/status")).body as object).sort()).toEqual(["checkedAt", "overall"]);
+  });
+
+  it("writes each change an operator makes inside an entered organisation to its log, and tells operators of top-up requests", async () => {
+    const w = as("operator");
+    await call(w, "PUT", "secrets", { scope: ORG, name: "OPERATOR_SET", value: "x" });
+    expect(w.operatorLog[0]).toMatchObject({ organisation: ORG, action: "admin.PUT-secrets", detail: { title: "Set a secret" } });
+    expect(JSON.stringify(w.operatorLog[0])).not.toContain('"x"');
+    w.sessionUserId = PEOPLE.owner.id;
+    await call(w, "POST", "credits/top-up-requests", { organisation: ORG, credits: 300, note: "Tournament weekend." });
+    expect(w.notifications.find((n) => n.kind === "topup.requested" && n.organisation === "frostaura")?.title).toBe("Northwind asks for 300 credits");
+  });
+});
+
 describe("live work", () => {
   it("plays research to its verdict, raising the verdict notice", () => {
     const w = as("owner");

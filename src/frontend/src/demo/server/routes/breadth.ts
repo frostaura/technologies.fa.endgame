@@ -80,6 +80,16 @@ function round(n: number) {
   return Math.round(n * 1e6) / 1e6;
 }
 
+/** `NotificationService.RaiseTopUpRequestedAsync`: a notice in each operator's own organisation feed. */
+export function raiseTopUpRequested(world: World, requestId: string, organisationName: string, credits: number, note: string) {
+  const operators = world.users.filter((u) => u.isOperator).map((u) => u.id);
+  const homes = [...new Set(world.memberships.filter((m) => operators.includes(m.userId) && !m.path.includes("/")).map((m) => m.path))];
+  const amount = (Math.round(credits * 100) / 100).toLocaleString("en-GB");
+  for (const home of homes) {
+    world.notifications.unshift({ id: uuidFor(`notification:topup.requested:${requestId}:${home}`), kind: "topup.requested", severity: "info", title: `${organisationName} asks for ${amount} credits`, detail: note.length > 0 ? note : "No note was given. Answer it under Every organisation.", scope: home, subject: { kind: "topup_request", id: requestId }, createdAt: new Date().toISOString(), read: false, emailedAt: null, organisation: home });
+  }
+}
+
 area("BreadthEndpoints", {
   // Tokens ------------------------------------------------------------------------------------
   "GET tokens": (_req, { world }) => {
@@ -226,7 +236,8 @@ area("BreadthEndpoints", {
     if (world.topUpRequests.filter((r) => r.organisation === org && r.status === "open").length >= 5) throw conflict("Five requests are already open; FrostAura answers them first.");
     const r = { id: newId(world, "top-up-request"), organisation: org, organisationName: organisation(world, org)?.name ?? org, credits, note: (str(req.body, "note") ?? "").slice(0, 500), status: "open" as const, requestedBy: u.displayName, requestedByEmail: u.email, requestedAt: new Date().toISOString(), closedAt: null, closeNote: null, topUpEntryId: null };
     world.topUpRequests.unshift(r);
-    world.changed.push("TopUpRequests", "Operator");
+    raiseTopUpRequested(world, r.id, r.organisationName, credits, r.note);
+    world.changed.push("TopUpRequests", "Operator", "Notifications");
     return created(r);
   },
 

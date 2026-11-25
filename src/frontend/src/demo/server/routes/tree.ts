@@ -3,6 +3,7 @@ import { homeOrganisation, me, requireRole, roleAt, scopeOf } from "../access";
 import { area, conflict, created, forbidden, invalid, isEmail, noContent, notFound, num, ok, problem, Refusal, str } from "../http";
 import { creditsView, treeView } from "../views";
 import { newId, orgOf, organisation, uuidFor, within, type DemoMembership, type World } from "../world";
+import { redLineOf } from "../../world/story";
 
 /** `TreeEndpoints.cs`: the tree, organisations, members (list, invite, revoke), credits, top-ups. */
 
@@ -16,7 +17,8 @@ export function parseRole(v: unknown): MemberRole {
 
 export function memberView(world: World, m: DemoMembership): Member {
   const u = world.users.find((x) => x.id === m.userId);
-  return { membershipId: m.id, userId: m.userId, email: u?.email ?? "", displayName: u?.displayName ?? "", scope: m.path, role: m.role, hasPasskey: (u?.passkeys ?? 0) > 0, grantedAt: m.grantedAt };
+  const pending = (u?.passkeys ?? 0) === 0;
+  return { membershipId: m.id, userId: m.userId, email: u?.email ?? "", displayName: u?.displayName ?? "", scope: m.path, role: m.role, hasPasskey: !pending, grantedAt: m.grantedAt, invitationExpiresAt: pending ? (u?.invitation?.expiresAt ?? null) : null };
 }
 
 function code(world: World) {
@@ -32,6 +34,34 @@ export function invitationFor(world: World, email: string, displayName: string) 
   }
   if (u.passkeys === 0) u.invitation = { code: code(world), expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString() };
   return u;
+}
+
+const LINES: Record<string, string> = {
+  "tobacco-gambling-finance": "tobacco, exploitative gambling or predatory finance",
+  weapons: "weapons used against civilians",
+  "animal-harm": "animal harm and industrial cruelty",
+  surveillance: "surveillance and authoritarian tooling",
+};
+
+/** `OrganisationScreening`: what the organisation does, screened by a model, or by the operator when none answers. */
+function screen(world: World, name: string, description: string | undefined, manual: unknown): { method: "model" | "manual"; reason: string; description: string } {
+  const what = (description ?? "").trim();
+  if (what.length < 10 || what.length > 1000) throw invalid("Say what the organisation does, in 10 to 1000 characters: it is screened against FrostAura's red lines before it is set up.");
+  const refuse = (line: string | null, reason: string, method: "model" | "manual") =>
+    new Refusal(problem(422, "red_line", "FrostAura does not set this organisation up", `What it does crosses a red line — ${line ? (LINES[line] ?? "one of FrostAura's red lines") : "one of FrostAura's red lines"}: ${reason}`, { line, method }));
+  if (manual && typeof manual === "object") {
+    const m = manual as { decision?: unknown; reason?: unknown; line?: unknown };
+    if (m.decision !== "clear" && m.decision !== "breach") throw invalid("A manual screening decides 'clear' (no red line is crossed) or 'breach'.");
+    const reason = typeof m.reason === "string" ? m.reason.trim() : "";
+    if (reason.length < 10 || reason.length > 1000) throw invalid("A manual screening needs a written reason of 10 to 1000 characters.");
+    if (m.decision === "breach") throw refuse(typeof m.line === "string" && LINES[m.line] ? m.line : null, reason, "manual");
+    return { method: "manual", reason, description: what };
+  }
+  if (world.modelsOffline)
+    throw new Refusal(problem(503, "screening_unavailable", "The organisation could not be screened", "It is screened against FrostAura's red lines before it is set up, and no model could be reached. Try again shortly, or record your own screening decision with a written reason."));
+  const breach = redLineOf(`${name}. ${what}`);
+  if (breach) throw refuse(breach.line, breach.reasoning, "model");
+  return { method: "model", reason: "It crosses none of the red lines: what it does harms no one and watches no one.", description: what };
 }
 
 area("TreeEndpoints", {
@@ -63,6 +93,8 @@ area("TreeEndpoints", {
     const ownerDisplayName = (str(req.body, "ownerDisplayName") ?? "").trim();
     if (!firstRun && !isEmail(ownerEmail)) throw invalid("Give a valid e-mail address.");
     if (ownerDisplayName.length > 200) throw invalid("A display name is at most 200 characters.");
+    // Provisioning screens what the organisation does against the red lines before anything exists.
+    const screened = firstRun ? null : screen(world, name, str(req.body, "description"), req.body.screening);
     const at = new Date().toISOString();
     world.organisations.push({ id: uuidFor(`org:${slug}`), slug, name, status: "active", createdAt: at, balance: 0, frostauraLimit: 0, ownLimit: null, lastActivityAt: at });
     world.nodes.push({ id: uuidFor(`node:${slug}`), path: slug, slug, name, level: "organisation", createdAt: at, stage: null, ideaId: null, note: null });
@@ -89,8 +121,12 @@ area("TreeEndpoints", {
     const ownerUser = firstRun ? u : invitationFor(world, ownerEmail, ownerDisplayName);
     world.memberships.push({ id: newId(world, "membership"), userId: ownerUser.id, path: slug, role: "owner", grantedAt: at });
     world.changed.push("Me", "Tree", "Credits", "Operator");
-    if (!firstRun) {
-      world.operatorLog.unshift({ id: newId(world, "op"), organisation: slug, at, action: "organisation.provisioned", operator: { id: u.id, email: u.email, displayName: u.displayName }, detail: { ownerUserId: ownerUser.id } });
+    if (screened) {
+      const operator = { id: u.id, email: u.email, displayName: u.displayName };
+      world.operatorLog.unshift(
+        { id: newId(world, "op"), organisation: slug, at, action: "organisation.provisioned", operator, detail: { ownerUserId: ownerUser.id, description: screened.description } },
+        { id: newId(world, "op"), organisation: slug, at, action: "organisation.screened", operator, detail: { method: screened.method, result: "clear", line: null, reason: screened.reason, by: u.id, at } },
+      );
     }
     return created({
       id: uuidFor(`org:${slug}`),
@@ -101,13 +137,27 @@ area("TreeEndpoints", {
       invitationExpiresAt: ownerUser.invitation?.expiresAt ?? null,
       invitationEmailed: false,
       nameCheck: { slug, source: "built-in", note: "No ops service is configured, so FrostAura's own subdomains were checked against the built-in list only." },
+      screening: screened ? { method: screened.method, result: "clear", reason: screened.reason } : null,
     });
   },
 
   "GET members": (req, { world }) => {
     const scope = scopeOf(world, req.query.get("scope"));
     requireRole(world, scope, "admin");
-    return ok(world.memberships.filter((m) => within(m.path, scope)).map((m) => memberView(world, m)));
+    // Every grant that holds here: set at it or beneath it, and set above it on its chain (PPL-01).
+    return ok(world.memberships.filter((m) => within(m.path, scope) || within(scope, m.path)).map((m) => memberView(world, m)));
+  },
+
+  "POST members/{membershipId}/invitation": (req, { world }) => {
+    const m = world.memberships.find((x) => x.id === req.params.membershipId);
+    if (!m) throw notFound("The membership");
+    requireRole(world, m.path, m.role === "admin" ? "owner" : "admin");
+    const u = world.users.find((x) => x.id === m.userId);
+    if (!u) throw notFound("The member");
+    if (u.passkeys > 0) throw conflict(`${u.displayName} already has a passkey, so they sign in with it and need no code.`);
+    u.invitation = { code: code(world), expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString() };
+    world.changed.push("Members");
+    return ok({ member: memberView(world, m), invitationCode: u.invitation.code, expiresAt: u.invitation.expiresAt, emailed: false });
   },
 
   "POST members": (req, { world }) => {

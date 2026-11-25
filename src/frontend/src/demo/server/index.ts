@@ -10,6 +10,7 @@ import "./routes/platformConsole";
 import { listen } from "./engine";
 import { match, problem, Refusal, routes, type Reply } from "./http";
 import { runRecord, type World } from "./world";
+import { logOperatorAction } from "./operatorLog";
 
 /**
  * The fake control plane: a `fetch` and an `EventSource` that answer the console's every request
@@ -40,8 +41,11 @@ export async function dispatch(world: World, method: string, path: string, query
     console.error(`[endgame demo] No handler for ${method} /api/${path}. Add one in src/demo/server/routes/ (see ARCH-009).`);
     return problem(404, "not_found", "Not found", "There is nothing at this address.");
   }
+  world.actedAsOperator = [];
   try {
-    return await hit.route.handler({ method, path, query, body, params: hit.params }, { world });
+    const reply = await hit.route.handler({ method, path, query, body, params: hit.params }, { world });
+    if (method !== "GET" && reply.status < 400) logOperatorAction(world, method, hit.route.pattern, path);
+    return reply;
   } catch (e) {
     if (e instanceof Refusal) return e.reply;
     console.error(`[endgame demo] ${method} /api/${path} failed`, e);

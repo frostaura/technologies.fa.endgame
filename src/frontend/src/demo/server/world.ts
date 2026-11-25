@@ -244,6 +244,10 @@ export interface World {
   pricing: PricingView;
   /** Counters for invented ids. */
   counter: number;
+  /** No model answers (the screening of a new organisation then needs an operator's own decision). */
+  modelsOffline?: boolean;
+  /** Organisations an operator acted in as an Admin during the request being answered; never saved. */
+  actedAsOperator?: string[];
   /** RTK Query tags changed since the page last refreshed; drained by the host, never saved. */
   changed: string[];
 }

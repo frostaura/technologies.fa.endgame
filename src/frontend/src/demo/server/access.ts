@@ -57,7 +57,11 @@ export function requireRole(world: World, path: string, needed: MemberRole): Hel
   const u = me(world);
   const held = roleAt(world, u.id, path);
   if (!held) throw notFound(`The scope '${path}'`);
-  if (held.viaOperator && !world.entered.includes(orgOf(path))) world.entered.push(orgOf(path));
+  if (held.viaOperator) {
+    if (!world.entered.includes(orgOf(path))) world.entered.push(orgOf(path));
+    const acted = (world.actedAsOperator ??= []);
+    if (!acted.includes(orgOf(path))) acted.push(orgOf(path));
+  }
   if (RANK[held.role] < RANK[needed]) throw forbidden(`This needs the ${needed} role at '${path}'; you are a ${held.role} there (set at ${held.at}).`);
   return held;
 }
