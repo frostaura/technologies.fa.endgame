@@ -47,6 +47,29 @@ describe("App — the session decides what renders", () => {
     expect(api.calls.some((c) => c.path === "/api/auth/development")).toBe(true);
   });
 
+  it("signs out to the sign-in screen and stays there", async () => {
+    // The session query keeps its last answer beside the 401 that follows a sign-out. Treating
+    // that as signed in sent the address back home, and the two redirects fought until React gave up.
+    let signedIn = true;
+    stubApi({
+      "GET /api/me": () => (signedIn ? json(ME) : problem(401, "Not signed in")),
+      "GET /api/auth/options": json({ passkey: true, developmentSignIn: false }),
+      "POST /api/auth/logout": () => {
+        signedIn = false;
+        return json(null);
+      },
+      "GET /api/tree": json({ slug: "acme", name: "Acme", divisions: [] }),
+      "GET /api/credits": json(CREDITS),
+    });
+    renderWithStore(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeTruthy();
+    await waitFor(() => expect(window.location.pathname).toBe("/sign-in"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(window.location.pathname).toBe("/sign-in");
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeTruthy();
+  });
+
   it("records a failed session check, which is not the same as signed out", async () => {
     stubApi({ "GET /api/me": problem(502, "Bad gateway") });
     renderWithStore(<App />);

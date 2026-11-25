@@ -38,11 +38,14 @@ export function App() {
   const route = matchRoute(pathname);
   const signedOut = me.isError && errorStatus(me.error) === 401;
 
+  // After a sign-out the query keeps its last answer beside the 401, so "has data" is not "signed in".
+  const signedIn = !me.isError && me.data !== undefined;
+
   // Keep the address honest: a signed-out visitor sits at /sign-in, a signed-in one never does.
   useEffect(() => {
     if (signedOut && route.name !== "sign-in") navigate(paths.signIn(), { replace: true });
-    if (me.data && route.name === "sign-in") navigate(paths.home(), { replace: true });
-  }, [signedOut, me.data, route.name]);
+    else if (signedIn && route.name === "sign-in") navigate(paths.home(), { replace: true });
+  }, [signedOut, signedIn, route.name]);
 
   if (signedOut) return <SignInView />;
   if (me.isError) {
