@@ -1,0 +1,85 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-11",
+  "persona": "end-user",
+  "scenario": "established",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign out"
+          }
+        }
+      ],
+      "note": "The app's own Sign out goes to _endgame/auth/sign-out."
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 800
+        }
+      ],
+      "note": "Edge ends this app's session, deletes its cookie and sends them back."
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign in to Court booking",
+        "note": "Shared, so the app asks for sign-in again."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A member signing out at an app",
+      "persona": "builder",
+      "scenario": "s1-app-private",
+      "start": "/__app/{app}/path/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Sign out"
+              }
+            },
+            {
+              "wait": 800
+            }
+          ],
+          "highlight": {
+            "text": "Sign in to Tutor Match",
+            "note": "On the platform's host this ends the console session too …"
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Back to Endgame"
+              }
+            },
+            {
+              "wait": 1200
+            }
+          ],
+          "highlight": {
+            "selector": "h1",
+            "note": "… so the console asks Lena to sign in again."
+          }
+        }
+      ]
+    }
+  ]
+}

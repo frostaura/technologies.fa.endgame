@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-14",
+  "persona": "builder",
+  "scenario": "app-paused",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "This app is paused",
+        "note": "Stock Counter's project spent its monthly budget: 503, and the app is never woken."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "The organisation is past its overdraft limit",
+      "persona": "builder",
+      "scenario": "at-overdraft-limit",
+      "start": "/__app/{app}/path/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Its organisation has used up its credits",
+            "note": "Back as soon as a top-up arrives. Nothing is lost."
+          }
+        }
+      ]
+    }
+  ]
+}

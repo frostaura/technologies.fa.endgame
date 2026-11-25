@@ -1,0 +1,67 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-02",
+  "persona": "signed-out",
+  "scenario": "established",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Court booking is shared and nobody is signed in: Edge's check answered “sign in”."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Edge redirected to _endgame/auth/sign-in on the app's own address, with returnTo the address asked for."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign in to Court booking",
+        "note": "The platform's own page, under the app's address."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Members of Northwind",
+        "note": "For members: the passkey they use for Endgame."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign in with your passkey",
+        "note": "Shared or public only: the people it was shared with, with “Create your sign-in” for the new."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A private app asks only its members",
+      "persona": "signed-out",
+      "scenario": "s1-app-private",
+      "start": "/__app/{app}/path/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Members of Northwind",
+            "note": "Tutor Match is private: only the members' sign-in, nothing for anyone else."
+          }
+        }
+      ]
+    }
+  ]
+}

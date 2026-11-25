@@ -27,7 +27,8 @@
         }
       ],
       "highlight": {
-        "text": "Invite someone"
+        "text": "Invite someone",
+        "note": "The name is optional: shown to everyone in the organisation."
       }
     },
     {
@@ -44,7 +45,8 @@
         }
       ],
       "highlight": {
-        "text": "Role"
+        "selector": "form select",
+        "note": "Viewer or Builder: Ada is an Admin, and only the Owner makes an Admin."
       }
     },
     {
@@ -61,16 +63,16 @@
         }
       ],
       "highlight": {
-        "text": "Where",
-        "note": "The role holds here and beneath."
+        "text": "The role holds here and beneath.",
+        "note": "Only this level and those beneath it are offered."
       }
     },
     {
       "step": 4,
       "kind": "demo",
       "highlight": {
-        "text": "Role",
-        "note": "The chosen role's description appears under the form."
+        "text": "Someone new gets a one-time code",
+        "note": "Under the form: what the chosen role may do, and how long a code works."
       }
     },
     {
@@ -84,7 +86,8 @@
         }
       ],
       "highlight": {
-        "text": "Inviting…"
+        "text": "Inviting…",
+        "note": "The button waits while the server grants the role."
       }
     },
     {
@@ -100,29 +103,134 @@
         "Invitation code: K7Q2-M9XD",
         "It works once, until 2026-12-02 10:15 UTC."
       ],
-      "note": "Queued only when mail is configured; otherwise the screen says to hand the code over yourself."
+      "note": "Sent only where mail is set up; otherwise the screen says to hand the code over yourself. The code and date are illustrative."
     },
     {
       "step": 7,
       "kind": "demo",
+      "act": [
+        {
+          "wait": 900
+        }
+      ],
       "highlight": {
         "text": "is invited as",
-        "note": "The green box: who, which role, where."
+        "note": "Who, which role, and where."
       }
     },
     {
       "step": 8,
       "kind": "demo",
       "highlight": {
-        "text": "It will not be shown again."
+        "text": "It will not be shown again.",
+        "note": "Copy the code now: it is kept only as a hash."
       }
     },
     {
       "step": 9,
       "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Done"
+          }
+        },
+        {
+          "wait": 600
+        }
+      ],
       "highlight": {
-        "text": "No passkey yet"
+        "text": "No passkey yet",
+        "note": "Sam's row: no passkey yet, and the day the code stops working."
       }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An address that is not an e-mail",
+      "persona": "admin",
+      "scenario": "established",
+      "start": "/people",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "E-mail address"
+                },
+                "text": "sam at northwind"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "That does not look like an e-mail address.",
+            "note": "Said under the field, and Invite stays disabled."
+          }
+        }
+      ]
+    },
+    {
+      "title": "The Owner cannot be invited to a role",
+      "persona": "admin",
+      "scenario": "established",
+      "start": "/people",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "E-mail address"
+                },
+                "text": "mara@northwind.example"
+              }
+            },
+            {
+              "click": {
+                "text": "Invite"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "was not invited",
+            "note": "Refused with 409: the Owner's role is never changed by a grant. Nothing changed."
+          }
+        }
+      ]
+    },
+    {
+      "title": "The Owner may invite an Admin",
+      "persona": "owner",
+      "scenario": "established",
+      "start": "/people",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "select": {
+                "into": {
+                  "text": "Role"
+                },
+                "value": "Admin"
+              }
+            }
+          ],
+          "highlight": {
+            "selector": "form select",
+            "note": "Mara is the Owner, so Admin is offered too, with what an Admin may do."
+          }
+        }
+      ]
     }
   ]
 }

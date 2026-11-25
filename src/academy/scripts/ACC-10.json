@@ -1,0 +1,43 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-10",
+  "persona": "division-admin",
+  "scenario": "s1-app-private",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Ines is signed in to Endgame — as Admin of Technologies only — and opens Tutor Match, in Learning."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "You don't have access to this app",
+        "note": "Edge's check answered deny: 403."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An end user of an app made private",
+      "persona": "end-user",
+      "scenario": "s1-app-made-private",
+      "start": "/__app/{app}/path/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "You don't have access to this app",
+            "note": "Court booking was shared with them, then made private: the same refusal."
+          }
+        }
+      ]
+    }
+  ]
+}

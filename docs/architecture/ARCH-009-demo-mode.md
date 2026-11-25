@@ -27,12 +27,22 @@ builds, approvals and conversations move as they do live. It is published as sta
 | Fake control plane | `demo/server/**` | One file per control-plane endpoint file in `routes/`, the same role rules (`access.ts`) and the same refusal words (`http.ts` problem bodies), and a fake `EventSource` for run logs. | Answers an address it has no handler for: that is a loud console error naming it, and a failing unit test. |
 | Run engine | `demo/server/engine.ts`, `scripts.ts` | Scripts for research, build, conversation, memory review and suggestions; a clock (play, pause, speed, seek); approvals that stop a run until answered. | Saves scripts: a run saves only its script name, parameters and position, and its steps are rebuilt from them. |
 | Story world | `demo/world/default.ts`, `story.ts`, `scenarios.ts` | Northwind and two more organisations, all invented, every address on `.example`. Scenarios and personas. | Names a real company or person. |
-| Device | `demo/device.ts` | `navigator.credentials` answered by an in-page "your device" sheet (approve or cancel). Embedded, it approves itself after 0.7 s. | Is real WebAuthn. The development sign-in is never offered (`auth/options` says so, `auth/development` is 404). |
+| Device | `demo/device.ts` | `navigator.credentials` answered by an in-page "your device" sheet (approve or cancel). Embedded, it approves itself after 0.7 s. | Is real WebAuthn. The development sign-in is never offered (`auth/options` says so, `auth/development` is 404) — except in the two scenarios that play a development deployment (`s1-development-sign-in`, `s1-development-apps`), for the Developer track. |
 | Hosted apps | `demo/hosted/**` | The Edge's own pages, copied from `Endgame.Edge/Pages/*.cs` and `Access/*.cs` with their wording and CSS, the access gate's decisions, and a small reading-list app behind them, at both addresses. | Runs the Edge's scripts: their passkey ceremonies and control-plane calls are answered by the demo. |
-| Bridge | `demo/bridge.ts`, `overlay.ts` | The academy's postMessage protocol and `window.endgameDemo`; the spotlight ring and the soft cursor. | Blocks a click: every overlay is `pointer-events: none`. |
+| Bridge | `demo/bridge.ts`, `overlay.ts` | The academy's postMessage protocol and `window.endgameDemo`; the spotlight ring and the soft cursor, also on an Edge page drawn in its frame (it shares the origin). | Blocks a click: every overlay is `pointer-events: none`. |
 
 A link that leaves the console (`https://…`) is caught before the browser follows it: a hosted
-app's address opens its pages inside the demo; anything else shows a small notice.
+app's address opens its pages inside the demo; anything else shows a small notice. An in-page link
+(`#main`, "Skip to the content") moves the focus there instead of changing the console's route.
+
+A hosted app is opened at `#/__app/<appId>/path/<rest>` or `#/__app/<appId>/subdomain/<rest>` (in a
+script, `/__app/{app}/path/`). Who the visitor is follows the persona: signed in to the console, a
+member with a role there or without one; `end-user`, the app's first registered end user (signed
+out, with their passkey still on the device, when the app is no longer shared with them);
+`invited`, an address it was shared with. Signed out, "Sign in with a passkey" signs in the first
+console account on the device with a role on the app. A member signing out at an app on the
+platform's host ends the console session too. An app id Edge does not know shows "This app is
+temporarily unavailable".
 
 ## Interfaces
 
@@ -99,6 +109,15 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `employee-released` | An employee who was let go, memory archived | `employee-let-go` |
 | `two-organisations` | A person in two organisations | |
 | `screening-offline` | God mode with no model to screen a new organisation (it needs the operator's own decision) | |
+| `s1-app-public`, `s1-app-private`, `s1-app-not-published` | Tutor Match, as a visitor meets it: public, private, or with no published version yet | |
+| `s1-app-unshared`, `s1-app-made-private` | Court booking after an Admin stopped sharing it, or made it private (for the `end-user` persona) | |
+| `s1-session-check-fails` | The first session check gets a bare 503, as from a gateway with no control plane behind it | |
+| `s1-keys-at-limit` | Mara already holds 50 live assistant keys | |
+| `s1-development-sign-in`, `s1-development-apps` | A development deployment (`ENDGAME_DEV_LOGIN=true`): on a fresh install, and with Northwind's apps | |
+
+Scenarios are kept one file per flow file, `world/scenarios.s<n>.ts`, each registered by one
+side-effect import in `host.ts`. Not in `scenarios.ts`: a scenario file calls its `defineScenario`,
+so importing it there is a cycle whose `const` map is not yet initialised.
 
 ### Named moments (`clock { seek }`)
 
@@ -124,7 +143,7 @@ clock | reset` for tests.
 | --- | --- | --- |
 | `goto` | `{ route?, persona?, scenario? }` | Switches persona and/or scenario (a new scenario is a new world), then opens the route (default: the scenario's). |
 | `highlight` | `{ selector? \| testId? \| text? \| label?, note? }`; `{}` clears | Scrolls the control into view and rings it, with the note beside it; waits up to 5 s for it. |
-| `act` | `{ actions: Action[], instant? }` | Performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. |
+| `act` | `{ actions: Action[], instant? }` | Performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. `press: "Tab"` moves the focus to the next control, as the browser does. |
 | `clock` | `{ play?, pause?, speed?, seek? }` | Plays, pauses, sets the speed, or jumps (a moment's name or milliseconds). |
 | `reset` | `{}` | Rebuilds the scenario's world from scratch and opens its route. |
 
@@ -133,7 +152,10 @@ nothing, so a lesson never breaks in front of a learner; an action whose target 
 `error`. Drift is caught at build instead: `tests-demo/academy-scripts.spec.ts` plays every academy
 step script against the built demo and fails, naming flow and step, on any action that errors or
 any highlight that finds nothing, unless `tests-demo/academy-allowlist.json` lists that step with
-its reason; an allow-listed step that passes again fails too, so the list stays true.
+its reason (`{ flow, step, reason }`, with `variation: n` for a step of a script's n-th variation);
+an allow-listed step that passes again fails too, so the list stays true. Each variation plays from
+its own start, as its own persona and scenario. `ACADEMY_FLOWS=ID,PPL` plays only the scripts whose
+flow id starts with one of those prefixes.
 
 A target is a CSS `selector`, a `testId`, or visible `text` / accessible `label`, matched in that
 order of preference: buttons, links and other controls by accessible name (exact, then prefix,

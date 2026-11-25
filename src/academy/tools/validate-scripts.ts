@@ -17,6 +17,8 @@ export interface Coverage {
   stepsWithMedia: number;
   byKind: Record<string, number>;
   scripted: string[];
+  /** Branches under "What else can happen" that play in the console. */
+  variations: number;
 }
 
 export interface ScriptReport {
@@ -68,6 +70,17 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
       if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.file}, which does not exist`);
       if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${file}: step ${step.step} is a demo step that sends the console nothing`);
     }
+    (script.variations ?? []).forEach((v, i) => {
+      const where = `${file}: variation ${i + 1} ("${v.title}")`;
+      const numbers = v.steps.map((s) => s.step);
+      if (numbers.some((n, k) => n !== k + 1)) problems.push(`${where}: its steps are numbered ${numbers.join(", ")}; number them 1 to ${numbers.length} in order`);
+      for (const step of v.steps) {
+        if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${where}: step ${step.step} is a demo step that sends the console nothing`);
+        if (!step.note && !(step.kind === "demo" && step.highlight?.note)) problems.push(`${where}: step ${step.step} has no note, and a variation's steps have no flow text to show beside them`);
+        if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${where}: step ${step.step} names public/shots/${step.shot.file}, which does not exist`);
+        if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${where}: step ${step.step} names public/shots/${step.file}, which does not exist`);
+      }
+    });
     scripts[id] = script;
   }
   const byKind: Record<string, number> = {};
@@ -87,6 +100,7 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
       stepsWithMedia,
       byKind,
       scripted: Object.keys(scripts),
+      variations: Object.values(scripts).reduce((n, s) => n + (s.variations?.length ?? 0), 0),
     },
   };
 }

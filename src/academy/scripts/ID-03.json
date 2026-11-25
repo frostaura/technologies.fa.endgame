@@ -1,0 +1,58 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-03",
+  "persona": "signed-out",
+  "scenario": "s1-development-sign-in",
+  "start": "/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign in with a passkey",
+        "note": "The screen first asks this deployment which sign-ins it offers."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Development only",
+        "note": "A development deployment, with ENDGAME_DEV_LOGIN=true: the dashed box appears."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Development sign-in"
+          }
+        }
+      ],
+      "note": "It sends an empty body, so the account named by ENDGAME_DEV_USER_EMAIL is signed in."
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Name your organisation, then describe your first idea.",
+        "note": "A fresh install, so that account became the first person, “Development owner”."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign out",
+        "note": "The console moved to the root address, signed in."
+      }
+    }
+  ]
+}

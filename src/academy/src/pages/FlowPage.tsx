@@ -10,6 +10,7 @@ import { Inline } from "../components/Inline.tsx";
 import { LevelBadge, ReachChip } from "../components/Chips.tsx";
 import { Eyebrow } from "../components/Shell.tsx";
 import { sentence } from "../content/text.ts";
+import { variationScript } from "../content/scripts.ts";
 import { Stage } from "../stage/Stage.tsx";
 import { mediaOf, type Media } from "../stage/media.ts";
 import { NotFound } from "./NotFound.tsx";
@@ -36,6 +37,8 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
   const [active, setActive] = useState(() => Math.min(Math.max(initialStep ?? 1, 1), Math.max(total, 1)));
   const [run, setRun] = useState(0);
   const [interactive, setInteractive] = useState(false);
+  // A branch from "What else can happen" playing in the stage: which one, and its step.
+  const [branch, setBranch] = useState<{ index: number; step: number } | null>(null);
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const stageRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
@@ -115,6 +118,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     (n: number) => {
       const target = Math.min(Math.max(n, 1), total);
       setActive(target);
+      setBranch(null);
       setInteractive(false);
       scrolling.current = true;
       scrollToStep(target, !reduced);
@@ -141,6 +145,18 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [active, goTo]);
+
+  const variation = branch && script ? script.variations?.[branch.index] : undefined;
+  const branchScript = branch && script ? variationScript(script, branch.index) : undefined;
+  const showBranch = (index: number) => {
+    setBranch({ index, step: 1 });
+    setInteractive(false);
+    // The stage sits beside the steps: bring its top, where the branch is named, back into view.
+    scrolling.current = true;
+    const grid = stageRef.current?.parentElement;
+    if (grid) window.scrollTo({ top: Math.max(0, grid.getBoundingClientRect().top + window.scrollY - 88), behavior: reduced ? "auto" : "smooth" });
+    window.setTimeout(() => (scrolling.current = false), reduced ? 50 : 700);
+  };
 
   const prereqs = f.learnFirst.flatMap((p) => flowById(p) ?? []);
   const done = progress.flows[f.id] === "done";
@@ -210,8 +226,13 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
           <div ref={stageRef} className="sticky top-header-sm z-10 md:top-header -mx-4 h-stage-sm border-b bg-surface/95 px-4 pb-3 pt-2 backdrop-blur sm:-mx-6 sm:px-6 lg:order-2 lg:col-span-7 lg:mx-0 lg:h-stage lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none" data-print="hide">
             <Stage
               flow={f}
-              script={script}
-              active={active}
+              script={branchScript ?? script}
+              active={branch && branchScript ? branch.step : active}
+              branch={
+                variation && branch
+                  ? { title: variation.title, step: branch.step, total: variation.steps.length, onStep: (n) => setBranch({ index: branch.index, step: n }), onClose: () => setBranch(null) }
+                  : undefined
+              }
               run={run}
               interactive={interactive}
               onTry={() => setInteractive(true)}
@@ -253,7 +274,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
         </div>
       )}
 
-      <Variations flow={f} />
+      <Variations flow={f} branches={script?.variations?.map((v) => v.title) ?? []} playing={branch?.index ?? null} onShow={total > 0 ? showBranch : undefined} />
     </article>
   );
 }
@@ -314,8 +335,8 @@ function Finish({ flow: f, done, next }: { flow: Flow; done: boolean; next: Flow
   );
 }
 
-function Variations({ flow: f }: { flow: Flow }) {
-  if (!f.variations.length && !f.extras.length) return null;
+function Variations({ flow: f, branches, playing, onShow }: { flow: Flow; branches: string[]; playing: number | null; onShow?: (index: number) => void }) {
+  if (!f.variations.length && !f.extras.length && !branches.length) return null;
   return (
     <section className="mt-12 max-w-prose">
       <details className="group rounded-lg border bg-surface" open={f.steps.length === 0}>
@@ -324,6 +345,26 @@ function Variations({ flow: f }: { flow: Flow }) {
           <span className="text-sm font-sans font-normal text-ink-muted group-open:hidden">Refusals, limits and other branches</span>
         </summary>
         <div className="border-t px-6 pb-6 pt-2">
+          {branches.length > 0 && onShow && (
+            <div className="mb-4 mt-3" data-print="hide">
+              <p className="text-eyebrow font-semibold uppercase text-ink-muted">Watch it in the live console</p>
+              <ul aria-label="Branches you can watch" className="mt-2 flex flex-wrap gap-2">
+                {branches.map((title, i) => (
+                  <li key={title}>
+                    <button
+                      type="button"
+                      onClick={() => onShow(i)}
+                      aria-pressed={playing === i}
+                      className={`inline-flex min-h-touch items-center gap-2 rounded-full border px-4 text-sm font-medium ${playing === i ? "border-primary bg-primary-tint text-primary-link" : "text-ink hover:border-primary-line hover:bg-primary-tint"}`}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+                      {title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <Blocks blocks={f.variations} self={f.id} />
           {f.extras.map((x) => (
             <div key={x.label} className="mt-4 rounded-md bg-attention-wash p-4">
