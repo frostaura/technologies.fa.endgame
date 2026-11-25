@@ -27,7 +27,7 @@
         },
         {
           "click": {
-            "text": "See what it costs"
+            "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
           }
         }
       ],
@@ -74,7 +74,7 @@
             },
             {
               "click": {
-                "text": "See what it costs"
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
               }
             }
           ],
@@ -105,7 +105,7 @@
             },
             {
               "click": {
-                "text": "See what it costs"
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
               }
             }
           ],
@@ -128,7 +128,7 @@
             }
           ],
           "highlight": {
-            "text": "See what it costs",
+            "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]",
             "note": "The words changed, so the estimate is gone: ask for a new one."
           }
         }
@@ -154,7 +154,7 @@
             },
             {
               "click": {
-                "text": "See what it costs"
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
               }
             }
           ],
@@ -185,7 +185,7 @@
             },
             {
               "click": {
-                "text": "See what it costs"
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
               }
             }
           ],

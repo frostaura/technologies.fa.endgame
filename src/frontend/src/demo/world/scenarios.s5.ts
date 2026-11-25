@@ -60,7 +60,7 @@ defineScenario({
     if (!a) return;
     Object.assign(a, { status: "draft", version: null, publishedAt: null, telemetry: null, healthSummary: "Not published yet." });
     // Nothing has been built, run or spent on it yet, so it can still be deleted (APP-14).
-    delete w.versions[IDS.tutorMatch];
+    w.versions = Object.fromEntries(Object.entries(w.versions).filter(([id]) => id !== IDS.tutorMatch));
     w.spend = w.spend.filter((s) => s.path !== a.path);
     w.employees = w.employees.filter((e) => e.scope !== a.path);
     w.tasks = w.tasks.filter((x) => x.scope !== a.path);

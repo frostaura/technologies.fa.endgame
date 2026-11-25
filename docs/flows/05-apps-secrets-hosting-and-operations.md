@@ -700,7 +700,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** every level has its own view of what applies there.
 - **You know it worked when:** the heading changes to "Secrets for <other level>".
 - **Steps:** the person follows a link and the page reloads with the new `?scope`.
-- **Variations and refusals:** 403 at a level where the person is not an Admin.
+- **Variations and refusals:** at a level where the person holds a role below Admin: 403, "You cannot see the secrets here"; at a level where they hold no role at all: 404, "The secrets could not be loaded" with "The scope '<path>' was not found, or you cannot see it.".
 - **Where:** `SecretsView.tsx`
 - **Reachable from:** UI
 - **Covered by tests:** none found specifically

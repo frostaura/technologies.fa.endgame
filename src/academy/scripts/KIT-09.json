@@ -1,55 +1,26 @@
 {
   "$schema": "../schema/step-script.schema.json",
   "flow": "KIT-09",
-  "persona": "builder",
-  "scenario": "established",
-  "start": "/",
+  "persona": "signed-out",
+  "scenario": "s1-development-apps",
+  "start": "/__app/{app}/path/_endgame/auth/sign-in",
   "steps": [
     {
       "step": 1,
-      "kind": "request",
-      "method": "GET",
-      "path": "/api/app-auth/16c54191-b459-4235-a608-a265aae2e485",
-      "response": {
-        "status": 200,
-        "body": {
-          "appId": "16c54191-b459-4235-a608-a265aae2e485",
-          "appName": "Court booking",
-          "organisationName": "Northwind",
-          "access": "shared",
-          "signUp": true,
-          "invitationRequired": true,
-          "passkey": true,
-          "developmentSignIn": true,
-          "address": "http://localhost:8095/northwind/technologies/court-booking/web/"
-        }
-      },
-      "note": "On a development stack (ENDGAME_DEV_LOGIN=true, Development), the page is told it may offer the “Development sign-in” box. Production pins it off."
+      "kind": "demo",
+      "highlight": {
+        "text": "Development sign-in",
+        "note": "Only on a development stack (ENDGAME_DEV_LOGIN=true): an e-mail address, then “As a member” or “As a visitor”. make prod-config proves production pins it off."
+      }
     },
     {
       "step": 2,
-      "kind": "request",
-      "method": "POST",
-      "path": "/api/app-auth/16c54191-b459-4235-a608-a265aae2e485/development",
-      "body": {
-        "email": "chef@northwind.example",
-        "displayName": "Chef",
-        "returnTo": "/northwind/technologies/court-booking/web/"
-      },
-      "response": {
-        "status": 200,
-        "body": {
-          "user": {
-            "id": "6b0f8f0e-2a51-4c4e-9d0a-5b8a2f1d7c33",
-            "email": "chef@northwind.example",
-            "displayName": "Chef",
-            "kind": "endUser",
-            "role": null
-          },
-          "returnTo": "/northwind/technologies/court-booking/web/"
-        }
-      },
-      "note": "“Continue without a passkey”: signed in where the app's access admits them. Not mapped at all in any other configuration (ids illustrative)."
+      "kind": "demo",
+      "goto": "/__app/{app}/path/_endgame/auth/sign-up",
+      "highlight": {
+        "text": "Create your sign-in for Court booking",
+        "note": "On sign-up the button is “Continue without a passkey”, but not here: Court booking is shared, so an invitation code is required."
+      }
     }
   ]
 }

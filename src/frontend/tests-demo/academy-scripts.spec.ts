@@ -18,6 +18,8 @@ interface Step {
   step: number;
   kind: string;
   goto?: string;
+  /** From this step on, someone else is signed in to the same world. */
+  persona?: string;
   clock?: Record<string, unknown>;
   act?: unknown[];
   highlight?: Record<string, unknown>;
@@ -73,7 +75,7 @@ for (const { script, variation, name } of plays) {
       const where = `${script.flow}${variation ? ` variation ${variation}` : ""} step ${step.step}`;
       let failed: string | null = null;
       try {
-        if (step.goto) await call("goto", { route: step.goto });
+        if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}) });
         if (step.clock) await call("clock", step.clock);
         if (step.act) await call("act", step.act, false);
         if (step.highlight && (await call("highlight", step.highlight)) === false) failed = `the highlight ${JSON.stringify(step.highlight)} found nothing on screen`;
@@ -84,6 +86,6 @@ for (const { script, variation, name } of plays) {
       if (failed && !ok) failures.push(`${where}: ${failed}`);
       if (!failed && ok) passedButAllowed.push(`${where} is on the allow-list ("${ok.reason}") but now passes: remove it`);
     }
-    expect([...failures, ...passedButAllowed, ...errors.map((e) => `${script.name}: console error: ${e}`)]).toEqual([]);
+    expect([...failures, ...passedButAllowed, ...errors.map((e) => `${script.flow}: console error: ${e}`)]).toEqual([]);
   });
 }

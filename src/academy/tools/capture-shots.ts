@@ -8,7 +8,8 @@ import type { DemoStep, ScriptStep, StepScript } from "../src/content/scripts.ts
 /**
  * `make academy-shots`: plays every step script against the built demo, as the academy plays it,
  * and saves one image per demo step — and one for where each variation ends — under
- * `public/shots/<FLOW-ID>/<step>.webp` (`v<n>.webp` for a variation), with `public/shots/index.json`
+ * `public/shots/<FLOW-ID>/<step>.webp` (`v<n>.webp` for a variation) and a smaller JPEG beside each
+ * for print, with `public/shots/index.json`
  * naming each. The print version (academy.pdf, operator-handbook.pdf) sets each image beside its
  * step, and the stage falls back to it when the live console cannot load.
  *
@@ -29,6 +30,8 @@ const VIEWPORT = { width: 1180, height: 760 };
 const QUALITY = Number(process.env.SHOTS_QUALITY ?? 0.72);
 /** The demo's clock for anything it dates: one fixed moment, so "3 days ago" never drifts between runs. */
 const NOW = new Date("2026-11-25T10:00:00Z");
+const PRINT_WIDTH = 880;
+const PRINT_QUALITY = 0.7;
 const WORKERS = Number(process.env.SHOTS_WORKERS ?? 4);
 
 interface Play {
@@ -65,17 +68,23 @@ function plays(): Play[] {
 
 const sha = (b: Buffer) => createHash("sha1").update(b).digest("hex");
 
-async function webp(encoder: Page, png: Buffer): Promise<Buffer> {
-  const b64 = await encoder.evaluate(async ([data, q]) => {
+/** Encodes in the browser itself, so no image library is needed: WebP for the site, JPEG for print. */
+async function encode(encoder: Page, png: Buffer, type: "image/webp" | "image/jpeg", quality: number, width?: number): Promise<Buffer> {
+  const b64 = await encoder.evaluate(async ([data, t, q, w]) => {
     const img = new Image();
     img.src = `data:image/png;base64,${data}`;
     await img.decode();
     const c = document.createElement("canvas");
-    c.width = img.naturalWidth;
-    c.height = img.naturalHeight;
-    c.getContext("2d")?.drawImage(img, 0, 0);
-    return c.toDataURL("image/webp", q).split(",")[1] ?? "";
-  }, [png.toString("base64"), QUALITY] as const);
+    const scale = w ? Math.min(1, w / img.naturalWidth) : 1;
+    c.width = Math.round(img.naturalWidth * scale);
+    c.height = Math.round(img.naturalHeight * scale);
+    const g = c.getContext("2d");
+    if (g) {
+      g.imageSmoothingQuality = "high";
+      g.drawImage(img, 0, 0, c.width, c.height);
+    }
+    return c.toDataURL(t, q).split(",")[1] ?? "";
+  }, [png.toString("base64"), type, quality, width ?? 0] as const);
   return Buffer.from(b64, "base64");
 }
 
@@ -120,9 +129,11 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
       }
       const file = `${key}.webp`;
       const target = path.join(out, file);
-      if (index.hashes[file] !== hash || !existsSync(target)) {
+      if (index.hashes[file] !== hash || !existsSync(target) || !existsSync(target.replace(/\.webp$/, ".jpg"))) {
         mkdirSync(path.dirname(target), { recursive: true });
-        writeFileSync(target, await webp(encoder, png));
+        writeFileSync(target, await encode(encoder, png, "image/webp", QUALITY));
+        // The PDFs take a JPEG beside it: Chromium embeds a JPEG as it is, where a WebP would be stored uncompressed.
+        writeFileSync(target.replace(/\.webp$/, ".jpg"), await encode(encoder, png, "image/jpeg", PRINT_QUALITY, PRINT_WIDTH));
         index.hashes[file] = hash;
       }
       index.shots[key] = file;
@@ -185,7 +196,7 @@ async function main() {
     for (const flowDir of readdirSync(out, { withFileTypes: true }).filter((d) => d.isDirectory())) {
       for (const f of readdirSync(path.join(out, flowDir.name))) {
         const rel = `${flowDir.name}/${f}`;
-        if (!named.has(rel)) {
+        if (!named.has(rel.replace(/\.jpg$/, ".webp"))) {
           rmSync(path.join(out, rel));
           index.hashes = Object.fromEntries(Object.entries(index.hashes).filter(([k]) => k !== rel));
         }

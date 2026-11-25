@@ -10,8 +10,11 @@
       "kind": "demo",
       "act": [
         {
+          "wait": 800
+        },
+        {
           "click": {
-            "text": "Technologies"
+            "selector": "ul[aria-label=\"Secrets\"] > li:nth-child(3) a"
           }
         }
       ],
@@ -33,14 +36,17 @@
           "kind": "demo",
           "act": [
             {
+              "wait": 800
+            },
+            {
               "click": {
-                "text": "Northwind"
+                "selector": "ul[aria-label=\"Secrets\"] > li:nth-child(1) a"
               }
             }
           ],
           "highlight": {
-            "text": "You cannot see the secrets here",
-            "note": "Ines is an Admin of Technologies only."
+            "text": "was not found, or you cannot see it",
+            "note": "Ines holds no role at Northwind itself, so to her its secrets do not exist (404)."
           }
         }
       ]

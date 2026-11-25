@@ -19,7 +19,7 @@
         },
         {
           "click": {
-            "text": "See what it costs"
+            "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
           }
         },
         {
@@ -76,7 +76,7 @@
             },
             {
               "click": {
-                "text": "See what it costs"
+                "selector": "form:has(input[placeholder=\"Which days are busiest?\"]) button[type=submit]"
               }
             },
             {

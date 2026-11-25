@@ -9,6 +9,9 @@ import { stepOf } from "../bridge/player.ts";
 import { sentence } from "../content/text.ts";
 import type { ScriptStep } from "../content/scripts.ts";
 
+/** A captured image's print copy: the JPEG `make academy-shots` writes beside each WebP. */
+const printable = (file: string) => (file.includes("/") ? file.replace(/\.webp$/, ".jpg") : file);
+
 const json = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v, null, 2));
 
 /** A terminal, request, code or e-mail step as it renders on the stage, set for paper. */
@@ -105,7 +108,7 @@ export function PrintPage({ operator }: { operator: boolean }) {
                           {sc && !file && <PrintMedia step={sc} />}
                         </div>
                       </div>
-                      {file && <img src={`./shots/${file}`} alt={alt} className="col-span-7 w-full rounded-xs border" loading="eager" />}
+                      {file && <img src={`./shots/${printable(file)}`} alt={alt} className="col-span-7 w-full rounded-xs border" loading="eager" />}
                     </li>
                   );
                 })}
@@ -124,7 +127,7 @@ export function PrintPage({ operator }: { operator: boolean }) {
                             <p className="font-semibold text-ink">{v.title}</p>
                             {words && <p className="mt-1 text-xs text-ink-muted"><Inline text={words} plainIds /></p>}
                           </div>
-                          {file && <img src={`./shots/${file}`} alt={words ?? v.title} className="col-span-7 w-full rounded-xs border" loading="eager" />}
+                          {file && <img src={`./shots/${printable(file)}`} alt={words ?? v.title} className="col-span-7 w-full rounded-xs border" loading="eager" />}
                         </li>
                       );
                     })}

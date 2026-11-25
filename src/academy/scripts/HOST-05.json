@@ -1,7 +1,7 @@
 {
   "$schema": "../schema/step-script.schema.json",
   "flow": "HOST-05",
-  "persona": "builder",
+  "persona": "admin",
   "scenario": "app-crashed",
   "start": "/__app/{app}/path/",
   "steps": [
