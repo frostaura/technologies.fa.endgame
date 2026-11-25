@@ -57,7 +57,7 @@ public sealed class RunExecutor(
                 Run = run,
                 Holder = holder,
                 ControlPlane = controlPlane,
-                Sink = log,
+                Sink = new FittingSink(log),
                 LogReader = log,
                 History = history,
                 Control = control,
@@ -92,7 +92,9 @@ public sealed class RunExecutor(
         catch (Exception e) when (e is not OperationCanceledException)
         {
             logger.LogError(e, "Run {RunId} failed in the Runner.", run.Id);
-            outcome = WorkflowOutcome.Failure($"The work stopped on an internal fault and has been logged: {OutputText.Truncate(e.Message, 300)}");
+            outcome = WorkflowOutcome.Failure($"The work stopped on an internal fault and has been logged: {OutputText.Truncate(e.Message, 300)}")
+                with
+            { ForOwner = "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; it can be started again." };
         }
 
         switch (outcome.End)
@@ -148,7 +150,7 @@ public sealed class RunExecutor(
             {
                 await ctx.Sink.AppendAsync(
                 [
-                    new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["code"] = "estimate_over_budget", ["text"] = text, ["estimate"] = expected, ["headroom"] = room }),
+                    new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["title"] = "Waiting for budget", ["code"] = "estimate_over_budget", ["text"] = text, ["estimate"] = expected, ["headroom"] = room }),
                     new RunEvent(RunEventTypes.RunPaused, new JsonObject { ["by"] = "runner", ["reason"] = "estimate_over_budget" }),
                 ], cancellationToken);
                 return WorkflowOutcome.Suspend("estimate over budget");
@@ -187,7 +189,9 @@ public sealed class RunExecutor(
                 {
                     ["from"] = "runner",
                     ["title"] = status == RunStatuses.Succeeded ? "Finished" : "Stopped",
-                    ["text"] = Workflows.WorkflowSupport.ForPeople(outcome.Summary),
+                    ["text"] = Workflows.WorkflowSupport.ForPeople(outcome.ForOwner ?? (OwnerText.IsPlain(outcome.Summary)
+                        ? outcome.Summary
+                        : status == RunStatuses.Succeeded ? "The work is finished; technical mode has the details." : "The work stopped before it was finished; technical mode says exactly why.")),
                     ["milestone"] = "finished",
                 }));
             }
@@ -230,5 +234,19 @@ public sealed class RunExecutor(
             var signal = await keeper.CheckAsync(cancellationToken);
             return signal == RunSignal.Continue && shutdown() ? RunSignal.LeaseLost : signal;
         }
+    }
+}
+
+/// <summary>
+/// Every event a workflow appends goes through the same cleaning and fitting the agents' own writer applies: control
+/// characters scrubbed and the payload cut to the log's 64 KB limit, largest strings first — a live build failed when one
+/// evaluation's evidence and faults ran past it.
+/// </summary>
+public sealed class FittingSink(IEventSink inner) : IEventSink
+{
+    public Task<IReadOnlyList<RunEvent>> AppendAsync(IReadOnlyList<RunEvent> events, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        return inner.AppendAsync(events.Select(e => new RunEvent(e.Type, AgentEventWriter.Fit(AgentEventWriter.Clean(e.Payload)))).ToList(), cancellationToken);
     }
 }

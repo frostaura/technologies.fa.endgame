@@ -6,7 +6,7 @@
 # set is broken and fails restore without it. Harmless everywhere else, so CI uses it too.
 .PHONY: up down lint lint-backend lint-frontend build build-backend build-frontend test test-backend test-frontend \
         e2e smoke docker-build docker-down prod-config appkit-build appkit-lint appkit-test appkit-proof appkit-vendor \
-        stack-up stack-down e2e-stack e2e-stack-run fac-up fac-down e2e-factory e2e-factory-run \
+        stack-up stack-down e2e-stack e2e-stack-run fac-up fac-down e2e-factory e2e-factory-run acc-up acc-down e2e-acceptance e2e-acceptance-run \
         backup restore ops-backups ops-verify ops-health ops-reserved-hosts ops-cloudflare-plan ops-cloudflare-apply ops-test ops-test-worker
 
 DOTNET ?= dotnet
@@ -99,9 +99,11 @@ smoke: up
 	exit 1
 
 # Parse the production stack file with throwaway values for its required variables, and prove it
-# can never turn the development sign-in on, whatever the environment says.
+# can never turn the development sign-in on, whatever the environment says, and that it refuses to
+# parse without the backup key (the ops service is the stack's only backup).
 PROD_CHECK_ENV = POSTGRES_PASSWORD=config-check CLOUDFLARE_TUNNEL_TOKEN=config-check ENDGAME_SERVICE_TOKEN=config-check \
-	DOCK_SECRET_KEY=config-check OPENROUTER_API_KEY=config-check ENDGAME_VAULT_MASTER_KEY=config-check ENDGAME_OPERATORS=config-check
+	DOCK_SECRET_KEY=config-check OPENROUTER_API_KEY=config-check ENDGAME_VAULT_MASTER_KEY=config-check ENDGAME_OPERATORS=config-check \
+	ENDGAME_BACKUP_KEY=config-check
 
 prod-config:
 	@env $(PROD_CHECK_ENV) docker compose -f docker-compose.prod.yml config -q
@@ -111,7 +113,10 @@ prod-config:
 	@if env $(PROD_CHECK_ENV) ENDGAME_DEV_LOGIN=true ASPNETCORE_ENVIRONMENT=Development docker compose -f docker-compose.prod.yml config \
 		| grep 'ASPNETCORE_ENVIRONMENT:' | grep -qv 'Production'; then \
 		echo "prod-config: a production service does not run as Production" >&2; exit 1; fi
-	@echo "prod-config: parses; development sign-in pinned off; every service Production."
+	@env $(PROD_CHECK_ENV) ENDGAME_BACKUP_KEY= docker compose -f docker-compose.prod.yml config -q 2>&1 \
+		| grep -q 'ENDGAME_BACKUP_KEY is required' \
+		|| { echo "prod-config: the production stack does not refuse a missing ENDGAME_BACKUP_KEY" >&2; exit 1; }
+	@echo "prod-config: parses; development sign-in pinned off; every service Production; backup key required."
 
 # ---------------------------------------------------------------------------------------------
 # The merged stack's acceptance test: a SECOND stack (its own project name, host ports, subnet
@@ -261,3 +266,51 @@ e2e-factory-run:
 	cd $(FAC_DRIVER) && npm ci --no-audit --no-fund && npx playwright install chromium
 	cd $(FAC_DRIVER) && CI=1 FAC_EDGE=http://localhost:$(FAC_EDGE_PORT) FAC_STATE=$(FAC_STATE) \
 		FAC_SPEND_STOP_USD=$(FAC_SPEND_STOP_USD) npx playwright test
+
+# The first version's three acceptance tests (`make e2e-acceptance`, TEST-201, the build plan's Phase 6), for real,
+# with LIVE models: FrostAura as tenant zero (its divisions, its workforce hired by the factory); a club court-booking
+# app taken through the factory and used in a real browser by a signed-in member, with its hardware endpoint, its
+# confirmation e-mail and its MCP tools; and an invited organisation that builds and shares an app of its own, kept
+# apart from the first. OPT-IN: it spends real money and stops itself once the ledger shows ACC_SPEND_STOP_USD. Its
+# own stack (project endgame-acc, its own ports, subnet pool and fresh volumes). ACC_CLUB_APP=<org/div/proj/app>
+# replays the member, hardware, e-mail and MCP steps against a club app already built on a running `make acc-up`.
+ACC_PROJECT ?= endgame-acc
+ACC_EDGE_PORT ?= 28295
+ACC_POSTGRES_PORT ?= 25646
+ACC_MAIL_PORT ?= 28226
+ACC_DOCK_PORT ?= 28296
+ACC_SUBNET_POOL ?= 10.228.0.0/16
+ACC_SPEND_STOP_USD ?= 5
+ACC_CLUB_APP ?=
+ACC_STATE = $(CURDIR)/.tmp/e2e-acceptance
+ACC_SERVICE_TOKEN ?= endgame_acc_stack_service_token_0001
+ACC_ENV = ENDGAME_SERVICE_TOKEN=$(ACC_SERVICE_TOKEN) ENDGAME_VAULT_MASTER_KEY= DOCK_SECRET_KEY= POSTGRES_PASSWORD= \
+	COMPOSE_PROJECT_NAME=$(ACC_PROJECT) EDGE_HOST_PORT=$(ACC_EDGE_PORT) POSTGRES_HOST_PORT=$(ACC_POSTGRES_PORT) \
+	MAIL_UI_HOST_PORT=$(ACC_MAIL_PORT) DOCK_HOST_PORT=$(ACC_DOCK_PORT) DOCK_SUBNET_POOL=$(ACC_SUBNET_POOL) \
+	ENDGAME_CONTROL_PLANE_ENVIRONMENT=Development ENDGAME_DEV_LOGIN=true ENDGAME_OPERATORS=operator@endgame.localhost \
+	SECONDS_PER_IDLE_MINUTE=60 ENDGAME_USAGE_REPORT_SECONDS=60
+ACC_COMPOSE = $(ACC_ENV) docker compose -f docker-compose.yml -f docker-compose.e2e.yml
+ACC_DRIVER = src/backend/Endgame.Harness.Bench/acceptance
+
+acc-up: .env appkit-vendor
+	@grep -q '^OPENROUTER_API_KEY=..*' .env || { echo "acc-up: set OPENROUTER_API_KEY in .env (the factory calls live models)" >&2; exit 1; }
+	$(ACC_COMPOSE) up -d --build --wait
+
+acc-down: .env
+	-$(ACC_COMPOSE) down -v --remove-orphans --rmi local
+	-docker ps -aq --filter label=endgame.dock=$(ACC_PROJECT) | xargs docker rm -f -v
+	-docker network ls -q --filter label=endgame.dock=$(ACC_PROJECT) | xargs docker network rm
+	-docker images -q --filter label=endgame.dock=$(ACC_PROJECT) | xargs docker image rm -f
+	-test -f $(ACC_STATE)/apps && for app in $$(cat $(ACC_STATE)/apps); do \
+		docker images --format '{{.Repository}}:{{.Tag}}' | grep "^app-$$app:" | xargs docker image rm -f; done
+	-test -f $(ACC_STATE)/apps && mv $(ACC_STATE)/apps $(ACC_STATE)/apps.removed
+
+e2e-acceptance: .env
+	$(MAKE) acc-up
+	$(MAKE) e2e-acceptance-run; status=$$?; $(MAKE) acc-down; exit $$status
+
+e2e-acceptance-run:
+	mkdir -p $(ACC_STATE)
+	cd $(ACC_DRIVER) && npm ci --no-audit --no-fund && npx playwright install chromium
+	cd $(ACC_DRIVER) && CI=1 ACC_EDGE=http://localhost:$(ACC_EDGE_PORT) ACC_MAIL=http://127.0.0.1:$(ACC_MAIL_PORT) ACC_STATE=$(ACC_STATE) \
+		ACC_PROJECT=$(ACC_PROJECT) ACC_SPEND_STOP_USD=$(ACC_SPEND_STOP_USD) ACC_CLUB_APP=$(ACC_CLUB_APP) npx playwright test

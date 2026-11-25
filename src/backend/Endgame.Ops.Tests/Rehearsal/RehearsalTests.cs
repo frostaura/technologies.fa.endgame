@@ -24,9 +24,11 @@ namespace Endgame.Ops.Tests.Rehearsal;
 [Trait("Category", "Docker")]
 public sealed class RehearsalTests(ITestOutputHelper output)
 {
-    private const string Project = "test-endgame-ops-rehearsal";
-    private const string S3Container = "test-endgame-ops-s3";
-    private const string S3Network = "test-endgame-ops-s3net";
+    // This run's own names: a second test run on the same machine never touches them.
+    private static readonly string RunId = Convert.ToHexString(RandomNumberGenerator.GetBytes(3)).ToLowerInvariant();
+    private static readonly string Project = $"test-endgame-ops-{RunId}";
+    private static readonly string S3Container = $"test-endgame-ops-{RunId}-s3";
+    private static readonly string S3Network = $"test-endgame-ops-{RunId}-s3net";
     private const string S3Image = "versity/versitygw:v1.0.16";
     private const string Bucket = "endgame-rehearsal";
     private const string OwnerEmail = "dev@frostaura.net";
@@ -47,8 +49,9 @@ public sealed class RehearsalTests(ITestOutputHelper output)
     private readonly int opsPort = FreePort();
     private readonly int s3Port = FreePort();
     private readonly List<string> report = [];
+    private string subnetPool = "";
 
-    private string EmptyEnvFile => Path.Combine(repositoryRoot, ".tmp", "ops-rehearsal", "empty.env");
+    private string EmptyEnvFile => Path.Combine(repositoryRoot, ".tmp", $"ops-rehearsal-{RunId}", "empty.env");
 
     private string Overlay => Path.Combine(AppContext.BaseDirectory, "Rehearsal", "docker-compose.rehearsal.yml");
 
@@ -65,6 +68,7 @@ public sealed class RehearsalTests(ITestOutputHelper output)
 
         Directory.CreateDirectory(Path.GetDirectoryName(EmptyEnvFile)!);
         await File.WriteAllTextAsync(EmptyEnvFile, "");
+        subnetPool = await FreeSubnetPoolAsync();
         await TearDownAsync();
         try
         {
@@ -277,7 +281,7 @@ public sealed class RehearsalTests(ITestOutputHelper output)
         ["POSTGRES_HOST_PORT"] = postgresPort.ToString(CultureInfo.InvariantCulture),
         ["MAIL_UI_HOST_PORT"] = mailPort.ToString(CultureInfo.InvariantCulture),
         ["DOCK_HOST_PORT"] = dockPort.ToString(CultureInfo.InvariantCulture),
-        ["DOCK_SUBNET_POOL"] = "10.219.0.0/16",
+        ["DOCK_SUBNET_POOL"] = subnetPool,
         ["ENDGAME_SERVICE_TOKEN"] = serviceToken,
         // The test stack's own throwaway secrets: never the developer's .env values.
         ["POSTGRES_PASSWORD"] = "rehearsal_" + serviceToken[^12..],
@@ -312,6 +316,32 @@ public sealed class RehearsalTests(ITestOutputHelper output)
             "psql", "-h", "127.0.0.1", "-v", "ON_ERROR_STOP=1", "-U", role, "-d", database, "-tAc", sql)).Trim();
 
     private Task<string> Docker(params string[] arguments) => CheckedAsync(TimeSpan.FromMinutes(5), "docker", arguments);
+
+    /// <summary>A private /16 between 10.128 and 10.191 that no network on this engine overlaps: this run's Dock cuts its apps' subnets from it.</summary>
+    private async Task<string> FreeSubnetPoolAsync()
+    {
+        var used = new List<string>();
+        foreach (var id in (await CheckedAsync(TimeSpan.FromMinutes(1), "docker", "network", "ls", "-q")).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var (exit, subnets, _) = await RunAsync(TimeSpan.FromSeconds(15), "docker", "network", "inspect", "--format", "{{range .IPAM.Config}}{{.Subnet}} {{end}}", id);
+            if (exit == 0)
+            {
+                used.AddRange(subnets.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            }
+        }
+
+        var start = RandomNumberGenerator.GetInt32(64);
+        for (var i = 0; i < 64; i++)
+        {
+            var octet = 128 + ((start + i) % 64);
+            if (!used.Any(s => s.StartsWith($"10.{octet}.", StringComparison.Ordinal)))
+            {
+                return $"10.{octet}.0.0/16";
+            }
+        }
+
+        throw new InvalidOperationException("No free 10.x.0.0/16 between 10.128 and 10.191 on this Docker engine.");
+    }
 
     private async Task TearDownAsync()
     {

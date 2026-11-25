@@ -110,6 +110,12 @@ public sealed class FakeControlPlane : HttpMessageHandler
     /// <summary>Faults the control plane names when refusing the first verdict(s); each refusal takes one.</summary>
     public Queue<string[]> VerdictRefusals { get; } = new();
 
+    /// <summary>What a suggest run reads (null: this is not a suggest run, 409).</summary>
+    public JsonObject? SuggestionContext { get; set; }
+
+    /// <summary>What a suggest run recorded, once.</summary>
+    public JsonArray? Suggestions { get; private set; }
+
     /// <summary>Schedules the app declares, as the ontology shows them.</summary>
     public List<string> Schedules { get; } = [];
 
@@ -162,6 +168,8 @@ public sealed class FakeControlPlane : HttpMessageHandler
                 ("POST", "/internal/contractors") => Contractor(body!.AsObject()),
                 ("POST", var p) when p.StartsWith("/internal/contractors/", StringComparison.Ordinal) && p.EndsWith("/finish", StringComparison.Ordinal) => Finished(p, body!.AsObject()),
                 ("POST", var p) when p.StartsWith("/internal/ideas/", StringComparison.Ordinal) && p.EndsWith("/decision", StringComparison.Ordinal) => Decide(body!.AsObject()),
+                ("GET", var p) when p == run + "/suggestion-context" => SuggestionContext is { } sc ? Json(sc) : Problem(HttpStatusCode.Conflict, "conflict", "That run does not suggest ideas."),
+                ("POST", var p) when p == run + "/suggestions" => RecordSuggestions(body!.AsObject()),
                 ("GET", "/internal/ontology") => Json(new JsonObject { ["nodes"] = new JsonArray(Schedules.Select(n => (JsonNode)new JsonObject { ["id"] = $"schedule:{n}", ["type"] = "schedule", ["name"] = n }).ToArray()), ["edges"] = new JsonArray() }),
                 _ => Problem(HttpStatusCode.NotFound, "not_found", $"{request.Method} {path} is not served by the fake."),
             };
@@ -206,6 +214,12 @@ public sealed class FakeControlPlane : HttpMessageHandler
         }
 
         var appended = new JsonArray();
+        // The control plane's own limit (RunService.MaxPayloadBytes): a fake that accepted anything hid the defect a live build found.
+        if (body["events"]!.AsArray().OfType<JsonObject>().Any(e => System.Text.Encoding.UTF8.GetByteCount((e["payload"] ?? new JsonObject()).ToJsonString()) > 64 * 1024))
+        {
+            return Problem(HttpStatusCode.BadRequest, "invalid_request", "An event's payload is at most 65536 bytes; truncate tool results before logging them.");
+        }
+
         foreach (var e in body["events"]!.AsArray().OfType<JsonObject>())
         {
             Append(e["type"]!.GetValue<string>(), e["payload"]?.DeepClone().AsObject() ?? []);
@@ -322,6 +336,23 @@ public sealed class FakeControlPlane : HttpMessageHandler
             "red_line" => Problem(HttpStatusCode.Forbidden, "red_line", "It crosses a red line."),
             var code => Problem(HttpStatusCode.Conflict, code, "Checkpoints are on here, so the owner decides."),
         };
+    }
+
+    private HttpResponseMessage RecordSuggestions(JsonObject body)
+    {
+        var list = body["suggestions"] as JsonArray ?? [];
+        if (list.Count is 0 or > 5)
+        {
+            return Problem(HttpStatusCode.BadRequest, "invalid_request", "Send 1 to 5 suggestions.");
+        }
+
+        if (Suggestions is not null)
+        {
+            return Problem(HttpStatusCode.Conflict, "conflict", "This run's suggestions are already recorded.");
+        }
+
+        Suggestions = list.DeepClone().AsArray();
+        return Json(new JsonArray(list.Select(s => (JsonNode)new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["title"] = s!["title"]?.ToString(), ["status"] = "open" }).ToArray()), HttpStatusCode.Created);
     }
 
     private HttpResponseMessage RecordVerdict(JsonObject verdict)

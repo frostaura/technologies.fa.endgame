@@ -7,7 +7,7 @@
 | **Primary actor** | Builder; the Runner (an employee) proposes |
 | **Scope** | Control plane (`/api/ideas/suggestions*`, `/internal/runs/{id}/suggestion-context`, `/internal/runs/{id}/suggestions`); the Runner |
 | **Cascade level** | Organisation or division |
-| **Status** | Built (control-plane side; the Runner's `suggest` workflow is owed) |
+| **Status** | Built — the control plane and the Runner's `suggest` workflow |
 
 ## Goal
 
@@ -38,7 +38,7 @@ the four things the market research found nobody combines.
 
 - Start → context → record → list → take, with the estimate on the run and the idea's text carrying the gap, the reason and the reuse.
 
-Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `BreadthTests.Ideas_are_suggested_from_the_portfolio…`.
+Tests: [`TEST-101`](../testing/TEST-101-control-plane.md) — `BreadthTests.Ideas_are_suggested_from_the_portfolio…`; [`TEST-201`](../testing/TEST-201-harness-and-runner.md) — `WorkflowTests.A_suggest_run_…` (only new, complete ideas kept; one corrected attempt; recorded once) and `RunnerIntegrationTests.A_suggest_run_queued_by_the_owner_…` (the real control plane: queued, claimed, listed, taken).
 
 ## Links
 

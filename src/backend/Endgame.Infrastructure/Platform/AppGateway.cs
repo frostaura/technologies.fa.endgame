@@ -106,7 +106,11 @@ public sealed class AppGateway(IHttpClientFactory http, IOptions<ServiceAddresse
         return await SendAsync(appId, new HttpMethod(operation.Method.ToUpperInvariant()), target, body, sessionToken, cancellationToken);
     }
 
-    private async Task<AppCallResult> SendAsync(Guid appId, HttpMethod method, string relative, HttpContent? content, string? sessionToken, CancellationToken cancellationToken)
+    /// <summary>A declared webhook called as its device would, with the header the platform computed (the evaluator's signed test).</summary>
+    public Task<AppCallResult> CallHookAsync(Guid appId, string name, string header, string value, string body, CancellationToken cancellationToken) =>
+        SendAsync(appId, HttpMethod.Post, $"hooks/{name}", new StringContent(body, Encoding.UTF8, "application/json"), null, cancellationToken, (header, value));
+
+    private async Task<AppCallResult> SendAsync(Guid appId, HttpMethod method, string relative, HttpContent? content, string? sessionToken, CancellationToken cancellationToken, (string Name, string Value)? extra = null)
     {
         var o = options.Value;
         Uri target;
@@ -134,6 +138,11 @@ public sealed class AppGateway(IHttpClientFactory http, IOptions<ServiceAddresse
         if (sessionToken is not null)
         {
             request.Headers.TryAddWithoutValidation(HostingConventions.SessionHeader, sessionToken);
+        }
+
+        if (extra is { } header)
+        {
+            request.Headers.TryAddWithoutValidation(header.Name, header.Value);
         }
 
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

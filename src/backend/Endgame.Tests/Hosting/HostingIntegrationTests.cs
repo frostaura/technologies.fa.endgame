@@ -5,6 +5,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Endgame.Hosting.Contracts;
+using Endgame.Infrastructure.Platform;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
 
 namespace Endgame.Tests.Hosting;
@@ -410,6 +413,65 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
             Assert.True(visible.Count >= 4, string.Join(",", visible));
             Assert.All(visible.Where(v => v!.StartsWith("d_", StringComparison.Ordinal)), name => Assert.Matches("^d_[0-9a-f]{24}$", name));
         }
+    }
+
+    [DockerFact]
+    public async Task The_control_plane_takes_an_apps_own_database_as_a_pg_dump_archive_and_gets_not_found_before_it_has_one()
+    {
+        using var client = env.EdgeClient();
+        var marker = $"exported-{Guid.NewGuid():N}";
+        (await client.PostAsync("/acme/apps/ledger/web/api/notes", new StringContent(marker))).EnsureSuccessStatusCode();
+
+        // The real caller: the control plane's DockClient, as the Owner's export uses it.
+        var services = new ServiceCollection();
+        services.AddHttpClient(DockClient.ClientName);
+        services.Configure<ServiceAddresses>(a => a.Dock = env.DockUrl.ToString());
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [HostingConventions.ServiceTokenVariable] = env.Token }).Build());
+        services.AddSingleton<DockClient>();
+        await using var provider = services.BuildServiceProvider();
+        var dock = provider.GetRequiredService<DockClient>();
+
+        using var dump = new MemoryStream();
+        Assert.True(await dock.DatabaseDumpAsync(env.LedgerApp, dump, CancellationToken.None));
+        var bytes = dump.ToArray();
+        Assert.Equal("PGDMP", System.Text.Encoding.ASCII.GetString(bytes, 0, 5)); // pg_dump's custom format
+
+        // pg_restore 16 reads it back, and the app's row is in it.
+        var file = Path.Combine(Path.GetTempPath(), $"{DockerCli.Prefix}{Guid.NewGuid():N}.dump");
+        await File.WriteAllBytesAsync(file, bytes);
+        try
+        {
+            await DockerCli.CheckedAsync("cp", file, $"{HostingEnvironment.Container("postgres")}:/tmp/ledger.dump");
+            var sql = await DockerCli.CheckedAsync("exec", HostingEnvironment.Container("postgres"), "pg_restore", "--file=-", "/tmp/ledger.dump");
+            Assert.Contains(marker, sql, StringComparison.Ordinal);
+            Assert.Contains("PostgreSQL database dump", sql, StringComparison.Ordinal);
+            Assert.DoesNotContain("endgame_system", sql, StringComparison.Ordinal); // only the app's own database
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+
+        // An app that never ran has no database: Dock says not_found and the export leaves the dump out.
+        using var none = new MemoryStream();
+        Assert.False(await dock.DatabaseDumpAsync(Guid.NewGuid(), none, CancellationToken.None));
+        using var refused = await env.DockAsync(HttpMethod.Get, $"/internal/apps/{Guid.NewGuid():D}/database/dump");
+        Assert.Equal(HttpStatusCode.NotFound, refused.StatusCode);
+        Assert.Equal("not_found", (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
+    [DockerFact]
+    public async Task A_recreated_edge_reaches_an_app_again_on_its_next_wake()
+    {
+        // A redeployed edge is a new container on none of the app networks: every app answered 503 until restarted.
+        var network = $"{DockerCli.Prefix}appnet-{env.LedgerApp:D}";
+        await DockerCli.CheckedAsync("network", "disconnect", "--force", network, HostingEnvironment.Container("edge"));
+        await env.EdgeControlAsync(HttpMethod.Post, $"/internal/apps/{env.LedgerApp:D}/state", new AppStateReport(env.LedgerApp, AppRuntimeState.Sleeping, 0, false, DateTimeOffset.UtcNow));
+        using var client = env.EdgeClient();
+        using var response = await client.GetAsync("/acme/apps/ledger/web/api/notes");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var attached = await DockerCli.CheckedAsync("network", "inspect", "--format", "{{range .Containers}}{{.Name}} {{end}}", network);
+        Assert.Contains(HostingEnvironment.Container("edge"), attached, StringComparison.Ordinal);
     }
 
     [DockerFact]

@@ -4,7 +4,7 @@
 | --- | --- |
 | **ID** | ARCH-001 |
 | **Title** | System overview |
-| **Status** | Current — the control plane after its fourth pass (MCP, asking about an app, versions and export, members, God mode, notifications, ideas from the portfolio, prices at runtime), with Dock, Edge, Ops and the app kit merged and integrated (the stack's acceptance test, `make e2e-stack`) |
+| **Status** | Current — after the wiring lane (Dock's data dump, Edge's app calls, the Runner's suggest run, the evaluator's signed-in checks); the control plane after its fourth pass (MCP, asking about an app, versions and export, members, God mode, notifications, ideas from the portfolio, prices at runtime), with Dock, Edge, Ops and the app kit merged and integrated (the stack's acceptance test, `make e2e-stack`) |
 | **Covers** | Every service in `docker-compose.yml` and `docker-compose.prod.yml`; the backend projects under `src/backend/`; the console under `src/frontend/`; the app kit under `src/appkit/` |
 
 ## Context
@@ -19,14 +19,14 @@ What is deployed is in `MEMORY.md`.
 
 | # | Service | Built as | What it does | Boundary |
 | --- | --- | --- | --- | --- |
-| 1 | **Edge** | `Endgame.Edge` — ASP.NET Core + YARP | The single entry point. `/api/*` to the control plane, apps at both address shapes (four segments: `/<org>/<division>/<project>/<app>/` and `<org>.<domain>/<division>/<project>/<app>/`), the console otherwise. Wakes sleeping apps through Dock, asks the control plane who may open an app (and decides nothing itself), serves the holding page for paused apps, the organisation's identity pages and the session hand-off, and counts each app's requests as hosting usage. A control listener on `:8081` that apps cannot reach: route refreshes, crash reports, signed schedule callbacks forwarded to apps. | The only service published to the host. |
+| 1 | **Edge** | `Endgame.Edge` — ASP.NET Core + YARP | The single entry point. `/api/*` to the control plane, apps at both address shapes (four segments: `/<org>/<division>/<project>/<app>/` and `<org>.<domain>/<division>/<project>/<app>/`), the console otherwise. Wakes sleeping apps through Dock, asks the control plane who may open an app (and decides nothing itself), serves the holding page for paused apps, the organisation's identity pages and the session hand-off, and counts each app's requests as hosting usage. A control listener on `:8081` that apps cannot reach: route refreshes, crash reports, signed schedule callbacks forwarded to apps, the evaluator's probe, and the control plane's calls into an app's own API (per-app MCP and the evaluator's signed-in calls). | The only service published to the host. |
 | 2 | **Control plane** | `Endgame.ControlPlane` over `Endgame.Application`, `Endgame.Infrastructure`, `Endgame.Domain` | The tree and cascade, passkey sign-in, members and invitations, the credit ledger with reservations and hosting charges, the model gateway, runs, events, tasks, ideas and verdicts, conversations, God mode with its audit log, and the **platform API for apps**: app tokens, identity (members and app end users, access checks, hand-offs), the vault, the e-mail outbox and SMTP sender, the scheduler, webhook declarations, telemetry intake and its read side. **MCP** at `/mcp` (the organisation's capabilities as tools) and `/mcp/apps/{id}` (each app's own API, derived from its OpenAPI document), by personal access token; **asking about an app** (a model-written, triple-fenced query over one app's telemetry views) and saved dashboards; an app's **version history, restore and export**, through Dock; members and role changes; God mode's overview, overdraft and top-up requests; the owner's **notifications**; **ideas from the portfolio** (the `suggest` run); **prices** as one runtime settings document. A sweep releases lapsed reservations, requeues lapsed runs and prunes telemetry; another derives notifications. | The only service with a database connection string, the OpenRouter key and the SMTP settings. |
-| 3 | **Runner** | `Endgame.Runner` over `Endgame.Harness` | Claims runs from the control plane under a lease and works them with Endgame's own harness — research, build, review and conversation workflows — with tools that execute in Dock's workspaces ([`ARCH-006`](ARCH-006-the-harness.md)). | No database, no Docker: the control plane and Dock only, by their internal APIs. |
-| 4 | **Dock** | `Endgame.Dock` + `Docker.DotNet.Enhanced` | Workspaces, repositories, builds, the app lifecycle (start, stop, wake), per-app networks, databases and egress rules; each app's token from the control plane at start; hosting usage (awake time, memory, storage). | **The only service given the Docker socket.** |
+| 3 | **Runner** | `Endgame.Runner` over `Endgame.Harness` | Claims runs from the control plane under a lease and works them with Endgame's own harness — research, build, review, conversation and suggest workflows — with tools that execute in Dock's workspaces ([`ARCH-006`](ARCH-006-the-harness.md)). | No database, no Docker: the control plane and Dock only, by their internal APIs. |
+| 4 | **Dock** | `Endgame.Dock` + `Docker.DotNet.Enhanced` | Workspaces, repositories, builds, the app lifecycle (start, stop, wake), per-app networks, databases and egress rules; each app's token from the control plane at start; hosting usage (awake time, memory, storage); an app's data dump for the Owner's export (`pg_dump` 16 in its image). | **The only service given the Docker socket.** |
 | 5 | **Console** | `src/frontend` — React, TypeScript, Redux Toolkit, Tailwind, shadcn/ui; unprivileged nginx | Sign-in, the org chart home with conversation history, start, run trace, verdict, app (with sharing), credits, secrets, the operator-access log. | Calls nothing except through Edge. |
 | 6 | **PostgreSQL** | `postgres:16.16-alpine` | The platform database, and each app's own database and role. | Development only: `127.0.0.1:5446`. |
 | 7 | **Egress proxy** | `src/egress` — squid | Every outbound call from apps and workspaces; default deny, per-app allow-lists from Dock. The platform API is reached through it. | Strips `X-Forwarded-For`; re-resolves peer names every 10 s. |
-| 8 | **Tunnel and backup** | `cloudflared` and a `pg_dump` loop | Production compose only. | The offsite copy does not exist yet. |
+| 8 | **Tunnel** | `cloudflared` | Production compose only. Backups are the ops service's (row 10); there is no other backup service. | Pointed at the edge alone. |
 | 10 | **Ops** | `Endgame.Ops` ([`ARCH-007`](ARCH-007-cloudflare-and-backups.md)) | Cloudflare management, the outage Worker, encrypted backups; tells the control plane which organisation names FrostAura's own subdomains take. | No socket, no OpenRouter key; reached by the control plane with the service token. |
 | 9 | **Mail catcher** | `axllent/mailpit`, service `mailcatcher` | Development compose only: the control plane's SMTP server on `1025`; keeps every message, sends none. | Never in `docker-compose.prod.yml`. |
 
@@ -127,10 +127,9 @@ and removes it.
 
 ## Not built yet
 
-The Dock endpoint for an app's data dump (`GET /internal/apps/{id}/database/dump`, ARCH-004) and
-Edge's app-call route (`/internal/apps/{id}/call/{**path}`) — both owed by their lanes; until then
-the export and the per-app MCP surface answer `502`. The Runner's `suggest` workflow. The offsite
-copy runs once R2 is configured (ARCH-007).
+The offsite copy runs once R2 is configured (ARCH-007). Builders work one plan item at a time in one workspace:
+parallel builders are not built (ARCH-006, *Sub-agents*). The evaluator's test members write into the app's own
+database, and their records stay in the published app: no separate preview database (ARCH-006, *Checking the work*).
 
 ## Links
 

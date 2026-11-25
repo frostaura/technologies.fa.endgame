@@ -52,9 +52,11 @@ public sealed class ResearchWorkflow : IWorkflow
             run.Options.ResearchTaskType, ["notes", "remember"], run.Options.MonthlyCredits.GetValueOrDefault("researcher", 400m),
             "Research has reached this part of the organisation, and every idea is researched before anything is built."), cancellationToken);
 
-        // The search budget, sized from the estimate shown to the owner before research began.
+        // The search budget, sized from the most research may cost (the estimate's ceiling; the estimate itself when it
+        // states none). Never from the expected cost: that is calibrated from past actuals, which the budget itself
+        // drives, so sizing from it would shrink every run's searches a little more than the last.
         var strands = Strands.Take(Math.Clamp(run.Options.ResearchContractors, 1, Strands.Length)).ToList();
-        var estimate = Estimator.Latest(run.History);
+        var estimate = Estimator.LatestCeiling(run.History) ?? Estimator.Latest(run.History);
         var slice = estimate is { } e ? decimal.Round(e * run.Options.ResearchStrandShare / strands.Count, 4) : (decimal?)null;
         var searches = slice is { } s
             ? Math.Clamp((int)Math.Floor(s / Math.Max(0.01m, run.Options.ResearchSearchCredits)), run.Options.ResearchMinimumSearches, run.Options.ResearchSearchesPerStrand)

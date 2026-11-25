@@ -223,8 +223,11 @@ test("3. placement, hires, plan, builders, evaluator, security review and a priv
     spentCredits: build.spentCredits,
     estimateCredits: build.estimateCredits,
     plan: log.filter((e) => e.type === "plan.accepted").map((e) => e.payload.items)[0],
+    requirements: log.filter((e) => e.type === "plan.accepted").map((e) => e.payload.requirements)[0],
+    leftOut: log.filter((e) => e.type === "plan.accepted").map((e) => e.payload.leftOut)[0],
+    appCalls: log.filter((e) => e.type === "tool.requested" && e.payload.name === "call_app").length,
     builderSessions: new Set(log.filter((e) => String(e.payload.agent ?? "").startsWith("builder-")).map((e) => e.payload.agent)).size,
-    evaluations: evaluations.map((e) => ({ item: e.payload.item, passed: e.type === "evaluation.passed", round: e.payload.round, tier: e.payload.tier, faults: e.payload.faults })),
+    evaluations: evaluations.map((e) => ({ item: e.payload.item, passed: e.type === "evaluation.passed", round: e.payload.round, tier: e.payload.tier, summary: e.payload.summary, requirements: e.payload.requirements, faults: e.payload.faults })),
     repairs: evaluations.filter((e) => e.type === "evaluation.failed").length,
     tiers: [...new Set(evaluations.map((e) => e.payload.tier))],
     probes: log.filter((e) => e.type === "tool.requested" && e.payload.name === "check_preview").length,
@@ -235,6 +238,25 @@ test("3. placement, hires, plan, builders, evaluator, security review and a priv
   };
   await note(`build ${build.status}: ${JSON.stringify(story.report.build).slice(0, 1500)}`);
   expect(build.status, String(build.summary ?? JSON.stringify(build))).toBe("finished");
+
+  // The plan is a faithful contract: "see what everyone is reading now" is a requirement of its own, delivered by an
+  // item, never silently dropped, and the evaluator showed it working in the running app, signed in.
+  const accepted = log.find((e) => e.type === "plan.accepted")!.payload as {
+    requirements: { id: string; text: string }[];
+    items: { id: string; text: string; covers: string[] }[];
+    leftOut: { requirement: string; reason: string }[];
+  };
+  const readingNow = accepted.requirements.find((r) => /reading now/i.test(r.text));
+  expect(readingNow, `requirements: ${JSON.stringify(accepted.requirements)}`).toBeTruthy();
+  expect(accepted.leftOut.map((l) => l.requirement)).not.toContain(readingNow!.id);
+  const delivering = accepted.items.filter((i) => i.covers.includes(readingNow!.id)).map((i) => i.id);
+  expect(delivering.length).toBeGreaterThan(0);
+  const shown = evaluations.filter((e) => e.type === "evaluation.passed" && delivering.includes(String(e.payload.item)))
+    .flatMap((e) => (e.payload.requirements as { id: string; met: boolean; calls: string[] }[]) ?? [])
+    .filter((r) => r.id === readingNow!.id && r.met && r.calls.length > 0);
+  expect(shown.length, "the evaluator evidenced 'reading now' with a signed-in call").toBeGreaterThan(0);
+  story.report.readingNow = { requirement: readingNow, items: delivering, evidence: shown };
+  await note(`"reading now" is ${readingNow!.id}, delivered by ${delivering.join(", ")}, evidenced by ${JSON.stringify(shown.map((r) => r.calls))}`);
 
   const hires = await ok<{ name: string; role: string; status: string; trigger: string }[]>(await owner.request.get(`/api/hires?scope=${org}`));
   story.report.hires = hires.map((h) => `${h.name}, ${h.role}: ${h.status} (${h.trigger})`);
@@ -250,6 +272,29 @@ test("3. placement, hires, plan, builders, evaluator, security review and a priv
   story.report.app = { id: story.appId, path: story.appPath, access: detail.settings?.access ?? detail.access };
   await note(`app ${story.appPath} (${story.appId}), access ${JSON.stringify(story.report.app)}`);
 });
+
+/** Sets a book's status the way the built app offers it: a "Mark …" button on its card, or a status control on its own page. */
+async function setStatus(page: Page, title: string, status: "reading" | "finished") {
+  const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: title }) }).first();
+  const button = card.getByRole("button", { name: new RegExp(`^(mark )?(as )?${status}`, "i") });
+  const saved = page.waitForResponse((r) => ["PATCH", "PUT", "POST"].includes(r.request().method()) && /books/.test(r.url()));
+  if (await button.count()) {
+    await button.first().click();
+  } else {
+    await page.getByText(title).first().click();
+    const own = page.getByRole("main").getByRole("button", { name: new RegExp(`^(mark )?(as )?${status}`, "i") });
+    if (await own.first().isVisible({ timeout: 10_000 }).catch(() => false)) {
+      await own.first().click();
+      expect((await saved).status()).toBeLessThan(300);
+      return;
+    }
+    const control = page.getByLabel(/status/i).first();
+    await expect(control).toBeVisible({ timeout: 20_000 });
+    if ((await control.evaluate((e) => e.tagName)) === "SELECT") await control.selectOption({ label: status === "reading" ? "Reading" : "Finished" });
+    else await page.getByRole("button", { name: new RegExp(status, "i") }).or(page.getByRole("radio", { name: new RegExp(status, "i") })).first().click();
+  }
+  expect((await saved).status()).toBeLessThan(300);
+}
 
 async function openApp(page: Page) {
   await expect(async () => {
@@ -274,8 +319,8 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   await page.screenshot({ path: path.join(STATE, "1-home.png"), fullPage: true });
 
   const books = [
-    { title: "The Left Hand of Darkness", author: "Ursula K. Le Guin", note: "Our pick for December." },
-    { title: "Piranesi", author: "Susanna Clarke", note: "Short and strange; everyone loved it." },
+    { title: `The Left Hand of Darkness (${run})`, author: "Ursula K. Le Guin", note: "Our pick for December." },
+    { title: `Piranesi (${run})`, author: "Susanna Clarke", note: "Short and strange; everyone loved it." },
   ];
   for (const book of books) {
     await page.getByRole("link", { name: /add a book|new book|add book/i }).or(page.getByRole("button", { name: /add a book|new book|add book/i })).first().click();
@@ -289,14 +334,8 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   for (const book of books) await expect(page.getByText(book.title).first()).toBeVisible();
   await page.screenshot({ path: path.join(STATE, "2-two-books.png"), fullPage: true });
 
-  // Mark the second one finished, where the app puts the control: the book's own page.
-  await page.getByText(books[1].title).first().click();
-  const status = page.getByLabel(/status/i).first();
-  await expect(status).toBeVisible({ timeout: 20_000 });
-  const saved = page.waitForResponse((r) => ["PATCH", "PUT", "POST"].includes(r.request().method()) && /books/.test(r.url()));
-  if ((await status.evaluate((e) => e.tagName)) === "SELECT") await status.selectOption({ label: "Finished" });
-  else await page.getByRole("button", { name: /finished/i }).or(page.getByRole("radio", { name: /finished/i })).first().click();
-  expect((await saved).status()).toBeLessThan(300);
+  // Mark the second one finished, wherever the app puts the control: a button on its card, or the book's own page.
+  await setStatus(page, books[1].title, "finished");
   await page.screenshot({ path: path.join(STATE, "3-finished.png"), fullPage: true });
 
   // A reload, and both are still there, the second one finished.
@@ -304,10 +343,27 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   await page.reload();
   await page.waitForLoadState("networkidle");
   for (const book of books) await expect(page.getByText(book.title).first()).toBeVisible();
-  const card = page.locator("li, article, a, [data-testid*=book]").filter({ hasText: books[1].title }).first();
+  const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: books[1].title }) }).first();
   await expect(card).toContainText(/finished/i);
   await page.screenshot({ path: path.join(STATE, "4-after-reload.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: path.join(STATE, "5-phone.png"), fullPage: true });
   await note("owner: two books added, one finished, both still there after a reload");
+
+  // What everyone is reading now: mark the first book "reading", then find the view that shows it as such.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openApp(page);
+  await setStatus(page, books[0].title, "reading");
+  await openApp(page);
+  await page.waitForLoadState("networkidle");
+  // The app's own way to it: a link or tab when it has one, otherwise a section of the home page.
+  const link = page.getByRole("link", { name: /reading now|currently reading|everyone/i }).or(page.getByRole("tab", { name: /reading now|currently reading|everyone/i }));
+  if (await link.count()) await link.first().click();
+  await page.waitForLoadState("networkidle");
+  const region = page.getByRole("main").filter({ hasText: /reading now|currently reading|everyone is reading/i });
+  await expect(region).toBeVisible({ timeout: 20_000 });
+  await expect(region).toContainText(books[0].title);
+  await expect(region).not.toContainText(books[1].title); // finished, so not being read now
+  await page.screenshot({ path: path.join(STATE, "6-reading-now.png"), fullPage: true });
+  await note("what everyone is reading now: the book marked reading is shown there");
 });

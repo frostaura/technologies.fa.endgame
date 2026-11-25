@@ -369,7 +369,7 @@ public sealed class ReplayAndContextTests
     {
         var board = new FakeBoard();
         var model = new ScriptedModel()
-            .ThenTool("tasks", new { action = "create", title = "Write the endpoint" })
+            .ThenTool("tasks", new { action = "create", title = "Wire the booking form" })
             .Then(_ => ScriptedModel.Tools(("tasks", new { action = "claim", id = board.Created[0].Id.ToString() }, null)))
             .Then(_ => ScriptedModel.Tools(("tasks", new { action = "complete", id = board.Created[0].Id.ToString(), summary = "done" }, null)))
             .Then(_ => ScriptedModel.Tools(("tasks", new { action = "claim", id = board.Taken.ToString() }, null)))
@@ -382,7 +382,12 @@ public sealed class ReplayAndContextTests
         Assert.StartsWith("Claimed", results[1], StringComparison.Ordinal);
         Assert.StartsWith("Completed", results[2], StringComparison.Ordinal);
         Assert.Contains("held by run", results[3], StringComparison.Ordinal);
-        Assert.Contains("[done] Write the endpoint", results[4], StringComparison.Ordinal);
+        Assert.Contains("[done] Wire the booking form", results[4], StringComparison.Ordinal);
+
+        // The owner reads task titles: one naming files or endpoints is refused with how to say it.
+        var plain = new ScriptedModel().ThenTool("tasks", new { action = "create", title = "Add POST api/bookings in BookingsEndpoints.cs" }).ThenText("Done.");
+        var (_, refused) = await TestAgents.RunAsync(TestAgents.Builder(tools), plain, new FakeWorkspace(), services: TestAgents.Services(plain) with { Tasks = new FakeBoard() });
+        Assert.Contains("plain words", refused.Events.First(e => e.Type == "tool.result").Payload["content"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
     private static AgentDefinition Agent() => TestAgents.Builder(TestAgents.WorkspaceTools.Concat<ITool>([new NotesTool()]));

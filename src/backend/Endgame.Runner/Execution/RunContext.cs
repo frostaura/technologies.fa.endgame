@@ -27,6 +27,9 @@ public sealed record WorkflowOutcome(WorkflowEnd End, string Summary)
     /// <summary>The workflow already told the owner how it ended (a milestone message): the Runner adds no closing message of its own.</summary>
     public bool Announced { get; init; }
 
+    /// <summary>How the ending reads to the owner, in plain words, when <see cref="Summary"/> carries technical detail (it stays in <c>run.finished</c>).</summary>
+    public string? ForOwner { get; init; }
+
     public static WorkflowOutcome Success(string summary) => new(WorkflowEnd.Succeeded, summary);
 
     public static WorkflowOutcome Failure(string summary) => new(WorkflowEnd.Failed, summary);

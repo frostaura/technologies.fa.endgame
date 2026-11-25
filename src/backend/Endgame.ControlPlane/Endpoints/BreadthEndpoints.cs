@@ -288,14 +288,14 @@ internal static class BreadthEndpoints
         suggestions.MapPost("/estimate", async (SuggestRequest request, ClaimsPrincipal principal, AccessService access, SuggestionService service, ResearchEstimator estimator, CancellationToken ct) =>
             {
                 var (scope, _) = await access.RequireAsync(principal.Id(), request.Scope, MemberRole.Builder, ct);
-                var estimate = estimator.EstimateSuggestions(await service.ContextSizeAsync(scope, ct));
+                var estimate = await estimator.SuggestionsAsync(scope.OrganisationId, await service.ContextSizeAsync(scope, ct), ct);
                 return Results.Ok(new IdeaEstimateView(estimate.Credits, estimate.Basis));
             })
             .WithName("EstimateSuggestions").WithSummary("The most suggesting ideas from the portfolio at a scope can cost, before anything is charged.").Produces<IdeaEstimateView>();
         suggestions.MapPost("", async (SuggestRequest request, ClaimsPrincipal principal, AccessService access, SuggestionService service, ResearchEstimator estimator, ReadModels reads, CancellationToken ct) =>
             {
                 var (scope, _) = await access.RequireAsync(principal.Id(), request.Scope, MemberRole.Builder, ct);
-                var estimate = estimator.EstimateSuggestions(await service.ContextSizeAsync(scope, ct));
+                var estimate = await estimator.SuggestionsAsync(scope.OrganisationId, await service.ContextSizeAsync(scope, ct), ct);
                 var started = await service.StartAsync(scope, estimate, principal.Id(), ct);
                 return Results.Created($"/api/runs/{started.Run.Id}",
                     new SuggestionsStartedView(await reads.RunAsync(scope.OrganisationId, started.Run.Id, ct), new IdeaEstimateView(estimate.Credits, estimate.Basis)));
@@ -315,8 +315,8 @@ internal static class BreadthEndpoints
                 var request = http.HasJsonContentType() && (http.ContentLength is > 0 || http.Headers.TransferEncoding.Count > 0) ? await http.ReadFromJsonAsync<TakeSuggestionRequest>(ct) : null;
                 var (suggestion, scope) = await service.RequireAsync(id, ct);
                 await access.RequireAsync(principal.Id(), scope, MemberRole.Builder, ct);
-                var estimate = estimator.EstimateResearch(SuggestionService.IdeaText(suggestion), request?.Constraints);
-                var started = await service.TakeAsync(id, request?.Constraints, estimate.Credits, principal.Id(), ct);
+                var estimate = await estimator.ResearchAsync(scope.OrganisationId, SuggestionService.IdeaText(suggestion), request?.Constraints, ct);
+                var started = await service.TakeAsync(id, request?.Constraints, estimate, principal.Id(), ct);
                 return Results.Created($"/api/ideas/{started.Idea.Id}", await reads.IdeaAsync(scope.OrganisationId, started.Idea.Id, ct));
             })
             .WithName("TakeSuggestion").WithSummary("Turns a suggestion into an idea in one click; its research is queued with its estimate, like any other idea.")

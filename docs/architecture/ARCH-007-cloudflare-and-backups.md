@@ -147,7 +147,10 @@ production host).
 **The key.** `ENDGAME_BACKUP_KEY` (32 bytes, hex or base64) comes from the environment. The spec
 says "the key held in the vault" — but the vault lives in the platform database, which is inside
 the archive, so a key kept only there could never open the backup it would be needed for. The key
-must exist outside the machine (the founder's password manager); see *Not built yet*.
+must exist outside the machine (the founder's password manager); see *Not built yet*. In
+production it is required: `docker-compose.prod.yml` refuses to start without it (`make prod-config`
+proves the refusal), because `ops` is the stack's only backup. The development stack has a
+development default.
 
 ## Interfaces
 
@@ -162,7 +165,8 @@ must exist outside the machine (the founder's password manager); see *Not built 
 
 Make targets: `backup`, `restore BACKUP= [OVERWRITE=1]`, `ops-backups`, `ops-verify BACKUP=`,
 `ops-health`, `ops-reserved-hosts`, `ops-cloudflare-plan`, `ops-cloudflare-apply CONFIRM=yes`,
-`ops-test` (part of `make test`), `ops-test-worker`.
+`ops-test` (part of `make test`, and CI's `ops` job, which runs the rehearsal on the runner's
+Docker engine), `ops-test-worker`. CI publishes the `ops` image with the others.
 
 Configuration (environment → `Ops__*`): `ENDGAME_BACKUP_KEY`, `ENDGAME_BACKUP_S3_ENDPOINT`,
 `ENDGAME_BACKUP_S3_BUCKET`, `ENDGAME_BACKUP_S3_ACCESS_KEY_ID`, `ENDGAME_BACKUP_S3_SECRET_ACCESS_KEY`,
@@ -259,8 +263,6 @@ and a separate app database: figures in TEST-301's *Against the running system*.
 - **The control plane calling ops**: refusing reserved organisation names and showing backup state in
   the console (operator only) are the control plane's to wire.
 - **Request-limit fail-open** on the Worker routes is a dashboard step, not set by the API here.
-- The production compose file's older `backup` service (plain `pg_dump` to a host directory) still
-  runs beside `ops`; it can be removed once an offsite archive and a restore from it are proven.
 
 ## Links
 

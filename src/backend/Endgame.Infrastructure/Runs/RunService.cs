@@ -175,6 +175,43 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
     /// Appends events, assigning the next sequence numbers. When <paramref name="leaseHolder"/> is given
     /// it must hold the run's live lease. A finished run's log is closed.
     /// </summary>
+    /// <summary>The path of the first string or key holding U+0000 in a payload, or null.</summary>
+    private static string? NulPath(JsonNode? node, string path)
+    {
+        switch (node)
+        {
+            case JsonObject o:
+                foreach (var (key, value) in o)
+                {
+                    if (key.Contains('\0', StringComparison.Ordinal))
+                    {
+                        return $"{path} (a key)";
+                    }
+
+                    if (NulPath(value, $"{path}.{key}") is { } inner)
+                    {
+                        return inner;
+                    }
+                }
+
+                return null;
+            case JsonArray a:
+                for (var i = 0; i < a.Count; i++)
+                {
+                    if (NulPath(a[i], $"{path}[{i}]") is { } inner)
+                    {
+                        return inner;
+                    }
+                }
+
+                return null;
+            case JsonValue v when v.GetValueKind() == System.Text.Json.JsonValueKind.String:
+                return v.GetValue<string>().Contains('\0', StringComparison.Ordinal) ? path : null;
+            default:
+                return null;
+        }
+    }
+
     public async Task<IReadOnlyList<RunEventView>> AppendAsync(Guid organisationId, Guid runId, IReadOnlyList<NewEvent> events, string? leaseHolder, Guid? actor, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(events);
@@ -183,8 +220,16 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
             throw EndgameProblem.Invalid($"Append 1 to {MaxEventsPerAppend} events at a time.");
         }
 
-        foreach (var e in events)
+        for (var index = 0; index < events.Count; index++)
         {
+            var e = events[index];
+            // PostgreSQL's jsonb cannot hold U+0000: refused here, precisely, rather than failing the insert with a 500.
+            if (NulPath(e.Payload, $"events[{index}].payload") is { } where)
+            {
+                throw new EndgameProblem(400, "event_invalid", "The event cannot be stored",
+                    $"{where}: contains a NUL character (U+0000), which the run log cannot store; remove it or replace it before logging.");
+            }
+
             if (!RunEventTypes.All.Contains(e.Type))
             {
                 throw EndgameProblem.Invalid($"'{e.Type}' is not a run event type.");

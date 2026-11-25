@@ -137,6 +137,12 @@ public sealed class SpawnTool : ITool
     public static string Title(string? given, string objective)
     {
         var text = (given?.Trim() is { Length: > 0 } t ? t : objective.Split(['.', '\n'], 2)[0]).Trim();
+        // The owner reads the title (ARCH-004): one naming a file, a command or code says what kind of step it is instead.
+        if (!Events.OwnerText.IsPlain(text))
+        {
+            return "Looked into part of the work";
+        }
+
         return text.Length <= 60 ? text : text[..57].TrimEnd() + "...";
     }
 

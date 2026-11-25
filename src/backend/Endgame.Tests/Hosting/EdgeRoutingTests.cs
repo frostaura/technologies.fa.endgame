@@ -246,3 +246,27 @@ public sealed class UnavailablePageTests
         return data;
     }
 }
+
+/// <summary>The edge's shipped configuration, read from its own appsettings.json.</summary>
+public sealed class EdgeShippedRoutesTests
+{
+    [Fact]
+    public void Mcp_goes_to_the_control_plane_before_the_console_catches_everything()
+    {
+        // A live MCP client got the console's nginx 405: the shipped edge routed /api only.
+        var root = AppContext.BaseDirectory;
+        while (!File.Exists(Path.Combine(root, "src", "backend", "Endgame.slnx")))
+        {
+            root = Path.GetDirectoryName(root)!;
+        }
+
+        var routes = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, "src", "backend", "Endgame.Edge", "appsettings.json")))!["ReverseProxy"]!["Routes"]!.AsObject();
+        var console = routes["console"]!["Order"]!.GetValue<int>();
+        foreach (var path in new[] { "/mcp", "/mcp/{**rest}" })
+        {
+            var route = routes.Select(r => r.Value!).Single(r => r["Match"]!["Path"]!.GetValue<string>() == path);
+            Assert.Equal("control-plane", route["ClusterId"]!.GetValue<string>());
+            Assert.True(route["Order"]!.GetValue<int>() < console);
+        }
+    }
+}

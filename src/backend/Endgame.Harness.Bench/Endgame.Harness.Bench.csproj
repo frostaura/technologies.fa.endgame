@@ -20,5 +20,8 @@
     <Compile Remove="factory-e2e/**" />
     <None Remove="factory-e2e/**" />
     <Content Remove="factory-e2e/**" />
+    <Compile Remove="acceptance/**" />
+    <None Remove="acceptance/**" />
+    <Content Remove="acceptance/**" />
   </ItemGroup>
 </Project>

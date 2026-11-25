@@ -24,6 +24,7 @@ public sealed class PlatformApiTests(PostgresServer postgres) : IAsyncLifetime
 {
     private const string EdgeControl = "http://edge-control.test";
     private readonly ConcurrentQueue<(HttpRequestMessage Request, byte[] Body)> callbacks = new();
+    private readonly ConcurrentQueue<(HttpRequestMessage Request, byte[] Body)> appCalls = new();
     private FakeOpenRouter openRouter = null!;
     private SmtpSink smtp = null!;
     private ControlPlaneApp app = null!;
@@ -48,6 +49,7 @@ public sealed class PlatformApiTests(PostgresServer postgres) : IAsyncLifetime
         {
             s.AddHttpClient(AppCallbackClient.ClientName).ConfigurePrimaryHttpMessageHandler(() => new CapturingHandler(callbacks, HttpStatusCode.NoContent));
             s.AddHttpClient(EdgeNotifier.ClientName).ConfigurePrimaryHttpMessageHandler(() => new CapturingHandler(new ConcurrentQueue<(HttpRequestMessage, byte[])>(), HttpStatusCode.OK));
+            s.AddHttpClient(AppGateway.ClientName).ConfigurePrimaryHttpMessageHandler(() => new CapturingHandler(appCalls, HttpStatusCode.OK));
         });
         owner = await app.OwnerWithOrganisationAsync();
         await owner.DivisionAsync("frostaura", "technologies");
@@ -103,6 +105,100 @@ public sealed class PlatformApiTests(PostgresServer postgres) : IAsyncLifetime
         await ControlPlaneApp.Expect(await Kit(token).GetAsync("/platform/v1/secrets/ANY_NAME"), HttpStatusCode.Unauthorized);
         await ControlPlaneApp.Expect(await Kit(fresh).GetAsync("/platform/v1/secrets/ANY_NAME"), HttpStatusCode.NotFound);
         token = fresh;
+    }
+
+    [Fact]
+    public async Task The_evaluator_gets_a_session_for_a_test_member_the_app_resolves_with_its_role_and_nobody_else_can_mint_one()
+    {
+        // The factory's evaluator calls the running app signed in (ARCH-004): the control plane mints an
+        // app-scoped session for a named test member, which the app resolves like any member's.
+        var minted = await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "member-a", role = "builder" }));
+        var session = minted["sessionToken"]!.GetValue<string>();
+        Assert.StartsWith("egs_", session, StringComparison.Ordinal);
+        var resolved = await ControlPlaneApp.Ok(Kit().PostAsJsonAsync("/platform/v1/identity/resolve", new { session }));
+        Assert.Equal("member", resolved["user"]!["kind"]!.GetValue<string>());
+        Assert.Equal("builder", resolved["user"]!["role"]!.GetValue<string>());
+        Assert.Equal("member-a@test-members.endgame.invalid", resolved["user"]!["email"]!.GetValue<string>());
+        Assert.Equal(minted["user"]!["id"]!.GetValue<string>(), resolved["user"]!["id"]!.GetValue<string>());
+
+        // The same persona is the same person every time (an owner check holds across calls); another is someone else.
+        var again = await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "member-a", role = "builder" }));
+        var admin = await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "club-admin", role = "admin" }));
+        Assert.Equal(minted["user"]!["id"]!.GetValue<string>(), again["user"]!["id"]!.GetValue<string>());
+        Assert.NotEqual(minted["user"]!["id"]!.GetValue<string>(), admin["user"]!["id"]!.GetValue<string>());
+        Assert.Equal("admin", (await ControlPlaneApp.Ok(Kit().PostAsJsonAsync("/platform/v1/identity/resolve", new { session = admin["sessionToken"]!.GetValue<string>() })))["user"]!["role"]!.GetValue<string>());
+
+        // Never the Owner's role, never a bad persona, never for an app that does not exist, never without the service token.
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "boss", role = "owner" }), HttpStatusCode.BadRequest);
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "Not A Slug!", role = "builder" }), HttpStatusCode.BadRequest);
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/apps/{Guid.NewGuid()}/test-session", new { persona = "member-a", role = "builder" }), HttpStatusCode.NotFound);
+        var anonymous = app.Internal();
+        anonymous.DefaultRequestHeaders.Authorization = null;
+        await ControlPlaneApp.Expect(await anonymous.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "member-a", role = "builder" }), HttpStatusCode.Unauthorized);
+
+        // A test member's session is for this app only.
+        var otherApp = await owner.AppAsync("frostaura/technologies/squash", "other");
+        var otherToken = (await ControlPlaneApp.Ok(service.PostAsync($"/internal/apps/{otherApp}/token", null)))["token"]!.GetValue<string>();
+        await ControlPlaneApp.Expect(await Kit(otherToken).PostAsJsonAsync("/platform/v1/identity/resolve", new { session }), HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task The_evaluator_reads_the_mail_an_app_sent_and_calls_its_declared_webhook_signed_with_the_vaults_secret()
+    {
+        // What the app sent: the evaluator's evidence that "a confirmation e-mail is sent".
+        await ControlPlaneApp.Expect(await Kit().PostAsJsonAsync("/platform/v1/email", new { to = new[] { "member-a@test-members.endgame.invalid" }, subject = "Court 2 is booked", text = "You booked court 2 at 18:00." }), HttpStatusCode.Accepted);
+        var sent = (await ControlPlaneApp.Ok(service.GetAsync($"/internal/apps/{appId}/emails?limit=5"))).AsArray();
+        var mail = Assert.Single(sent)!;
+        Assert.Equal("Court 2 is booked", mail["subject"]!.GetValue<string>());
+        Assert.Equal("member-a@test-members.endgame.invalid", mail["to"]![0]!.GetValue<string>());
+        Assert.Contains("court 2 at 18:00", mail["text"]!.GetValue<string>(), StringComparison.Ordinal);
+
+        // A declared webhook, called as the device would: signed with the vault's secret, which never leaves the control plane.
+        await ControlPlaneApp.Ok(Kit().PutAsJsonAsync("/platform/v1/webhooks", new { webhooks = new[] { new { name = "court-status", path = "hooks/court-status" } } }));
+        await ControlPlaneApp.Ok(owner.PutAsJsonAsync("/api/secrets", new { scope = "frostaura/technologies/squash/bookings", name = "COURT_HARDWARE_SECRET", value = "s3cret-value-for-the-court" }));
+        var body = "{\"courtId\":\"2\"}";
+        var called = await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/webhook-test", new { name = "court-status", header = "X-Court-Signature", scheme = "hmac-sha256", secretName = "COURT_HARDWARE_SECRET", prefix = "sha256=", body }));
+        Assert.Equal(200, called["status"]!.GetValue<int>());
+        Assert.False(called["secretCreated"]!.GetValue<bool>());
+        var (request, sentBody) = appCalls.Last();
+        Assert.EndsWith($"/internal/apps/{appId:D}/call/hooks/court-status", request.RequestUri!.AbsolutePath, StringComparison.Ordinal);
+        Assert.Equal(body, Encoding.UTF8.GetString(sentBody));
+        var expected = "sha256=" + Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes("s3cret-value-for-the-court"), Encoding.UTF8.GetBytes(body)));
+        Assert.Equal(expected, request.Headers.GetValues("X-Court-Signature").Single());
+        Assert.DoesNotContain("s3cret-value-for-the-court", called.ToJsonString(), StringComparison.Ordinal);
+
+        // A secret the app needs and nobody has set is made at the app, said so, and then used; never returned.
+        var made = await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/webhook-test", new { name = "court-status", header = "X-Device-Token", scheme = "shared-token", secretName = "DEVICE_TOKEN", body }));
+        Assert.True(made["secretCreated"]!.GetValue<bool>());
+        var secrets = await ControlPlaneApp.Ok(owner.GetAsync("/api/secrets?scope=frostaura/technologies/squash/bookings"));
+        Assert.Contains(secrets["effective"]!.AsArray(), e => e!["name"]!.GetValue<string>() == "DEVICE_TOKEN");
+        Assert.Equal(64, appCalls.Last().Request.Headers.GetValues("X-Device-Token").Single().Length);
+
+        // Only a declared webhook, and only a header the platform does not own.
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/apps/{appId}/webhook-test", new { name = "nope", header = "X-Sig", scheme = "hmac-sha256", secretName = "COURT_HARDWARE_SECRET", body }), HttpStatusCode.NotFound);
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/apps/{appId}/webhook-test", new { name = "court-status", header = "X-Endgame-Session", scheme = "shared-token", secretName = "COURT_HARDWARE_SECRET", body }), HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Sharing_an_app_e_mails_the_person_their_one_time_code_and_the_apps_address()
+    {
+        // The spec shares an app "by e-mail address"; the acceptance run found the code returned but never sent.
+        await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/apps/{appId}/settings", new { access = "shared" }));
+        var share = await ControlPlaneApp.Created(owner.PostAsJsonAsync($"/api/apps/{appId}/shares", new { email = "friend@example.com" }));
+        Assert.True(share["emailed"]!.GetValue<bool>());
+        await app.Services.GetRequiredService<EmailDispatcher>().DispatchOnceAsync(CancellationToken.None);
+        var received = smtp.Messages.Last();
+        Assert.Equal(["friend@example.com"], received.To);
+        string text;
+        await using (var db = new NpgsqlConnection(app.ConnectionString))
+        {
+            await db.OpenAsync();
+            await using var command = new NpgsqlCommand("SELECT text_body FROM email_messages WHERE 'friend@example.com' = ANY(recipients) AND status = 'sent'", db);
+            text = (string)(await command.ExecuteScalarAsync())!;
+        }
+
+        Assert.Contains(share["invitationCode"]!.GetValue<string>(), text, StringComparison.Ordinal);
+        Assert.Contains("/frostaura/technologies/squash/bookings/", text, StringComparison.Ordinal);
     }
 
     [Fact]

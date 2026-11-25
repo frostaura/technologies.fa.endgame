@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
+using Endgame.Harness.Events;
 using Endgame.Harness.Kernel;
 using Endgame.Harness.Model;
 using Endgame.Harness.Platform;
@@ -34,6 +35,190 @@ public sealed class EdgePreviewProbe(HttpClient edgeControl) : IPreviewProbe
 
         var answer = await response.Content.ReadFromJsonAsync<JsonObject>(Json.Web, cancellationToken) ?? [];
         return new PreviewAnswer(Json.Int(answer, "status") ?? 0, Json.Str(answer, "contentType") ?? "", Json.Str(answer, "body") ?? "");
+    }
+}
+
+/// <summary>One answer of the running app to a signed-in call.</summary>
+public sealed record AppCallAnswer(int Status, string ContentType, string Body);
+
+/// <summary>The evaluator calling the running app as a signed-in test member (ARCH-004, <i>Checking the work</i>).</summary>
+public interface IAppCaller
+{
+    Task<AppCallAnswer> CallAsync(Guid appId, string persona, string role, string method, string path, string? body, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// A session for the test member from the control plane (<c>POST /internal/apps/{id}/test-session</c>), then the call
+/// through Edge's control listener (<c>ANY /internal/apps/{id}/call/{path}</c>), which wakes the app and forwards the
+/// session as <c>X-Endgame-Session</c>: the app sees that member as if they had come through its door. The Runner
+/// joins no app network and never holds a member's own credentials.
+/// </summary>
+public sealed class EdgeAppCaller(HttpClient edgeControl, ControlPlaneClient controlPlane) : IAppCaller
+{
+    public const int MaxBody = 48 * 1024;
+
+    public async Task<AppCallAnswer> CallAsync(Guid appId, string persona, string role, string method, string path, string? body, CancellationToken cancellationToken)
+    {
+        var session = await controlPlane.TestSessionAsync(appId, persona, role, cancellationToken);
+        using var request = new HttpRequestMessage(new HttpMethod(method), $"/internal/apps/{appId:D}/call/{path.TrimStart('/')}");
+        request.Headers.TryAddWithoutValidation(Endgame.Hosting.Contracts.HostingConventions.SessionHeader, session);
+        request.Headers.TryAddWithoutValidation("Accept", "application/json, text/html;q=0.8, */*;q=0.5");
+        if (!string.IsNullOrEmpty(body) && method is not ("GET" or "DELETE"))
+        {
+            request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        }
+
+        using var response = await edgeControl.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        var type = response.Content.Headers.ContentType?.ToString() ?? "";
+        var text = await response.Content.ReadAsStringAsync(cancellationToken);
+        // Edge's own refusals (the app is paused, cannot be woken, the path is the platform's) are not the app's answer.
+        if (response.Headers.TryGetValues(Endgame.Hosting.Contracts.HostingConventions.RefusalHeader, out var refusal))
+        {
+            throw new ServiceProblemException(response.StatusCode, refusal.First(), Json.Str(JsonNode.Parse(text) as JsonObject, "title") ?? text);
+        }
+
+        return new AppCallAnswer((int)response.StatusCode, type, text.Length > MaxBody ? text[..MaxBody] : text);
+    }
+}
+
+/// <summary>
+/// <c>call_app</c>: the evaluator's signed-in view of the running app. Every call is logged as its result, whose first
+/// line (<c>HTTP 200 … — GET api/books as member-a (member)</c>) is what the evaluation gate reads to see which calls were made.
+/// </summary>
+public sealed partial class CallAppTool(IAppCaller caller, Guid appId) : ITool
+{
+    public const string ToolName = "call_app";
+
+    public string Name => ToolName;
+
+    public string Description => "Call the running app as a SIGNED-IN test member, exactly as a person using it would: any method, a path relative to the app (for example 'api/bookings' or 'api/courts/2/bookings?date=2026-11-25'), an optional JSON body. 'as' names the test member (the same name is the same person every time, so ownership can be checked with two names); 'role' is member (an ordinary member), admin, or viewer. Use it to show each requirement working in the running app.";
+
+    public JsonObject Parameters => Schema.Object(new JsonObject
+    {
+        ["method"] = Schema.Enum("The HTTP method.", "GET", "POST", "PUT", "PATCH", "DELETE"),
+        ["path"] = Schema.Str("The path under the app's address, without a leading slash."),
+        ["body"] = Schema.Str("A JSON body, for POST, PUT and PATCH."),
+        ["as"] = Schema.Str("The test member: a lowercase name such as member-a, member-b or club-admin. Default member-a."),
+        ["role"] = Schema.Enum("The test member's role in the organisation. Default member.", "member", "admin", "viewer"),
+    }, "method", "path");
+
+    public ToolEffect Effect => ToolEffect.ReadOnly;
+
+    public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root) => (ToolTargets.None, null);
+
+    public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var method = (Json.Str(call.Arguments, "method") ?? "GET").ToUpperInvariant();
+        var path = (Json.Str(call.Arguments, "path") ?? "").Trim().TrimStart('/');
+        var persona = Json.Str(call.Arguments, "as") is { Length: > 0 } p ? p.Trim().ToLowerInvariant() : "member-a";
+        var role = Json.Str(call.Arguments, "role") ?? "member";
+        var platformRole = role switch { "admin" => "admin", "viewer" => "viewer", _ => "builder" };
+        try
+        {
+            var answer = await caller.CallAsync(appId, persona, platformRole, method, path, Json.Str(call.Arguments, "body"), cancellationToken);
+            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {answer.Status} {answer.ContentType} — {method} {path} as {persona} ({role})\n\n{OutputText.Truncate(answer.Body, 8000)}"));
+        }
+        catch (Exception e) when (e is ServiceProblemException or HttpRequestException)
+        {
+            return ToolOutcome.Error($"The running app could not be called: {e.Message}. A requirement you cannot show working in the running app is not met.", "app_unreachable");
+        }
+    }
+
+    /// <summary>The calls the agent made that the app answered (signed in, or to a webhook as its device), as <c>"GET api/books"</c> (query dropped), read back from the run log.</summary>
+    public static IReadOnlyList<string> CallsIn(IEnumerable<RunEvent> log, string agentId) =>
+        log.Where(e => e.Type == HarnessEvents.ToolResult && Json.Str(e.Payload, HarnessEvents.AgentField) == agentId
+                && Json.Str(e.Payload, "name") is ToolName or CallWebhookTool.ToolName && Json.Bool(e.Payload, "isError") != true)
+            .Select(e => CallLine().Match((Json.Str(e.Payload, "content") ?? "").Split('\n')[0]))
+            .Where(m => m.Success)
+            .Select(m => $"{m.Groups[1].Value} {m.Groups[2].Value.Split('?')[0]}")
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^HTTP \d{3} .*? — (GET|POST|PUT|PATCH|DELETE) (\S*) as ")]
+    private static partial System.Text.RegularExpressions.Regex CallLine();
+}
+
+/// <summary>
+/// <c>call_webhook</c>: one of the app's declared webhooks called the way its device would — the control plane signs it
+/// with the vault's secret (and makes the secret at the app when nobody has set it), so the evaluator never holds one.
+/// Its result's first line has <c>call_app</c>'s shape, so the gate counts it as a call to the running app.
+/// </summary>
+public sealed class CallWebhookTool(ControlPlaneClient controlPlane, Guid appId) : ITool
+{
+    public const string ToolName = "call_webhook";
+
+    public string Name => ToolName;
+
+    public string Description => "Call one of the app's declared webhooks (an incoming endpoint for a device or another service, at hooks/<name>) exactly as the device would: the platform signs the request with the vault secret the app verifies with. Read the app's code for the webhook's name, the header it checks, its scheme (MapWebhook with WebhookVerification.HmacSha256(header, secretName, prefix) or SharedToken(header, secretName)) and the body it expects.";
+
+    public JsonObject Parameters => Schema.Object(new JsonObject
+    {
+        ["name"] = Schema.Str("The webhook's declared name, as in MapWebhook(\"name\", …)."),
+        ["header"] = Schema.Str("The header the app verifies, for example X-Court-Signature."),
+        ["scheme"] = Schema.Enum("How it is verified.", "hmac-sha256", "shared-token"),
+        ["secret_name"] = Schema.Str("The vault secret the app verifies with, in UPPER_SNAKE_CASE."),
+        ["prefix"] = Schema.Str("For hmac-sha256: what comes before the hex signature (the kit's default is sha256=)."),
+        ["body"] = Schema.Str("The JSON body the device sends."),
+    }, "name", "header", "scheme", "secret_name", "body");
+
+    public ToolEffect Effect => ToolEffect.ReadOnly;
+
+    public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root) => (ToolTargets.None, null);
+
+    public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var name = (Json.Str(call.Arguments, "name") ?? "").Trim();
+        var scheme = Json.Str(call.Arguments, "scheme") ?? "hmac-sha256";
+        try
+        {
+            var answer = await controlPlane.TestWebhookAsync(appId, new JsonObject
+            {
+                ["name"] = name,
+                ["header"] = Json.Str(call.Arguments, "header"),
+                ["scheme"] = scheme,
+                ["secretName"] = Json.Str(call.Arguments, "secret_name"),
+                ["prefix"] = Json.Str(call.Arguments, "prefix") ?? (scheme == "hmac-sha256" ? "sha256=" : ""),
+                ["body"] = Json.Str(call.Arguments, "body") ?? "",
+            }, cancellationToken);
+            var made = Json.Bool(answer, "secretCreated") == true ? $" (the secret {Json.Str(answer, "secretName")} was not set, so the platform made one at the app)" : "";
+            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {Json.Int(answer, "status")} {Json.Str(answer, "contentType")} — POST hooks/{name} as device (signed){made}\n\n{OutputText.Truncate(Json.Str(answer, "body") ?? "", 8000)}"));
+        }
+        catch (Exception e) when (e is ServiceProblemException or HttpRequestException)
+        {
+            return ToolOutcome.Error($"The webhook could not be called: {e.Message}.", "app_unreachable");
+        }
+    }
+}
+
+/// <summary><c>sent_emails</c>: the e-mail the running app asked the platform to send, newest first — the evidence for an e-mail requirement.</summary>
+public sealed class SentEmailsTool(ControlPlaneClient controlPlane, Guid appId) : ITool
+{
+    public string Name => "sent_emails";
+
+    public string Description => "List the e-mail the running app has asked the platform to send, newest first: recipients, subject, text and delivery status. Use it after the call_app call that should send one.";
+
+    public JsonObject Parameters => Schema.Object(new JsonObject { ["limit"] = Schema.Int("At most this many (1-20).") });
+
+    public ToolEffect Effect => ToolEffect.ReadOnly;
+
+    public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root) => (ToolTargets.None, null);
+
+    public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        try
+        {
+            var mails = await controlPlane.SentEmailsAsync(appId, Math.Clamp(Json.Int(call.Arguments, "limit") ?? 10, 1, 20), cancellationToken);
+            return new ToolOutcome(mails.Count == 0
+                ? "The app has sent no e-mail."
+                : string.Join("\n\n", mails.OfType<JsonObject>().Select(m => $"To: {string.Join(", ", Json.Strings(m, "to"))}\nSubject: {Json.Str(m, "subject")}\nStatus: {Json.Str(m, "status")} at {Json.Str(m, "createdAt")}\n{OutputText.Truncate(Json.Str(m, "text") ?? "", 1500)}")));
+        }
+        catch (ServiceProblemException e)
+        {
+            return ToolOutcome.Error($"The sent e-mail could not be read: {e.Detail}. Count an e-mail requirement as not shown.", "unavailable");
+        }
     }
 }
 

@@ -102,6 +102,36 @@ jobs:
       - name: Both-addresses proof, in a real browser, against the kit's dev platform
         run: make appkit-proof
 
+  # The ops service (ARCH-007): unit tests, the reconciler against a fake Cloudflare, the outage
+  # Worker under Node, and the backup -> destroy -> restore rehearsal, which builds and runs a whole
+  # throwaway stack of its own (plus a local S3-compatible server) on the runner's Docker engine.
+  ops:
+    name: Ops (with the restore rehearsal)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26"
+
+      # The rehearsal's stack builds Dock, whose image carries the app kit's template.
+      - name: Pack the app kit into the template
+        run: make appkit-vendor
+
+      # The runner's socket is root:docker; the rehearsal's Dock joins that group, as it would on a
+      # Linux host. The rehearsal reads no .env, so the value goes in the job's environment.
+      - name: Docker socket group for Dock
+        run: echo "DOCKER_SOCKET_GID=$(stat -c %g /var/run/docker.sock)" >> "$GITHUB_ENV"
+
+      - name: Ops tests (make ops-test)
+        run: make ops-test
+
   frontend:
     name: Frontend
     runs-on: ubuntu-24.04
@@ -289,7 +319,7 @@ jobs:
   publish:
     name: Publish ${{ matrix.image }}
     if: vars.PUBLISH_ENABLED == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [backend, hosting, appkit, frontend, security, stack-smoke, e2e, stack-acceptance]
+    needs: [backend, hosting, appkit, ops, frontend, security, stack-smoke, e2e, stack-acceptance]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -319,6 +349,10 @@ jobs:
           - image: egress
             context: src/egress
             dockerfile: src/egress/Dockerfile
+            project: ""
+          - image: ops
+            context: .
+            dockerfile: src/ops/Dockerfile
             project: ""
     steps:
       - uses: actions/checkout@v7.0.1

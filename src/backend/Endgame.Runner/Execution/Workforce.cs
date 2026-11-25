@@ -67,6 +67,16 @@ public static class Workforce
                 return null;
             }
 
+            // Said before it is journaled, and without a milestone: a hire is not a milestone and its key is not for people.
+            // A Runner that dies between the two raises the hire again, and the control plane answers created: false.
+            if (hire.Created)
+            {
+                var credits = need.MonthlyCredits.ToString("0.##", CultureInfo.InvariantCulture);
+                await (hire.EmployeeId is not null
+                    ? SayAsync(run, "runner", $"Hired {need.Name}", $"{need.Name} joins as {Article(need.Role)} {Lower(need.Role)}, at up to {credits} credits a month: {need.Reason}", cancellationToken)
+                    : SayAsync(run, "runner", $"{need.Name} is proposed", $"The factory proposes hiring {need.Name} as {Article(need.Role)} {Lower(need.Role)}, at up to {credits} credits a month. It waits for you; the work goes ahead meanwhile.", cancellationToken));
+            }
+
             recorded = await run.Journal.RecordAsync(step, new JsonObject
             {
                 ["hireId"] = hire.HireId.ToString(),
@@ -75,13 +85,6 @@ public static class Workforce
                 ["role"] = need.Role,
                 ["name"] = need.Name,
             }, cancellationToken);
-            if (hire.Created)
-            {
-                var credits = need.MonthlyCredits.ToString("0.##", CultureInfo.InvariantCulture);
-                await (hire.EmployeeId is not null
-                    ? SayAsync(run, "runner", $"Hired {need.Name}", $"{need.Name} joins as {Article(need.Role)} {Lower(need.Role)}, at up to {credits} credits a month: {need.Reason}", cancellationToken, $"hired:{need.NeedKey}")
-                    : SayAsync(run, "runner", $"{need.Name} is proposed", $"The factory proposes hiring {need.Name} as {Article(need.Role)} {Lower(need.Role)}, at up to {credits} credits a month. It waits for you; the work goes ahead meanwhile.", cancellationToken, $"proposed:{need.NeedKey}"));
-            }
         }
 
         return Guid.TryParse(Json.Str(recorded, "employeeId"), out var id) ? id : null;

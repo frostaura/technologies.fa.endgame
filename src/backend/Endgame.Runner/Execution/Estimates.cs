@@ -39,7 +39,7 @@ public sealed class Estimator(RunnerOptions options)
         var perRun = history.Count >= MinimumSamples ? Median(history) : prior;
         var basis = history.Count >= MinimumSamples
             ? string.Create(CultureInfo.InvariantCulture, $"median of the last {history.Count} {run.Run.Kind} runs")
-            : $"the starting figure for {run.Run.Kind} runs (fewer than {MinimumSamples} finished runs to learn from)";
+            : $"the measured starting figure for {run.Run.Kind} runs (fewer than {MinimumSamples} finished runs here to learn from)";
         if (planItems is > 0 && run.Run.Kind == RunKinds.Build)
         {
             // A build's history is per run of a typical size: scale by the plan, a typical plan being four items.
@@ -89,6 +89,10 @@ public sealed class Estimator(RunnerOptions options)
         ["modelCalls"] = actual.Calls,
         ["ratio"] = expected > 0 ? decimal.Round(actual.Billable / expected, 4) : null,
     };
+
+    /// <summary>The most the run could cost, when the latest estimate states it (the control plane's research and suggest estimates do).</summary>
+    public static decimal? LatestCeiling(IReadOnlyList<RunEvent> log) =>
+        log.LastOrDefault(e => e.Type == HarnessEvents.EstimateMade) is { } e ? Json.Dec(e.Payload, "ceiling") : null;
 
     /// <summary>The most recent estimate in the log, which is what the run is scored against.</summary>
     public static decimal? Latest(IReadOnlyList<RunEvent> log) =>

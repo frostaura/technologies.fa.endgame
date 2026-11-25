@@ -20,10 +20,36 @@ public sealed class DockClient(HttpClient http)
         return response.StatusCode == HttpStatusCode.NotFound ? null : await ReadAsync<WorkspaceInfo>(response, cancellationToken);
     }
 
+    /// <summary>How long a workspace may wait for Dock to finish preparing the workspace image (a fresh stack builds it first).</summary>
+    public TimeSpan WorkspaceImageWait { get; init; } = TimeSpan.FromMinutes(20);
+
+    public TimeSpan WorkspaceImagePoll { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// A workspace for the run. While Dock is still preparing the workspace image (503 <c>workspace_image_not_ready</c>, a
+    /// fresh stack's first minutes) it waits and asks again, up to <see cref="WorkspaceImageWait"/>: a live build failed
+    /// at once when research finished before the image did.
+    /// </summary>
     public async Task<WorkspaceInfo> CreateWorkspaceAsync(CreateWorkspaceRequest request, CancellationToken cancellationToken)
     {
-        using var response = await Http.PostAsJsonAsync("/internal/workspaces", request, Json.Web, cancellationToken);
-        return await ReadAsync<WorkspaceInfo>(response, cancellationToken);
+        var deadline = DateTimeOffset.UtcNow + WorkspaceImageWait;
+        while (true)
+        {
+            using var response = await Http.PostAsJsonAsync("/internal/workspaces", request, Json.Web, cancellationToken);
+            if (response.StatusCode == HttpStatusCode.ServiceUnavailable && DateTimeOffset.UtcNow < deadline)
+            {
+                var problem = await ServiceProblemException.FromAsync(response, cancellationToken);
+                if (problem.Code == DockProblemCodes.WorkspaceImageNotReady)
+                {
+                    await Task.Delay(WorkspaceImagePoll, cancellationToken);
+                    continue;
+                }
+
+                throw new WorkspaceException($"Dock refused: {problem.Detail}", problem.Code);
+            }
+
+            return await ReadAsync<WorkspaceInfo>(response, cancellationToken);
+        }
     }
 
     public async Task RenewWorkspaceAsync(Guid runId, DateTimeOffset expiresAt, CancellationToken cancellationToken)

@@ -53,4 +53,42 @@ public sealed class InvitationMailer(EndgameDbContext db, TenantSession session,
         db.ChangeTracker.Clear();
         return true;
     }
+
+    /// <summary>A share of an app (spec: shared "by e-mail address"): the code and where to register with it.</summary>
+    /// <returns>True when the e-mail was queued.</returns>
+    public async Task<bool> SendShareAsync(ResolvedScope app, string email, string code, DateTimeOffset expiresAt, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        if (!sender.IsConfigured)
+        {
+            return false;
+        }
+
+        var address = addresses.Value.Origin(addresses.Value.PathHost) + "/" + app.Path + "/";
+        var now = clock.GetUtcNow();
+        session.UseOrganisation(app.OrganisationId);
+        db.EmailMessages.Add(new EmailMessageRecord
+        {
+            Id = Guid.NewGuid(),
+            OrganisationId = app.OrganisationId,
+            AppId = null,
+            Recipients = [email],
+            Subject = $"{app.Nodes[0].Name} shared {app.Node.Name} with you",
+            TextBody = $"""
+                {app.Nodes[0].Name} shared {app.Node.Name} with you.
+
+                Open {address} and choose "Create an account" with this e-mail address and the code below.
+                You sign in with a passkey; no password is ever set.
+
+                Invitation code: {code}
+                It works once, until {expiresAt:yyyy-MM-dd HH:mm} UTC.
+                """,
+            Status = "queued",
+            NextAttemptAt = now,
+            CreatedAt = now,
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        db.ChangeTracker.Clear();
+        return true;
+    }
 }

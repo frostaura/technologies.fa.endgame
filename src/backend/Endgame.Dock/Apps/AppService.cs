@@ -154,6 +154,10 @@ public sealed class AppService(
             var name = names.AppContainer(appId);
             var container = await TryInspectAsync(name, cancellationToken)
                 ?? throw new DockProblem(StatusCodes.Status409Conflict, DockProblemCodes.NotPublished, "The app has not been started yet.");
+
+            // A peer recreated since the app started (a redeployed edge, a restarted database or proxy) is no longer on
+            // the app's network, and the app is unreachable however often it is woken: join them again first (idempotent).
+            await networks.ConnectPeersAsync(names.AppNetwork(appId), NetworkPeers.Edge | NetworkPeers.Postgres | NetworkPeers.Egress, cancellationToken);
             if (container.State?.Running != true)
             {
                 await StartContainerAsync(appId, runtime, name, cancellationToken);

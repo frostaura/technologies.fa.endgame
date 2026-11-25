@@ -23,6 +23,8 @@ public sealed record LeaseRequest(string? Holder, int Seconds);
 
 public sealed record EventInput(string? Type, JsonObject? Payload);
 
+public sealed record TestSessionRequest(string? Persona, string? Role);
+
 public sealed record AppendEventsRequest(string? LeaseHolder, IReadOnlyList<EventInput>? Events);
 
 public sealed record CheckoutRequest(Guid TaskId, Guid RunId, Guid? EmployeeId, string? ExpectedStatus, Guid? ExpectedHolderRunId);
@@ -209,6 +211,28 @@ internal static class InternalEndpoints
             return Results.Ok(new AppTokenResult(await tokens.IssueAsync(scope, ct)));
         })
         .WithName("IssueAppToken").WithSummary("Dock, before it starts an app: a fresh platform token for it (stored only as a hash). The previous one keeps working for a short grace period.").Produces<AppTokenResult>();
+
+        group.MapPost("/apps/{id:guid}/test-session", async (Guid id, TestSessionRequest request, ScopeResolver scopes, AppIdentityService identity, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
+            var (token, user, expiresAt) = identity.TestMemberToken(scope, request.Persona ?? "", request.Role ?? "builder");
+            return Results.Ok(new { sessionToken = token, user, expiresAt });
+        })
+        .WithName("IssueTestMemberSession").WithSummary("The factory's evaluator: an app-scoped session for a named test member (admin, builder or viewer; never the Owner), so it can call the running app signed in through Edge.");
+
+        group.MapGet("/apps/{id:guid}/emails", async (Guid id, int? limit, ScopeResolver scopes, EvaluatorAids aids, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
+            return Results.Ok(await aids.SentEmailsAsync(scope, limit ?? 20, ct));
+        })
+        .WithName("AppSentEmails").WithSummary("The factory's evaluator: the e-mail an app asked the platform to send, newest first (text cut at 2000 characters).");
+
+        group.MapPost("/apps/{id:guid}/webhook-test", async (Guid id, WebhookTestRequest request, ScopeResolver scopes, EvaluatorAids aids, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
+            return Results.Ok(await aids.CallWebhookAsync(scope, request, ct));
+        })
+        .WithName("TestAppWebhook").WithSummary("The factory's evaluator: calls a declared webhook as its device would, signed here with the vault's secret (made at the app when none is set); the secret is never returned.");
 
         group.MapPost("/access/check", async (AccessCheckRequest request, AppIdentityService identity, CancellationToken ct) =>
             Results.Ok(await identity.CheckAsync(request, ct)))

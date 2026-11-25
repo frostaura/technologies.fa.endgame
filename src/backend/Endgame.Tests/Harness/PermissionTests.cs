@@ -109,7 +109,9 @@ public sealed class PermissionTests
         var agent = TestAgents.Builder(change: a => a with { Permissions = new PermissionPolicy { Cascade = [OrgRules] } });
         var (_, log) = await TestAgents.RunAsync(agent, model, ws, services: TestAgents.Services(model) with { Approvals = gate });
         Assert.Single(gate.Asked);
-        Assert.Contains("infra/main.tf", gate.Asked[0], StringComparison.Ordinal);
+        // The owner reads the title in plain words; the tool and its file are the detail (technical mode).
+        Assert.Equal("Let the agent change part of the app?", gate.Asked[0]);
+        Assert.Contains("write_file: infra/main.tf", gate.Details[0], StringComparison.Ordinal);
         var decision = log.Events.Single(e => e.Type is "tool.permitted" or "tool.denied");
         Assert.Equal(type, decision.Type);
         Assert.Equal(rule, decision.Payload["rule"]!.GetValue<string>());
@@ -144,9 +146,12 @@ public sealed class PermissionTests
     {
         public List<string> Asked { get; } = [];
 
+        public List<string> Details { get; } = [];
+
         public Task<bool> RequestAsync(string title, string detail, CancellationToken cancellationToken)
         {
             Asked.Add(title);
+            Details.Add(detail);
             return Task.FromResult(answer);
         }
     }

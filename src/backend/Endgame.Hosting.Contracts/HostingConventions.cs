@@ -18,6 +18,9 @@ public static class HostingConventions
     /// <summary>The app-scoped session token of the admitted visitor; the app resolves it through the platform API.</summary>
     public const string SessionHeader = "X-Endgame-Session";
 
+    /// <summary>On an answer from Edge's control listener: Edge itself refused the call (its code), so the body is not the app's.</summary>
+    public const string RefusalHeader = "X-Endgame-Refusal";
+
     /// <summary>How long a visitor waited for a sleeping app to wake, in milliseconds.</summary>
     public const string WakeTimeHeader = "X-Endgame-Wake-Ms";
 

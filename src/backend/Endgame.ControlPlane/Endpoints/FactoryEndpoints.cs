@@ -155,8 +155,8 @@ internal static class FactoryEndpoints
                 resolved = await scopes.RequireAsync(ScopePath.Of(resolved.Path.Organisation, resolved.Path.Division!).ToString(), ct);
             }
 
-            var estimate = estimator.EstimateResearch(request.Text, request.Constraints);
-            var started = await ideas.CreateAsync(resolved, request.Text ?? "", request.Constraints, estimate.Credits, null, ct, via: "conversation");
+            var estimate = await estimator.ResearchAsync(resolved.OrganisationId, request.Text, request.Constraints, ct);
+            var started = await ideas.CreateAsync(resolved, request.Text ?? "", request.Constraints, estimate.Credits, null, ct, via: "conversation", estimate.Basis, estimate.Ceiling);
             return Results.Created($"/api/ideas/{started.Idea.Id}", new { idea = started.Idea, run = started.Run, estimate = new IdeaEstimateView(estimate.Credits, estimate.Basis) });
         })
         .WithName("StartIdeaInternal")

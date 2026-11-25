@@ -52,6 +52,46 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
 
     private static JsonArray Tools() => [new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = "edit_file", ["parameters"] = new JsonObject { ["type"] = "object" } } }];
 
+    // ------------------------------------------------------------------ estimates
+
+    [Fact]
+    public async Task The_research_estimate_starts_at_a_measured_figure_then_tracks_the_median_of_past_actuals_under_its_ceiling()
+    {
+        async Task<JsonObject> EstimateOfNewIdeaAsync()
+        {
+            var idea = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/ideas", new { scope = "frostaura/technologies", text = "A court booking app for a squash club.", constraints = Array.Empty<string>() }));
+            var events = (await ControlPlaneApp.Ok(service.GetAsync($"/internal/runs/{idea["runId"]}/events"))).AsArray();
+            return events.Single(e => e!["type"]!.GetValue<string>() == "estimate.made")!["payload"]!.AsObject();
+        }
+
+        // No history yet: the measured starting figure, said as such, with the most it could cost beside it.
+        var first = await EstimateOfNewIdeaAsync();
+        Assert.Equal(12m, first["credits"]!.GetValue<decimal>());
+        Assert.Contains("starting figure", first["reason"]!.GetValue<string>(), StringComparison.Ordinal);
+        var ceiling = first["ceiling"]!.GetValue<decimal>();
+        Assert.True(ceiling > first["credits"]!.GetValue<decimal>());
+
+        // Three research runs actually cost 20, 30 and 45 credits: the estimate is now their median.
+        var gateway = new GatewayModelClient(app.Internal(), stream: false);
+        foreach (var usd in new[] { 0.20m, 0.45m, 0.30m })
+        {
+            var run = await RunAsync("frostaura/technologies", "research");
+            openRouter.Chat = FakeOpenRouter.Completion(usd);
+            await gateway.CompleteAsync(new ChatCall("research", "frostaura/technologies", run, null, Messages(), null, 2000, false, null, null), CancellationToken.None);
+            await FinishAsync(run);
+        }
+
+        var calibrated = await EstimateOfNewIdeaAsync();
+        Assert.Equal(30m, calibrated["credits"]!.GetValue<decimal>());
+        Assert.Contains("median of the last 3 research runs", calibrated["reason"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal(ceiling, calibrated["ceiling"]!.GetValue<decimal>());
+
+        // The public estimate says the same, with its basis, for the organisation named.
+        var shown = await ControlPlaneApp.Ok(owner.PostAsJsonAsync("/api/ideas/estimate", new { text = "A court booking app for a squash club.", scope = "frostaura" }));
+        Assert.Equal(30m, shown["credits"]!.GetValue<decimal>());
+        Assert.Contains("median", shown["basis"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
     // ------------------------------------------------------------------ A1, A2
 
     [Theory]

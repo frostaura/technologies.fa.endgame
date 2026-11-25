@@ -10,7 +10,7 @@ using Endgame.Hosting.Contracts;
 namespace Endgame.Tests.Hosting;
 
 /// <summary>
-/// A whole hosting stack on the real Docker Engine, named <c>test-endgame-*</c>: PostgreSQL, the
+/// A whole hosting stack on the real Docker Engine, named <c>test-endgame-&lt;run id&gt;-*</c>: PostgreSQL, the
 /// egress proxy, Dock (with the socket) and Edge, built from this repository's own Dockerfiles,
 /// with the control plane faked in the test process. Two apps are created from the fixture
 /// template, built and started once for the whole collection. Everything is removed afterwards.
@@ -19,7 +19,8 @@ public sealed class HostingEnvironment : IAsyncLifetime
 {
     public const string Organisation = "acme";
     public const string Division = "apps";
-    public const string SubnetPool = "10.214.0.0/16";
+    /// <summary>This run's own pool (<see cref="DockerCli.SubnetPoolAsync"/>), set before anything starts.</summary>
+    public static string SubnetPool { get; private set; } = "";
     public const string NotesHost = "acme.endgame.test";
 
     /// <summary>The fake control plane as apps reach it, through the proxy.</summary>
@@ -70,6 +71,7 @@ public sealed class HostingEnvironment : IAsyncLifetime
         }
 
         await DockerCli.RemoveEverythingOursAsync();
+        SubnetPool = await DockerCli.SubnetPoolAsync();
         ControlPlane = await FakeControlPlane.StartAsync(Token, listenOnAllInterfaces: OperatingSystem.IsLinux());
 
         var clock = Stopwatch.StartNew();
@@ -108,9 +110,9 @@ public sealed class HostingEnvironment : IAsyncLifetime
             "-p", $"127.0.0.1:{dockPort}:8080",
             "-e", $"{HostingConventions.ServiceTokenVariable}={Token}",
             "-e", $"Dock__ResourcePrefix={DockerCli.Prefix}",
-            "-e", "Dock__Instance=test-endgame",
+            "-e", $"Dock__Instance={DockerCli.Prefix.TrimEnd('-')}",
             "-e", $"Dock__SubnetPool={SubnetPool}",
-            "-e", $"Dock__WorkspaceImageRepository={Container("workspace")}",
+            "-e", $"Dock__WorkspaceImageRepository={DockerCli.SharedPrefix}workspace",
             "-e", $"Dock__SecretKey={Convert.ToHexString(RandomNumberGenerator.GetBytes(24))}",
             "-e", $"Dock__PostgresAdmin=Host={Container("postgres")};Username=postgres;Password={postgresPassword};Database=postgres",
             "-e", $"Dock__Peers__Edge={Container("edge")}",
@@ -191,7 +193,7 @@ public sealed class HostingEnvironment : IAsyncLifetime
         await ControlPlane.DisposeAsync();
         if (Environment.GetEnvironmentVariable("ENDGAME_TEST_KEEP_DOCKER") == "1")
         {
-            return; // debugging only: leaves every test-endgame-* resource for inspection
+            return; // debugging only: leaves every resource of this run for inspection
         }
 
         await DockerCli.RemoveEverythingOursAsync();

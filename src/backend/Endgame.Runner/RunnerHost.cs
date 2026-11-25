@@ -44,11 +44,13 @@ public static class RunnerHost
         services.AddSingleton(new AgentFactory(options));
         services.AddSingleton(new Estimator(options));
         services.AddSingleton<IPreviewProbe>(sp => new EdgePreviewProbe(sp.GetRequiredService<IHttpClientFactory>().CreateClient("edge-control")));
+        services.AddSingleton<IAppCaller>(sp => new EdgeAppCaller(sp.GetRequiredService<IHttpClientFactory>().CreateClient("edge-control"), sp.GetRequiredService<ControlPlaneClient>()));
         services.AddSingleton<IWorkflow, TaskWorkflow>();
         services.AddSingleton<IWorkflow, ResearchWorkflow>();
-        services.AddSingleton<IWorkflow>(sp => new BuildWorkflow(sp.GetRequiredService<Estimator>(), sp.GetRequiredService<IPreviewProbe>()));
+        services.AddSingleton<IWorkflow>(sp => new BuildWorkflow(sp.GetRequiredService<Estimator>(), sp.GetRequiredService<IPreviewProbe>(), sp.GetRequiredService<IAppCaller>()));
         services.AddSingleton<IWorkflow, ConversationWorkflow>();
         services.AddSingleton<IWorkflow, ReviewWorkflow>();
+        services.AddSingleton<IWorkflow, SuggestWorkflow>();
         services.AddSingleton(sp => new RunExecutor(
             sp.GetRequiredService<ControlPlaneClient>(),
             sp.GetRequiredService<IModelClient>(),

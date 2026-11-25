@@ -29,10 +29,12 @@ FROM ${DOTNET_RUNTIME} AS runtime
 ARG PROJECT
 WORKDIR /app
 # curl for the compose healthcheck; tini as PID 1 so a start-up crash exits and the restart policy
-# fires, instead of dotnet-as-init spinning on its own SIGABRT. Dock also drives the git CLI.
+# fires, instead of dotnet-as-init spinning on its own SIGABRT. Dock also drives the git CLI, and
+# pg_dump 16 (the shared server's major version; Ubuntu 24.04's own package) for an app's data export.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl tini $([ "$PROJECT" = "Endgame.Dock" ] && echo git) \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends curl tini $([ "$PROJECT" = "Endgame.Dock" ] && echo git postgresql-client-16) \
+    && rm -rf /var/lib/apt/lists/* \
+    && if [ "$PROJECT" = "Endgame.Dock" ]; then /usr/lib/postgresql/16/bin/pg_dump --version | grep -q ' 16\.'; fi
 COPY --from=app-template /template/ /opt/endgame/app-template/
 # Only Dock keeps the template; only Dock has a data directory (repositories, its small state).
 RUN rm -f /opt/endgame/app-template/Dockerfile \

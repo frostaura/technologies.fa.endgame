@@ -394,9 +394,21 @@ public sealed class AgentLoop
         }
 
         var what = targets.Command ?? string.Join(", ", targets.Paths.Select(p => p.Relative));
+        // The title is for the owner (ARCH-004): what the agent wants to do, in words; the tool, its command or its
+        // files are technical detail. An idea's own text is the owner's words, so it stays in the title.
+        var title = name switch
+        {
+            "start_idea" => $"Start researching an idea: {what}",
+            "adjust_setting" => "Change a setting for this part of the organisation",
+            "edit_file" or "write_file" => "Let the agent change part of the app",
+            "run" => "Let the agent run a check on the app",
+            "commit" => "Let the agent save a new version",
+            "tasks" => "Let the agent update its task list",
+            _ => "Let the agent take this step",
+        };
         var approved = await services.Approvals.RequestAsync(
-            OutputText.Truncate($"Allow {name}{(what.Length > 0 ? $": {what}" : "")}?", 300),
-            $"{asked.Reason} Checkpoint: {asked.Checkpoint}.",
+            OutputText.Truncate($"{title.TrimEnd('.')}?", 300),
+            $"{name}{(what.Length > 0 ? $": {what}" : "")}. {asked.Reason} Checkpoint: {asked.Checkpoint}.",
             cancellationToken);
         return approved
             ? new PermissionDecision(PermissionVerdict.Allow, $"checkpoint:{asked.Checkpoint}:approved", "The owner approved this call.")

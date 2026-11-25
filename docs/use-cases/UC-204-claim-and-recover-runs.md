@@ -17,7 +17,7 @@
    cancel from each renewal's answer.
 3. Before work: an estimate in the log (`estimate.made`) and the gate — in auto-mode, work whose estimate exceeds the
    budget's headroom does not begin (the run pauses, saying why); with a start checkpoint, the owner approves first.
-4. The workflow for the run's kind runs (`task`, `research`, `build`, `conversation`, `review`).
+4. The workflow for the run's kind runs (`task`, `research`, `build`, `conversation`, `review`, `suggest`).
 5. At the end: `estimate.scored`, a plain-language `message`, `run.finished` — in one append.
 
 ## Alternate and failure flows
