@@ -11,11 +11,12 @@
       "command": "make backup",
       "output": [
         "docker compose up -d --wait postgres ops",
+        "[+] Running 2/2",
         " ✔ Container endgame-postgres-1  Healthy",
         " ✔ Container endgame-ops-1       Healthy",
         "docker compose exec -T ops /app/Endgame.Ops backup"
       ],
-      "note": "PostgreSQL and the ops service are started if they are not running. Production adds OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"."
+      "note": "PostgreSQL and the ops service are started if they are not running. On the production host add OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"."
     },
     {
       "step": 2,
@@ -24,12 +25,94 @@
       "output": [
         "Backing up to a directory on this machine (/backups), not offsite: no bucket is configured...",
         "Backup 20261125T101500Z: 48,213,504 bytes sealed (212,992,131 before encryption) in 6.4 s.",
-        "  databases: endgame",
+        "  databases: d_4c1e9a7b02f3d58e6a91c0b7, endgame",
         "  volume repositories: 1,284 files, 37,551,920 bytes",
         "BACKUP_ID=20261125T101500Z",
         "0.048 GB in 1 archive(s) on this machine; nothing is offsite."
       ],
-      "note": "The lines are the ops service's own; the id, sizes and timing are one run's."
+      "note": "The ops command line's own lines. With a bucket set, the first line names it and the last compares usage with the 10 GB free allowance. The service's info log lines are left out. Ids, sizes, seconds and dates are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "To the bucket, with old archives pruned",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make backup OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops backup",
+            "Backing up to the bucket 'endgame-backups' at 4b8e2d17c9a0f3e65d21b7c84a9f0e13.r2.cloudflarestorage.com, encrypted before upload...",
+            "Backup 20261125T010312Z: 51,380,224 bytes sealed (226,104,822 before encryption) in 9.1 s.",
+            "  databases: d_4c1e9a7b02f3d58e6a91c0b7, endgame",
+            "  volume repositories: 1,312 files, 38,927,411 bytes",
+            "  pruned by retention: 20261117T010245Z",
+            "BACKUP_ID=20261125T010312Z",
+            "0.411 GB of the 10 GB free allowance in 8 archive(s)."
+          ],
+          "note": "Production, with the four ENDGAME_BACKUP_S3_* keys set. Retention runs only after the archive is committed. The compose lines before the command are left out. Ids, sizes, seconds and dates are illustrative."
+        }
+      ]
+    },
+    {
+      "title": "Another backup or restore is running",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "docker compose exec -T ops /app/Endgame.Ops backup",
+          "output": [
+            "Backing up to a directory on this machine (/backups), not offsite: no bucket is configured...",
+            "Another backup or restore is running; try again when it has finished.",
+            "make: *** [backup] Error 1"
+          ],
+          "note": "Every backup and restore holds one PostgreSQL lease, so a second one at the same moment is refused and changes nothing. Exit code 1."
+        }
+      ]
+    },
+    {
+      "title": "The backup key is not 32 bytes",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "docker compose exec -T ops /app/Endgame.Ops backup",
+          "output": [
+            "Backing up to a directory on this machine (/backups), not offsite: no bucket is configured...",
+            "ENDGAME_BACKUP_KEY is not 32 bytes written as hex or base64, so no backup runs.",
+            "make: *** [backup] Error 1"
+          ],
+          "note": "The key must be 64 hex characters or base64 of 32 bytes (openssl rand -hex 32). With this key /health is also unhealthy (OPS-18), so the ops container fails its health check and the compose line before it fails first."
+        }
+      ]
+    },
+    {
+      "title": "The bucket is near the free allowance",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "docker compose exec -T ops /app/Endgame.Ops backup",
+          "output": [
+            "BACKUP_ID=20261125T010312Z",
+            "WARNING: The next backup would take the bucket to 8.214 GB of the 10 GB free allowance (more than 80%)."
+          ],
+          "note": "Once tomorrow's archive would pass 80% of the allowance the usage line starts with WARNING:. Past the allowance it says to keep fewer archives (ENDGAME_BACKUP_KEEP_DAILY / _WEEKLY) or accept the charge. Earlier lines are left out. Sizes are illustrative."
+        }
+      ]
     }
   ]
 }

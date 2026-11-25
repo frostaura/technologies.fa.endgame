@@ -1,0 +1,170 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-20",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "text",
+      "code": "1. the Worker:  GET …/workers/scripts/endgame-outage/settings  (its ENDGAME_SOURCE_SHA256 binding)\n2. routes:      GET /zones/{zone}/workers/routes\n3. the tunnel:  GET /accounts/{account}/cfd_tunnel/{tunnel}/configurations  (its ingress)\n4. DNS:         GET /zones/{zone}/dns_records",
+      "note": "What the reconciler reads before it plans, in the order it plans them: the Worker before any route names it, DNS last, so a name resolves only once the tunnel knows where to send it. Reading changes nothing."
+    },
+    {
+      "step": 2,
+      "kind": "terminal",
+      "command": "make ops-cloudflare-plan OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+      "output": [
+        "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops cloudflare-plan",
+        "  create   worker endgame-outage",
+        "           Upload the outage page Worker (sha256 a3f19c07be52).",
+        "  create   route  endgame.frostaura.net/*",
+        "           Route to endgame-outage.",
+        "  create   route  *.frostaura.net/*",
+        "           Route to endgame-outage.",
+        "  create   route  portainer.frostaura.net/*",
+        "           Exclude this host from the outage page: it is not Endgame's (a route with no Worker).",
+        "  create   route  www.frostaura.net/*",
+        "           Exclude this host from the outage page: it is not Endgame's (a route with no Worker).",
+        "  update   tunnel 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42",
+        "           Ingress becomes: 1 other hostname rule(s) kept as they are, then endgame.frostaura.net and *.frostaura.net → http://edge:8080, then 404 for anything else. Currently 2 rule(s), version 4.",
+        "  create   dns    endgame.frostaura.net",
+        "           CNAME → 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42.cfargotunnel.com, proxied (console host).",
+        "  create   dns    *.frostaura.net",
+        "           CNAME → 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42.cfargotunnel.com, proxied (organisation subdomains).",
+        "8 change(s) to apply."
+      ],
+      "note": "A first plan on a zone with two other web hosts: each gets an excluding route, so the outage page never runs in front of a site that is not Endgame's. Two lines per change: action, kind, target, then the detail. The tunnel id, hash and hosts are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "Already in sync",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-cloudflare-plan OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops cloudflare-plan",
+            "  keep     worker endgame-outage",
+            "           The outage page is deployed at this source (sha256 a3f19c07be52).",
+            "  keep     route  endgame.frostaura.net/*",
+            "           Routed to endgame-outage.",
+            "  keep     route  *.frostaura.net/*",
+            "           Routed to endgame-outage.",
+            "  keep     route  portainer.frostaura.net/*",
+            "           Excluded from the outage page (not an Endgame host).",
+            "  keep     route  www.frostaura.net/*",
+            "           Excluded from the outage page (not an Endgame host).",
+            "  keep     tunnel 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42",
+            "           Ingress: endgame.frostaura.net and *.frostaura.net → http://edge:8080, then 404.",
+            "  keep     dns    endgame.frostaura.net",
+            "           CNAME → 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42.cfargotunnel.com, proxied (console host).",
+            "  keep     dns    *.frostaura.net",
+            "           CNAME → 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42.cfargotunnel.com, proxied (organisation subdomains).",
+            "In sync: apply would change nothing."
+          ],
+          "note": "After an apply: every line is keep. The tunnel id, hash and hosts are illustrative."
+        }
+      ]
+    },
+    {
+      "title": "A record Endgame did not make is in the way",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-cloudflare-plan OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops cloudflare-plan",
+            "  keep     worker endgame-outage",
+            "           The outage page is deployed at this source (sha256 a3f19c07be52).",
+            "  keep     route  endgame.frostaura.net/*",
+            "           Routed to endgame-outage.",
+            "  keep     route  *.frostaura.net/*",
+            "           Routed to endgame-outage.",
+            "  keep     route  portainer.frostaura.net/*",
+            "           Excluded from the outage page (not an Endgame host).",
+            "  keep     route  www.frostaura.net/*",
+            "           Excluded from the outage page (not an Endgame host).",
+            "  keep     tunnel 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42",
+            "           Ingress: endgame.frostaura.net and *.frostaura.net → http://edge:8080, then 404.",
+            "  conflict dns    endgame.frostaura.net",
+            "           CNAME → 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42.cfargotunnel.com already exists and was not created by Endgame, so it is never modified. Delete it, or mark it as Endgame's by setting its comment to 'endgame-managed: console host'.",
+            "  create   dns    *.frostaura.net",
+            "           CNAME → 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42.cfargotunnel.com, proxied (organisation subdomains).",
+            "1 change(s) to apply; conflicts must be resolved first.",
+            "make: *** [ops-cloudflare-plan] Error 3"
+          ],
+          "note": "The dashboard's public-hostname screen makes such a record, with no comment. Exit code 3. Delete the record, or adopt it by setting its comment exactly as the line says. The other lines are illustrative."
+        }
+      ]
+    },
+    {
+      "title": "No Cloudflare token",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-cloudflare-plan",
+          "output": [
+            "docker compose exec -T ops /app/Endgame.Ops cloudflare-plan",
+            "No Cloudflare API token is configured (CLOUDFLARE_API_TOKEN), so nothing is managed.",
+            "make: *** [ops-cloudflare-plan] Error 1"
+          ],
+          "note": "The development stack's default. Exit code 1."
+        }
+      ]
+    },
+    {
+      "title": "Half configured",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-cloudflare-plan OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops cloudflare-plan",
+            "Cloudflare is half configured; also needed: CLOUDFLARE_ZONE_ID, CLOUDFLARE_TUNNEL_ID.",
+            "make: *** [ops-cloudflare-plan] Error 1"
+          ],
+          "note": "A token is set but not every key it needs. The list names each missing key."
+        }
+      ]
+    },
+    {
+      "title": "The console host is two labels deep",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-cloudflare-plan OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops cloudflare-plan",
+            "ENDGAME_CONSOLE_HOST (app.endgame.frostaura.net) must be one label directly under ENDGAME_ZONE (frostaura.net): the free certificate covers one level only.",
+            "make: *** [ops-cloudflare-plan] Error 1"
+          ],
+          "note": "Refused before anything is read from the account."
+        }
+      ]
+    }
+  ]
+}

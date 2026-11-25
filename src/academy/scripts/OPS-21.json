@@ -1,0 +1,95 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-21",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make ops-cloudflare-apply CONFIRM=yes OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+      "output": [
+        "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops cloudflare-apply --confirm",
+        "Applied 8 change(s):",
+        "  create   worker endgame-outage",
+        "           Upload the outage page Worker (sha256 a3f19c07be52).",
+        "  create   route  endgame.frostaura.net/*",
+        "           Route to endgame-outage.",
+        "  create   route  *.frostaura.net/*",
+        "           Route to endgame-outage.",
+        "  create   route  portainer.frostaura.net/*",
+        "           Exclude this host from the outage page: it is not Endgame's (a route with no Worker).",
+        "  create   route  www.frostaura.net/*",
+        "           Exclude this host from the outage page: it is not Endgame's (a route with no Worker).",
+        "  update   tunnel 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42",
+        "           Ingress becomes: 1 other hostname rule(s) kept as they are, then endgame.frostaura.net and *.frostaura.net → http://edge:8080, then 404 for anything else. Currently 2 rule(s), version 4.",
+        "  create   dns    endgame.frostaura.net",
+        "           CNAME → 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42.cfargotunnel.com, proxied (console host).",
+        "  create   dns    *.frostaura.net",
+        "           CNAME → 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42.cfargotunnel.com, proxied (organisation subdomains).",
+        "Read back: in sync."
+      ],
+      "note": "Ops plans afresh, applies each change in plan order (keep lines are not applied, so they are not listed), then reads the account back. Exit 0 only when the read-back is in sync. The tunnel id, hash and hosts are illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "Without CONFIRM=yes",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-cloudflare-apply",
+          "output": [
+            "ops-cloudflare-apply changes the live Cloudflare account. Read make ops-cloudflare-plan, then run make ops-cloudflare-apply CONFIRM=yes.",
+            "make: *** [ops-cloudflare-apply] Error 2"
+          ],
+          "note": "The Makefile refuses before it calls the ops service. Exit code 2."
+        }
+      ]
+    },
+    {
+      "title": "The plan has a conflict",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-cloudflare-apply CONFIRM=yes OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops cloudflare-apply --confirm",
+            "The plan has conflicts, so nothing was applied: [dns endgame.frostaura.net] CNAME → 6f1c2a9e-4b7d-4e2a-9c3f-8d5b1e7a0c42.cfargotunnel.com already exists and was not created by Endgame, so it is never modified. Delete it, or mark it as Endgame's by setting its comment to 'endgame-managed: console host'.",
+            "make: *** [ops-cloudflare-apply] Error 1"
+          ],
+          "note": "Any conflict refuses the whole apply: nothing at all is changed. Exit code 1."
+        }
+      ]
+    },
+    {
+      "title": "The account drifts while applying",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make ops-cloudflare-apply CONFIRM=yes OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"",
+          "output": [
+            "docker compose -f docker-compose.prod.yml exec -T ops /app/Endgame.Ops cloudflare-apply --confirm",
+            "Applied 8 change(s):",
+            "Read back: NOT in sync — run the plan again.",
+            "make: *** [ops-cloudflare-apply] Error 1"
+          ],
+          "note": "Something else changed the account during the apply. The applied lines are left out here. Exit code 1."
+        }
+      ]
+    }
+  ]
+}

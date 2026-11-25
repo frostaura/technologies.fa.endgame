@@ -1309,14 +1309,14 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 
 ### OPS-02 Stop the local stack, keeping or wiping its data
 - **Who:** host administrator / developer
-- **Starts at:** `make down` (keeps the data), or `make docker-down` (also removes the database volume; local only)
+- **Starts at:** `make down` (keeps the data), or `make docker-down` (also removes every volume: the database, the app repositories and the local backup archives; local only)
 - **Needs:** OPS-01
 - **Level:** Operator
 - **Learn first:** OPS-01
 - **What you learn:** `down` keeps the data and `docker-down` wipes it.
 - **You know it worked when:** `docker compose ps` lists nothing.
 - **Steps:** run the target.
-- **Variations and refusals:** none.
+- **Variations and refusals:** `make docker-down` runs `docker compose down -v --remove-orphans`, which also removes the `backup` volume, so local archives go with it. An archive in a bucket is not touched.
 - **Where:** Makefile
 - **Reachable from:** command line only
 - **Covered by tests:** none found
@@ -1343,7 +1343,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Learn first:** nothing
 - **What you learn:** the backend, the console and the kit all lint with zero warnings.
 - **You know it worked when:** it exits 0.
-- **Steps:** `dotnet format --verify-no-changes`, then ESLint and tsc for the console, then the kit's lint.
+- **Steps:** `dotnet format --verify-no-changes`, then ESLint (zero warnings allowed) and tsc for the console, then the kit's lint, which packs the kit before it lints the template.
 - **Variations and refusals:** none.
 - **Where:** Makefile
 - **Reachable from:** command line only
@@ -1371,7 +1371,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Learn first:** OPS-05
 - **What you learn:** the backend, console, kit and ops tests, including the backup rehearsal, run together.
 - **You know it worked when:** every suite passes.
-- **Steps:** run the target.
+- **Steps:** run the target. It runs the backend tests, the console's unit tests, the kit's tests against a throwaway PostgreSQL, then `ops-test` (OPS-27).
 - **Variations and refusals:** none.
 - **Where:** Makefile
 - **Reachable from:** command line only
@@ -1386,9 +1386,9 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** the stack is deployable only when every service reports healthy through the edge.
 - **You know it worked when:** `make smoke` prints "smoke: every service healthy through the edge; console served."
 - **Steps:**
-  1. `make smoke` probes `/api/system/status` for `"overall":"healthy"`, the console's `<div id="root">` and `/health`, up to 40 times, 3 seconds apart.
-  2. `make e2e` runs Playwright with `PW_BASE_URL`, which **runs only `smoke.spec.ts`**.
-- **Variations and refusals:** on failure, `make smoke` prints "smoke: the stack did not report healthy through the edge in time." with the status, `ps` and logs.
+  1. `make smoke` runs `make up`, prints "Probing the stack through the edge on :8095...", then probes `/api/system/status` for `"overall":"healthy"`, the console's `<div id="root">` and `/health`, up to 40 times, 3 seconds apart. On success it prints the status body, then its last line.
+  2. `make e2e` runs Playwright with `PW_BASE_URL`, which **runs only `smoke.spec.ts`**: its two tests in the desktop and phone projects.
+- **Variations and refusals:** on failure, `make smoke` prints "smoke: the stack did not report healthy through the edge in time." with the status, `docker compose ps` and the last 80 log lines, and exits 1.
 - **Where:** Makefile; `src/frontend/playwright.config.ts`
 - **Reachable from:** command line only
 - **Covered by tests:** `tests-e2e/smoke.spec.ts`
@@ -1399,11 +1399,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Starts at:** `make prod-config`
 - **Needs:** Docker Compose
 - **Level:** Operator
-- **Learn first:** OPS-24
+- **Learn first:** OPS-01
 - **What you learn:** production can never turn on the development sign-in, always runs as Production, and refuses to start without the backup key.
 - **You know it worked when:** it prints "prod-config: parses; development sign-in pinned off; every service Production; backup key required."
-- **Steps:** the stack file is parsed with throwaway values and the three properties are checked.
-- **Variations and refusals:** each failed property prints its own `prod-config: …` message.
+- **Steps:** the stack file is parsed with throwaway values for its seven required variables, and the three properties are checked. Every check is silent, so a pass prints only the last line.
+- **Variations and refusals:** each failed property prints its own message and exits 1: "prod-config: the production control plane could enable the development sign-in", "prod-config: a production service does not run as Production" or "prod-config: the production stack does not refuse a missing ENDGAME_BACKUP_KEY".
 - **Where:** Makefile
 - **Reachable from:** command line only
 - **Covered by tests:** CI `stack-smoke`
@@ -1445,7 +1445,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** tenant zero, the club app and an invited organisation are each proven end to end.
 - **You know it worked when:** the Playwright run passes.
 - **Steps:** the run stops at `ACC_SPEND_STOP_USD` (default 5).
-- **Variations and refusals:** with no key set: the matching "acc-up: set OPENROUTER_API_KEY…" message.
+- **Variations and refusals:** with no key set: "acc-up: set OPENROUTER_API_KEY in .env (the factory calls live models)".
 - **Where:** Makefile; `Endgame.Harness.Bench/acceptance`
 - **Reachable from:** command line only
 - **Covered by tests:** this target is the test run itself
@@ -1462,7 +1462,8 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. PostgreSQL and the ops service are started if needed.
   2. It prints "Backing up to <store>...", then "Backup <id>: <n> bytes sealed (<m> before encryption) in <s> s.", the databases, each volume, any pruned archives, `BACKUP_ID=<id>`, and a storage usage line.
 - **Variations and refusals:**
-  - Another backup or restore is running: "Another backup or restore is running; try again when it has finished."
+  - Another backup or restore is running: "Another backup or restore is running; try again when it has finished." (exit 1).
+  - A key that is not 32 bytes: "ENDGAME_BACKUP_KEY is not 32 bytes written as hex or base64, so no backup runs." (exit 1).
   - Usage near or over the free allowance prefixes the usage line with "WARNING: ".
   - With no S3 bucket configured, the archive goes to a local volume and is reported as not offsite.
 - **Where:** Makefile; `Endgame.Ops/Program.cs` (OpsCli backup); `BackupService`
@@ -1478,10 +1479,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** one archive is made per day after the set hour, and old ones are pruned on a daily and weekly rule.
 - **You know it worked when:** `make ops-backups` lists an archive for today.
 - **Steps:**
-  1. Every 5 minutes, once the hour has passed (01:00 UTC by default), the service runs a backup if today has none.
-  2. It skips a server that is still empty.
-  3. Retention keeps the newest archive of each of the last 7 days and the last 4 ISO weeks, and always keeps the newest.
-- **Variations and refusals:** a failure is retried at the next check. Nothing notifies a person (per ARCH-007).
+  1. The first check is 30 seconds after the service starts, then one every 5 minutes. Once the hour has passed (01:00 UTC by default), the service runs a backup if today has none; an empty store is due at once, whatever the hour.
+  2. It skips a server that is still empty, and logs "The nightly backup is due but every database is empty (a stack waiting for a restore?); skipped."
+  3. Retention keeps the newest archive of each of the last 7 days and the last 4 ISO weeks, and always keeps the newest. It runs only after a backup succeeds, and logs each archive it prunes.
+- **Variations and refusals:** a failure is logged ("The nightly backup failed; it will try again at the next check: …") and retried at the next check. Nothing notifies a person (per ARCH-007). With `ENDGAME_BACKUP_SCHEDULE=false` it logs "The nightly backup schedule is switched off (Ops__Backup__ScheduleEnabled=false)." and never runs.
 - **Where:** `Backups/BackupScheduler.cs`, `Retention.cs`
 - **Reachable from:** system
 - **Covered by tests:** `BackupPolicyTests`
@@ -1510,7 +1511,8 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** "Backup <id> is intact: <n> database(s), <m> file(s), every chunk authenticated against the manifest." is printed.
 - **Steps:** run the target.
 - **Variations and refusals:**
-  - No id given: "ops-verify: make ops-verify BACKUP=<id>".
+  - No id given: "ops-verify: make ops-verify BACKUP=<id>" (exit 2).
+  - No archive with that id: "There is no backup endgame-<id>.egbk in /backups." from the local store.
   - Damaged archives give messages such as "The backup is damaged: it has entries after its manifest.", "The backup has no manifest: it is incomplete." or "The backup's manifest is format X; this version reads Y.".
   - A wrong key is named as such.
 - **Where:** OpsCli verify
@@ -1536,6 +1538,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - With `OVERWRITE=1`: "Replacing what is already here (OVERWRITE): …".
   - Not configured: "Backups are not configured." or the specific reason.
   - Busy: as OPS-12.
+  - After any refusal or failure from the ops command, make stops there, so the services stopped in step 1 stay stopped until `make up` (or `docker compose up -d --wait`) brings them back.
   - Restore exists only on the command line; it is never on the HTTP API.
 - **Where:** Makefile; OpsCli restore; `BackupService.RestoreAsync`
 - **Reachable from:** command line only
@@ -1551,7 +1554,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** the rehearsal test passes; or, by hand, the restored stack opens with its data.
 - **Steps:**
   1. Automatic: the test backs up, destroys the stack, restores, checks that no plaintext is in the upload, and checks that a second restore is refused without overwrite.
-  2. By hand: copy the archive and `ENDGAME_BACKUP_KEY` to the other host, then run `make restore BACKUP=<id> OPS_COMPOSE="docker compose -f docker-compose.prod.yml"`.
+  2. By hand, per ARCH-007 step 9: copy the compose file and `.env` to the other host, with the same `ENDGAME_VAULT_MASTER_KEY`, `DOCK_SECRET_KEY` and `ENDGAME_BACKUP_KEY` (and the bucket keys, or the archive itself when it is local), then run `make restore BACKUP=<id> OPS_COMPOSE="docker compose -f docker-compose.prod.yml"`.
 - **Variations and refusals:** none.
 - **Where:** `Endgame.Ops.Tests/Rehearsal`; ARCH-007
 - **Reachable from:** command line only
@@ -1564,11 +1567,13 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-12
 - **What you learn:** the ops service says in plain words what it is, and is not, doing.
-- **You know it worked when:** a JSON report is printed. It answers 503 when unhealthy, for example with no backup key.
+- **You know it worked when:** a one-line JSON report is printed. It answers 503 when unhealthy, for example with a backup key that is missing or not 32 bytes.
 - **Steps:** run the target.
 - **Variations and refusals:**
-  - With no Cloudflare token, the report says Cloudflare is idle.
+  - With no Cloudflare token, the report says Cloudflare is idle; with a token but not every key, misconfigured.
   - With no S3 bucket, it says backups are local.
+  - Unhealthy, the answer is 503 but `make ops-health` still exits 0 (curl prints the body); the container's own health check fails.
+  - `last` records only the service's own runs (nightly, or `POST /internal/ops/backups`), not a `make backup`, which runs in its own process.
 - **Where:** `Api/OpsEndpoints.cs` `/health`
 - **Reachable from:** command line / HTTP
 - **Covered by tests:** `OpsApiTests.With_no_token_health_says…`, `Without_a_backup_key_health_is_unhealthy_and_says_why`
@@ -1600,8 +1605,8 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   2. It prints each change as keep, create, update, delete or conflict.
 - **Variations and refusals:**
   - Conflicts end the line with "; conflicts must be resolved first" (exit 3).
-  - No token: "No Cloudflare API token is configured (CLOUDFLARE_API_TOKEN), so nothing is managed."
-  - Half configured: "Cloudflare is half configured; also needed: …"
+  - No token: "No Cloudflare API token is configured (CLOUDFLARE_API_TOKEN), so nothing is managed." (exit 1)
+  - Half configured: "Cloudflare is half configured; also needed: …" (exit 1)
   - Console host two labels deep: "ENDGAME_CONSOLE_HOST (…) must be one label directly under ENDGAME_ZONE (…): the free certificate covers one level only."
 - **Where:** `Cloudflare/CloudflareReconciler.cs`
 - **Reachable from:** command line; `GET /internal/ops/cloudflare/plan`
@@ -1645,11 +1650,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-06
 - **What you learn:** nothing is built on the host; every release is seven images for two architectures.
-- **You know it worked when:** `publish-manifest` is green and each image has `sha-<commit>` and `latest` tags.
+- **You know it worked when:** every "Tag <image> (multi-arch)" job is green and each image has `sha-<commit>` and `latest` tags. Not yet seen: this has not run with real credentials (ARCH-008).
 - **Steps:**
-  1. After the backend, hosting, appkit, ops, frontend, security, stack-smoke, e2e and stack-acceptance jobs pass, `publish` builds the seven images for amd64 and arm64.
-  2. `publish-manifest` joins them under `sha-<commit>` and `latest`.
-- **Variations and refusals:** without the Docker Hub secrets, each `publish` job fails at "Log in to Docker Hub".
+  1. After the Backend, Hosting (real Docker), App kit, Ops (with the restore rehearsal), Frontend, Security, Stack smoke, E2E smoke and Stack acceptance (make e2e-stack) jobs pass, `publish` runs 14 jobs named "Publish <image> (<arch>)": the seven images, each for amd64 and arm64.
+  2. `publish-manifest` runs "Tag <image> (multi-arch)" for each image, joining both architectures under `sha-<commit>` and `latest`.
+- **Variations and refusals:** without the Docker Hub secrets, each `publish` job fails at "Log in to Docker Hub", after its image has built.
 - **Where:** `.github/workflows/ci.yml`; ARCH-008
 - **Reachable from:** CI
 - **Covered by tests:** not verified. ARCH-008 says nothing has been pushed with credentials yet.
@@ -1661,15 +1666,15 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-23, OPS-08
 - **What you learn:** the stack's name and its never-change keys matter, and the edge is the only published port.
-- **You know it worked when:** every service is healthy within about a minute, `http://<host>:8095/health` answers, and `https://endgame.<zone>/` opens.
+- **You know it worked when:** every service is healthy within about a minute, `http://<host>:8095/health` answers, and `https://endgame.<zone>/` opens. Not yet seen: no deploy has run with real credentials (ARCH-008).
 - **Steps:**
-  1. Name the stack `endgame` and paste `docker-compose.prod.yml`.
-  2. Paste a filled `.env.production.example`. Save `DOCK_SECRET_KEY`, `ENDGAME_VAULT_MASTER_KEY` and `ENDGAME_BACKUP_KEY` off the machine.
+  1. In Portainer, Stacks, Add stack: name it `endgame`, choose the web editor and paste `docker-compose.prod.yml`.
+  2. Under Environment variables, Advanced mode, paste a filled `.env.production.example`. Save `DOCK_SECRET_KEY`, `ENDGAME_VAULT_MASTER_KEY` and `ENDGAME_BACKUP_KEY` off the machine.
   3. Deploy.
   4. Route the tunnel, either on the host or with `COMPOSE_PROFILES=tunnel` and `CLOUDFLARE_TUNNEL_TOKEN`.
-  5. Register a passkey with an operator address and top the organisation up.
+  5. Register a passkey with an operator address and top the organisation up (OP-05).
 - **Variations and refusals:**
-  - The stack refuses to start without each required variable.
+  - The stack refuses to start without each required variable: compose says "required variable <KEY> is missing a value: <KEY> is required".
   - Without SMTP, no mail is sent and codes are handed over by hand.
   - Without S3, backups are local.
 - **Where:** ARCH-008; `docker-compose.prod.yml`
@@ -1683,13 +1688,14 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-24
 - **What you learn:** a redeploy moves images and nothing else; a changed stack file must be pasted in by hand.
-- **You know it worked when:** the `deploy` job is green, or the stack shows the new images.
+- **You know it worked when:** the "Redeploy on Portainer" job is green and prints "Portainer accepted the redeploy.", or the stack shows the new images. Not yet seen: this job has not run with real credentials (ARCH-008).
 - **Steps:** the job reads the stack file and environment Portainer holds and sends them back with `pullImage: true`.
 - **Variations and refusals:**
   - With the variable unset, the job is skipped, not failed.
   - A missing secret fails the job with "secret X is required".
   - An empty stack file fails with "Portainer returned an empty stack file".
-  - A non-200 answer fails the job.
+  - A non-200 answer fails the job with "Portainer refused the redeploy (HTTP <status>): <Portainer's message>".
+  - A changed `docker-compose.prod.yml` is not delivered: paste it into the stack's editor by hand.
 - **Where:** `ci.yml` `deploy`
 - **Reachable from:** CI / Portainer
 - **Covered by tests:** none
@@ -1701,12 +1707,28 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Operator
 - **Learn first:** OPS-25, OPS-16
 - **What you learn:** a rollback is an image tag, but database migrations only go forward.
-- **You know it worked when:** the services run the older tag.
+- **You know it worked when:** the services run the older tag, and the edge's `/health` names that commit as its `revision`. Not yet seen: no release has been deployed with real credentials (ARCH-008).
 - **Steps:** set `ENDGAME_IMAGE_TAG=sha-<commit>` and update the stack.
 - **Variations and refusals:** going back across a migration needs a restore (OPS-16).
 - **Where:** ARCH-008
 - **Reachable from:** Portainer
 - **Covered by tests:** none
+
+### OPS-27 Run the ops service's tests and the outage Worker's
+- **Who:** developer
+- **Starts at:** `make ops-test-worker` (the outage Worker alone), or `make ops-test` (the Worker, then the ops service)
+- **Needs:** Node for the Worker; the .NET SDK and Docker for the ops tests and the rehearsal
+- **Level:** Developer
+- **Learn first:** OPS-06
+- **What you learn:** the outage page's Worker is tested on its own under Node, with no dependencies and no build step; the ops tests add the fake-Cloudflare reconciler and the restore rehearsal.
+- **You know it worked when:** `node --test` ends with "ℹ fail 0", and the ops test run has no failures.
+- **Steps:**
+  1. `make ops-test-worker` runs `node --test` in `src/ops/outage-worker`: 26 tests, from a healthy origin passing through to the page being self-contained.
+  2. `make ops-test` runs the Worker's tests first, then `dotnet test` on `Endgame.Ops.Tests`, including the backup, destroy and restore rehearsal on its own throwaway stack.
+- **Variations and refusals:** with `ENDGAME_SKIP_DOCKER_TESTS=1` (or `true`) the rehearsal returns at once and writes "Skipped: ENDGAME_SKIP_DOCKER_TESTS is set." to its test output.
+- **Where:** Makefile; `src/ops/outage-worker/outage-worker.test.mjs`; `Endgame.Ops.Tests`
+- **Reachable from:** command line only
+- **Covered by tests:** this target is the test run itself (CI "Ops (with the restore rehearsal)")
 
 ## Gaps and oddities found
 

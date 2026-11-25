@@ -1,0 +1,31 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-04",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make lint",
+      "output": [
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet format src/backend/Endgame.slnx --verify-no-changes --verbosity minimal",
+        "cd src/frontend && npm run lint",
+        "",
+        "> technologies.fa.endgame-console@0.0.0 lint",
+        "> eslint . --max-warnings 0",
+        "",
+        "cd src/frontend && npm run typecheck",
+        "",
+        "> technologies.fa.endgame-console@0.0.0 typecheck",
+        "> tsc -b --noEmit",
+        "",
+        "make -C src/appkit lint",
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet format Endgame.AppKit.slnx --verify-no-changes --verbosity minimal",
+        "cd sdk-web && npm run lint && npm run typecheck"
+      ],
+      "note": "Each recipe line is echoed, and a clean run prints nothing else of its own: dotnet format, ESLint with zero warnings allowed, and tsc for the console, then the kit. The kit's template lint packs the kit first. Its output and make's directory lines are left out."
+    }
+  ]
+}

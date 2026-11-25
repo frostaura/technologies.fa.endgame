@@ -1,0 +1,62 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-02",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make down",
+      "output": [
+        "docker compose down",
+        "[+] Running 10/10",
+        " ✔ Container endgame-edge-1           Removed",
+        " ✔ Container endgame-console-1        Removed",
+        " ✔ Container endgame-dock-1           Removed",
+        " ✔ Container endgame-runner-1         Removed",
+        " ✔ Container endgame-control-plane-1  Removed",
+        " ✔ Container endgame-ops-1            Removed",
+        " ✔ Container endgame-mailcatcher-1    Removed",
+        " ✔ Container endgame-egress-1         Removed",
+        " ✔ Container endgame-postgres-1       Removed",
+        " ✔ Network endgame_default            Removed"
+      ],
+      "note": "The containers and the network go. The volumes stay, so the next make up starts with the same database, app repositories and local backups. Compose may list the containers in another order."
+    }
+  ],
+  "variations": [
+    {
+      "title": "Wipe the data too, with make docker-down (local only)",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make docker-down",
+          "output": [
+            "docker compose down -v --remove-orphans",
+            "[+] Running 13/13",
+            " ✔ Container endgame-edge-1           Removed",
+            " ✔ Container endgame-console-1        Removed",
+            " ✔ Container endgame-dock-1           Removed",
+            " ✔ Container endgame-runner-1         Removed",
+            " ✔ Container endgame-control-plane-1  Removed",
+            " ✔ Container endgame-ops-1            Removed",
+            " ✔ Container endgame-mailcatcher-1    Removed",
+            " ✔ Container endgame-egress-1         Removed",
+            " ✔ Container endgame-postgres-1       Removed",
+            " ✔ Network endgame_default            Removed",
+            " ✔ Volume endgame_postgres_data       Removed",
+            " ✔ Volume endgame_dock_data           Removed",
+            " ✔ Volume endgame_backup              Removed"
+          ],
+          "note": "-v removes every volume the stack named: the database, every app's repository, and the local backup archives. An archive in a bucket is not touched. Never run this on the production host."
+        }
+      ]
+    }
+  ]
+}
