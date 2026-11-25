@@ -29,6 +29,12 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
     public string Kind => RunKinds.Build;
 
+    /// <summary>
+    /// How the earlier parts are shown working again. A live change failed this check four times although the app worked:
+    /// for parts on screen the evaluator cited the screen's code and tests, which code's gate does not count.
+    /// </summary>
+    public const string KeepCheck = "Each earlier part shown working again in the running app, signed in as a test member: call_app every part, and cite the exact calls made (METHOD path, with the real ids). A part that is on screen is shown by the data it shows or changes — for example the list it reads after the action its button takes — never by its code or its tests alone.";
+
     /// <summary>The code-owned part of a change's plan: everything the app did before, checked again in the running app.</summary>
     public const string KeepItem = "keep";
 
@@ -300,7 +306,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var notes = Json.Strings(earlier, "notes");
         var detail = "No new work: the app as changed is checked again against each part it already had." + (notes.Count == 0 ? "" : " The builder's notes on the earlier parts: " + string.Join(" ", notes));
         var item = new PlanItem(KeepItem, "Everything the app did before still works", detail,
-            "Each earlier part shown working again in the running app, signed in as a test member.", kept.Select(k => k.Id).ToList());
+            KeepCheck, kept.Select(k => k.Id).ToList());
         return plan with { Items = [.. plan.Items, item], Requirements = [.. plan.Requirements, .. kept] };
     }
 
@@ -706,7 +712,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
 
         var evaluatorId = $"evaluator-{item.Id}-{round}";
-        var evaluator = AgentFactory.As(run, run.Agents.Evaluator(run, evaluatorId, item, plan.RequirementsOf(item), workspace.Root, probe, callApp, appId), crew.Qa, crew.QaMemory, canRemember: true, crew.ProjectPath);
+        // The check of what worked before says how a part on screen is shown: by the data it shows or changes (KeepCheck).
+        var checkedItem = item.Id == KeepItem ? item with { Check = KeepCheck } : item;
+        var evaluator = AgentFactory.As(run, run.Agents.Evaluator(run, evaluatorId, checkedItem, plan.RequirementsOf(item), workspace.Root, probe, callApp, appId), crew.Qa, crew.QaMemory, canRemember: true, crew.ProjectPath);
         var result = await WorkflowSupport.RunAgentAsync(run, evaluator, workspace,
             $"Evaluate the item now (round {round}, built on {tier}).{(previewNote is null ? "" : "\n\n" + previewNote)}", cancellationToken);
         if (WorkflowOutcome.FromAgent(result) is not null)
