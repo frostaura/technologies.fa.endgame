@@ -7,16 +7,27 @@ using Endgame.Runner.Execution;
 namespace Endgame.Runner.Workflows;
 
 /// <summary>
-/// A <c>task</c> run: one employee's piece of work on an app, in that app's workspace, by one builder
-/// agent on the cheapest building tier. Resumed from its log after a crash or a pause.
+/// A <c>task</c> run on an app. A <b>change</b> a person asked for (the owner message's <c>kind</c> is <c>change</c>) goes
+/// through the factory's own stages — <see cref="BuildWorkflow.ChangeAsync"/>: plan, build, evaluate, check what worked
+/// before, security review, republish. Any other task is one employee's piece of work in that app's workspace, by one
+/// builder agent on the cheapest building tier, committed but not published. Resumed from its log after a crash or a pause.
 /// </summary>
-public sealed class TaskWorkflow : IWorkflow
+public sealed class TaskWorkflow(BuildWorkflow? factory = null) : IWorkflow
 {
+    public const string ChangeKind = "change";
+
     public string Kind => RunKinds.Task;
 
     public async Task<WorkflowOutcome> RunAsync(RunContext run, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(run);
+        if (Json.Str(run.OwnerMessage(), "kind") == ChangeKind)
+        {
+            return factory is null
+                ? WorkflowOutcome.Failure("This Runner cannot make changes to apps: it has no factory.")
+                : await factory.ChangeAsync(run, cancellationToken);
+        }
+
         if (run.LevelId("app") is not { } appId)
         {
             return WorkflowOutcome.Failure("A task run works on an app, and this one's scope names none.");

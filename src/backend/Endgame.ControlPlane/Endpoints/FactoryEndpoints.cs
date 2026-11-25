@@ -38,6 +38,12 @@ public sealed record InternalCascadeRequest(string? Scope, string? Kind, string?
 /// <summary><c>POST /internal/ideas/{id}/decision</c>: auto-mode proceeds after a build verdict.</summary>
 public sealed record AutoDecisionRequest(string? Decision, string? By);
 
+/// <summary><c>POST /internal/apps/changes</c>: the conversation asks for a change the person confirmed.</summary>
+public sealed record InternalChangeRequest(string? Scope, string? Request);
+
+/// <summary><c>POST /internal/runs/{id}/retry</c>: the conversation at <c>Scope</c> tries stopped work again, on the person's word.</summary>
+public sealed record InternalRetryRequest(string? Scope);
+
 /// <summary><c>GET /internal/estimates/accuracy</c>, and the same numbers in an employee's track record.</summary>
 public sealed record EstimateAccuracyView(string Scope, Guid? EmployeeId, EstimatesView? Estimates);
 
@@ -185,6 +191,35 @@ internal static class FactoryEndpoints
         .WithName("SetSettingInternal")
         .WithSummary("An agent changes one allow-listed setting (autonomy, checkpoints, sleep, idle days) at a scope. Never access: making an app public is a person's act.")
         .Produces<EffectiveValue>();
+
+        group.MapPost("/apps/changes", async (InternalChangeRequest request, ScopeResolver scopes, ChangeService changes, CancellationToken ct) =>
+        {
+            var resolved = await scopes.RequireAsync(request.Scope, ct);
+            if (resolved.AppId is null)
+            {
+                throw EndgameProblem.Invalid("A change is asked of one app: name the app's scope, for example 'acme/labs/bookings/web'.");
+            }
+
+            var run = await changes.CreateAsync(resolved, request.Request, null, "conversation", ct);
+            return Results.Created($"/api/runs/{run.Id}", new { run, estimateCredits = (await changes.EstimateAsync(resolved, request.Request, ct)).Credits });
+        })
+        .WithName("ChangeAppInternal").WithSummary("The conversation asks the factory to change a built app, on the person's confirmed word; the change's estimate opens its run.");
+
+        group.MapPost("/runs/{id:guid}/retry", async (Guid id, InternalRetryRequest request, ScopeResolver scopes, RunService runs, RetryService retries, CancellationToken ct) =>
+        {
+            var within = await scopes.RequireAsync(request.Scope, ct);
+            var (run, scope) = await runs.RequireAsync(id, ct);
+            var path = scope.Path.ToString();
+            var at = within.Path.ToString();
+            // The conversation acts only within the part of the tree it is about.
+            if (run.OrganisationId != within.OrganisationId || !(path == at || path.StartsWith(at + "/", StringComparison.Ordinal)))
+            {
+                throw EndgameProblem.NotFound("The run");
+            }
+
+            return Results.Created($"/api/runs/{id}", await retries.RetryAsync(id, null, ct));
+        })
+        .WithName("RetryRunInternal").WithSummary("The conversation tries stopped work in its scope again, on the person's confirmed word.");
 
         group.MapPost("/ideas/{id:guid}/decision", async (Guid id, AutoDecisionRequest request, IdeaService ideas, ReadModels reads, CancellationToken ct) =>
         {

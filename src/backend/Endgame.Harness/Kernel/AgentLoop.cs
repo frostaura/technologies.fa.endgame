@@ -337,7 +337,7 @@ public sealed class AgentLoop
         var decision = agent.Permissions.Decide(name, tool.Effect, targets, state.Plan is not null && state.PlanAccepted);
         if (decision.Verdict == PermissionVerdict.Ask)
         {
-            decision = await AskAsync(name, targets, decision, cancellationToken);
+            decision = await AskAsync(name, tool, arguments!, targets, decision, cancellationToken);
         }
 
         await events.WriteAsync(decision.Verdict == PermissionVerdict.Allow ? HarnessEvents.ToolPermitted : HarnessEvents.ToolDenied, new JsonObject
@@ -386,7 +386,7 @@ public sealed class AgentLoop
         return outcome;
     }
 
-    private async Task<PermissionDecision> AskAsync(string name, ToolTargets targets, PermissionDecision asked, CancellationToken cancellationToken)
+    private async Task<PermissionDecision> AskAsync(string name, ITool tool, JsonObject arguments, ToolTargets targets, PermissionDecision asked, CancellationToken cancellationToken)
     {
         if (services.Approvals is null || asked.Checkpoint is null)
         {
@@ -394,25 +394,25 @@ public sealed class AgentLoop
         }
 
         var what = targets.Command ?? string.Join(", ", targets.Paths.Select(p => p.Relative));
-        // The title is for the owner (ARCH-004): what the agent wants to do, in words; the tool, its command or its
-        // files are technical detail. An idea's own text is the owner's words, so it stays in the title.
-        var title = name switch
+        // The title is for the owner (ARCH-004): what will happen if they approve, in words; the tool, its command or its
+        // files are technical detail, kept for the detail line technical mode shows. A tool that knows its own plain words says them.
+        var title = tool is IApprovalTitle plain ? plain.ApprovalTitle(arguments) : name switch
         {
-            "start_idea" => $"Start researching an idea: {what}",
-            "adjust_setting" => "Change a setting for this part of the organisation",
             "edit_file" or "write_file" => "Let the agent change part of the app",
             "run" => "Let the agent run a check on the app",
             "commit" => "Let the agent save a new version",
             "tasks" => "Let the agent update its task list",
             _ => "Let the agent take this step",
         };
-        var approved = await services.Approvals.RequestAsync(
-            OutputText.Truncate($"{title.TrimEnd('.')}?", 300),
+        var answer = await services.Approvals.AskAsync(
+            OutputText.Truncate($"{title.TrimEnd('.', '?')}?", 300),
             $"{name}{(what.Length > 0 ? $": {what}" : "")}. {asked.Reason} Checkpoint: {asked.Checkpoint}.",
+            ApprovalConsequence.Continues,
             cancellationToken);
-        return approved
-            ? new PermissionDecision(PermissionVerdict.Allow, $"checkpoint:{asked.Checkpoint}:approved", "The owner approved this call.")
-            : new PermissionDecision(PermissionVerdict.Deny, $"checkpoint:{asked.Checkpoint}:rejected", "The owner rejected this call. Do the work another way, or finish and explain.");
+        var note = string.IsNullOrWhiteSpace(answer.Note) ? "" : $" Their note: \"{OutputText.Truncate(answer.Note.Trim(), 1000)}\"";
+        return answer.Approved
+            ? new PermissionDecision(PermissionVerdict.Allow, $"checkpoint:{asked.Checkpoint}:approved", $"The owner approved this call.{note}")
+            : new PermissionDecision(PermissionVerdict.Deny, $"checkpoint:{asked.Checkpoint}:rejected", $"The owner declined this call, so it was not done.{note} Carry on without it, or finish and say plainly that it was not done.");
     }
 
     private async Task<(string Text, string Source)?> StopNudgeAsync(AgentState state, string text, CancellationToken cancellationToken)

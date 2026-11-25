@@ -438,7 +438,7 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.BudgetExhaustedAt, now), cancellationToken);
         await AppendAsync(organisationId, runId, [new NewEvent(RunEventTypes.Message, new JsonObject
         {
-            ["text"] = "The credit budget is exhausted, so this run cannot call a model again. Top up or raise the budget, then start new work.",
+            ["text"] = "The credit budget is exhausted, so this run cannot call a model again. Top up or raise the budget; what was finished is kept, and the work can then be tried again.",
             ["code"] = "budget_exhausted",
         })], null, null, cancellationToken);
     }

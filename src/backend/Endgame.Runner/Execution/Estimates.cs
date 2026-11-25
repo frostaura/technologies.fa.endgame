@@ -40,12 +40,15 @@ public sealed partial class Estimator(RunnerOptions options)
             history = [];
         }
 
+        // A change to a built app is a task run that goes through the build's stages, so it is priced as a small build.
+        var change = run.Run.Kind == RunKinds.Task && Json.Str(run.OwnerMessage(), "kind") == "change";
+        var kind = change ? "change" : run.Run.Kind;
         var learned = history.Count >= MinimumSamples;
-        var perRun = learned ? Median(history) : options.EstimatePriors.GetValueOrDefault(run.Run.Kind, 2m);
+        var perRun = learned ? Median(history) : options.EstimatePriors.GetValueOrDefault(kind, 2m);
         var basis = learned
             ? string.Create(CultureInfo.InvariantCulture, $"median of the last {history.Count} {run.Run.Kind} runs")
-            : $"the measured starting figure for {run.Run.Kind} runs (fewer than {MinimumSamples} finished runs here to learn from)";
-        if (plan is { Items.Count: > 0 } && run.Run.Kind == RunKinds.Build)
+            : $"the measured starting figure for {kind} runs (fewer than {MinimumSamples} finished runs here to learn from)";
+        if (plan is { Items.Count: > 0 } && (run.Run.Kind == RunKinds.Build || change))
         {
             if (learned)
             {

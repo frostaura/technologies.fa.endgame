@@ -43,12 +43,38 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             ?? throw EndgameProblem.NotFound("The run");
         var scope = await scopes.ForRowAsync(run.OrganisationId, run.DivisionId, run.ProjectId, run.AppId, cancellationToken);
         var (estimates, spent) = await RunCostsAsync(organisationId, [runId], cancellationToken);
-        return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId));
+        return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId), await CanTryAgainAsync(run, cancellationToken));
     }
 
-    private static PublicRunView Run(RunRecord r, string scope, decimal? estimate, decimal spent) => new(
+    /// <summary>Whether this run is the latest attempt at research, a build or a change, and stopped without finishing (CHG-03).</summary>
+    private async Task<bool> CanTryAgainAsync(RunRecord run, CancellationToken cancellationToken)
+    {
+        if (run.Status is not (RunStatuses.Failed or RunStatuses.Cancelled))
+        {
+            return false;
+        }
+
+        if (run.Kind is RunKinds.Research or RunKinds.Build)
+        {
+            var idea = run.IdeaId is { } id ? await db.Ideas.AsNoTracking().Where(i => i.OrganisationId == run.OrganisationId && i.Id == id).Select(i => new { i.Status, i.ResearchRunId, i.BuildRunId }).SingleOrDefaultAsync(cancellationToken) : null;
+            return run.Kind == RunKinds.Research
+                ? idea is { Status: IdeaStatuses.Researching } && idea.ResearchRunId == run.Id
+                : idea is { Status: IdeaStatuses.Building } && idea.BuildRunId == run.Id;
+        }
+
+        if (run.Kind != RunKinds.Task || await db.Runs.AsNoTracking().AnyAsync(r => r.OrganisationId == run.OrganisationId && r.ParentRunId == run.Id && r.Kind == RunKinds.Task, cancellationToken))
+        {
+            return false;
+        }
+
+        var first = await db.RunEvents.AsNoTracking().Where(e => e.OrganisationId == run.OrganisationId && e.RunId == run.Id && e.Type == RunEventTypes.Message)
+            .OrderBy(e => e.Seq).Select(e => e.PayloadJson).FirstOrDefaultAsync(cancellationToken);
+        return first is not null && JsonNode.Parse(first) is JsonObject p && Text(p["kind"]) == "change";
+    }
+
+    private static PublicRunView Run(RunRecord r, string scope, decimal? estimate, decimal spent, bool canTryAgain = false) => new(
         r.Id, RunKind(r.Kind), r.Title, scope, RunStatus(r.Status), r.StartedAt ?? r.CreatedAt, r.FinishedAt, r.LastSeq, r.IdeaId,
-        estimate, spent, r.EmployeeId, r.ConversationId, r.BudgetExhaustedAt is not null, r.Outcome, r.Summary, r.CreatedAt);
+        estimate, spent, r.EmployeeId, r.ConversationId, r.BudgetExhaustedAt is not null, r.Outcome, r.Summary, r.CreatedAt, canTryAgain);
 
     /// <summary>Each run's latest estimate (from <c>estimate.made</c>) and its settled, billable spend.</summary>
     private async Task<(Dictionary<Guid, decimal> Estimates, Dictionary<Guid, decimal> Spent)> RunCostsAsync(Guid organisationId, Guid[] runIds, CancellationToken cancellationToken)
@@ -380,6 +406,19 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             placed = (await scopes.ForRowAsync(organisationId, buildRun.DivisionId, buildRun.ProjectId, buildRun.AppId, cancellationToken)).Path.ToString();
         }
 
+        TryAgainView? tryAgain = null;
+        if (status == "failed" && latest is not null)
+        {
+            tryAgain = new TryAgainView(latest.Id, "research", latest.Status == RunStatuses.Cancelled ? "cancelled" : latest.BudgetExhaustedAt is not null ? "budget" : "failed");
+        }
+        else if (idea.Status == IdeaStatuses.Building && idea.BuildRunId is { } lastBuild
+                 && await db.Runs.AsNoTracking().SingleOrDefaultAsync(r => r.OrganisationId == organisationId && r.Id == lastBuild, cancellationToken) is { Status: RunStatuses.Failed or RunStatuses.Cancelled } stopped)
+        {
+            tryAgain = new TryAgainView(stopped.Id, "build", stopped.Status == RunStatuses.Cancelled ? "cancelled" : stopped.BudgetExhaustedAt is not null ? "budget"
+                : stopped.Summary?.StartsWith("The owner rejected the plan", StringComparison.Ordinal) == true ? "plan-declined" : "failed");
+        }
+
+        var history = await DecisionHistoryAsync(organisationId, researchRuns, cancellationToken);
         session.UseOrganisation(organisationId);
         return new PublicIdeaView(
             idea.Id, IdeaTitle(idea.Text), idea.Text, SplitConstraints(idea.Constraints), status, idea.ResearchRunId ?? Guid.Empty, placed,
@@ -387,7 +426,45 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             idea.Verdict is null || idea.VerdictEvidenceJson is null ? null : JsonNode.Parse(idea.VerdictEvidenceJson),
             decision,
             await VerdictRecordAsync(organisationId, cancellationToken),
-            idea.RedLine);
+            idea.RedLine,
+            history,
+            tryAgain);
+    }
+
+    /// <summary>
+    /// The decisions taken on earlier rounds of research, oldest first, read from the research runs themselves: each round
+    /// after the first was asked for by a "change" (with the owner's note) after a verdict, or started again after research
+    /// that did not finish. The latest round's own decision is the idea's current one.
+    /// </summary>
+    private async Task<IReadOnlyList<DecisionHistoryView>> DecisionHistoryAsync(Guid organisationId, List<RunRecord> newestFirst, CancellationToken cancellationToken)
+    {
+        var rounds = newestFirst.AsEnumerable().Reverse().ToList();
+        if (rounds.Count < 2)
+        {
+            return [];
+        }
+
+        var ids = rounds.Select(r => r.Id).ToList();
+        var events = await db.RunEvents.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && ids.Contains(e.RunId) && e.Type == RunEventTypes.Message)
+            .Select(e => new { e.RunId, e.Seq, e.PayloadJson }).ToListAsync(cancellationToken);
+        JsonObject? Owner(Guid run) => events.Where(e => e.RunId == run).OrderBy(e => e.Seq).Select(e => JsonNode.Parse(e.PayloadJson) as JsonObject).FirstOrDefault(p => Text(p?["from"]) == "owner");
+        JsonObject? Verdict(Guid run) => events.Where(e => e.RunId == run).OrderByDescending(e => e.Seq).Select(e => JsonNode.Parse(e.PayloadJson) as JsonObject)
+            .FirstOrDefault(p => Text(p?["kind"]) == "workflow.step" && Text(p?["step"]) == "verdict")?["data"] as JsonObject;
+        var people = rounds.Select(r => r.CreatedBy).OfType<Guid>().Distinct().ToList();
+        var names = await db.Users.AsNoTracking().Where(u => people.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, cancellationToken);
+        var history = new List<DecisionHistoryView>();
+        for (var i = 0; i < rounds.Count - 1; i++)
+        {
+            var next = rounds[i + 1];
+            var verdict = Verdict(rounds[i].Id);
+            var owner = Owner(next.Id);
+            var by = next.CreatedBy is { } who && names.TryGetValue(who, out var name) ? name : "";
+            history.Add(new DecisionHistoryView(Text(verdict?["outcome"]), Text(verdict?["headline"]), Text(owner?["retryOf"]) is null ? "change" : "retry",
+                Text(owner?["change"]), by, next.CreatedAt, next.Id));
+        }
+
+        return history;
     }
 
     public static IReadOnlyList<string> SplitConstraints(string constraints) =>
@@ -698,10 +775,20 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                           where e.OrganisationId == scope.OrganisationId && r.ConversationId == conversation.Id && e.Type == RunEventTypes.Message
                           orderby e.At descending, e.Seq descending
                           select new { e.RunId, e.Seq, e.At, e.PayloadJson }).Take(MaxConversationMessages).ToListAsync(cancellationToken);
-        var messages = rows.AsEnumerable().Reverse().Select(m =>
+        var parsed = rows.AsEnumerable().Reverse().Select(m => (m.RunId, m.Seq, m.At, Payload: JsonNode.Parse(m.PayloadJson) as JsonObject))
+            // Bookkeeping (a workflow's journal, an agent's start) is not something anyone said.
+            .Where(m => Text(m.Payload?["kind"]) is null && !string.IsNullOrEmpty(Text(m.Payload?["text"])))
+            .ToList();
+        // A conversation at a level is shared by everyone there, so each message says who sent it (TALK-11).
+        var senders = parsed.Select(m => Guid.TryParse(Text(m.Payload?["userId"]), out var u) ? u : (Guid?)null).OfType<Guid>().Distinct().ToList();
+        var names = await db.Users.AsNoTracking().Where(u => senders.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, cancellationToken);
+        var messages = parsed.Select(m =>
         {
-            var payload = JsonNode.Parse(m.PayloadJson);
-            return new ConversationMessageView(m.RunId, m.Seq, m.At, Text(payload?["from"]) ?? "employee", Text(payload?["text"]) ?? "");
+            var from = Text(m.Payload?["from"]) ?? "employee";
+            var by = from == "owner"
+                ? Guid.TryParse(Text(m.Payload?["userId"]), out var user) && names.TryGetValue(user, out var name) ? name : null
+                : Text(m.Payload?["by"]);
+            return new ConversationMessageView(m.RunId, m.Seq, m.At, from, Text(m.Payload?["text"]) ?? "", by, Text(m.Payload?["code"]));
         }).ToList();
         return new ConversationHistoryView(scope.Path.ToString(), conversation.Id, employeeId, messages);
     }

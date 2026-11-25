@@ -80,7 +80,8 @@ public sealed record PublicRunView(
     bool BudgetExhausted,
     string? Outcome,
     string? Summary,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool CanTryAgain = false);
 
 public sealed record ResearchView(decimal EstimatedCredits, decimal SpentCredits, string? By);
 
@@ -107,7 +108,19 @@ public sealed record PublicIdeaView(
     JsonNode? Verdict,
     DecisionView? Decision,
     VerdictRecordView Record,
-    string? RedLine);
+    string? RedLine,
+    IReadOnlyList<DecisionHistoryView>? History = null,
+    TryAgainView? TryAgain = null);
+
+/// <summary>A decision taken on an earlier verdict, kept after a new verdict cleared it (VERD-07).</summary>
+/// <param name="Choice"><c>change</c> (researched again with a note), or <c>retry</c> (research that did not finish, started again).</param>
+/// <param name="RunId">The research that followed.</param>
+public sealed record DecisionHistoryView(string? Verdict, string? Headline, string Choice, string? Note, string By, DateTimeOffset At, Guid RunId);
+
+/// <summary>Work on this idea that stopped and can be tried again (CHG-03): its run, what it was, and why it stopped.</summary>
+/// <param name="What"><c>research</c> or <c>build</c>.</param>
+/// <param name="Why"><c>failed</c>, <c>cancelled</c>, <c>budget</c> or <c>plan-declined</c>.</param>
+public sealed record TryAgainView(Guid RunId, string What, string Why);
 
 public sealed record IdeaEstimateView(decimal Credits, string Basis);
 
@@ -189,7 +202,9 @@ public sealed record CreditsView(
     decimal HeldCredits,
     decimal Available);
 
-public sealed record ConversationMessageView(Guid RunId, long Seq, DateTimeOffset At, string From, string Text);
+/// <param name="By">Who said it, by name: the person who sent it, or the employee who answered; null for Endgame's own assistant.</param>
+/// <param name="Code">A machine-readable reason on Endgame's own notices, such as <c>budget_exhausted</c>.</param>
+public sealed record ConversationMessageView(Guid RunId, long Seq, DateTimeOffset At, string From, string Text, string? By = null, string? Code = null);
 
 /// <summary><c>GET /api/conversations?scope=</c>: the messages of the conversation docked at a scope, oldest first.</summary>
 public sealed record ConversationHistoryView(string Scope, Guid? ConversationId, Guid? EmployeeId, IReadOnlyList<ConversationMessageView> Messages);
