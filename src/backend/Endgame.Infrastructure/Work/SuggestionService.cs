@@ -55,7 +55,7 @@ public sealed class SuggestionService(EndgameDbContext db, TenantSession session
         var run = await runs.CreateAsync(at, RunKinds.Suggest, $"Suggest ideas from {at.Node.Name}", null, null, null, null, by, cancellationToken);
         await runs.AppendAsync(at.OrganisationId, run.Id,
         [
-            new NewEvent("estimate.made", new JsonObject { ["credits"] = estimate.Credits, ["basis"] = "suggest" }),
+            new NewEvent("estimate.made", new JsonObject { ["credits"] = estimate.Credits, ["basis"] = "suggest", ["reason"] = estimate.Basis, ["ceiling"] = estimate.Ceiling }),
             new NewEvent(RunEventTypes.Message, new JsonObject
             {
                 ["from"] = "owner",
@@ -160,7 +160,7 @@ public sealed class SuggestionService(EndgameDbContext db, TenantSession session
     }
 
     /// <summary>One click: the suggestion becomes an idea and its research is queued, estimate first, like any other.</summary>
-    public async Task<IdeaStarted> TakeAsync(Guid id, IReadOnlyList<string>? constraints, decimal researchEstimate, Guid by, CancellationToken cancellationToken)
+    public async Task<IdeaStarted> TakeAsync(Guid id, IReadOnlyList<string>? constraints, Estimate researchEstimate, Guid by, CancellationToken cancellationToken)
     {
         var (suggestion, scope) = await RequireAsync(id, cancellationToken);
         if (suggestion.Status != SuggestionStatuses.Open)
@@ -168,7 +168,8 @@ public sealed class SuggestionService(EndgameDbContext db, TenantSession session
             throw EndgameProblem.Conflict($"This suggestion is already {suggestion.Status}.");
         }
 
-        var started = await ideas.CreateAsync(scope, IdeaText(suggestion), constraints, researchEstimate, by, cancellationToken, via: "suggestion");
+        ArgumentNullException.ThrowIfNull(researchEstimate);
+        var started = await ideas.CreateAsync(scope, IdeaText(suggestion), constraints, researchEstimate.Credits, by, cancellationToken, via: "suggestion", researchEstimate.Basis, researchEstimate.Ceiling);
         session.UseOrganisation(suggestion.OrganisationId);
         await db.IdeaSuggestions.Where(s => s.OrganisationId == suggestion.OrganisationId && s.Id == id && s.Status == SuggestionStatuses.Open)
             .ExecuteUpdateAsync(u => u.SetProperty(s => s.Status, SuggestionStatuses.Taken).SetProperty(s => s.IdeaId, started.Idea.Id)

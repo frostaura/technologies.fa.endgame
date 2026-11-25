@@ -105,10 +105,11 @@ public sealed class WorkflowTests
     [Fact]
     public async Task The_search_budget_is_sized_from_the_estimate_within_its_bounds()
     {
-        foreach (var (estimate, expected) in new[] { (100m, 7), (7m, 2), (25m, 3) })
+        // Sized from the ceiling the control plane states beside its calibrated estimate, or from the estimate when it states none.
+        foreach (var (estimate, ceiling, expected) in new[] { (100m, (decimal?)null, 7), (7m, null, 2), (25m, null, 3), (12m, 111m, 7), (12m, 25m, 3) })
         {
             var cp = new FakeControlPlane("frostaura/technologies", "research", "A recipe box.", Idea) { Headroom = 1000m };
-            cp.Append("estimate.made", new JsonObject { ["credits"] = estimate, ["basis"] = "research" });
+            cp.Append("estimate.made", new JsonObject { ["credits"] = estimate, ["basis"] = "research", ["ceiling"] = ceiling });
             var model = Researchers(Verdict());
             await EstimateTests.Executor(cp, model, workflows: [new ResearchWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
             Assert.All(model.Calls.Where(c => System(c).Contains("market researcher", StringComparison.Ordinal)), c => Assert.Equal(expected, c.MaxSearches));
@@ -352,6 +353,10 @@ public sealed class WorkflowTests
         Assert.True(types.IndexOf("plan.proposed") < types.IndexOf("plan.accepted"));
         Assert.True(types.IndexOf("plan.accepted") < cp.Events.FindIndex(e => e.Payload["agent"]?.GetValue<string>() == "builder-recipes-api-0"));
         Assert.Equal(2, types.Count(t => t == "estimate.made"));
+        // The build is estimated from measured figures, not a guess: 20 credits for a typical four-item plan, scaled to this one's two.
+        var planned = cp.Events.Last(e => e.Type == "estimate.made").Payload;
+        Assert.Equal((10m, "plan"), (planned["credits"]!.GetValue<decimal>(), planned["stage"]!.GetValue<string>()));
+        Assert.Contains("measured starting figure for build runs", planned["basis"]!.GetValue<string>(), StringComparison.Ordinal);
         // One session, one clean commit and one progress entry per feature; a separate evaluator each.
         Assert.Equal(2, types.Count(t => t == "evaluation.passed"));
         Assert.Equal(4, ws.CommitMessages.Count);

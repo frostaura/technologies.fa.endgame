@@ -153,10 +153,13 @@ internal static class ControlPlaneTools
 
         // ------------------------------------------------------------------ ideas and verdicts
         Read("idea_estimate", "What researching an idea will cost at most, before anything is charged.",
-            Schema(("text", Str("The idea."), true), ("constraints", Strings("Constraints, in plain language."), false)), c =>
+            Schema(("text", Str("The idea."), true), ("constraints", Strings("Constraints, in plain language."), false), ("scope", Str("The organisation it is for, so its own history is used; defaults to the token's."), false)), async c =>
             {
-                var estimate = c.S<ResearchEstimator>().EstimateResearch(c.Req("text"), c.Strings("constraints"));
-                return Task.FromResult<object?>(new IdeaEstimateView(estimate.Credits, estimate.Basis));
+                var access = c.S<AccessService>();
+                var scopeText = c.Str("scope") ?? (await access.MembershipsOfAsync(c.UserId, c.Ct)).FirstOrDefault()?.OrganisationSlug;
+                Guid? organisation = scopeText is null ? null : (await access.RequireAsync(c.UserId, scopeText, MemberRole.Viewer, c.Ct)).Scope.OrganisationId;
+                var estimate = await c.S<ResearchEstimator>().ResearchAsync(organisation, c.Req("text"), c.Strings("constraints"), c.Ct);
+                return new IdeaEstimateView(estimate.Credits, estimate.Basis);
             }),
         Write("idea_submit", "Records an idea and queues its research (the estimate is shown in the run's log first). Research ends in a verdict a person decides on.",
             Schema(("text", Str("The idea."), true), ("constraints", Strings("Constraints, in plain language."), false), ("scope", Str("The organisation or division to propose it to; defaults to the organisation."), false)), async c =>
@@ -164,8 +167,8 @@ internal static class ControlPlaneTools
                 var access = c.S<AccessService>();
                 var scopeText = c.Str("scope") ?? (await access.MembershipsOfAsync(c.UserId, c.Ct)).FirstOrDefault()?.OrganisationSlug;
                 var (scope, _) = await access.RequireAsync(c.UserId, scopeText, MemberRole.Builder, c.Ct);
-                var estimate = c.S<ResearchEstimator>().EstimateResearch(c.Req("text"), c.Strings("constraints"));
-                var started = await c.S<IdeaService>().CreateAsync(scope, c.Req("text"), c.Strings("constraints"), estimate.Credits, c.UserId, c.Ct, via: "mcp");
+                var estimate = await c.S<ResearchEstimator>().ResearchAsync(scope.OrganisationId, c.Req("text"), c.Strings("constraints"), c.Ct);
+                var started = await c.S<IdeaService>().CreateAsync(scope, c.Req("text"), c.Strings("constraints"), estimate.Credits, c.UserId, c.Ct, via: "mcp", estimate.Basis, estimate.Ceiling);
                 return await c.S<ReadModels>().IdeaAsync(scope.OrganisationId, started.Idea.Id, c.Ct);
             }),
         Read("idea_get", "An idea: its research, its verdict (with the evidence), the decision taken and the organisation's verdict record.",
@@ -192,7 +195,7 @@ internal static class ControlPlaneTools
             {
                 var (scope, _) = await c.S<AccessService>().RequireAsync(c.UserId, c.Req("scope"), MemberRole.Builder, c.Ct);
                 var service = c.S<SuggestionService>();
-                var estimate = c.S<ResearchEstimator>().EstimateSuggestions(await service.ContextSizeAsync(scope, c.Ct));
+                var estimate = await c.S<ResearchEstimator>().SuggestionsAsync(scope.OrganisationId, await service.ContextSizeAsync(scope, c.Ct), c.Ct);
                 var started = await service.StartAsync(scope, estimate, c.UserId, c.Ct);
                 return new SuggestionsStartedView(await c.S<ReadModels>().RunAsync(scope.OrganisationId, started.Run.Id, c.Ct), new IdeaEstimateView(estimate.Credits, estimate.Basis));
             }),
@@ -209,8 +212,8 @@ internal static class ControlPlaneTools
                 var id = c.Id("id");
                 var (suggestion, scope) = await service.RequireAsync(id, c.Ct);
                 await c.S<AccessService>().RequireAsync(c.UserId, scope, MemberRole.Builder, c.Ct);
-                var estimate = c.S<ResearchEstimator>().EstimateResearch(SuggestionService.IdeaText(suggestion), c.Strings("constraints"));
-                var started = await service.TakeAsync(id, c.Strings("constraints"), estimate.Credits, c.UserId, c.Ct);
+                var estimate = await c.S<ResearchEstimator>().ResearchAsync(scope.OrganisationId, SuggestionService.IdeaText(suggestion), c.Strings("constraints"), c.Ct);
+                var started = await service.TakeAsync(id, c.Strings("constraints"), estimate, c.UserId, c.Ct);
                 return await c.S<ReadModels>().IdeaAsync(scope.OrganisationId, started.Idea.Id, c.Ct);
             }),
 

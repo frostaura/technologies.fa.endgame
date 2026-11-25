@@ -41,7 +41,7 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
 
     /// <param name="by">The person who described it; null when the conversation started it on the owner's confirmed word.</param>
     /// <param name="via"><c>console</c> or <c>conversation</c>: where the idea was raised.</param>
-    public async Task<IdeaStarted> CreateAsync(ResolvedScope scope, string text, IReadOnlyList<string>? constraints, decimal estimateCredits, Guid? by, CancellationToken cancellationToken, string via = "console")
+    public async Task<IdeaStarted> CreateAsync(ResolvedScope scope, string text, IReadOnlyList<string>? constraints, decimal estimateCredits, Guid? by, CancellationToken cancellationToken, string via = "console", string? estimateReason = null, decimal? estimateCeiling = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (scope.Level > NodeLevel.Division)
@@ -76,6 +76,8 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
         {
             ["credits"] = estimateCredits,
             ["basis"] = "research",
+            ["reason"] = estimateReason,
+            ["ceiling"] = estimateCeiling,
         })], null, by, cancellationToken);
         return new IdeaStarted(await GetAsync(scope.OrganisationId, idea.Id, cancellationToken), run);
     }

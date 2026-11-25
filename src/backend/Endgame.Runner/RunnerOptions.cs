@@ -74,11 +74,17 @@ public sealed class RunnerOptions
         ["operations"] = 100m,
     };
 
-    /// <summary>Credits a run of each kind is expected to cost before any history exists (scored, then replaced by history).</summary>
+    /// <summary>
+    /// Credits a run of each kind is expected to cost before an organisation has history of its own (scored, then
+    /// replaced by the median of its finished runs). Measured, not guessed: a build is priced for a typical plan of
+    /// four items — the live factory builds of 2026-11-25 cost 13.35 and 14.56 credits for three-item plans, about
+    /// 4.7 an item (TEST-201) — and research is the control plane's own calibrated estimate, with this as a fallback.
+    /// </summary>
     public Dictionary<string, decimal> EstimatePriors { get; set; } = new(StringComparer.Ordinal)
     {
-        ["research"] = 8m,
-        ["build"] = 120m,
+        ["research"] = 12m,
+        ["build"] = 20m,
+        ["suggest"] = 2m,
         ["task"] = 1.5m,
         ["conversation"] = 0.5m,
         ["review"] = 1m,

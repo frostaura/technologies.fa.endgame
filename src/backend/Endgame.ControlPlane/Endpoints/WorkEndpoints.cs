@@ -24,7 +24,8 @@ namespace Endgame.ControlPlane.Endpoints;
 /// <param name="Scope">Optional: the organisation or division to propose to. Defaults to the caller's organisation.</param>
 public sealed record IdeaRequest(string? Text, IReadOnlyList<string>? Constraints, string? Scope);
 
-public sealed record EstimateRequest(string? Text, IReadOnlyList<string>? Constraints);
+/// <param name="Scope">Optional: the organisation (or a scope in it) the idea is for, so the estimate uses its own history.</param>
+public sealed record EstimateRequest(string? Text, IReadOnlyList<string>? Constraints, string? Scope = null);
 
 public sealed record DecisionRequest(string? Choice, string? Note);
 
@@ -58,9 +59,16 @@ internal static class WorkEndpoints
     public static void MapWork(this RouteGroupBuilder api)
     {
         var ideas = api.MapGroup("/ideas").WithTags("Ideas");
-        ideas.MapPost("/estimate", (EstimateRequest request, ResearchEstimator estimator) =>
+        ideas.MapPost("/estimate", async (EstimateRequest request, ClaimsPrincipal principal, AccessService access, ResearchEstimator estimator, CancellationToken ct) =>
         {
-            var estimate = estimator.EstimateResearch(request.Text, request.Constraints);
+            // History is read only for an organisation the caller belongs to; otherwise the measured starting figure.
+            Guid? organisation = null;
+            if (request.Scope is { Length: > 0 } named && principal.Identity?.IsAuthenticated == true)
+            {
+                organisation = (await access.RequireAsync(principal.Id(), named, MemberRole.Viewer, ct)).Scope.OrganisationId;
+            }
+
+            var estimate = await estimator.ResearchAsync(organisation, request.Text, request.Constraints, ct);
             return Results.Ok(new IdeaEstimateView(estimate.Credits, estimate.Basis));
         })
         .WithName("EstimateIdea").WithSummary("What researching an idea will cost at most, before anything is charged. Free; works before an organisation exists.").Produces<IdeaEstimateView>();
@@ -69,8 +77,8 @@ internal static class WorkEndpoints
             var scopeText = request.Scope ?? (await access.MembershipsOfAsync(principal.Id(), ct)).FirstOrDefault()?.OrganisationSlug
                 ?? throw new EndgameProblem(409, "no_organisation", "Name your organisation first", "An idea belongs to an organisation; create it, then describe the idea.");
             var (scope, _) = await access.RequireAsync(principal.Id(), scopeText, MemberRole.Builder, ct);
-            var estimate = estimator.EstimateResearch(request.Text, request.Constraints);
-            var started = await service.CreateAsync(scope, request.Text ?? "", request.Constraints, estimate.Credits, principal.Id(), ct);
+            var estimate = await estimator.ResearchAsync(scope.OrganisationId, request.Text, request.Constraints, ct);
+            var started = await service.CreateAsync(scope, request.Text ?? "", request.Constraints, estimate.Credits, principal.Id(), ct, estimateReason: estimate.Basis, estimateCeiling: estimate.Ceiling);
             return Results.Created($"/api/ideas/{started.Idea.Id}", await reads.IdeaAsync(scope.OrganisationId, started.Idea.Id, ct));
         })
         .WithName("CreateIdea").WithSummary("Records an idea and its constraints, shows its estimate in the research run's log, and queues the research. Returns the idea with its runId.").Produces<PublicIdeaView>(201);

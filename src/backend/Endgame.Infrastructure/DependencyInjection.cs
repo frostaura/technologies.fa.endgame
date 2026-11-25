@@ -169,6 +169,7 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(gateway.RequestTimeoutSeconds));
         services.AddScoped<ModelGateway>();
         services.AddSingleton(configuration.GetSection(EstimateOptions.SectionName).Get<EstimateOptions>() ?? new EstimateOptions());
+        services.AddScoped<IEstimateHistory, Tree.EstimateHistory>();
         services.AddScoped<ResearchEstimator>();
         return services;
     }
