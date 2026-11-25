@@ -48,6 +48,28 @@ public sealed class RunsAndTasksTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_nul_character_anywhere_in_an_event_is_refused_with_400_naming_where_it_is_and_nothing_is_appended()
+    {
+        var run = await RunAsync();
+        var payload = new JsonObject { ["text"] = "fine", ["output"] = new JsonObject { ["lines"] = new JsonArray("ok", "bin\u0000ary") } };
+        var refused = await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/runs/{run}/events", new
+        {
+            events = new object[] { new { type = "message", payload = new { text = "first" } }, new { type = "tool.result", payload } },
+        }), HttpStatusCode.BadRequest);
+        Assert.Equal("event_invalid", refused["code"]!.GetValue<string>());
+        Assert.Contains("events[1].payload.output.lines[1]", refused["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("U+0000", refused["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+
+        var key = await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/runs/{run}/events", new
+        {
+            events = new[] { new { type = "message", payload = new JsonObject { ["bad\u0000key"] = "x" } } },
+        }), HttpStatusCode.BadRequest);
+        Assert.Contains("events[0].payload", key["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+
+        Assert.Empty((await ControlPlaneApp.Ok(service.GetAsync($"/internal/runs/{run}/events"))).AsArray());
+    }
+
+    [Fact]
     public async Task A_lease_is_exclusive_until_it_lapses_and_appending_needs_the_live_lease()
     {
         var run = await RunAsync();
