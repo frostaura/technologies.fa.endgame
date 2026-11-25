@@ -25,7 +25,9 @@ import { ItIsYours, TechnicalDetails, WhatItUses } from "./AppAside";
 import { AppItself, AppSpending, IdleMinutes, RebuildAndRestart } from "./AppManage";
 import { capNote } from "./appModel";
 import { AskPanel, Dashboard } from "./AskPanel";
+import { ChangeRequest } from "./ChangeRequest";
 import { History } from "./History";
+import { AppConversation } from "../home/ConversationDock";
 
 export function AppView({ appId }: { appId: string }) {
   const query = useGetAppQuery(appId, { pollingInterval: 20_000, skipPollingIfUnfocused: true });
@@ -188,11 +190,19 @@ function AppBody({ app }: { app: AppDetail }) {
         </p>
       )}
 
+      {builder && (
+        <ErrorBoundary name="Changing this app">
+          <ChangeRequest appId={app.id} appName={app.name} />
+        </ErrorBoundary>
+      )}
       <ErrorBoundary name="Asking about this app">
         <AskPanel appId={app.id} canAsk={builder} />
       </ErrorBoundary>
       <ErrorBoundary name="The dashboard">
         <Dashboard appId={app.id} canChange={builder} />
+      </ErrorBoundary>
+      <ErrorBoundary name="The conversation">
+        <TalkToApp scope={app.scope} />
       </ErrorBoundary>
 
       <div className="grid grid-cols-1 items-start gap-6 2xl:grid-cols-2">
@@ -611,4 +621,10 @@ function ConfirmPublic({ appName, onConfirm, onCancel }: { appName: string; onCo
       </div>
     </div>
   );
+}
+
+/** The conversation scoped to this app: ask about it, or tell it what to change. */
+function TalkToApp({ scope }: { scope: string }) {
+  const tree = useActiveTree();
+  return <AppConversation scope={scope} trail={namesFor(tree.data, scope)} />;
 }
