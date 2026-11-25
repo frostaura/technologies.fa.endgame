@@ -24,7 +24,7 @@
         }
       ],
       "highlight": {
-        "text": "A new app in Gift Cards",
+        "selector": "form[aria-label^='Add a']",
         "note": "Add an app opens the form."
       }
     },

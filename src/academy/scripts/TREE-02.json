@@ -24,7 +24,7 @@
         }
       ],
       "highlight": {
-        "text": "A new division in Northwind",
+        "selector": "form[aria-label^='Add a']",
         "note": "Manage opens with the organisation chosen and the form ready: Name, and Its address."
       }
     },
