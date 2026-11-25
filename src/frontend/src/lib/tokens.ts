@@ -79,7 +79,7 @@ export const roles = {
 } as const;
 
 /** Corner radii: controls, cards, panels. */
-export const radius = { xs: "8px", sm: "14px", md: "18px", lg: "24px", full: "9999px" } as const;
+export const radius = { xxs: "4px", xs: "8px", sm: "14px", md: "18px", lg: "24px", full: "9999px" } as const;
 
 /** Elevation. Soft and low: a card lifts off the ground, it does not float. */
 export const shadow = {
@@ -167,6 +167,8 @@ export const layout = {
   height: { graph: "40rem" },
   /** The smallest comfortable touch target. */
   touch: "44px",
+  /** Grid tracks: a chart's label column beside its bars; a table of figures with a name column. */
+  columns: { "chart-row": "minmax(3rem, 9rem) minmax(0, 1fr)", "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))" },
   /** Where the org chart's connecting wire sits under a division's badge. */
   wireInset: "39px",
 } as const;

@@ -76,7 +76,7 @@ describe("RunView", () => {
 
     expect(screen.getByText("Waiting for you")).toBeTruthy();
     expect(screen.getAllByText("Argue against it first.").length).toBe(2);
-    expect(screen.getByText("Passed")).toBeTruthy();
+    expect(screen.getByText("Passed its check")).toBeTruthy();
     expect(screen.getByText("Checked and passed: Name the competitors")).toBeTruthy();
     const tasks = screen.getByRole("list", { name: "Tasks" });
     expect(within(tasks).getByText("In progress")).toBeTruthy();
@@ -89,6 +89,39 @@ describe("RunView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(screen.getByText(/Approved\./)).toBeTruthy();
     await waitFor(() => expect(api.calls.find((c) => c.path === "/api/runs/r1/approvals/a1")?.body).toEqual({ decision: "approve" }));
+  });
+
+  it("shows each plan item in plain words in normal mode and its technical detail only in technical mode", async () => {
+    base();
+    const { store } = renderWithStore(<RunView runId="r1" />);
+    await screen.findByRole("heading", { name: "Researching Pager" });
+    feed([
+      ["run.started", {}],
+      [
+        "plan.proposed",
+        {
+          items: [
+            // The newer shape: plain text for the owner, the detail for technical mode.
+            { id: "backend-books", text: "Keep the club's books and who added each", detail: "api/Books/Book.cs, BooksEndpoints.cs and a fresh migration", check: "make test passes" },
+            // The older shape: one technical text.
+            { id: "frontend-books", text: "web/src/books/BooksPage.tsx replaces NotesPage", check: "make lint passes" },
+          ],
+        },
+      ],
+      ["evaluation.passed", { item: "frontend-books", text: "web/src/books/BooksPage.tsx replaces NotesPage", evidence: "make test passed 17 Vitest tests" }],
+    ]);
+    const plan = screen.getByRole("list", { name: "Parts of the plan" });
+    expect(within(plan).getByText("Keep the club's books and who added each")).toBeTruthy();
+    expect(within(plan).getByText("Part 2 of 2 of the plan")).toBeTruthy();
+    expect(plan.textContent).not.toMatch(/\.cs|\.tsx|make test|make lint|migration/);
+    expect(screen.getByText("Checked and passed: Part 2 of 2 of the plan")).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Steps" }).textContent).not.toMatch(/\.tsx|Vitest|make /);
+
+    act(() => void store.dispatch(modeSet("technical")));
+    const technical = screen.getByRole("list", { name: "Parts of the plan" });
+    expect(within(technical).getByText("api/Books/Book.cs, BooksEndpoints.cs and a fresh migration")).toBeTruthy();
+    expect(within(technical).getByText("frontend-books · web/src/books/BooksPage.tsx replaces NotesPage")).toBeTruthy();
+    expect(within(technical).getByText("Check: make test passes")).toBeTruthy();
   });
 
   it("shows the raw detail in technical mode", async () => {

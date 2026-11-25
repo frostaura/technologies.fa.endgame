@@ -15,7 +15,7 @@ import { api, useDecideIdeaMutation, useGetIdeaQuery, useGetMeQuery, useGetTreeQ
 import type { DecisionChoice, ExistingProduct, Idea, Verdict, VerdictOutcome } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { namesFor } from "../home/treeModel";
-import { decisionOptions, plainProductName, redLineBreached, sourceLabel } from "./verdictModel";
+import { decisionOptions, paragraphs, plainProductName, redLineBreached, shortSummary, sourceLabel } from "./verdictModel";
 
 const OUTCOME: Record<VerdictOutcome, string> = { build: "Build", change: "Change", "do-not-build": "Do not build" };
 
@@ -34,6 +34,7 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   const tree = useGetTreeQuery(undefined);
   const me = useGetMeQuery(undefined);
   const idea = view.kind === "loaded" ? view.data : null;
+  const technical = useAppSelector((s) => s.ui.mode) === "technical";
 
   const crumbs: Crumb[] = [];
   const org = me.data?.organisation;
@@ -69,6 +70,13 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
           <p className="text-ink-muted">
             Research{view.data.research.by ? ` by ${view.data.research.by}` : ""} · {formatNumber(view.data.research.spentCredits)} credits, estimated {formatNumber(view.data.research.estimatedCredits)}
           </p>
+          {technical && (
+            <code className="break-all font-mono text-xs text-ink-muted">
+              idea {view.data.id} · research run {view.data.runId} · status {view.data.status}
+              {view.data.scope ? ` · scope ${view.data.scope}` : ""}
+              {view.data.redLine ? ` · red line ${view.data.redLine}` : ""}
+            </code>
+          )}
           {view.data.verdict ? (
             <ErrorBoundary name="The verdict">
               <VerdictBody idea={view.data} verdict={view.data.verdict} />
@@ -101,6 +109,8 @@ function NoVerdictYet({ idea }: { idea: Idea }) {
 function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
   const stamp = verdict.outcome === "build" ? "bg-success-tint text-success-text" : verdict.outcome === "change" ? "bg-primary-tint text-primary-hover" : "bg-attention-chip text-attention-text";
   const redLine = redLineBreached(verdict, idea.redLine);
+  const short = verdict.summary ? shortSummary(verdict.summary) : null;
+  const [reasoning, setReasoning] = useState(false);
   return (
     <>
       <section className={cn("relative flex flex-col gap-3.5 overflow-hidden rounded-lg bg-night px-6 py-7 text-primary-ink sm:px-8", RISE)}>
@@ -109,9 +119,25 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
         <span className={cn("relative self-start rounded-full px-3.5 py-1.5 text-sm font-bold uppercase tracking-wide", stamp, "animate-stamp motion-reduce:animate-none")}>
           Verdict · {OUTCOME[verdict.outcome].toLowerCase()}
         </span>
-        <h1 className="relative text-3xl font-semibold leading-tight sm:text-4xl">{verdict.headline}</h1>
-        {verdict.summary && <p className="relative max-w-prose text-base text-primary-tint">{verdict.summary}</p>}
+        <h1 className="relative max-w-prose text-3xl font-semibold leading-tight sm:text-4xl">{verdict.headline}</h1>
+        {short && <p className="relative max-w-prose text-base text-primary-tint">{short.text}</p>}
+        {short && !short.full && (
+          <Button variant="white" size="sm" className="relative self-start" aria-expanded={reasoning} aria-controls="full-reasoning" onClick={() => setReasoning((x) => !x)}>
+            {reasoning ? "Hide the full reasoning" : "Read the full reasoning"}
+          </Button>
+        )}
       </section>
+
+      {short && !short.full && reasoning && (
+        <section id="full-reasoning" aria-label="The full reasoning" className={cn("flex flex-col gap-3 rounded-md border bg-surface p-5 shadow-card sm:p-6", RISE)}>
+          <h2 className="text-lg font-semibold">The full reasoning</h2>
+          {paragraphs(verdict.summary).map((p, i) => (
+            <p key={i} className="max-w-prose text-ink-body">
+              {p}
+            </p>
+          ))}
+        </section>
+      )}
 
       {redLine && (
         <section role="alert" aria-label="Red line" className="flex flex-col gap-2 rounded-md border-2 border-attention-text bg-attention-tint px-6 py-5">
@@ -242,7 +268,7 @@ function ExistingProducts({ products, evidence }: { products: ExistingProduct[];
             {p.does && <span className="break-words text-ink-body">{p.does}</span>}
             {p.sources.length > 0 && (
               <span className="flex flex-wrap gap-x-3">
-                {p.sources.map((u) => (
+                {[...new Set(p.sources)].map((u) => (
                   <SourceLink key={u} url={u} />
                 ))}
               </span>
@@ -430,7 +456,7 @@ function RecordAside({ idea }: { idea: Idea }) {
             <Link key={o.ideaId} href={paths.idea(o.ideaId)} className="flex flex-col gap-1 rounded-xs border border-border-strong bg-surface px-4 py-3.5 text-ink hover:bg-ground">
               <span className="font-semibold">{o.title}</span>
               <span className="text-ink-body">
-                Research said {OUTCOME[o.verdict].toLowerCase()}. {o.outcome}
+                Research said {OUTCOME[o.verdict].toLowerCase()}. {overruledOutcome(o.outcome)}
               </span>
             </Link>
           ))
@@ -479,7 +505,7 @@ function RecordAside({ idea }: { idea: Idea }) {
             <details>
               <summary className="min-h-touch cursor-pointer py-2 text-primary-link">Every source ({formatNumber(method.sources.length)})</summary>
               <ul className="flex flex-col gap-1">
-                {method.sources.map((u) => (
+                {[...new Set(method.sources)].map((u) => (
                   <li key={u} className="min-w-0">
                     <SourceLink url={u} />
                   </li>
@@ -510,6 +536,14 @@ function MethodRow({ label, children }: { label: string; children: ReactNode }) 
       <dd className="m-0">{children}</dd>
     </>
   );
+}
+
+/** How an overruled idea turned out, as a sentence: the control plane sends a status word. */
+function overruledOutcome(outcome: string): string {
+  const words: Record<string, string> = { finished: "It was built.", building: "It is being built.", failed: "The build did not succeed.", dropped: "It was dropped later.", live: "It is live." };
+  if (words[outcome]) return words[outcome];
+  const t = outcome.trim();
+  return t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}${/[.!?]$/.test(t) ? "" : "."}` : "";
 }
 
 const STRANDS: Record<string, string> = { existing: "existing products", gap: "the gap", demand: "demand" };

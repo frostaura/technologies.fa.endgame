@@ -1,3 +1,4 @@
+import { isPlain, plainOrNull } from "@/lib/plain";
 import type { RunEvent, RunStatus } from "@/store/types";
 
 /**
@@ -70,10 +71,63 @@ export interface DerivedApproval {
   seq: number;
 }
 
+/**
+ * One item of a plan. The planner writes `text` for the owner and `detail` for technical mode
+ * (ARCH-004, the run log); older plans wrote one technical `text` only, so `plain` is that text
+ * when it reads as plain language and null when it names files or commands.
+ */
+export interface PlanItem {
+  id: string;
+  text: string;
+  /** The technical detail: files, endpoints, tests. Technical mode only. */
+  detail: string | null;
+  /** What normal mode may print for this item, or null when the item has no plain wording. */
+  plain: string | null;
+  check: string | null;
+  /** The requirement ids this item delivers (technical mode). */
+  covers: string[];
+  result: "passed" | "failed" | null;
+  evidence: string | null;
+  /** The evaluator's plain sentence about the check, when it wrote one. */
+  outcome: string | null;
+}
+
 export interface DerivedPlan {
   summary: string | null;
-  items: { id: string; text: string; check: string | null; result: "passed" | "failed" | null; evidence: string | null }[];
+  items: PlanItem[];
   accepted: boolean;
+  /** What the idea asks for, in its own words. */
+  requirements: { id: string; text: string }[];
+  /** A requirement deliberately not built, with the reason the owner reads. */
+  leftOut: { requirement: string; text: string; reason: string }[];
+}
+
+export function planItemOf(item: Record<string, unknown>, index: number): PlanItem {
+  const text = str(item, "text") ?? "";
+  const detail = str(item, "detail");
+  // The newer shape carries `detail` beside a plain `text`; the older one put the detail in `text`.
+  const newer = "detail" in item;
+  return {
+    id: str(item, "id") ?? String(index + 1),
+    text,
+    detail: newer ? detail : null,
+    plain: newer ? text || null : isPlain(text) ? text : null,
+    check: str(item, "check"),
+    covers: Array.isArray(item.covers) ? item.covers.filter((x): x is string => typeof x === "string") : [],
+    result: null,
+    evidence: null,
+    outcome: null,
+  };
+}
+
+/** How normal mode names a plan item: its plain words, or its place in the plan. */
+export function planItemLabel(plan: DerivedPlan | null, id: string, mode: Mode): string | null {
+  const items = plan?.items ?? [];
+  const index = items.findIndex((i) => i.id === id || i.text === id);
+  const item = items[index];
+  if (!item) return null;
+  if (mode === "technical") return item.text;
+  return item.plain ?? `Part ${index + 1} of ${items.length} of the plan`;
 }
 
 export interface DerivedRun {
@@ -139,31 +193,29 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
       }
       case "plan.proposed":
       case "plan.accepted": {
-        const items = list(p, "items").map((item, i) => ({
-          id: str(item, "id") ?? String(i + 1),
-          text: str(item, "text") ?? "",
-          check: str(item, "check"),
-          result: null as "passed" | "failed" | null,
-          evidence: null as string | null,
-        }));
+        const items = list(p, "items").map(planItemOf);
         const previous = run.plan;
+        const requirements = list(p, "requirements").map((r, i) => ({ id: str(r, "id") ?? String(i + 1), text: str(r, "text") ?? "" })).filter((r) => r.text);
+        const leftOut = list(p, "leftOut").map((r) => ({ requirement: str(r, "requirement") ?? "", text: str(r, "text") ?? "", reason: str(r, "reason") ?? "" })).filter((r) => r.text || r.reason);
         run.plan = {
           summary: str(p, "summary") ?? previous?.summary ?? null,
           items: items.length > 0 ? items : (previous?.items ?? []),
           accepted: e.type === "plan.accepted" || (previous?.accepted ?? false),
+          requirements: requirements.length > 0 ? requirements : (previous?.requirements ?? []),
+          leftOut: leftOut.length > 0 ? leftOut : (previous?.leftOut ?? []),
         };
         break;
       }
       case "task.created": {
         const id = str(p, "taskId") ?? `task-${e.seq}`;
-        tasks.set(id, { id, summary: str(p, "summary") ?? "A task", status: "open", holder: null, note: null });
+        tasks.set(id, { id, summary: str(p, "title") ?? str(p, "summary") ?? "A task", status: "open", holder: null, note: null });
         break;
       }
       case "task.claimed":
       case "task.done":
       case "task.failed": {
         const id = str(p, "taskId") ?? "";
-        const task = tasks.get(id) ?? { id, summary: str(p, "summary") ?? "A task", status: "open" as TaskStatus, holder: null, note: null };
+        const task = tasks.get(id) ?? { id, summary: str(p, "title") ?? str(p, "summary") ?? "A task", status: "open" as TaskStatus, holder: null, note: null };
         if (e.type === "task.claimed") {
           task.status = "working";
           task.holder = str(p, "holder");
@@ -200,7 +252,7 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         break;
       case "approval.requested": {
         const id = str(p, "approvalId") ?? `approval-${e.seq}`;
-        approvals.set(id, { id, question: str(p, "question") ?? "Your approval is needed.", detail: str(p, "detail"), answer: null, seq: e.seq });
+        approvals.set(id, { id, question: str(p, "title") ?? str(p, "question") ?? "Your approval is needed.", detail: str(p, "detail"), answer: null, seq: e.seq });
         run.status = "waiting";
         break;
       }
@@ -218,6 +270,7 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         if (target) {
           target.result = e.type === "evaluation.passed" ? "passed" : "failed";
           target.evidence = str(p, "evidence");
+          target.outcome = str(p, "summary");
         }
         break;
       }
@@ -308,7 +361,7 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     case "plan.accepted":
       return { ...base, tone: "factory", icon: "plan", title: "The plan was agreed", detail: str(p, "summary") };
     case "task.created":
-      return { ...base, tone: "structure", icon: "plan", title: `New task: ${str(p, "summary") ?? "untitled"}` };
+      return { ...base, tone: "structure", icon: "plan", title: `New task: ${str(p, "title") ?? str(p, "summary") ?? "untitled"}` };
     case "task.claimed":
       return { ...base, tone: "people", icon: "employee", title: `${str(p, "holder") ?? "Someone"} took on a task`, detail: str(p, "summary") };
     case "task.done":
@@ -349,15 +402,15 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     case "subagent.finished":
       return { ...base, tone: "people", icon: "contractors", title: str(p, "title") ? `Reported back: ${str(p, "title")}` : "A contractor reported back", detail: str(p, "summary") };
     case "approval.requested":
-      return { ...base, tone: "attention", icon: "verdict", title: "Asked for your approval", detail: str(p, "question") };
+      return { ...base, tone: "attention", icon: "verdict", title: "Asked for your approval", detail: str(p, "title") ?? str(p, "question") };
     case "approval.answered":
       return { ...base, tone: "attention", icon: "verdict", title: `You answered: ${str(p, "answer") ?? "answered"}` };
     case "evaluation.passed":
-      return { ...base, tone: "money", icon: "evaluate", title: `Checked and passed: ${itemName(p, planItem)}`, detail: str(p, "evidence") };
+      return { ...base, tone: "money", icon: "evaluate", title: `Checked and passed: ${itemName(p, planItem, mode)}`, detail: technical ? str(p, "evidence") : plainOrNull(str(p, "summary")) };
     case "evaluation.failed":
-      return { ...base, tone: "attention", icon: "evaluate", title: `Checked and failed: ${itemName(p, planItem)}`, detail: str(p, "evidence") };
+      return { ...base, tone: "attention", icon: "evaluate", title: `Checked and failed: ${itemName(p, planItem, mode)}`, detail: technical ? str(p, "evidence") : plainOrNull(str(p, "summary")) };
     case "estimate.made":
-      return { ...base, tone: "money", icon: "credits", title: "Estimated the cost", credits: credits(num(p, "credits")) };
+      return { ...base, tone: "money", icon: "credits", title: str(p, "stage") === "plan" ? "Estimated the cost again, from the plan" : "Estimated the cost", credits: credits(num(p, "credits")) };
     case "estimate.scored": {
       const scored = readScored(p);
       return {
@@ -383,10 +436,11 @@ export function readScored(p: Record<string, unknown>): { estimated: number; act
   return estimated !== null && actual !== null ? { estimated, actual } : null;
 }
 
-function itemName(p: Record<string, unknown>, planItem: (id: string) => string | null): string {
+function itemName(p: Record<string, unknown>, planItem: (id: string) => string | null, mode: Mode): string {
   const item = str(p, "item");
-  if (!item) return str(p, "text") ?? "a check";
-  return planItem(item) ?? str(p, "text") ?? item;
+  const text = mode === "technical" ? str(p, "text") : plainOrNull(str(p, "text"));
+  if (!item) return text ?? "a part of the plan";
+  return planItem(item) ?? text ?? (mode === "technical" ? item : "a part of the plan");
 }
 
 export function accuracy(estimated: number, actual: number): string {

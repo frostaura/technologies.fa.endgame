@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import type { Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import type { Selection } from "@/store/uiSlice";
 import { TypingDots } from "./ConversationDock";
-import { accessChip, contractorsLabel, healthChip, runningChip, splitWorkers, stageChip, type Chip } from "./treeModel";
+import { accessChip, contractorsLabel, healthChip, runningChip, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
 
 /** Each division takes the next hue in turn, as the design draws Technologies blue and Labs violet. */
 const DIVISION_TONES = [
@@ -28,8 +28,10 @@ interface Props {
 export function OrgChart({ tree, selection, onSelect }: Props) {
   const org = tree.organisation;
   if (!org) return null;
+  // A lone division takes the whole width, its projects side by side, rather than leaving half the page empty.
+  const lone = tree.divisions.length === 1;
   return (
-    <section aria-label="Organisation chart" className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 2xl:grid-cols-3">
+    <section aria-label="Organisation chart" className={cn("grid grid-cols-1 items-start gap-6", !lone && "md:grid-cols-2 2xl:grid-cols-3")}>
       {tree.divisions.map((division, i) => (
         <DivisionColumn
           key={division.id}
@@ -38,6 +40,7 @@ export function OrgChart({ tree, selection, onSelect }: Props) {
           orgName={org.name}
           tone={DIVISION_TONES[i % DIVISION_TONES.length] ?? DIVISION_TONES[0]}
           index={i}
+          wide={lone}
           selection={selection}
           onSelect={onSelect}
         />
@@ -57,9 +60,11 @@ function DivisionColumn({
   orgName,
   tone,
   index,
+  wide,
   selection,
   onSelect,
 }: {
+  wide: boolean;
   division: TreeDivision;
   orgSlug: string;
   orgName: string;
@@ -102,12 +107,12 @@ function DivisionColumn({
           <Workers workers={division.workers} scope={scope} trail={trail} selection={selection} onSelect={onSelect} />
         </div>
       )}
-      <div className={cn("relative ml-wire flex flex-col gap-3.5 border-l-2 pl-6 pt-4", tone.wire)}>
+      <div className={cn("relative ml-wire gap-3.5 border-l-2 pl-6 pt-4", wide ? "grid grid-cols-1 items-start lg:grid-cols-2 2xl:grid-cols-3" : "flex flex-col", tone.wire)}>
         {isActive(division) && (
           <span aria-hidden className={cn("absolute -left-1.5 size-2.5 animate-travel rounded-full ring-4 motion-reduce:hidden", tone.signal)} />
         )}
         {division.projects.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border-strong bg-surface px-5 py-4 text-ink-muted">No projects in {division.name} yet.</p>
+          <p className="rounded-md border border-dashed border-border-strong bg-surface px-5 py-4 text-ink-muted lg:col-span-2">No projects in {division.name} yet.</p>
         ) : (
           division.projects.map((project) => (
             <ProjectCard key={project.id} project={project} scope={`${scope}/${project.slug}`} trail={[...trail, project.name]} selection={selection} onSelect={onSelect} />
@@ -284,7 +289,7 @@ function WorkerChip({ worker, selected, onSelect }: { worker: Worker; selected: 
       )}
     >
       <Avatar name={worker.name} seed={worker.id} size="xs" />
-      {worker.name} · {worker.role}
+      {workerLabel(worker)}
       {worker.status === "paused" && <Badge tone="attention">Paused</Badge>}
       {worker.idle && <Badge tone="quiet">Nothing to do</Badge>}
       {worker.activity && <span className="sr-only">, working: {worker.activity}</span>}

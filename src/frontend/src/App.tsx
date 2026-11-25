@@ -25,6 +25,11 @@ const AutonomyView = lazy(() => import("@/features/autonomy/AutonomyView").then(
 const EmployeeView = lazy(() => import("@/features/workforce/EmployeeView").then((x) => ({ default: x.EmployeeView })));
 const HireView = lazy(() => import("@/features/workforce/HireView").then((x) => ({ default: x.HireView })));
 const HiresView = lazy(() => import("@/features/workforce/HiresView").then((x) => ({ default: x.HiresView })));
+const PeopleView = lazy(() => import("@/features/people/PeopleView").then((x) => ({ default: x.PeopleView })));
+const AssistantsView = lazy(() => import("@/features/assistants/AssistantsView").then((x) => ({ default: x.AssistantsView })));
+const NotificationsView = lazy(() => import("@/features/notifications/NotificationsView").then((x) => ({ default: x.NotificationsView })));
+const SuggestionsView = lazy(() => import("@/features/suggestions/SuggestionsView").then((x) => ({ default: x.SuggestionsView })));
+const OperatorView = lazy(() => import("@/features/operator/OperatorView").then((x) => ({ default: x.OperatorView })));
 
 /** The session decides what renders: signed out is the sign-in screen, never a broken console. */
 export function App() {
@@ -109,6 +114,16 @@ function Screen({ route }: { route: Route }) {
       return <HiresView />;
     case "autonomy":
       return <AutonomyView />;
+    case "people":
+      return <PeopleView />;
+    case "assistants":
+      return <AssistantsView />;
+    case "notifications":
+      return <NotificationsView />;
+    case "suggestions":
+      return <SuggestionsView />;
+    case "operator":
+      return <OperatorView />;
     default:
       return <NotFound />;
   }

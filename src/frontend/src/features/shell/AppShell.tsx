@@ -4,9 +4,12 @@ import { Icon } from "@/components/Icon";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/format";
+import { shortTitle } from "@/lib/plain";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetCreditsQuery, useGetMeQuery, useLogoutMutation } from "@/store/api";
 import { modeSet } from "@/store/uiSlice";
+import { GodModeBand } from "./GodModeBand";
+import { NotificationsBell } from "./NotificationsBell";
 
 export interface Crumb {
   label: string;
@@ -28,6 +31,7 @@ export function AppShell({ crumbs, aside, children }: { crumbs: Crumb[]; aside?:
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xs focus:bg-surface focus:px-4 focus:py-2">
         Skip to the content
       </a>
+      {me?.isOperator && <GodModeBand />}
       <header className="border-b bg-surface">
         {/*
           Desktop: one row. Phone: two — the mark, where you are and sign-out; then the mode toggle
@@ -45,6 +49,7 @@ export function AppShell({ crumbs, aside, children }: { crumbs: Crumb[]; aside?:
             <ModeToggle />
             {org && <CreditsPill scope={org.slug} />}
           </div>
+          {org && <NotificationsBell organisation={org.slug} />}
           {me && <SignOut />}
         </div>
       </header>
@@ -68,6 +73,8 @@ export function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
       <ol className="flex min-w-0 items-center gap-2 text-ink-muted sm:flex-wrap">
         {crumbs.map((crumb, i) => {
           const last = i === crumbs.length - 1;
+          // A step is a name, not a paragraph: a run titled with its whole idea is cut to a line.
+          const label = shortTitle(crumb.label, 48);
           return (
             <li
               key={`${i}-${crumb.label}`}
@@ -81,15 +88,15 @@ export function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
               {i > 0 && <span aria-hidden className={cn(i === firstShownOnPhone && "hidden sm:inline")}>/</span>}
               {crumb.onSelect && !last ? (
                 <button type="button" onClick={crumb.onSelect} className="min-h-touch min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover">
-                  {crumb.label}
+                  {label}
                 </button>
               ) : crumb.href && !last ? (
                 <Link href={crumb.href} className="min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover">
-                  {crumb.label}
+                  {label}
                 </Link>
               ) : (
-                <span aria-current={last ? "page" : undefined} className={cn("truncate", last && "font-medium text-ink")}>
-                  {crumb.label}
+                <span aria-current={last ? "page" : undefined} title={label !== crumb.label ? crumb.label : undefined} className={cn("truncate", last && "font-medium text-ink")}>
+                  {label}
                 </span>
               )}
             </li>

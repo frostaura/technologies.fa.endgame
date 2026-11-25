@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { formatCredits } from "@/lib/format";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
@@ -9,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { RISE, stagger } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
-import { paths } from "@/lib/router";
+import { paths, useLocation } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetMeQuery, useGetTreeQuery } from "@/store/api";
@@ -19,13 +18,18 @@ import { AppShell, type Crumb } from "../shell/AppShell";
 import { ConversationDock } from "./ConversationDock";
 import { OrgChart } from "./OrgChart";
 import { OntologyView } from "./OntologyView";
-import { countTree, orgFigures, organisationSelection } from "./treeModel";
+import { needLines } from "./needsYouModel";
+import { countTree, orgFigures, organisationSelection, workerLabel } from "./treeModel";
 
 /** How often the org chart refreshes. Status, spend and who is working are live, not a snapshot. */
 export const TREE_POLL_MS = 15_000;
 
 export function HomeView() {
-  const query = useGetTreeQuery(undefined, { pollingInterval: TREE_POLL_MS, skipPollingIfUnfocused: true });
+  // An operator in God mode reads the organisation they entered; anyone else reads their own.
+  const { search } = useLocation();
+  const me = useGetMeQuery(undefined);
+  const entered = me.data?.isOperator ? search.get("organisation") || undefined : undefined;
+  const query = useGetTreeQuery(entered, { pollingInterval: TREE_POLL_MS, skipPollingIfUnfocused: true });
   const view = viewOf(query);
   const dispatch = useAppDispatch();
   const selection = useAppSelector((s) => s.ui.selection);
@@ -59,7 +63,13 @@ export function HomeView() {
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
           <ErrorBoundary name="The org chart">
-            {view.data.organisation ? <Organisation tree={view.data} org={view.data.organisation} selection={activeSelection} onSelect={select} /> : <FirstRun />}
+            {view.data.organisation ? (
+              <Organisation tree={view.data} org={view.data.organisation} selection={activeSelection} onSelect={select} />
+            ) : me.data?.isOperator ? (
+              <OperatorHome />
+            ) : (
+              <FirstRun />
+            )}
           </ErrorBoundary>
         </>
       )}
@@ -112,7 +122,7 @@ function Organisation({ tree, org, selection, onSelect }: { tree: Tree; org: Non
                   className="inline-flex min-h-touch items-center gap-2 rounded-full bg-surface/15 py-1 pl-1 pr-3 text-sm text-primary-ink hover:bg-surface/25"
                 >
                   <Avatar name={w.name} seed={w.id} size="xs" />
-                  {w.name} · {w.role}
+                  {workerLabel(w)}
                   {w.activity && <span className="text-primary-tint">— {w.activity}</span>}
                 </button>
               ))}
@@ -153,6 +163,7 @@ function Organisation({ tree, org, selection, onSelect }: { tree: Tree; org: Non
  */
 function ManageLinks({ tree, selection }: { tree: Tree; selection: Selection }) {
   const me = useGetMeQuery(undefined);
+  const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const role = tree.viewerRole;
   const admin = role === "admin" || role === "owner" || me.data?.isOperator === true;
   const node = selection.kind === "employee" ? { scope: selection.scope, name: selection.trail[selection.trail.length - 2] ?? "" } : { scope: selection.scope, name: selection.trail[selection.trail.length - 1] ?? "" };
@@ -171,6 +182,22 @@ function ManageLinks({ tree, selection }: { tree: Tree; selection: Selection }) 
       <Link href={paths.hires(node.scope)} className={buttonVariants({ variant: "soft" })}>
         <Icon name="contractors" tinted className="size-4" />
         Hiring
+      </Link>
+      {selection.kind !== "employee" && selection.kind !== "project" && selection.kind !== "app" && (
+        <Link href={paths.suggestions(node.scope)} className={buttonVariants({ variant: "soft" })}>
+          <Icon name="research" tinted className="size-4" />
+          Ideas from your portfolio
+        </Link>
+      )}
+      {admin && (
+        <Link href={paths.people(node.scope)} className={buttonVariants({ variant: "soft" })}>
+          <Icon name="employee" tinted className="size-4" />
+          People
+        </Link>
+      )}
+      <Link href={paths.assistants()} className={buttonVariants({ variant: "soft" })}>
+        <Icon name="assistants" tinted className="size-4" />
+        {technical ? "MCP access" : "AI assistants"}
       </Link>
       {admin && (
         <Link href={paths.secrets(node.scope)} className={buttonVariants({ variant: "soft" })}>
@@ -221,6 +248,7 @@ function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
     <section aria-label="Needs you" className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3", RISE, stagger(1))}>
       {items.map((item) => {
         const style = NEED_STYLE[item.kind];
+        const lines = needLines(item);
         return (
           <Link
             key={item.id}
@@ -230,14 +258,8 @@ function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
             <Badge tone={style.tone} className="self-start bg-surface">
               {style.badge}
             </Badge>
-            <span className="text-base font-semibold">{item.title}</span>
-            {item.kind === "hire" ? (
-              <span className={style.detail}>
-                About {formatCredits(item.expectedMonthlyCredits)} a month.{item.detail ? ` ${item.detail}` : ""}
-              </span>
-            ) : (
-              item.detail && <span className={style.detail}>{item.detail}</span>
-            )}
+            <span className="line-clamp-2 break-words text-base font-semibold">{lines.headline}</span>
+            <span className={cn("line-clamp-1 break-words", style.detail)}>{lines.line}</span>
           </Link>
         );
       })}
@@ -281,6 +303,23 @@ function ChartViews({ tree, selection, onSelect }: { tree: Tree; selection: Sele
         </ErrorBoundary>
       </div>
     </div>
+  );
+}
+
+/** An operator with no organisation of their own starts in God mode. */
+function OperatorHome() {
+  return (
+    <section aria-label="God mode" className={cn("flex flex-col items-start gap-4 rounded-lg border-2 border-attention-text bg-surface px-6 py-8 sm:px-10", RISE)}>
+      <span className="flex items-center gap-2 font-semibold uppercase tracking-wide text-attention-text">
+        <Icon name="god-mode" />
+        God mode
+      </span>
+      <h1 className="max-w-prose font-display text-3xl font-bold sm:text-4xl">You run Endgame for FrostAura. Every organisation is one step away.</h1>
+      <p className="max-w-prose text-ink-body">List them, set one up for an invited Owner, top one up or enter it. Each entry is written where that organisation&rsquo;s Owner can read it.</p>
+      <Link href={paths.operator()} className={buttonVariants({ size: "lg" })}>
+        Every organisation
+      </Link>
+    </section>
   );
 }
 

@@ -240,3 +240,27 @@ export function sourceLabel(url: string): string {
 export function plainProductName(name: string): string {
   return name.replace(/\s*\([^()]*\/[^()]*\)/g, "").trim() || name;
 }
+
+/** The sentences of a text, kept whole. */
+function sentences(text: string): string[] {
+  return (text.replace(/\s+/g, " ").trim().match(/[^.!?]+(?:[.!?]+["”’)]?|$)/g) ?? []).map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * The verdict in a few lines, for the top of the page: research's own conclusion ("Verdict: do not
+ * build. …") when it wrote one, otherwise its opening sentences — never the whole argument, which
+ * sits behind "read the full reasoning". `full` is false when the short form already says it all.
+ */
+export function shortSummary(summary: string, max = 320): { text: string; full: boolean } {
+  const all = sentences(summary).filter((s) => !/^the case against(,)? (argued )?first\.?$/i.test(s));
+  if (all.length === 0) return { text: summary.trim(), full: true };
+  const verdictAt = all.findIndex((s) => /^verdict\b/i.test(s));
+  const from = verdictAt >= 0 ? all.slice(verdictAt + 1) : all;
+  const picked: string[] = [];
+  for (const s of from.length > 0 ? from : all) {
+    if (picked.length >= 2 || (picked.length > 0 && [...picked, s].join(" ").length > max)) break;
+    picked.push(s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
+  }
+  const text = picked.join(" ");
+  return { text, full: text.length >= summary.replace(/\s+/g, " ").trim().length - 30 };
+}

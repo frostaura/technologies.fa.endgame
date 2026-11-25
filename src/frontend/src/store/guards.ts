@@ -1,6 +1,26 @@
 import { arr, bool, dict, nullable, num, obj, oneOf, record, str, unknownValue, withDefault, type Guard } from "@/lib/guards";
 import { normaliseVerdict } from "@/features/verdict/verdictModel";
 import type {
+  AccessToken,
+  AccessTokenCreated,
+  AppVersion,
+  AppVersions,
+  AskAnswer,
+  AskChart,
+  AskEstimate,
+  Member,
+  MemberInvitation,
+  NotificationFeed,
+  OperatorEntry,
+  OperatorOrganisation,
+  OperatorTopUp,
+  OrganisationProvisioned,
+  PricingView,
+  RestoreResult,
+  SavedQuestion,
+  Suggestion,
+  SuggestionsStarted,
+  TopUpRequest,
   AppDetail,
   AppShare,
   Autonomy,
@@ -180,7 +200,7 @@ export const ideaGuard: Guard<Idea> = obj<Idea>({
   redLine: withDefault(ns, null),
 });
 
-const runKind = oneOf(["research", "conversation", "build", "factory", "task", "review"] as const);
+const runKind = oneOf(["research", "conversation", "build", "factory", "task", "review", "suggest"] as const);
 const runStatus = oneOf(["queued", "running", "waiting", "paused", "finished", "failed", "cancelled"] as const);
 
 export const runGuard: Guard<Run> = obj<Run>({
@@ -414,3 +434,176 @@ export const tasksGuard: Guard<TaskItem[]> = arr(
     updatedAt: s,
   }),
 );
+
+// Ask about this app ----------------------------------------------------------------------------
+
+export const askEstimateGuard: Guard<AskEstimate> = obj<AskEstimate>({ credits: num, basis: s });
+
+const chartKind = oneOf(["line", "bar", "number", "table"] as const);
+const chartPoint = obj<AskChart["series"][number]["points"][number]>({ x: unknownValue, y: nn });
+export const askChartGuard: Guard<AskChart> = obj<AskChart>({
+  kind: chartKind,
+  x: withDefault(ns, null),
+  y: withDefault(arr(s), []),
+  series: withDefault(arr(obj<AskChart["series"][number]>({ name: s, points: arr(chartPoint) })), []),
+});
+const rows = withDefault(arr(record), []);
+
+export const askAnswerGuard: Guard<AskAnswer> = obj<AskAnswer>({
+  question: s,
+  answer: s,
+  chart: askChartGuard,
+  sql: withDefault(s, ""),
+  columns: withDefault(arr(s), []),
+  rows,
+  truncated: withDefault(bool, false),
+  credits: obj<AskAnswer["credits"]>({ estimate: num, charged: num }),
+});
+
+export const savedQuestionGuard: Guard<SavedQuestion> = obj<SavedQuestion>({
+  id: s,
+  question: s,
+  answer: withDefault(s, ""),
+  sql: withDefault(s, ""),
+  chart: nullable(askChartGuard),
+  columns: withDefault(arr(s), []),
+  rows,
+  truncated: withDefault(bool, false),
+  askedAt: s,
+  ranAt: s,
+  error: withDefault(ns, null),
+});
+export const dashboardGuard: Guard<SavedQuestion[]> = arr(savedQuestionGuard);
+
+// Versions --------------------------------------------------------------------------------------
+
+const appVersion = obj<AppVersion>({
+  commit: s,
+  message: s,
+  at: s,
+  author: obj<AppVersion["author"]>({ kind: oneOf(["employee", "person", "factory"] as const), id: ns, name: s }),
+  live: bool,
+});
+export const versionsGuard: Guard<AppVersions> = obj<AppVersions>({ appId: s, live: ns, versions: arr(appVersion), hasMore: withDefault(bool, false) });
+export const restoreGuard: Guard<RestoreResult> = obj<RestoreResult>({ version: appVersion, published: bool, madePrivate: bool, publishError: ns });
+
+// People ----------------------------------------------------------------------------------------
+
+export const memberGuard: Guard<Member> = obj<Member>({ membershipId: s, userId: s, email: s, displayName: s, scope: s, role, hasPasskey: withDefault(bool, false), grantedAt: s });
+export const membersGuard: Guard<Member[]> = arr(memberGuard);
+export const invitationGuard: Guard<MemberInvitation> = obj<MemberInvitation>({ member: memberGuard, invitationCode: ns, expiresAt: ns, emailed: withDefault(bool, false) });
+
+// AI assistant access ---------------------------------------------------------------------------
+
+export const accessTokenGuard: Guard<AccessToken> = obj<AccessToken>({
+  id: s,
+  name: s,
+  organisation: s,
+  role: oneOf(["admin", "builder", "viewer"] as const),
+  prefix: s,
+  createdAt: s,
+  expiresAt: ns,
+  lastUsedAt: ns,
+  revokedAt: ns,
+  active: bool,
+});
+export const accessTokensGuard: Guard<AccessToken[]> = arr(accessTokenGuard);
+export const accessTokenCreatedGuard: Guard<AccessTokenCreated> = obj<AccessTokenCreated>({ token: s, accessToken: accessTokenGuard });
+
+// Notifications ---------------------------------------------------------------------------------
+
+export const notificationsGuard: Guard<NotificationFeed> = obj<NotificationFeed>({
+  organisation: withDefault(s, ""),
+  unread: num,
+  notifications: arr(
+    obj<NotificationFeed["notifications"][number]>({
+      id: s,
+      kind: s,
+      severity: withDefault(oneOf(["info", "urgent"] as const), "info"),
+      title: s,
+      detail: withDefault(s, ""),
+      scope: withDefault(s, ""),
+      subject: nullable(obj<{ kind: string; id: string }>({ kind: s, id: s })),
+      createdAt: s,
+      read: bool,
+      emailedAt: withDefault(ns, null),
+    }),
+  ),
+});
+
+// Ideas from the portfolio ----------------------------------------------------------------------
+
+export const suggestionGuard: Guard<Suggestion> = obj<Suggestion>({
+  id: s,
+  scope: s,
+  runId: s,
+  title: s,
+  idea: s,
+  gap: s,
+  whyUs: s,
+  reuses: withDefault(arr(s), []),
+  status: oneOf(["open", "taken", "dismissed"] as const),
+  ideaId: ns,
+  createdAt: s,
+});
+export const suggestionsGuard: Guard<Suggestion[]> = arr(suggestionGuard);
+export const suggestionsStartedGuard: Guard<SuggestionsStarted> = obj<SuggestionsStarted>({ run: runGuard, estimate: estimateGuard });
+
+// Top-ups ---------------------------------------------------------------------------------------
+
+export const topUpRequestGuard: Guard<TopUpRequest> = obj<TopUpRequest>({
+  id: s,
+  organisation: s,
+  organisationName: withDefault(s, ""),
+  credits: num,
+  note: withDefault(s, ""),
+  status: oneOf(["open", "fulfilled", "declined"] as const),
+  requestedBy: s,
+  requestedByEmail: ns,
+  requestedAt: s,
+  closedAt: ns,
+  closeNote: ns,
+  topUpEntryId: ns,
+});
+export const topUpRequestsGuard: Guard<TopUpRequest[]> = arr(topUpRequestGuard);
+
+// God mode --------------------------------------------------------------------------------------
+
+export const operatorOrganisationGuard: Guard<OperatorOrganisation> = obj<OperatorOrganisation>({
+  id: s,
+  slug: s,
+  name: s,
+  status: s,
+  createdAt: s,
+  balance: num,
+  standing: oneOf(["in-credit", "overdrawn", "at-limit"] as const),
+  overdraft: obj<OperatorOrganisation["overdraft"]>({ frostauraLimit: num, ownLimit: nn, effective: num }),
+  apps: num,
+  lastActivityAt: ns,
+  openTopUpRequests: withDefault(num, 0),
+});
+export const operatorOrganisationsGuard: Guard<OperatorOrganisation[]> = arr(operatorOrganisationGuard);
+export const operatorEntryGuard: Guard<OperatorEntry> = obj<OperatorEntry>({ organisationId: s, organisation: s, role: s, enteredAt: s, logged: withDefault(s, "") });
+export const operatorTopUpsGuard: Guard<OperatorTopUp[]> = arr(obj<OperatorTopUp>({ id: s, organisation: s, credits: num, note: withDefault(s, ""), at: s, by: ns, byEmail: ns }));
+export const pricingGuard: Guard<PricingView> = obj<PricingView>({
+  pricing: obj<PricingView["pricing"]>({
+    creditsPerUsd: num,
+    margin: num,
+    hosting: obj<PricingView["pricing"]["hosting"]>({ usdPerAwakeHour: num, usdPerGbHourMemory: num, usdPerGbMonthStorage: num, usdPerMillionRequests: num }),
+    defaultAppModelMonthlyCredits: num,
+  }),
+  source: withDefault(oneOf(["defaults", "stored"] as const), "defaults"),
+  updatedAt: ns,
+  updatedBy: ns,
+  history: withDefault(arr(obj<PricingView["history"][number]>({ at: s, by: s, byEmail: ns, before: unknownValue, after: unknownValue })), []),
+});
+export const provisionedGuard: Guard<OrganisationProvisioned> = obj<OrganisationProvisioned>({
+  id: s,
+  slug: s,
+  name: s,
+  ownerEmail: s,
+  ownerInvitationCode: ns,
+  invitationExpiresAt: ns,
+  invitationEmailed: withDefault(bool, false),
+  nameCheck: withDefault(nullable(obj<NonNullable<OrganisationProvisioned["nameCheck"]>>({ slug: s, source: s, note: ns })), null),
+});
