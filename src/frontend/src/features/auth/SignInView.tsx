@@ -13,6 +13,7 @@ import {
   usePasskeyRegisterCompleteMutation,
   usePasskeyRegisterOptionsMutation,
 } from "@/store/api";
+import { registerOptionsWithInvitation } from "@/store/sensitive";
 import { assertionJson, describePasskeyError, passkeysSupported, registrationJson, toCreationOptions, toRequestOptions } from "./webauthn";
 
 const LEADS: { icon: "organisation" | "credits" | "verdict" | "secrets"; title: string; text: string }[] = [
@@ -23,6 +24,15 @@ const LEADS: { icon: "organisation" | "credits" | "verdict" | "secrets"; title: 
 ];
 
 type Busy = null | "login" | "register" | "development";
+
+/** A refusal whose words are already the server's, in plain language. */
+class Refused extends Error {}
+
+async function invited(body: { displayName: string; email: string; invitationCode: string }) {
+  const outcome = await registerOptionsWithInvitation(body);
+  if (!outcome.ok) throw new Refused(outcome.reason);
+  return outcome.data;
+}
 
 export function SignInView() {
   const options = useGetAuthOptionsQuery(undefined);
@@ -36,8 +46,10 @@ export function SignInView() {
   const [creating, setCreating] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
+  const [invitationCode, setInvitationCode] = useState("");
   const nameId = useId();
   const emailId = useId();
+  const codeId = useId();
   const supported = passkeysSupported();
 
   const run = async (kind: Exclude<Busy, null>, work: () => Promise<void>) => {
@@ -46,7 +58,8 @@ export function SignInView() {
     try {
       await work();
     } catch (e) {
-      setError(e && typeof e === "object" && "status" in e ? describeError(e as never) : describePasskeyError(e));
+      if (e instanceof Refused) setError(e.message);
+      else setError(e && typeof e === "object" && "status" in e ? describeError(e as never) : describePasskeyError(e));
     } finally {
       setBusy(null);
     }
@@ -63,7 +76,9 @@ export function SignInView() {
   const register = (event: FormEvent) => {
     event.preventDefault();
     void run("register", async () => {
-      const { publicKey } = await registerOptions({ displayName: displayName.trim(), email: email.trim() }).unwrap();
+      const who = { displayName: displayName.trim(), email: email.trim() };
+      const code = invitationCode.trim();
+      const { publicKey } = code ? await invited({ ...who, invitationCode: code }) : await registerOptions(who).unwrap();
       const credential = (await navigator.credentials.create({ publicKey: toCreationOptions(publicKey) })) as PublicKeyCredential | null;
       if (!credential) throw new Error("No passkey was created.");
       await registerComplete({ credential: registrationJson(credential) }).unwrap();
@@ -126,6 +141,24 @@ export function SignInView() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="min-h-12 rounded-xs border border-border-strong bg-surface px-3.5 text-base"
               />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label htmlFor={codeId} className="font-medium">
+                Invitation code
+              </label>
+              <input
+                id={codeId}
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                aria-describedby={`${codeId}-hint`}
+                value={invitationCode}
+                onChange={(e) => setInvitationCode(e.target.value)}
+                className="min-h-12 rounded-xs border border-border-strong bg-surface px-3.5 font-mono text-base"
+              />
+              <p id={`${codeId}-hint`} className="text-sm text-ink-muted">
+                The code you were sent or given when you were invited. It works once. Leave it empty only if you are the first person here.
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" size="lg" disabled={!supported || busy !== null}>

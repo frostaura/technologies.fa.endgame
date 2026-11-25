@@ -47,6 +47,30 @@ describe("App — the session decides what renders", () => {
     expect(api.calls.some((c) => c.path === "/api/auth/development")).toBe(true);
   });
 
+  it("registers an invited person with the code they were given, and shows a refused code in the server's words", async () => {
+    // Without the field an invited person could only ever be told "Endgame is invite-only".
+    vi.stubGlobal("PublicKeyCredential", function PublicKeyCredential() {});
+    Object.defineProperty(navigator, "credentials", { configurable: true, value: { create: vi.fn(), get: vi.fn() } });
+    const refusal = "That invitation code is not valid for this e-mail address, or it has expired.";
+    const api = stubApi({
+      "GET /api/me": problem(401, "Not signed in"),
+      "GET /api/auth/options": json({ passkey: true, developmentSignIn: false }),
+      "POST /api/auth/passkey/register/options": json({ title: "Forbidden", status: 403, detail: refusal }, 403),
+    });
+    const { store } = renderWithStore(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "First time here? Create your passkey" }));
+    fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "Ann" } });
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "ann@example.test" } });
+    fireEvent.change(screen.getByLabelText("Invitation code"), { target: { value: " one-time-code " } });
+    fireEvent.click(screen.getByRole("button", { name: "Create passkey" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(refusal);
+    const sent = api.calls.find((c) => c.path === "/api/auth/passkey/register/options");
+    expect(sent?.body).toEqual({ displayName: "Ann", email: "ann@example.test", invitationCode: "one-time-code" });
+    // A one-time code is never kept in the store.
+    expect(JSON.stringify(store.getState())).not.toContain("one-time-code");
+    Reflect.deleteProperty(navigator, "credentials");
+  });
+
   it("signs out to the sign-in screen and stays there", async () => {
     // The session query keeps its last answer beside the 401 that follows a sign-out. Treating
     // that as signed in sent the address back home, and the two redirects fought until React gave up.

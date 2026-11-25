@@ -45,6 +45,14 @@ async function send<T>(method: string, path: string, body: unknown, guard?: Guar
   return { ok: true, data: data as T };
 }
 
+/**
+ * Passkey registration for someone who was invited: the one-time code proves the invitation, so it
+ * goes straight to the server and never into the store.
+ */
+export function registerOptionsWithInvitation(body: { displayName: string; email: string; invitationCode: string }): Promise<Outcome<{ publicKey: Record<string, unknown> }>> {
+  return send("POST", "auth/passkey/register/options", body);
+}
+
 /** The level a scope sits at, from its path of slugs. */
 export function levelOf(scope: string): ScopeLevel {
   const depth = scope.split("/").filter(Boolean).length;
