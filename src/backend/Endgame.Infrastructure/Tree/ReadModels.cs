@@ -401,6 +401,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var spent = (await ledger.SpendThisMonthByNodeAsync(scope.OrganisationId, cancellationToken)).Where(s => s.AppId == app.Id).Sum(s => s.Credits);
         var measured = (await telemetry.SummariesAsync(scope.OrganisationId, app.Id, cancellationToken)).GetValueOrDefault(app.Id);
         var sharedWith = await db.AppShares.AsNoTracking().CountAsync(x => x.OrganisationId == scope.OrganisationId && x.AppId == app.Id, cancellationToken);
+        var endUsers = await db.AppEndUsers.AsNoTracking().CountAsync(x => x.OrganisationId == scope.OrganisationId && x.AppId == app.Id, cancellationToken);
         var runningCost = await hosting.RunningCostAsync(scope.OrganisationId, app.Id, cancellationToken);
         var route = (await tree.RoutesAsync(cancellationToken)).Routes.FirstOrDefault(r => r.AppId == app.Id);
         session.UseOrganisation(scope.OrganisationId);
@@ -429,11 +430,10 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             ["latencyP95Ms"] = measured.LatencyP95Ms,
             ["lastVisitAt"] = measured.LastVisitAt,
         };
-        JsonNode? runningCostView = runningCost is { } rc ? new JsonObject { ["sleep"] = rc.Sleep, ["alwaysOn"] = rc.AlwaysOn } : null;
         return new PublicAppView(app.Id, app.Name, scope.Path.ToString(), new HealthView(health, summary), route?.Paused == true ? "paused" : AppRunning(app.Status, alwaysOn),
             new AppAddressesView(addresses.Path, addresses.Subdomain), telemetryView,
             new CostView(spent, cap is null ? null : CascadeService.NumberOf(JsonNode.Parse(cap.Entry.ValueJson))),
-            new AppSettingsView(alwaysOn ? "always-on" : "sleep", access), runningCostView, sharedWith, app.Status, app.CurrentVersion, app.PublishedAt,
+            new AppSettingsView(alwaysOn ? "always-on" : "sleep", access), runningCost, sharedWith, endUsers, app.Status, app.CurrentVersion, app.PublishedAt,
             idle is null ? TreeService.DefaultIdleMinutes : (int)(CascadeService.NumberOf(JsonNode.Parse(idle.Entry.ValueJson)) ?? TreeService.DefaultIdleMinutes));
     }
 

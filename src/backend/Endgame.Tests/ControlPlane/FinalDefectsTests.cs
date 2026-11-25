@@ -88,6 +88,119 @@ public sealed class FinalDefectsTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Contains(flow["edges"]!.AsArray(), e => e!["from"]!.GetValue<string>() == "service:identity" && e["to"]!.GetValue<string>() == $"app:{members}" && e["type"]!.GetValue<string>() == "data-flows-to");
         Assert.Contains(flow["nodes"]!.AsArray(), n => n!["id"]!.GetValue<string>() == "service:identity" && n["type"]!.GetValue<string>() == "service");
     }
+
+    [Fact]
+    public async Task An_app_counts_its_registered_end_users_and_not_the_members_who_open_it()
+    {
+        await owner.DivisionAsync("frostaura", "technologies");
+        await owner.ProjectAsync("frostaura/technologies", "squash");
+        var bookings = await owner.AppAsync("frostaura/technologies/squash", "bookings");
+        var ladder = await owner.AppAsync("frostaura/technologies/squash", "ladder");
+        Assert.Equal(0, (await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{bookings}")))["endUsers"]!.GetValue<int>());
+
+        await owner.SetAsync("frostaura/technologies/squash/bookings", "setting", "access", "public");
+        await owner.SetAsync("frostaura/technologies/squash/ladder", "setting", "access", "public");
+        foreach (var (appId, slug, email) in new[] { (bookings, "bookings", "one@example.com"), (bookings, "bookings", "two@example.com"), (bookings, "bookings", "one@example.com"), (ladder, "ladder", "three@example.com") })
+        {
+            await ControlPlaneApp.Ok(app.Client().PostAsJsonAsync($"/api/app-auth/{appId}/development", new { email, returnTo = $"/frostaura/technologies/squash/{slug}/" }));
+        }
+
+        // A member opening it is not one of its end users.
+        var link = new Uri((await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/app-auth/{bookings}/handoff", new { })))["url"]!.GetValue<string>());
+        await ControlPlaneApp.Ok(app.Internal().PostAsJsonAsync("/internal/access/handoff", new { appId = bookings, code = System.Web.HttpUtility.ParseQueryString(link.Query)["code"]! }));
+
+        Assert.Equal(2, (await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{bookings}")))["endUsers"]!.GetValue<int>());
+        Assert.Equal(1, (await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{ladder}")))["endUsers"]!.GetValue<int>());
+    }
+
+    private static object Hosting(string id, Guid appId, DateTimeOffset from, DateTimeOffset to, double awakeHours, long memoryMb, long storageMb, long requests) => new
+    {
+        sampleId = id,
+        appId,
+        from,
+        to,
+        awakeSeconds = (long)(awakeHours * 3600),
+        memoryBytes = memoryMb * 1024 * 1024,
+        storageBytes = storageMb * 1024 * 1024,
+        requests,
+    };
+
+    [Fact]
+    public async Task The_running_cost_of_each_choice_comes_from_the_apps_own_measured_use_and_the_current_prices()
+    {
+        await owner.DivisionAsync("frostaura", "technologies");
+        await owner.ProjectAsync("frostaura/technologies", "squash");
+        var bookings = await owner.AppAsync("frostaura/technologies/squash", "bookings");
+        await owner.TopUpAsync("frostaura", 100m);
+        var service = app.Internal();
+
+        // Nothing measured: no figures, and it says why.
+        var none = (await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{bookings}")))["runningCost"]!;
+        Assert.Equal("not-enough-history", none["state"]!.GetValue<string>());
+        Assert.Equal(0m, none["measuredHours"]!.GetValue<decimal>());
+        Assert.Null(none["sleep"]);
+        Assert.Null(none["alwaysOn"]);
+        Assert.Contains("24 hours", none["basis"]!.GetValue<string>());
+
+        // Ten hours measured is less than the 24 an estimate needs.
+        var now = DateTimeOffset.UtcNow;
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync("/internal/usage/hosting", new { samples = new[] { Hosting("dock:a:early", bookings, now.AddHours(-58), now.AddHours(-48), 1, 512, 1024, 0) } }));
+        // ... outside the 14-day window, which counts for nothing:
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync("/internal/usage/hosting", new { samples = new[] { Hosting("dock:a:old", bookings, now.AddDays(-20), now.AddDays(-20).AddHours(24), 24, 4096, 1024, 0) } }));
+        var short_ = (await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{bookings}")))["runningCost"]!;
+        Assert.Equal("not-enough-history", short_["state"]!.GetValue<string>());
+        Assert.Equal(10m, short_["measuredHours"]!.GetValue<decimal>());
+        Assert.Null(short_["sleep"]);
+
+        // Two more days from Dock and Edge: 48 hours measured from the first sample to the last.
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync("/internal/usage/hosting", new
+        {
+            samples = new[]
+            {
+                Hosting("dock:a:1", bookings, now.AddHours(-48), now.AddHours(-24), 5, 512, 1024, 0),
+                Hosting("dock:a:2", bookings, now.AddHours(-24), now, 2, 256, 2048, 0),
+                Hosting("edge:a:2", bookings, now.AddHours(-24), now, 0, 0, 0, 4800),
+            },
+        }));
+
+        // By hand, over 58 hours (now-58h .. now): awake 1 + 5 + 2 = 8 h; mean memory while awake
+        // (1×512 + 5×512 + 2×256) / 8 = 448 MB = 0.4375 GB; storage now 2048 MB = 2 GB; 4800 requests.
+        // Sleeps when unused: 8/58 of 720 = 99.3103 awake hours a month.
+        //   99.3103 × (0.002 + 0.4375 × 0.004) + 2 × 0.10 + (4800 / 58 × 720) / 1e6 × 0.20
+        //   = 0.3724138 + 0.2 + 0.0119172 = 0.5843310 US$ → 58.43 credits at 100 a dollar.
+        // Always on: 720 × 0.00375 + 0.2 + 0.0119172 = 2.9119172 US$ → 291.19 credits.
+        var cost = (await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{bookings}")))["runningCost"]!;
+        Assert.Equal("estimated", cost["state"]!.GetValue<string>());
+        Assert.Equal(58m, cost["measuredHours"]!.GetValue<decimal>());
+        Assert.Equal(14, cost["windowDays"]!.GetValue<int>());
+        Assert.Equal(24, cost["minimumHours"]!.GetValue<int>());
+        Assert.Equal(58.43m, cost["sleep"]!["credits"]!.GetValue<decimal>());
+        Assert.Equal(99.3m, cost["sleep"]!["awakeHoursPerMonth"]!.GetValue<decimal>());
+        Assert.Equal(291.19m, cost["alwaysOn"]!["credits"]!.GetValue<decimal>());
+        Assert.Equal(720m, cost["alwaysOn"]!["awakeHoursPerMonth"]!.GetValue<decimal>());
+        Assert.Equal(448m, cost["measured"]!["memoryMb"]!.GetValue<decimal>());
+        Assert.Equal(2048m, cost["measured"]!["storageMb"]!.GetValue<decimal>());
+        Assert.Equal(8m, cost["measured"]!["awakeHours"]!.GetValue<decimal>());
+        Assert.Equal(59586m, cost["measured"]!["requestsPerMonth"]!.GetValue<decimal>());
+        var sleepBasis = cost["sleep"]!["basis"]!.GetValue<string>();
+        Assert.Contains("8 of the 58 hours", sleepBasis);
+        Assert.Contains("448 MB", sleepBasis);
+        Assert.Contains("2 GB", sleepBasis);
+        Assert.Contains("720 hours", cost["alwaysOn"]!["basis"]!.GetValue<string>());
+        Assert.Contains("0.2 credits an awake hour", cost["prices"]!.GetValue<string>());
+        // This month's actual hosting is far below either: the old figures were not this app's.
+        Assert.True(cost["sleep"]!["credits"]!.GetValue<decimal>() < cost["alwaysOn"]!["credits"]!.GetValue<decimal>());
+
+        // The current prices, not configuration's: doubling the awake-hour rate moves both at once.
+        var pricing = (await ControlPlaneApp.Ok(owner.GetAsync("/api/operator/pricing")))["pricing"]!.AsObject();
+        pricing["hosting"]!["usdPerAwakeHour"] = 0.004m;
+        await ControlPlaneApp.Ok(owner.PutAsJsonAsync("/api/operator/pricing", pricing));
+        var repriced = (await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{bookings}")))["runningCost"]!;
+        // 99.3103 × 0.00575 + 0.2 + 0.0119172 = 0.7829517 → 78.30; 720 × 0.00575 + 0.2119172 = 4.3519172 → 435.19.
+        Assert.Equal(78.30m, repriced["sleep"]!["credits"]!.GetValue<decimal>());
+        Assert.Equal(435.19m, repriced["alwaysOn"]!["credits"]!.GetValue<decimal>());
+        Assert.Contains("0.4 credits an awake hour", repriced["prices"]!.GetValue<string>());
+    }
 }
 
 public sealed class OperatorVisitsTests

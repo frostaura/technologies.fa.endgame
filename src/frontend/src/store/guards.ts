@@ -40,6 +40,8 @@ import type {
   Ontology,
   OperatorAction,
   RecurringRole,
+  RunningChoiceCost,
+  RunningCost,
   Run,
   RunEvent,
   SecretList,
@@ -232,6 +234,8 @@ export const conversationGuard: Guard<ConversationHistory> = obj<ConversationHis
   messages: arr(obj<ConversationHistory["messages"][number]>({ runId: s, seq: num, at: s, from: s, text: s })),
 });
 
+const runningChoice = obj<RunningChoiceCost>({ credits: num, awakeHoursPerMonth: num, basis: s });
+
 export const appGuard: Guard<AppDetail> = obj<AppDetail>({
   id: s,
   name: s,
@@ -244,8 +248,19 @@ export const appGuard: Guard<AppDetail> = obj<AppDetail>({
   ),
   cost: obj<AppDetail["cost"]>({ monthCredits: num, capCredits: nn }),
   settings: obj<AppDetail["settings"]>({ running: oneOf(["sleep", "always-on"] as const), access }),
-  runningCost: nullable(obj<NonNullable<AppDetail["runningCost"]>>({ sleep: num, alwaysOn: num })),
+  runningCost: obj<RunningCost>({
+    state: oneOf(["estimated", "not-enough-history"] as const),
+    windowDays: num,
+    minimumHours: num,
+    measuredHours: num,
+    basis: s,
+    prices: s,
+    sleep: nullable(runningChoice),
+    alwaysOn: nullable(runningChoice),
+    measured: nullable(obj<NonNullable<RunningCost["measured"]>>({ awakeHours: num, memoryMb: num, storageMb: num, requestsPerMonth: num })),
+  }),
   sharedWith: withDefault(num, 0),
+  endUsers: num,
   status: withDefault(s, ""),
   version: withDefault(ns, null),
   publishedAt: withDefault(ns, null),

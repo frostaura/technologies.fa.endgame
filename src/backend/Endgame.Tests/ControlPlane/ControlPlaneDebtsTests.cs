@@ -192,7 +192,8 @@ public sealed class ControlPlaneDebtsTests(PostgresServer postgres) : IAsyncLife
         Assert.Equal(100m - 3.158889m, credits["balance"]!.GetValue<decimal>());
         var detail = await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{appId}"));
         Assert.Equal(3.158889m, detail["cost"]!["monthCredits"]!.GetValue<decimal>());
-        Assert.NotNull(detail["runningCost"]!["alwaysOn"]);
+        // Ten measured hours are not enough to project a month from (FinalDefectsTests holds the figures).
+        Assert.Equal("not-enough-history", detail["runningCost"]!["state"]!.GetValue<string>());
 
         await ControlPlaneApp.Expect(await service.PostAsJsonAsync("/internal/usage/hosting", new { samples = new[] { Sample("bad", appId, 30) } }), HttpStatusCode.BadRequest);
         await ControlPlaneApp.Expect(await service.PostAsJsonAsync("/internal/usage/hosting", new { samples = new[] { Sample("ghost", Guid.NewGuid(), 1) } }), HttpStatusCode.NotFound);

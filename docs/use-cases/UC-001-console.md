@@ -175,7 +175,7 @@ is camelCase, errors are problem details. What the console relies on beyond ARCH
 | `GET /api/tree` | `{ generatedAt, viewerRole: owner\|admin\|builder\|viewer\|none, organisation \| null, divisions[], needsYou[] }`; app `visitsToday` is null until measured. `viewerRole` gates the secrets and operator-log links. |
 | `GET /api/runs/{id}` | Also `employeeId`, `conversationId`, `budgetExhausted`, `outcome`, `summary`, `createdAt`. A conversation run's log opens with the owner's own `message { from: "owner", text }`. |
 | `GET /api/conversations?scope=&employeeId=` | `{ scope, conversationId \| null, employeeId \| null, messages[] { runId, seq, at, from, text } }`, oldest first, at most 200. |
-| `GET /api/apps/{id}` | `telemetry` and `runningCost` are **null** until measured; also `status`, `version`, `publishedAt`, `idleMinutes`. |
+| `GET /api/apps/{id}` | `telemetry` is **null** until measured; `runningCost` is always an object — `state: not-enough-history` (no figures) until 24 hours are measured; also `status`, `version`, `publishedAt`, `idleMinutes`, `endUsers`. |
 | `GET /api/credits?scope=` | Also `heldCredits` and `available`. A zero or negative balance has no "months left"; the page says what is left of the overdraft instead. |
 | `GET /api/ideas/{id}` | `verdict` is the agreed verdict document (older runs' `{ evidence }` sections and products as text are read too); `redLine` names a breached red line by its code; `decision.via`. |
 | `GET /api/tree` | Workers also carry `status`, `idle`, `standing`, `briefedBy`; `needsYou` adds `hire` and `idle`. Older answers without them still read. |

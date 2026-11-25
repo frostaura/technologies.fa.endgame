@@ -314,15 +314,42 @@ export interface AppDetail {
   telemetry: AppTelemetry | null;
   cost: { monthCredits: number; capCredits: number | null };
   settings: { running: "sleep" | "always-on"; access: AppAccess };
-  /** Expected monthly credits for each running choice, from measured hosting. Null until measured. */
-  runningCost: { sleep: number; alwaysOn: number } | null;
+  /** What each running choice would cost a month, from this app's own measured use and today's prices — or why not yet. */
+  runningCost: RunningCost;
   sharedWith: number;
+  /** How many end users have registered for it (members who open it are not counted). */
+  endUsers: number;
   /** The app's own lifecycle word (draft, building, running, sleeping, failed, stopped, archived). */
   status: string;
   version: string | null;
   publishedAt: string | null;
   /** Minutes idle before it sleeps. */
   idleMinutes: number;
+}
+
+/** One running choice's monthly figure and what it assumes. */
+export interface RunningChoiceCost {
+  credits: number;
+  awakeHoursPerMonth: number;
+  basis: string;
+}
+
+/**
+ * `runningCost` of `GET /api/apps/{id}`: from the app's own hosting over the last `windowDays`, at today's
+ * prices. Under `minimumHours` of measured time it is `not-enough-history` and both choices are null.
+ */
+export interface RunningCost {
+  state: "estimated" | "not-enough-history";
+  windowDays: number;
+  minimumHours: number;
+  measuredHours: number;
+  /** What was measured, or why there is no estimate yet. */
+  basis: string;
+  /** Today's hosting prices, in credits. */
+  prices: string;
+  sleep: RunningChoiceCost | null;
+  alwaysOn: RunningChoiceCost | null;
+  measured: { awakeHours: number; memoryMb: number; storageMb: number; requestsPerMonth: number } | null;
 }
 
 export interface AppTelemetry {

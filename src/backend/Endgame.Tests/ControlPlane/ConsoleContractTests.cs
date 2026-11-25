@@ -68,7 +68,7 @@ public sealed class ConsoleContractTests(PostgresServer postgres) : IAsyncLifeti
         HasKeys(idea["record"], "total", "build", "change", "doNotBuild", "overruled");
 
         var detail = await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{appId}"));
-        HasKeys(detail, "id", "name", "scope", "health", "running", "addresses", "telemetry", "cost", "settings", "runningCost", "sharedWith");
+        HasKeys(detail, "id", "name", "scope", "health", "running", "addresses", "telemetry", "cost", "settings", "runningCost", "sharedWith", "endUsers");
         HasKeys(detail["health"], "state", "summary");
         HasKeys(detail["addresses"], "path", "subdomain");
         HasKeys(detail["cost"], "monthCredits", "capCredits");

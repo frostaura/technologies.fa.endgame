@@ -37,7 +37,9 @@
   back with the reason on the page. God mode is marked on every screen and closed to anyone else.
 - Only a research run links to a verdict; a build run never offers one (`RunView.test.tsx`, "never offers a
   verdict on a build run"). God mode's top-ups name each organisation by its display name, its address
-  name only in technical mode (`OperatorView.test.tsx`).
+  name only in technical mode (`OperatorView.test.tsx`). Each running choice shows its monthly figure with
+  what it assumes and today's prices, or "Not enough history yet" with the reason; "what it uses" says how many
+  people signed up (`AppView.test.tsx`).
 
 ## Tests
 

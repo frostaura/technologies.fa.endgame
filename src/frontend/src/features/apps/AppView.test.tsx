@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppDetail } from "@/store/types";
+import { ONTOLOGY_APP } from "@/test/breadth";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { AppView } from "./AppView";
 
@@ -16,13 +17,16 @@ const APP: AppDetail = {
   telemetry: { visitsToday: 12, requestsToday: 90, errorsToday: 0, latencyP50Ms: 120, latencyP95Ms: 1500, lastVisitAt: null },
   cost: { monthCredits: 33, capCredits: 100 },
   settings: { running: "sleep", access: "private" },
-  runningCost: { sleep: 10, alwaysOn: 80 },
+  runningCost: { state: "estimated", windowDays: 14, minimumHours: 24, measuredHours: 58, basis: "Measured over the last 14 days: awake 8 of the 58 hours measured, using 448 MB while awake, 2 GB stored and about 59,586 requests a month.", prices: "Today's prices: 0.2 credits an awake hour, 0.4 per GB of memory an awake hour, 10 per GB stored a month and 20 per million requests.", sleep: { credits: 10, awakeHoursPerMonth: 99.3, basis: "Awake about 99 hours a month, as it was 8 of the 58 hours measured in the last 14 days, using 448 MB while awake, with 2 GB stored and about 59,586 requests a month." }, alwaysOn: { credits: 80, awakeHoursPerMonth: 720, basis: "Awake all 720 hours of a month at the 448 MB it uses while awake, with the same 2 GB stored and about 59,586 requests a month." }, measured: { awakeHours: 8, memoryMb: 448, storageMb: 2048, requestsPerMonth: 59586 } },
   sharedWith: 0,
+  endUsers: 0,
   status: "sleeping",
   version: "1.2.0",
   publishedAt: "2026-11-20T10:00:00Z",
   idleMinutes: 15,
 };
+
+const NO_HISTORY: AppDetail["runningCost"] = { state: "not-enough-history", windowDays: 14, minimumHours: 24, measuredHours: 0, basis: "Nothing measured yet. An estimate needs at least 24 hours of this app's own use in the last 14 days.", prices: "Today's prices: 0.2 credits an awake hour, 0.4 per GB of memory an awake hour, 10 per GB stored a month and 20 per million requests.", sleep: null, alwaysOn: null, measured: null };
 
 afterEach(() => {
   cleanup();
@@ -117,14 +121,39 @@ describe("AppView", () => {
   });
 
   it("says an app that has measured nothing yet is not measured, never zero, and does not crash", async () => {
-    stub(json({ ...APP, telemetry: null, runningCost: null }));
+    stub(json({ ...APP, telemetry: null, runningCost: NO_HISTORY }));
     renderWithStore(<AppView appId="a1" />);
     expect(await screen.findByRole("heading", { name: "Ledger web" })).toBeTruthy();
     const today = screen.getByRole("region", { name: "Today" });
     expect(within(today).getAllByText("Not measured yet")).toHaveLength(2);
     expect(within(today).queryByText("0")).toBeNull();
-    expect(screen.getAllByText(/Its monthly cost is not measured yet/)).toHaveLength(2);
+    expect(screen.getAllByText(/Not enough history yet to say what it costs a month/)).toHaveLength(2);
     expect(screen.queryByText(/About \d+ credits a month/)).toBeNull();
+    expect(screen.getByText(/Not enough history yet\. Nothing measured yet\. An estimate needs at least 24 hours/)).toBeTruthy();
+  });
+
+  it("gives each running choice its monthly figure with what it assumes, and today's prices", async () => {
+    stub(json(APP));
+    renderWithStore(<AppView appId="a1" />);
+    const sleeps = (await screen.findByRole("radio", { name: /Sleeps when unused/ })).closest("label") as HTMLElement;
+    expect(sleeps.textContent).toContain("About 10 credits a month.");
+    expect(sleeps.textContent).toContain("Awake about 99 hours a month, as it was 8 of the 58 hours measured in the last 14 days");
+    const always = screen.getByRole("radio", { name: /Always on/ }).closest("label") as HTMLElement;
+    expect(always.textContent).toContain("About 80 credits a month.");
+    expect(always.textContent).toContain("Awake all 720 hours of a month at the 448 MB");
+    expect(screen.getByText(/Today's prices: 0\.2 credits an awake hour/)).toBeTruthy();
+    expect(screen.queryByText(/Not enough history yet/)).toBeNull();
+  });
+
+  it("says how many people signed up to it in what it uses", async () => {
+    stub(json({ ...APP, endUsers: 14 }), { "GET /api/ontology": json(ONTOLOGY_APP) });
+    renderWithStore(<AppView appId="a1" />);
+    const uses = await screen.findByRole("list", { name: "What it uses" });
+    expect(within(uses).getByText("14 people signed up")).toBeTruthy();
+    cleanup();
+    stub(json({ ...APP, endUsers: 0 }), { "GET /api/ontology": json(ONTOLOGY_APP) });
+    renderWithStore(<AppView appId="a1" />);
+    expect(within(await screen.findByRole("list", { name: "What it uses" })).getByText("No one has signed up yet")).toBeTruthy();
   });
 
   it("asks a person to confirm making it public, in a dialog that can be declined", async () => {

@@ -124,9 +124,10 @@ public sealed record AppSettingsView(string Running, string Access);
 /// (today is the UTC day). Null only while the app has measured nothing yet — never zeros that were not measured.
 /// </param>
 /// <param name="RunningCost">
-/// Expected monthly credits for each running choice, <c>{ sleep, alwaysOn }</c>, from the app's measured hosting over the
-/// last seven days. Null until Dock has reported any.
+/// What each running choice would cost a month, from the app's own measured hosting over the last 14 days and the current
+/// prices, each with what it assumes; or <c>state: not-enough-history</c> (under 24 hours measured) with no figures. Never null.
 /// </param>
+/// <param name="EndUsers">How many end users have registered for the app (members who open it are not counted).</param>
 public sealed record PublicAppView(
     Guid Id,
     string Name,
@@ -137,8 +138,9 @@ public sealed record PublicAppView(
     JsonNode? Telemetry,
     CostView Cost,
     AppSettingsView Settings,
-    JsonNode? RunningCost,
+    Platform.RunningCostView RunningCost,
     int SharedWith,
+    int EndUsers,
     string Status,
     string? Version,
     DateTimeOffset? PublishedAt,
