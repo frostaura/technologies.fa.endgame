@@ -88,6 +88,8 @@ public sealed class TelemetrySqlGuardTests
         "SELECT r.route, count(e.message) FROM ask.requests r LEFT JOIN ask.errors e ON e.route = r.route GROUP BY r.route",
         "select source, count(*) from errors where at between now() - interval '2 days' and now() group by source",
         "SELECT round(avg(value)::numeric, 2) FROM metrics WHERE name = 'queue.depth'",
+        // A live model listed today's errors with array_agg; the guard refused a harmless aggregate.
+        "SELECT count(*) AS errors, array_agg(DISTINCT status) AS statuses, string_agg(message, '; ') AS messages FROM errors WHERE at >= date_trunc('day', now())",
     };
 
     [Theory]
