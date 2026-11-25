@@ -105,6 +105,11 @@ deepseek-v4.1-flash), 0 repairs**; the evaluator called the running preview 15 t
 reviewer). Published privately. Build estimate 90 credits, actual 14.56 (ratio 0.16). 215 model calls, 291 tool calls.
 Whole run 28 minutes; **US$0.24** (research 0.09, build 0.15), plus 0.07 credits of hosting.
 
+**Repeated unattended**, `make e2e-factory` from fresh volumes with the final code: all four steps passed in 16.6
+minutes. Do not build (16 searches, 14 products, 44 sources, confidence high), overruled; the same four hires (no
+promotion this time); a three-item plan, 3 builder sessions, 3 evaluations passed first time on `build`, 0 repairs, 7
+preview probes; build estimate 90 credits, actual 13.35; **US$0.22** in all.
+
 What the screenshots show: a clean, light "Book Club" page with a header (signed-in name, sign out), "The reading list" and
 an "Add a book" button, books as cards in a three-column grid (title, author, status, who added it and when), a book's own
 page with its note and a Status selector; at phone width the cards stack in one column with nothing cut off. Signed out, the
