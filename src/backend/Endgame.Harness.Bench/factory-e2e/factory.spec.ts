@@ -284,16 +284,23 @@ function bookItem(page: Page, title: string) {
 /** Sets a book's status with its `set-<field>-<value>` button: on its item when the list offers it, otherwise on its own page. */
 async function setStatus(page: Page, title: string, status: "reading" | "finished") {
   const setter = (scope: Page | ReturnType<Page["getByTestId"]>) => scope.locator(`[data-testid^="set-"][data-testid$="-${status}"]`).first();
-  const saved = page.waitForResponse((r) => ["PATCH", "PUT", "POST"].includes(r.request().method()) && /books/.test(r.url()));
+  const anySetter = (scope: Page | ReturnType<Page["getByTestId"]>) => scope.locator('[data-testid^="set-"]').first();
   const item = bookItem(page, title);
   await expect(item).toBeVisible({ timeout: 20_000 });
-  if (await setter(item).count()) {
-    await setter(item).click();
-  } else {
+  let scope: Page | ReturnType<Page["getByTestId"]> = item;
+  if (!(await anySetter(item).count())) {
     await item.getByTestId("open-book").first().click();
-    await expect(setter(page)).toBeVisible({ timeout: 20_000 });
-    await setter(page).click();
+    await expect(anySetter(page)).toBeVisible({ timeout: 20_000 });
+    scope = page;
   }
+  // A book already in that status offers no button for it, or a disabled one (a new book starts as "reading" in some
+  // builds): nothing to do.
+  if (!(await setter(scope).count()) || (await setter(scope).isDisabled())) {
+    await expect(scope === page ? page.getByRole("main") : item).toContainText(new RegExp(status, "i"));
+    return;
+  }
+  const saved = page.waitForResponse((r) => ["PATCH", "PUT", "POST"].includes(r.request().method()) && /books/.test(r.url()));
+  await setter(scope).click();
   expect((await saved).status()).toBeLessThan(300);
 }
 
@@ -357,14 +364,20 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   await setStatus(page, books[0].title, "reading");
   await openApp(page);
   await page.waitForLoadState("networkidle");
-  // The app's own way to it: its `nav-<view>` link when it has one, otherwise a `page-<view>` section of the home page.
-  const nav = page.locator('[data-testid^="nav-"]').filter({ hasText: /reading now|currently reading|everyone/i });
+  // The app's own way to it: a `nav-<view>` link to a view of its own (`page-<view>` naming reading), or the home page
+  // when that is where the app shows what is being read.
+  const nav = page.locator('[data-testid^="nav-"]').filter({ hasText: /reading|everyone/i });
   if (await nav.count()) await nav.first().click();
   await page.waitForLoadState("networkidle");
-  const region = page.locator('[data-testid^="page-"], section').filter({ hasText: /reading now|currently reading|everyone is reading/i }).last();
+  const own = page.locator('[data-testid^="page-"][data-testid*="reading"]');
+  const dedicated = (await own.count()) > 0;
+  const region = dedicated ? own.first() : page.getByTestId("page-home");
   await expect(region).toBeVisible({ timeout: 20_000 });
-  await expect(region.getByTestId("book-item").filter({ hasText: books[0].title })).toBeVisible({ timeout: 20_000 });
-  await expect(region.getByTestId("book-item").filter({ hasText: books[1].title })).toHaveCount(0); // finished, so not being read now
+  await expect(region.getByTestId("book-item").filter({ hasText: books[0].title }).first()).toContainText(/reading/i, { timeout: 20_000 });
+  const finished = region.getByTestId("book-item").filter({ hasText: books[1].title });
+  // A view of what is being read leaves the finished book out; a list of every book shows it as finished, never as reading.
+  if (dedicated) await expect(finished).toHaveCount(0);
+  else await expect(finished.first()).toContainText(/finished/i);
+  await note(`what everyone is reading now: ${dedicated ? "its own view" : "the home page"} shows the book being read${dedicated ? " and leaves the finished one out" : " and the finished one as finished"}`);
   await page.screenshot({ path: path.join(STATE, "6-reading-now.png"), fullPage: true });
-  await note("what everyone is reading now: the book marked reading is shown there");
 });
