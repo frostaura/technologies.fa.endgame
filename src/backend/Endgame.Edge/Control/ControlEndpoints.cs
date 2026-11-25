@@ -52,6 +52,9 @@ public static class ControlEndpoints
         // The evaluator's look at a private preview: one request, as a signed-out visitor, never from the public side.
         control.MapPost("/apps/{id:guid}/probe", PreviewProbe.ProbeAsync);
 
+        // The per-app MCP surface: the control plane calls an app's own API with a member's app-scoped session.
+        control.MapMethods("/apps/{id:guid}/call/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"], AppCalls.CallAsync);
+
         control.MapGet("/apps", (AppRegistry registry) => registry.All.Select(a => new
         {
             a.Route.AppId,

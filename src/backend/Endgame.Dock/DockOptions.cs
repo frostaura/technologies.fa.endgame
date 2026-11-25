@@ -40,6 +40,9 @@ public sealed class DockOptions
     /// <summary>Most connections one app may hold.</summary>
     public int AppConnectionLimit { get; set; } = 10;
 
+    /// <summary>The <c>pg_dump</c> the data export runs: version 16, the shared server's (the Dock image installs it).</summary>
+    public string PgDumpPath { get; set; } = "/usr/lib/postgresql/16/bin/pg_dump";
+
     /// <summary>Derives every app's database name and password. Required; never logged.</summary>
     public string SecretKey { get; set; } = "";
 

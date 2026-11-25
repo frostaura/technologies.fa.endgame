@@ -149,6 +149,79 @@ public sealed class DatabaseProvisioner(IOptions<DockOptions> options, OpaqueNam
         }
     }
 
+    /// <summary>
+    /// The app's own database as a <c>pg_dump --format=custom</c> archive (ARCH-004, <i>Dock</i>), written to a
+    /// temporary file that is deleted when the returned stream is closed, so a dump that fails half-way is a
+    /// problem rather than a truncated 200. Null when the app has no database yet.
+    /// </summary>
+    public async Task<Stream?> DumpAsync(Guid appId, CancellationToken cancellationToken)
+    {
+        if (!Configured)
+        {
+            throw DockProblem.Unavailable("No database server is configured for apps.");
+        }
+
+        var database = names.Database(appId);
+        await using (var connection = await OpenAsync(cancellationToken))
+        {
+            if (!await ExistsAsync(connection, database, cancellationToken))
+            {
+                return null;
+            }
+        }
+
+        var admin = new NpgsqlConnectionStringBuilder(options.Value.PostgresAdmin);
+        var file = Path.Combine(Path.GetTempPath(), $"dump-{appId:N}-{Guid.NewGuid():N}.pgdump");
+        var start = new System.Diagnostics.ProcessStartInfo(options.Value.PgDumpPath)
+        {
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        foreach (var argument in new[] { "--format=custom", "--compress=6", "--no-password", $"--file={file}", $"--host={admin.Host}", $"--port={admin.Port}", $"--username={admin.Username}", $"--dbname={database}" })
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        start.Environment["PGPASSWORD"] = admin.Password ?? "";
+        start.Environment["PGCONNECT_TIMEOUT"] = "15";
+        System.Diagnostics.Process process;
+        try
+        {
+            process = System.Diagnostics.Process.Start(start) ?? throw DockProblem.Unavailable("pg_dump could not be started.");
+        }
+        catch (System.ComponentModel.Win32Exception e)
+        {
+            throw DockProblem.Unavailable($"pg_dump is not installed here ({options.Value.PgDumpPath}): {e.Message}");
+        }
+
+        using (process)
+        {
+            var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
+            _ = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            try
+            {
+                await process.WaitForExitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                File.Delete(file);
+                throw;
+            }
+
+            if (process.ExitCode != 0)
+            {
+                File.Delete(file);
+                var error = (await stderr).Trim();
+                logger.LogWarning("pg_dump of app {AppId} failed ({Exit}): {Error}", appId, process.ExitCode, error);
+                throw DockProblem.Unavailable($"The app's database could not be dumped: {(error.Length > 400 ? error[..400] : error)}");
+            }
+        }
+
+        return new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 64 * 1024, FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+    }
+
     /// <summary>The size of each app's database in bytes; an app with no database yet is left out.</summary>
     public async Task<IReadOnlyDictionary<Guid, long>> SizesAsync(IEnumerable<Guid> appIds, CancellationToken cancellationToken)
     {

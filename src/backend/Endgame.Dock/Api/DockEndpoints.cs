@@ -52,6 +52,12 @@ public static class DockEndpoints
         api.MapPost("/apps/{id:guid}/stop", (Guid id, AppService apps, CancellationToken ct) => apps.StopAsync(id, ct));
         api.MapPost("/apps/{id:guid}/wake", (Guid id, AppService apps, CancellationToken ct) => apps.WakeAsync(id, ct));
         api.MapGet("/apps/{id:guid}", (Guid id, AppService apps, CancellationToken ct) => apps.StatusAsync(id, ct));
+        // The app's own data for the Owner's export: a pg_dump custom-format archive, or 404 not_found before it has a database.
+        api.MapGet("/apps/{id:guid}/database/dump", async (Guid id, DatabaseProvisioner databases, CancellationToken ct) =>
+        {
+            var dump = await databases.DumpAsync(id, ct) ?? throw DockProblem.NotFound("The app's database");
+            return Results.Stream(dump, "application/octet-stream", $"{id:D}.dump");
+        });
         api.MapPut("/apps/{id:guid}/egress", (Guid id, EgressAllowList body, AppService apps, CancellationToken ct) => apps.SetEgressAsync(id, body, ct));
         // Hosting usage: close the period now and report it (the timer does this every UsageReportSeconds).
         api.MapPost("/usage/flush", async (Endgame.Dock.Platform.HostingUsageReporter usage, CancellationToken ct) => Results.Ok(new { taken = await usage.FlushAsync(ct) }));

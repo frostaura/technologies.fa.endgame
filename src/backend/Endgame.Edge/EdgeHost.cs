@@ -88,6 +88,8 @@ public static class EdgeHost
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(5) });
         builder.Services.AddHttpClient(PreviewProbe.ClientName, c => c.Timeout = TimeSpan.FromSeconds(60))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(5) });
+        builder.Services.AddHttpClient(AppCalls.ClientName, c => c.Timeout = TimeSpan.FromSeconds(90))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false, UseCookies = false, ConnectTimeout = TimeSpan.FromSeconds(5) });
         builder.Services.AddSingleton<AppRegistry>();
         builder.Services.AddSingleton<IAppBackend, DockBackend>();
         builder.Services.AddSingleton<AppDiscovery>();

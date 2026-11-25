@@ -476,6 +476,78 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_control_planes_app_gateway_calls_an_app_through_the_control_listener_with_the_members_session()
+    {
+        await ControlAsync(HttpMethod.Post, $"/internal/apps/{privateApp:D}/state", new AppStateReport(privateApp, AppRuntimeState.Sleeping, 0, false, DateTimeOffset.UtcNow));
+        var wakes = backend.WakeCalls;
+
+        // The real caller: the control plane's AppGateway, as the per-app MCP tools use it.
+        var services = new ServiceCollection();
+        services.AddHttpClient(Endgame.Infrastructure.Platform.AppGateway.ClientName);
+        services.Configure<Endgame.Infrastructure.Platform.ServiceAddresses>(a => a.EdgeControl = $"http://127.0.0.1:{controlPort}");
+        services.Configure<Endgame.Infrastructure.Platform.AppCallOptions>(_ => { });
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [HostingConventions.ServiceTokenVariable] = Token }).Build());
+        services.AddSingleton<Endgame.Infrastructure.Platform.AppGateway>();
+        await using var provider = services.BuildServiceProvider();
+        var gateway = provider.GetRequiredService<Endgame.Infrastructure.Platform.AppGateway>();
+        var operation = new Endgame.Infrastructure.Platform.AppOperation("createBooking", "Book a court", "post", "/api/courts/{court}/bookings",
+            new System.Text.Json.Nodes.JsonObject(), ["court"], ["dryRun"], HasBody: true);
+        var arguments = new System.Text.Json.Nodes.JsonObject { ["court"] = "2", ["dryRun"] = "true", ["body"] = new System.Text.Json.Nodes.JsonObject { ["slot"] = "18:00" } };
+        var answer = await gateway.CallAsync(privateApp, operation, arguments, "egs_member-session", CancellationToken.None);
+
+        Assert.Equal(200, answer.Status);
+        var seen = answer.Json!.AsObject();
+        Assert.Equal("POST", seen["method"]!.GetValue<string>());
+        Assert.Equal("/api/courts/2/bookings", seen["path"]!.GetValue<string>());
+        Assert.Equal("?dryRun=true", seen["query"]!.GetValue<string>());
+        Assert.StartsWith("application/json", seen["contentType"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal("{\"slot\":\"18:00\"}", seen["body"]!.GetValue<string>());
+        Assert.Equal("egs_member-session", seen["session"]!.GetValue<string>()); // the member, as at the app's door
+        Assert.Equal("/acme/apps/secret/web", seen["prefix"]!.GetValue<string>());
+        Assert.Equal("endgame.test", seen["forwardedHost"]!.GetValue<string>());
+        Assert.Equal(wakes + 1, backend.WakeCalls); // a sleeping app is woken first
+
+        // The app's own OpenAPI document, as the gateway reads it to derive the tools.
+        using var control = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{controlPort}") };
+        async Task<HttpStatusCode> Call(HttpMethod method, string path, bool token = true, HttpClient? via = null)
+        {
+            using var request = new HttpRequestMessage(method, path);
+            if (token)
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+            }
+
+            using var response = await (via ?? control).SendAsync(request);
+            return response.StatusCode;
+        }
+
+        Assert.Equal(HttpStatusCode.OK, await Call(HttpMethod.Get, $"/internal/apps/{privateApp:D}/call/openapi/v1.json"));
+        Assert.Equal(HttpStatusCode.Unauthorized, await Call(HttpMethod.Get, $"/internal/apps/{privateApp:D}/call/api/x", token: false));
+        Assert.Equal(HttpStatusCode.NotFound, await Call(HttpMethod.Get, $"/internal/apps/{privateApp:D}/call/api/x", via: client)); // never the public side
+        foreach (var path in new[] { "_platform/schedules/x", "_endgame/auth/sign-in", "%5Fplatform/x" })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, await Call(HttpMethod.Get, $"/internal/apps/{privateApp:D}/call/{path}"));
+        }
+
+        Assert.Equal(HttpStatusCode.NotFound, await Call(HttpMethod.Get, $"/internal/apps/{Guid.NewGuid():D}/call/api/x"));
+        Assert.Equal(HttpStatusCode.Conflict, await Call(HttpMethod.Get, $"/internal/apps/{pausedApp:D}/call/api/x"));
+        Assert.Equal(HttpStatusCode.Conflict, await Call(HttpMethod.Get, $"/internal/apps/{unpublishedApp:D}/call/api/x"));
+
+        // An app that cannot be woken is 503, and the gateway carries the app's status to its caller unchanged.
+        await ControlAsync(HttpMethod.Post, $"/internal/apps/{privateApp:D}/state", new AppStateReport(privateApp, AppRuntimeState.Sleeping, 0, false, DateTimeOffset.UtcNow));
+        backend.WakeAnswer = WakeStart.NoCapacity;
+        try
+        {
+            var asleep = await gateway.CallAsync(privateApp, operation, arguments, "egs_member-session", CancellationToken.None);
+            Assert.Equal(503, asleep.Status);
+        }
+        finally
+        {
+            backend.WakeAnswer = WakeStart.Started;
+        }
+    }
+
+    [Fact]
     public async Task Requests_an_app_served_are_reported_as_hosting_usage_once_per_period()
     {
         for (var i = 0; i < 3; i++)
@@ -640,8 +712,11 @@ public sealed class EdgePipelineTests : IAsyncLifetime
             Callbacks.Enqueue((name, c.Request.Headers["X-Endgame-Signature"].ToString(), await new StreamReader(c.Request.Body).ReadToEndAsync()));
             return Results.NoContent();
         });
-        app.MapFallback((HttpContext c) => Results.Json(new
+        app.MapFallback("{**path}", async Task<IResult> (HttpContext c) => Results.Json(new
         {
+            method = c.Request.Method,
+            contentType = c.Request.ContentType ?? "",
+            body = await new StreamReader(c.Request.Body).ReadToEndAsync(),
             path = c.Request.Path.Value,
             query = c.Request.QueryString.Value ?? "",
             prefix = c.Request.Headers[HostingConventions.ForwardedPrefixHeader].ToString(),
