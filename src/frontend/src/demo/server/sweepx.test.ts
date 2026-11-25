@@ -34,7 +34,7 @@ describe("the sweep lane's fixes", () => {
     expect(suspended.status).toBe(200);
     expect((suspended.body as { status: string }).status).toBe("suspended");
     expect((await call(op, "PATCH", `organisations/${orgNode(op)}`, { status: "active" })).status).toBe(200);
-    expect(op.operatorLog.filter((e) => e.organisation === ORG && e.detail.title === "Renamed, suspended or reinstated the organisation")).toHaveLength(2);
+    expect(op.operatorLog.filter((e) => e.organisation === ORG && e.detail?.title === "Renamed, suspended or reinstated the organisation")).toHaveLength(2);
   });
 
   it("stops a contractor, and refuses to stop an employee or one already finished", async () => {
