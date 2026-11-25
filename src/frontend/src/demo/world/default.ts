@@ -215,11 +215,11 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   sp(`${ORG}`, 61.4, 0);
   sp(`${ORG}/technologies`, 22.1, 0);
   sp(`${ORG}/technologies/court-booking/web`, 310.6, 14.3);
-  sp(`${ORG}/technologies/allergen-labels`, 9.8, 0);
-  sp(`${ORG}/technologies/staff-locator`, 4.1, 0);
+  // Research is charged where it ran: the division the idea was proposed to (nothing is placed until it is built).
+  sp(`${ORG}/technologies`, 13.9, 0);
   sp(`${ORG}/learning/course-notes/web`, 44.9, 1.8);
   sp(`${ORG}/learning/tutor-match/web`, 88.2, 0.2);
-  sp(`${ORG}/learning/cookery-club`, 11.3, 0);
+  sp(`${ORG}/learning`, 11.3, 0);
   sp(`${ORG}/operations/stock-counter/web`, 116.8, 3.2);
   sp(`${ORG}/operations/shift-rota/web`, 71.5, 4.4);
   sp(`${ORG}/operations/van-tracker`, 8.7, 0);

@@ -71,8 +71,13 @@
       "kind": "demo",
       "act": [
         {
+          "wait": {
+            "text": "Auto-mode chose to build it"
+          }
+        },
+        {
           "click": {
-            "text": "Build it"
+            "text": "Watch the work that followed"
           }
         },
         {
@@ -83,7 +88,7 @@
       ],
       "highlight": {
         "text": "Step by step",
-        "note": "The build starts. Its first step places the idea: the division first, made if it does not exist, then the project and the app."
+        "note": "Northwind is in auto-mode, so the build started on its own. Its first step places the idea: the division first, made if it does not exist, then the project and the app."
       }
     },
     {

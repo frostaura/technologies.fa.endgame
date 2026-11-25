@@ -134,6 +134,12 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `outage` | The host cannot be reached: Cloudflare's outage page at Court booking's address | |
 | `ask-unavailable`, `dashboard-full` | No model route, so nothing about an app can be asked; Court booking's dashboard at its 30 questions | |
 | `no-secrets` | No secret set anywhere in Northwind | |
+| `s3-research-failed`, `s3-research-cancelled` | The tide board's research ends with no verdict, or was cancelled: "Try again" on the idea and the run (`scenarios.s3.ts`) | |
+| `s3-checkpoints`, `s3-start-checkpoint` | Northwind in checkpoints mode, so a verdict waits for you; Learning asking "Start this work?" before research begins | |
+| `s3-waiting-for-budget`, `s3-budget-runs-out` | Learning with 5 credits left, so research waits for budget; in checkpoints mode with 1.4 left, so the reading list's build stops part-way for budget | |
+| `s3-change-running`, `s3-change-failed` | A change to Court booking playing from its estimate; one whose check of what worked before still fails after its repairs | |
+| `s3-stage-rules` | Learning's build stage asks before `docs/app.md` changes and refuses `docs/decisions.md` | |
+| `s3-suggestions`, `s3-employee-paused` | Two open ideas from the portfolio, one taken, one set aside; Kasper paused, so Court booking takes no new work | |
 
 Scenarios are kept one file per flow file, `world/scenarios.s<n>.ts`, each registered by one
 side-effect import in `host.ts`. Not in `scenarios.ts`: a scenario file calls its `defineScenario`,
@@ -149,10 +155,15 @@ own words, or none), with the server's eight services in `StatusOptions.Probes` 
 ### Named moments (`clock { seek }`)
 
 `research:started`, `research:strand-existing|gap|demand`, `research:judging`, `research:verdict`,
-`research:finished`; `build:placed`, `build:hired`, `build:plan`, `build:waiting-on-plan`,
-`build:part-1…n`, `build:sent-back`, `build:repaired`, `build:security-review`,
+`research:decided`, `research:finished`, `research:failed`, `research:budget-stopped`,
+`research:waiting-for-budget`, `research:waiting-to-start`; `build:placed`, `build:hired`,
+`build:plan`, `build:waiting-on-plan`, `build:waiting-for-budget`, `build:carried`, `build:part-1…n`,
+`build:sent-back`, `build:repaired`, `build:budget-stopped`, `build:security-review`,
 `build:security-finding`, `build:security-passed`, `build:published`, `build:finished`,
-`build:failed`; `conversation:approval`, `conversation:replied`. A number instead moves every live
+`build:failed`; the same for a change of a built app as `change:…`, with `change:screened` and
+`change:red-line`; `conversation:approval`, `conversation:replied`, `conversation:budget-stopped`.
+A budget, a checkpoint or a stage rule is read when its step is reached (an `effect` or an `ask`
+step), so a setting changed while a run plays changes what it does next. A number instead moves every live
 run forward by that many script milliseconds (approvals on the way stop it). Seeking to a name
 approves any approval on the way.
 
@@ -286,7 +297,8 @@ defineScenario({
 
 A run that should play is a `DemoRun` with `playback: { script, params, elapsed: 0, cursor: 0 }`;
 a new kind of work is a `defineScript(name, (world, run) => steps)` in `server/scripts.ts`, built
-with `Script` (`wait`, `event`, `effect`, `approval`, `mark`).
+with `Script` (`wait`, `event`, `effect`, `approval`, `ask` — an approval decided from the world when
+its step is reached — and `mark`).
 
 ## Data
 
