@@ -109,7 +109,14 @@ public sealed class BackupScheduler(
                 var stored = await backups.ListAsync(stoppingToken);
                 if (IsDue(clock.GetUtcNow(), stored, options.HourUtc))
                 {
-                    await backups.BackupAsync("nightly", stoppingToken);
+                    if (await backups.HasDataAsync(stoppingToken))
+                    {
+                        await backups.BackupAsync("nightly", stoppingToken);
+                    }
+                    else
+                    {
+                        logger.LogInformation("The nightly backup is due but every database is empty (a stack waiting for a restore?); skipped.");
+                    }
                 }
             }
             catch (BackupBusyException)

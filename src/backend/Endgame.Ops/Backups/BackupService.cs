@@ -29,6 +29,23 @@ public sealed class BackupService(
 
     public Task<IReadOnlyList<StoredBackup>> ListAsync(CancellationToken cancellationToken) => store.ListAsync(cancellationToken);
 
+    /// <summary>
+    /// Whether any database holds anything yet. The nightly run skips a server that is still empty —
+    /// a stack waiting to be restored onto — so it never files an empty archive as the newest.
+    /// </summary>
+    public async Task<bool> HasDataAsync(CancellationToken cancellationToken)
+    {
+        foreach (var database in await postgres.DatabasesAsync(cancellationToken))
+        {
+            if (await postgres.UserObjectCountAsync(database, cancellationToken) > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public async Task<BackupResult> BackupAsync(string trigger, CancellationToken cancellationToken)
     {
         if (options.WhyRefused() is { } why)
