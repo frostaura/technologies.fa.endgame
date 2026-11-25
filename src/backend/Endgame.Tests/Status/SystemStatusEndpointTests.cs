@@ -1,17 +1,23 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Endgame.Infrastructure.Health;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Endgame.Tests.Status;
 
 /// <summary>
 /// The real control plane, in process. Only the network is replaced: health calls go to a fake
 /// handler that answers per host, and the database points at a port nothing listens on — so the
-/// database row is a genuine failed connection, not a stub.
+/// database row is a genuine failed connection, not a stub. With no database there is no session to
+/// sign in with, so a signed-in request is stood in for by a header the test scheme reads.
 /// </summary>
 public sealed class SystemStatusEndpointTests
 {
@@ -25,16 +31,25 @@ public sealed class SystemStatusEndpointTests
             builder.UseSetting("Sweeps:Enabled", "false");
             builder.UseEnvironment("Testing");
             builder.ConfigureServices(services =>
+            {
                 services.AddHttpClient(HttpHealthProbe.ClientName)
-                    .ConfigurePrimaryHttpMessageHandler(() => new FakeHandler(answer)));
+                    .ConfigurePrimaryHttpMessageHandler(() => new FakeHandler(answer));
+                services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, SignedInByHeader>(SignedInByHeader.Name, null);
+                services.PostConfigure<AuthenticationOptions>(options => options.DefaultAuthenticateScheme = SignedInByHeader.Name);
+            });
         });
 
     private static HttpResponseMessage Healthy(HttpRequestMessage _) =>
         new(HttpStatusCode.OK) { Content = JsonContent.Create(new { status = "healthy" }) };
 
-    private static async Task<JsonElement> GetStatus(WebApplicationFactory<Program> factory)
+    private static async Task<JsonElement> GetStatus(WebApplicationFactory<Program> factory, bool signedIn = true)
     {
         using var client = factory.CreateClient();
+        if (signedIn)
+        {
+            client.DefaultRequestHeaders.Add(SignedInByHeader.Header, "yes");
+        }
+
         var response = await client.GetAsync("/api/system/status");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -52,6 +67,16 @@ public sealed class SystemStatusEndpointTests
         var keys = status.GetProperty("services").EnumerateArray().Select(s => s.GetProperty("key").GetString()).ToList();
         Assert.Equal(["control-plane", "edge", "runner", "dock", "database", "console", "ops"], keys);
         Assert.True(status.TryGetProperty("checkedAt", out _));
+    }
+
+    [Fact]
+    public async Task Signed_out_it_says_only_whether_the_whole_is_healthy_and_when()
+    {
+        await using var factory = Factory(Healthy);
+        var status = await GetStatus(factory, signedIn: false);
+
+        Assert.Equal(["overall", "checkedAt"], status.EnumerateObject().Select(p => p.Name).ToList());
+        Assert.Equal("unhealthy", status.GetProperty("overall").GetString());
     }
 
     [Fact]
@@ -113,6 +138,18 @@ public sealed class SystemStatusEndpointTests
         using var client = factory.CreateClient();
         var health = await client.GetFromJsonAsync<JsonElement>("/health");
         Assert.Equal("healthy", health.GetProperty("status").GetString());
+    }
+
+    /// <summary>Signs a request in when it carries <see cref="Header"/>; leaves it anonymous otherwise.</summary>
+    private sealed class SignedInByHeader(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    {
+        public const string Name = "SignedInByHeader";
+        public const string Header = "X-Test-Signed-In";
+
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync() => Task.FromResult(Request.Headers.ContainsKey(Header)
+            ? AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], Name)), Name))
+            : AuthenticateResult.NoResult());
     }
 
     private sealed class FakeHandler(Func<HttpRequestMessage, HttpResponseMessage> answer) : HttpMessageHandler

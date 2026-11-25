@@ -58,7 +58,7 @@ public sealed class ControlPlaneDebtsTests(PostgresServer postgres) : IAsyncLife
         await ControlPlaneApp.Expect(await dev.GetAsync("/api/operator/organisations"), HttpStatusCode.Forbidden);
         Assert.True((await ControlPlaneApp.Ok(owner.GetAsync("/api/me")))["isOperator"]!.GetValue<bool>());
 
-        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example" }));
+        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = Provisioning.Description, screening = Provisioning.Manual }));
         var dean = await app.SignInAsync("dean@frostaura.net");
         Assert.Equal(["acme", "frostaura"], (await ControlPlaneApp.Ok(dean.GetAsync("/api/operator/organisations"))).AsArray().Select(o => o!["slug"]!.GetValue<string>()));
         var entered = await ControlPlaneApp.Ok(dean.GetAsync("/api/tree?organisation=acme"));

@@ -118,6 +118,8 @@ public sealed class EndgameDbContext : IdentityUserContext<EndgameUser, Guid>, I
 
     public DbSet<PlatformSettingChangeRecord> PlatformSettingChanges => Set<PlatformSettingChangeRecord>();
 
+    public DbSet<PlatformCostRecord> PlatformCosts => Set<PlatformCostRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -244,7 +244,7 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
 
         // Another organisation's runs never inform this one's estimates.
         var other = await app.SignInAsync("dean@frostaura.net", "Dean");
-        await ControlPlaneApp.Created(other.PostAsJsonAsync("/api/organisations", new { name = "Elsewhere", slug = "elsewhere", ownerEmail = "dean@frostaura.net" }));
+        await ControlPlaneApp.Created(other.PostAsJsonAsync("/api/organisations", new { name = "Elsewhere", slug = "elsewhere", ownerEmail = "dean@frostaura.net", description = Provisioning.Description, screening = Provisioning.Manual }));
         await other.TopUpAsync("elsewhere", 10m);
         var theirs = Guid.Parse((await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/runs", new { scope = "elsewhere", kind = "task", title = "Theirs" })))["id"]!.GetValue<string>());
         await gateway.CompleteAsync(new ChatCall("chat", "elsewhere", theirs, null, Messages(), null, 100, false, null, null), CancellationToken.None);

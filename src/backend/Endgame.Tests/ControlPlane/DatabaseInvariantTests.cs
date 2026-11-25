@@ -27,7 +27,7 @@ public sealed class DatabaseInvariantTests(PostgresServer postgres) : IAsyncLife
         var owner = await app.OwnerWithOrganisationAsync();
         frostaura = Guid.Parse((await ControlPlaneApp.Ok(owner.GetAsync("/api/me")))["organisation"]!["id"]!.GetValue<string>());
         frostauraDivision = await owner.DivisionAsync("frostaura", "technologies");
-        var provisioned = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example" }));
+        var provisioned = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = Provisioning.Description, screening = Provisioning.Manual }));
         other = Guid.Parse(provisioned["id"]!.GetValue<string>());
         Assert.NotNull(provisioned["ownerInvitationCode"]);
         await owner.TopUpAsync("frostaura", 10m);

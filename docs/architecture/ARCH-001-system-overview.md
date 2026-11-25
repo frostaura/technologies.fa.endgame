@@ -67,7 +67,7 @@ control-plane ──/internal/ops/reserved-hosts, /health──▶ ops          
 The cascade tree (`organisations`, `divisions`, `projects`, `apps`); `memberships`; `cascade_entries`
 (budgets, rule sets, context, settings, and secrets sealed with envelope encryption); the workforce
 and the work (`employees`, `runs`, `run_events`, `tasks`, `approvals`, `ideas`, `conversations`); the
-one ledger (`credit_entries`) and `operator_actions`; Identity's tables (members only) and the
+one ledger (`credit_entries`), `operator_actions` and `platform_costs` (what FrostAura spent on its own model calls, charged to no organisation); Identity's tables (members only) and the
 data-protection key ring. The platform API adds `app_tokens`, `app_end_users`,
 `app_end_user_passkeys`, `app_sessions`, `app_handoffs`, `app_shares`, `app_schedules`,
 `app_webhooks`, `email_messages`, `telemetry_events`, `telemetry_spans`, `telemetry_metrics`,

@@ -64,9 +64,16 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
             throw EndgameProblem.Invalid("A run's title is 1 to 300 characters.");
         }
 
-        if (employeeId is { } employee && !await db.Employees.AnyAsync(e => e.OrganisationId == scope.OrganisationId && e.Id == employee && e.Status != EmployeeStatuses.Released, cancellationToken))
+        EmployeeRecord? worker = null;
+        if (employeeId is { } employee)
         {
-            throw EndgameProblem.NotFound("The employee");
+            worker = await db.Employees.AsNoTracking().SingleOrDefaultAsync(e => e.OrganisationId == scope.OrganisationId && e.Id == employee && e.Status != EmployeeStatuses.Released, cancellationToken)
+                ?? throw EndgameProblem.NotFound("The employee");
+            if (worker.Status == EmployeeStatuses.Paused && createdBy is not null)
+            {
+                // A person starting work for a paused employee is told so; the factory's work waits instead (below).
+                throw EndgameProblem.Conflict($"{worker.Name} is paused, so they are given no new work. Resume them first.");
+            }
         }
 
         if (parentRunId is { } parent && !await db.Runs.AnyAsync(r => r.OrganisationId == scope.OrganisationId && r.Id == parent, cancellationToken))
@@ -94,7 +101,73 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
         db.Runs.Add(run);
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
+        if (worker?.Status == EmployeeStatuses.Paused)
+        {
+            // The factory gave a paused employee work: it waits, and says so, until they are resumed (EMP-04).
+            await AppendAsync(scope.OrganisationId, run.Id, EmployeePaused(worker.Id, worker.Name), null, null, cancellationToken);
+            return await GetAsync(scope.OrganisationId, run.Id, cancellationToken);
+        }
+
         return View(run, scope.Path.ToString());
+    }
+
+    /// <summary>The <c>run.paused</c> reason when a run waits because the employee doing it is paused.</summary>
+    public const string EmployeePausedReason = "employee_paused";
+
+    /// <summary>What a run waiting on a paused employee logs: a plain line, then the pause itself.</summary>
+    public static IReadOnlyList<NewEvent> EmployeePaused(Guid employeeId, string name) =>
+    [
+        new(RunEventTypes.Message, new JsonObject { ["text"] = $"Waiting for {name}, who is paused. This work carries on when they are resumed.", ["code"] = EmployeePausedReason }),
+        new(RunEventTypes.RunPaused, new JsonObject { ["by"] = "workforce", ["reason"] = EmployeePausedReason, ["employeeId"] = employeeId.ToString() }),
+    ];
+
+    /// <summary>
+    /// An employee was paused: every run under way that is theirs, or in which they hold a task, pauses.
+    /// The Runner learns it at its next lease renewal and stops at the next step boundary. Returns how many.
+    /// </summary>
+    public async Task<int> PauseForEmployeeAsync(Guid organisationId, Guid employeeId, string name, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        string[] live = [RunStatuses.Queued, RunStatuses.Running, RunStatuses.WaitingApproval];
+        var ids = await db.Runs.AsNoTracking()
+            .Where(r => r.OrganisationId == organisationId && live.Contains(r.Status))
+            .Where(r => r.EmployeeId == employeeId || db.Tasks.Any(t => t.OrganisationId == organisationId && t.HolderRunId == r.Id && t.HolderEmployeeId == employeeId && t.Status == TaskStatuses.InProgress))
+            .Select(r => r.Id).ToListAsync(cancellationToken);
+        foreach (var id in ids)
+        {
+            await AppendAsync(organisationId, id, EmployeePaused(employeeId, name), null, null, cancellationToken);
+        }
+
+        return ids.Count;
+    }
+
+    /// <summary>An employee was resumed: the runs that paused because of them go back to the queue. Returns how many.</summary>
+    public async Task<int> ResumeForEmployeeAsync(Guid organisationId, Guid employeeId, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        var ids = new List<Guid>();
+        await using (var command = await db.CommandAsync("""
+            SELECT r.id FROM runs r
+            WHERE r.organisation_id = @org AND r.status = 'paused'
+              AND (SELECT e.payload FROM run_events e
+                   WHERE e.organisation_id = r.organisation_id AND e.run_id = r.id AND e.type = 'run.paused'
+                   ORDER BY e.seq DESC LIMIT 1) @> jsonb_build_object('reason', @reason::text, 'employeeId', @employee::text)
+            """, cancellationToken, P("org", organisationId), P("reason", EmployeePausedReason), P("employee", employeeId.ToString())))
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                ids.Add(reader.GetGuid(0));
+            }
+        }
+
+        foreach (var id in ids)
+        {
+            await AppendAsync(organisationId, id, [new NewEvent(RunEventTypes.RunResumed, new JsonObject { ["by"] = "workforce", ["reason"] = "employee_resumed", ["employeeId"] = employeeId.ToString() })],
+                null, null, cancellationToken);
+        }
+
+        return ids.Count;
     }
 
     /// <summary>Finds a run by id in whichever organisation holds it, and confines the session there.</summary>
@@ -455,8 +528,10 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
                 await SetStatusAsync(org, run, RunStatuses.Running, now, cancellationToken);
                 if (employeeId is { } starter)
                 {
+                    // A paused employee stays paused: starting a run never resumes them.
                     await db.Employees.Where(x => x.OrganisationId == org && x.Id == starter && x.Status != EmployeeStatuses.Released)
-                        .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, EmployeeStatuses.Working).SetProperty(x => x.CurrentRunId, run).SetProperty(x => x.LastActiveAt, now), cancellationToken);
+                        .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, x => x.Status == EmployeeStatuses.Paused ? EmployeeStatuses.Paused : EmployeeStatuses.Working)
+                            .SetProperty(x => x.CurrentRunId, run).SetProperty(x => x.LastActiveAt, now), cancellationToken);
                 }
 
                 return RunStatuses.Running;

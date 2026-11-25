@@ -40,6 +40,11 @@ gateway is not built yet; this is the design it must follow.
     response body and every stream chunk for an error, not only the status code.
 11. **Research defaults to the cheap search engine;** the dearer one where quality matters. Citations
     are not anchored to spans of the answer.
+12. **Work FrostAura does for itself is a platform cost, never an organisation's.** Screening a new
+    organisation against the red lines (UC-111) happens before it exists, so `PlatformModelCalls`
+    prepares the call exactly as every call is prepared (`ModelGateway.Prepare`: the route's models,
+    ceiling, `max_price` and limits) and sends it through the same provider adapter, but reserves in no
+    ledger: the reported cost is written to `platform_costs` (append-only) with what the call was for.
 
 ## Routing table shape
 

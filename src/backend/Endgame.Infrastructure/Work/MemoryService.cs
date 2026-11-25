@@ -148,11 +148,20 @@ public sealed class MemoryService(EndgameDbContext db, TenantSession session, Sc
         return added.Select(m => View(m, paths(m))).ToList();
     }
 
+    /// <summary>A released employee's memory is archived and cannot be written until a rehire (UC-113 A1).</summary>
+    private static void RequireWritable(EmployeeRecord employee)
+    {
+        if (employee.Status == EmployeeStatuses.Released)
+        {
+            throw EndgameProblem.Conflict($"{employee.Name} has been released; their memory is archived until a rehire.");
+        }
+    }
+
     /// <summary>A person corrects an entry.</summary>
     public async Task<MemoryEntryView> CorrectAsync(Guid organisationId, Guid employeeId, Guid memoryId, MemoryCorrection correction, Guid userId, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(correction);
-        await EmployeeAsync(organisationId, employeeId, cancellationToken);
+        RequireWritable(await EmployeeAsync(organisationId, employeeId, cancellationToken));
         var row = await RequireEntryAsync(organisationId, employeeId, memoryId, cancellationToken);
         var now = clock.GetUtcNow();
         var detail = Apply(row, correction.Title, correction.Body, correction.Kind, now);
@@ -165,7 +174,7 @@ public sealed class MemoryService(EndgameDbContext db, TenantSession session, Sc
     /// <summary>A person removes an entry. Its history stays in the change log.</summary>
     public async Task RemoveAsync(Guid organisationId, Guid employeeId, Guid memoryId, string? why, Guid userId, CancellationToken cancellationToken)
     {
-        await EmployeeAsync(organisationId, employeeId, cancellationToken);
+        RequireWritable(await EmployeeAsync(organisationId, employeeId, cancellationToken));
         var row = await RequireEntryAsync(organisationId, employeeId, memoryId, cancellationToken);
         db.EmployeeMemories.Remove(row);
         db.EmployeeMemoryChanges.Add(Change(row, MemoryActions.Removed, MemoryActors.Person, userId, null, new JsonObject { ["title"] = row.Title, ["body"] = row.Body, ["why"] = why }, clock.GetUtcNow()));
