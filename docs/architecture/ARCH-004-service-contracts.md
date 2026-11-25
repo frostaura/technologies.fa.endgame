@@ -151,7 +151,7 @@ form; anything else is 400 `invalid_return_to`. When it points at the subdomain 
 | `POST /internal/tasks`, `POST /internal/tasks/checkout`, `PATCH /internal/tasks/{id}` | The task graph; checkout is one conditional update. |
 | `GET /internal/context?scope=` | The resolved cascade: levels, context, rule sets, budgets, settings, secret names, roles. |
 | `POST /internal/approvals` | A checkpoint the run waits on. |
-| `POST /internal/ideas/{id}/verdict` | Research's verdict document. |
+| `POST /internal/ideas/{id}/verdict` | Research's verdict document, exactly as *The verdict document* below. Anything else is `400 verdict_invalid` with `errors[]`, one precise line per fault (`existing.products[0].name: required, a string of 1 to 120 characters`), and nothing is recorded. `409` when the idea is not being researched. |
 | `POST /internal/employees { scope, name, role, mandate?, tools?, services?, monthlyCreditLimit?, modelTier?, reportsTo? }`, `GET /internal/employees?scope=&includeReleased=&kind=`, `GET /internal/employees/{id}` | The factory's direct hire; the workforce at and beneath a scope; one employee's detail (as the public shapes). |
 | `POST /internal/hires { scope, trigger, needKey, reason, name, role, jobDescription, reportsTo?, expectedMonthlyCredits, contractorRole?, runId? }` | A need from the ontology → `201 { hire, created: true }`, or `200` with the live proposal for the same `needKey`. Accepted at once when within budget and the hire checkpoint is off. |
 | `GET /internal/employees/{id}/memory?scope=`, `POST …/memory { runId?, entries: [{ title, body, kind, scope? }] }`, `POST …/memory/review { runId?, merged: [{ from[], title, body, kind? }], removed: [{ id, why }], corrected: [{ id, title?, body?, kind?, why }] }` | Memory for a run (at, above or beneath the scope; at most 200); written after a task; a review's result. |
@@ -163,6 +163,53 @@ form; anything else is 400 `invalid_return_to`. When it points at the subdomain 
 | `POST /internal/apps/{id}/token` | → `{ token }` (`egt_…`). Mints a fresh app token, stored only as a hash; the previous one keeps working for `AppSessions:TokenGraceSeconds`. |
 | `POST /internal/apps/{id}/published { version }`, `POST /internal/apps/{id}/state { status }` | Dock's reports. |
 | `POST /internal/usage/hosting { samples: [{ sampleId, appId, from, to, awakeSeconds, memoryBytes, storageBytes, requests }] }` | → `{ recorded, duplicates, credits }`. One `hosting` ledger entry per sample; a `sampleId` is charged once. **Two reporters**, each sending its own samples: Dock (`dock:<instance>:<app>:<period start>` — awake seconds and mean memory from its memory sampler, the app database's size, `requests: 0`) and Edge (`edge:<process>:<app>:<period start>` — the requests it forwarded, nothing else), every `UsageReportSeconds` (300). Edge alone sees requests, so it reports them rather than handing counts to Dock. A sample not taken is resent under the same id; one refused for good (4xx) is dropped. |
+
+## The verdict document
+
+What research records (`POST /internal/ideas/{id}/verdict`) and what the console reads back, unchanged, as
+`GET /api/ideas/{id}` → `verdict`. One shape, validated by the control plane on the way in
+(`Endgame.Domain.Runs.VerdictDocument.Validate`, which the Runner also runs before it posts). **Every key below
+is present, with exactly the type shown; no other key is accepted, at any depth.** Strings are trimmed and
+non-empty unless the range starts at 0. Normal-mode copy: every string is plain language for the owner.
+
+```text
+{
+  outcome:          "build" | "change" | "do-not-build",
+  headline:         string 1–200          one line, the verdict in words
+  summary:          string 1–4000         the case against first, then the verdict
+  against:          string 1–2000         the strongest case against building it
+  suggestedChange:  string 1–1000 | null  what to change; a string exactly when outcome is "change", else null
+  existing: {
+    evidence:       string 1–2000         who already does this
+    products:       [ { name: string 1–120, what: string 1–300, url: string 0–500 | null } ]   0–40, names unique (case-insensitive)
+    sources:        [ string 1–500 ]      0–60 addresses, unique; every source any strand reported, deduplicated
+  },
+  gap:     { evidence: string 1–2000 },
+  demand:  { evidence: string 1–2000,  signals: [ string 1–300 ]  0–20 },
+  wouldChange:      string 1–1000         what evidence would change this verdict
+  redLines: {
+    breached:       boolean,
+    line:           "tobacco-gambling-finance" | "weapons" | "animal-harm" | "surveillance" | null   — null exactly when not breached
+    reasoning:      string 1–1000
+  },
+  placement: { division: slug, project: slug, app: slug, name: string 1–60 },   slug: ARCH-004 slug rules
+  method: {
+    searches:       integer ≥ 0           web searches the strands made, in all
+    strands:        [ { id: string 1–40, title: string 1–80, searches: integer ≥ 0, sources: integer ≥ 0,
+                        confidence: "low" | "medium" | "high" } ]   1–6, ids unique
+    confidence:     "low" | "medium" | "high"   the verdict's own, never above the strands' best
+  },
+  rulesApplied:     [ string 1–500 ]      0–10: each rule code applied over the judge, in plain language
+}
+```
+
+Cross-field rules, also enforced: a breached red line has outcome `do-not-build`; `suggestedChange` is a string
+exactly when the outcome is `change`. `method.searches` equals the sum of the strands' `searches`. An
+`existing.products` entry with no address has `url: null`, never `""`.
+
+The control plane answers a document that breaks any rule with `400` and `code: "verdict_invalid"`, `errors: [string]`
+(at most 50, each `<path>: <what is wrong and what is expected>`), and records nothing. The Runner gives those errors
+to the judge for **one** corrected attempt; a second refusal fails the research run (no verdict is guessed).
 
 ## Control plane — platform API for apps (`/platform/v1`, app token)
 
@@ -200,7 +247,13 @@ posts straight to the container instead.
 
 `POST /internal/routes/refresh` → `{ version, apps }`; `POST /internal/apps/{id}/state` (Dock's crash
 reports); `POST /internal/apps/{id}/platform/schedules/{name}` (platform callbacks, above);
-`POST /internal/usage/flush` (closes the hosting-usage period now); `GET /internal/apps`,
+`POST /internal/usage/flush` (closes the hosting-usage period now);
+`POST /internal/apps/{id}/probe { method, path, body? }` → `{ status, contentType, body, truncated }` — the evaluator's
+one request into a running (private) preview: woken if asleep, sent on the app's network at its path address as a
+signed-out visitor (forwarded prefix and host set, no session, no platform cookie), a text body up to 48 KB returned
+(anything else described, not returned); `400` for a method outside GET/POST/PUT/PATCH/DELETE or a path that is
+absolute, climbs out, or enters `_platform`/`_endgame`; `404` unknown app; `409` paused; `503` not woken;
+`GET /internal/apps`,
 `GET /internal/routes`. The control plane calls `routes/refresh` when access, settings, budgets,
 webhooks or the balance change, best effort.
 
@@ -226,6 +279,21 @@ assigned by the control plane and gapless per run. Types: `run.started`, `run.pa
 plan, tool, sub-agent, evaluation and estimate types the harness writes. `model.requested` and
 `model.replied` carry the `employeeId` the call is charged to, and every ledger line carries it too.
 `estimate.scored` is `{ expectedCredits, actualCredits, nonBillableCredits, modelCalls }` (older `{ estimated, actual }` is read too).
+`model.replied` also carries `searches`, the web searches the call made.
+
+What the owner reads (normal mode) and what only technical mode shows:
+
+| Event | Payload the console reads | Normal mode |
+| --- | --- | --- |
+| `message` **without** `kind` | `{ from, title, text, milestone? }` — `from` is who speaks (`owner`, `researcher`, `builder`, `evaluator`, `security-reviewer`, `assistant`, `runner`); `title` a heading of 1–60 characters; `text` one plain-language sentence or short paragraph, at most 600 characters, never JSON and never naming infrastructure. A `milestone` (e.g. `verdict`, `placed`, `published`) is written once per run. | Shown |
+| `message` **with** `kind` | The harness's own bookkeeping for replay (`agent.start`, `agent.reply`, `agent.stopped`, `nudge`, `compaction`, `notes`, `plan.mark`, `workflow.step`). None carries `text`. | Hidden |
+| `subagent.started` | `{ subagent, title, brief, role }` — `title` is what the contractor does, for people ("Looked for existing products"); `brief` its objective as a plain string. | Shown, counted as an action |
+| `subagent.finished` | `{ subagent, title, summary, stopReason, searches, report }` — `summary` one plain sentence of what it found; `report` the raw report. | Shown (`summary`); `report` technical only |
+| `tool.requested` | `{ name, arguments }` | Hidden, counted as an action |
+| `plan.proposed`, `plan.accepted` | `{ summary, items: [{ id, text, check }] }`; `plan.accepted` adds `by` (`auto-mode` or `owner`). | Shown |
+| `evaluation.passed`, `evaluation.failed` | `{ item, text, round, tier, evidence, faults[] }` | Shown |
+
+**Actions**, as the console counts them, are `tool.requested` plus `subagent.started` events.
 
 ## Credits
 

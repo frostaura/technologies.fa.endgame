@@ -109,24 +109,21 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
     public async Task<IdeaView> RecordVerdictAsync(Guid ideaId, JsonObject verdict, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(verdict);
-        var outcome = verdict["outcome"]?.GetValueKind() == System.Text.Json.JsonValueKind.String ? verdict["outcome"]!.GetValue<string>().Replace('_', '-') : null;
-        if (outcome is null || !Verdicts.All.Contains(outcome))
+
+        // One shape, exactly (ARCH-004, The verdict document): the console renders what is stored, so
+        // nothing malformed is stored. Each fault is named, so the Runner can have it corrected.
+        var faults = VerdictDocument.Validate(verdict);
+        if (faults.Count > 0)
         {
-            throw EndgameProblem.Invalid($"A verdict's outcome is one of {string.Join(", ", Verdicts.All)}.");
+            var refused = new EndgameProblem(400, "verdict_invalid", "The verdict document is not in the agreed shape",
+                $"{faults.Count} fault{(faults.Count == 1 ? "" : "s")}: {string.Join("; ", faults.Take(5))}{(faults.Count > 5 ? "; …" : "")}");
+            refused.Extensions["errors"] = faults;
+            throw refused;
         }
 
-        var summary = verdict["summary"]?.GetValueKind() == System.Text.Json.JsonValueKind.String ? verdict["summary"]!.GetValue<string>().Trim() : "";
-        if (summary.Length == 0)
-        {
-            throw EndgameProblem.Invalid("A verdict carries a summary of its evidence.");
-        }
-
-        verdict["outcome"] = outcome;
+        var outcome = verdict["outcome"]!.GetValue<string>();
+        var summary = verdict["summary"]!.GetValue<string>().Trim();
         var redLine = RedLineOf(verdict);
-        if (redLine is not null && outcome != Verdicts.DoNotBuild)
-        {
-            throw EndgameProblem.Invalid("A verdict that records a breached red line is 'do-not-build'; no other outcome is possible.");
-        }
 
         var org = await OrganisationOfAsync(ideaId, cancellationToken);
         var document = verdict.ToJsonString();

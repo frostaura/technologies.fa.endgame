@@ -52,11 +52,33 @@ public sealed class RunnerOptions
     /// <summary>Contractors a research run fans out.</summary>
     public int ResearchContractors { get; set; } = 3;
 
+    /// <summary>The most web searches one research strand makes (the route allows up to 8 a call).</summary>
+    public int ResearchSearchesPerStrand { get; set; } = 7;
+
+    /// <summary>The fewest a strand is given, however small the estimate.</summary>
+    public int ResearchMinimumSearches { get; set; } = 2;
+
+    /// <summary>What one search may cost at worst, in credits (its fee plus the results it adds to the prompt): how the estimate is turned into a search budget.</summary>
+    public decimal ResearchSearchCredits { get; set; } = 1.7m;
+
+    /// <summary>The share of the research estimate the strands may spend between them; the judge and one corrected verdict take the rest.</summary>
+    public decimal ResearchStrandShare { get; set; } = 0.75m;
+
+    /// <summary>What each standing role is expected to cost a month, in credits: its hire is accepted in auto-mode only when this fits the budget.</summary>
+    public Dictionary<string, decimal> MonthlyCredits { get; set; } = new(StringComparer.Ordinal)
+    {
+        ["researcher"] = 400m,
+        ["lead"] = 100m,
+        ["engineer"] = 1500m,
+        ["qa"] = 600m,
+        ["operations"] = 100m,
+    };
+
     /// <summary>Credits a run of each kind is expected to cost before any history exists (scored, then replaced by history).</summary>
     public Dictionary<string, decimal> EstimatePriors { get; set; } = new(StringComparer.Ordinal)
     {
         ["research"] = 8m,
-        ["build"] = 6m,
+        ["build"] = 120m,
         ["task"] = 1.5m,
         ["conversation"] = 0.5m,
         ["review"] = 1m,

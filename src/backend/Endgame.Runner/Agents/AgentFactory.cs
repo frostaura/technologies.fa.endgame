@@ -26,10 +26,12 @@ public sealed class AgentFactory(RunnerOptions options)
         SystemPrompt = prompt ?? RunnerResources.Prompt("builder", new Dictionary<string, string> { ["root"] = root, ["skills"] = SkillLibrary.Index(run.Skills, BuilderSkills) }),
         Tools = new ToolRegistry([
             new ReadFileTool(), new EditFileTool(), new WriteFileTool(), new ListFilesTool(), new SearchTool(), new RunTool(), new GitDiffTool(), new CommitTool(),
-            new NotesTool(), new LoadSkillTool(), new MarkItemTool(), new TasksTool(), new SpawnTool(),
+            new NotesTool(), new LoadSkillTool(), new TasksTool(), new SpawnTool(),
         ]),
         Permissions = Policy(run, "build", ["edit_file", "write_file", "run", "commit", "tasks"]),
         Repair = repair,
+        // A whole feature across entity, migration, endpoints, screens and tests: the first live build needed more than 50.
+        Limits = new AgentLimits { MaxSteps = 70 },
         StopHooks =
         [
             new VerifyAfterEditStopHook(),
@@ -85,6 +87,33 @@ public sealed class AgentFactory(RunnerOptions options)
         StopHooks = [],
         Limits = new AgentLimits { MaxSteps = 12, MaxOutputTokens = 4000 },
     };
+
+    /// <summary>
+    /// The agent as the employee (or contractor) doing the work: its model calls carry that id, its curated
+    /// memory follows its instructions as context, and an employee may keep notes with <c>remember</c>.
+    /// </summary>
+    public static AgentDefinition As(RunContext run, AgentDefinition agent, Guid? workerId, string memory, bool canRemember, string? scope = null)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(agent);
+        if (workerId is not { } id)
+        {
+            return agent;
+        }
+
+        var remember = canRemember
+            ? "\n\nBefore you finish, if you learned something about this organisation or this app that would help next time, keep it with remember (at most twice)."
+            : "";
+        return agent with
+        {
+            EmployeeId = id,
+            SystemPrompt = agent.SystemPrompt.TrimEnd() + remember + memory,
+            Tools = canRemember ? agent.Tools.With(new RememberTool(run.ControlPlane, id, run.Run.Id, scope ?? run.Run.Scope)) : agent.Tools,
+            // A plain name Dock accepts as a commit author: no brackets, no line breaks, never a truncation marker.
+            AuthorName = $"Endgame employee {id.ToString("N")[..8]}",
+            AuthorEmail = $"{id:N}@{run.Options.AuthorDomain}",
+        };
+    }
 
     public PermissionPolicy Policy(RunContext run, string stage, IEnumerable<string> allow, IEnumerable<string>? deny = null, IEnumerable<string>? checkpoints = null)
     {

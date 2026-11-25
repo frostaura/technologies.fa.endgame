@@ -1,8 +1,10 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using Endgame.Domain.Runs;
+using Endgame.Harness;
 using Endgame.Harness.Events;
 using Endgame.Harness.Kernel;
+using Endgame.Harness.Platform;
 using Endgame.Harness.Tools;
 using Endgame.Runner.Agents;
 using Endgame.Runner.Execution;
@@ -74,22 +76,89 @@ public sealed class ConversationWorkflow : IWorkflow
     }
 }
 
-/// <summary>A <c>review</c> run: the security reviewer on one app, on its own, reporting its findings.</summary>
+/// <summary>
+/// A <c>review</c> run. A <b>memory review</b> (the owner's <c>POST /api/employees/{id}/reviews</c>): the
+/// employee's curated memory is consolidated, pruned and corrected, and the result applied through
+/// <c>POST /internal/employees/{id}/memory/review</c>. Otherwise, the security reviewer on one app.
+/// </summary>
 public sealed class ReviewWorkflow : IWorkflow
 {
+    public const string MemoryReviewKind = "memory.review";
+
     public string Kind => RunKinds.Review;
 
-    public async Task<WorkflowOutcome> RunAsync(RunContext run, CancellationToken cancellationToken)
+    public Task<WorkflowOutcome> RunAsync(RunContext run, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(run);
+        return Json.Str(run.OwnerMessage(), "kind") == MemoryReviewKind ? MemoryReviewAsync(run, cancellationToken) : SecurityReviewAsync(run, cancellationToken);
+    }
+
+    private static async Task<WorkflowOutcome> MemoryReviewAsync(RunContext run, CancellationToken cancellationToken)
+    {
+        var owner = run.OwnerMessage();
+        if ((Guid.TryParse(Json.Str(owner, "employeeId"), out var id) ? id : run.Run.EmployeeId) is not { } employeeId)
+        {
+            return WorkflowOutcome.Failure("A memory review is of one employee, and this run names none.");
+        }
+
+        if (run.Journal.Get("memory.review.applied") is { } done)
+        {
+            return WorkflowOutcome.Success(Json.Str(done, "summary") ?? "The memory review was applied.") with { Announced = true };
+        }
+
+        var entries = await run.ControlPlane.MemoryAsync(employeeId, null, cancellationToken);
+        var employee = (await run.ControlPlane.EmployeesAsync(run.Run.Scope, cancellationToken)).FirstOrDefault(e => e.Id == employeeId);
+        var name = employee?.Name ?? "The employee";
+        if (entries.Count == 0)
+        {
+            await run.ControlPlane.ApplyMemoryReviewAsync(employeeId, run.Run.Id, [], [], [], cancellationToken);
+            const string empty = "There was nothing to review: the memory is empty.";
+            await run.Journal.RecordAsync("memory.review.applied", new JsonObject { ["summary"] = empty }, cancellationToken);
+            await Workforce.SayAsync(run, "runner", "Memory reviewed", $"{name}'s memory is empty, so there was nothing to review.", cancellationToken, "memory.reviewed");
+            return WorkflowOutcome.Success(empty) with { Announced = true };
+        }
+
+        var listing = string.Join("\n", entries.Select(e => $"- id {e.Id:D} ({e.Kind}, about {e.Scope}) {e.Title}: {e.Body.ReplaceLineEndings(" ")}"));
+        var prompt = RunnerResources.Prompt("memory-review", new Dictionary<string, string> { ["name"] = name, ["role"] = employee?.Role ?? "employee", ["entries"] = listing });
+        var agent = run.Agents.Researcher(run, "memory-reviewer", prompt) with
+        {
+            TaskType = run.Options.SummaryTaskType,
+            EmployeeId = employeeId,
+            Limits = new AgentLimits { MaxSteps = 3, MaxOutputTokens = 6000, MaxSearchesPerCall = 0 },
+        };
+        var result = await WorkflowSupport.RunAgentAsync(run, agent, NoWorkspace.Instance, "Review the memory now and reply with the JSON object.", cancellationToken);
+        if (WorkflowOutcome.FromAgent(result) is { } stopped)
+        {
+            return stopped;
+        }
+
+        if (WorkflowSupport.JsonAnswer(result.FinalText) is not { } answer)
+        {
+            return WorkflowOutcome.Failure("The review gave no answer in the agreed form, so the memory was left as it was.");
+        }
+
+        var (merged, removed, corrected, dropped) = MemoryReview.Clean(answer, entries);
+        await run.ControlPlane.ApplyMemoryReviewAsync(employeeId, run.Run.Id, merged, removed, corrected, cancellationToken);
+        var summary = Sentences.Join([
+            $"Reviewed {entries.Count} entr{(entries.Count == 1 ? "y" : "ies")} of {name}'s memory: {merged.Count} merged, {removed.Count} removed, {corrected.Count} corrected, the rest kept",
+            dropped > 0 ? $"{dropped} suggested change{(dropped == 1 ? " was" : "s were")} not applied because {(dropped == 1 ? "it" : "they")} named entries that do not exist or named one twice" : null,
+        ]);
+        await run.Journal.RecordAsync("memory.review.applied", new JsonObject { ["summary"] = summary }, cancellationToken);
+        await Workforce.SayAsync(run, "runner", "Memory reviewed", summary, cancellationToken, "memory.reviewed");
+        return WorkflowOutcome.Success(summary) with { Announced = true };
+    }
+
+    private static async Task<WorkflowOutcome> SecurityReviewAsync(RunContext run, CancellationToken cancellationToken)
+    {
         if (run.LevelId("app") is not { } appId)
         {
             return WorkflowOutcome.Failure("A review is of an app, and this run's scope names none.");
         }
 
         var (workspace, _) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), cancellationToken);
-        var result = await WorkflowSupport.RunAgentAsync(run, run.Agents.SecurityReviewer(run, workspace.Root), workspace,
-            "Review the app now against your checklist, then reply with the JSON object.", cancellationToken);
+        var reviewer = await Workforce.StandingReviewerAsync(run, cancellationToken);
+        var agent = AgentFactory.As(run, run.Agents.SecurityReviewer(run, workspace.Root), reviewer, await Workforce.MemoryBlockAsync(run, reviewer, run.Run.Scope, cancellationToken), canRemember: true);
+        var result = await WorkflowSupport.RunAgentAsync(run, agent, workspace, "Review the app now against your checklist, then reply with the JSON object.", cancellationToken);
         if (WorkflowOutcome.FromAgent(result) is { } stopped)
         {
             return stopped;
@@ -106,5 +175,93 @@ public sealed class ReviewWorkflow : IWorkflow
         return findings.Count == 0
             ? WorkflowOutcome.Success("The security review found nothing that blocks publishing.")
             : WorkflowOutcome.Failure($"The security review found {findings.Count} problem{(findings.Count == 1 ? "" : "s")} that block publishing.");
+    }
+}
+
+/// <summary>A review's answer, checked against the memory it was given: unknown ids, ids used twice and unreadable items are dropped, never guessed.</summary>
+public static class MemoryReview
+{
+    private static readonly string[] Kinds = ["fact", "practice", "preference", "lesson"];
+
+    public static (JsonArray Merged, JsonArray Removed, JsonArray Corrected, int Dropped) Clean(JsonObject answer, IReadOnlyList<MemoryEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        ArgumentNullException.ThrowIfNull(entries);
+        var live = entries.ToDictionary(e => e.Id);
+        var used = new HashSet<Guid>();
+        var dropped = 0;
+        bool Claim(IEnumerable<Guid?> ids)
+        {
+            var list = ids.ToList();
+            if (list.Any(i => i is null || !live.ContainsKey(i.Value) || used.Contains(i.Value)) || list.Distinct().Count() != list.Count)
+            {
+                dropped++;
+                return false;
+            }
+
+            foreach (var i in list)
+            {
+                used.Add(i!.Value);
+            }
+
+            return true;
+        }
+
+        static Guid? Id(JsonNode? node) => Guid.TryParse(node?.ToString(), out var g) ? g : null;
+        string Kind(JsonObject o, Guid? fallbackFrom) => Json.Str(o, "kind") is { } k && Kinds.Contains(k) ? k : fallbackFrom is { } f && live.TryGetValue(f, out var e) ? e.Kind : "fact";
+
+        var merged = new JsonArray();
+        foreach (var m in (answer["merged"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            var from = (m["from"] as JsonArray ?? []).Select(Id).ToList();
+            if (from.Count < 2 || string.IsNullOrWhiteSpace(Json.Str(m, "title")) || string.IsNullOrWhiteSpace(Json.Str(m, "body")) || !Claim(from))
+            {
+                dropped += from.Count < 2 || string.IsNullOrWhiteSpace(Json.Str(m, "title")) || string.IsNullOrWhiteSpace(Json.Str(m, "body")) ? 1 : 0;
+                continue;
+            }
+
+            merged.Add(new JsonObject { ["from"] = new JsonArray(from.Select(f => (JsonNode)f!.Value.ToString()).ToArray()), ["title"] = OutputText.Truncate(Json.Str(m, "title")!, 120), ["body"] = OutputText.Truncate(Json.Str(m, "body")!, 1000), ["kind"] = Kind(m, from[0]) });
+        }
+
+        var removed = new JsonArray();
+        foreach (var r in (answer["removed"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            var id = Id(r["id"]);
+            if (!Claim([id]))
+            {
+                continue;
+            }
+
+            removed.Add(new JsonObject { ["id"] = id!.Value.ToString(), ["why"] = OutputText.Truncate(Json.Str(r, "why") ?? "Stale.", 500) });
+        }
+
+        var corrected = new JsonArray();
+        foreach (var c in (answer["corrected"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            var id = Id(c["id"]);
+            if (string.IsNullOrWhiteSpace(Json.Str(c, "why")) || !Claim([id]))
+            {
+                dropped += string.IsNullOrWhiteSpace(Json.Str(c, "why")) ? 1 : 0;
+                continue;
+            }
+
+            var fix = new JsonObject { ["id"] = id!.Value.ToString(), ["why"] = OutputText.Truncate(Json.Str(c, "why")!, 500) };
+            foreach (var key in new[] { "title", "body" })
+            {
+                if (Json.Str(c, key) is { Length: > 0 } value)
+                {
+                    fix[key] = OutputText.Truncate(value, key == "title" ? 120 : 1000);
+                }
+            }
+
+            if (Json.Str(c, "kind") is { } kind && Kinds.Contains(kind))
+            {
+                fix["kind"] = kind;
+            }
+
+            corrected.Add(fix);
+        }
+
+        return (merged, removed, corrected, dropped);
     }
 }

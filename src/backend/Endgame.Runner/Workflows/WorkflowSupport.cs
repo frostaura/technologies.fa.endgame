@@ -51,6 +51,9 @@ public static partial class WorkflowSupport
         }
     }
 
+    /// <summary>A workflow's closing summary as the owner reads it: one plain paragraph, at most 600 characters.</summary>
+    public static string ForPeople(string summary) => Sentences.Plain(summary, 600);
+
     /// <summary>A slug the tree accepts: lowercase letters, digits and hyphens, 2 to 40 characters.</summary>
     public static string Slug(string? text, string fallback)
     {

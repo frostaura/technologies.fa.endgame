@@ -35,6 +35,9 @@ public sealed record AgentLimits
 
     /// <summary>A credit ceiling for this agent alone (a sub-agent's budget slice), on top of the gateway's budgets.</summary>
     public decimal? CreditBudget { get; init; }
+
+    /// <summary>On a route with web search, the most searches one call may make (0: none); null leaves the route's maximum.</summary>
+    public int? MaxSearchesPerCall { get; init; }
 }
 
 /// <summary>Everything that defines one agent in a run. A resumed run is rebuilt from the same definition plus its log.</summary>
@@ -123,6 +126,12 @@ public sealed class AgentState
     public long CompletionTokens { get; set; }
 
     public long CachedTokens { get; set; }
+
+    /// <summary>Server-side web searches this agent's calls made, as the provider reported them.</summary>
+    public int Searches { get; set; }
+
+    /// <summary>The addresses its replies cited, each once, in order.</summary>
+    public List<string> Citations { get; } = [];
 
     /// <summary>The provider that served the run's first reply; every later call asks for it first (ARCH-006).</summary>
     public string? PinnedProvider { get; set; }

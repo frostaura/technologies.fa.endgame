@@ -161,7 +161,7 @@ public sealed class NotesTool : ITool
 
             var note = OutputText.Truncate(text, 4000);
             notes.Add(note);
-            await call.Context.Events.WriteAsync(HarnessEvents.Message, new JsonObject { ["kind"] = "notes", ["text"] = note }, cancellationToken);
+            await call.Context.Events.WriteAsync(HarnessEvents.Message, new JsonObject { ["kind"] = "notes", ["note"] = note }, cancellationToken);
             return new ToolOutcome($"Noted ({notes.Count} note{(notes.Count == 1 ? "" : "s")}).");
         }
 

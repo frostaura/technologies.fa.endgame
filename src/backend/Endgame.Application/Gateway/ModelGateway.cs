@@ -179,7 +179,13 @@ public sealed class ModelGateway(
         var tools = request.Tools?.DeepClone().AsArray() ?? [];
         long searchFees = 0;
         decimal searchFeesUsd = 0m;
-        if (route.WebSearch is { } search)
+        if (request.Limits?.MaxSearches is < 0)
+        {
+            throw EndgameProblem.Invalid("limits.maxSearches is 0 or more: the most web searches this call may make.");
+        }
+
+        var uses = route.WebSearch is { } offered ? Math.Min(request.Limits?.MaxSearches ?? offered.MaxUses, offered.MaxUses) : 0;
+        if (route.WebSearch is { } search && uses > 0)
         {
             tools.Add(new JsonObject
             {
@@ -188,10 +194,10 @@ public sealed class ModelGateway(
                 {
                     ["engine"] = search.Engine,
                     ["max_results"] = search.MaxResults,
-                    ["max_uses"] = search.MaxUses,
+                    ["max_uses"] = uses,
                 },
             });
-            var results = (long)search.MaxResults * search.MaxUses;
+            var results = (long)search.MaxResults * uses;
             searchFees = results * search.PromptTokensPerResult;
             searchFeesUsd = results * search.FeePerResultUsd;
         }
@@ -409,6 +415,7 @@ public sealed class ModelGateway(
                 ["promptTokens"] = facts.PromptTokens,
                 ["completionTokens"] = facts.CompletionTokens,
                 ["reasoningTokens"] = facts.ReasoningTokens,
+                ["searches"] = facts.Searches,
                 ["reservedCredits"] = call.ReservedCredits,
                 ["settledCredits"] = settled,
                 ["billable"] = call.Billable,
@@ -510,6 +517,9 @@ public sealed class ModelGateway(
 
         public string? FinishReason { get; private set; }
 
+        /// <summary>Server-side web searches the call made, as the provider reports them.</summary>
+        public int Searches { get; private set; }
+
         public JsonNode? Error { get; private set; }
 
         public static ReplyFacts From(JsonNode? body)
@@ -545,6 +555,7 @@ public sealed class ModelGateway(
                 PromptTokens = (long?)Number(usage["prompt_tokens"]) ?? PromptTokens;
                 CompletionTokens = (long?)Number(usage["completion_tokens"]) ?? CompletionTokens;
                 ReasoningTokens = (long?)Number(usage["completion_tokens_details"]?["reasoning_tokens"]) ?? ReasoningTokens;
+                Searches = Math.Max(Searches, (int)(Number(usage["server_tool_use_details"]?["web_search_requests"]) ?? 0));
             }
         }
 

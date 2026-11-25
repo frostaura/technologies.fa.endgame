@@ -28,7 +28,7 @@ public sealed class Estimator(RunnerOptions options)
         IReadOnlyList<decimal> history;
         try
         {
-            history = await run.ControlPlane.CostHistoryAsync(run.Run.Kind, cancellationToken);
+            history = await run.ControlPlane.CostHistoryAsync(run.Run.Kind, run.Run.Scope, cancellationToken);
         }
         catch (ServiceProblemException)
         {

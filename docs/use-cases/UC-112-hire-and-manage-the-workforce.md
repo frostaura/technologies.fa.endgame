@@ -40,6 +40,19 @@ known monthly cost, with a job description and a track record the owner can read
 7. **Idle.** An employee idle for longer than `workforce.idle_days` (default 14) is flagged; where autonomy is auto the
    sweep releases it, otherwise it waits in `needsYou[] { kind: "idle" }`.
 
+## The Runner's triggers
+
+| When | Trigger · need key | Role (name) | At |
+| --- | --- | --- | --- |
+| Research first reaches a scope | `stage` · `stage:research:<scope>` | Market researcher (Iris) | the idea's scope |
+| Placement creates a division | `division` · `division:<division path>` | Division lead (Sol) | the division |
+| A project enters its build | `stage` · `stage:build:<project path>` | Software engineer (Theo) | the project |
+| A project enters evaluation | `stage` · `stage:evaluate:<project path>` | QA engineer (Nadia) | the project |
+| A published app declares a recurring job | `recurring` · `recurring:<app path>` | Operations engineer (Ravi) | the app |
+
+Expected monthly credits per role are `Runner:MonthlyCredits`. Research contractors are registered with `briefedBy` the
+researcher and finished with what they learned.
+
 ## Alternate and failure flows
 
 - **A1 — a standing hire.** The security reviewer, created with every organisation, cannot be released: `409 standing_hire`.

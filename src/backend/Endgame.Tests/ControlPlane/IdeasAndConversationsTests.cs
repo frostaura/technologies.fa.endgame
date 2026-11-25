@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 using Endgame.Tests.Fixtures;
 
 namespace Endgame.Tests.ControlPlane;
@@ -18,17 +19,7 @@ public sealed class IdeasAndConversationsTests(PostgresServer postgres) : IAsync
 
     public async Task DisposeAsync() => await app.DisposeAsync();
 
-    private static object Verdict(string outcome) => new
-    {
-        outcome,
-        headline = "Others already do this",
-        summary = "Three products cover it; demand evidence is thin.",
-        existing = new[] { new { name = "Rival", description = "Does it", url = (string?)"https://rival.example" } },
-        gap = new[] { "No cascade" },
-        demand = new { paragraphs = new[] { "Few people asked." }, evidenceFound = false },
-        wouldChange = (object?)null,
-        method = "Searched the web.",
-    };
+    private static JsonObject Verdict(string outcome) => VerdictSamples.Valid(outcome);
 
     [Fact]
     public async Task The_estimate_is_free_and_works_before_an_organisation_exists()
@@ -65,7 +56,7 @@ public sealed class IdeasAndConversationsTests(PostgresServer postgres) : IAsync
         Assert.Equal(["message", "estimate.made"], events.Select(e => e!["type"]!.GetValue<string>()));
 
         await ControlPlaneApp.Expect(await owner.PostAsJsonAsync($"/api/ideas/{ideaId}/decision", new { choice = "build" }), HttpStatusCode.Conflict);
-        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/ideas/{ideaId}/verdict", Verdict("do_not_build")));
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/ideas/{ideaId}/verdict", Verdict("do-not-build")));
 
         var tree = await ControlPlaneApp.Ok(owner.GetAsync("/api/tree"));
         var need = Assert.Single(tree["needsYou"]!.AsArray())!;
@@ -75,7 +66,7 @@ public sealed class IdeasAndConversationsTests(PostgresServer postgres) : IAsync
         var withVerdict = await ControlPlaneApp.Ok(owner.GetAsync($"/api/ideas/{ideaId}"));
         Assert.Equal("verdict", withVerdict["status"]!.GetValue<string>());
         Assert.Equal("do-not-build", withVerdict["verdict"]!["outcome"]!.GetValue<string>());
-        Assert.Equal("Rival", withVerdict["verdict"]!["existing"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal("Rival", withVerdict["verdict"]!["existing"]!["products"]![0]!["name"]!.GetValue<string>());
         Assert.Equal(1, withVerdict["record"]!["doNotBuild"]!.GetValue<int>());
 
         var refused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync($"/api/ideas/{ideaId}/decision", new { choice = "build" }), HttpStatusCode.Conflict);
@@ -91,6 +82,45 @@ public sealed class IdeasAndConversationsTests(PostgresServer postgres) : IAsync
         var overruled = Assert.Single(decided["record"]!["overruled"]!.AsArray())!;
         Assert.Equal(ideaId, overruled["ideaId"]!.GetValue<string>());
         Assert.Empty((await ControlPlaneApp.Ok(owner.GetAsync("/api/tree")))["needsYou"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task A_malformed_verdict_is_refused_with_every_fault_named_and_nothing_recorded()
+    {
+        // The defect the first real run found: the Runner wrote existing as an object and the console read
+        // an array, and the control plane stored whatever it was given.
+        var owner = await app.OwnerWithOrganisationAsync();
+        var ideaId = (await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/ideas", new { text = "A reading list", constraints = Array.Empty<string>() })))["id"]!.GetValue<string>();
+        var malformed = VerdictSamples.Valid("build");
+        malformed["existing"] = new JsonArray(new JsonObject { ["name"] = "Rival" });
+        malformed["demand"]!["signals"] = "Some forum posts.";
+        malformed.Remove("wouldChange");
+        malformed["method"]!["searches"] = 9;
+        malformed["extra"] = true;
+        var refused = await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/ideas/{ideaId}/verdict", malformed), HttpStatusCode.BadRequest);
+        Assert.Equal("verdict_invalid", refused["code"]!.GetValue<string>());
+        var errors = refused["errors"]!.AsArray().Select(e => e!.GetValue<string>()).ToList();
+        Assert.Contains("existing: an object, not an array", errors);
+        Assert.Contains("demand.signals: an array, not a string", errors);
+        Assert.Contains("wouldChange: required", errors);
+        Assert.Contains("method.searches: the sum of the strands' searches (3), not 9", errors);
+        Assert.Contains(errors, e => e.StartsWith("extra: not part of the verdict document", StringComparison.Ordinal));
+        Assert.Equal("researching", (await ControlPlaneApp.Ok(owner.GetAsync($"/api/ideas/{ideaId}")))["status"]!.GetValue<string>());
+
+        // A red line breached must be named from the list, and is never built.
+        var crossed = VerdictSamples.Valid("build", redLine: "surveillance");
+        var contradiction = await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/ideas/{ideaId}/verdict", crossed), HttpStatusCode.BadRequest);
+        Assert.Contains("outcome: \"do-not-build\": a breached red line is never built", contradiction["errors"]!.AsArray().Select(e => e!.GetValue<string>()));
+        var change = VerdictSamples.Valid("change");
+        change["suggestedChange"] = null;
+        var noChange = await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/ideas/{ideaId}/verdict", change), HttpStatusCode.BadRequest);
+        Assert.Contains(noChange["errors"]!.AsArray(), e => e!.GetValue<string>().StartsWith("suggestedChange: a string of 1 to 1000 characters saying what to change", StringComparison.Ordinal));
+
+        // The valid document is stored and read back exactly as it was sent.
+        var valid = VerdictSamples.Valid("build");
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/ideas/{ideaId}/verdict", valid));
+        var read = await ControlPlaneApp.Ok(owner.GetAsync($"/api/ideas/{ideaId}"));
+        Assert.True(JsonNode.DeepEquals(valid, read["verdict"]), read["verdict"]!.ToJsonString());
     }
 
     [Fact]

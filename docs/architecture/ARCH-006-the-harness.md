@@ -60,6 +60,20 @@ routes by task type itself (`ARCH-003`).
   caching and varies tool-call behaviour. Mark the system message and the newest message for
   caching on the models that need it explicit.
 
+## Sub-agents, memory and the owner's view (as built)
+
+- **Parallel where independent.** A turn of two or more `spawn` calls whose sub-agents only read (the default read-only tool
+  set), within the fan-out cap, runs them at once: every call is requested first, they work concurrently, and their results
+  enter the conversation in call order, so replay is unchanged. Anything that writes runs one at a time; builders that work in
+  parallel would each need a workspace of their own, and the factory's builders work one feature at a time.
+- **Memory is context.** An employee's curated memory follows its rules, framed as notes that never outrank them; `remember`
+  keeps a note. A contractor keeps none: what it learned goes to its briefer.
+- **Search budgets.** `AgentLimits.MaxSearchesPerCall` is sent as the call's `limits.maxSearches`; the reply's `searches` and
+  url citations are counted into the agent's state (and replayed from `accounting`).
+- **Bookkeeping is not for people.** The loop's own `message` events carry a `kind` and no `text` (`reply`, `detail`,
+  `nudge`, `note` instead); sub-agent events carry a `title`, a plain `brief` and a one-sentence `summary`, the raw report in
+  `report` (ARCH-004, *Run log*).
+
 ## The workspace
 
 One fresh container per run: no network, no capabilities, no new privileges, not root, no socket,

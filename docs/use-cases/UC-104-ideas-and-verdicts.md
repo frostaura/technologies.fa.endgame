@@ -22,7 +22,7 @@ decides what happens after a verdict that is allowed to say no.
 2. `POST /api/ideas { text, constraints[], scope? }` → 201 `Idea`; the research run is queued with the owner's
    message and an `estimate.made { credits }` event. `scope` defaults to the caller's organisation.
 3. The Runner researches and posts the verdict document to `/internal/ideas/{id}/verdict`
-   (`outcome` build | change | do-not-build, `headline`, `summary`, `existing[]`, `gap[]`, `demand`, `wouldChange`, `method`).
+   — exactly the document ARCH-004 defines (*The verdict document*); anything else is `400 verdict_invalid` with every fault.
 4. The idea appears in `GET /api/tree` → `needsYou[]` as `{ kind: "verdict", ... }`.
 5. `POST /api/ideas/{id}/decision { choice, note? }` → the updated `Idea`. `build` or `overrule` queues a build
    run (`decision.runId`); `change` runs the research again; `drop` ends it. `decision.via` is `person`.
@@ -39,6 +39,8 @@ decides what happens after a verdict that is allowed to say no.
 - **A2 — deciding before a verdict.** 409.
 - **A3 — no research route configured.** 503 `estimate_unavailable`; research cannot start.
 - **A4 — no organisation yet.** `POST /api/ideas` is 409 `no_organisation`.
+- **A7 — a malformed verdict.** `400 verdict_invalid`, `errors[]` one line per fault; nothing is recorded and the idea stays
+  under research.
 - **A5 — a breached red line.** A verdict whose `redLines { breached: true, line }` is recorded as the idea's `redLine`;
   `build` and `overrule` are then `403 red_line` for everyone, a person included (CLAUDE.md rule 4); `change` and `drop`
   remain. A verdict that names a breached red line and says anything but do-not-build is `400`.

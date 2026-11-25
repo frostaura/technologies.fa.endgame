@@ -26,6 +26,7 @@ public sealed class SpawnTool : ITool
 
     public JsonObject Parameters => Schema.Object(new JsonObject
     {
+        ["title"] = Schema.Str("A few plain words for the owner saying what it will do, for example 'Survey the legacy handlers'."),
         ["objective"] = Schema.Str("What the sub-agent must achieve, with everything it needs to know."),
         ["output_format"] = Schema.Str("Exactly what to report back, and how briefly."),
         ["boundaries"] = Schema.Str("What it must not do or touch."),
@@ -42,10 +43,6 @@ public sealed class SpawnTool : ITool
         ArgumentNullException.ThrowIfNull(call);
         var parent = call.Context.Agent;
         var state = call.Context.State;
-        if (state.SubagentsStarted >= parent.Limits.MaxSubagents)
-        {
-            return ToolOutcome.Error($"The fan-out cap is reached: this agent may start at most {parent.Limits.MaxSubagents} sub-agents. Do the rest yourself.", "fan_out_cap");
-        }
 
         var objective = Json.Str(call.Arguments, "objective")?.Trim() ?? "";
         var format = Json.Str(call.Arguments, "output_format")?.Trim() ?? "";
@@ -68,8 +65,21 @@ public sealed class SpawnTool : ITool
         decimal? slice = parent.Limits.CreditBudget is { } budget ? Math.Max(0m, (budget - state.SettledCredits) / 2m) : null;
         var tools = parent.Tools.Subset(names);
         var writes = names.Any(n => n is "edit_file" or "write_file");
-        var id = string.Create(CultureInfo.InvariantCulture, $"{parent.Id}.sub-{state.SubagentsStarted + 1}");
-        var brief = new JsonObject { ["objective"] = objective, ["outputFormat"] = format, ["boundaries"] = boundaries };
+
+        // Claimed before any await: sub-agents of one turn may start at once, and each takes its own number.
+        int number;
+        lock (state)
+        {
+            if (state.SubagentsStarted >= parent.Limits.MaxSubagents)
+            {
+                return ToolOutcome.Error($"The fan-out cap is reached: this agent may start at most {parent.Limits.MaxSubagents} sub-agents. Do the rest yourself.", "fan_out_cap");
+            }
+
+            number = ++state.SubagentsStarted;
+        }
+
+        var id = string.Create(CultureInfo.InvariantCulture, $"{parent.Id}.sub-{number}");
+        var title = Title(Json.Str(call.Arguments, "title"), objective);
         var child = parent with
         {
             Id = id,
@@ -85,12 +95,14 @@ public sealed class SpawnTool : ITool
         {
             ["subagent"] = id,
             ["callId"] = call.CallId,
-            ["brief"] = brief,
+            ["title"] = title,
+            ["role"] = "contractor",
+            ["brief"] = OutputText.Truncate(objective, 1000),
+            ["briefDetail"] = new JsonObject { ["objective"] = objective, ["outputFormat"] = format, ["boundaries"] = boundaries },
             ["tools"] = Json.Array(tools.Names),
             ["maxSteps"] = steps,
             ["creditBudget"] = slice,
         }, cancellationToken);
-        state.SubagentsStarted++;
 
         var loop = new AgentLoop(child, call.Context.Services, call.Context.Workspace, call.Context.Events.Sink);
         var result = await loop.StartAsync($"Your brief.\n\nObjective: {objective}\n\nReport back: {format}\n\nBoundaries: {boundaries}", cancellationToken);
@@ -104,8 +116,11 @@ public sealed class SpawnTool : ITool
         {
             ["subagent"] = id,
             ["callId"] = call.CallId,
+            ["title"] = title,
             ["stopReason"] = result.StopReason,
-            ["summary"] = summary,
+            ["summary"] = Sentence(result.Completed ? summary : $"It stopped before finishing ({result.StopReason})."),
+            ["report"] = summary,
+            ["searches"] = result.State.Searches,
             ["steps"] = result.State.Steps,
             ["credits"] = result.State.SettledCredits,
             ["edited"] = result.State.EverEdited,
@@ -116,6 +131,22 @@ public sealed class SpawnTool : ITool
         // Its spend counts against the parent's slice and its edits as the parent's own (through the tool result, so replay agrees).
         var outcome = ok ? new ToolOutcome(text) : ToolOutcome.Error(text, "subagent_stopped");
         return outcome with { Edited = result.State.EverEdited, Credits = result.State.SettledCredits };
+    }
+
+    /// <summary>The owner-facing heading: the briefer's own words, or the objective's first sentence.</summary>
+    public static string Title(string? given, string objective)
+    {
+        var text = (given?.Trim() is { Length: > 0 } t ? t : objective.Split(['.', '\n'], 2)[0]).Trim();
+        return text.Length <= 60 ? text : text[..57].TrimEnd() + "...";
+    }
+
+    /// <summary>The first sentence of a report, plain, at most 300 characters: what the console shows in normal mode.</summary>
+    public static string Sentence(string report)
+    {
+        var flat = string.Join(' ', report.Split((char[])['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).Trim('#', '*', ' ', '-');
+        var end = flat.IndexOfAny(['.', '!', '?']);
+        var sentence = end > 0 ? flat[..(end + 1)] : flat;
+        return sentence.Length <= 300 ? sentence : sentence[..297].TrimEnd() + "...";
     }
 
     private static string SystemPrompt(string objective, string format, string boundaries, string root) => $"""

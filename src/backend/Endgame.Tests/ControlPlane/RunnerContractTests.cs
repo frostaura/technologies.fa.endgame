@@ -76,6 +76,50 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
     }
 
     [Fact]
+    public async Task A_research_call_carries_its_search_budget_and_the_searches_made_and_sources_cited_come_back()
+    {
+        var run = await RunAsync("frostaura/technologies", "research");
+        openRouter.Chat = async (request, http) =>
+        {
+            var usage = FakeOpenRouter.Usage(0.0135m);
+            usage["server_tool_use_details"] = new JsonObject { ["web_search_requests"] = 3 };
+            await Microsoft.AspNetCore.Http.HttpResponseJsonExtensions.WriteAsJsonAsync(http.Response, new JsonObject
+            {
+                ["id"] = "gen-search",
+                ["provider"] = "FakeProvider",
+                ["model"] = request["model"]?.GetValue<string>(),
+                ["choices"] = new JsonArray(new JsonObject
+                {
+                    ["index"] = 0,
+                    ["finish_reason"] = "stop",
+                    ["message"] = new JsonObject
+                    {
+                        ["role"] = "assistant",
+                        ["content"] = "{\"findings\":[]}",
+                        ["annotations"] = new JsonArray(
+                            new JsonObject { ["type"] = "url_citation", ["url_citation"] = new JsonObject { ["url"] = "https://bookclubs.com", ["title"] = "Bookclubs" } },
+                            new JsonObject { ["type"] = "url_citation", ["url_citation"] = new JsonObject { ["url"] = "https://bookclubs.com", ["title"] = "again" } }),
+                    },
+                }),
+                ["usage"] = usage,
+            });
+        };
+        var body = GatewayModelClient.Body(new ChatCall("research", "frostaura/technologies", run, null, Messages(), null, 2000, false, null, null), stream: false);
+        body["limits"]!["maxSearches"] = 7;
+        using var response = await app.Internal().PostAsync("/internal/model/chat", new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json"));
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(7, openRouter.Requests.Last()["tools"]![0]!["parameters"]!["max_uses"]!.GetValue<int>());
+
+        var gateway = new GatewayModelClient(app.Internal(), stream: false);
+        var reply = await gateway.CompleteAsync(new ChatCall("research", "frostaura/technologies", run, null, Messages(), null, 2000, false, null, null), CancellationToken.None);
+        Assert.Equal(3, reply.Searches);
+        Assert.Equal(["https://bookclubs.com"], reply.Citations);
+        Assert.Null(reply.Message["annotations"]);
+        var replied = (await runner.ReadEventsAsync(run, 0, 50, CancellationToken.None)).Where(e => e.Type == "model.replied").ToList();
+        Assert.All(replied, e => Assert.Equal(3, e.Payload["searches"]!.GetValue<int>()));
+    }
+
+    [Fact]
     public async Task Sonnet_never_receives_a_temperature_even_when_a_caller_sends_one()
     {
         await ControlPlaneApp.Ok(service.PostAsJsonAsync("/internal/model/chat", new
@@ -172,10 +216,11 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
         Assert.Equal(0.03m, row["credits"]!.GetValue<decimal>()); // the repair call is not billed, so not counted
         Assert.Equal(2, row["steps"]!.GetValue<int>());
 
-        // The Runner's client sends no scope today: refused rather than answered across organisations.
-        var refused = await Assert.ThrowsAsync<ServiceProblemException>(() => runner.CostHistoryAsync("task", CancellationToken.None));
-        Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
-        Assert.Equal("scope_required", refused.Code);
+        // The Runner's client sends the run's scope, so it reads its own organisation's history and nothing else.
+        Assert.Equal([0.03m], await runner.CostHistoryAsync("task", "frostaura/technologies/squash", CancellationToken.None));
+        Assert.Empty(await runner.CostHistoryAsync("research", "frostaura/technologies/squash", CancellationToken.None));
+        var refused = await ControlPlaneApp.Expect(await service.GetAsync("/internal/estimates/history?taskType=task&limit=50"), HttpStatusCode.BadRequest);
+        Assert.Equal("scope_required", refused["code"]!.GetValue<string>());
     }
 
     [Fact]
@@ -271,24 +316,11 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
 
     // ------------------------------------------------------------------ A7, A8
 
-    private async Task<Guid> IdeaWithVerdictAsync(string outcome, JsonObject? redLines = null, string scope = "frostaura/technologies")
+    private async Task<Guid> IdeaWithVerdictAsync(string outcome, string? redLine = null, string scope = "frostaura/technologies")
     {
         var idea = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/ideas", new { text = $"An idea that gets {outcome}", constraints = Array.Empty<string>(), scope }));
         var id = Guid.Parse(idea["id"]!.GetValue<string>());
-        var verdict = new JsonObject
-        {
-            ["outcome"] = outcome,
-            ["headline"] = "The verdict",
-            ["summary"] = "What the research found.",
-            ["existing"] = new JsonObject { ["products"] = new JsonArray("Rival") },
-            ["demand"] = new JsonObject { ["evidence"] = "Some." },
-        };
-        if (redLines is not null)
-        {
-            verdict["redLines"] = redLines;
-        }
-
-        await runner.RecordVerdictAsync(id, verdict, CancellationToken.None);
+        await runner.RecordVerdictAsync(id, VerdictSamples.Valid(outcome, redLine), CancellationToken.None);
         return id;
     }
 
@@ -322,32 +354,27 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
     [Fact]
     public async Task A_breached_red_line_cannot_be_overruled_by_anyone_a_person_included()
     {
-        var crossed = await IdeaWithVerdictAsync("do-not-build", new JsonObject { ["breached"] = true, ["line"] = "surveillance and authoritarian tooling" });
+        var crossed = await IdeaWithVerdictAsync("do-not-build", "surveillance");
         foreach (var choice in new[] { "overrule", "build" })
         {
             var refused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync($"/api/ideas/{crossed}/decision", new { choice }), HttpStatusCode.Forbidden);
             Assert.Equal("red_line", refused["code"]!.GetValue<string>());
-            Assert.Equal("surveillance and authoritarian tooling", refused["redLine"]!.GetValue<string>());
+            Assert.Equal("surveillance", refused["redLine"]!.GetValue<string>());
         }
 
         var idea = await ControlPlaneApp.Ok(owner.GetAsync($"/api/ideas/{crossed}"));
-        Assert.Equal("surveillance and authoritarian tooling", idea["redLine"]!.GetValue<string>());
+        Assert.Equal("surveillance", idea["redLine"]!.GetValue<string>());
         Assert.Null(idea["decision"]);
         await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/ideas/{crossed}/decision", new { choice = "drop" }));
 
         // A plain do-not-build is still the owner's to overrule.
-        var plain = await IdeaWithVerdictAsync("do-not-build", new JsonObject { ["breached"] = false });
+        var plain = await IdeaWithVerdictAsync("do-not-build");
         await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/ideas/{plain}/decision", new { choice = "overrule" }));
 
         // A verdict cannot name a breached red line and still say build.
         var contradiction = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/ideas", new { text = "Contradictory", constraints = Array.Empty<string>() }));
-        var problem = await Assert.ThrowsAsync<ServiceProblemException>(() => runner.RecordVerdictAsync(Guid.Parse(contradiction["id"]!.GetValue<string>()), new JsonObject
-        {
-            ["outcome"] = "build",
-            ["summary"] = "Fine.",
-            ["redLines"] = new JsonObject { ["breached"] = true, ["line"] = "predatory finance" },
-        }, CancellationToken.None));
-        Assert.Equal(HttpStatusCode.BadRequest, problem.Status);
+        var problem = await Assert.ThrowsAsync<VerdictRefusedException>(() => runner.RecordVerdictAsync(Guid.Parse(contradiction["id"]!.GetValue<string>()), VerdictSamples.Valid("build", "tobacco-gambling-finance"), CancellationToken.None));
+        Assert.Contains("outcome: \"do-not-build\": a breached red line is never built", problem.Errors);
     }
 
     // ------------------------------------------------------------------ A9

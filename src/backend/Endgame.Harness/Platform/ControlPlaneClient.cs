@@ -28,8 +28,39 @@ public sealed record RunInfo(
     string? Outcome,
     string? Summary);
 
-/// <summary>A tree node the factory created or found.</summary>
-public sealed record NodeInfo(Guid Id, string Path, string Name, string Slug);
+/// <summary>A tree node the factory created or found; <paramref name="Created"/> when this call made it.</summary>
+public sealed record NodeInfo(Guid Id, string Path, string Name, string Slug, bool Created = false);
+
+/// <summary>An employee or a working contractor, as the Runner needs it.</summary>
+public sealed record EmployeeInfo(Guid Id, string Kind, string Name, string Role, string Status, string? Standing, string Scope);
+
+/// <summary>A hire the Runner raised: accepted at once (auto-mode, within budget) with its employee, or waiting for the owner.</summary>
+public sealed record HireOutcome(Guid HireId, string Status, Guid? EmployeeId, bool Created, bool WithinBudget, decimal ExpectedMonthlyCredits);
+
+/// <summary>One entry of an employee's curated memory.</summary>
+public sealed record MemoryEntry(Guid Id, string Title, string Body, string Kind, string Scope);
+
+/// <summary>A memory entry an employee proposes after a task.</summary>
+public sealed record MemoryNote(string Title, string Body, string Kind, string? Scope = null);
+
+/// <summary>What auto-mode's decision after a verdict came to.</summary>
+public enum AutoDecision
+{
+    /// <summary>The build has been queued.</summary>
+    Building,
+
+    /// <summary>A do-not-build, or checkpoints are on: the owner decides.</summary>
+    WaitingForOwner,
+
+    /// <summary>A breached red line: nobody builds it.</summary>
+    RedLine,
+}
+
+/// <summary>The control plane refused a verdict document, naming each fault (<c>400 verdict_invalid</c>).</summary>
+public sealed class VerdictRefusedException(IReadOnlyList<string> errors) : Exception($"The verdict was refused: {string.Join("; ", errors.Take(5))}")
+{
+    public IReadOnlyList<string> Errors { get; } = errors;
+}
 
 /// <summary>
 /// The control plane's internal API (ARCH-004) for the Runner: runs and their log, leases, the
@@ -122,19 +153,137 @@ public sealed class ControlPlaneClient(HttpClient http)
         return Task(await ReadAsync<JsonObject>(response, cancellationToken));
     }
 
-    /// <summary>Research's verdict document (outcome, headline, summary, existing, gap, demand, wouldChange, method).</summary>
+    /// <summary>Research's verdict document (ARCH-004, <i>The verdict document</i>). A refused one throws <see cref="VerdictRefusedException"/> with every fault.</summary>
     public async Task RecordVerdictAsync(Guid ideaId, JsonObject verdict, CancellationToken cancellationToken)
     {
         using var response = await Http.PostAsync($"/internal/ideas/{ideaId:D}/verdict", JsonContent.Create(verdict, options: Json.Web), cancellationToken);
+        if (response.StatusCode == HttpStatusCode.BadRequest)
+        {
+            var problem = GatewayModelClient.TryParse(await response.Content.ReadAsStringAsync(cancellationToken)) as JsonObject;
+            if (Json.Str(problem, "code") == "verdict_invalid")
+            {
+                throw new VerdictRefusedException(Json.Strings(problem, "errors"));
+            }
+
+            throw new ServiceProblemException(response.StatusCode, Json.Str(problem, "code") ?? "bad_request", Json.Str(problem, "detail") ?? "The verdict was refused.");
+        }
+
         await ReadAsync<JsonObject>(response, cancellationToken);
     }
+
+    /// <summary><c>POST /internal/ideas/{id}/decision</c> {decision: build, by: auto-mode}: auto-mode builds after a build or change verdict.</summary>
+    public async Task<(AutoDecision Decision, Guid? RunId, string Detail)> BuildOnVerdictAsync(Guid ideaId, CancellationToken cancellationToken)
+    {
+        using var response = await Http.PostAsJsonAsync($"/internal/ideas/{ideaId:D}/decision", new { decision = "build", by = "auto-mode" }, Json.Web, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadFromJsonAsync<JsonObject>(Json.Web, cancellationToken);
+            return (AutoDecision.Building, Guid.TryParse(Json.Str(body?["run"] as JsonObject, "id"), out var run) ? run : null, "");
+        }
+
+        var problem = await ServiceProblemException.FromAsync(response, cancellationToken);
+        return problem.Code switch
+        {
+            "owner_decision_required" => (AutoDecision.WaitingForOwner, null, problem.Detail),
+            "red_line" => (AutoDecision.RedLine, null, problem.Detail),
+            _ => throw problem,
+        };
+    }
+
+    /// <summary>The workforce at and beneath a scope (employees, and contractors while they work).</summary>
+    public async Task<IReadOnlyList<EmployeeInfo>> EmployeesAsync(string scope, CancellationToken cancellationToken)
+    {
+        using var response = await Http.GetAsync($"/internal/employees?scope={Uri.EscapeDataString(scope)}", cancellationToken);
+        return (await ReadAsync<JsonArray>(response, cancellationToken)).OfType<JsonObject>().Select(Employee).ToList();
+    }
+
+    /// <summary>Raises a need from the ontology (<c>POST /internal/hires</c>); the same <paramref name="needKey"/> again answers the live proposal.</summary>
+    public async Task<HireOutcome> RaiseHireAsync(string scope, string trigger, string needKey, string reason, string name, string role, string mandate,
+        IReadOnlyList<string> tools, IReadOnlyList<string> services, decimal monthlyCredits, string modelTier, Guid? reportsTo, Guid? runId, CancellationToken cancellationToken)
+    {
+        var body = new
+        {
+            scope,
+            trigger,
+            needKey,
+            reason,
+            name,
+            role,
+            jobDescription = new { mandate, tools, services, monthlyCreditLimit = monthlyCredits, modelTier },
+            reportsTo,
+            expectedMonthlyCredits = monthlyCredits,
+            runId,
+        };
+        using var response = await Http.PostAsJsonAsync("/internal/hires", body, Json.Web, cancellationToken);
+        var raised = await ReadAsync<JsonObject>(response, cancellationToken);
+        var hire = raised["hire"] as JsonObject ?? [];
+        return new HireOutcome(Guid.Parse(Json.Str(hire, "id")!), Json.Str(hire, "status") ?? "proposed", Guid.TryParse(Json.Str(hire, "employeeId"), out var e) ? e : null,
+            Json.Bool(raised, "created") == true, Json.Bool(hire, "withinBudget") == true, Json.Dec(hire, "expectedMonthlyCredits") ?? monthlyCredits);
+    }
+
+    /// <summary>What an employee remembers that bears on a scope (at it, above it or beneath it); all of it when <paramref name="scope"/> is null.</summary>
+    public async Task<IReadOnlyList<MemoryEntry>> MemoryAsync(Guid employeeId, string? scope, CancellationToken cancellationToken)
+    {
+        using var response = await Http.GetAsync($"/internal/employees/{employeeId:D}/memory{(scope is null ? "" : $"?scope={Uri.EscapeDataString(scope)}")}", cancellationToken);
+        return (await ReadAsync<JsonArray>(response, cancellationToken)).OfType<JsonObject>()
+            .Select(m => new MemoryEntry(Guid.Parse(Json.Str(m, "id")!), Json.Str(m, "title") ?? "", Json.Str(m, "body") ?? "", Json.Str(m, "kind") ?? "fact", Json.Str(m, "scope") ?? ""))
+            .ToList();
+    }
+
+    /// <summary>After a task, what the employee learned (1 to 20 entries).</summary>
+    public async Task RememberAsync(Guid employeeId, Guid? runId, IReadOnlyList<MemoryNote> entries, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        using var response = await Http.PostAsJsonAsync($"/internal/employees/{employeeId:D}/memory", new { runId, entries = entries.Take(20).Select(Note) }, Json.Web, cancellationToken);
+        await ReadAsync<JsonArray>(response, cancellationToken);
+    }
+
+    /// <summary>A memory review's result: <c>{ merged, removed, corrected }</c>, applied in one transaction.</summary>
+    public async Task<JsonObject> ApplyMemoryReviewAsync(Guid employeeId, Guid? runId, JsonArray merged, JsonArray removed, JsonArray corrected, CancellationToken cancellationToken)
+    {
+        var body = new JsonObject { ["runId"] = runId?.ToString(), ["merged"] = merged.DeepClone(), ["removed"] = removed.DeepClone(), ["corrected"] = corrected.DeepClone() };
+        using var response = await Http.PostAsync($"/internal/employees/{employeeId:D}/memory/review", JsonContent.Create(body, options: Json.Web), cancellationToken);
+        return await ReadAsync<JsonObject>(response, cancellationToken);
+    }
+
+    /// <summary>A contractor briefed by an employee, on the chart while it works; its model calls carry its id.</summary>
+    public async Task<Guid> StartContractorAsync(string scope, Guid briefedBy, string role, string name, string brief, Guid? runId, CancellationToken cancellationToken)
+    {
+        using var response = await Http.PostAsJsonAsync("/internal/contractors", new { scope, briefedBy, role, name, brief, runId }, Json.Web, cancellationToken);
+        return Guid.Parse(Json.Str(await ReadAsync<JsonObject>(response, cancellationToken), "id")!);
+    }
+
+    /// <summary>The contractor is done: what it learned goes to its briefer's memory. Returns the promotion raised, if its role kept recurring.</summary>
+    public async Task<JsonObject?> FinishContractorAsync(Guid contractorId, Guid? runId, IReadOnlyList<MemoryNote> learned, CancellationToken cancellationToken)
+    {
+        using var response = await Http.PostAsJsonAsync($"/internal/contractors/{contractorId:D}/finish", new { runId, learned = learned.Take(20).Select(Note) }, Json.Web, cancellationToken);
+        return (await ReadAsync<JsonObject>(response, cancellationToken))["promotion"] as JsonObject;
+    }
+
+    /// <summary>The organisation graph at a scope (<c>view</c>: all, org-chart, data-flow).</summary>
+    public async Task<JsonObject> OntologyAsync(string scope, string view, CancellationToken cancellationToken)
+    {
+        using var response = await Http.GetAsync($"/internal/ontology?scope={Uri.EscapeDataString(scope)}&view={Uri.EscapeDataString(view)}", cancellationToken);
+        return await ReadAsync<JsonObject>(response, cancellationToken);
+    }
+
+    private static object Note(MemoryNote n) => new { title = n.Title, body = n.Body, kind = n.Kind, scope = n.Scope };
+
+    private static EmployeeInfo Employee(JsonObject o) =>
+        new(Guid.Parse(Json.Str(o, "id")!), Json.Str(o, "kind") ?? "employee", Json.Str(o, "name") ?? "", Json.Str(o, "role") ?? "", Json.Str(o, "status") ?? "", Json.Str(o, "standing"), Json.Str(o, "scope") ?? "");
 
     /// <summary>Proposed: <c>POST /internal/tree/nodes</c> {parent, level, name, slug} → the node (201), or the existing one (200).</summary>
     public async Task<NodeInfo> EnsureNodeAsync(string parent, string level, string name, string slug, CancellationToken cancellationToken)
     {
         using var response = await Http.PostAsJsonAsync("/internal/tree/nodes", new { parent, level, name, slug }, Json.Web, cancellationToken);
+        var created = response.StatusCode == HttpStatusCode.Created;
         var node = await ReadAsync<JsonObject>(response, cancellationToken);
-        return new NodeInfo(Guid.Parse(Json.Str(node, "id")!), Json.Str(node, "path") ?? $"{parent}/{slug}", Json.Str(node, "name") ?? name, Json.Str(node, "slug") ?? slug);
+        return new NodeInfo(Guid.Parse(Json.Str(node, "id")!), Json.Str(node, "path") ?? $"{parent}/{slug}", Json.Str(node, "name") ?? name, Json.Str(node, "slug") ?? slug, created);
     }
 
     /// <summary>Proposed: <c>POST /internal/apps/{id}/token</c> → {token}: the app token Dock injects at start.</summary>
@@ -156,10 +305,10 @@ public sealed class ControlPlaneClient(HttpClient http)
         return Json.Dec(await ReadAsync<JsonObject>(response, cancellationToken), "headroomCredits");
     }
 
-    /// <summary>Proposed: <c>GET /internal/estimates/history?taskType=&amp;limit=</c> → [{credits, steps}] of finished runs' actuals.</summary>
-    public async Task<IReadOnlyList<decimal>> CostHistoryAsync(string taskType, CancellationToken cancellationToken)
+    /// <summary><c>GET /internal/estimates/history?taskType=&amp;scope=&amp;limit=</c> → the billable actuals of finished runs of that kind in the scope's organisation, newest first.</summary>
+    public async Task<IReadOnlyList<decimal>> CostHistoryAsync(string taskType, string scope, CancellationToken cancellationToken)
     {
-        using var response = await Http.GetAsync($"/internal/estimates/history?taskType={Uri.EscapeDataString(taskType)}&limit=50", cancellationToken);
+        using var response = await Http.GetAsync($"/internal/estimates/history?taskType={Uri.EscapeDataString(taskType)}&scope={Uri.EscapeDataString(scope)}&limit=50", cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             return [];

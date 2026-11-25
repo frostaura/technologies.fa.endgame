@@ -1,0 +1,14 @@
+{
+  "name": "endgame-factory-e2e",
+  "private": true,
+  "type": "module",
+  "description": "make e2e-factory: an idea to a running private app, for real, with live models (TEST-201).",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "22.19.1",
+    "typescript": "5.9.3"
+  }
+}
