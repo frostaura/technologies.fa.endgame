@@ -95,7 +95,7 @@ minutes (`degraded` when more than one response in twenty failed).
 | Runs | `GET /api/runs?scope=&employeeId=&kind=&status=&limit=` → `[PublicRun]` newest first, at most 100 (Viewer; `employeeId` alone: wherever the employee works); `GET /api/runs/{id}`, `GET /api/runs/{id}/events` (server-sent events, resumable), `POST /api/runs/{id}/{pause,resume,cancel}`, `POST /api/runs/{id}/approvals/{approvalId}` |
 | Tasks | `GET /api/tasks?scope=&status=&limit=` |
 | Apps | `GET /api/apps/{id}` (health, running, addresses, `telemetry { visitsToday, requestsToday, errorsToday, latencyP50Ms, latencyP95Ms, lastVisitAt }` or null before anything was measured, cost, settings, `runningCost { sleep, alwaysOn }` or null, `sharedWith`); `POST /api/apps/{id}/settings { running?, access?, idleMinutes? }` (access needs Admin; `public` only from a person) |
-| Ask about this app | `POST /api/apps/{id}/ask/estimate { question }` → `{ credits, basis }` (Viewer); `POST /api/apps/{id}/ask { question }` → `{ question, answer, chart: { kind: line|bar|number|table, x, y[], series: [{ name, points: [{ x, y }] }] }, sql, columns[], rows[], truncated, credits: { estimate, charged } }` (Builder; charged to the app; `sql` is for technical mode); `422 ask_unanswerable` / `query_timeout` / `query_failed`; `503 ask_unavailable` with no `ask` route. Dashboard: `GET /api/apps/{id}/dashboard` → `[{ id, question, answer, sql, chart, columns, rows, truncated, askedAt, ranAt, error }]` re-run on read (Viewer); `POST /api/apps/{id}/dashboard { question, sql, chart?, answer? }` → `201` (Builder; the query is guarded again; at most 30); `DELETE /api/apps/{id}/dashboard/{questionId}` (Builder) |
+| Ask about this app | `POST /api/apps/{id}/ask/estimate { question }` → `{ credits, basis }` (Viewer); `POST /api/apps/{id}/ask { question }` → `{ question, answer, chart: { kind: line|bar|number|table, x, y[], series: [{ name, points: [{ x, y }] }] }, sql, columns[], rows[], truncated, credits: { estimate, charged } }` (Builder; charged to the app; `sql` is for technical mode); `422 ask_unanswerable` (a repaired query still refused or failing, or the model declined; title and detail plain, naming no query, column or database) / `422 query_timeout`, each with `technical: { sql, error }` (the last query tried and the guard's or database's message; technical mode only; absent when the model declined at once); `503 ask_unavailable` with no `ask` route or no views. Dashboard: `GET /api/apps/{id}/dashboard` → `[{ id, question, answer, sql, chart, columns, rows, truncated, askedAt, ranAt, error, technical: { sql, error } | null }]` re-run on read (Viewer; `error` is plain words, `technical` the message behind it); `POST /api/apps/{id}/dashboard { question, sql, chart?, answer? }` → `201` (Builder; the query is guarded again; at most 30); `DELETE /api/apps/{id}/dashboard/{questionId}` (Builder) |
 | Versions and export | `GET /api/apps/{id}/versions?skip=&limit=` → `{ appId, live, versions: [{ commit, message, at, author: { kind: employee|person|factory, id, name }, live }], hasMore }` (Viewer); `POST /api/apps/{id}/versions/{commit}/restore` → `{ version, published, madePrivate, publishError }` (Builder; a new commit by the person, rebuilt and restarted; a public app becomes private); `GET /api/apps/{id}/export` → `application/gzip`, `<app slug>-export.tar.gz` holding `<slug>/manifest.json`, `code.bundle` (git bundle, whole history), `database.dump` (pg_dump custom, absent when the app never ran) and `platform.json` (end users without passkeys, shares, schedules, webhooks, custom events) (Owner only) |
 | Sharing | `GET /api/apps/{id}/shares`, `POST /api/apps/{id}/shares { email }` → `201 { email, invitationCode, expiresAt, emailed }` (code shown once; `emailed` when a mail server is configured: the person gets the app's address and the code), `DELETE /api/apps/{id}/shares?email=` |
 | Conversation | `POST /api/conversations { scope, message, employeeId?, conversationId? }` → a run; `GET /api/conversations?scope=&employeeId=` |
@@ -284,9 +284,23 @@ straight to the container instead.
 ## Ask about this app
 
 Four views in schema `ask`, `security_invoker`, each one app's telemetry only:
-`requests(at, method, route, path, status, duration_ms, failed)`, `errors(at, source, status, route, message)`,
-`events(at, name, user_id, properties)`, `metrics(at, name, unit, type, value, count, sum)`. The model
-(route `ask`, two calls plus one uncharged repair) writes one query; three fences hold it:
+`requests(at, method, route, path, status, duration_ms, failed, visit)`, `errors(at, source, status, route, message)`,
+`events(at, name, user_id, properties)`, `metrics(at, name, unit, type, value, count, sum)`. None has an
+`id`. `requests.visit` is the app page's visit rule (a page `GET`, not `/api`, a file, a health check,
+`/_platform`, `/_endgame`, `/hooks` or `/openapi`), so an asked visit count is the page's.
+
+**The prompt is generated from the views.** `AskViewCatalog` reads the views' columns and types from
+`pg_catalog` (`pg_class` · `pg_namespace` · `pg_attribute`, `format_type`) — readable by any role,
+unlike `information_schema`, which hides columns the role cannot select — once per process (a failed
+or empty read is not kept; no views is `503 ask_unavailable`). Only a one-line hint per view is
+written by hand, keyed by view name; a hint for a view the catalog lacks throws. The prompt also says
+there is no `id` and to count with `count(*)`, what a visit is, the functions the guard allows (from
+its own list), and that the model may reply `{"sql": null, "unanswerable": "<plain reason>"}`.
+
+The model (route `ask`, two calls plus one uncharged repair) writes one query. A guard refusal or a
+database error (`query_failed` / `query_refused`, PostgreSQL's message and hint) goes back to it with
+the failing query for exactly one repair (`Repair = true`, recorded, not billed); the second failure
+is `422 ask_unanswerable` with the plain words and `technical: { sql, error }`. Three fences hold it:
 
 1. **The guard** (`TelemetrySqlGuard`): one `SELECT` or `WITH … SELECT`; relations only the four views
    (or a CTE defined earlier); functions from an allow-list; casts to a list of types; no comments,

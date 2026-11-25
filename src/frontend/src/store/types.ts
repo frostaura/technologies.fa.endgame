@@ -737,6 +737,15 @@ export interface AskAnswer {
   credits: { estimate: number; charged: number };
 }
 
+/**
+ * What went wrong underneath a question, for technical mode only: the last query tried and the
+ * guard's or the database's message. A refused ask carries it as the problem's `technical`.
+ */
+export interface AskTechnical {
+  sql: string | null;
+  error: string;
+}
+
 /** A question kept on the dashboard, re-run on every read at no model cost. */
 export interface SavedQuestion {
   id: string;
@@ -749,8 +758,10 @@ export interface SavedQuestion {
   truncated: boolean;
   askedAt: string;
   ranAt: string;
-  /** Why the saved query no longer runs, when it does not. */
+  /** Why the saved question no longer works out, in plain words, when it does not. */
   error: string | null;
+  /** The query and the message behind `error`. Technical mode only. */
+  technical: AskTechnical | null;
 }
 
 // ---------------------------------------------------------------------------------------------

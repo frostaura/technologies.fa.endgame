@@ -265,6 +265,202 @@ public sealed class AskTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal("ask_unanswerable", refused["code"]!.GetValue<string>());
     }
 
+    /// <summary>The views' columns and types as the database itself reports them, read here as the superuser, independently of the code under test.</summary>
+    private async Task<Dictionary<string, List<(string Name, string Type)>>> ColumnsInDatabaseAsync()
+    {
+        var views = new Dictionary<string, List<(string, string)>>(StringComparer.Ordinal);
+        await using var connection = new NpgsqlConnection(app.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("""
+            SELECT c.table_name, c.column_name, c.data_type
+            FROM information_schema.columns c JOIN information_schema.views v ON v.table_schema = c.table_schema AND v.table_name = c.table_name
+            WHERE c.table_schema = 'ask' ORDER BY c.table_name, c.ordinal_position
+            """, connection);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var view = reader.GetString(0);
+            if (!views.TryGetValue(view, out var columns))
+            {
+                views[view] = columns = [];
+            }
+
+            columns.Add((reader.GetString(1), reader.GetString(2)));
+        }
+
+        return views;
+    }
+
+    private static string SystemPrompt(JsonObject request) => request["messages"]![0]!["content"]!.GetValue<string>();
+
+    private JsonObject[] Calls() => openRouter.Requests.ToArray();
+
+    /// <summary>This app's ask settlements in the ledger: how many were charged, how many recorded and not charged.</summary>
+    private async Task<(long Charged, long NotCharged)> AskSettlementsAsync(Guid appId)
+    {
+        await using var connection = new NpgsqlConnection(app.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FILTER (WHERE billable), count(*) FILTER (WHERE NOT billable) FROM credit_entries WHERE app_id = @app AND kind = 'settlement' AND task_type = 'ask'", connection);
+        command.Parameters.AddWithValue("app", appId);
+        await using var reader = await command.ExecuteReaderAsync();
+        await reader.ReadAsync();
+        return (reader.GetInt64(0), reader.GetInt64(1));
+    }
+
+    [Fact]
+    public async Task The_prompt_lists_every_view_and_column_the_database_has_and_no_other()
+    {
+        var inDatabase = await ColumnsInDatabaseAsync();
+        Assert.Equal(TelemetrySqlGuard.Views.Order(StringComparer.Ordinal), inDatabase.Keys.Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(inDatabase["requests"], c => c.Name == "id");
+
+        await using var scope = app.Scope();
+        var catalog = await scope.ServiceProvider.GetRequiredService<AskViewCatalog>().ViewsAsync(CancellationToken.None);
+        Assert.Equal(inDatabase.Keys.Order(StringComparer.Ordinal), catalog.Select(v => v.Name).Order(StringComparer.Ordinal));
+        foreach (var view in catalog)
+        {
+            Assert.Equal(inDatabase[view.Name].Select(c => (c.Name, c.Type)), view.Columns.Select(c => (c.Name, c.Type)));
+        }
+
+        var prompt = AskViewCatalog.Prompt(catalog);
+        foreach (var (view, columns) in inDatabase)
+        {
+            Assert.Contains($"{view}({string.Join(", ", columns.Select(c => $"{c.Name} {c.Type}"))})", prompt, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("There is no id column", prompt, StringComparison.Ordinal);
+        Assert.Contains("count(*)", prompt, StringComparison.Ordinal);
+        Assert.Contains("visit", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("requests(id", prompt, StringComparison.Ordinal);
+
+        // What the model is sent is that prompt.
+        openRouter.Chat = Answers("""{"sql": "SELECT count(*) AS n FROM requests", "chart": {"kind": "number"}}""", """{"answer": "Ten."}""");
+        await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/apps/{bookings}/ask", new { question = "How many requests?" }));
+        Assert.Contains(prompt, SystemPrompt(Calls()[0]), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Every_hint_names_a_view_that_exists_and_every_view_has_one()
+    {
+        Assert.Equal(TelemetrySqlGuard.Views.Order(StringComparer.Ordinal), AskViewCatalog.Hints.Keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_hint_for_a_view_the_database_does_not_have_fails_the_prompt()
+    {
+        await using var scope = app.Scope();
+        var catalog = await scope.ServiceProvider.GetRequiredService<AskViewCatalog>().ViewsAsync(CancellationToken.None);
+        var missing = Assert.Throws<InvalidOperationException>(() => AskViewCatalog.Prompt(catalog.Where(v => v.Name != "metrics").ToList()));
+        Assert.Contains("metrics", missing.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Visits_in_the_views_are_the_visits_the_app_page_counts()
+    {
+        await using (var connection = new NpgsqlConnection(app.ConnectionString))
+        {
+            await connection.OpenAsync();
+            foreach (var (method, path) in new[] { ("GET", "/"), ("GET", "/books"), ("GET", "/books/12"), ("GET", "/assets/app.js"), ("GET", "/favicon.ico"), ("POST", "/books"), ("GET", "/api/books"), ("GET", "/_platform/schedules/x"), ("GET", "/health") })
+            {
+                await using var command = new NpgsqlCommand("""
+                    INSERT INTO telemetry_spans (id, organisation_id, app_id, trace_id, span_id, name, kind, start_at, duration_ms, status_code, http_method, http_route, url_path, http_status, received_at)
+                    VALUES (gen_random_uuid(), @org, @app, @trace, @span, 'page', 2, now(), 5, 0, @method, @path, @path, 200, now())
+                    """, connection);
+                command.Parameters.AddWithValue("org", org);
+                command.Parameters.AddWithValue("app", other);
+                command.Parameters.AddWithValue("trace", Guid.NewGuid().ToString("N"));
+                command.Parameters.AddWithValue("span", Guid.NewGuid().ToString("N")[..16]);
+                command.Parameters.AddWithValue("method", method);
+                command.Parameters.AddWithValue("path", path);
+                await command.ExecuteNonQueryAsync();
+            }
+        }
+
+        var visits = Count(await RunUnguardedAsync(org, other, "SELECT count(*) FILTER (WHERE visit) AS n FROM requests WHERE at >= date_trunc('day', now())"));
+        Assert.Equal(3, visits);
+        var page = await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{other}"));
+        Assert.Equal(visits, page["telemetry"]!["visitsToday"]!.GetValue<long>());
+    }
+
+    [Fact]
+    public async Task A_database_error_goes_back_to_the_model_for_one_uncharged_repair()
+    {
+        openRouter.Chat = Answers(
+            """{"sql": "SELECT date_trunc('hour', at) AS hour, count(id) AS visits FROM requests WHERE at >= date_trunc('day', now()) GROUP BY 1 ORDER BY 1", "chart": {"kind": "bar", "x": "hour", "y": ["visits"]}}""",
+            """{"sql": "SELECT date_trunc('hour', at) AS hour, count(*) AS visits FROM requests WHERE at >= date_trunc('day', now()) GROUP BY 1 ORDER BY 1", "chart": {"kind": "bar", "x": "hour", "y": ["visits"]}}""",
+            """{"answer": "It had ten requests today."}""");
+        var answer = await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/apps/{bookings}/ask", new { question = "How many visits did it get today, by hour?" }));
+        Assert.Equal("It had ten requests today.", answer["answer"]!.GetValue<string>());
+        Assert.Contains("count(*)", answer["sql"]!.GetValue<string>(), StringComparison.Ordinal);
+
+        var calls = Calls();
+        Assert.Equal(3, calls.Length);
+        Assert.Contains("There is no id column", SystemPrompt(calls[0]), StringComparison.Ordinal);
+        Assert.Equal(calls[0]["messages"]![0]!.ToJsonString(), calls[1]["messages"]![0]!.ToJsonString());
+        var repair = calls[1]["messages"]!.AsArray();
+        Assert.Contains("count(id)", repair[^2]!["content"]!.GetValue<string>(), StringComparison.Ordinal);
+        var feedback = repair[^1]!["content"]!.GetValue<string>();
+        Assert.Contains("The database said: column \"id\" does not exist", feedback, StringComparison.Ordinal);
+
+        Assert.Equal((2L, 1L), await AskSettlementsAsync(bookings));
+    }
+
+    [Fact]
+    public async Task A_repair_that_still_fails_says_so_in_plain_words_with_the_technical_detail_apart()
+    {
+        const string Second = "SELECT count(user_id) AS visits FROM requests";
+        openRouter.Chat = Answers("""{"sql": "SELECT count(id) AS visits FROM requests"}""", $$"""{"sql": "{{Second}}"}""");
+        var failed = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync($"/api/apps/{bookings}/ask", new { question = "How many visits?" }), (HttpStatusCode)422);
+        Assert.Equal("ask_unanswerable", failed["code"]!.GetValue<string>());
+        var words = failed["title"]!.GetValue<string>() + " " + failed["detail"]!.GetValue<string>();
+        foreach (var technical in new[] { "SQL", "sql", "query", "column", "database", "view", "user_id", "id\"", "does not exist" })
+        {
+            Assert.DoesNotContain(technical, words, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(Second, failed["technical"]!["sql"]!.GetValue<string>());
+        Assert.Contains("column \"user_id\" does not exist", failed["technical"]!["error"]!.GetValue<string>(), StringComparison.Ordinal);
+
+        // One repair, never charged; nothing after it.
+        Assert.Equal(2, Calls().Length);
+        Assert.Equal((1L, 1L), await AskSettlementsAsync(bookings));
+    }
+
+    [Fact]
+    public async Task The_model_may_decline_a_question_the_views_cannot_answer()
+    {
+        openRouter.Chat = Answers("""{"sql": null, "unanswerable": "The app does not record where its visitors come from."}""");
+        var declined = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync($"/api/apps/{bookings}/ask", new { question = "Which countries do visitors come from?" }), (HttpStatusCode)422);
+        Assert.Equal("ask_unanswerable", declined["code"]!.GetValue<string>());
+        Assert.Equal("The app does not record where its visitors come from.", declined["detail"]!.GetValue<string>());
+        Assert.Contains("\"unanswerable\"", SystemPrompt(Calls()[0]), StringComparison.Ordinal);
+
+        // Only the one call was made, and only it was charged.
+        Assert.Single(Calls());
+        Assert.Equal((1L, 0L), await AskSettlementsAsync(bookings));
+    }
+
+    [Fact]
+    public async Task A_saved_question_that_no_longer_runs_says_so_plainly_with_the_database_message_apart()
+    {
+        var saved = await ControlPlaneApp.Created(owner.PostAsJsonAsync($"/api/apps/{bookings}/dashboard", new { question = "Requests", sql = "SELECT count(*) AS n FROM requests" }));
+        await using (var connection = new NpgsqlConnection(app.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand("UPDATE app_dashboard_questions SET sql = 'SELECT count(id) AS n FROM requests' WHERE id = @id", connection);
+            command.Parameters.AddWithValue("id", Guid.Parse(saved["id"]!.GetValue<string>()));
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+
+        var question = Assert.Single((await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{bookings}/dashboard"))).AsArray())!;
+        var error = question["error"]!.GetValue<string>();
+        Assert.DoesNotContain("column", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("does not exist", error, StringComparison.Ordinal);
+        Assert.Equal("SELECT count(id) AS n FROM requests", question["technical"]!["sql"]!.GetValue<string>());
+        Assert.Contains("column \"id\" does not exist", question["technical"]!["error"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Saved_questions_rerun_on_read_and_a_viewer_reads_but_cannot_ask()
     {

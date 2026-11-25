@@ -18,6 +18,7 @@ import type {
   PricingView,
   RestoreResult,
   SavedQuestion,
+  AskTechnical,
   Suggestion,
   SuggestionsStarted,
   TopUpRequest,
@@ -460,6 +461,8 @@ export const askAnswerGuard: Guard<AskAnswer> = obj<AskAnswer>({
   credits: obj<AskAnswer["credits"]>({ estimate: num, charged: num }),
 });
 
+export const askTechnicalGuard: Guard<AskTechnical> = obj<AskTechnical>({ sql: withDefault(ns, null), error: s });
+
 export const savedQuestionGuard: Guard<SavedQuestion> = obj<SavedQuestion>({
   id: s,
   question: s,
@@ -472,6 +475,7 @@ export const savedQuestionGuard: Guard<SavedQuestion> = obj<SavedQuestion>({
   askedAt: s,
   ranAt: s,
   error: withDefault(ns, null),
+  technical: withDefault(nullable(askTechnicalGuard), null),
 });
 export const dashboardGuard: Guard<SavedQuestion[]> = arr(savedQuestionGuard);
 
