@@ -127,6 +127,8 @@ function AppBody({ app }: { app: AppDetail }) {
   const budgets = useGetCascadeQuery({ scope: app.scope, kind: "budget" });
   const nameOf = useNameOf();
   const stopped = app.status === "failed" || app.status === "stopped";
+  // Once the rebuild works the app reads as running and the panel above goes; what happened stays said.
+  const [rebuilt, setRebuilt] = useState<string | null>(null);
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const t = app.telemetry;
   const healthText = { success: "text-success-text", attention: "text-attention-text", "attention-strong": "text-attention-text" } as Record<string, string>;
@@ -180,8 +182,13 @@ function AppBody({ app }: { app: AppDetail }) {
         <section aria-label="It is not running" className="flex flex-col gap-2 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
           <p className="font-semibold text-attention-text">{app.status === "failed" ? `${app.name} stopped working.` : `${app.name} is stopped.`}</p>
           <p className="text-ink">Rebuilding builds its newest version again and starts it. Nothing in its history changes.</p>
-          <RebuildAndRestart app={app} />
+          <RebuildAndRestart app={app} onResult={(r) => setRebuilt(r.published ? `${app.name} is rebuilt and running again.` : null)} />
         </section>
+      )}
+      {!stopped && rebuilt && (
+        <p role="status" className="rounded-xs bg-success-tint px-4 py-3 text-success-text">
+          {rebuilt}
+        </p>
       )}
 
       <ErrorBoundary name="Asking about this app">
