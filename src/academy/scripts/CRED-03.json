@@ -1,0 +1,163 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CRED-03",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/credits",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Change the cap on Learning"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Credits a month"
+            },
+            "text": "450"
+          }
+        },
+        {
+          "click": {
+            "text": "Save the cap"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Learning may spend 450 credits a month.",
+        "note": "The bar changes at once; work that would break the cap does not start."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Remove the cap on Technologies"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Technologies has no cap of its own now",
+        "note": "Taken away at once, saying what holds it now — here only the balance and the overdraft limit."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "120 of 120",
+        "note": "At 80% and at the cap you are told; at the cap its work stops and its apps pause — as Stock Counter's has."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "An employee's cap, with its contractors",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Change the cap on Kasper"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Credits a month"
+                },
+                "text": "1600"
+              }
+            },
+            {
+              "click": {
+                "text": "Save the cap"
+              }
+            },
+            {
+              "wait": 1200
+            }
+          ],
+          "highlight": {
+            "text": "Kasper may spend 1,600 credits a month, with the contractors it briefs.",
+            "note": "Set on his own record, as on his page (EMP-03)."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Not a number of credits",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Set a cap on Operations"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Credits a month"
+                },
+                "text": "plenty"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Type a number of credits.",
+            "note": "“Save the cap” stays disabled."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below Admin, no controls",
+      "persona": "builder",
+      "scenario": "quiet",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "An Admin or the Owner sets the caps.",
+            "note": "Lena is a Builder: the caps are read here, not set."
+          }
+        }
+      ]
+    }
+  ]
+}

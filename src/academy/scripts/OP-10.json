@@ -1,0 +1,95 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-10",
+  "persona": "owner",
+  "scenario": "s4-operator-log",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Operator access"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Every time someone from FrostAura entered Northwind or acted on it, newest first.",
+        "note": "Only the Owner reads it, and nothing an operator does here is silent."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ol[aria-label='Operator log']",
+        "note": "Each entry in plain words, with when and who: entries, set-up and screening, top-ups, overdraft, requests answered, prices, and “As an Admin: …”."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Nobody from FrostAura has been in",
+      "persona": "owner",
+      "scenario": "s4-operator-log-empty",
+      "start": "/operator-access",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "No one from FrostAura has entered Northwind",
+            "note": "If anyone does, it is written here first."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Only the Owner reads it",
+      "persona": "admin",
+      "scenario": "s4-operator-log",
+      "start": "/operator-access",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Only the Owner can read the operator log",
+            "note": "Ada is an Admin: the control plane refuses her, and the page says so."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Technical mode shows the raw entry",
+      "persona": "owner",
+      "scenario": "s4-operator-log",
+      "start": "/operator-access",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Technical"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "admin.POST-hires-id-accept",
+            "note": "Each entry's action and detail, as recorded."
+          }
+        }
+      ]
+    }
+  ]
+}

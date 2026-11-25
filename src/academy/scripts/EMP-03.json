@@ -1,0 +1,150 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-03",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Change budget"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Credits a month"
+            },
+            "text": "1800"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Counts what the contractors it briefs spend too.",
+        "note": "Its own monthly cap, covering the contractors it briefs."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Save budget"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "Budget 1,800 a month, 188 used",
+        "note": "Changed at once, on “Cost so far” and the “Budget” row."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Change budget"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Credits a month"
+            },
+            "text": " "
+          }
+        },
+        {
+          "click": {
+            "text": "Save budget"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "no budget of its own, the one above holds",
+        "note": "Emptied, the cap is removed: the Court booking and Technologies caps hold it now."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Not a number of credits",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Change budget"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Credits a month"
+                },
+                "text": "plenty"
+              }
+            },
+            {
+              "click": {
+                "text": "Save budget"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "A budget is a number of credits a month, or empty for none of its own.",
+            "note": "Checked before anything is sent."
+          }
+        }
+      ]
+    },
+    {
+      "title": "At the cap, it stops",
+      "persona": "owner",
+      "scenario": "s4-employee-at-cap",
+      "start": "/employees/{employee}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Budget 190 a month, 190 used",
+            "note": "Kasper has spent all of his own budget this month."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "goto": "/notifications",
+          "highlight": {
+            "text": "Kasper reached their monthly budget",
+            "note": "You were told: he stops — his model calls, and his contractors', are refused — until it is raised or the month turns."
+          }
+        }
+      ]
+    }
+  ]
+}

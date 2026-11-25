@@ -1,0 +1,61 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "CRED-09",
+  "persona": "owner",
+  "scenario": "build-running",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 2500
+        }
+      ],
+      "highlight": {
+        "text": "Held for calls in flight",
+        "note": "Before each AI call its worst case is held against every cap and the balance; it is settled at the reply's real cost."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/credits",
+      "highlight": {
+        "text": "What you were not charged for",
+        "note": "A repair of an employee's own mistake is recorded, and not billed."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "On hosting",
+        "note": "Hosting is counted from use after the fact, at the hosting rates, and never refused."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 4000
+        }
+      ],
+      "highlight": {
+        "text": "On AI work",
+        "note": "As the build works, AI work rises here — and in the budget bars, each employee's cost, the app's cost this month and the operator's balances."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "goto": "/apps/{app}",
+      "highlight": {
+        "text": "Cost this month",
+        "note": "An app's own AI calls also stop at its monthly allowance."
+      }
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HIRE-07",
+  "persona": "owner",
+  "scenario": "quiet",
+  "start": "/hires?scope=northwind/technologies",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Briefed 6 times in 30 days at Technologies, costing 49 credits.",
+        "note": "A contractor role that keeps coming back: how often, where, and what it cost."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Propose as a permanent hire"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Name the new employee"
+            },
+            "text": "Quill"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Expected about 49 credits a month, from what the contractors cost.",
+        "note": "Name the employee; its cost comes from what the contractors cost."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Propose the hire"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Quill was hired by auto-mode",
+        "note": "You land on the proposal. It fitted the room left, so auto-mode took Quill on at once."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "The new employee needs a name",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/hires?scope=northwind/technologies",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Propose as a permanent hire"
+              }
+            },
+            {
+              "click": {
+                "text": "Propose the hire"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Give the new employee a name.",
+            "note": "Nothing is sent without one."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Below Admin, the role is read but not proposed",
+      "persona": "builder",
+      "scenario": "quiet",
+      "start": "/hires?scope=northwind/technologies",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "An Admin or the Owner proposes it as a hire.",
+            "note": "Lena is a Builder: she sees the role, not the button."
+          }
+        }
+      ]
+    }
+  ]
+}

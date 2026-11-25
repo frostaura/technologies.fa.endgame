@@ -1,0 +1,77 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "MEM-06",
+  "persona": "owner",
+  "scenario": "s4-memory-to-tidy",
+  "start": "/employees/{employee}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "GET",
+      "path": "/internal/employees/b24d9632-c5ed-423d-ac7e-0986003a1fd9/memory?scope=northwind/technologies/court-booking",
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "id": "3771a9cc-c146-4dce-a731-962b7afe0975",
+            "employeeId": "b24d9632-c5ed-423d-ac7e-0986003a1fd9",
+            "scope": "northwind/technologies/court-booking",
+            "title": "Courts are booked in 40-minute slots",
+            "body": "Every court is sold in 40-minute playing slots from 06:20 to 22:20; members pay in playing minutes, never per booking. Mara confirmed it.",
+            "kind": "fact",
+            "sourceRunId": null,
+            "createdAt": "2026-10-26T09:12:00Z",
+            "updatedAt": "2026-10-26T09:12:00Z",
+            "lastReviewedAt": "2026-11-15T09:12:00Z",
+            "archived": false
+          }
+        ]
+      },
+      "note": "Before a task, the Runner reads what Kasper remembers that bears on the run's place — at it, above it or beneath it."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/internal/employees/b24d9632-c5ed-423d-ac7e-0986003a1fd9/memory",
+      "body": {
+        "runId": "1b6f3c0e-5d2a-4f8e-9c41-7a2d6e0b9f13",
+        "entries": [
+          {
+            "title": "Courts are booked in 40-minute slots",
+            "body": "A booking is always one or more 40-minute slots; the first slot starts at 06:20.",
+            "kind": "fact"
+          }
+        ]
+      },
+      "response": {
+        "status": 201,
+        "body": [
+          {
+            "id": "2fe519e1-0a98-407e-ad5a-9a52be2f3ba9",
+            "employeeId": "b24d9632-c5ed-423d-ac7e-0986003a1fd9",
+            "scope": "northwind/technologies/court-booking",
+            "title": "Courts are booked in 40-minute slots",
+            "body": "A booking is always one or more 40-minute slots; the first slot starts at 06:20.",
+            "kind": "fact",
+            "sourceRunId": "1b6f3c0e-5d2a-4f8e-9c41-7a2d6e0b9f13",
+            "createdAt": "2026-11-23T10:04:00Z",
+            "updatedAt": "2026-11-23T10:04:00Z",
+            "lastReviewedAt": null,
+            "archived": false
+          }
+        ]
+      },
+      "note": "After it, Kasper writes what he learned: 1 to 20 entries, attributed to the run."
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Memory entries'] li:first-child",
+        "note": "It shows in his memory as “Learned on a task”, with a link to the task."
+      }
+    }
+  ]
+}

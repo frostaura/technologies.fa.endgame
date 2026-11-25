@@ -1,0 +1,99 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "HIRE-04",
+  "persona": "owner",
+  "scenario": "hire-pending",
+  "start": "/hires/{hire}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Decline"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Decline this hire? The same need can be raised again later.",
+        "note": "Declining closes this proposal only."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "A note for the record (optional)"
+            },
+            "text": "Sol already prepares the weekly figures."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "A note for the record (optional)",
+        "note": "Optional: why, for whoever reads it later."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes, decline"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "This hire was declined by Mara Ellison",
+        "note": "The badge reads “Declined”, and the panel names you, with your note."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "“Not now” keeps it waiting",
+      "persona": "owner",
+      "scenario": "hire-pending",
+      "start": "/hires/{hire}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Decline"
+              }
+            },
+            {
+              "wait": 600
+            },
+            {
+              "click": {
+                "text": "Not now"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "Hire proposed",
+            "note": "Nothing was decided: the proposal is still open."
+          }
+        }
+      ]
+    }
+  ]
+}

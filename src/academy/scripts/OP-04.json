@@ -1,0 +1,250 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OP-04",
+  "persona": "operator",
+  "scenario": "god-mode",
+  "start": "/operator",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1000
+        },
+        {
+          "click": {
+            "text": "Enter Northwind"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "You entered Northwind as an Admin",
+        "note": "Never as its Owner — and the card says where the entry is logged: the operator log its Owner reads."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Open its org chart"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "text": "You are inside Northwind as a FrostAura operator",
+        "note": "Northwind's own org chart, with the band naming it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Hiring"
+          }
+        },
+        {
+          "wait": 1000
+        }
+      ],
+      "highlight": {
+        "text": "Hiring for Northwind",
+        "note": "Every screen now works on Northwind — Credits, Hiring, People, Secrets, the header's balance and bell — until you leave."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Lark, data analyst for Technologies"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Hire Lark",
+        "note": "Inside, you act as an Admin: this hire is yours to decide."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Hire Lark"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "A note for the record (optional)"
+            },
+            "text": "Accepted for Mara while she is away."
+          }
+        },
+        {
+          "click": {
+            "text": "Yes, hire"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "text": "Lark was hired by Nell Avery",
+        "note": "Done as an Admin — and written to Northwind's operator log as “As an Admin: Accepted a hire”."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "credits left"
+          }
+        },
+        {
+          "wait": 1000
+        }
+      ],
+      "highlight": {
+        "text": "Only the Owner sets the organisation’s own limit.",
+        "note": "What only the Owner may do stays closed: the own limit, the operator log, granting Admin, asking for a top-up."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "What the Owner reads afterwards",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Enter Northwind"
+              }
+            },
+            {
+              "wait": 1200
+            },
+            {
+              "click": {
+                "text": "Open its org chart"
+              }
+            },
+            {
+              "wait": 1200
+            },
+            {
+              "click": {
+                "text": "Hiring"
+              }
+            },
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Lark, data analyst for Technologies"
+              }
+            },
+            {
+              "click": {
+                "text": "Hire Lark"
+              }
+            },
+            {
+              "click": {
+                "text": "Yes, hire"
+              }
+            },
+            {
+              "wait": 1500
+            }
+          ],
+          "highlight": {
+            "text": "Lark was hired by Nell Avery",
+            "note": "Nell enters Northwind and hires Lark as an Admin."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "goto": "/operator-access",
+          "persona": "owner",
+          "highlight": {
+            "text": "As an Admin: Accepted a hire",
+            "note": "Mara reads it in her operator log, under the entry itself, with who did it and when."
+          }
+        }
+      ]
+    },
+    {
+      "title": "Leave the organisation",
+      "persona": "operator",
+      "scenario": "god-mode",
+      "start": "/operator",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": 1000
+            },
+            {
+              "click": {
+                "text": "Enter Northwind"
+              }
+            },
+            {
+              "wait": 1200
+            },
+            {
+              "click": {
+                "text": "Open its org chart"
+              }
+            },
+            {
+              "wait": 1200
+            },
+            {
+              "click": {
+                "text": "Leave Northwind"
+              }
+            },
+            {
+              "wait": 1000
+            }
+          ],
+          "highlight": {
+            "selector": "[data-god-mode]",
+            "note": "Left: the band is back to plain God mode, and every screen reads your own organisation again."
+          }
+        }
+      ]
+    }
+  ]
+}

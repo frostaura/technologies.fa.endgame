@@ -536,14 +536,31 @@ defineScript("review", (world, run) => {
   cycle(s, run, { agent: "memory-review", employeeId: e?.id ?? null, taskType: "review", credits: 0.03, tool: { name: "read_memory", args: {}, result: "Read the memory." } });
   s.wait(900);
   cycle(s, run, { agent: "memory-review", employeeId: e?.id ?? null, taskType: "review", credits: 0.04 });
+  // What repeats is merged (`MemoryService.ReviewAsync`): entries with the same title become the older one.
+  const all = world.memory.filter((m) => m.employeeId === e?.id && !m.archived);
+  const repeats = all.filter((m) => all.some((o) => o.id !== m.id && o.title.toLowerCase() === m.title.toLowerCase() && o.createdAt < m.createdAt));
   s.effect((w) => {
-    const entries = w.memory.filter((m) => m.employeeId === e?.id && !m.archived);
     const at = new Date().toISOString();
+    for (const dup of repeats) {
+      const kept = w.memory.find((m) => m.employeeId === dup.employeeId && !m.archived && m.id !== dup.id && m.title.toLowerCase() === dup.title.toLowerCase());
+      if (!kept || !w.memory.some((m) => m.id === dup.id)) continue;
+      w.memory = w.memory.filter((m) => m.id !== dup.id);
+      (w.removedMemory ??= {})[dup.id] = dup.employeeId;
+      kept.updatedAt = at;
+      w.memoryChanges.unshift({ id: uuidFor(`change:${run.run.id}:merged:${dup.id}`), memoryId: kept.id, action: "merged", by: "review", userId: null, runId: run.run.id, detail: { title: kept.title, from: [kept.id, dup.id] }, at });
+    }
+    const entries = w.memory.filter((m) => m.employeeId === e?.id && !m.archived);
     for (const m of entries) m.lastReviewedAt = at;
-    w.memoryChanges.unshift({ id: uuidFor(`change:${run.run.id}`), memoryId: entries[0]?.id ?? null, action: "reviewed", by: "review", userId: null, runId: run.run.id, detail: { reviewed: entries.length, merged: 0, removed: 0 }, at });
+    if (e) e.memoryEntries = entries.length;
+    w.memoryChanges.unshift({ id: uuidFor(`change:${run.run.id}`), memoryId: entries[0]?.id ?? null, action: "reviewed", by: "review", userId: null, runId: run.run.id, detail: { reviewed: entries.length, merged: repeats.length, removed: 0 }, at });
     return ["Memory", "Employee"];
   });
-  s.event("message", { from: e?.name ?? "review", text: `Reviewed ${world.memory.filter((m) => m.employeeId === e?.id && !m.archived).length} entries: nothing repeats, nothing is stale, and nothing needed correcting.` });
+  s.event("message", {
+    from: e?.name ?? "review",
+    text: repeats.length
+      ? `Reviewed ${all.length} entries: merged ${repeats.length === 1 ? "one that repeated" : `${repeats.length} that repeated`}; nothing is stale, and nothing needed correcting.`
+      : `Reviewed ${all.length} entries: nothing repeats, nothing is stale, and nothing needed correcting.`,
+  });
   s.wait(200).event("run.finished", { totals: {}, outcome: "succeeded", summary: "The memory was reviewed." });
   return patchTotals(s, run);
 });

@@ -1,6 +1,6 @@
 import type { MemberRole } from "@/store/types";
 import { forbidden, invalid, notFound, unauthenticated } from "./http";
-import { chain, node, orgOf, user, type DemoUser, type World } from "./world";
+import { chain, newId, node, orgOf, user, type DemoUser, type World } from "./world";
 
 /**
  * Who may do what, as `AccessService.RequireAsync` and `RoleResolver` decide it: the deepest grant
@@ -58,12 +58,35 @@ export function requireRole(world: World, path: string, needed: MemberRole): Hel
   const held = roleAt(world, u.id, path);
   if (!held) throw notFound(`The scope '${path}'`);
   if (held.viaOperator) {
+    operatorVisit(world, u, orgOf(path));
     if (!world.entered.includes(orgOf(path))) world.entered.push(orgOf(path));
     const acted = (world.actedAsOperator ??= []);
     if (!acted.includes(orgOf(path))) acted.push(orgOf(path));
   }
   if (RANK[held.role] < RANK[needed]) throw forbidden(`This needs the ${needed} role at '${path}'; you are a ${held.role} there (set at ${held.at}).`);
   return held;
+}
+
+/** `OperatorOptions.EntryLogWindowMinutes`: how long a visit lasts between an operator's reads. */
+export const VISIT_WINDOW_MS = 10 * 60_000;
+
+/**
+ * `AccessService.LogVisitAsync` (and `RecordEntryAsync` when `entered` is set): an operator's read or
+ * change inside an organisation continues their visit, and logs nothing, when they were last there
+ * within ten minutes; otherwise it is a new visit, and one "Entered the organisation" row is written
+ * where the Owner reads it. An explicit entry is always a row.
+ */
+export function operatorVisit(world: World, u: DemoUser, org: string, entered = false) {
+  const now = Date.now();
+  const seen = (world.operatorSeen ??= {});
+  const key = `${u.id}:${org}`;
+  const recent = (iso: string | undefined) => iso !== undefined && now - Date.parse(iso) <= VISIT_WINDOW_MS;
+  const lastEntry = world.operatorLog.find((x) => x.organisation === org && x.operator.id === u.id && x.action === "organisation.entered");
+  if (entered || !(recent(seen[key]) || recent(lastEntry?.at))) {
+    world.operatorLog.unshift({ id: newId(world, "op"), organisation: org, at: new Date(now).toISOString(), action: "organisation.entered", operator: { id: u.id, email: u.email, displayName: u.displayName }, detail: { scope: org } });
+    world.changed.push("OperatorAccess");
+  }
+  seen[key] = new Date(now).toISOString();
 }
 
 export function atLeast(held: MemberRole, needed: MemberRole): boolean {

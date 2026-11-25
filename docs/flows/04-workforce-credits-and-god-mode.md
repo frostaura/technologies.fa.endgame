@@ -2,11 +2,11 @@
 
 Hiring, employees and contractors, employee memory, credits, budgets and the overdraft, the operator's screens.
 
-Read from the code on 2026-11-25, one reader per area; nothing here was taken from the other docs. The fields and how to read them are in [README.md](README.md). A flow marked *API only* or *MCP only* has no screen.
+Read from the code on 2026-11-25, one reader per area; nothing here was taken from the other docs, and every screen flow here was walked again in the demo console for its academy script the same day. The fields and how to read them are in [README.md](README.md). A flow marked *API only* or *MCP only* has no screen.
 
 Shared vocabulary used below:
 - Text in "double quotes" is copied word for word from the screen or from a server message.
-- `<n>` is a formatted number. `<n> credits` is the output of `formatCredits`; I assumed it reads "N credits" but did not check it.
+- `<n>` is a formatted number, grouped by thousands ("1,840"). `<n> credits` is `formatCredits`: "1,500 credits", and "1 credit" for one.
 - Every error banner on the employee actions ends with "Nothing was changed."
 - `FE` is `src/frontend/src`. `CP` is `src/backend/Endgame.ControlPlane`. `INF` is `src/backend/Endgame.Infrastructure`.
 
@@ -23,14 +23,15 @@ Shared vocabulary used below:
   1. Press "Hiring". The page title reads "Hiring for <name>" with the intro "Hires are proposed when the organisation needs someone: a new division, a project reaching a new stage, or a job that keeps coming back. In auto-mode one that fits the budget is taken on at once; otherwise it waits for you here."
   2. The proposals load (up to 200, newest first). The section "Waiting for you" holds open proposals. The section "Decided" holds accepted and declined ones.
   3. Each card shows a badge ("Waiting for you" / "Hired" / "Declined"), "<Name>, <role> for <place>", "About <n> credits a month" plus ", more than the budget has room for" when it does not fit, then the trigger text and the date.
-  4. The aside "Contractor roles that keep coming back" loads alongside (HIRE-07).
+  4. The aside holds "Contractor roles that keep coming back" (HIRE-07) and "People let go" (EMP-09). An Admin also sees "Ask for a hire" above the proposals (HIRE-09).
 - **You know it worked when:** the heading "Hiring for <name>" appears with the "Waiting for you" section, or the empty state.
 - **Variations and refusals:**
   - Empty: "No hires have been proposed here" with "When the work here needs someone, a hire is proposed with its job description and what it would cost a month."
   - Everything decided: "Nothing is waiting. Every proposal here has been decided."
   - Failed read: "The hire proposals could not be loaded" with a retry button. A stale-data banner appears when a refresh fails.
   - Trigger texts: "A new division needs someone" · "A project reached a stage that needs someone" · "A job keeps coming back" · "A contractor role keeps recurring, so it is proposed as a permanent hire" · "You asked for this hire".
-  - A person with no role there gets a 404 for the scope.
+  - A person with no role there gets a 404 for the scope, shown as "The hire proposals could not be loaded".
+  - In God mode the page works on the organisation entered (OP-04).
 - **Where:** `FE/features/workforce/HiresView.tsx`, `features/home/HomeView.tsx` (ManageLinks). Endpoint `GET /api/hires?scope=&status=`.
 - **Reachable from:** UI. Also MCP `hires_list`. A notification of kind `hire` links to `/hires?scope=`.
 - **Covered by tests:** `HireView.test.tsx` ("lists proposals waiting and decided…", "shows nothing proposed as an empty state…"). `tests-e2e/workforce.spec.ts`.
@@ -178,7 +179,7 @@ Shared vocabulary used below:
 - **Needs:** the role qualifies as recurring (HIRE-07).
 - **Steps:**
   1. The contractor leaves the chart.
-  2. A promotion proposal is raised. Its reason reads "<n> <Role> contractors were briefed here in the last 30 days, costing <n> credits. Standing work is cheaper, and better remembered, done by an employee."
+  2. A promotion proposal is raised, named after the role ("<Role>, <role> for <place>"), at what the contractors cost scaled to a month. Its reason reads "<n> <Role> contractors were briefed here in the last 30 days, costing <n> credits. Standing work is cheaper, and better remembered, done by an employee." What the contractor learned goes into the briefer's memory (MEM-06).
   3. The proposal reports to the briefer and copies the briefer's tools, services and thinking power.
   4. It is then auto-hired or waits, as in HIRE-06.
 - **You know it worked when:** a proposal with the trigger "A contractor role keeps recurring…" appears on `/hires`.
@@ -204,7 +205,7 @@ Shared vocabulary used below:
   - Server: "The hire was not asked for: <reason>" (an unknown thinking power, a service the platform does not offer, a reporting loop, a reason over 4000 characters).
   - Below Admin the button is not shown.
 - **Where:** `HiresView.tsx` (RaiseHire), `JobFields.tsx`. `POST /api/hires` (trigger owner).
-- **Reachable from:** UI; API; MCP.
+- **Reachable from:** UI (screen); also API and MCP `hire_raise`.
 - **Covered by tests:** `WorkforceEdits.test.tsx` ("asks for a hire of your own choosing…"); `tests-e2e/manage.spec.ts`; `WorkforceTests`.
 
 ## Employees and contractors (EMP)
@@ -251,7 +252,8 @@ Shared vocabulary used below:
 - **You know it worked when:** "Works at" shows the new place and "Reports to" the manager chosen.
 - **Variations and refusals:**
   - "Could not reassign: <reason> Nothing was changed."
-  - No Admin at the destination: 403. Contractor: 409. Released: 409 "<Name> has been released; rehire them first."
+  - Not an Admin at the destination: 403, or 404 where you hold no role there at all. Contractor: 409. Released: 409 "<Name> has been released; rehire them first."
+  - A manager who would close a loop: 400 "That would make a reporting loop: the manager already reports, directly or not, to this employee."
 - **Where:** `EmployeeView.tsx` (EmployeeActions). `POST /api/employees/{id}/reassign { scope, reportsTo? }`.
 - **Reachable from:** UI. No MCP tool.
 - **Covered by tests:** `WorkforceEdits.test.tsx` ("reassigns keeping the manager…"); `WorkforceTests.Reassignment_carries_memory_release_archives_it_and_a_rehire_restores_it`.
@@ -329,9 +331,9 @@ Shared vocabulary used below:
 - **Starts at:** the system. An employee has been idle for more than the idle-days setting (default 14).
 - **Needs:** not a standing hire, not a contractor.
 - **Steps:**
-  1. Under checkpoints, the org chart's "needs you" strip shows a "Nothing to do" card, and the record shows the badge "Nothing to do for <n> days".
+  1. Under checkpoints, the org chart's "needs you" strip shows a "Nothing to do" card — "<Name> has had no work for <n> days" and "Keep them on, give them work, or release them; released employees keep their memory archived." — and the record shows the badge "Nothing to do for <n> days".
   2. The person then lets it go (EMP-05) or gives it work.
-  3. Under auto-mode, a background sweep releases it without asking.
+  3. Under auto-mode, a background sweep releases it without asking: its record reads "Let go", its memory's change log "Archived by Endgame", and it is listed under "People let go" on Hiring.
 - **You know it worked when:** the employee shows "Let go", or the idle badge is gone after new work.
 - **Variations and refusals:** the idle-days setting can be changed only through the cascade API or MCP. There is no screen for it.
 - **Where:** `EmployeeService.ReleaseIdleAsync`, `WorkforceRules.Idle`. `INF/Sweeps/LeaseSweep.cs`.
@@ -349,7 +351,7 @@ Shared vocabulary used below:
   1. The summary reads "<Name> has not briefed a contractor yet.", or "<n> contractors so far, <n> working now. They cost <n> credits in all, <n> this month."
   2. "Contractors working now" lists each role (with a spinner) and its brief; each row opens that contractor's record.
   3. "Reports to it:" links to each report's record.
-  4. A contractor's own page shows the badge, "<Role> · Contractor", the section "Its brief", the link "Briefed by <name>", and the memory note "A contractor keeps no memory: what it learned goes to the employee who briefed it."
+  4. A contractor's own page shows the badge, "<Role> · Contractor", the section "Its brief", the link "Briefed by <name>", and the memory note "A contractor keeps no memory: what it learns goes to the employee who briefed it."
 - **You know it worked when:** the contractor count and the list match the chart.
 - **Variations and refusals:** a contractor page shows no actions, no conversation and no memory editing. **A person cannot stop, cap or brief a contractor from any screen or public endpoint.** Contractors are created and finished only by the Runner (`/internal/contractors`).
 - **Where:** `EmployeeView.tsx` (ContractorsBriefed). `EmployeeService.StartContractorAsync` and `FinishContractorAsync`.
@@ -363,9 +365,10 @@ Shared vocabulary used below:
 - **What you learn:** you can direct one employee in conversation, scoped to its place in the tree.
 - **Starts at:** `/employees/<id>`, section "Talk to <Name>", which embeds the same conversation dock as the org chart, scoped to the employee.
 - **Needs:** the employee is on the payroll, and an organisation is loaded.
-- **Steps:** as in the conversation flow (another reader's catalogue). Messages go to `/api/conversations` with the employee's id.
-- **You know it worked when:** that is another reader's area.
-- **Variations and refusals:** hidden for released employees and for contractors.
+- **Steps:**
+  1. Type into "Message <Name>" and press "Send". The dock reads "Talking to <Name>" and "Only <Name> hears this, and answers from what it knows."; the message goes to `/api/conversations` with the employee's id, and the reply follows in the conversation (the conversation flows are another reader's catalogue).
+- **You know it worked when:** the reply appears under your message.
+- **Variations and refusals:** hidden for released employees and for contractors. A paused employee is refused: 409 "<Name> is paused, so they are given no new work. Resume them first." (EMP-04).
 - **Where:** `EmployeeView.tsx`, `features/home/ConversationDock.tsx`.
 - **Reachable from:** UI.
 - **Covered by tests:** `workforce.spec.ts` ("the conversation is scoped to an employee from the chart…").
@@ -403,7 +406,7 @@ Shared vocabulary used below:
   - Emptying the budget removes it; "Nobody" clears the manager.
   - Server: "Could not change the job: <reason> Nothing was changed." and the record goes back (an unknown tier, a reporting loop, text over the limits).
 - **Where:** `EmployeeView.tsx` (EditJob), `JobFields.tsx`, `workforceModel.ts` (`employeePatchFrom`). `EmployeeService.UpdateAsync`.
-- **Reachable from:** UI; API; MCP (part).
+- **Reachable from:** UI (screen); also API, and MCP `employee_update` for the name, role and mandate.
 - **Covered by tests:** `WorkforceEdits.test.tsx`; `tests-e2e/manage.spec.ts` ("an Admin edits the job…"); `WorkforceTests`.
 
 ## Employee memory (MEM)
@@ -512,7 +515,10 @@ Shared vocabulary used below:
 - **What you learn:** memory is written after each task and read before the next, limited to the run's place in the tree.
 - **Starts at:** `GET /internal/employees/{id}/memory?scope=` before a task, and `POST /internal/employees/{id}/memory` after it (1 to 20 entries).
 - **Needs:** nothing.
-- **Steps:** the employee writes after a task. Entries show as "Learned on a task" with a link to the task.
+- **Steps:**
+  1. Before a task, the Runner reads what the employee remembers that bears on the run's place in the tree — at it, above it or beneath it, at most 200 entries: `GET /internal/employees/{id}/memory?scope=<path>`.
+  2. After the task, the employee writes what it learned: `POST /internal/employees/{id}/memory { runId, entries: [{ title, body, kind, scope? }] }`, 1 to 20 entries, attributed to the run.
+  3. The entries show in its memory (MEM-01) as "Learned on a task", with a link "the task".
 - **You know it worked when:** new "Learned on a task" entries appear in MEM-01.
 - **Variations and refusals:** a contractor writing memory is refused. Its lessons go to the briefer on finish.
 - **Where:** `WorkforceEndpoints.MapWorkforceInternal`, `MemoryService`.
@@ -542,7 +548,7 @@ Shared vocabulary used below:
 - **Variations and refusals:**
   - No organisation: "There are no credits to show until your organisation is named." with a "Start" link.
   - Failed: "Credits could not be loaded". Header pill failure: "Balance unavailable".
-  - The page reads the active organisation: the one an operator entered in God mode, or the one a person in several chose (ID-02). Not verified from code: a person whose only role is at a division probably gets a 404 here, because the page asks at organisation level.
+  - The page reads the active organisation: the one an operator entered in God mode, or the one a person in several chose (ID-02). A person whose only role is at a division gets "Credits could not be loaded": the page asks at organisation level, and `GET /api/credits` needs a Viewer there (404 otherwise; `TreeEndpoints.cs`).
 - **Where:** `features/credits/CreditsView.tsx`, `creditsModel.ts`, `shell/AppShell.tsx` (CreditsPill). `GET /api/credits?scope=<org>`. `ReadModels.CreditsAsync`.
 - **Reachable from:** UI. Also MCP `credits_get`.
 - **Covered by tests:** `CreditsView.test.tsx`, `creditsModel.test.ts`. `CascadeCreditsAndAppsTests.Credits_show_balance_budgets_in_tree_order_and_top_ups`.
@@ -555,7 +561,7 @@ Shared vocabulary used below:
 - **Starts at:** `/credits`, section "Budgets" ("A cap set higher up holds for everything beneath it. Work that would break a cap does not start.", with " An Admin or the Owner sets the caps." for anyone below Admin).
 - **Needs:** nothing.
 - **Steps:**
-  1. Rows run in tree order, indented: organisation, divisions, projects, apps, and employees with a cap of their own.
+  1. Rows run in tree order (by name at each level), indented: organisation, divisions, projects, apps; each level's employees with a cap of their own follow it.
   2. Each row shows a bar "<n> of <n> used" (warning colour at 100%), or which cap holds it: "No cap here; the cap on <Name>, <n> credits, holds" — or "No cap here or above it".
   3. App and employee names link to their page. An employee's row reads "With the contractors it briefs" and counts their spend too, as its cap does.
 - **You know it worked when:** the tree of rows is shown with bars where caps exist.
@@ -581,7 +587,7 @@ Shared vocabulary used below:
   - An employee's cap is set on its record (`PATCH /api/employees/{id}`), as on its page (EMP-03).
   - Below Admin no controls are shown.
 - **Where:** `CreditsActions.tsx` (CapControl). `TreeEndpoints.cs` (cascade). `CascadeService`.
-- **Reachable from:** UI; API; MCP.
+- **Reachable from:** UI (screen); also API and MCP `budget_set`.
 - **Covered by tests:** `CapControl.test.tsx`; `tests-e2e/manage.spec.ts` ("an Owner sets and removes a cap…"); `ModelGatewayTests`; `CascadeCreditsAndAppsTests`.
 
 ### CRED-04 Read estimates against cost, and what was not charged
@@ -682,6 +688,7 @@ Shared vocabulary used below:
      - Apps show "This app is paused" / "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up."
      - Operators see the standing "At its limit".
   4. A top-up (OP-05) settles the debt, recalculates routing and un-pauses apps at once. The warnings start again from the next episode.
+  5. The Owner's Credits screen reads "Credits left" again (or a smaller "Below zero"), and the apps open again.
 - **You know it worked when:** after a top-up, the app opens again and the banner returns to "Credits left" or a smaller "Below zero".
 - **Variations and refusals:**
   - "Employees stop working" means their model calls are refused. Their status does not change.
@@ -702,7 +709,7 @@ Shared vocabulary used below:
   1. Each AI call reserves its worst case against every cap and the balance, then settles at the reply's cost converted by the current prices.
   2. Repairs are recorded as not billed.
   3. Hosting samples become hosting entries at the hosting rates and are never refused.
-  4. Both appear in "On AI work" / "On hosting", the budget bars, the employee's "Cost so far", the app's "Cost this month" tile ("Cap <n>" or "No cap of its own; the one above applies") and the operator's balances.
+  4. Both appear in "On AI work" / "On hosting", the budget bars, the employee's "Cost so far", the app's "Cost this month" tile ("Its own cap: <n> credits a month", "No cap of its own; <Above>'s <n> credits applies" or "No cap on it or above it") and the operator's balances.
   5. An app's own model calls also stop at its monthly AI allowance (default from prices, OP-09).
 - **You know it worked when:** the figures rise after work runs.
 - **Variations and refusals:** the same sample is charged once. Over the app's allowance, the refusal says "The app's own model calls have <n> credits left of their <n> this month…"
@@ -768,7 +775,7 @@ Shared vocabulary used below:
   - Server:
     - 409 "That name is reserved" ("'<slug>' cannot name an organisation: it is one of Endgame's own names" / "FrostAura already uses it as a subdomain").
     - 503 "New organisation names are paused".
-    - "A sibling already uses that slug." (probably).
+    - 409 "An organisation is already called '<slug>'."
     - A non-operator after first run gets 403 "Organisations are provisioned by FrostAura; there is no self-serve sign-up."
   - Failure: "<Name> was not set up: <reason>".
   - A breach: 422 "FrostAura does not set this organisation up" — "What it does crosses a red line — <line>: <why>". Nothing is created.
@@ -791,12 +798,12 @@ Shared vocabulary used below:
   2. Press "Open its org chart". `/?organisation=<slug>` shows that organisation's tree, with the in-organisation band naming it.
   3. From then on every screen works on that organisation — Credits, Hiring, People, Secrets, Autonomy, Notifications, the header's balance and bell — until the operator presses "Leave <Name>" or "Every organisation". The organisation is remembered for the tab, so a link without `?organisation=` keeps working.
   4. Any call the operator makes inside that organisation is treated as Admin. Reads continue the visit. Coming back more than 10 minutes later logs a new entry.
-  5. As Admin the operator can do anything an Admin can: decide hires, change employees, set tighter limits, manage people and secrets, change caps through the API. Every change is one entry in the organisation's operator log, titled plainly ("As an Admin: Added a division"); a refused change is not.
+  5. As Admin the operator can do anything an Admin can: decide hires, change employees, set caps and tighter limits, manage people and secrets. Every change is one entry in the organisation's operator log, titled plainly ("As an Admin: Added a division"); a refused change is not.
   6. The operator cannot set the own limit, read the operator log, grant Admin, ask for a top-up, or act as Owner.
 - **You know it worked when:** the "You entered … as an Admin" status and the entered organisation's org chart appear.
 - **Variations and refusals:**
   - "You did not enter <Name>: <reason>". A path that is not an organisation: 400 "Name an organisation by its slug."
-  - Screens read the entered organisation through one hook, `useActiveOrganisation` (and `useActiveTree`). Home, the header, People, Autonomy, Notifications and the operator log use it; the Credits, Hiring, Hire, Employee, Secrets, Suggestions, App and Start screens do not use it yet and still read the operator's own organisation.
+  - Screens read the entered organisation through one hook, `useActiveOrganisation` (and `useActiveTree`): Home, the header, Credits, Hiring, a hire, an employee, People, Secrets, Autonomy, Notifications, Manage, an app, Start, AI assistants and the operator log all use it. "Ideas from your portfolio" does not yet.
 - **Where:** `OperatorView.tsx`, `features/home/HomeView.tsx`, `shell/GodModeBand.tsx`, `lib/useActiveOrganisation.ts`. `POST /api/operator/organisations/{slug}/enter`, `GET /api/tree?organisation=`. `AccessService.OperatorEntryAsync`, `RecordEntryAsync`, `LogVisitAsync` and `LogActionAsync`; `Endpoints/OperatorActionLog.cs`.
 - **Reachable from:** UI.
 - **Covered by tests:** `OperatorView.test.tsx` ("enters an organisation, saying plainly where the entry is logged"). `GodModeBand.test.tsx`. `breadth.spec.ts` ("…enters one and says it is logged", which follows it to the notifications and leaves). `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry`. `ScreensAndRolesTests.Every_change_an_operator_makes_inside_an_entered_organisation_is_one_entry_in_its_log`.
@@ -833,7 +840,8 @@ Shared vocabulary used below:
 - **Steps:**
   1. A row reads "<Org> asks for <n> credits", with the time, the note and "From <email>".
   2. To fulfil: press "Add the credits". A top-up form opens filled with the amount and the note "Answering the request of <date>". Press "Add it and close the request". The message "Added <n> credits to <Org> and closed the request. Its Owner can read that you did." shows above the list, and the request moves to "Answered (<n>)" as "Added".
-  3. To decline: press "Decline", fill in "Why (the Owner reads this)", and press "Decline it". The request moves to answered as "Declined", and the Owner sees "FrostAura: <why>".
+  3. To decline: press "Decline", fill in "Why (the Owner reads this)", and press "Decline it". The request moves to "Answered (<n>)" as "Declined".
+  4. The Owner reads the answer on their Credits screen (CRED-07): "Added", or "Declined" with "FrostAura: <why>".
 - **You know it worked when:** the request leaves "Waiting" and appears under "Answered" with the right badge.
 - **Variations and refusals:**
   - Empty: "No request is waiting" with "When an Owner asks for credits, it appears here to answer."
@@ -898,6 +906,7 @@ Shared vocabulary used below:
   - Server: hosting rates or the allowance negative is 400. The credits-per-dollar check comes from the credit settings: 0 may be allowed on screen and then refused by the server (not verified).
   - Failure: "The prices were not changed: <reason>" rolls back.
   - History is empty: "Never changed: the defaults hold." History is capped at 50.
+  - New work is priced with the new figures: an app's page quotes the new hosting rates ("Today's prices: …") and its monthly running cost moves with them.
 - **Where:** `OperatorView.tsx` (PricingPanel, PricingForm), `operatorModel.ts`. `GET` and `PUT /api/operator/pricing`. `PricingService.cs`.
 - **Reachable from:** UI.
 - **Covered by tests:** `OperatorView.test.tsx` ("refuses a margin below one and asks before changing the prices", "reads a price change figure by figure"). `breadth.spec.ts`. `BreadthTests.Prices_change_at_runtime_for_the_next_charge_audited_and_never_below_cost`.
@@ -917,7 +926,7 @@ Shared vocabulary used below:
   - Empty: "No one from FrostAura has entered <Org>" with "If anyone does, it is written here first."
   - Non-Owner: "Only the Owner can read the operator log".
   - No organisation: "There is no log until your organisation is named".
-  - An Owner of several organisations sees only their first.
+  - An Owner of several organisations reads the log of the one they are working in (ID-02).
 - **Where:** `features/audit/OperatorAccessView.tsx`. `GET /api/audit/operator-access?organisation=`.
 - **Reachable from:** UI.
 - **Covered by tests:** `OperatorAccessView.test.tsx`. `ControlPlaneDebtsTests.Operators_come_from_the_explicit_list_only_and_every_entry_is_logged_for_the_owner`.
@@ -926,15 +935,19 @@ Shared vocabulary used below:
 - **Who:** operator.
 - **Level:** Operator / Developer
 - **Learn first:** OP-02.
-- **What you learn:** only FrostAura changes an organisation's status.
+- **What you learn:** only FrostAura changes an organisation's status — and today the check lets through only an operator who is also that organisation's Owner.
 - **Starts at:** `PATCH /api/organisations/{id} { status }`.
-- **Needs:** operator (and Owner-level access, which God mode does not give, so not verified that an operator can actually pass this check).
-- **Steps:** send the new status. A suspended organisation's apps leave the routing table (it routes only active organisations).
+- **Needs:** an operator who holds the Owner role in that organisation. God mode gives an operator Admin, never Owner, and changing an organisation needs Owner, so an operator who has only entered it is refused.
+- **Steps:**
+  1. An operator in God mode sends `{ "status": "suspended" }`: 403 "This needs the owner role at '<slug>'; you are a admin there (set at <slug>)."
+  2. The organisation's Owner sends it: they pass the role check, then get 403 "An organisation is suspended or reinstated by FrostAura."
+  3. An operator who is also its Owner gets 200 with the organisation (`id`, `level`, `slug`, `name`, `path`, `status`, `createdAt`). A suspended organisation's apps leave the routing table (it routes only active organisations).
 - **You know it worked when:** the operator card shows " · <status>".
-- **Variations and refusals:** a non-operator sending a status gets 403 "An organisation is suspended or reinstated by FrostAura."
-- **Where:** `TreeEndpoints.MapNodeChanges`.
+- **Variations and refusals:** as the steps: in practice no operator can suspend an organisation they do not own.
+- **Where:** `TreeEndpoints.MapNodeChanges` (organisations: change role Owner), `AccessService.OperatorEntryAsync` (an operator is an Admin).
 - **Reachable from:** API only. **No screen.**
 - **Covered by tests:** none found.
+- **Finding:** the role an organisation change needs (Owner) and the role God mode gives (Admin) do not meet, so FrostAura cannot suspend an organisation it does not also own. Read from `TreeEndpoints.cs` and `AccessService.cs`.
 
 ---
 
@@ -956,9 +969,10 @@ Shared vocabulary used below:
 15. ~~An employee's budget row counts only its own spend~~ — fixed: it counts its contractors, as its cap does (CRED-02).
 16. ~~Released employees are not listed; contractor rows are not links~~ — fixed (EMP-09, EMP-07). A person still cannot stop or cap a contractor.
 17. **`GET /api/employees/{id}/track-record` and `GET /api/operator/top-ups?organisation=` are not called by any screen.**
-18. **Fixed:** the operator log and the Credits page use the organisation being shown (in God mode, the one entered). Not verified: a member whose only role is at a division probably cannot load Credits.
+18. **Fixed:** the operator log and the Credits page use the organisation being shown (in God mode, the one entered). Still open: a member whose only role is at a division cannot load Credits at all, because the page asks at organisation level (CRED-01).
 19. **Fixed:** a fulfilled top-up request is closed with the top-up's note and logged as `topup_request.fulfilled` (OP-06).
-20. **Docs versus code:**
+20. **Open:** no operator can suspend or reinstate an organisation they do not also own: the change needs Owner, and God mode gives Admin (OP-11).
+21. **Docs versus code:**
     - UC-103 says caps are set by an Admin, but with no screen.
     - UC-111 and UC-112 match the API.
     - CLAUDE.md rule 4 is met at an operator's provisioning; the first organisation of a fresh install is not screened.

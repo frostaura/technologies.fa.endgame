@@ -64,7 +64,30 @@
         "s1-development-apps",
         "s1-development-sign-in",
         "s1-keys-at-limit",
-        "s1-session-check-fails"
+        "s1-session-check-fails",
+        "quiet",
+        "hire-pending",
+        "employee-memory",
+        "employee-released",
+        "screening-offline",
+        "build-running",
+        "s4-hiring",
+        "s4-hires-all-decided",
+        "s4-hire-manager-gone",
+        "s4-contractor-working",
+        "s4-contractor-finishes",
+        "s4-employee-working",
+        "s4-employee-record",
+        "s4-employee-team",
+        "s4-employee-at-cap",
+        "s4-idle-sweep",
+        "s4-released-with-memory",
+        "s4-memory-to-tidy",
+        "s4-credits-at-zero",
+        "s4-below-zero",
+        "s4-top-ups-waiting",
+        "s4-operator-log",
+        "s4-operator-log-empty"
       ]
     },
     "start": {
@@ -295,6 +318,10 @@
             },
             "goto": {
               "$ref": "#/definitions/route"
+            },
+            "persona": {
+              "$ref": "#/properties/persona",
+              "description": "From this step on, someone else is signed in to the same world (the operator acts, then the Owner reads what was logged). Needs a goto."
             },
             "highlight": {
               "type": "object",

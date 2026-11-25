@@ -69,6 +69,7 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
       if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.shot.file}, which does not exist`);
       if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.file}, which does not exist`);
       if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${file}: step ${step.step} is a demo step that sends the console nothing`);
+      if (step.kind === "demo" && step.persona && !step.goto) problems.push(`${file}: step ${step.step} changes who is signed in, so it needs a goto`);
     }
     (script.variations ?? []).forEach((v, i) => {
       const where = `${file}: variation ${i + 1} ("${v.title}")`;
