@@ -542,6 +542,11 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var spend = await ledger.SpendThisMonthByNodeAsync(org, cancellationToken);
         var caps = await db.CascadeEntries.AsNoTracking().Where(e => e.OrganisationId == org && e.Kind == "budget" && e.Key == CascadeKeys.MonthlyCredits).ToListAsync(cancellationToken);
         var employees = await db.Employees.AsNoTracking().Where(e => e.OrganisationId == org && e.MonthlyCreditLimit != null && e.Status != EmployeeStatuses.Released).ToListAsync(cancellationToken);
+        // An employee's cap covers the contractors it briefs (CreditLedger), so its row counts their spend too.
+        var briefers = employees.Select(e => (Guid?)e.Id).ToList();
+        var contractorsOf = (await db.Employees.AsNoTracking().Where(e => e.OrganisationId == org && e.BriefedById != null && briefers.Contains(e.BriefedById))
+                .Select(e => new { e.Id, e.BriefedById }).ToListAsync(cancellationToken))
+            .ToLookup(e => e.BriefedById!.Value, e => e.Id);
         var divisions = await db.Divisions.AsNoTracking().Where(d => d.OrganisationId == org && (scope.DivisionId == null || d.Id == scope.DivisionId)).OrderBy(d => d.Name).ToListAsync(cancellationToken);
         var projects = await db.Projects.AsNoTracking().Where(p => p.OrganisationId == org && (scope.ProjectId == null || p.Id == scope.ProjectId)).OrderBy(p => p.Name).ToListAsync(cancellationToken);
         var apps = await db.Apps.AsNoTracking().Where(a => a.OrganisationId == org && (scope.AppId == null || a.Id == scope.AppId)).OrderBy(a => a.Name).ToListAsync(cancellationToken);
@@ -556,7 +561,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             lines.Add(new BudgetLineView(path, name, level.ToWire(), (int)level - top, spent, cap, appId));
             foreach (var e in employees.Where(e => e.DivisionId == d && e.ProjectId == p && e.AppId == a).OrderBy(e => e.Name))
             {
-                lines.Add(new BudgetLineView(path, e.Name, "employee", (int)level - top + 1, spend.Where(s => s.EmployeeId == e.Id).Sum(s => s.Credits), e.MonthlyCreditLimit, null));
+                var counted = contractorsOf[e.Id].Append(e.Id).ToHashSet();
+                lines.Add(new BudgetLineView(path, e.Name, "employee", (int)level - top + 1, spend.Where(s => s.EmployeeId is { } x && counted.Contains(x)).Sum(s => s.Credits), e.MonthlyCreditLimit, null, e.Id));
             }
         }
 

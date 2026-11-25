@@ -323,6 +323,7 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         new("DELETE", "/api/apps/{id:guid}/dashboard/{questionId:guid}", MemberRole.Builder, Level.Branch, async s => new Req($"/api/apps/{s.AppId}/dashboard/{await s.FreshQuestion()}")),
         new("GET", "/api/apps/{id:guid}/versions", MemberRole.Viewer, Level.Branch, s => R($"/api/apps/{s.AppId}/versions")),
         new("POST", "/api/apps/{id:guid}/versions/{commit}/restore", MemberRole.Builder, Level.Branch, s => R($"/api/apps/{s.AppId}/versions/abcdef1234/restore")),
+        new("POST", "/api/apps/{id:guid}/republish", MemberRole.Builder, Level.Branch, s => R($"/api/apps/{s.AppId}/republish")),
         new("GET", "/api/apps/{id:guid}/export", MemberRole.Owner, Level.Branch, s => R($"/api/apps/{s.AppId}/export")),
 
         // Secrets

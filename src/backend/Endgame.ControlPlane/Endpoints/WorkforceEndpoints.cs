@@ -30,7 +30,7 @@ public sealed record HireProposalRequest(
     Guid? RunId);
 
 /// <summary><c>PATCH /api/hires/{id}</c>: edits before the decision. Fields left out are kept.</summary>
-public sealed record HireEditRequest(string? Reason, string? Name, string? Role, JobDescriptionInput? JobDescription, Guid? ReportsTo, bool? ClearReportsTo, decimal? ExpectedMonthlyCredits);
+public sealed record HireEditRequest(string? Reason, string? Name, string? Role, JobDescriptionInput? JobDescription, Guid? ReportsTo, bool? ClearReportsTo, decimal? ExpectedMonthlyCredits, bool? ClearMonthlyCreditLimit = null);
 
 public sealed record HireDecisionRequest(string? Note);
 
@@ -290,7 +290,7 @@ internal static class WorkforceEndpoints
             var org = await service.OrganisationOfAsync(id, ct);
             await access.RequireAsync(principal.Id(), await service.ScopeOfAsync(org, id, ct), MemberRole.Admin, ct);
             return Results.Ok(await service.EditAsync(org, id, new HireInput(null, null, request.Reason, request.Name, request.Role, request.JobDescription, request.ReportsTo, request.ExpectedMonthlyCredits, null),
-                request.ClearReportsTo ?? false, ct));
+                request.ClearReportsTo ?? false, ct, request.ClearMonthlyCreditLimit ?? false));
         })
         .WithName("EditHire").WithSummary("Edits an open proposal: name, role, job description, manager, expected cost or reason.").Produces<HireView>();
 

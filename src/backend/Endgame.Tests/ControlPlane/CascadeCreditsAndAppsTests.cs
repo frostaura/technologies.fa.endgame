@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using Endgame.Application.Gateway;
+using Endgame.Infrastructure.Credits;
+using Endgame.Infrastructure.Tree;
 using Endgame.Tests.Fixtures;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Endgame.Tests.ControlPlane;
 
@@ -94,6 +98,34 @@ public sealed class CascadeCreditsAndAppsTests(PostgresServer postgres) : IAsync
         await ControlPlaneApp.Ok(viewer.GetAsync("/api/credits?scope=frostaura"));
         await ControlPlaneApp.Expect(await viewer.PostAsJsonAsync("/api/credits/top-ups", new { organisation = "frostaura", credits = 5 }), HttpStatusCode.Forbidden);
         await ControlPlaneApp.Expect(await viewer.PutAsJsonAsync("/api/cascade", new { scope = "frostaura", kind = "budget", key = "monthly_credits", value = 1 }), HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task An_employee_budget_row_names_the_employee_and_counts_what_its_contractors_spent()
+    {
+        await owner.TopUpAsync("frostaura", 50m);
+        var ada = Guid.Parse((await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/employees", new { scope = "frostaura/technologies/squash", name = "Ada", role = "Builder", monthlyCreditLimit = 20 })))["id"]!.GetValue<string>());
+        var helper = Guid.Parse((await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/contractors", new { scope = "frostaura/technologies/squash", briefedBy = ada, role = "Researcher", brief = "Survey the rivals." })))["id"]!.GetValue<string>());
+        await SpendAsync(ada, 3m);
+        await SpendAsync(helper, 2m);
+
+        var budgets = (await ControlPlaneApp.Ok(owner.GetAsync("/api/credits?scope=frostaura")))["budgets"]!.AsArray();
+        var row = budgets.Single(b => b!["level"]!.GetValue<string>() == "employee")!;
+        Assert.Equal(ada.ToString(), row["employeeId"]!.GetValue<string>());
+        Assert.Equal(5m, row["spentCredits"]!.GetValue<decimal>());
+        Assert.Equal(20m, row["capCredits"]!.GetValue<decimal>());
+        Assert.Null(budgets[0]!["employeeId"]);
+    }
+
+    private async Task SpendAsync(Guid employee, decimal credits)
+    {
+        await using var scope = app.Scope();
+        var resolved = await scope.ServiceProvider.GetRequiredService<ScopeResolver>().RequireAsync("frostaura/technologies/squash", CancellationToken.None);
+        var ledger = scope.ServiceProvider.GetRequiredService<CreditLedger>();
+        var admitted = Assert.IsType<Admitted>(await ledger.AdmitAsync(new ReservationRequest(
+            new Attribution(resolved.OrganisationId, resolved.DivisionId, resolved.ProjectId, null, employee, null, "frostaura/technologies/squash", null), "chat", "m", credits, 0.01m, true,
+            DateTimeOffset.UtcNow.AddMinutes(1), null), CancellationToken.None));
+        await ledger.SettleAsync(new Settlement(resolved.OrganisationId, admitted.ReservationId, credits, 0.01m, "m", null, null), CancellationToken.None);
     }
 
     [Fact]

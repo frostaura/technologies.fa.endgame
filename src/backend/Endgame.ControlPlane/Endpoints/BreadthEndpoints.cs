@@ -137,6 +137,14 @@ internal static class BreadthEndpoints
             .WithName("RestoreAppVersion")
             .WithSummary("Makes an earlier version the newest, as a new change by you (history is never rewritten), and republishes it. A public app becomes private until a person makes it public again.")
             .Produces<RestoreResult>();
+        apps.MapPost("/republish", async (Guid id, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, AppVersionService versions, CancellationToken ct) =>
+            {
+                var app = await AppAsync(id, principal, access, scopes, MemberRole.Builder, ct);
+                return Results.Ok(await versions.RepublishAsync(app, ct));
+            })
+            .WithName("RepublishApp")
+            .WithSummary("Builds the app's newest version again and restarts it, when publishing it failed or the app stopped. The history and who may open it are unchanged.")
+            .Produces<RestoreResult>();
         apps.MapGet("/export", async (Guid id, HttpContext http, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, AppVersionService versions, CancellationToken ct) =>
             {
                 var app = await AppAsync(id, principal, access, scopes, MemberRole.Owner, ct);
