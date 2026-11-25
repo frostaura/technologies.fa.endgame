@@ -121,6 +121,8 @@ public sealed class TelemetryQueryRunner(EndgameDbContext db, IOptions<AskOption
         string s when type is "jsonb" or "json" => JsonNode.Parse(s),
         string s => JsonValue.Create(s),
         TimeSpan ts => JsonValue.Create(ts.TotalSeconds),
+        // array_agg: each element as itself, never the CLR type's name ("System.String[]" reached a live answer).
+        Array items => new JsonArray(items.Cast<object?>().Select(i => i is null or DBNull ? null : Value(i, type.TrimStart('_'))).ToArray()),
         _ => JsonValue.Create(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)),
     };
 }

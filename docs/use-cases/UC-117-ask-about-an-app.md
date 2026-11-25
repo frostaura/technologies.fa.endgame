@@ -24,6 +24,11 @@ Natural-language dashboards on top of the telemetry every app collects (spec, *S
    - The model is told each view's **exact columns and types, read from the database catalog**
      (`pg_catalog`, once per process), with a one-line hint per view; nothing in the prompt lists a
      column by hand. It is told there is no `id` column and to count rows with `count(*)`.
+   - It is also told **what this app itself records**: the names of its custom events over the last 30
+     days, how often and one example of their properties (read through the same fenced runner, at most
+     30), so "how many books were added today?" becomes `name = 'book.created'`; that the slowest
+     requests are rows ordered by `duration_ms`; and that people are `count(DISTINCT user_id)` over
+     events. An answer the model leaves blank is replaced by a plain sentence about the rows.
    - **A visit** is a page someone opened: a `GET` that is not an API call (`/api`), a file (a path
      ending in an extension), a health check, a platform callback (`/_platform`, `/_endgame`), a
      webhook (`/hooks`) or the API description (`/openapi`). `requests.visit` carries that rule, the
