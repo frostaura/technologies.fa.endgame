@@ -1,0 +1,7 @@
+{
+  "name": "endgame-outage-worker",
+  "private": true,
+  "type": "module",
+  "description": "Deployed as written by Endgame.Ops; no dependencies, no build step.",
+  "scripts": { "test": "node --test" }
+}
