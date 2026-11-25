@@ -78,6 +78,7 @@ export const SAVED = {
   askedAt: "2026-11-24T10:00:00Z",
   ranAt: "2026-11-25T02:00:00Z",
   error: null,
+  technical: null,
 };
 
 export const MEMBERS = [

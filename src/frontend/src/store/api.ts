@@ -585,7 +585,7 @@ export const api = createApi({
         const at = new Date().toISOString();
         const undo = dispatch(
           api.util.updateQueryData("getDashboard", appId, (list) => {
-            list.push({ id: tempId, question, answer, sql, chart, columns, rows, truncated, askedAt: at, ranAt: at, error: null });
+            list.push({ id: tempId, question, answer, sql, chart, columns, rows, truncated, askedAt: at, ranAt: at, error: null, technical: null });
           }),
         );
         try {
