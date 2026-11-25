@@ -1,0 +1,423 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AST-07",
+  "persona": "assistant",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+          "name": "tree_get",
+          "arguments": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ \"organisation\": { \"name\": \"Northwind\", … }, \"divisions\": [ … ] }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-07 Read the organisation: tree_get, ontology_get, notifications_list."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "node_create",
+          "arguments": {
+            "level": "project",
+            "parent": "northwind/learning",
+            "name": "Reading room",
+            "slug": "reading-room"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ … }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-08 Shape the tree: node_create, node_update."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "cascade_set",
+          "arguments": {
+            "scope": "northwind/learning",
+            "kind": "budget",
+            "key": "monthly_credits",
+            "value": 400
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ … }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-09 Values, budgets and credits: cascade_get, cascade_set, cascade_remove, budget_set, credits_get."
+    },
+    {
+      "step": 4,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+          "name": "idea_submit",
+          "arguments": {
+            "text": "A waiting list for the Saturday junior sessions",
+            "scope": "northwind/learning"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ … }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-10 Ideas and verdicts: idea_estimate, idea_submit, idea_get, idea_decide, ideas_suggest, ideas_suggestions, suggestion_take."
+    },
+    {
+      "step": 5,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+          "name": "run_control",
+          "arguments": {
+            "id": "…",
+            "action": "pause",
+            "reason": "Waiting for the new menu"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 5,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ … }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-11 Runs, tasks, approvals and conversation: runs_list, run_get, run_events, run_control, approval_answer, tasks_list, conversation_post."
+    },
+    {
+      "step": 6,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/call",
+        "params": {
+          "name": "employee_release",
+          "arguments": {
+            "id": "…"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 6,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ … }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-12 Workforce: employees_list, employee_get, employee_update, employee_release, hires_list, hire_raise, hire_decide."
+    },
+    {
+      "step": 7,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "tools/call",
+        "params": {
+          "name": "autonomy_set",
+          "arguments": {
+            "scope": "northwind/operations",
+            "autonomy": "checkpoints",
+            "plan": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 7,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ … }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-13 Autonomy and rules: autonomy_get, autonomy_set, rule_set_set."
+    },
+    {
+      "step": 8,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 8,
+        "method": "tools/call",
+        "params": {
+          "name": "member_invite",
+          "arguments": {
+            "scope": "northwind/learning",
+            "email": "sam@northwind.example",
+            "role": "viewer"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 8,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ \"invitationCode\": \"…\", … }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-14 People: members_list, member_invite (the code comes back in the result), member_revoke."
+    },
+    {
+      "step": 9,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {
+          "name": "secret_set",
+          "arguments": {
+            "scope": "northwind/learning",
+            "name": "VIDEO_ROOM_KEY",
+            "value": "…"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 9,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ … }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-15 Secrets: secrets_list (names only), secret_set, secret_remove."
+    },
+    {
+      "step": 10,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+          "name": "app_versions",
+          "arguments": {
+            "id": "…",
+            "limit": 10
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 10,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ … }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "AST-16 Apps: app_get, app_settings, app_ask, app_versions, app_restore."
+    },
+    {
+      "step": 11,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "tools/call",
+        "params": {
+          "name": "app_share",
+          "arguments": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 11,
+          "error": {
+            "code": -32602,
+            "message": "There is no tool 'app_share'."
+          }
+        }
+      },
+      "note": "Missing as tools: sharing an app, keys, read marks, top-up requests, the operator log, memory, the dashboard."
+    }
+  ]
+}

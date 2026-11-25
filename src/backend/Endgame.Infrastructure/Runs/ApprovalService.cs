@@ -13,8 +13,14 @@ public sealed record ApprovalView(Guid Id, Guid RunId, string Title, string Deta
 /// <summary>Checkpoints: a run raises one and waits; a person with rights over the run's scope answers it.</summary>
 public sealed class ApprovalService(EndgameDbContext db, TenantSession session, RunService runs, TimeProvider clock)
 {
-    public async Task<ApprovalView> RaiseAsync(Guid runId, string title, string? detail, CancellationToken cancellationToken)
+    /// <param name="onDecline"><c>continues</c> or <c>stops</c>: what declining does to the work, so the console can say it truthfully.</param>
+    public async Task<ApprovalView> RaiseAsync(Guid runId, string title, string? detail, CancellationToken cancellationToken, string? onDecline = null)
     {
+        if (onDecline is not (null or "continues" or "stops"))
+        {
+            throw EndgameProblem.Invalid("onDecline is 'continues' or 'stops'.");
+        }
+
         var trimmed = title?.Trim() ?? "";
         if (trimmed.Length is 0 or > 300)
         {
@@ -46,6 +52,7 @@ public sealed class ApprovalService(EndgameDbContext db, TenantSession session, 
             ["title"] = trimmed,
             ["question"] = trimmed,
             ["detail"] = approval.Detail,
+            ["onDecline"] = onDecline ?? "continues",
         })], null, null, cancellationToken);
         return View(approval);
     }
@@ -53,6 +60,11 @@ public sealed class ApprovalService(EndgameDbContext db, TenantSession session, 
     /// <summary>Answers a pending approval, once. A second answer is a conflict.</summary>
     public async Task<ApprovalView> AnswerAsync(Guid organisationId, Guid runId, Guid approvalId, bool approve, string? comment, Guid by, CancellationToken cancellationToken)
     {
+        if (comment is { Length: > 2000 })
+        {
+            throw EndgameProblem.Invalid("A note with an answer is at most 2000 characters.");
+        }
+
         session.UseOrganisation(organisationId);
         var now = clock.GetUtcNow();
         var status = approve ? ApprovalStatuses.Approved : ApprovalStatuses.Rejected;
@@ -70,7 +82,7 @@ public sealed class ApprovalService(EndgameDbContext db, TenantSession session, 
         {
             ["approvalId"] = approvalId.ToString(),
             ["answer"] = status,
-            ["comment"] = comment,
+            ["comment"] = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
             ["by"] = by.ToString(),
         })], null, by, cancellationToken);
         return View(approval);

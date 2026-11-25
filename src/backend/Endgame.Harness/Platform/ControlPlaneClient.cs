@@ -121,9 +121,9 @@ public sealed class ControlPlaneClient(HttpClient http)
         return await ReadAsync<JsonObject>(response, cancellationToken);
     }
 
-    public async Task<Guid> RaiseApprovalAsync(Guid runId, string title, string detail, CancellationToken cancellationToken)
+    public async Task<Guid> RaiseApprovalAsync(Guid runId, string title, string detail, CancellationToken cancellationToken, string? onDecline = null)
     {
-        using var response = await Http.PostAsJsonAsync("/internal/approvals", new { runId, title, detail }, Json.Web, cancellationToken);
+        using var response = await Http.PostAsJsonAsync("/internal/approvals", new { runId, title, detail, onDecline }, Json.Web, cancellationToken);
         var approval = await ReadAsync<JsonObject>(response, cancellationToken);
         return Guid.Parse(Json.Str(approval, "id")!);
     }
@@ -191,6 +191,13 @@ public sealed class ControlPlaneClient(HttpClient http)
     }
 
     /// <summary>The workforce at and beneath a scope (employees, and contractors while they work).</summary>
+    /// <summary>One employee with its job description and track record (<c>GET /internal/employees/{id}</c>), as the control plane wrote it.</summary>
+    public async Task<JsonObject> EmployeeAsync(Guid employeeId, CancellationToken cancellationToken)
+    {
+        using var response = await Http.GetAsync($"/internal/employees/{employeeId:D}", cancellationToken);
+        return await ReadAsync<JsonObject>(response, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<EmployeeInfo>> EmployeesAsync(string scope, CancellationToken cancellationToken)
     {
         using var response = await Http.GetAsync($"/internal/employees?scope={Uri.EscapeDataString(scope)}", cancellationToken);
@@ -390,9 +397,13 @@ public sealed class ControlPlaneApprovals(ControlPlaneClient client, Guid runId,
 {
     private readonly TimeSpan poll = pollInterval ?? TimeSpan.FromSeconds(2);
 
-    public async Task<bool> RequestAsync(string title, string detail, CancellationToken cancellationToken)
+    public async Task<bool> RequestAsync(string title, string detail, CancellationToken cancellationToken) =>
+        (await AskAsync(title, detail, ApprovalConsequence.Continues, cancellationToken)).Approved;
+
+    /// <summary>Raises the approval, saying what a decline does, and waits for the answer and the note that came with it.</summary>
+    public async Task<ApprovalAnswer> AskAsync(string title, string detail, string onDecline, CancellationToken cancellationToken)
     {
-        var approvalId = await client.RaiseApprovalAsync(runId, title, detail, cancellationToken);
+        var approvalId = await client.RaiseApprovalAsync(runId, title, detail, cancellationToken, onDecline);
         long after = 0;
         while (true)
         {
@@ -402,7 +413,7 @@ public sealed class ControlPlaneApprovals(ControlPlaneClient client, Guid runId,
                 after = e.Seq;
                 if (e.Type == RunEventTypes.ApprovalAnswered && Json.Str(e.Payload, "approvalId") == approvalId.ToString())
                 {
-                    return Json.Str(e.Payload, "answer") == ApprovalStatuses.Approved;
+                    return new ApprovalAnswer(Json.Str(e.Payload, "answer") == ApprovalStatuses.Approved, Json.Str(e.Payload, "comment"));
                 }
 
                 if (e.Type == RunEventTypes.RunFinished)

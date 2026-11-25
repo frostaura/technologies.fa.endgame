@@ -304,13 +304,18 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
             var (run, approval) = await s.FreshApproval();
             return new Req($"/api/runs/{run}/approvals/{approval}", new { decision = "approve" });
         }),
+        new("POST", "/api/runs/{id:guid}/retry/estimate", MemberRole.Builder, Level.Branch, s => R($"/api/runs/{s.RunId}/retry/estimate")),
+        new("POST", "/api/runs/{id:guid}/retry", MemberRole.Builder, Level.Branch, s => R($"/api/runs/{s.RunId}/retry")),
         new("GET", "/api/tasks", MemberRole.Viewer, Level.Branch, s => R($"/api/tasks?scope={s.Division}")),
+        new("POST", "/api/conversations/estimate", MemberRole.Viewer, Level.Branch, s => R("/api/conversations/estimate", new { scope = s.Division })),
         new("POST", "/api/conversations", MemberRole.Builder, Level.Branch, s => R("/api/conversations", new { scope = s.Division, message = "Hello" })),
         new("GET", "/api/conversations", MemberRole.Viewer, Level.Branch, s => R($"/api/conversations?scope={s.Division}")),
 
         // Apps: settings, sharing, asking, versions, export
         new("GET", "/api/apps/{id:guid}", MemberRole.Viewer, Level.Branch, s => R($"/api/apps/{s.AppId}")),
         new("POST", "/api/apps/{id:guid}/settings", MemberRole.Builder, Level.Branch, s => R($"/api/apps/{s.AppId}/settings", new { running = "sleep" })),
+        new("POST", "/api/apps/{id:guid}/changes/estimate", MemberRole.Builder, Level.Branch, s => R($"/api/apps/{s.AppId}/changes/estimate", new { request = "Add a notes field." })),
+        new("POST", "/api/apps/{id:guid}/changes", MemberRole.Builder, Level.Branch, s => R($"/api/apps/{s.AppId}/changes", new { request = "Add a notes field." })),
         new("POST", "/api/apps/{id:guid}/settings", MemberRole.Admin, Level.Branch, s => R($"/api/apps/{s.AppId}/settings", new { access = "private" })),
         new("GET", "/api/apps/{id:guid}/shares", MemberRole.Admin, Level.Branch, s => R($"/api/apps/{s.AppId}/shares")),
         new("POST", "/api/apps/{id:guid}/shares", MemberRole.Admin, Level.Branch, s => R($"/api/apps/{s.AppId}/shares", new { email = "friend@example.com" })),
@@ -524,6 +529,11 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         "app_ask" => new { id = s.AppId, question = "How many requests?" },
         "app_restore" => new { id = s.AppId, commit = "abcdef1234" },
         "conversation_post" => new { scope = s.Division, message = "Hello" },
+        "conversation_estimate" or "conversation_history" => new { scope = s.Division },
+        "suggestion_dismiss" => new { id = await s.FreshSuggestion() },
+        "ideas_suggest_estimate" => new { scope = s.Division },
+        "run_retry_estimate" or "run_retry" => new { id = s.RunId },
+        "app_change_estimate" or "app_change" => new { id = s.AppId, request = "Add a notes field." },
         "ontology_get" => new { scope = s.Division },
         _ => throw new InvalidOperationException($"No arguments for {tool}."),
     };

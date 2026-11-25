@@ -1,0 +1,95 @@
+import { useId, useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { formatCredits } from "@/lib/format";
+import { describeError } from "@/lib/queryState";
+import { navigate, paths } from "@/lib/router";
+import { useEstimateChangeMutation, useRequestChangeMutation } from "@/store/api";
+import type { ChangeEstimate } from "@/store/types";
+
+/**
+ * Asking for a change to an app that is already built (CHG-01): the person describes it in their own words, sees what it is
+ * expected to cost first (CLAUDE.md rule 11), then starts it and follows it on its own page. The factory screens it against the
+ * red lines, plans it from those words, builds and checks each part in a private preview, checks that everything the app did
+ * before still works, reviews it and publishes the new version.
+ */
+export function ChangeRequest({ appId, appName }: { appId: string; appName: string }) {
+  const [request, setRequest] = useState("");
+  const [estimate, setEstimate] = useState<ChangeEstimate | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [estimateChange, estimating] = useEstimateChangeMutation();
+  const [requestChange, starting] = useRequestChangeMutation();
+  const fieldId = useId();
+  const text = request.trim();
+
+  const price = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!text) return;
+    setError(null);
+    try {
+      setEstimate(await estimateChange({ appId, request: text }).unwrap());
+    } catch (e) {
+      setError(`No estimate could be made: ${describeError(e as never)} Nothing was started.`);
+    }
+  };
+
+  const start = async () => {
+    setError(null);
+    try {
+      const run = await requestChange({ appId, request: text }).unwrap();
+      navigate(paths.run(run.id));
+    } catch (e) {
+      setError(`The change was not started: ${describeError(e as never)}`);
+    }
+  };
+
+  return (
+    <section aria-labelledby={`${fieldId}-title`} data-testid="change-request" className="flex flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
+      <h2 id={`${fieldId}-title`} className="text-lg font-semibold">
+        Change {appName}
+      </h2>
+      <p className="text-ink-body">
+        Describe the change in your own words. It is checked against FrostAura’s red lines, planned from your words, built and checked part by part in a private preview, and
+        everything {appName} does now is checked again before the new version is published. Who may open it does not change.
+      </p>
+      <form onSubmit={(e) => void price(e)} className="flex flex-col gap-2">
+        <label htmlFor={fieldId} className="font-medium">
+          What should change?
+        </label>
+        <textarea
+          id={fieldId}
+          value={request}
+          rows={4}
+          maxLength={20000}
+          onChange={(e) => {
+            setRequest(e.target.value);
+            setEstimate(null);
+          }}
+          className="rounded-xs border border-border-strong bg-surface px-3 py-2"
+        />
+        {estimate ? (
+          <div role="status" className="flex flex-col gap-2 rounded-sm bg-primary-tint px-4 py-3">
+            <span className="font-display text-xl font-semibold">Estimated {formatCredits(estimate.credits)}</span>
+            <span className="text-sm text-ink-body">{estimate.basis}</span>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void start()} disabled={starting.isLoading}>
+                {starting.isLoading ? "Starting…" : "Make this change"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setEstimate(null)}>
+                Not now
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button type="submit" variant="outline" className="self-start" disabled={!text || estimating.isLoading}>
+            {estimating.isLoading ? "Working it out…" : "See what it costs"}
+          </Button>
+        )}
+      </form>
+      {error && (
+        <p role="alert" className="rounded-xs bg-attention-tint px-4 py-3 text-attention-text">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}

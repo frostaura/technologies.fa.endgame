@@ -1,0 +1,45 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-08",
+  "persona": "owner",
+  "scenario": "account",
+  "start": "/account",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "can sign you in",
+        "note": "Mara holds two passkeys today."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Add another passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Waiting for your device…",
+        "note": "This device makes a new passkey; approve it."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 2500
+        }
+      ],
+      "highlight": {
+        "text": "The new passkey is saved",
+        "note": "Either one signs you in now, and the count reads 3."
+      }
+    }
+  ]
+}

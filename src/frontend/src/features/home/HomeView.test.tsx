@@ -132,6 +132,7 @@ describe("HomeView", () => {
       const req = input instanceof Request ? input : new Request(String(input), init);
       const path = new URL(req.url).pathname;
       if (path === "/api/conversations" && req.method === "GET") return json(NO_HISTORY);
+      if (path === "/api/conversations/estimate") return json({ credits: 0.5, ceiling: 3.2, basis: "The measured starting figure." });
       if (path === "/api/conversations") return json({ id: "run-c1", kind: "conversation", title: "", scope: "acme/tools", status: "running", startedAt: "", finishedAt: null, lastSeq: 0, ideaId: null, estimateCredits: null, spentCredits: 0 }, 201);
       if (path === "/api/tree") return json(TREE);
       if (path === "/api/credits") return json(CREDITS);
@@ -147,6 +148,9 @@ describe("HomeView", () => {
     expect(crumbs.textContent).toBe("Acme/Tools");
 
     fireEvent.change(screen.getByLabelText("Message Tools"), { target: { value: "What needs me?" } });
+    // What a message can cost at most is shown before it is sent (CLAUDE.md rule 11).
+    expect((await screen.findByTestId("message-estimate")).textContent).toMatch(/at most 3\.2 credits, usually about 0\.5 credits/);
+    await waitFor(() => expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));
     const sent = api.fetch.mock.calls.map(([r]) => r as Request).find((r) => new URL(r.url).pathname === "/api/conversations" && r.method === "POST");

@@ -237,7 +237,8 @@ export interface World {
   versions: Record<string, AppVersion[]>;
   notifications: DemoNotification[];
   suggestions: Suggestion[];
-  tokens: AccessToken[];
+  /** Each key with the person who made it (`AccessTokens.cs` keeps it per person); `userId` is never sent. */
+  tokens: (AccessToken & { userId?: string })[];
   settings: DemoSetting[];
   ruleSets: DemoRuleSet[];
   topUpRequests: TopUpRequest[];
@@ -254,6 +255,10 @@ export interface World {
   edgeAnswer?: Record<string, "slow" | "busy" | "unreachable" | "outage">;
   /** Apps whose rebuild fails (a restore or "Rebuild and restart" that cannot start the app), by app id. */
   rebuildFails?: string[];
+  /** A development deployment (ID-03): the development sign-in is offered, for this account. Never in any other scenario. */
+  developmentSignIn?: { email: string };
+  /** How many of the next session checks (`GET me`) fail as an unreachable control plane would (ID-05). */
+  sessionCheckFailures?: number;
   /** Organisations an operator acted in as an Admin during the request being answered; never saved. */
   actedAsOperator?: string[];
   /** RTK Query tags changed since the page last refreshed; drained by the host, never saved. */

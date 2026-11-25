@@ -20,16 +20,23 @@ function layer(className: string): HTMLDivElement {
 }
 
 /**
- * Where an element is on the demo's page: an element inside one of the Edge's pages (drawn in a
- * same-origin frame, see `hosted/EdgeDocument`) is offset by where its frame sits.
+ * Where an element sits in the demo's own page: an Edge page is drawn in a frame, so its controls'
+ * boxes are moved by the frame's own place on the page.
  */
-export function rectOf(el: Element): DOMRect {
+export function pageRect(el: Element): { left: number; top: number; width: number; height: number; bottom: number } {
   const r = el.getBoundingClientRect();
-  if (el.ownerDocument === document) return r;
-  const frame = [...document.querySelectorAll("iframe")].find((f) => f.contentDocument === el.ownerDocument);
-  if (!frame) return r;
-  const f = frame.getBoundingClientRect();
-  return new DOMRect(r.left + f.left, r.top + f.top, r.width, r.height);
+  let left = r.left;
+  let top = r.top;
+  // Out to the demo's own page, and no further: embedded, the demo is itself in the academy's frame.
+  let win = el.ownerDocument.defaultView;
+  while (win && win !== window && win.frameElement) {
+    const frame = win.frameElement;
+    const f = frame.getBoundingClientRect();
+    left += f.left + frame.clientLeft;
+    top += f.top + frame.clientTop;
+    win = frame.ownerDocument.defaultView;
+  }
+  return { left, top, width: r.width, height: r.height, bottom: top + r.height };
 }
 
 function place() {
@@ -39,7 +46,7 @@ function place() {
     clearSpotlight();
     return;
   }
-  const r = rectOf(tracked);
+  const r = pageRect(tracked);
   Object.assign(ring.style, { left: `${r.left - 6}px`, top: `${r.top - 6}px`, width: `${r.width + 12}px`, height: `${r.height + 12}px` });
   if (note) {
     const below = r.bottom + 12 + 80 < window.innerHeight;

@@ -1,6 +1,6 @@
 import { clock } from "./server/engine";
 import { goto, reset, seekTo } from "./host";
-import { clearSpotlight, moveCursor, rectOf, showSpotlight } from "./overlay";
+import { clearSpotlight, moveCursor, pageRect, showSpotlight } from "./overlay";
 
 /**
  * The academy bridge (ARCH-009): a small postMessage protocol through which a parent frame drives
@@ -41,6 +41,13 @@ export interface ClockArgs {
 type Envelope = { source: string; id: string; op: string; args?: Record<string, unknown> };
 
 let instantNow = false;
+/** Inside the academy's frame: the learner's keyboard (← → to walk the steps) stays with the academy. */
+let embeddedNow = false;
+
+/** A control the demo acts on takes the focus, as a click would — except embedded, where focus inside the frame would take the academy's keys. */
+function focusUnlessEmbedded(el: HTMLElement) {
+  if (!embeddedNow) el.focus({ preventScroll: true });
+}
 
 function post(message: Omit<Envelope, "source">) {
   const target = window.parent !== window ? window.parent : null;
@@ -79,15 +86,22 @@ function controlFor(label: Element): HTMLElement | null {
 }
 
 /**
- * The element a target names, or null; `field` prefers form controls (for typing and selecting).
- * The console's page is searched first, then any of the Edge's own pages (same-origin frames).
+ * The documents a step can point into: the console's page, then each of the Edge's own pages drawn
+ * in its frame (a hosted app's sign-in and sign-up), which share this origin.
  */
-export function find(target: Target | string, field = false, strict = false): HTMLElement | null {
-  const inPage = findIn(document, target, field, strict);
-  if (inPage) return inPage;
+function documents(): Document[] {
+  const docs = [document];
   for (const frame of document.querySelectorAll<HTMLIFrameElement>('iframe[data-testid="edge-page"]')) {
     const doc = frame.contentDocument;
-    const el = doc ? findIn(doc, target, field, strict) : null;
+    if (doc?.body) docs.push(doc);
+  }
+  return docs;
+}
+
+/** The element a target names, or null; `field` prefers form controls (for typing and selecting). */
+export function find(target: Target | string, field = false, strict = false): HTMLElement | null {
+  for (const doc of documents()) {
+    const el = findIn(doc, target, field, strict);
     if (el) return el;
   }
   return null;
@@ -152,31 +166,78 @@ function sleep(ms: number) {
 
 const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/**
+ * Brings an element to the middle of the demo's own page — and of an Edge page's frame, for a
+ * control inside one — and never further out. `scrollIntoView` would also scroll the academy's
+ * page around the embedded demo (they share an origin), which moves the learner off the step.
+ */
+function reveal(el: Element, smooth: boolean) {
+  const behavior: ScrollBehavior = smooth ? "smooth" : "auto";
+  for (let box = el.parentElement; box && box !== el.ownerDocument.documentElement && box !== el.ownerDocument.body; box = box.parentElement) {
+    const style = windowOf(box).getComputedStyle(box);
+    if (box.scrollHeight > box.clientHeight && /(auto|scroll)/.test(style.overflowY)) {
+      const r = el.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      box.scrollBy({ top: r.top - b.top - (b.height - r.height) / 2, behavior });
+    }
+  }
+  const win = windowOf(el);
+  const r = el.getBoundingClientRect();
+  win.scrollBy({ top: r.top - (win.innerHeight - r.height) / 2, behavior });
+  const frame = win.frameElement;
+  if (frame && win !== window) reveal(frame, smooth);
+}
+
 async function approach(el: HTMLElement) {
-  el.scrollIntoView({ block: "center", behavior: instantNow || reduced() ? "auto" : "smooth" });
+  reveal(el, !(instantNow || reduced()));
   if (instantNow) return;
   await sleep(250);
-  const r = rectOf(el);
+  const r = pageRect(el);
   await moveCursor(r.left + r.width / 2, r.top + r.height / 2);
 }
 
+/** The window an element lives in: the console's, or an Edge page's frame. */
+const windowOf = (el: Element) => (el.ownerDocument.defaultView ?? window) as typeof window;
+
 function setValue(el: HTMLElement, value: string) {
-  const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : el.tagName === "SELECT" ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  const win = windowOf(el);
+  const proto = el.tagName === "TEXTAREA" ? win.HTMLTextAreaElement.prototype : el.tagName === "SELECT" ? win.HTMLSelectElement.prototype : win.HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, value);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
-  el.dispatchEvent(new Event("change", { bubbles: true }));
+  el.dispatchEvent(new win.Event("input", { bubbles: true }));
+  el.dispatchEvent(new win.Event("change", { bubbles: true }));
+}
+
+/** What has the keyboard: inside an Edge page's frame when the frame has it. */
+function focused(): HTMLElement {
+  let el = (document.activeElement as HTMLElement | null) ?? document.body;
+  while (el.tagName === "IFRAME") {
+    const inner = (el as HTMLIFrameElement).contentDocument?.activeElement as HTMLElement | null | undefined;
+    if (!inner) break;
+    el = inner;
+  }
+  return el;
+}
+
+const FOCUSABLE = "a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+
+/** Tab, as the browser does it: the next control in the page's order takes the keyboard. */
+function tabFrom(from: HTMLElement) {
+  const doc = from.ownerDocument;
+  const all = [...doc.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => !el.closest("[data-demo-chrome]"));
+  const at = all.indexOf(from);
+  all[at + 1]?.focus();
 }
 
 async function perform(action: Action) {
   if ("click" in action) {
     const el = await waitFor(action.click, false, 6000, true);
     await approach(el);
-    el.focus({ preventScroll: true });
+    focusUnlessEmbedded(el);
     el.click();
   } else if ("type" in action) {
     const el = await waitFor(action.type.into, true, 6000, true);
     await approach(el);
-    el.focus({ preventScroll: true });
+    focusUnlessEmbedded(el);
     if (instantNow || reduced()) setValue(el, action.type.text);
     else {
       let typed = "";
@@ -190,8 +251,9 @@ async function perform(action: Action) {
     const el = await waitFor(action.select.into, true, 6000, true);
     await approach(el);
     const want = norm(action.select.value);
-    if (el.tagName === "SELECT" && el instanceof (el.ownerDocument.defaultView ?? window).HTMLSelectElement) {
-      const option = [...el.options].find((o) => norm(o.textContent) === want || norm(o.value) === want) ?? [...el.options].find((o) => norm(o.textContent).startsWith(want));
+    if (el.tagName === "SELECT") {
+      const list = el as HTMLSelectElement;
+      const option = [...list.options].find((o) => norm(o.textContent) === want || norm(o.value) === want) ?? [...list.options].find((o) => norm(o.textContent).startsWith(want));
       if (!option) throw new Error(`The list ${JSON.stringify(action.select.into)} has no ${action.select.value}.`);
       setValue(el, option.value);
     } else {
@@ -200,16 +262,15 @@ async function perform(action: Action) {
     }
   } else if ("press" in action) {
     const key = typeof action.press === "string" ? action.press : action.press.key;
-    let el = (document.activeElement as HTMLElement | null) ?? document.body;
-    // Focus inside one of the Edge's pages: the key goes to what has focus in that frame.
-    if (el.tagName === "IFRAME") el = ((el as HTMLIFrameElement).contentDocument?.activeElement as HTMLElement | null) ?? el;
-    el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    const el = focused();
+    const win = windowOf(el);
+    el.dispatchEvent(new win.KeyboardEvent("keydown", { key, bubbles: true }));
     if (key === "Enter") {
       const form = el.closest("form");
-      if (form) form.requestSubmit();
-      else if (el.tagName === "BUTTON" || el.tagName === "A") el.click();
-    }
-    el.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
+      if (el.tagName === "BUTTON" || el.tagName === "A") el.click();
+      else if (form) form.requestSubmit();
+    } else if (key === "Tab") tabFrom(el);
+    el.dispatchEvent(new win.KeyboardEvent("keyup", { key, bubbles: true }));
   } else if ("wait" in action) {
     if (typeof action.wait === "number") await sleep(instantNow ? Math.min(action.wait, 50) : action.wait);
     else await waitFor(action.wait);
@@ -248,7 +309,7 @@ export const endgameDemo = {
       clearSpotlight();
       return false;
     }
-    el.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" });
+    reveal(el, !reduced());
     showSpotlight(el, args.note ?? null);
     return true;
   },
@@ -274,6 +335,7 @@ declare global {
 }
 
 export function installBridge(embedded: boolean) {
+  embeddedNow = embedded;
   window.endgameDemo = endgameDemo;
   window.addEventListener("message", (e: MessageEvent) => {
     const m = e.data as Envelope | null;

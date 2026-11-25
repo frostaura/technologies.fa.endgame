@@ -7,6 +7,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { dispatch } from "./index";
 import { crc32, gitBundle, gzip, sha1, tar } from "./archive";
 import { buildWorld } from "../world/scenarios";
+import "../world/scenarios.s5";
 import { IDS } from "../world/default";
 import type { World } from "./world";
 

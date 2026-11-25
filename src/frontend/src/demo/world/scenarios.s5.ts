@@ -1,17 +1,13 @@
 import type { SavedQuestion } from "@/store/types";
 import { IDS } from "./default";
-import type { Scenario } from "./scenarios";
+import { defineScenario } from "./scenarios";
 import { ago, uuidFor, type World } from "../server/world";
 
 /**
  * Scenarios for the academy's area 05 — the app page, asking, versions, sharing, secrets, a hosted
  * app as its visitors meet it — so every refusal and branch "What else can happen" names has a
- * world that shows it. `scenarios.ts` registers them: this module cannot call `defineScenario`
- * itself, because the import that brings it in runs before `scenarios.ts` has made its registry.
+ * world that shows it. Registered by one import in `host.ts`, after `scenarios.ts` has run.
  */
-
-export const scenariosS5: Scenario[] = [];
-const defineScenario = (s: Scenario) => scenariosS5.push(s);
 
 const COURT = { app: IDS.tableBookings };
 const NOTES = { app: IDS.courseNotes };

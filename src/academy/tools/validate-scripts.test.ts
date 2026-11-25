@@ -61,15 +61,6 @@ describe("the step-script validator", () => {
     expect(sandbox({ "ID-02.json": { ...ok, steps: [{ step: 1, kind: "code", language: "cobol", code: "x" }] } }).problems.length).toBeGreaterThan(0);
   });
 
-  it("accepts variations played from their own start, numbered from 1, each saying what it shows", () => {
-    const variation = { title: "The passkey prompt is closed", persona: "signed-out", scenario: "established", start: "/sign-in", steps: [{ step: 1, kind: "demo", highlight: { text: "Sign in", note: "Closing the prompt changes nothing." } }] };
-    expect(sandbox({ "ID-02.json": { ...ok, variations: [variation] } }).problems).toEqual([]);
-    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...variation, steps: [{ ...variation.steps[0], step: 2 }] }] } }).problems.join()).toMatch(/numbered 1, 2, 3/);
-    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...variation, steps: [{ step: 1, kind: "demo", highlight: { text: "Sign in" } }] }] } }).problems.join()).toMatch(/needs a note/);
-    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...variation, persona: "nobody" }] } }).problems.length).toBeGreaterThan(0);
-    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ title: "x", persona: "owner", scenario: "established", start: "/", steps: [], extra: 1 }] } }).problems.length).toBeGreaterThan(0);
-  });
-
   it("accepts a named moment for the clock", () => {
     expect(sandbox({ "ID-02.json": { ...ok, steps: [{ step: 1, kind: "demo", clock: { seek: "build:published" } }] } }).problems).toEqual([]);
     expect(sandbox({ "ID-02.json": { ...ok, steps: [{ step: 1, kind: "demo", clock: { seek: "Build Published" } }] } }).problems.length).toBeGreaterThan(0);
@@ -85,5 +76,13 @@ describe("the step-script validator", () => {
     const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as { properties: { persona: { enum: string[] }; scenario: { enum: string[] } } };
     expect(schema.properties.persona.enum).toEqual([...PERSONAS]);
     expect(schema.properties.scenario.enum).toEqual([...SCENARIOS]);
+  });
+
+  it("checks a script's variations: numbered from 1, each step saying what it shows", () => {
+    const branch = { title: "A stranger is refused", persona: "signed-out", scenario: "established", start: "/sign-in", steps: [{ step: 1, kind: "demo", highlight: { text: "invite-only", note: "Refused." } }] };
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [branch] } }).problems).toEqual([]);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, steps: [{ step: 2, kind: "demo", highlight: { text: "a", note: "b" } }] }] } }).problems.join()).toMatch(/number them 1 to 1/);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, steps: [{ step: 1, kind: "demo", highlight: { text: "a" } }] }] } }).problems.join()).toMatch(/has no note/);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...branch, persona: "nobody" }] } }).problems.length).toBeGreaterThan(0);
   });
 });

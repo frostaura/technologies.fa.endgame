@@ -1,0 +1,25 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-07",
+  "persona": "signed-out",
+  "scenario": "s1-app-public",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Public, and no cookies: Edge opens it without asking the control plane."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign in",
+        "note": "Signing in only tells the app who you are."
+      }
+    }
+  ]
+}

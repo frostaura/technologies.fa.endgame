@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Endgame.Harness.Events;
 using Endgame.Harness.Kernel;
 using Endgame.Harness.Model;
+using Endgame.Harness.Permissions;
 using Endgame.Harness.Platform;
 using Endgame.Harness.Tools;
 
@@ -312,8 +313,10 @@ public sealed class ReadOrganisationTool(ControlPlaneClient controlPlane, string
 }
 
 /// <summary>Proposed endpoints: <c>POST /internal/ideas</c> {scope, text, constraints, by: "conversation"} and <c>PUT /internal/cascade</c> {scope, kind: "setting", key, value}.</summary>
-public sealed class StartIdeaTool(ControlPlaneClient controlPlane, string scope) : ITool
+public sealed class StartIdeaTool(ControlPlaneClient controlPlane, string scope) : ITool, IApprovalTitle
 {
+    public string ApprovalTitle(JsonObject arguments) => $"Start researching an idea: {Json.Str(arguments, "text")}";
+
     public string Name => "start_idea";
 
     public string Description => "Start research on a new product idea at the scope being discussed. The owner is asked to confirm first.";
@@ -340,8 +343,27 @@ public sealed class StartIdeaTool(ControlPlaneClient controlPlane, string scope)
     }
 }
 
-public sealed class AdjustSettingTool(ControlPlaneClient controlPlane, string scope) : ITool
+public sealed class AdjustSettingTool(ControlPlaneClient controlPlane, string scope) : ITool, IApprovalTitle
 {
+    /// <summary>What approving the change does, in the words the autonomy and app screens use; never the setting's key.</summary>
+    public string ApprovalTitle(JsonObject arguments)
+    {
+        var raw = (Json.Str(arguments, "value") ?? "").Trim().Trim('"');
+        var on = raw is "true" or "on";
+        var where = "here";
+        return Json.Str(arguments, "key") switch
+        {
+            "autonomy" => raw == "checkpoints" ? $"Stop for your sign-off at checkpoints {where}" : $"Switch {where} to auto-mode",
+            "checkpoint.start" => $"Turn {(on ? "on" : "off")} the “Before work starts” checkpoint {where}",
+            "checkpoint.plan" => $"Turn {(on ? "on" : "off")} the “Before the plan is carried out” checkpoint {where}",
+            "checkpoint.hire" => $"Turn {(on ? "on" : "off")} the “Before anyone is hired” checkpoint {where}",
+            "sleep.mode" => raw == "always_on" ? $"Keep the apps {where} always on" : $"Let the apps {where} sleep when nobody is using them",
+            "sleep.idle_minutes" => $"Let the apps {where} sleep after {raw} minutes without a visitor",
+            "workforce.idle_days" => $"Flag employees {where} who have had no work for {raw} days",
+            _ => $"Change a setting {where}",
+        };
+    }
+
     public string Name => "adjust_setting";
 
     public string Description => "Change a setting at the scope being discussed (for example sleep after idle, autonomy, checkpoints). The owner is asked to confirm first.";
@@ -376,5 +398,86 @@ public sealed class AdjustSettingTool(ControlPlaneClient controlPlane, string sc
         return response.IsSuccessStatusCode
             ? new ToolOutcome($"Setting changed: {OutputText.Truncate(text, 1000)}")
             : ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The setting could not be changed ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}"), "tool_error");
+    }
+}
+
+/// <summary>
+/// <c>change_app</c>: asks the factory to change an app that is already built (CHG-01), through
+/// <c>POST /internal/apps/changes</c> — the estimate is shown first in the change's own run, then a plan, the build, the checks
+/// and the new version. The owner confirms first.
+/// </summary>
+public sealed class ChangeAppTool(ControlPlaneClient controlPlane, string scope) : ITool, IApprovalTitle
+{
+    public string Name => "change_app";
+
+    public string Description => "Ask the factory to change an app that is already built: a plan for the change, the change built and checked in the running app, everything it did before checked again, then the new version published. The owner is asked to confirm first.";
+
+    public JsonObject Parameters => Schema.Object(new JsonObject
+    {
+        ["request"] = Schema.Str("The change, in the owner's words."),
+        ["app"] = Schema.Str("The app's scope path, if the conversation is not already about one app (for example 'acme/labs/bookings/web')."),
+    }, "request");
+
+    public ToolEffect Effect => ToolEffect.External;
+
+    public string ApprovalTitle(JsonObject arguments) => $"Change the app: {Json.Str(arguments, "request")}";
+
+    public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root)
+    {
+        if (string.IsNullOrWhiteSpace(Json.Str(arguments, "request")))
+        {
+            return (ToolTargets.None, "change_app needs the change, in the owner's words.");
+        }
+
+        var app = Json.Str(arguments, "app") is { Length: > 0 } a ? a : scope;
+        return app == scope || app.StartsWith(scope + "/", StringComparison.Ordinal)
+            ? (new ToolTargets([], $"{app}: {Json.Str(arguments, "request")}"), null)
+            : (ToolTargets.None, $"'{app}' is outside {scope}, the scope this conversation is about.");
+    }
+
+    public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var app = Json.Str(call.Arguments, "app") is { Length: > 0 } a ? a : scope;
+        using var response = await controlPlane.Http.PostAsJsonAsync("/internal/apps/changes", new { scope = app, request = Json.Str(call.Arguments, "request") }, Json.Web, cancellationToken);
+        var text = await response.Content.ReadAsStringAsync(cancellationToken);
+        return response.IsSuccessStatusCode
+            ? new ToolOutcome($"The change has started; its estimate is shown first in its own work: {OutputText.Truncate(text, 2000)}")
+            : ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The change could not be started ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it did not start."), "tool_error");
+    }
+}
+
+/// <summary>
+/// <c>try_again</c>: starts a failed, cancelled or budget-stopped piece of work again (CHG-03) through
+/// <c>POST /internal/runs/{id}/retry</c>, picking up what was already built and agreed. The owner confirms first.
+/// </summary>
+public sealed class TryAgainTool(ControlPlaneClient controlPlane, string scope) : ITool, IApprovalTitle
+{
+    public string Name => "try_again";
+
+    public string Description => "Start again a research, a build or a change that failed, was cancelled or stopped for budget, picking up what was already built and agreed (read 'runs' to find it). The owner is asked to confirm first.";
+
+    public JsonObject Parameters => Schema.Object(new JsonObject
+    {
+        ["run_id"] = Schema.Str("The id of the run that stopped, from read_organisation 'runs'."),
+        ["title"] = Schema.Str("That run's title, as read, so the owner sees what is being tried again."),
+    }, "run_id", "title");
+
+    public ToolEffect Effect => ToolEffect.External;
+
+    public string ApprovalTitle(JsonObject arguments) => $"Try again: {Json.Str(arguments, "title")}";
+
+    public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root) =>
+        Guid.TryParse(Json.Str(arguments, "run_id"), out _) ? (new ToolTargets([], Json.Str(arguments, "run_id")), null) : (ToolTargets.None, "try_again needs the run's id, from read_organisation 'runs'.");
+
+    public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var id = Guid.Parse(Json.Str(call.Arguments, "run_id")!);
+        using var response = await controlPlane.Http.PostAsJsonAsync($"/internal/runs/{id:D}/retry", new { scope }, Json.Web, cancellationToken);
+        var text = await response.Content.ReadAsStringAsync(cancellationToken);
+        return response.IsSuccessStatusCode
+            ? new ToolOutcome($"Started again: {OutputText.Truncate(text, 2000)}")
+            : ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"It could not be started again ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it did not start."), "tool_error");
     }
 }

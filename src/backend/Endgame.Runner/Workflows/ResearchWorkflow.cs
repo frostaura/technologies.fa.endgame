@@ -169,7 +169,9 @@ public sealed class ResearchWorkflow : IWorkflow
             await run.Journal.RecordAsync("decided", new JsonObject { ["decision"] = decision.ToString(), ["runId"] = buildRun?.ToString() }, cancellationToken);
             await (decision switch
             {
-                AutoDecision.Building => Workforce.SayAsync(run, "runner", "Building has started", "Auto-mode is building it now, on that verdict. You can follow the build, pause it or stop it at any time.", cancellationToken, "decided"),
+                AutoDecision.Building => Workforce.SayAsync(run, "runner", "Building has started", outcome == Verdicts.Change
+                    ? Sentences.Join([$"Auto-mode is building it now, with research's change applied: {Json.Str(verdict, "suggestedChange")}", "You can follow the build, pause it or stop it at any time"])
+                    : "Auto-mode is building it now, on that verdict. You can follow the build, pause it or stop it at any time.", cancellationToken, "decided"),
                 AutoDecision.RedLine => Workforce.SayAsync(run, "runner", "It will not be built", detail, cancellationToken, "decided"),
                 _ => Workforce.SayAsync(run, "runner", "Waiting for your decision", Sentences.Join(["The verdict waits for you: build it, change it or drop it", detail]), cancellationToken, "decided"),
             });

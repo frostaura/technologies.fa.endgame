@@ -4,9 +4,9 @@ Signing in, people and roles, AI-assistant keys and MCP, opening apps as a membe
 
 Read from the code on 2026-11-25, one reader per area; nothing here was taken from the other docs. The fields and how to read them are in [README.md](README.md). A flow marked *API only* or *MCP only* has no screen.
 
-Every entry carries the four academy fields you added: Level, Learn first, What you learn, and You know it worked when. On-screen labels are quoted word for word. `{App}` and `{Org}` stand for real names.
+Every entry carries the four academy fields: Level, Learn first, What you learn, and You know it worked when. On-screen labels are quoted word for word. In a quoted label, `{App}` and `{Org}` stand for the real names on screen; the academy's step notes name them (Court booking, Northwind).
 
-**The most serious finding:** a person invited to an organisation cannot register through the console. The sign-in screen has no field for an invitation code, yet the invitation e-mail and the People screen both tell them to use one. The control plane accepts the code (`SignInTests` proves it); only the screen is missing. This also blocks the Owner of an organisation that an operator provisions. Details are in ID-07, PPL-08 and the list at the end.
+Checked against the screens again on 2026-11-25, when every flow here was scripted for the academy: the sign-in screen now has the **"Invitation code"** field, so an invited person registers in the console (PPL-08), and "Your account" carries the passkeys and the organisation switcher (ID-08, ID-09).
 
 ---
 
@@ -22,7 +22,7 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 - **Steps:**
   1. The person opens the console. It finds no session and shows **"Sign in"**, with the lead "Use the passkey on this device. There is no password to remember or to lose."
   2. They click **"First time here? Create your passkey"**. The heading becomes **"Create your passkey"**, with the lead "Your device keeps the key; Endgame never sees a password, because there is none."
-  3. They fill in **"Your name"** and **"Email address"** (both required) and click **"Create passkey"**. While it works the button reads **"Waiting for your device…"**.
+  3. They fill in **"Your name"** and **"Email address"** (both required), leave **"Invitation code"** empty ("The code you were sent or given when you were invited. It works once. Leave it empty only if you are the first person here.") and click **"Create passkey"**. While it works the button reads **"Waiting for your device…"**.
   4. The server checks that this is a fresh install and sends passkey options. It keeps the registration's purpose in a sealed cookie that lasts five minutes.
   5. The device asks the person to approve. On approval the server checks the attestation and creates the first user, under a lock so two people cannot both become first. It stores the passkey and opens a session that lasts 14 days and renews with use.
   6. The console reloads who is signed in. Because no organisation exists yet, it shows **"Name your organisation, then describe your first idea."** That screen belongs to the organisation-tree reader.
@@ -63,7 +63,7 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   - No key chosen: "No passkey was chosen."
   - Unsupported browser: the same alert as in ID-01.
   - Only a console address is kept: never another site, never `/sign-in` itself; it is used once.
-  - Someone with roles in two organisations switches between them on "Your account" (ID-09).
+  - Someone with roles in two organisations switches between them with **"Working in"**, in the header or on "Your account" (ID-09).
 - **Where:** `SignInView.tsx`, `features/auth/returnTo.ts`. `POST /api/auth/passkey/login/options`, `POST /api/auth/passkey/login/complete`. `App.tsx` redirect logic.
 - **Reachable from:** UI
 - **Covered by tests:** `SignInTests` (`A_passkey_answered_for_another_origin_is_rejected`, `An_unknown_passkey_cannot_sign_in`, the first-person test); `AccountView.test.tsx` ("landing where you were going…"); `tests-e2e/console.spec.ts`; `tests-e2e/manage.spec.ts` ("after signing in, you land on the address you first asked for").
@@ -89,27 +89,27 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   - An unknown e-mail on an install that already has users creates a person with no role. Not verified on screen: they probably see the first-run screen, whose naming step the server then refuses.
 - **Where:** `SignInView.tsx` (`DevelopmentSignIn`). `GET /api/auth/options`, `POST /api/auth/development`.
 - **Reachable from:** UI (API with an e-mail)
-- **Covered by tests:** `DevelopmentSignInTests` (both tests); `App.test.tsx` "offers the development sign-in only when the API advertises it…" and "…no development sign-in unless advertised"; `console.spec.ts` "development sign-in is offered only when advertised…"; `tests-stack/acceptance.spec.ts` "1. the development sign-in, through the console".
+- **Covered by tests:** `DevelopmentSignInTests` (both tests); `App.test.tsx` "offers the development sign-in only when the API advertises it…" and "…no development sign-in unless advertised"; `console.spec.ts` "development sign-in is offered only when advertised…"; `tests-stack/acceptance.spec.ts` "1. the development sign-in, through the console". The academy plays it in the demo's one development-deployment scenario (`s1-development-sign-in`); no other demo scenario offers it.
 
 ### ID-04 Arrive signed out at any console address
 - **Who:** anonymous visitor
-- **Starts at:** any console address, for example `/apps/{id}` or `/people?scope=…`
+- **Starts at:** any console address, for example an app's page (`/apps/{id}`) or `/people?scope=…`
 - **Needs:** nothing
 - **Level:** Foundation
 - **Learn first:** none
-- **What you learn:** signed out, the console is only its sign-in screen, never a broken page.
+- **What you learn:** signed out, the console is only its sign-in screen, never a broken page, and it keeps the address you asked for.
 - **Steps:**
-  1. While the session is checked, the console shows the **"Opening Endgame"** skeleton.
-  2. The server answers 401. The console replaces the address with `/sign-in` and shows the sign-in screen.
-  3. Once signed in, a visitor at `/sign-in` is moved to `/`.
-- **You know it worked when:** the address bar reads `/sign-in` and the **"Sign in"** heading shows.
+  1. The visitor opens a console address. While the session is checked, the console shows the **"Opening Endgame"** skeleton.
+  2. The server answers 401. The console replaces the address with `/sign-in` and shows the sign-in screen, keeping the address first asked for in this tab.
+  3. Once they sign in (ID-02), the console opens the address first asked for.
+- **You know it worked when:** the address bar reads `/sign-in` and the **"Sign in"** heading shows; after signing in, the screen first asked for opens.
 - **Variations and refusals:**
-  - The address originally asked for is not remembered for after sign-in.
+  - Only a console address is kept, never `/sign-in` itself or another site, and it is used once.
   - Signed in, `/sign-in` itself shows the home screen.
   - The side panel **"One place to run every product you own"**, with its four points, shows only on wide screens.
-- **Where:** `App.tsx`, `lib/router.ts`. `GET /api/me`.
+- **Where:** `App.tsx`, `lib/router.ts`, `features/auth/returnTo.ts`. `GET /api/me`.
 - **Reachable from:** UI
-- **Covered by tests:** `App.test.tsx` "shows the opening skeleton…" and "sends a signed-out visitor to sign-in…"; `SignInTests.Signed_out_me_is_401_problem_and_auth_options_are_readable`.
+- **Covered by tests:** `App.test.tsx` "shows the opening skeleton…" and "sends a signed-out visitor to sign-in…"; `returnTo.test.ts`; `tests-e2e/manage.spec.ts` ("after signing in, you land on the address you first asked for"); `SignInTests.Signed_out_me_is_401_problem_and_auth_options_are_readable`.
 
 ### ID-05 Recover from a failed session check
 - **Who:** anyone
@@ -144,25 +144,27 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 - **Reachable from:** UI
 - **Covered by tests:** `App.test.tsx` "signs out to the sign-in screen and stays there"; `SignInTests` first-person test (signs out and back in).
 
-### ID-07 Try to register without an invitation, or with one through the console
-- **Who:** stranger; invited person
+### ID-07 Try to register without an invitation
+- **Who:** stranger
 - **Starts at:** `/sign-in`, then **"First time here? Create your passkey"**
 - **Needs:** an install that already has a person
 - **Level:** Foundation
 - **Learn first:** ID-01
-- **What you learn:** Endgame is invite-only.
+- **What you learn:** Endgame is invite-only: after the first person, nobody registers without a code.
 - **Steps:**
-  1. The person fills in **"Your name"** and **"Email address"** and clicks **"Create passkey"**.
-  2. The console sends only the name and e-mail. The server refuses with 403 and the console shows: "Endgame is invite-only. Sign in, or register with the invitation code you were sent."
+  1. The person fills in **"Your name"** and **"Email address"**, leaves **"Invitation code"** empty, and clicks **"Create passkey"**.
+  2. The server refuses with 403 and the console shows: "Endgame is invite-only. Sign in, or register with the invitation code you were sent."
 - **You know it worked when:** that refusal appears in the alert box and nothing is created.
-- **Variations and refusals:** **this is where invited people are stranded.** The form has no invitation-code field, so a person holding a valid code gets the same refusal. See PPL-08.
-- **Where:** `SignInView.tsx`, `store/api.ts` (`passkeyRegisterOptions`, whose arguments are `{ displayName, email }` only). `POST /api/auth/passkey/register/options`.
-- **Reachable from:** UI (refusal only)
-- **Covered by tests:** `SignInTests.After_the_first_person_registration_needs_an_invitation…` (API only). No console test.
+- **Variations and refusals:**
+  - A code that is wrong, used or expired for that address: "That invitation code is not valid for this e-mail address, or it has expired." (403).
+  - With a valid code, the person registers: PPL-08.
+- **Where:** `SignInView.tsx`; `store/api.ts` (`passkeyRegisterOptions`) and `store/sensitive.ts` (`registerOptionsWithInvitation`, which keeps the code out of the data store). `POST /api/auth/passkey/register/options`.
+- **Reachable from:** UI
+- **Covered by tests:** `SignInTests.After_the_first_person_registration_needs_an_invitation…`; `App.test.tsx` "registers an invited person with the code they were given, and shows a refused code in the server's words".
 
 ### ID-08 Add another passkey to your own account
 - **Who:** any signed-in person
-- **Starts at:** "Your account" (`/account`), **"Add another passkey"**
+- **Starts at:** "Your account" (the person icon in the header, `/account`), **"Add another passkey"**
 - **Needs:** signed in; a browser that can make passkeys
 - **Level:** Core
 - **Learn first:** ID-02
@@ -182,7 +184,7 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 
 ### ID-09 See who you are and every role you hold, and switch organisation
 - **Who:** any signed-in person
-- **Starts at:** "Your account" (`/account`). Also `GET /api/me`.
+- **Starts at:** "Your account" (the person icon in the header, `/account`). Also `GET /api/me`.
 - **Needs:** signed in
 - **Level:** Foundation
 - **Learn first:** ID-02
@@ -190,11 +192,11 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 - **Steps:**
   1. The page shows your name, e-mail and, for an operator, "FrostAura operator".
   2. "Your roles" lists each organisation, with "Working in it now" on the active one, and each grant: "<Role> of the whole organisation" or "<Role> of a division, <path>", with what that role may do. An Admin or Owner sees "People in <Org>".
-  3. In more than one organisation: "You belong to <n> organisations. The console shows one at a time." and **"Working in"**. Choosing another opens its org chart; every screen then reads that organisation. The choice is kept on this device.
+  3. In more than one organisation: "You belong to <n> organisations. The console shows one at a time." and **"Working in"** (the header carries the same drop-down on every screen). Choosing another opens its org chart; every screen then reads that organisation. The choice is kept on this device.
 - **You know it worked when:** "Working in it now" moves to the organisation chosen.
 - **Variations and refusals:** no role yet: "You hold no role in any organisation yet. Whoever invited you grants one." (an operator: "As an operator you enter organisations from Every organisation."). Failed read: "Your account could not be loaded". An operator inside an organisation in God mode has no switcher; the entered organisation applies.
 - **Where:** `features/account/AccountView.tsx`, `OrganisationSwitcher.tsx`; `lib/useActiveOrganisation.ts`; `AuthEndpoints.MeAsync`.
-- **Reachable from:** UI; API. The header carries the same switcher once the shell mounts it.
+- **Reachable from:** UI; API.
 - **Covered by tests:** `AccountView.test.tsx`; `tests-e2e/manage.spec.ts`; `SignInTests`.
 
 ### ID-10 Read the operator access log
@@ -223,18 +225,18 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 
 ### ID-11 Set who is an operator, and whether the development sign-in can exist
 - **Who:** host administrator
-- **Starts at:** environment configuration and the command line
+- **Starts at:** the host's `.env` and the command line
 - **Needs:** access to the host
 - **Level:** Operator
 - **Learn first:** ID-03, SHL-05
 - **What you learn:** God mode is granted to an explicit list of addresses only, never by domain, and production cannot enable the development sign-in.
 - **Steps:**
-  1. Set `ENDGAME_OPERATORS` to a list of e-mail addresses (separated by commas, semicolons or spaces), and/or `Operators:Emails`.
-  2. Restart the control plane. Those people now see the God-mode band and can open `/operator`.
+  1. Set `ENDGAME_OPERATORS` in the host's `.env` to a list of e-mail addresses (separated by commas, semicolons or spaces), and/or `Operators:Emails`. The example file says "# God mode: comma-separated e-mail addresses, an explicit list. [prod]".
+  2. Restart the control plane (`docker compose -f docker-compose.prod.yml up -d control-plane`). Those people now see the God-mode band and can open `/operator`.
   3. `make prod-config` checks that production pins `ENDGAME_DEV_LOGIN` to false.
 - **You know it worked when:** an operator sees the God-mode band. `make prod-config` prints "prod-config: parses; development sign-in pinned off; every service Production; backup key required."
-- **Variations and refusals:** an access token is never treated as an operator.
-- **Where:** `AccessService.cs` (`OperatorOptions`), `Makefile`.
+- **Variations and refusals:** an access token is never treated as an operator. `make prod-config` fails with "prod-config: the production control plane could enable the development sign-in" if it could.
+- **Where:** `AccessService.cs` (`OperatorOptions`), `.env.example`, `docker-compose.prod.yml`, `Makefile` (`prod-config`).
 - **Reachable from:** command line only
 - **Covered by tests:** `ControlPlaneDebtsTests.Operators_come_from_the_explicit_list_only…`; `DevelopmentSignInTests`.
 
@@ -288,7 +290,9 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 - **Level:** Core
 - **Learn first:** PPL-01
 - **What you learn:** each level of the tree has its own people list.
-- **Steps:** the person picks a node in the indented list. The address becomes `/people?scope=…` and the list and heading follow.
+- **Steps:**
+  1. The person opens **"Show people at"**: the organisation, its divisions, projects and apps, indented.
+  2. They pick a level. The address becomes `/people?scope=…`, and the heading **"People in {name}"** and the list follow.
 - **You know it worked when:** the heading changes to the chosen node's name.
 - **Variations and refusals:** the same refusals as PPL-01 at the new scope.
 - **Where:** `PeopleView.tsx` (`ScopePicker`).
@@ -330,8 +334,11 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 - **Level:** Core
 - **Learn first:** PPL-03
 - **What you learn:** existing people need no code; the grant applies at once.
-- **Steps:** the same as PPL-03, steps 1 to 5. The server issues no code.
-- **You know it worked when:** "{name} already has a passkey, so they now hold {Role} at {node} and can sign in straight away." appears.
+- **Steps:**
+  1. The person fills in **"E-mail address"** with the address of someone who already signs in, and chooses **"Role"** and **"Where"**, as in PPL-03.
+  2. They click **"Invite"**. The server grants the role and issues no code.
+  3. The panel says "{name} already has a passkey, so they now hold {Role} at {node} and can sign in straight away."
+- **You know it worked when:** that line appears.
 - **Variations and refusals:** granting at a node where they already hold a grant replaces that grant's role.
 - **Where:** as PPL-03.
 - **Reachable from:** UI; MCP
@@ -400,22 +407,24 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
 
 ### PPL-08 Accept an invitation and register as an invited member
 - **Who:** invited person
-- **Starts at:** the invitation e-mail (which says "Open {console} and register a passkey with this e-mail address and the code below.") or a code handed over by the inviter
+- **Starts at:** the invitation e-mail (which says "Open {console} and register a passkey with this e-mail address and the code below.") or a code handed over by the inviter; then `/sign-in`, **"First time here? Create your passkey"**
 - **Needs:** an open code (7 days, single use) for that e-mail address
 - **Level:** Foundation
 - **Learn first:** PPL-03
 - **What you learn:** the code proves you were invited, once, and after that your passkey is all you use.
-- **Steps that work, through the API only:**
-  1. Request registration options with the e-mail, a display name and the invitation code. The server checks the code in constant time and against its expiry.
-  2. Complete the passkey registration. The passkey is stored, the code is cleared and the person is signed in with exactly the granted role.
-- **Steps in the console:** the sign-in screen offers only **"First time here? Create your passkey"**, with name and e-mail. Submitting gets "Endgame is invite-only…" (ID-07). **The invited person cannot finish in the console.**
-- **You know it worked when:** (API) the answer lists the granted membership.
+- **Steps:**
+  1. They open the console and click **"First time here? Create your passkey"**.
+  2. They fill in **"Your name"**, **"Email address"** (the address they were invited at) and **"Invitation code"**.
+  3. They click **"Create passkey"** (**"Waiting for your device…"**). The server checks the code in constant time and against its expiry, then the device asks them to approve.
+  4. The passkey is stored, the code is cleared and they are signed in with exactly the role they were granted.
+- **You know it worked when:** the console opens with **"Sign out"** in the header, and "Your account" lists the role they were invited to.
 - **Variations and refusals:**
   - Wrong, used or expired code: 403, "That invitation code is not valid for this e-mail address, or it has expired."
-  - The same gap blocks the Owner of an organisation that an operator provisions from God mode.
-- **Where:** `AuthEndpoints.cs` (the "invitation" kind), `AccountService.FindInvitedAsync` and `ClearInvitationAsync`. The console side is missing from `SignInView.tsx`.
-- **Reachable from:** **API only. Screen missing.**
-- **Covered by tests:** `SignInTests.After_the_first_person_registration_needs_an_invitation_and_the_invited_person_gets_their_role` (API). No UI test.
+  - No code: ID-07's refusal.
+  - The Owner of an organisation an operator provisions registers the same way, with the code the operator hands over.
+- **Where:** `SignInView.tsx`, `store/sensitive.ts` (`registerOptionsWithInvitation`); `AuthEndpoints.cs` (the "invitation" kind), `AccountService.FindInvitedAsync` and `ClearInvitationAsync`.
+- **Reachable from:** UI; API
+- **Covered by tests:** `SignInTests.After_the_first_person_registration_needs_an_invitation_and_the_invited_person_gets_their_role`; `App.test.tsx` "registers an invited person with the code they were given, and shows a refused code in the server's words".
 
 ---
 
@@ -432,7 +441,7 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   1. The heading reads **"Let an AI assistant work with your organisation"** (technical: **"MCP access tokens"**).
   2. The lead reads: "Give an assistant a key and it can do what you can do here — read the org chart, start ideas, look after apps — but never more than the role you give it. It can never make an app public, change the overdraft, top up or download an app."
   3. In technical mode the lead instead names `egp_…` tokens, `/mcp` and `/mcp/apps/{appId}`, and says "God mode is never available through one."
-  4. The side panel **"The addresses to give it"** (technical: **"Endpoints"**) shows **"The whole organisation"** with `{origin}/mcp` and one line per app with `{origin}/mcp/apps/{id}`. Each has **"Copy"**, which reads **"Copied"** afterwards.
+  4. The side panel **"The addresses to give it"** (technical: **"Endpoints"**) shows **"The whole organisation"** (technical: **"Control plane"**) with `{origin}/mcp` and one line per app with `{origin}/mcp/apps/{id}`. Each has **"Copy"**, which reads **"Copied"** afterwards.
   5. The footnote reads "The organisation's address lets it do what you do in the console; an app's address lets it use that app the way its people do." (technical: "Streamable HTTP, stateless; no OAuth — the token is made here.")
 - **You know it worked when:** a copied address reads **"Copied"**.
 - **Variations and refusals:**
@@ -482,7 +491,7 @@ Every entry carries the four academy fields you added: Level, Learn first, What 
   - Empty: "No assistant has a key yet" and "Make a key here, then give it and the address beside to your assistant."
   - Load failure: "The assistant access could not be loaded" and **"Try again"**.
   - "Last used" updates at most once a minute.
-  - The list shows your keys from **every** organisation without saying which one each belongs to.
+  - The list shows only your own keys, from every organisation you are in, each naming its organisation.
 - **Where:** `AssistantsView.tsx` (`TokenRow`). `GET /api/tokens`, `DELETE /api/tokens/{id}`.
 - **Reachable from:** UI
 - **Covered by tests:** `AssistantsView.test.tsx` "lists each key…", "shows loading, a failed read and an empty list distinctly" and "revokes at once after a confirmation…"; `breadth.spec.ts`.
@@ -619,9 +628,12 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** ID-02
 - **What you learn:** your console session opens every app you have a role on, and the app is told who you are.
-- **Steps:** Edge asks the control plane. The answer is allow, with a 15-minute app-scoped token that Edge passes to the app as `X-Endgame-Session`. The app opens and shows the person as a member with their role. An operator entering this way is logged in the operator log.
-- **You know it worked when:** the app loads. In template apps the user menu shows the person's name with **"Sign out"**.
-- **Variations and refusals:** see ACC-10 (no role) and ACC-14 to ACC-16 (unavailable).
+- **Steps:**
+  1. The member opens the app's address in the browser where they are signed in to the console.
+  2. Edge asks the control plane. The answer is allow, with a 15-minute app-scoped token that Edge passes to the app as `X-Endgame-Session`.
+  3. The app opens and shows the person as a member with their role; in template apps the user menu shows their name with **"Sign out"**.
+- **You know it worked when:** the app loads, showing the person's name.
+- **Variations and refusals:** see ACC-10 (no role) and ACC-14 to ACC-16 (unavailable). An operator entering this way is logged in the operator log.
 - **Where:** `Edge/Routing/AppGate.cs`, `Edge/Access/AccessGate.cs`, `AppIdentityService.CheckAsync`. `POST /internal/access/check`.
 - **Reachable from:** UI (browser)
 - **Covered by tests:** `AppAccessTests.A_private_app_admits_members_with_rights…`; `acceptance.spec.ts` test 4.
@@ -655,7 +667,10 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** ACC-02, ID-02
 - **What you learn:** apps use the same passkey as the console.
-- **Steps:** they approve the passkey. This is the console sign-in, so the console session starts too. The page sends them to `returnTo`, or through a hand-off for the subdomain form (ACC-08). The app opens.
+- **Steps:**
+  1. On the app's sign-in page, under **"Members of {Org}"**, they click **"Sign in with a passkey"** and approve on their device.
+  2. This is the console's own sign-in, so the console session starts too.
+  3. The page sends them to `returnTo`, or through a hand-off for the subdomain form (ACC-08), and the app opens.
 - **You know it worked when:** the app opens at the original address.
 - **Variations and refusals:**
   - Unknown key: the error text from ID-02.
@@ -700,7 +715,10 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** ACC-07
 - **What you learn:** anyone may register for a public app with just a passkey.
-- **Steps:** the lead reads "Anyone may use {App}. A passkey on this device signs you in — there is no password." There is no code field. Fill in the e-mail, optionally the name, click **"Create a passkey"**, approve, and return signed in.
+- **Steps:**
+  1. The page reads **"Create your sign-in for {App}"**, then "Anyone may use {App}. A passkey on this device signs you in — there is no password." There is no code field.
+  2. They fill in **"E-mail address"** and, optionally, **"Your name"**, click **"Create a passkey"** and approve on the device.
+  3. They return to the app, signed in.
 - **You know it worked when:** the app shows their name.
 - **Variations and refusals:**
   - Private app: the lead reads "{App} is private: only members of {Org} can open it." and no form is shown. The server refuses with "This app is private: only members of the organisation with rights over it can open it."
@@ -716,7 +734,10 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** ACC-04 or ACC-05
 - **What you learn:** a passkey made for one app works there and nowhere else.
-- **Steps:** they approve the passkey. The server verifies it for this app only and checks the app may still be opened. A new 14-day session starts and they return.
+- **Steps:**
+  1. Under **"Using this app"**, they click **"Sign in with your passkey"** and approve.
+  2. The server verifies the passkey for this app only and checks the app may still be opened by them. A new 14-day session starts.
+  3. They return to the app.
 - **You know it worked when:** the app opens with their name.
 - **Variations and refusals:**
   - A passkey from another app, or an unknown one: "That passkey could not be verified for this app."
@@ -733,8 +754,10 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** none
 - **What you learn:** public means anyone, and signing in only tells the app who you are.
-- **Steps:** with no cookies, Edge opens the app without asking the control plane. With cookies, it asks; a known visitor gets a session token, and anyone else is anonymous.
-- **You know it worked when:** the app loads, offering **"Sign in"** in template apps.
+- **Steps:**
+  1. With no cookies, Edge opens the app without asking the control plane. With cookies, it asks; a known visitor gets a session token, and anyone else is anonymous.
+  2. The app loads, offering **"Sign in"** in template apps.
+- **You know it worked when:** the app loads, offering **"Sign in"**.
 - **Variations and refusals:** even if the control plane is down, a public app opens anonymously.
 - **Where:** `AccessGate.CheckAsync`.
 - **Reachable from:** UI
@@ -769,11 +792,11 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Learn first:** ACC-08
 - **What you learn:** sign-in links work once, for a minute.
 - **Steps:**
-  1. Expired: the page reads **"This sign-in link has expired"**, "Sign-in links work once, for a minute. Sign in again to continue." (410).
-  2. Control plane failed: **"Sign-in is unavailable just now"**, "Endgame could not finish signing you in. Please try again in a moment." (503).
-  3. Both offer **"Sign in again"**.
+  1. The page reads **"This sign-in link has expired"**, "Sign-in links work once, for a minute. Sign in again to continue." (410).
+  2. They click **"Sign in again"**: the app's sign-in page.
+  3. They sign in (ACC-03 or ACC-06), and the app opens.
 - **You know it worked when:** after **"Sign in again"**, the app opens.
-- **Variations and refusals:** none found.
+- **Variations and refusals:** if the control plane failed while redeeming it: **"Sign-in is unavailable just now"**, "Endgame could not finish signing you in. Please try again in a moment." (503), also with **"Sign in again"**.
 - **Where:** `AuthPages.RedeemAsync`, `AuthPage.WriteMessageAsync`.
 - **Reachable from:** UI
 - **Covered by tests:** `EdgePipelineTests` hand-off test.
@@ -785,7 +808,9 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** ACC-01
 - **What you learn:** being signed in is not the same as having access.
-- **Steps:** Edge's check answers deny. The page reads **"You don't have access to this app"**, "You are signed in, but your account has no access to this app. Ask its owner for access." (403) — true of a private app as of an unshared one.
+- **Steps:**
+  1. Someone signed in to Endgame, with no role on the app, opens its address.
+  2. Edge's check answers deny. The page reads **"You don't have access to this app"**, "You are signed in, but your account has no access to this app. Ask its owner for access." (403) — true of a private app as of an unshared one.
 - **You know it worked when:** that page shows.
 - **Variations and refusals:**
   - The same wording is used when the app is private and sharing is irrelevant.
@@ -815,16 +840,16 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 
 ### ACC-12 Lose access when an app is unshared or made private
 - **Who:** app end user
-- **Starts at:** an Admin stops sharing the app, or changes its access (another reader covers that control)
+- **Starts at:** an Admin stops sharing the app with them, or changes its access (another reader covers that control)
 - **Needs:** the person was an end user
 - **Level:** Core
 - **Learn first:** ACC-04
 - **What you learn:** taking access away takes effect at once.
 - **Steps:**
-  1. On unshare, their sessions end at once and the next request asks them to sign in. Signing in is refused with "This app is not shared with that address."
-  2. When the app is made private, existing sessions stop resolving at the app and Edge's next check denies them (ACC-10). Edge may reuse a previous answer briefly, for a few seconds.
-- **You know it worked when:** the sign-in page or the refusal page appears.
-- **Variations and refusals:** none found.
+  1. On unshare, their sessions end at once, and the next request asks them to sign in.
+  2. Signing in with their passkey is refused with "This app is not shared with that address."
+- **You know it worked when:** the sign-in page or the refusal appears.
+- **Variations and refusals:** when the app is made private instead, existing sessions stop resolving at the app and Edge's next check denies them (ACC-10). Edge may reuse a previous answer briefly, for a few seconds.
 - **Where:** `AppIdentityService.UnshareAsync`, `ResolveAsync`, `CheckAsync`.
 - **Reachable from:** UI
 - **Covered by tests:** `AppAccessTests` shared-app test (unshare half).
@@ -852,13 +877,14 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 ### ACC-14 Visit a paused app
 - **Who:** any visitor
 - **Starts at:** the app's address
-- **Needs:** the organisation is past its overdraft limit, or a monthly budget above the app is spent
+- **Needs:** a monthly budget above the app is spent, or the organisation is past its overdraft limit
 - **Level:** Core
 - **Learn first:** ACC-01
 - **What you learn:** running out of credits pauses an app without losing anything.
-- **Steps:** no credits left: **"This app is paused"**, "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up." Budget spent: **"This app is paused"**, "It has used this month's budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns." Both are 503 and the app is never woken.
-- **You know it worked when:** after a top-up or a raised budget, the app opens again.
-- **Variations and refusals:** none found.
+- **Steps:**
+  1. Budget spent: **"This app is paused"**, "It has used this month's budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns." It is a 503 and the app is never woken.
+- **You know it worked when:** after a raised budget, or a top-up, the app opens again.
+- **Variations and refusals:** past the overdraft limit: **"This app is paused"**, "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up." (503).
 - **Where:** `AppGate.InvokeAsync`, `UnavailablePage.cs`.
 - **Reachable from:** UI
 - **Covered by tests:** `EdgePipelineTests.A_paused_app_gets_its_holding_page_and_is_never_woken`; `acceptance.spec.ts` "13. at the overdraft limit the app is paused…"; `ControlPlaneDebtsTests.At_the_overdraft_limit_work_stops_and_apps_pause…`.
@@ -870,14 +896,15 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Core
 - **Learn first:** ACC-01
 - **What you learn:** a sleeping app wakes on the first visit; the visitor just waits.
-- **Steps:** the request waits while Edge wakes the app, and concurrent visitors share one wake. The page then loads, with a wake-time header added.
+- **Steps:**
+  1. The request waits while Edge wakes the app; concurrent visitors share one wake. There is no "waking up" page.
+  2. The page then loads, with a wake-time header added.
 - **You know it worked when:** the app loads after a short delay.
 - **Variations and refusals** (each a 503 page):
   - Timed out: **"This app is taking longer than usual"**, "It is still starting. Please try again in a few seconds." (Retry-After 3).
   - No room on the host: **"This app could not start just now"**, "Endgame is very busy at the moment. Please try again in a minute."
   - Crashed: **"This app has stopped for a moment"**, "Something went wrong inside it. It will be started again shortly — please try again in a moment."
   - The app fails mid-request: the crashed page, or **"This app is temporarily unavailable"**.
-  - There is no "waking up" page.
 - **Where:** `AppGate.cs`, `Runtime/AppRuntime.cs`, `UnavailablePage.cs`.
 - **Reachable from:** UI
 - **Covered by tests:** `AppRuntimeTests`; `EdgeRoutingTests.Every_page_is_plain_language_and_branded`.
@@ -911,7 +938,10 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** ID-02
 - **What you learn:** normal mode never names infrastructure; technical mode shows ids, raw events and protocol names.
-- **Steps:** click **"Technical"**. It looks pressed, screens add ids and raw detail, and a **"System"** link appears beside the toggle. The choice is remembered in this browser and survives a reload.
+- **Steps:**
+  1. Click **"Technical"**. It looks pressed, and a **"System"** link appears beside the toggle.
+  2. Screens add ids and raw detail, and name protocols: the AI assistants heading reads **"MCP access tokens"**.
+  3. Every screen keeps the mode, and this browser remembers it after a reload.
 - **You know it worked when:** **"Technical"** is the pressed option and, for example, the AI assistants heading reads **"MCP access tokens"**.
 - **Variations and refusals:** a private window that refuses storage keeps the mode for the session only.
 - **Where:** `AppShell.tsx` (`ModeToggle`), `store/uiSlice.ts`, `store/index.ts`.
@@ -925,7 +955,9 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Core
 - **Learn first:** SHL-01
 - **What you learn:** system status is technical detail, shown only in technical mode.
-- **Steps:** in normal mode the page reads **"System status is technical detail"**, "It names the services Endgame runs on, so it is shown in technical mode only.", with **"Switch to technical mode"**. Clicking it shows the status.
+- **Steps:**
+  1. In normal mode the page reads **"System status is technical detail"**, "It names the services Endgame runs on, so it is shown in technical mode only.", with **"Switch to technical mode"**.
+  2. Clicking it turns technical mode on, and the status shows.
 - **You know it worked when:** the status view replaces the notice.
 - **Variations and refusals:** none found.
 - **Where:** `App.tsx` (`SystemRoute`).
@@ -957,7 +989,9 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** none
 - **What you learn:** the header can be skipped.
-- **Steps:** press Tab. **"Skip to the content"** appears top left; Enter moves focus to the main area.
+- **Steps:**
+  1. Press Tab. **"Skip to the content"** appears top left.
+  2. Press Enter: focus moves to the main area, past the header.
 - **You know it worked when:** focus lands on the main content.
 - **Variations and refusals:** none found.
 - **Where:** `AppShell.tsx`.
@@ -969,10 +1003,10 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Starts at:** every console screen
 - **Needs:** your e-mail is in the operator list (ID-11)
 - **Level:** Operator
-- **Learn first:** ID-11
+- **Learn first:** ID-02
 - **What you learn:** operators always know they are in God mode, which organisation every screen is showing, and that what they do there is logged for the Owner.
 - **Steps:**
-  1. A coral band labelled "God mode" shows **"GOD MODE"**. Outside an organisation it reads "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it."
+  1. A coral band labelled "God mode" shows **"God mode"** (drawn in capitals). Outside an organisation it reads "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it."
   2. Inside an organisation you entered it reads, on every screen, "You are inside {Name} as a FrostAura operator, acting as an Admin. Your entry and everything you change here are logged where its Owner can read them.", with **"Leave {Name}"**.
   3. **"Leave {Name}"** returns every screen to your own organisation and opens `/operator`. **"Every organisation"** does the same; it is shown everywhere except on `/operator` while you are in no organisation.
 - **You know it worked when:** the band is visible, naming the organisation you are inside.
@@ -988,7 +1022,9 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Level:** Foundation
 - **Learn first:** ID-02
 - **What you learn:** a stale link gets a plain answer and a way back.
-- **Steps:** the page reads **"Nothing lives at this address"**, "The link may be old, or the thing it pointed to was removed.", with **"Back to the org chart"**.
+- **Steps:**
+  1. The page reads **"Nothing lives at this address"**, "The link may be old, or the thing it pointed to was removed."
+  2. **"Back to the org chart"** returns to `/`.
 - **You know it worked when:** the button returns to `/`.
 - **Variations and refusals:** any crash inside a screen is caught and shown as a failure, never a blank page.
 - **Where:** `App.tsx` (`NotFound`, `ErrorBoundary`).
@@ -999,11 +1035,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 
 ## Gaps and oddities found
 
-1. **Invited members cannot register through the console.**
-   - The sign-in form sends only name and e-mail; the code field is missing (`SignInView.tsx`, `passkeyRegisterOptions` in `api.ts`).
-   - The invitation e-mail, the People screen ("They use it to make their passkey") and the pending-row text ("they sign in with the code they were given") all point to a step that does not exist.
-   - The control plane supports it (`SignInTests`).
-   - The same blocks the Owner of an organisation an operator provisions.
+1. **Fixed:** invited members register through the console: the sign-in form has an **"Invitation code"** field (PPL-08, ID-07).
 2. **Fixed:** changing the role of someone with no passkey no longer issues a new code (PPL-06).
 3. **Fixed:** the console resolves a role as the server does — the tree carries each node's effective role, and `lib/roles.ts` `roleAt` takes the deepest grant (PPL-01); the screens read `effectiveRole` for the node.
 4. **Fixed:** People below the organisation lists the Owner and grants set above, as "Set at {node}" (PPL-01).
@@ -1023,3 +1055,5 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 15. **Partly fixed:** People says a member's code works for 7 days and shows each pending code's date. The share screen (app shares, 14 days) does not say yet.
 16. **Fixed:** "Send a new code" on a pending person's row (PPL-05).
 17. **Not verified:** an archived app, if still routed, shows anonymous visitors the "You are signed in…" refusal (archived apps, and apps in an archived division or project, are no longer routed: TREE-07). **Fixed:** a role-less account after the first organisation exists is told organisations are set up by FrostAura, not offered the first-run screen (ORG-03).
+18. **A key's refusal reads "acts as a admin at most"** (`AccessService.cs`, `RequireAsync`): the role word is put after "a" whatever it is (AST-04).
+19. **Fixed:** in the demo console, the address a signed-out visitor asked for is kept (it was read from the page's path, not the console's), so ID-02 and ID-04 land where they were going there too.

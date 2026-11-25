@@ -116,7 +116,7 @@ describe("EmployeeView", () => {
     fireEvent.click(within(form).getByRole("button", { name: "Add it" }));
     expect(await screen.findByText(/It was not saved: Builders only/)).toBeTruthy();
     expect(within(screen.getByRole("list", { name: "Memory entries" })).queryByText("Weekends off")).toBeNull();
-    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ title: "Weekends off", body: "No deploys on weekends.", kind: "fact" });
+    expect(api.calls.find((c) => c.method === "POST" && c.path.includes("/memory"))?.body).toEqual({ title: "Weekends off", body: "No deploys on weekends.", kind: "fact" });
   });
 
   it("corrects and removes an entry, with why", async () => {

@@ -45,9 +45,10 @@ public static class RunnerHost
         services.AddSingleton(new Estimator(options));
         services.AddSingleton<IPreviewProbe>(sp => new EdgePreviewProbe(sp.GetRequiredService<IHttpClientFactory>().CreateClient("edge-control")));
         services.AddSingleton<IAppCaller>(sp => new EdgeAppCaller(sp.GetRequiredService<IHttpClientFactory>().CreateClient("edge-control"), sp.GetRequiredService<ControlPlaneClient>()));
-        services.AddSingleton<IWorkflow, TaskWorkflow>();
+        services.AddSingleton(sp => new BuildWorkflow(sp.GetRequiredService<Estimator>(), sp.GetRequiredService<IPreviewProbe>(), sp.GetRequiredService<IAppCaller>()));
+        services.AddSingleton<IWorkflow>(sp => new TaskWorkflow(sp.GetRequiredService<BuildWorkflow>()));
         services.AddSingleton<IWorkflow, ResearchWorkflow>();
-        services.AddSingleton<IWorkflow>(sp => new BuildWorkflow(sp.GetRequiredService<Estimator>(), sp.GetRequiredService<IPreviewProbe>(), sp.GetRequiredService<IAppCaller>()));
+        services.AddSingleton<IWorkflow>(sp => sp.GetRequiredService<BuildWorkflow>());
         services.AddSingleton<IWorkflow, ConversationWorkflow>();
         services.AddSingleton<IWorkflow, ReviewWorkflow>();
         services.AddSingleton<IWorkflow, SuggestWorkflow>();

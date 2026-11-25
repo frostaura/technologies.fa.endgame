@@ -50,6 +50,21 @@
         "app-live",
         "low-credits",
         "god-mode",
+        "account",
+        "two-organisations",
+        "app-asleep",
+        "app-paused",
+        "app-crashed",
+        "at-overdraft-limit",
+        "s1-app-made-private",
+        "s1-app-not-published",
+        "s1-app-private",
+        "s1-app-public",
+        "s1-app-unshared",
+        "s1-development-apps",
+        "s1-development-sign-in",
+        "s1-keys-at-limit",
+        "s1-session-check-fails",
         "default",
         "quiet",
         "empty-organisation",
@@ -65,18 +80,12 @@
         "build-waiting-on-plan",
         "build-failed",
         "app-busy",
-        "app-asleep",
-        "app-paused",
-        "app-crashed",
         "app-never-measured",
         "employee-memory",
         "hire-pending",
-        "at-overdraft-limit",
         "budget-spent",
         "manage-tree",
-        "account",
         "employee-released",
-        "two-organisations",
         "screening-offline",
         "ask-unavailable",
         "app-private",
@@ -107,8 +116,7 @@
     },
     "variations": {
       "type": "array",
-      "minItems": 1,
-      "description": "What else can happen: each refusal or other branch worth seeing, played from its own start in its own world. Shown under the flow's \"What else can happen\"; its steps are numbered from 1 and each says in its note what it shows.",
+      "description": "What else can happen: each refusal or branch that matters, played in the live console from its own start, as its own person and world. Shown under \"What else can happen\" on the flow's page.",
       "items": {
         "$ref": "#/definitions/variation"
       }
@@ -607,7 +615,8 @@
         "title": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 120
+          "maxLength": 140,
+          "description": "The branch in a few words, as the learner picks it."
         },
         "persona": {
           "$ref": "#/properties/persona"
@@ -623,7 +632,8 @@
           "minItems": 1,
           "items": {
             "$ref": "#/definitions/step"
-          }
+          },
+          "description": "Numbered 1, 2, … within the variation; each step's note says what it shows."
         }
       }
     }

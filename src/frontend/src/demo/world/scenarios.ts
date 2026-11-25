@@ -1,6 +1,5 @@
 import { IDS, ORG, PEOPLE, defaultWorld } from "./default";
 import { DEFAULT_PRICING, WORLD_VERSION, uuidFor, type World } from "../server/world";
-import { scenariosS5 } from "./scenarios.s5";
 
 /**
  * Scenarios and personas: named presets of the world and of who is signed in. A scenario is one
@@ -181,7 +180,6 @@ defineScenario({ name: "employee-released", title: "An employee who was let go",
 defineScenario({ name: "two-organisations", title: "A person in two organisations", route: "/", persona: "two-organisations", featured: BASE_FEATURED });
 defineScenario({ name: "screening-offline", title: "God mode with no model to screen a new organisation", apply: (w) => (w.modelsOffline = true), route: "/operator", persona: "operator", featured: BASE_FEATURED });
 defineScenario({ name: "god-mode", title: "God mode: every organisation", route: "/operator", persona: "operator", featured: BASE_FEATURED });
-for (const s of scenariosS5) defineScenario(s);
 
 // ---------------------------------------------------------------------------------------------
 // Personas

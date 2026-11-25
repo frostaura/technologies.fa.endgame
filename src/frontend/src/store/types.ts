@@ -248,6 +248,53 @@ export interface Idea {
   record: VerdictRecord;
   /** The red line the verdict found breached; nothing can be built over it. */
   redLine: string | null;
+  /** Decisions taken on earlier rounds of research, oldest first, kept after a new verdict cleared them. */
+  history: IdeaDecisionHistory[];
+  /** Work on this idea that stopped and can be tried again, or null. */
+  tryAgain: TryAgainOffer | null;
+}
+
+/** A decision taken on an earlier verdict: "change" (researched again with a note) or "retry" (research that did not finish, started again). */
+export interface IdeaDecisionHistory {
+  verdict: VerdictOutcome | null;
+  headline: string | null;
+  choice: "change" | "retry";
+  note: string | null;
+  by: string;
+  at: string;
+  /** The research that followed. */
+  runId: string;
+}
+
+/** Stopped work on an idea that can be started again, and why it stopped. */
+export interface TryAgainOffer {
+  runId: string;
+  what: "research" | "build";
+  why: "failed" | "cancelled" | "budget" | "plan-declined";
+}
+
+/** What trying a stopped piece of work again costs, and how much of it is already done and kept. */
+export interface RetryEstimate {
+  runId: string;
+  what: "research" | "build" | "change";
+  credits: number;
+  basis: string;
+  /** Parts already built and checked; null when no plan was agreed. */
+  partsDone: number | null;
+  parts: number | null;
+}
+
+/** What a requested change to an app is expected to cost, before it starts. */
+export interface ChangeEstimate {
+  credits: number;
+  basis: string;
+}
+
+/** What one message in the conversation is expected to cost, and the most it can. */
+export interface ConversationEstimate {
+  credits: number;
+  ceiling: number | null;
+  basis: string;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -278,6 +325,8 @@ export interface Run {
   outcome: string | null;
   summary: string | null;
   createdAt: string;
+  /** The latest attempt at research, a build or a change, stopped without finishing: it can be tried again. */
+  canTryAgain: boolean;
 }
 
 export interface RunEvent {
@@ -301,9 +350,13 @@ export interface ConversationMessage {
   runId: string;
   seq: number;
   at: string;
-  /** "owner" for the owner's own messages; otherwise who answered. */
+  /** "owner" for a person's own messages; otherwise who answered ("assistant", or "runner" for Endgame's own notices). */
   from: string;
   text: string;
+  /** Who said it, by name: the person who sent it, or the employee who answered. */
+  by: string | null;
+  /** A notice's reason, such as "budget_exhausted". */
+  code: string | null;
 }
 
 /** `GET /api/conversations?scope=&employeeId=`: oldest first, at most the last 200 messages. */

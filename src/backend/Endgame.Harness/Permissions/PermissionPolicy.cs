@@ -189,7 +189,9 @@ public sealed class PermissionPolicy
         {
             if (set.Ask.FirstOrDefault(r => r.Matches(tool, targets)) is { } ask)
             {
-                return Asked($"cascade:{set.SetAt}:{set.Key}:ask:{ask.Text}", $"The {set.Key} rule set set at {set.SetAt} asks for sign-off on '{ask.Text}'.", tool, targets, sets);
+                // An "asks you first" rule is the owner saying they want to be asked: it raises an approval even when
+                // nobody is watching, rather than refusing (AUTO-05). The rule itself is the checkpoint.
+                return Asked($"cascade:{set.SetAt}:{set.Key}:ask:{ask.Text}", $"The {set.Key} rule set set at {set.SetAt} asks for sign-off on '{ask.Text}'.", tool, targets, sets, $"{set.SetAt}:{ask.Text}");
             }
         }
 
@@ -224,9 +226,9 @@ public sealed class PermissionPolicy
             : Asked("default:ask", $"No rule allows {tool} here.", tool, targets, sets);
     }
 
-    private PermissionDecision Asked(string rule, string reason, string tool, ToolTargets targets, IReadOnlyList<CascadeRuleSet> sets)
+    private PermissionDecision Asked(string rule, string reason, string tool, ToolTargets targets, IReadOnlyList<CascadeRuleSet> sets, string? askedBy = null)
     {
-        var checkpoint = Checkpoints.FirstOrDefault(r => r.Matches(tool, targets))?.Text;
+        var checkpoint = Checkpoints.FirstOrDefault(r => r.Matches(tool, targets))?.Text ?? askedBy;
         if (checkpoint is null)
         {
             foreach (var set in sets)
@@ -267,4 +269,30 @@ public sealed class PermissionPolicy
 public interface IApprovalGate
 {
     Task<bool> RequestAsync(string title, string detail, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The same, with what a decline means (<see cref="ApprovalConsequence"/>) shown to the person, and the person's own
+    /// note returned with the answer.
+    /// </summary>
+    async Task<ApprovalAnswer> AskAsync(string title, string detail, string onDecline, CancellationToken cancellationToken) =>
+        new(await RequestAsync(title, detail, cancellationToken), null);
+}
+
+/// <summary>A person's answer to an approval, and the note they wrote with it (or null).</summary>
+public sealed record ApprovalAnswer(bool Approved, string? Note);
+
+/// <summary>What declining an approval does to the work, so the console can say it truthfully (RUN-07).</summary>
+public static class ApprovalConsequence
+{
+    /// <summary>Declined, the step is not taken and the work carries on without it.</summary>
+    public const string Continues = "continues";
+
+    /// <summary>Declined, the work stops (the start or the plan checkpoint).</summary>
+    public const string Stops = "stops";
+}
+
+/// <summary>A tool that can say, in the owner's words, what approving one call of it will do (an approval's title in normal mode).</summary>
+public interface IApprovalTitle
+{
+    string ApprovalTitle(JsonObject arguments);
 }

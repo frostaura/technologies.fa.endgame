@@ -45,11 +45,15 @@ internal static class ControlPlaneTools
         ["ideas_suggest"] = MemberRole.Builder,
         ["ideas_suggestions"] = MemberRole.Viewer,
         ["suggestion_take"] = MemberRole.Builder,
+        ["suggestion_dismiss"] = MemberRole.Builder,
+        ["ideas_suggest_estimate"] = MemberRole.Builder,
         ["runs_list"] = MemberRole.Viewer,
         ["run_get"] = MemberRole.Viewer,
         ["run_events"] = MemberRole.Viewer,
         ["run_control"] = MemberRole.Builder,
         ["approval_answer"] = MemberRole.Builder,
+        ["run_retry_estimate"] = MemberRole.Builder,
+        ["run_retry"] = MemberRole.Builder,
         ["tasks_list"] = MemberRole.Viewer,
         ["credits_get"] = MemberRole.Viewer,
         ["budget_set"] = MemberRole.Admin,
@@ -74,7 +78,11 @@ internal static class ControlPlaneTools
         ["app_ask"] = MemberRole.Builder,
         ["app_versions"] = MemberRole.Viewer,
         ["app_restore"] = MemberRole.Builder,
+        ["app_change_estimate"] = MemberRole.Builder,
+        ["app_change"] = MemberRole.Builder,
         ["conversation_post"] = MemberRole.Builder,
+        ["conversation_estimate"] = MemberRole.Viewer,
+        ["conversation_history"] = MemberRole.Viewer,
         ["ontology_get"] = MemberRole.Viewer,
         ["notifications_list"] = MemberRole.Admin,
     };
@@ -181,13 +189,14 @@ internal static class ControlPlaneTools
                 return await c.S<ReadModels>().IdeaAsync(org, id, c.Ct);
             }),
         Write("idea_decide", "Decides on a verdict: build, change (research again), overrule (build over a do-not-build, recorded) or drop. A breached red line refuses build and overrule for everyone.",
-            Schema(("id", Uuid("The idea's id."), true), ("choice", Enum("The decision.", IdeaDecisions.All.ToArray()), true), ("note", Str("Why, for the record."), false)), async c =>
+            Schema(("id", Uuid("The idea's id."), true), ("choice", Enum("The decision.", IdeaDecisions.All.ToArray()), true), ("note", Str("Why, for the record."), false),
+                ("applyChange", Bool("On a 'change' verdict with choice build: build with research's suggested change as part of what is built."), false)), async c =>
             {
                 var ideas = c.S<IdeaService>();
                 var id = c.Id("id");
                 var org = await ideas.OrganisationOfAsync(id, c.Ct);
                 await c.S<AccessService>().RequireAsync(c.UserId, await ideas.ScopeOfAsync(org, id, c.Ct), MemberRole.Builder, c.Ct);
-                await ideas.DecideAsync(org, id, c.Req("choice"), c.Str("note"), c.UserId, c.Ct);
+                await ideas.DecideAsync(org, id, c.Req("choice"), c.Str("note"), c.UserId, c.Ct, applyChange: c.Bool("applyChange") == true);
                 return await c.S<ReadModels>().IdeaAsync(org, id, c.Ct);
             }),
         Write("ideas_suggest", "Queues a run that proposes up to five new ideas from what the organisation already holds (estimate first, in the run's log).",
@@ -217,7 +226,39 @@ internal static class ControlPlaneTools
                 return await c.S<ReadModels>().IdeaAsync(scope.OrganisationId, started.Idea.Id, c.Ct);
             }),
 
+        Write("suggestion_dismiss", "Sets a suggestion aside; it is kept on record, not deleted.",
+            Schema(("id", Uuid("The suggestion's id."), true)), async c =>
+            {
+                var service = c.S<SuggestionService>();
+                var id = c.Id("id");
+                var (_, scope) = await service.RequireAsync(id, c.Ct);
+                await c.S<AccessService>().RequireAsync(c.UserId, scope, MemberRole.Builder, c.Ct);
+                return await service.DismissAsync(id, c.UserId, c.Ct);
+            }),
+        Read("ideas_suggest_estimate", "The most asking for ideas from the portfolio at a scope can cost, before anything is charged. Free.",
+            Schema(("scope", Str("The organisation or a division."), true)), async c =>
+            {
+                var (scope, _) = await c.S<AccessService>().RequireAsync(c.UserId, c.Req("scope"), MemberRole.Builder, c.Ct);
+                var estimate = await c.S<ResearchEstimator>().SuggestionsAsync(scope.OrganisationId, await c.S<SuggestionService>().ContextSizeAsync(scope, c.Ct), c.Ct);
+                return new IdeaEstimateView(estimate.Credits, estimate.Basis);
+            }),
+
         // ------------------------------------------------------------------ runs, tasks, approvals
+        Read("run_retry_estimate", "What trying a stopped research, build or change again would cost, and how many of its parts are already built and kept. Free; show it before run_retry.",
+            Schema(("id", Uuid("The run that stopped."), true)), async c =>
+            {
+                var (_, scope) = await c.S<RunService>().RequireAsync(c.Id("id"), c.Ct);
+                await c.S<AccessService>().RequireAsync(c.UserId, scope, MemberRole.Builder, c.Ct);
+                return await c.S<RetryService>().EstimateAsync(c.Id("id"), c.Ct);
+            }),
+        Write("run_retry", "Tries a failed, cancelled or budget-stopped research, build or change again as a new run, keeping what was placed, agreed and finished.",
+            Schema(("id", Uuid("The run that stopped."), true)), async c =>
+            {
+                var (run, scope) = await c.S<RunService>().RequireAsync(c.Id("id"), c.Ct);
+                await c.S<AccessService>().RequireAsync(c.UserId, scope, MemberRole.Builder, c.Ct);
+                var again = await c.S<RetryService>().RetryAsync(run.Id, c.UserId, c.Ct);
+                return await c.S<ReadModels>().RunAsync(run.OrganisationId, again.Id, c.Ct);
+            }),
         Read("runs_list", "Runs at a scope and beneath it, newest first; one employee's with employeeId.",
             Schema(("scope", Str("A scope path."), true), ("employeeId", Uuid("Only this employee's runs."), false), ("limit", Int("At most this many (1-100)."), false)), async c =>
             {
@@ -519,12 +560,41 @@ internal static class ControlPlaneTools
                 return await c.S<AppVersionService>().RestoreAsync(app, c.Req("commit"), me, Actor.Mcp, c.Ct);
             }),
 
+        Read("app_change_estimate", "What changing a built app as described is expected to cost, before anything starts. Free; show it before app_change.",
+            Schema(("id", Uuid("The app's id."), true), ("request", Str("The change, in the person's words."), true)), async c =>
+            {
+                var app = await App(c, MemberRole.Builder);
+                var estimate = await c.S<ChangeService>().EstimateAsync(app, c.Req("request"), c.Ct);
+                return new ChangeEstimateView(estimate.Credits, estimate.Basis);
+            }),
+        Write("app_change", "Asks the factory to change a built app: screened against the red lines, planned, built and checked part by part, what worked before checked again, reviewed, and the new version published.",
+            Schema(("id", Uuid("The app's id."), true), ("request", Str("The change, in the person's words."), true)), async c =>
+            {
+                var app = await App(c, MemberRole.Builder);
+                var run = await c.S<ChangeService>().CreateAsync(app, c.Req("request"), c.UserId, "api", c.Ct);
+                return await c.S<ReadModels>().RunAsync(app.OrganisationId, run.Id, c.Ct);
+            }),
+
         // ------------------------------------------------------------------ conversation, ontology, notifications
+        Read("conversation_estimate", "What one message in the conversation at a scope (or with one employee) is expected to cost, and the most it can. Free.",
+            Schema(("scope", Str("A scope path."), true), ("employeeId", Uuid("With this employee."), false)), async c =>
+            {
+                var (scope, _) = await c.S<AccessService>().RequireAsync(c.UserId, c.Req("scope"), MemberRole.Viewer, c.Ct);
+                var estimate = await c.S<FactoryEstimates>().ConversationAsync(scope.OrganisationId, await WorkEndpoints.TierAsync(c.S<EmployeeService>(), scope.OrganisationId, c.OptionalId("employeeId"), c.Ct), c.Ct);
+                return new ConversationEstimateView(estimate.Credits, estimate.Ceiling, estimate.Basis);
+            }),
+        Read("conversation_history", "What was said in the conversation at a scope (or with one employee), oldest first, at most the last 200 messages, each with who said it.",
+            Schema(("scope", Str("A scope path."), true), ("employeeId", Uuid("With this employee."), false)), async c =>
+            {
+                var (scope, _) = await c.S<AccessService>().RequireAsync(c.UserId, c.Req("scope"), MemberRole.Viewer, c.Ct);
+                return await c.S<ReadModels>().ConversationAsync(scope, c.OptionalId("employeeId"), c.Ct);
+            }),
         Write("conversation_post", "Sends a message in the conversation docked at a scope (or with one employee); returns the run whose events carry the reply.",
             Schema(("scope", Str("A scope path."), true), ("message", Str("The message."), true), ("employeeId", Uuid("Talk to this employee."), false)), async c =>
             {
                 var (scope, _) = await c.S<AccessService>().RequireAsync(c.UserId, c.Req("scope"), MemberRole.Builder, c.Ct);
-                var turn = await c.S<ConversationService>().PostAsync(scope, c.Req("message"), null, c.OptionalId("employeeId"), c.UserId, c.Ct);
+                var estimate = await c.S<FactoryEstimates>().ConversationAsync(scope.OrganisationId, await WorkEndpoints.TierAsync(c.S<EmployeeService>(), scope.OrganisationId, c.OptionalId("employeeId"), c.Ct), c.Ct);
+                var turn = await c.S<ConversationService>().PostAsync(scope, c.Req("message"), null, c.OptionalId("employeeId"), c.UserId, c.Ct, estimate);
                 return await c.S<ReadModels>().RunAsync(scope.OrganisationId, turn.Run.Id, c.Ct);
             }),
         Read("ontology_get", "The organisation at and beneath a scope as a graph: nodes and typed edges (owns, works-on, reports-to, depends-on, data-flows-to).",

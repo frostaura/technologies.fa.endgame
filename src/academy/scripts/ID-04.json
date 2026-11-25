@@ -1,0 +1,41 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-04",
+  "persona": "signed-out",
+  "scenario": "established",
+  "start": "/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "goto": "/apps/{app}",
+      "note": "A signed-out visitor opens an app's page in the console. “Opening Endgame” shows while the session is checked."
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "h1",
+        "note": "The check answered 401: the address became /sign-in and only the sign-in screen shows."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in with a passkey"
+          }
+        },
+        {
+          "wait": 2200
+        }
+      ],
+      "highlight": {
+        "selector": "nav[aria-label='Where you are']",
+        "note": "Signed in, they land on the app's page they first asked for."
+      }
+    }
+  ]
+}

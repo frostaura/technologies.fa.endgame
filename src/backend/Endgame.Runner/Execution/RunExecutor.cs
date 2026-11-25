@@ -6,6 +6,7 @@ using Endgame.Harness;
 using Endgame.Harness.Events;
 using Endgame.Harness.Kernel;
 using Endgame.Harness.Model;
+using Endgame.Harness.Permissions;
 using Endgame.Harness.Platform;
 using Endgame.Harness.Skills;
 using Endgame.Runner.Platform;
@@ -94,7 +95,11 @@ public sealed class RunExecutor(
             logger.LogError(e, "Run {RunId} failed in the Runner.", run.Id);
             outcome = WorkflowOutcome.Failure($"The work stopped on an internal fault and has been logged: {OutputText.Truncate(e.Message, 300)}")
                 with
-            { ForOwner = "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; it can be started again." };
+            {
+                ForOwner = run.Kind is RunKinds.Build or RunKinds.Research or RunKinds.Task
+                ? "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; use “Try again” to carry on from where it stopped."
+                : "The work stopped on an unexpected fault, which has been recorded. Nothing was lost."
+            };
         }
 
         switch (outcome.End)
@@ -159,13 +164,16 @@ public sealed class RunExecutor(
 
         if (autonomy == "checkpoints" && ctx.Setting("checkpoint.start")?.GetValueKind() == System.Text.Json.JsonValueKind.True)
         {
-            var approved = await new ControlPlaneApprovals(ctx.ControlPlane, ctx.Run.Id).RequestAsync(
+            var answer = await new ControlPlaneApprovals(ctx.ControlPlane, ctx.Run.Id).AskAsync(
                 string.Create(CultureInfo.InvariantCulture, $"Start this work? Estimated {expected} credits."),
                 headroom is { } h ? string.Create(CultureInfo.InvariantCulture, $"{h} credits are left in the budget.") : "The budget's headroom is not known.",
+                ApprovalConsequence.Stops,
                 cancellationToken);
-            if (!approved)
+            if (!answer.Approved)
             {
-                return WorkflowOutcome.Failure("The owner declined to start this work at its estimate.");
+                return WorkflowOutcome.Failure("The owner declined to start this work at its estimate.")
+                    with
+                { ForOwner = "You declined to start this work at its estimate, so nothing was done and nothing was charged." };
             }
         }
 

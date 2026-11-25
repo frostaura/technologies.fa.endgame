@@ -16,7 +16,8 @@
         }
       ],
       "highlight": {
-        "text": "Waiting for your device…"
+        "text": "Waiting for your device…",
+        "note": "The button waits while your device asks you to approve."
       }
     },
     {
@@ -32,7 +33,7 @@
       "kind": "demo",
       "act": [
         {
-          "wait": 900
+          "wait": 1200
         }
       ],
       "note": "You choose a key and approve; the server verifies it and signs you in."
@@ -40,11 +41,46 @@
     {
       "step": 4,
       "kind": "demo",
-      "goto": "/",
       "highlight": {
         "text": "Sign out",
-        "note": "Signed in: the org chart and the header with Sign out."
+        "note": "Signed in as Mara Ellison: the org chart, with Sign out in the header."
       }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Arrive at Credits signed out, and land there after signing in",
+      "persona": "signed-out",
+      "scenario": "established",
+      "start": "/credits",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Sign in with a passkey",
+            "note": "Asked for Credits while signed out: the sign-in screen, and the address is kept."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Sign in with a passkey"
+              }
+            },
+            {
+              "wait": 2200
+            }
+          ],
+          "highlight": {
+            "selector": "nav[aria-label='Where you are']",
+            "note": "Signed in, the console opens Credits, the screen first asked for — not the org chart."
+          }
+        }
+      ]
     }
   ]
 }

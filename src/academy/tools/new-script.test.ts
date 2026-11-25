@@ -24,7 +24,7 @@ describe("script:new", () => {
   it("suggests the kind from how the flow is reached", () => {
     expect(scaffold(flow("OPS-12")).steps[0]?.kind).toBe("terminal");
     expect(scaffold(flow("OPS-12")).persona).toBe("host-admin");
-    expect(scaffold(flow("ID-08")).steps[0]?.kind).toBe("request");
+    expect(scaffold(flow("AST-06")).steps[0]?.kind).toBe("request");
     expect(scaffold(flow("ID-02")).steps[0]).toMatchObject({ kind: "demo", highlight: { text: "Sign in with a passkey" } });
   });
 });

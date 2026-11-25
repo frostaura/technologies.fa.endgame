@@ -55,7 +55,7 @@ function main() {
   const c = scripts.coverage;
   const pct = (a: number, b: number) => (b ? `${((100 * a) / b).toFixed(1)}%` : "0%");
   log(`  Script coverage: ${c.flowsWithScript}/${c.flows} flows (${pct(c.flowsWithScript, c.flows)}), ${c.stepsWithMedia}/${c.steps} steps with media (${pct(c.stepsWithMedia, c.steps)}).`);
-  log(`  By kind: ${Object.entries(c.byKind).map(([k, n]) => `${k} ${n}`).join(" · ") || "none"} · variations played ${c.variations}`);
+  log(`  By kind: ${Object.entries(c.byKind).map(([k, n]) => `${k} ${n}`).join(" · ") || "none"}; ${c.variations} variation(s) under "What else can happen".`);
   const shots = readShots();
   log(`  Captured images: ${Object.keys(shots).length ? `${Object.keys(shots).length} steps (public/shots/, from make academy-shots)` : "none (make academy-shots captures them)"}`);
 

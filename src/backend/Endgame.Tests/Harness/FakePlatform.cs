@@ -76,6 +76,18 @@ public sealed class FakeControlPlane : HttpMessageHandler
 
     public List<string> Approvals { get; } = [];
 
+    /// <summary>Each approval as it was raised: title, detail and what a decline does.</summary>
+    public List<JsonObject> ApprovalsAsked { get; } = [];
+
+    /// <summary>The note the person sends with every answer.</summary>
+    public string? ApprovalNote { get; set; }
+
+    /// <summary>The logs of earlier runs, read by id (a retry carries on from one).</summary>
+    public Dictionary<Guid, List<(long Seq, string Type, JsonObject Payload)>> EarlierRuns { get; } = [];
+
+    /// <summary>What <c>GET /internal/employees/{id}</c> answers, by id.</summary>
+    public Dictionary<Guid, JsonObject> EmployeeDetails { get; } = [];
+
     public JsonObject? Verdict { get; private set; }
 
     public List<JsonObject> Nodes { get; } = [];
@@ -153,6 +165,10 @@ public sealed class FakeControlPlane : HttpMessageHandler
                 ("GET", var p) when p == run + "/events" => Json(new JsonArray(Events.Where(e => e.Seq > long.Parse(query["after"] ?? "0")).Take(int.Parse(query["limit"] ?? "500"))
                     .Select(e => (JsonNode)new JsonObject { ["seq"] = e.Seq, ["type"] = e.Type, ["payload"] = e.Payload.DeepClone() }).ToArray())),
                 ("POST", var p) when p == run + "/events" => AppendAll(body!.AsObject()),
+                ("GET", var p) when p.StartsWith("/internal/runs/", StringComparison.Ordinal) && p.EndsWith("/events", StringComparison.Ordinal) && EarlierRuns.TryGetValue(Guid.Parse(p[15..^7]), out var earlier) =>
+                    Json(new JsonArray(earlier.Where(e => e.Seq > long.Parse(query["after"] ?? "0")).Take(int.Parse(query["limit"] ?? "500"))
+                        .Select(e => (JsonNode)new JsonObject { ["seq"] = e.Seq, ["type"] = e.Type, ["payload"] = e.Payload.DeepClone() }).ToArray())),
+                ("GET", var p) when p.StartsWith("/internal/employees/", StringComparison.Ordinal) && Guid.TryParse(p[20..], out var who) && EmployeeDetails.TryGetValue(who, out var detail) => Json(detail),
                 ("GET", "/internal/context") => Json(Context),
                 ("POST", "/internal/approvals") => Approve(body!.AsObject()),
                 ("POST", "/internal/tasks") => CreateTask(body!.AsObject()),
@@ -292,10 +308,11 @@ public sealed class FakeControlPlane : HttpMessageHandler
         var id = Guid.NewGuid().ToString();
         var title = body["title"]!.GetValue<string>();
         Approvals.Add(title);
-        Append("approval.requested", new JsonObject { ["approvalId"] = id, ["title"] = title });
+        ApprovalsAsked.Add(body.DeepClone().AsObject());
+        Append("approval.requested", new JsonObject { ["approvalId"] = id, ["title"] = title, ["detail"] = body["detail"]?.DeepClone(), ["onDecline"] = body["onDecline"]?.DeepClone() });
         if (AnswerApproval(title) is { } answer)
         {
-            Append("approval.answered", new JsonObject { ["approvalId"] = id, ["answer"] = answer ? "approved" : "rejected" });
+            Append("approval.answered", new JsonObject { ["approvalId"] = id, ["answer"] = answer ? "approved" : "rejected", ["comment"] = ApprovalNote });
         }
 
         return Json(new JsonObject { ["id"] = id, ["title"] = title, ["status"] = "pending" }, HttpStatusCode.Created);

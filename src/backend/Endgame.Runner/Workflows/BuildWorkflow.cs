@@ -5,6 +5,7 @@ using Endgame.Domain.Runs;
 using Endgame.Harness;
 using Endgame.Harness.Events;
 using Endgame.Harness.Kernel;
+using Endgame.Harness.Permissions;
 using Endgame.Harness.Planning;
 using Endgame.Harness.Platform;
 using Endgame.Harness.Tools;
@@ -22,20 +23,94 @@ namespace Endgame.Runner.Workflows;
 /// separate sceptical evaluator with its own context, a capped number of repair rounds — repairs not
 /// billed — each escalating the model one tier.
 /// </summary>
-public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = null, IAppCaller? caller = null) : IWorkflow
+public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = null, IAppCaller? caller = null) : IWorkflow
 {
     public const string ProgressFile = "PROGRESS.md";
 
     public string Kind => RunKinds.Build;
+
+    /// <summary>
+    /// How the earlier parts are shown working again. A live change failed this check four times although the app worked:
+    /// for parts on screen the evaluator cited the screen's code and tests, which code's gate does not count.
+    /// </summary>
+    public const string KeepCheck = "Each earlier part shown working again in the running app, signed in as a test member: call_app every part, and cite the exact calls made (METHOD path, with the real ids). A part that is on screen is shown by the data it shows or changes — for example the list it reads after the action its button takes — never by its code or its tests alone.";
+
+    /// <summary>The code-owned part of a change's plan: everything the app did before, checked again in the running app.</summary>
+    public const string KeepItem = "keep";
 
     public async Task<WorkflowOutcome> RunAsync(RunContext run, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(run);
         var owner = run.OwnerMessage();
         var idea = Json.Str(owner, "text") ?? run.Run.Title;
+        await CarryOverAsync(run, cancellationToken);
 
-        // Placement: a division, a project and an app, created in the tree.
+        // What is built: the idea, plus every change agreed after research (the owner's own, or research's that the owner accepted).
+        var request = WithAgreedChanges(idea, Json.Strings(owner, "changes"));
         var placement = await run.Journal.OnceAsync("placement", () => PlaceAsync(run, idea, cancellationToken), cancellationToken);
+        var task = $"Plan the app described below. It starts from the app kit's template (the Notes example), which it replaces.\n\nThe idea, word for word:\n{request}\n\nConstraints: {Json.Str(owner, "constraints")}";
+        return await PipelineAsync(run, new Job(request, task, placement, Change: false), cancellationToken);
+    }
+
+    /// <summary>
+    /// A change to an app that is already built (CHG-01): research is not repeated — it is the same product — but the request is
+    /// screened against the red lines first; then the build's own stages: a plan whose requirements quote the request, each part
+    /// built and checked by the separate evaluator on a preview, everything that worked before checked again, the security
+    /// review, and the new version published and the app restarted.
+    /// </summary>
+    public async Task<WorkflowOutcome> ChangeAsync(RunContext run, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (run.LevelId("app") is null)
+        {
+            return WorkflowOutcome.Failure("A change is made to an app, and this run's scope names none.");
+        }
+
+        var request = Json.Str(run.OwnerMessage(), "text") ?? run.Run.Title;
+        await CarryOverAsync(run, cancellationToken);
+        var screen = run.Journal.Get("screen");
+        if (screen is null)
+        {
+            var screener = await WorkflowSupport.RunAgentAsync(run, run.Agents.Researcher(run, "red-line-screen", RunnerResources.Prompt("change-screen", new Dictionary<string, string> { ["request"] = request })) with
+            {
+                TaskType = run.Options.SummaryTaskType,
+                Limits = new AgentLimits { MaxSteps = 2, MaxOutputTokens = 1500, MaxSearchesPerCall = 0 },
+            }, NoWorkspace.Instance, "Screen the change now and reply with the JSON object.", cancellationToken);
+            if (WorkflowOutcome.FromAgent(screener) is { } stopped)
+            {
+                return stopped;
+            }
+
+            // An unreadable screen has not cleared anything: the change is not made on a guess.
+            if (WorkflowSupport.JsonAnswer(screener.FinalText) is not { } answer || Json.Bool(answer, "breached") is not { } breached)
+            {
+                return WorkflowOutcome.Failure("The red-line screen gave no answer in the agreed form, so nothing was changed.")
+                    with
+                { ForOwner = "The change could not be checked against FrostAura's red lines, so nothing was changed. “Try again” checks it again." };
+            }
+
+            screen = await run.Journal.RecordAsync("screen", new JsonObject { ["breached"] = breached, ["line"] = Json.Str(answer, "line"), ["reasoning"] = OutputText.Truncate(Json.Str(answer, "reasoning") ?? "", 1000) }, cancellationToken);
+        }
+
+        if (Json.Bool(screen, "breached") == true)
+        {
+            var line = Json.Str(screen, "line") ?? "a red line";
+            return WorkflowOutcome.Failure($"The change crosses a red line ({line}); nothing was changed.")
+                with
+            { ForOwner = $"This change crosses a red line ({line}). FrostAura never builds it, and no one can overrule that, so nothing was changed." };
+        }
+
+        var placement = await run.Journal.OnceAsync("placement", () => Task.FromResult(ExistingPlacement(run)), cancellationToken);
+        var task = $"Plan a change to {Json.Str(placement, "name")}, an app that is already built and running. PROGRESS.md lists what it does now, part by part. Change only what the request asks for, and keep everything it does now working; a change is usually one to three items.\n\nThe change, word for word:\n{request}";
+        return await PipelineAsync(run, new Job(request, task, placement, Change: true), cancellationToken);
+    }
+
+    /// <summary>What one pipeline run is for: the words the plan must be faithful to, the planner's task, where the app lives, and whether it already existed.</summary>
+    private sealed record Job(string Request, string PlannerTask, JsonObject Placement, bool Change);
+
+    private async Task<WorkflowOutcome> PipelineAsync(RunContext run, Job job, CancellationToken cancellationToken)
+    {
+        var placement = job.Placement;
         var appId = Guid.Parse(Json.Str(placement, "appId")!);
         var crew = await StaffAsync(run, placement, cancellationToken);
         var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), cancellationToken);
@@ -45,27 +120,34 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         var plan = PlanContract.FromJson(run.Journal.Get("plan"));
         if (plan is null)
         {
-            var planner = await WorkflowSupport.RunAgentAsync(run, AgentFactory.As(run, run.Agents.Planner(run, root, idea), crew.Engineer, crew.EngineerMemory, canRemember: false), workspace,
-                $"Plan the app described below. It starts from the app kit's template (the Notes example), which it replaces.\n\nThe idea, word for word:\n{idea}\n\nConstraints: {Json.Str(owner, "constraints")}", cancellationToken);
+            var planner = await WorkflowSupport.RunAgentAsync(run, AgentFactory.As(run, run.Agents.Planner(run, root, job.Request), crew.Engineer, crew.EngineerMemory, canRemember: false), workspace, job.PlannerTask, cancellationToken);
             if (WorkflowOutcome.FromAgent(planner) is { } stopped)
             {
                 return stopped;
             }
 
             plan = planner.State.Plan;
-            if (plan is null || plan.Faults(idea).Count > 0)
+            if (plan is null || plan.Faults(job.Request).Count > 0)
             {
-                return WorkflowOutcome.Failure("Planning produced no valid contract, so nothing was built." + (plan is null ? "" : " " + string.Join(" ", plan.Faults(idea))))
+                return WorkflowOutcome.Failure("Planning produced no valid contract, so nothing was built." + (plan is null ? "" : " " + string.Join(" ", plan.Faults(job.Request))))
                     with
-                { ForOwner = "Planning did not produce a plan that covers everything the idea asks for, so nothing was built. Starting the build again plans it afresh." };
+                { ForOwner = $"Planning did not produce a plan that covers everything {(job.Change ? "the change" : "the idea")} asks for, so nothing was {(job.Change ? "changed" : "built")}. “Try again” plans it afresh." };
+            }
+
+            if (job.Change)
+            {
+                plan = WithKeep(plan, await run.Journal.OnceAsync("earlier", () => EarlierWorkAsync(workspace, cancellationToken), cancellationToken));
             }
 
             if (Checkpoint(run, "plan"))
             {
-                var approved = await new Harness.Platform.ControlPlaneApprovals(run.ControlPlane, run.Run.Id).RequestAsync("Accept this plan?", Sentences.Flatten(plan.ForOwner(), 2000), cancellationToken);
-                if (!approved)
+                var answer = await new Harness.Platform.ControlPlaneApprovals(run.ControlPlane, run.Run.Id).AskAsync(job.Change ? "Accept this plan for the change?" : "Accept this plan?", Sentences.Flatten(plan.ForOwner(), 2000), ApprovalConsequence.Stops, cancellationToken);
+                if (!answer.Approved)
                 {
-                    return WorkflowOutcome.Failure("The owner rejected the plan.");
+                    var note = string.IsNullOrWhiteSpace(answer.Note) ? "" : $" Your note: \"{OutputText.Truncate(answer.Note.Trim(), 300)}\"";
+                    return WorkflowOutcome.Failure("The owner rejected the plan." + note)
+                        with
+                    { ForOwner = $"You declined the plan, so nothing was {(job.Change ? "changed" : "built")}.{note} “Try again” plans it afresh." };
                 }
             }
 
@@ -95,10 +177,10 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             await run.Journal.RecordAsync("estimate.plan", new JsonObject { ["credits"] = estimate.Credits }, cancellationToken);
         }
 
-        // Build, evaluate, repair: one feature per session.
+        // Build, evaluate, repair: one feature per session; a change's last part checks that what worked before still works.
         foreach (var item in plan.Items)
         {
-            var built = await BuildItemAsync(run, plan, item, workspace, appId, recreated, crew, cancellationToken);
+            var built = await BuildItemAsync(run, plan, item, workspace, appId, recreated, crew, job.Change, cancellationToken);
             if (built is not null)
             {
                 return built;
@@ -112,17 +194,188 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             return review;
         }
 
-        // Publish: built and started privately. Going public is the owner's act, in the console.
+        // Publish: built and started. Going public is the owner's act, in the console; a change keeps who may open the app as it was.
         var published = await run.Journal.OnceAsync("publish", () => PublishAsync(run, appId, cancellationToken), cancellationToken);
+        var name = Json.Str(placement, "name");
         if (Json.Bool(published, "started") != true)
         {
-            return WorkflowOutcome.Failure($"{Json.Str(placement, "name")} is built and its work is saved, but it could not be started: {Json.Str(published, "detail")}");
+            return WorkflowOutcome.Failure($"{name} is {(job.Change ? "changed" : "built")} and its work is saved, but it could not be started: {Json.Str(published, "detail")}");
         }
 
-        var text = $"{Json.Str(placement, "name")} is built and running privately. Only you and the people you choose can open it until you make it public.";
-        await Workforce.SayAsync(run, "builder", "Running privately", text, cancellationToken, "published");
         await RecurringJobsAsync(run, placement, crew, cancellationToken);
-        return WorkflowOutcome.Success($"{Json.Str(placement, "name")} is built and running privately.") with { Announced = true };
+        if (job.Change)
+        {
+            await Workforce.SayAsync(run, "builder", "New version running", $"The new version of {name} is running, with the change and everything it did before checked in the running app. Who may open it has not changed. Its history shows the change.", cancellationToken, "published");
+            return WorkflowOutcome.Success($"{name} is changed and its new version is running.") with { Announced = true };
+        }
+
+        await Workforce.SayAsync(run, "builder", "Running privately", $"{name} is built and running privately. Only you and the people you choose can open it until you make it public.", cancellationToken, "published");
+        return WorkflowOutcome.Success($"{name} is built and running privately.") with { Announced = true };
+    }
+
+    /// <summary>The idea, then each change agreed after research, so the planner holds the app to both.</summary>
+    public static string WithAgreedChanges(string idea, IReadOnlyList<string> changes)
+    {
+        ArgumentNullException.ThrowIfNull(idea);
+        ArgumentNullException.ThrowIfNull(changes);
+        var agreed = changes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct(StringComparer.Ordinal).ToList();
+        return agreed.Count == 0 ? idea : $"{idea}\n\nAgreed after research, and part of what is built:\n{string.Join("\n", agreed.Select(c => $"- {c}"))}";
+    }
+
+    /// <summary>The existing app a change is made to, from the run's own scope: nothing is created.</summary>
+    private static JsonObject ExistingPlacement(RunContext run)
+    {
+        var levels = (run.Context["levels"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        JsonObject? Level(string level) => levels.FirstOrDefault(l => Json.Str(l, "level") == level);
+        var project = Level("project");
+        var app = Level("app")!;
+        return new JsonObject
+        {
+            ["name"] = Json.Str(project, "name") ?? Json.Str(app, "name"),
+            ["division"] = Json.Str(Level("division"), "path"),
+            ["divisionCreated"] = false,
+            ["projectPath"] = Json.Str(project, "path") ?? Json.Str(app, "path"),
+            ["appPath"] = Json.Str(app, "path"),
+            ["appId"] = Json.Str(app, "id"),
+            ["existing"] = true,
+        };
+    }
+
+    /// <summary>
+    /// What the app does now, part by part, from the progress file in its repository. The factory's own lines
+    /// (<c>- [x] **id** — what the owner gets. Checked: …</c>) give each part in plain words. A builder may keep the file
+    /// in its own words (<c>- **id** — what was built</c>, a live build did); such a part is still checked again, named
+    /// by its place, with the builder's note as the detail the evaluator reads.
+    /// </summary>
+    public static JsonObject EarlierWork(string? progress)
+    {
+        var parts = new JsonArray();
+        var notes = new JsonArray();
+        var plain = new HashSet<string>(StringComparer.Ordinal);
+        var lines = (progress ?? "").Split('\n').Select(l => l.TrimEnd()).ToList();
+        foreach (var line in lines)
+        {
+            if (ProgressLine().Match(line.Trim()) is { Success: true } m && parts.Count < PlanContract.MaxRequirements - 10)
+            {
+                plain.Add(m.Groups[1].Value);
+                parts.Add(m.Groups[2].Value.Trim());
+            }
+        }
+
+        // A builder's own note: its first line, and the indented lines that continue it.
+        for (var i = 0; i < lines.Count && parts.Count < PlanContract.MaxRequirements - 10; i++)
+        {
+            if (BuilderLine().Match(lines[i].Trim()) is not { Success: true } m || plain.Any(p => p.EndsWith(m.Groups[1].Value, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            var note = new StringBuilder(m.Groups[2].Value.Trim());
+            for (var j = i + 1; j < lines.Count && lines[j].StartsWith("  ", StringComparison.Ordinal); j++)
+            {
+                note.Append(' ').Append(lines[j].Trim());
+            }
+
+            parts.Add($"Part {parts.Count + 1} of what was built before still works, as its note describes");
+            notes.Add($"k{parts.Count} ({m.Groups[1].Value}): {OutputText.Truncate(note.ToString(), 600)}");
+        }
+
+        return new JsonObject { ["parts"] = parts, ["notes"] = notes };
+    }
+
+    private static async Task<JsonObject> EarlierWorkAsync(IWorkspace workspace, CancellationToken cancellationToken)
+    {
+        var bytes = await workspace.ReadBytesAsync($"{workspace.Root}/{ProgressFile}", cancellationToken);
+        return EarlierWork(bytes is null ? null : Encoding.UTF8.GetString(bytes));
+    }
+
+    /// <summary>
+    /// A change's plan with code's own last part: every part the app had before, as a requirement of its own, shown working again
+    /// in the running app by the evaluator. Nothing to build first; a part it finds broken is repaired, unbilled, like any other.
+    /// </summary>
+    public static PlanContract WithKeep(PlanContract plan, JsonObject? earlier)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var parts = Json.Strings(earlier, "parts").Where(p => p.Length > 0).ToList();
+        if (parts.Count == 0 || plan.Items.Any(i => i.Id == KeepItem))
+        {
+            return plan;
+        }
+
+        var kept = parts.Select((p, i) => new PlanRequirement($"k{i + 1}", p)).ToList();
+        var notes = Json.Strings(earlier, "notes");
+        var detail = "No new work: the app as changed is checked again against each part it already had." + (notes.Count == 0 ? "" : " The builder's notes on the earlier parts: " + string.Join(" ", notes));
+        var item = new PlanItem(KeepItem, "Everything the app did before still works", detail,
+            KeepCheck, kept.Select(k => k.Id).ToList());
+        return plan with { Items = [.. plan.Items, item], Requirements = [.. plan.Requirements, .. kept] };
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^- \[x\] \*\*([^*]+)\*\* — (.+?)\. Checked:")]
+    private static partial System.Text.RegularExpressions.Regex ProgressLine();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^- \*\*([a-z0-9][a-z0-9-]*)\*\* — (.+)$")]
+    private static partial System.Text.RegularExpressions.Regex BuilderLine();
+
+    /// <summary>
+    /// Trying again (CHG-03): a new run picks up what the earlier attempt finished and agreed — where the app lives, the plan the
+    /// owner or auto-mode accepted, and every part that passed its check — so finished parts are not rebuilt or billed again.
+    /// A rejected plan was never recorded, so it is planned afresh; a part that failed is built again with fresh repair rounds.
+    /// </summary>
+    private static async Task CarryOverAsync(RunContext run, CancellationToken cancellationToken)
+    {
+        if (run.Journal.Done("carried") || !Guid.TryParse(Json.Str(run.OwnerMessage(), "retryOf"), out var earlier))
+        {
+            return;
+        }
+
+        var events = new List<RunEvent>();
+        long after = 0;
+        while (true)
+        {
+            var page = await run.ControlPlane.ReadEventsAsync(earlier, after, 500, cancellationToken);
+            events.AddRange(page);
+            if (page.Count < 500)
+            {
+                break;
+            }
+
+            after = page[^1].Seq;
+        }
+
+        var steps = new WorkflowJournal(events, run.Sink);
+        foreach (var key in new[] { "placement", "screen", "earlier" })
+        {
+            if (steps.Get(key) is { } data)
+            {
+                await run.Journal.RecordAsync(key, data, cancellationToken);
+            }
+        }
+
+        var plan = PlanContract.FromJson(steps.Get("plan"));
+        var kept = new JsonArray();
+        if (plan is not null)
+        {
+            var accepted = plan.ToEvent();
+            accepted["by"] = "earlier-attempt";
+            await run.AppendAsync(HarnessEvents.PlanAccepted, accepted, cancellationToken);
+            await run.Journal.RecordAsync("plan", plan.ToJson(), cancellationToken);
+            // The try's own estimate, made for what is left, stands: the plan is not priced again as if nothing were built.
+            await run.Journal.RecordAsync("estimate.plan", steps.Get("estimate.plan") ?? new JsonObject { ["carried"] = true }, cancellationToken);
+            foreach (var item in plan.Items.Where(i => Json.Bool(steps.Get($"item:{i.Id}"), "passed") == true))
+            {
+                await run.Journal.RecordAsync($"item:{item.Id}", new JsonObject { ["passed"] = true, ["carried"] = true }, cancellationToken);
+                kept.Add(item.Id);
+            }
+        }
+
+        await run.AppendAsync(HarnessEvents.Message, new JsonObject { ["kind"] = "plan.carried", ["from"] = "runner", ["items"] = kept.DeepClone(), ["retryOf"] = earlier.ToString() }, cancellationToken);
+        await run.Journal.RecordAsync("carried", new JsonObject { ["from"] = earlier.ToString(), ["items"] = kept }, cancellationToken);
+        var text = plan is null
+            ? "This starts again from the plan; nothing the earlier attempt did needed undoing."
+            : kept.Count == 0
+                ? "This picks up where the earlier attempt stopped: the plan agreed then is kept, and building starts again from its first part."
+                : $"This picks up where the earlier attempt stopped: {kept.Count} of {plan.Items.Count} parts were already built and checked, so they are kept, not rebuilt or charged again.";
+        await Workforce.SayAsync(run, "runner", "Carrying on", text, cancellationToken, "carried");
     }
 
     /// <summary>The people this build needs, hired from the ontology as the project enters its stages, with what each remembers.</summary>
@@ -186,15 +439,18 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
     /// <summary>Who does what in this build, and what each of them remembers about it.</summary>
     private sealed record Crew(Guid? Engineer, string EngineerMemory, Guid? Qa, string QaMemory, Guid? Reviewer, string ReviewerMemory, string ProjectPath);
 
-    private async Task<WorkflowOutcome?> BuildItemAsync(RunContext run, PlanContract plan, PlanItem item, IWorkspace workspace, Guid appId, bool recreated, Crew crew, CancellationToken cancellationToken)
+    private async Task<WorkflowOutcome?> BuildItemAsync(RunContext run, PlanContract plan, PlanItem item, IWorkspace workspace, Guid appId, bool recreated, Crew crew, bool change, CancellationToken cancellationToken)
     {
         if (Json.Bool(run.Journal.Get($"item:{item.Id}"), "passed") == true)
         {
             return null;
         }
 
+        // A change's "keep" part has nothing to build: it is checked first, and only repaired if the check finds something broken.
+        var checkFirst = change && item.Id == KeepItem;
+
         // The item is a task in the graph, claimed by the engineer who builds it: the work is theirs wherever the run belongs.
-        var taskId = await ClaimTaskAsync(run, $"build:{item.Id}", crew.ProjectPath, item.Text, $"{item.Detail}\nChecked by: {item.Check}", crew.Engineer, cancellationToken);
+        var taskId = await ClaimTaskAsync(run, $"build:{item.Id}", crew.ProjectPath, item.Text, $"{item.Detail}\nChecked by: {item.Check}", checkFirst ? crew.Qa : crew.Engineer, cancellationToken);
         var tiers = run.Options.BuildTiers;
         JsonObject? lastEvaluation = null;
         for (var round = 0; round <= run.Options.MaxRepairRounds; round++)
@@ -215,6 +471,24 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             var tier = tiers[Math.Min(round, tiers.Count - 1)];
             var repair = round > 0;
             var builder = AgentFactory.As(run, run.Agents.Builder(run, $"builder-{item.Id}-{round}", tier, repair, workspace.Root), crew.Engineer, crew.EngineerMemory, canRemember: true, crew.ProjectPath);
+            if (checkFirst && round == 0)
+            {
+                // Nothing built yet: straight to the check of what worked before.
+                var firstCheck = await JudgeAsync(run, plan, item, round, tier, workspace, appId, crew, taskId, cancellationToken);
+                if (firstCheck.Outcome is { } interrupted)
+                {
+                    return interrupted;
+                }
+
+                lastEvaluation = firstCheck.Evaluation;
+                if (Json.Bool(lastEvaluation, "passed") == true)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
             var task = repair
                 ? RunnerResources.Prompt("repair", new Dictionary<string, string>
                 {
@@ -238,45 +512,13 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
                 await workspace.CommitAsync($"{(repair ? "Repair" : "Build")} {item.Id}: {item.Deliverable}", builder.AuthorName, builder.AuthorEmail, cancellationToken);
             }
 
-            // The check is the QA engineer's own piece of work.
-            var checkTaskId = await ClaimTaskAsync(run, $"check:{item.Id}:{round}", crew.ProjectPath, $"Check: {item.Text}", $"Round {round}, built on {tier}. Checked by: {item.Check}", crew.Qa, cancellationToken);
-            var evaluation = await EvaluateAsync(run, plan, item, round, tier, workspace, appId, crew, cancellationToken);
-            if (evaluation is null)
+            var judged = await JudgeAsync(run, plan, item, round, tier, workspace, appId, crew, taskId, cancellationToken);
+            if (judged.Outcome is { } interrupted2)
             {
-                return WorkflowOutcome.Suspend("evaluation interrupted");
+                return interrupted2;
             }
 
-            var passedNow = Json.Bool(evaluation, "passed") == true;
-            var shown = (evaluation["requirements"] as JsonArray ?? []).OfType<JsonObject>().ToList();
-            var summary = EvaluationSummary(item, passedNow, shown, round);
-            // A judgement on the engineer's work by the QA engineer: accepted, or sent back with the repair not charged.
-            var judgement = new JsonObject
-            {
-                ["item"] = item.Id,
-                ["text"] = item.Text,
-                ["summary"] = summary,
-                ["round"] = round,
-                ["tier"] = tier,
-                ["taskId"] = taskId?.ToString(),
-                ["employeeId"] = crew.Engineer?.ToString(),
-                ["judgedBy"] = crew.Qa?.ToString(),
-                ["checkTaskId"] = checkTaskId?.ToString(),
-                ["requirements"] = new JsonArray(shown.Select(r => (JsonNode)r.DeepClone()).ToArray()),
-                ["evidence"] = OutputText.Truncate(Json.Str(evaluation, "evidence") ?? "", 4000),
-                ["faults"] = evaluation["faults"]?.DeepClone(),
-            };
-            if (!passedNow && round < run.Options.MaxRepairRounds)
-            {
-                judgement["repairCharged"] = false;
-            }
-            else if (!passedNow)
-            {
-                judgement["final"] = true;
-            }
-
-            await run.AppendAsync(passedNow ? HarnessEvents.EvaluationPassed : HarnessEvents.EvaluationFailed, judgement, cancellationToken);
-            await FinishTaskAsync(run, checkTaskId, "done", summary, cancellationToken);
-            await run.Journal.RecordAsync(key, evaluation, cancellationToken);
+            var evaluation = judged.Evaluation!;
             lastEvaluation = evaluation;
             if (Json.Bool(evaluation, "passed") == true)
             {
@@ -295,13 +537,63 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             await FinishTaskAsync(run, taskId, "failed", $"Still did not work after {run.Options.MaxRepairRounds} rounds of repair, each on a stronger model; the repairs were not charged.", cancellationToken);
             return WorkflowOutcome.Failure($"'{item.Deliverable}' still failed its check after {run.Options.MaxRepairRounds} repair rounds: {string.Join(" ", Json.Strings(lastEvaluation, "faults"))}")
                 with
-            { ForOwner = $"\"{item.Text.TrimEnd('.')}\" still did not work after {run.Options.MaxRepairRounds} rounds of repair, each on a stronger model, so the app was not published. Its work so far is saved; the repairs were not charged." };
+            { ForOwner = $"\"{item.Text.TrimEnd('.')}\" still did not work after {run.Options.MaxRepairRounds} rounds of repair, each on a stronger model, so the app was not {(change ? "changed" : "published")}. Its work so far is saved and the repairs were not charged; “Try again” carries on from it." };
         }
 
-        await RecordProgressAsync(run, item, lastEvaluation!, workspace, cancellationToken);
+        if (item.Id != KeepItem)
+        {
+            await RecordProgressAsync(run, item, lastEvaluation!, workspace, change, cancellationToken);
+        }
+
         await run.Journal.RecordAsync($"item:{item.Id}", new JsonObject { ["passed"] = true }, cancellationToken);
         await FinishTaskAsync(run, taskId, "done", Json.Str(lastEvaluation, "summary") ?? $"Checked and working: {item.Text.TrimEnd('.')}.", cancellationToken);
         return null;
+    }
+
+    /// <summary>One round's check by the QA engineer, as its own task, written to the log as a judgement on the engineer's work.</summary>
+    private async Task<(JsonObject? Evaluation, WorkflowOutcome? Outcome)> JudgeAsync(RunContext run, PlanContract plan, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, Guid? taskId, CancellationToken cancellationToken)
+    {
+        var key = $"item:{item.Id}:round:{round}";
+        // The check is the QA engineer's own piece of work.
+        var checkTaskId = await ClaimTaskAsync(run, $"check:{item.Id}:{round}", crew.ProjectPath, $"Check: {item.Text}", $"Round {round}, built on {tier}. Checked by: {item.Check}", crew.Qa, cancellationToken);
+        var evaluation = await EvaluateAsync(run, plan, item, round, tier, workspace, appId, crew, cancellationToken);
+        if (evaluation is null)
+        {
+            return (null, WorkflowOutcome.Suspend("evaluation interrupted"));
+        }
+
+        var passedNow = Json.Bool(evaluation, "passed") == true;
+        var shown = (evaluation["requirements"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        var summary = EvaluationSummary(item, passedNow, shown, round);
+        // A judgement on the engineer's work by the QA engineer: accepted, or sent back with the repair not charged.
+        var judgement = new JsonObject
+        {
+            ["item"] = item.Id,
+            ["text"] = item.Text,
+            ["summary"] = summary,
+            ["round"] = round,
+            ["tier"] = tier,
+            ["taskId"] = taskId?.ToString(),
+            ["employeeId"] = crew.Engineer?.ToString(),
+            ["judgedBy"] = crew.Qa?.ToString(),
+            ["checkTaskId"] = checkTaskId?.ToString(),
+            ["requirements"] = new JsonArray(shown.Select(r => (JsonNode)r.DeepClone()).ToArray()),
+            ["evidence"] = OutputText.Truncate(Json.Str(evaluation, "evidence") ?? "", 4000),
+            ["faults"] = evaluation["faults"]?.DeepClone(),
+        };
+        if (!passedNow && round < run.Options.MaxRepairRounds)
+        {
+            judgement["repairCharged"] = false;
+        }
+        else if (!passedNow)
+        {
+            judgement["final"] = true;
+        }
+
+        await run.AppendAsync(passedNow ? HarnessEvents.EvaluationPassed : HarnessEvents.EvaluationFailed, judgement, cancellationToken);
+        await FinishTaskAsync(run, checkTaskId, "done", summary, cancellationToken);
+        await run.Journal.RecordAsync(key, evaluation, cancellationToken);
+        return (evaluation, null);
     }
 
     /// <summary>
@@ -420,7 +712,9 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         }
 
         var evaluatorId = $"evaluator-{item.Id}-{round}";
-        var evaluator = AgentFactory.As(run, run.Agents.Evaluator(run, evaluatorId, item, plan.RequirementsOf(item), workspace.Root, probe, callApp, appId), crew.Qa, crew.QaMemory, canRemember: true, crew.ProjectPath);
+        // The check of what worked before says how a part on screen is shown: by the data it shows or changes (KeepCheck).
+        var checkedItem = item.Id == KeepItem ? item with { Check = KeepCheck } : item;
+        var evaluator = AgentFactory.As(run, run.Agents.Evaluator(run, evaluatorId, checkedItem, plan.RequirementsOf(item), workspace.Root, probe, callApp, appId), crew.Qa, crew.QaMemory, canRemember: true, crew.ProjectPath);
         var result = await WorkflowSupport.RunAgentAsync(run, evaluator, workspace,
             $"Evaluate the item now (round {round}, built on {tier}).{(previewNote is null ? "" : "\n\n" + previewNote)}", cancellationToken);
         if (WorkflowOutcome.FromAgent(result) is not null)
@@ -456,17 +750,20 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         return item.TestIds.Where(t => !found.Contains(t)).ToList();
     }
 
-    private static async Task RecordProgressAsync(RunContext run, PlanItem item, JsonObject evaluation, IWorkspace workspace, CancellationToken cancellationToken)
+    private static async Task RecordProgressAsync(RunContext run, PlanItem item, JsonObject evaluation, IWorkspace workspace, bool change, CancellationToken cancellationToken)
     {
+        // A change's parts are keyed by the run, so its "i1" never hides the build's "i1".
+        var id = change ? $"{run.Run.Id.ToString("N")[..8]}-{item.Id}" : item.Id;
         var path = $"{workspace.Root}/{ProgressFile}";
         var existing = await workspace.ReadBytesAsync(path, cancellationToken);
         var text = existing is null ? "# Progress\n\nWhat is built and checked, feature by feature. Kept by the factory.\n\n" : Encoding.UTF8.GetString(existing);
         var evidence = (Json.Str(evaluation, "evidence") ?? "").Split('\n')[0];
-        var line = $"- [x] **{item.Id}** — {item.Text.TrimEnd('.')}. Checked: {OutputText.Truncate(evidence, 300)}\n";
-        if (!text.Contains($"**{item.Id}**", StringComparison.Ordinal))
+        var line = $"- [x] **{id}** — {item.Text.TrimEnd('.')}. Checked: {OutputText.Truncate(evidence, 300)}\n";
+        // The factory's own line, in the owner's words, even when the builder already noted the part in its own (a live build did).
+        if (!text.Contains($"- [x] **{id}**", StringComparison.Ordinal))
         {
             await workspace.WriteBytesAsync(path, Encoding.UTF8.GetBytes(text.TrimEnd('\n') + "\n" + line), cancellationToken);
-            await workspace.CommitAsync($"Record progress: {item.Id} is built and checked", "Endgame factory", $"factory@{run.Options.AuthorDomain}", cancellationToken);
+            await workspace.CommitAsync($"Record progress: {id} is built and checked", "Endgame factory", $"factory@{run.Options.AuthorDomain}", cancellationToken);
         }
     }
 
@@ -542,7 +839,7 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         var list = (run.Journal.Get("security:1")?["findings"] as JsonArray ?? []).OfType<JsonObject>().Select(f => $"{Json.Str(f, "file")}: {Json.Str(f, "problem")}");
         return WorkflowOutcome.Failure($"Publishing is blocked by the security review: {string.Join("; ", list)}")
             with
-        { ForOwner = "The security review still found problems after one repair, so the app was not published. Its work is saved, and technical mode lists each finding." };
+        { ForOwner = "The security review still found problems after one repair, so the app was not published. Its work is saved, technical mode lists each finding, and “Try again” carries on from it." };
     }
 
     private static bool Passed(JsonObject findings) =>

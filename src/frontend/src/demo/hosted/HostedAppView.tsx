@@ -87,6 +87,24 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
       return;
     }
 
+    if (action.kind === "dev-member") {
+      const member = ctx.developmentMember?.(normaliseEmail(action.email));
+      if (!member) throw new Error(authProblems.passkeyNotVerified);
+      finish(member, config.returnTo);
+      return;
+    }
+
+    if (action.kind === "dev-visitor") {
+      // `AppIdentityService.DevelopmentSignInAsync`: still within the app's access rule.
+      const email = normaliseEmail(action.email);
+      if (app.access === "private") throw new Error(authProblems.privateApp);
+      if (app.access === "shared" && !(ctx.isShared?.(email) ?? false)) throw new Error(authProblems.notShared);
+      const user: HostedVisitor = { kind: "end-user", displayName: displayNameFor(action.displayName, email), email };
+      device.registered.add(email);
+      finish(user, config.returnTo);
+      return;
+    }
+
     if (action.kind === "visitor-passkey") {
       if (!(await ctx.passkey({ action: "sign-in", site, account: null }))) throw closedPrompt();
       const user = ctx.returningEndUser !== undefined ? ctx.returningEndUser : device.passkeyFor;
@@ -169,7 +187,7 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
         organisationName: app.organisationName,
         signUp: app.access !== "private",
         invitationRequired: app.access === "shared",
-        developmentSignIn: false,
+        developmentSignIn: ctx.developmentSignIn === true,
       };
       config = pageConfig;
       html = renderAuthPage(outcome.page);

@@ -1,0 +1,50 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-09",
+  "persona": "signed-out",
+  "scenario": "established",
+  "start": "/__app/{app}/path/_endgame/auth/handoff?code=used",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "This sign-in link has expired",
+        "note": "Used, more than a minute old, or broken: 410."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in again"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Sign in to Court booking",
+        "note": "The app's sign-in page."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in with a passkey"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "testId": "signed-in-as",
+        "note": "Signed in again: the app opens."
+      }
+    }
+  ]
+}

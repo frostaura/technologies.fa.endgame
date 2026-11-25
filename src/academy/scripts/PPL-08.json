@@ -1,0 +1,143 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "PPL-08",
+  "persona": "invited",
+  "scenario": "established",
+  "start": "/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "First time here? Create your passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Invitation code",
+        "note": "Tobi was invited to Learning as a Builder and has not registered yet."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Your name"
+            },
+            "text": "Tobi Adeyemi"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Email address"
+            },
+            "text": "tobi@northwind.example"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Invitation code"
+            },
+            "text": "LARK-7Q4M-2PXD"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Invitation code",
+        "note": "The address he was invited at, and the code from the e-mail."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Create passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Waiting for your device…",
+        "note": "The server checks the code first; then his device makes the passkey."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 2500
+        }
+      ],
+      "highlight": {
+        "text": "Sign out",
+        "note": "Signed in with exactly the role he was given. The code no longer works."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A code that is wrong, used or expired",
+      "persona": "invited",
+      "scenario": "established",
+      "start": "/sign-in",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "First time here? Create your passkey"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Your name"
+                },
+                "text": "Tobi Adeyemi"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Email address"
+                },
+                "text": "tobi@northwind.example"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Invitation code"
+                },
+                "text": "LARK-1111-1111"
+              }
+            },
+            {
+              "click": {
+                "text": "Create passkey"
+              }
+            },
+            {
+              "wait": 1200
+            }
+          ],
+          "highlight": {
+            "text": "That invitation code is not valid",
+            "note": "Refused with 403, and nothing is created."
+          }
+        }
+      ]
+    }
+  ]
+}

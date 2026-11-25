@@ -73,4 +73,10 @@ export interface HostedContext {
   returningEndUser?: HostedVisitor | null;
   /** True when the address is already registered with this app (sign-up then refuses). Default: only addresses registered here earlier. */
   isRegistered?(email: string): boolean;
+  /** A development deployment (ACC-13): the pages offer the development sign-in. Default false. */
+  developmentSignIn?: boolean;
+  /** Development sign-in as a member: who the console account for this address is. */
+  developmentMember?(email: string): HostedVisitor;
+  /** True when the app is shared with this address (the development sign-in as a visitor). */
+  isShared?(email: string): boolean;
 }
