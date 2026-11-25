@@ -248,6 +248,9 @@ public sealed class WorkflowTests
         /// <summary>When set, a failed evaluation names faults this long (twice), as a verbose evaluator does.</summary>
         public string? LongFaults { get; set; }
 
+        /// <summary>A plan of the test's own (items and requirements), proposed instead of the recipe box's.</summary>
+        public (object[] Items, object[] Requirements, string Summary)? Plan { get; set; }
+
         public ScriptedModel Model() => new() { Fallback = Answer };
 
         private ModelReply Answer(ChatCall call)
@@ -270,6 +273,11 @@ public sealed class WorkflowTests
                     if (!missing && !LeaveOneOut)
                     {
                         items.Add(new { id = "recipes-page", text = "Households can share their recipes with each other.", detail = "A recipes page with four states and a share action", check = "make test passes RecipesPage.test.tsx", covers = new[] { "r2" } });
+                    }
+
+                    if (Plan is { } own)
+                    {
+                        return ScriptedModel.Tools(("propose_plan", new { summary = own.Summary, requirements = own.Requirements, items = own.Items, leftOut = Array.Empty<object>() }, null));
                     }
 
                     return ScriptedModel.Tools(("propose_plan", new
@@ -325,9 +333,9 @@ public sealed class WorkflowTests
         }
     }
 
-    private static (FakeControlPlane Cp, FakeWorkspace Ws, FakeDock Dock) BuildRun()
+    private static (FakeControlPlane Cp, FakeWorkspace Ws, FakeDock Dock) BuildRun(string idea = "Recipe box for families\nShare recipes between households.")
     {
-        var cp = new FakeControlPlane("frostaura/technologies", "build", "Recipe box for families\nShare recipes between households.") { Headroom = 1000m };
+        var cp = new FakeControlPlane("frostaura/technologies", "build", idea) { Headroom = 1000m };
         var ws = new FakeWorkspace().With("api/Program.cs", "var api = app.UseEndgameApp();\napi.MapNotes();\napp.Run();\n").With("AGENTS.md", "# AGENTS\n");
         return (cp, ws, new FakeDock());
     }
@@ -539,6 +547,211 @@ public sealed class WorkflowTests
         Assert.Equal(1, factory.Plans);
         Assert.Equal(2, cp.Types.Count(t => t == "evaluation.passed"));
         Assert.Single(cp.Types, t => t == "plan.accepted");
+    }
+
+    // ---- attribution: who did the work, and who judged it --------------------------------------------
+
+    private const string RecipeProject = "frostaura/technologies/recipe-box-for-families";
+
+    private static (string Engineer, string Qa) Crew(FakeControlPlane cp) =>
+        (cp.Hires[$"stage:build:{RecipeProject}"]["employeeId"]!.GetValue<string>(), cp.Hires[$"stage:evaluate:{RecipeProject}"]["employeeId"]!.GetValue<string>());
+
+    private static List<(long Seq, string Type, JsonObject Payload)> Judgements(FakeControlPlane cp, string item) =>
+        cp.Events.Where(e => e.Type is "evaluation.passed" or "evaluation.failed" && e.Payload["item"]?.GetValue<string>() == item).ToList();
+
+    [Fact]
+    public async Task Each_plan_item_is_a_task_the_engineer_claims_and_each_evaluation_is_a_judgement_naming_the_work_and_the_judge()
+    {
+        var (cp, ws, dock) = BuildRun();
+        // The first feature is sent back once, then accepted.
+        await RunBuildAsync(cp, new Factory { EvaluationPasses = n => n != 0 }.Model(), ws, dock);
+        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+        var (engineer, qa) = Crew(cp);
+
+        // Each plan item is a task in the persistent graph, for this run and the app's project, titled in the owner's
+        // words, claimed by the engineer who builds it, and done once its evaluation accepts it.
+        var built = cp.Tasks.Where(t => t["employeeId"]?.GetValue<string>() == engineer).ToList();
+        Assert.Equal(["Families can keep their recipes in one place.", "Households can share their recipes with each other."], built.Select(t => t["title"]!.GetValue<string>()));
+        Assert.All(built, t => Assert.Equal((cp.RunId.ToString(), RecipeProject, "done"), (t["runId"]!.GetValue<string>(), t["scope"]!.GetValue<string>(), t["status"]!.GetValue<string>())));
+
+        // The QA engineer's checks and the standing reviewer's review are their own work: tasks they claimed and finished.
+        var checks = cp.Tasks.Where(t => t["employeeId"]?.GetValue<string>() == qa).ToList();
+        Assert.Equal(3, checks.Count);
+        Assert.All(checks, t => Assert.Equal("done", t["status"]!.GetValue<string>()));
+        Assert.Equal("done", Assert.Single(cp.Tasks, t => t["employeeId"]?.GetValue<string>() == cp.Reviewer.ToString())["status"]!.GetValue<string>());
+        Assert.All(cp.Tasks, t => Assert.True(Endgame.Harness.Events.OwnerText.IsPlain(t["title"]!.GetValue<string>()), t["title"]!.GetValue<string>()));
+        Assert.All(cp.Events.Where(e => e.Type is "task.claimed" or "task.done" or "task.failed"), e => Assert.NotNull(e.Payload["employeeId"]));
+
+        // Each evaluation judges the engineer's task, by the QA engineer: sent back with the repair not charged, then accepted.
+        var apiTask = built[0]["id"]!.GetValue<string>();
+        var judgements = Judgements(cp, "recipes-api");
+        Assert.Equal(["evaluation.failed", "evaluation.passed"], judgements.Select(j => j.Type));
+        Assert.All(judgements, j => Assert.Equal((apiTask, engineer, qa), (j.Payload["taskId"]!.GetValue<string>(), j.Payload["employeeId"]!.GetValue<string>(), j.Payload["judgedBy"]!.GetValue<string>())));
+        Assert.All(judgements, j => Assert.Contains(checks, c => c["id"]!.GetValue<string>() == j.Payload["checkTaskId"]!.GetValue<string>()));
+        Assert.False(judgements[0].Payload["repairCharged"]!.GetValue<bool>());
+        Assert.Null(judgements[1].Payload["repairCharged"]);
+        var done = cp.Events.FindIndex(e => e.Type == "task.done" && e.Payload["taskId"]?.GetValue<string>() == apiTask);
+        Assert.True(done > cp.Events.FindIndex(e => e.Type == "evaluation.passed"), "the task is done only once it is accepted");
+        Assert.DoesNotContain(cp.Events, e => e.Type == "task.failed");
+        AssertOwnerFieldsArePlain(cp);
+    }
+
+    [Fact]
+    public async Task Work_that_never_passes_its_check_fails_its_task_and_every_round_is_judged()
+    {
+        var (cp, ws, dock) = BuildRun();
+        await RunBuildAsync(cp, new Factory { EvaluationPasses = _ => false }.Model(), ws, dock);
+        Assert.Equal("failed", cp.Run["status"]!.GetValue<string>());
+        var (engineer, qa) = Crew(cp);
+        var task = Assert.Single(cp.Tasks, t => t["employeeId"]?.GetValue<string>() == engineer);
+        Assert.Equal(("Families can keep their recipes in one place.", "failed"), (task["title"]!.GetValue<string>(), task["status"]!.GetValue<string>()));
+        Assert.Single(cp.Events, e => e.Type == "task.failed" && e.Payload["taskId"]?.GetValue<string>() == task["id"]!.GetValue<string>() && e.Payload["employeeId"]?.GetValue<string>() == engineer);
+        var judgements = Judgements(cp, "recipes-api");
+        Assert.Equal(4, judgements.Count);
+        Assert.All(judgements, j => Assert.Equal((engineer, qa), (j.Payload["employeeId"]!.GetValue<string>(), j.Payload["judgedBy"]!.GetValue<string>())));
+        // Three repairs followed, none charged; the last judgement is final.
+        Assert.Equal([false, false, false], judgements.Take(3).Select(j => j.Payload["repairCharged"]!.GetValue<bool>()));
+        Assert.True(judgements[3].Payload["final"]!.GetValue<bool>());
+        Assert.Null(judgements[3].Payload["repairCharged"]);
+    }
+
+    [Fact]
+    public async Task A_resumed_build_keeps_its_tasks_and_creates_none_twice()
+    {
+        var (cp, ws, dock) = BuildRun();
+        var factory = new Factory();
+        using var kill = new CancellationTokenSource();
+        factory.OnBuilder = call =>
+        {
+            if (call.Messages[1]!["content"]!.GetValue<string>().Contains("The feature: [recipes-page]", StringComparison.Ordinal))
+            {
+                kill.Cancel();
+            }
+        };
+        await RunBuildAsync(cp, factory.Model(), ws, dock, kill.Token);
+        var (engineer, _) = Crew(cp);
+        Assert.Equal(["done", "in_progress"], cp.Tasks.Where(t => t["employeeId"]?.GetValue<string>() == engineer).Select(t => t["status"]!.GetValue<string>()));
+        var before = cp.Tasks.Count;
+
+        factory.OnBuilder = null;
+        await RunBuildAsync(cp, factory.Model(), ws, dock);
+        Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
+        var built = cp.Tasks.Where(t => t["employeeId"]?.GetValue<string>() == engineer).ToList();
+        Assert.Equal(2, built.Count);
+        Assert.All(built, t => Assert.Equal("done", t["status"]!.GetValue<string>()));
+        Assert.Equal(2, cp.Tasks.Count(t => t["title"]!.GetValue<string>().EndsWith("recipes in one place.", StringComparison.Ordinal)));
+        Assert.Equal(1, cp.Tasks.Count(t => t["title"]!.GetValue<string>() == "Households can share their recipes with each other."));
+        Assert.True(cp.Tasks.Count > before);
+    }
+
+    [Fact]
+    public async Task The_security_review_is_the_reviewers_work_and_the_fix_is_the_engineers()
+    {
+        var (cp, ws, dock) = BuildRun();
+        await RunBuildAsync(cp, new Factory { ReviewPasses = n => n != 0 }.Model(), ws, dock);
+        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+        var (engineer, _) = Crew(cp);
+        var reviews = cp.Tasks.Where(t => t["employeeId"]?.GetValue<string>() == cp.Reviewer.ToString()).ToList();
+        Assert.Equal(2, reviews.Count);
+        Assert.All(reviews, t => Assert.Equal("done", t["status"]!.GetValue<string>()));
+        var fix = Assert.Single(cp.Tasks, t => t["employeeId"]?.GetValue<string>() == engineer && t["title"]!.GetValue<string>().Contains("security review", StringComparison.Ordinal));
+        Assert.Equal("done", fix["status"]!.GetValue<string>());
+        var said = cp.Events.Where(e => e.Type == "message" && e.Payload["kind"]?.GetValue<string>() == "security.review").ToList();
+        Assert.Equal(2, said.Count);
+        Assert.All(said, e => Assert.Equal(cp.Reviewer.ToString(), e.Payload["employeeId"]!.GetValue<string>()));
+        Assert.Equal(reviews.Select(r => r["id"]!.GetValue<string>()), said.Select(e => e.Payload["taskId"]!.GetValue<string>()));
+        Assert.All(cp.Tasks, t => Assert.True(Endgame.Harness.Events.OwnerText.IsPlain(t["title"]!.GetValue<string>()), t["title"]!.GetValue<string>()));
+    }
+
+    // ---- the build estimate, weighted by the plan ------------------------------------------------------
+
+    private const string ReadingListIdea = "A reading list for a small book club. Members add books, mark what they are reading and what they finished, and see what everyone is reading now. Each book has its own page with a note.";
+
+    /// <summary>The live reading-list builds' plan (TEST-201): the books kept and served, the list, the add-a-book form and a book's page.</summary>
+    private static (object[] Items, object[] Requirements, string Summary) ReadingList(bool emailOnFinish = false) => (
+        [
+            new { id = "books-api", text = "The club's books are kept, with who added each and what they are reading.", detail = "Book entity with status, a fresh migration, GET/POST/PATCH api/books and tests", check = "make test passes BooksApiTests", covers = new[] { "r1", "r2", "r3" } },
+            new { id = "reading-list", text = "Members see the reading list and what everyone is reading now.", detail = "The reading-list page and the reading-now view, with four states each", check = "make test passes ReadingList.test.tsx", covers = new[] { "r1", "r4" } },
+            new
+            {
+                id = "book-page",
+                text = emailOnFinish ? "Members add a book and open its own page, and the club gets an e-mail when a book is finished." : "Members add a book and open its own page to change its status.",
+                detail = "The add-a-book form and a book's page with a status selector and its note" + (emailOnFinish ? "; an e-mail to the club through the platform when one is finished" : ""),
+                check = "make test passes BookPage.test.tsx",
+                covers = new[] { "r2", "r3", "r5" },
+            },
+        ],
+        [
+            new { id = "r1", text = "A reading list for a small book club" },
+            new { id = "r2", text = "Members add books" },
+            new { id = "r3", text = "mark what they are reading and what they finished" },
+            new { id = "r4", text = "see what everyone is reading now" },
+            new { id = "r5", text = "Each book has its own page with a note" },
+        ],
+        "A reading list the club shares.");
+
+    private const string ClubIdea = "A court booking app for a squash club. Members buy packages of playing minutes and book a court for a time slot; bookings cost playing minutes. Members get a confirmation e-mail and see their bookings and balance. An admin adds minutes to a member. The court's hardware asks a webhook whether the court is booked now.";
+
+    /// <summary>The acceptance test's club app (TEST-201): five items, eight requirements, one item with a signed webhook and e-mail.</summary>
+    private static (object[] Items, object[] Requirements, string Summary) Club() => (
+        [
+            new { id = "bookings-api", text = "Courts and bookings are kept, each booking costing its playing minutes.", detail = "Court and Booking entities, a migration, api/bookings endpoints and tests", check = "make test passes BookingsApiTests", covers = new[] { "r1", "r3", "r4" } },
+            new { id = "minutes-api", text = "Members hold playing minutes bought in packages, and an admin can add to them.", detail = "MinutePackage and MinuteLedger entities, api/minutes endpoints, the admin's add-minutes endpoint", check = "make test passes MinutesApiTests", covers = new[] { "r2", "r7" } },
+            new { id = "booking-screen", text = "Members book a court and see their bookings and balance.", detail = "The booking page with a court-and-slot form, and my bookings with the balance", check = "make test passes Booking.test.tsx", covers = new[] { "r3", "r6" } },
+            new { id = "admin-screen", text = "An admin adds minutes to a member.", detail = "The admin page with a member picker and an add-minutes form", check = "make test passes Admin.test.tsx", covers = new[] { "r7" } },
+            new { id = "hooks-and-mail", text = "The court's hardware can ask whether it is booked now, and members get a confirmation e-mail.", detail = "A signed webhook endpoint hooks/court-status, and a confirmation e-mail through the platform on every booking", check = "the evaluator calls the webhook signed and reads the sent e-mail", covers = new[] { "r5", "r8" } },
+        ],
+        [
+            new { id = "r1", text = "A court booking app for a squash club" },
+            new { id = "r2", text = "Members buy packages of playing minutes" },
+            new { id = "r3", text = "book a court for a time slot" },
+            new { id = "r4", text = "bookings cost playing minutes" },
+            new { id = "r5", text = "Members get a confirmation e-mail" },
+            new { id = "r6", text = "see their bookings and balance" },
+            new { id = "r7", text = "An admin adds minutes to a member" },
+            new { id = "r8", text = "The court's hardware asks a webhook whether the court is booked now" },
+        ],
+        "A court booking app the club's members and admins use.");
+
+    private static async Task<JsonObject> PlanEstimateAsync(string idea, (object[] Items, object[] Requirements, string Summary)? plan)
+    {
+        var (cp, ws, dock) = BuildRun(idea);
+        await RunBuildAsync(cp, new Factory { Plan = plan }.Model(), ws, dock);
+        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+        return cp.Events.Single(e => e.Type == "estimate.made" && e.Payload["stage"]?.GetValue<string>() == "plan").Payload;
+    }
+
+    [Theory]
+    // The reading list: within the spread of its four live builds (13.35, 14.56, 17.6, 23.9 credits), 10% either side.
+    [InlineData("reading-list", 12.0, 26.3)]
+    // The club app: within a quarter of its live build's 59.1 credits.
+    [InlineData("club", 44.3, 73.9)]
+    public async Task Before_any_history_a_build_is_estimated_by_its_plans_items_and_lands_near_what_the_live_builds_cost(string plan, double low, double high)
+    {
+        var made = await PlanEstimateAsync(plan == "club" ? ClubIdea : ReadingListIdea, plan == "club" ? Club() : ReadingList());
+        var credits = made["credits"]!.GetValue<decimal>();
+        Assert.InRange(credits, (decimal)low, (decimal)high);
+        var basis = made["basis"]!.GetValue<string>();
+        Assert.Contains("measured starting figure for build runs", basis, StringComparison.Ordinal);
+        Assert.Contains(plan == "club" ? "5 items" : "3 items", basis, StringComparison.Ordinal);
+        if (plan == "club")
+        {
+            Assert.Contains("webhooks and e-mail", basis, StringComparison.Ordinal);
+        }
+
+        Assert.True(Endgame.Harness.Events.OwnerText.IsPlain(basis), basis);
+    }
+
+    [Fact]
+    public async Task A_plans_estimate_grows_with_its_items_and_with_what_they_involve()
+    {
+        var recipes = (await PlanEstimateAsync("Recipe box for families\nShare recipes between households.", null))["credits"]!.GetValue<decimal>();
+        var reading = (await PlanEstimateAsync(ReadingListIdea, ReadingList()))["credits"]!.GetValue<decimal>();
+        var readingWithEmail = (await PlanEstimateAsync(ReadingListIdea, ReadingList(emailOnFinish: true)))["credits"]!.GetValue<decimal>();
+        var club = (await PlanEstimateAsync(ClubIdea, Club()))["credits"]!.GetValue<decimal>();
+        Assert.True(recipes < reading, $"{recipes} < {reading}");
+        Assert.True(reading < readingWithEmail, $"{reading} < {readingWithEmail}: an item that sends e-mail costs more");
+        Assert.True(readingWithEmail < club, $"{readingWithEmail} < {club}");
     }
 
     // ---- ideas from the portfolio -------------------------------------------------------------------
