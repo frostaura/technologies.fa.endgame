@@ -148,7 +148,14 @@ public sealed record BudgetLineView(string Scope, string Name, string Level, int
 
 public sealed record MonthView(decimal Spent, decimal Ai, decimal Hosting);
 
-public sealed record EstimatesView(long Pieces, decimal WithinPercent, long Under, long Over, decimal LargestMissPercent);
+/// <summary>
+/// Estimates scored against actuals. <paramref name="WithinPercent"/> is the share of pieces that came within 10% of their
+/// estimate; <paramref name="TypicalGapPercent"/> the typical gap with its sign — the median across scored pieces of
+/// (actual − estimate) / estimate, in percent (−84 is "usually 84% under the estimate"), null when no piece had an
+/// estimate above zero; <paramref name="Typically"/> says it in a word: <c>under</c>, <c>over</c>, or <c>within</c>
+/// when the typical gap is within 10% either way.
+/// </summary>
+public sealed record EstimatesView(long Pieces, decimal WithinPercent, long Under, long Over, decimal LargestMissPercent, decimal? TypicalGapPercent, string? Typically);
 
 public sealed record NotChargedView(decimal Credits, long Repairs);
 

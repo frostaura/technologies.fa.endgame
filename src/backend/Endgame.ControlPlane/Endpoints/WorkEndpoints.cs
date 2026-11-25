@@ -155,12 +155,12 @@ internal static class WorkEndpoints
         })
         .WithName("AnswerApproval").WithSummary("Approves or rejects a checkpoint a run is waiting on.").Produces(204);
 
-        api.MapGet("/tasks", async (string? scope, string? status, int? limit, ClaimsPrincipal principal, AccessService access, TaskService tasks, CancellationToken ct) =>
+        api.MapGet("/tasks", async (string? scope, string? status, int? limit, Guid? employeeId, ClaimsPrincipal principal, AccessService access, TaskService tasks, CancellationToken ct) =>
         {
             var (resolved, _) = await access.RequireAsync(principal.Id(), scope, MemberRole.Viewer, ct);
-            return Results.Ok(await tasks.ListAsync(resolved, status, limit ?? 100, ct));
+            return Results.Ok(await tasks.ListAsync(resolved, status, limit ?? 100, ct, employeeId));
         })
-        .WithTags("Tasks").WithName("ListTasks").WithSummary("Tasks at the scope and beneath it, most recently changed first (at most 500).").Produces<IReadOnlyList<TaskView>>();
+        .WithTags("Tasks").WithName("ListTasks").WithSummary("Tasks at the scope and beneath it, most recently changed first (at most 500); with employeeId, only the ones that employee claimed.").Produces<IReadOnlyList<TaskView>>();
 
         var apps = api.MapGroup("/apps").WithTags("Apps");
         apps.MapGet("/{id:guid}", async (Guid id, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, ReadModels reads, CancellationToken ct) =>

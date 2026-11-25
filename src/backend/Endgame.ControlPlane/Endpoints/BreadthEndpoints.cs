@@ -150,14 +150,18 @@ internal static class BreadthEndpoints
             .Produces(200, contentType: "application/gzip");
 
         api.MapGet("/runs", async (string? scope, Guid? employeeId, string? kind, string? status, int? limit, ClaimsPrincipal principal, AccessService access, EmployeeService employees,
-                RunService runs, ReadModels reads, CancellationToken ct) =>
+                RunService runs, ReadModels reads, ScopeResolver scopes, CancellationToken ct) =>
             {
                 ResolvedScope at;
+                var wherever = false;
                 if (scope is null && employeeId is { } employee)
                 {
+                    // Wherever the employee worked in its organisation — a factory build sits where the idea was proposed,
+                    // above the project its engineer was hired into — and only the runs the caller may see.
                     var record = await employees.RequireAsync(employee, ct);
-                    at = await employees.ScopeOfAsync(record, ct);
-                    await access.RequireAsync(principal.Id(), at, MemberRole.Viewer, ct);
+                    await access.RequireAsync(principal.Id(), await employees.ScopeOfAsync(record, ct), MemberRole.Viewer, ct);
+                    at = await scopes.ForRowAsync(record.OrganisationId, null, null, null, ct);
+                    wherever = true;
                 }
                 else
                 {
@@ -168,13 +172,18 @@ internal static class BreadthEndpoints
                 var views = new List<PublicRunView>();
                 foreach (var run in list)
                 {
+                    if (wherever && !await SeesAsync(access, scopes, principal.Id(), run.Scope, ct))
+                    {
+                        continue;
+                    }
+
                     views.Add(await reads.RunAsync(at.OrganisationId, run.Id, ct));
                 }
 
                 return Results.Ok(views);
             })
             .WithTags("Runs").WithName("ListRuns")
-            .WithSummary("Runs at a scope and beneath it, newest first (at most 100), optionally only one employee's (employeeId alone: wherever that employee works).")
+            .WithSummary("Runs at a scope and beneath it, newest first (at most 100), optionally only the ones an employee worked in — its own, one it claimed a task in, or one with a model call charged to it (employeeId alone: wherever in its organisation, as far as the caller may see).")
             .Produces<IReadOnlyList<PublicRunView>>();
     }
 
@@ -349,5 +358,18 @@ internal static class BreadthEndpoints
             .Take(200).ToListAsync(ct);
         session.Clear();
         return rows;
+    }
+
+    private static async Task<bool> SeesAsync(AccessService access, ScopeResolver scopes, Guid userId, string scope, CancellationToken ct)
+    {
+        try
+        {
+            await access.RequireAsync(userId, await scopes.RequireAsync(scope, ct), MemberRole.Viewer, ct);
+            return true;
+        }
+        catch (EndgameProblem problem) when (problem.Status is 403 or 404)
+        {
+            return false;
+        }
     }
 }

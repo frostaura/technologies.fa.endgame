@@ -207,6 +207,9 @@ public sealed class TaskRecord : IScopedRecord
 
     public Guid? HolderEmployeeId { get; set; }
 
+    /// <summary>Who claimed the work last: kept when it finishes (the holder is not), so the work stays theirs.</summary>
+    public Guid? EmployeeId { get; set; }
+
     public DateTimeOffset? ClaimedAt { get; set; }
 
     public decimal? EstimateCredits { get; set; }

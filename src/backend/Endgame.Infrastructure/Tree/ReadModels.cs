@@ -117,9 +117,13 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var spend = await ledger.SpendThisMonthByNodeAsync(organisationId, cancellationToken);
         var sleepModes = await db.CascadeEntries.AsNoTracking()
             .Where(e => e.OrganisationId == organisationId && e.Kind == "setting" && e.Key == CascadeKeys.SleepMode).ToListAsync(cancellationToken);
+        var liveIds = liveRuns.Select(r => r.Id).ToList();
         var tasks = await db.Tasks.AsNoTracking()
-            .Where(t => t.OrganisationId == organisationId && t.RunId != null && liveRuns.Select(r => r.Id).Contains(t.RunId.Value))
-            .Select(t => new { t.RunId, t.Status }).ToListAsync(cancellationToken);
+            .Where(t => t.OrganisationId == organisationId && t.RunId != null && liveIds.Contains(t.RunId.Value))
+            .Select(t => new { t.RunId, t.Status, t.EmployeeId }).ToListAsync(cancellationToken);
+        var charged = await db.CreditEntries.AsNoTracking()
+            .Where(c => c.OrganisationId == organisationId && c.RunId != null && c.EmployeeId != null && liveIds.Contains(c.RunId.Value))
+            .Select(c => new { c.RunId, c.EmployeeId }).Distinct().ToListAsync(cancellationToken);
         var (estimates, runSpend) = await RunCostsAsync(organisationId, liveRuns.Select(r => r.Id).ToArray(), cancellationToken);
         var measured = await telemetry.SummariesAsync(organisationId, null, cancellationToken);
         var shares = (await db.AppShares.AsNoTracking().Where(x => x.OrganisationId == organisationId).GroupBy(x => x.AppId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken))
@@ -131,6 +135,9 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var visible = grants.Select(g => g.NodeId).ToHashSet();
         bool Visible(Guid id, params Guid[] ancestors) => everything || visible.Contains(id) || ancestors.Any(visible.Contains);
         var runTitles = liveRuns.ToDictionary(r => r.Id, r => r.Title);
+        // Who works in each run that is under way: its owner, whoever claimed a task in it, whoever its model calls were charged to.
+        var working = WorkingIn(liveRuns.Where(r => r.Status is RunStatuses.Running or RunStatuses.WaitingApproval).ToList(),
+            tasks.Where(t => t.EmployeeId != null).Select(t => (t.RunId!.Value, t.EmployeeId!.Value)).Concat(charged.Select(c => (c.RunId!.Value, c.EmployeeId!.Value))));
 
         var idleDays = await db.CascadeEntries.AsNoTracking()
             .Where(e => e.OrganisationId == organisationId && e.Kind == "setting" && e.Key == AgentSettings.WorkforceIdleDays).ToListAsync(cancellationToken);
@@ -140,13 +147,15 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         {
             EmployeeStatuses.Paused => "Paused",
             _ when e.CurrentRunId is { } run && runTitles.TryGetValue(run, out var title) => title,
+            _ when working.TryGetValue(e.Id, out var worked) => runTitles[worked],
             _ when e.Kind == Domain.Workforce.EmployeeKinds.Contractor => e.Brief is { Length: > 120 } brief ? brief[..117] + "..." : e.Brief,
             _ => null,
         };
 
         IReadOnlyList<WorkerView> Workers(Guid? division, Guid? project, Guid? app) => employees
             .Where(e => e.DivisionId == division && e.ProjectId == project && e.AppId == app)
-            .Select(e => new WorkerView(e.Id, e.Name, e.Role, e.Kind, Activity(e), e.Status, idle[e.Id].Flagged, e.Standing, e.BriefedById))
+            .Select(e => new WorkerView(e.Id, e.Name, e.Role, e.Kind, Activity(e), e.Status == EmployeeStatuses.Idle && working.ContainsKey(e.Id) ? EmployeeStatuses.Working : e.Status,
+                idle[e.Id].Flagged && !working.ContainsKey(e.Id), e.Standing, e.BriefedById))
             .ToList();
 
         SpendView Spend(Func<(Guid? DivisionId, Guid? ProjectId, Guid? AppId, Guid? EmployeeId, decimal Credits), bool> where) => new(spend.Where(where).Sum(s => s.Credits));
@@ -211,6 +220,23 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         needs = [.. needs, .. await WorkforceNeedsAsync(organisationId, everything, visible, employees.Where(e => idle[e.Id].Flagged).ToList(), idle, cancellationToken)];
         var viewer = RoleResolver.Resolve(grants)?.Role.ToWire() ?? "none";
         return new TreeView(clock.GetUtcNow(), viewer, root, divisionViews, needs);
+    }
+
+    /// <summary>For each employee, the newest of <paramref name="runs"/> (newest first) it works in: as the run's owner, or by a task or a charged model call in it.</summary>
+    public static Dictionary<Guid, Guid> WorkingIn(IReadOnlyList<RunRecord> runs, IEnumerable<(Guid RunId, Guid EmployeeId)> workedIn)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        var order = runs.Select((r, i) => (r.Id, i)).ToDictionary(x => x.Id, x => x.i);
+        var working = new Dictionary<Guid, Guid>();
+        foreach (var (run, employee) in runs.Where(r => r.EmployeeId is not null).Select(r => (r.Id, r.EmployeeId!.Value)).Concat(workedIn ?? []))
+        {
+            if (order.TryGetValue(run, out var at) && (!working.TryGetValue(employee, out var held) || order[held] > at))
+            {
+                working[employee] = run;
+            }
+        }
+
+        return working;
     }
 
     public TreeView FirstRun() => new(clock.GetUtcNow(), "none", null, [], []);
@@ -544,7 +570,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
     }
 
     /// <summary>
-    /// Estimates scored against what the work cost, in the scope (and for one employee when given): the
+    /// Estimates scored against what the work cost, in the scope (and for one employee when given — the run's owner, or
+    /// for a run nobody owns, such as a factory build, the employee its billable model calls were mostly charged to): the
     /// Runner's <c>estimate.scored { expectedCredits, actualCredits }</c>, and the older
     /// <c>{ estimated, actual }</c>. Null before any was scored.
     /// </summary>
@@ -561,7 +588,10 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                 JOIN runs r ON r.organisation_id = e.organisation_id AND r.id = e.run_id
                 WHERE e.organisation_id = @org AND e.type = 'estimate.scored'
                   AND (@division IS NULL OR r.division_id = @division) AND (@project IS NULL OR r.project_id = @project) AND (@app IS NULL OR r.app_id = @app)
-                  AND (@employee IS NULL OR r.employee_id = @employee)) x
+                  AND (@employee IS NULL OR COALESCE(r.employee_id, (
+                        SELECT c.employee_id FROM credit_entries c
+                        WHERE c.organisation_id = r.organisation_id AND c.run_id = r.id AND c.kind = 'settlement' AND c.billable AND c.employee_id IS NOT NULL
+                        GROUP BY c.employee_id ORDER BY SUM(c.amount) DESC, c.employee_id LIMIT 1)) = @employee)) x
             WHERE x.estimated IS NOT NULL AND x.actual IS NOT NULL
             """, cancellationToken, P("org", scope.OrganisationId), P("division", scope.DivisionId), P("project", scope.ProjectId), P("app", scope.AppId), P("employee", employeeId));
         var pieces = new List<(decimal Estimated, decimal Actual)>();
@@ -580,9 +610,20 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
 
         static decimal Miss((decimal Estimated, decimal Actual) p) => p.Estimated == 0 ? (p.Actual == 0 ? 0 : 1) : Math.Abs(p.Actual - p.Estimated) / p.Estimated;
         var within = pieces.Count(p => Miss(p) <= EstimateTolerance);
+        var gap = TypicalGap(pieces);
         return new EstimatesView(pieces.Count, decimal.Round(100m * within / pieces.Count, 1),
             pieces.Count(p => p.Actual < p.Estimated && Miss(p) > EstimateTolerance), pieces.Count(p => p.Actual > p.Estimated && Miss(p) > EstimateTolerance),
-            decimal.Round(pieces.Max(Miss) * 100m, 1));
+            decimal.Round(pieces.Max(Miss) * 100m, 1),
+            gap is { } typical ? decimal.Round(typical * 100m, 1) : null,
+            gap switch { null => null, var g when Math.Abs(g.Value) <= EstimateTolerance => "within", < 0 => "under", _ => "over" });
+    }
+
+    /// <summary>The median of (actual − estimate) / estimate over the pieces that had an estimate above zero: the typical gap, with its direction.</summary>
+    public static decimal? TypicalGap(IReadOnlyList<(decimal Estimated, decimal Actual)> pieces)
+    {
+        ArgumentNullException.ThrowIfNull(pieces);
+        var gaps = pieces.Where(p => p.Estimated > 0).Select(p => (p.Actual - p.Estimated) / p.Estimated).Order().ToList();
+        return gaps.Count == 0 ? null : gaps.Count % 2 == 1 ? gaps[gaps.Count / 2] : (gaps[(gaps.Count / 2) - 1] + gaps[gaps.Count / 2]) / 2m;
     }
 
     /// <summary>
