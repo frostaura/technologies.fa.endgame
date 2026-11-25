@@ -94,7 +94,7 @@
             "ENDGAME_BACKUP_KEY is set but is not a backup key, so no backup runs. It must be 32 random bytes written as 64 hex characters (or as 44 characters of base64); make one with `openssl rand -hex 32`. An archive opens only with the key that sealed it, so keep the one you have used before.",
             "make: *** [backup] Error 1"
           ],
-          "note": "The variable is named and the shape it needs is said; its value is never printed. Nothing is started beyond the database and the ops service, and no backup runs. With no key at all the line reads \"ENDGAME_BACKUP_KEY is not set, so nothing can be encrypted and no backup runs. It must be 32 random bytes written as 64 hex characters (or as 44 characters of base64); make one with `openssl rand -hex 32`.\" The compose progress lines are left out."
+          "note": "The variable is named with the shape it needs, never its value, and no backup runs. With no key at all it reads \"ENDGAME_BACKUP_KEY is not set, so nothing can be encrypted and no backup runs.\" and the same shape. The compose progress lines are left out."
         }
       ]
     },

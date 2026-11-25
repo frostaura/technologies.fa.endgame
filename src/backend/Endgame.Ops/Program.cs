@@ -65,7 +65,7 @@ public static class OpsCli
     /// <summary>The exit code of a restore that failed after it began to write (every refusal before that is 1).</summary>
     public const int RestoreIncompleteExit = 4;
 
-    private static readonly string[] Commands =["backup", "backups", "verify", "restore", "cloudflare-plan", "cloudflare-apply", "reserved-hosts"];
+    private static readonly string[] Commands = ["backup", "backups", "verify", "restore", "cloudflare-plan", "cloudflare-apply", "reserved-hosts"];
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     public static bool IsCommand(string arg) => Commands.Contains(arg);
