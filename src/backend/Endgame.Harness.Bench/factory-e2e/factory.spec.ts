@@ -223,8 +223,11 @@ test("3. placement, hires, plan, builders, evaluator, security review and a priv
     spentCredits: build.spentCredits,
     estimateCredits: build.estimateCredits,
     plan: log.filter((e) => e.type === "plan.accepted").map((e) => e.payload.items)[0],
+    requirements: log.filter((e) => e.type === "plan.accepted").map((e) => e.payload.requirements)[0],
+    leftOut: log.filter((e) => e.type === "plan.accepted").map((e) => e.payload.leftOut)[0],
+    appCalls: log.filter((e) => e.type === "tool.requested" && e.payload.name === "call_app").length,
     builderSessions: new Set(log.filter((e) => String(e.payload.agent ?? "").startsWith("builder-")).map((e) => e.payload.agent)).size,
-    evaluations: evaluations.map((e) => ({ item: e.payload.item, passed: e.type === "evaluation.passed", round: e.payload.round, tier: e.payload.tier, faults: e.payload.faults })),
+    evaluations: evaluations.map((e) => ({ item: e.payload.item, passed: e.type === "evaluation.passed", round: e.payload.round, tier: e.payload.tier, summary: e.payload.summary, requirements: e.payload.requirements, faults: e.payload.faults })),
     repairs: evaluations.filter((e) => e.type === "evaluation.failed").length,
     tiers: [...new Set(evaluations.map((e) => e.payload.tier))],
     probes: log.filter((e) => e.type === "tool.requested" && e.payload.name === "check_preview").length,
@@ -235,6 +238,25 @@ test("3. placement, hires, plan, builders, evaluator, security review and a priv
   };
   await note(`build ${build.status}: ${JSON.stringify(story.report.build).slice(0, 1500)}`);
   expect(build.status, String(build.summary ?? JSON.stringify(build))).toBe("finished");
+
+  // The plan is a faithful contract: "see what everyone is reading now" is a requirement of its own, delivered by an
+  // item, never silently dropped, and the evaluator showed it working in the running app, signed in.
+  const accepted = log.find((e) => e.type === "plan.accepted")!.payload as {
+    requirements: { id: string; text: string }[];
+    items: { id: string; text: string; covers: string[] }[];
+    leftOut: { requirement: string; reason: string }[];
+  };
+  const readingNow = accepted.requirements.find((r) => /reading now/i.test(r.text));
+  expect(readingNow, `requirements: ${JSON.stringify(accepted.requirements)}`).toBeTruthy();
+  expect(accepted.leftOut.map((l) => l.requirement)).not.toContain(readingNow!.id);
+  const delivering = accepted.items.filter((i) => i.covers.includes(readingNow!.id)).map((i) => i.id);
+  expect(delivering.length).toBeGreaterThan(0);
+  const shown = evaluations.filter((e) => e.type === "evaluation.passed" && delivering.includes(String(e.payload.item)))
+    .flatMap((e) => (e.payload.requirements as { id: string; met: boolean; calls: string[] }[]) ?? [])
+    .filter((r) => r.id === readingNow!.id && r.met && r.calls.length > 0);
+  expect(shown.length, "the evaluator evidenced 'reading now' with a signed-in call").toBeGreaterThan(0);
+  story.report.readingNow = { requirement: readingNow, items: delivering, evidence: shown };
+  await note(`"reading now" is ${readingNow!.id}, delivered by ${delivering.join(", ")}, evidenced by ${JSON.stringify(shown.map((r) => r.calls))}`);
 
   const hires = await ok<{ name: string; role: string; status: string; trigger: string }[]>(await owner.request.get(`/api/hires?scope=${org}`));
   story.report.hires = hires.map((h) => `${h.name}, ${h.role}: ${h.status} (${h.trigger})`);
@@ -310,4 +332,24 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: path.join(STATE, "5-phone.png"), fullPage: true });
   await note("owner: two books added, one finished, both still there after a reload");
+
+  // What everyone is reading now: mark the first book "reading", then find the view that shows it as such.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openApp(page);
+  await page.getByText(books[0].title).first().click();
+  const reading = page.getByLabel(/status/i).first();
+  await expect(reading).toBeVisible({ timeout: 20_000 });
+  if ((await reading.evaluate((e) => e.tagName)) === "SELECT") await reading.selectOption({ label: "Reading" });
+  else await page.getByRole("button", { name: /^reading/i }).or(page.getByRole("radio", { name: /^reading/i })).first().click();
+  await openApp(page);
+  await page.waitForLoadState("networkidle");
+  const view = page.getByText(/reading now|currently reading|everyone is reading/i).first();
+  if (!(await view.isVisible())) {
+    await page.getByRole("link", { name: /reading now|currently reading|everyone/i }).or(page.getByRole("tab", { name: /reading now|currently reading|everyone/i })).first().click();
+  }
+  await expect(page.getByText(/reading now|currently reading|everyone is reading/i).first()).toBeVisible({ timeout: 20_000 });
+  const section = page.locator("section, [role=region], main").filter({ hasText: /reading now|currently reading|everyone is reading/i }).last();
+  await expect(section).toContainText(books[0].title);
+  await page.screenshot({ path: path.join(STATE, "6-reading-now.png"), fullPage: true });
+  await note("what everyone is reading now: the book marked reading is shown there");
 });

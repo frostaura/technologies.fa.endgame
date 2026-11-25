@@ -1,0 +1,15 @@
+{
+  "name": "endgame-acceptance",
+  "private": true,
+  "type": "module",
+  "description": "make e2e-acceptance: the first version's three acceptance tests, for real, with live models (TEST-201, Phase 6).",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@playwright/test": "1.65.1",
+    "@types/node": "22.19.1",
+    "typescript": "5.9.3"
+  }
+}
