@@ -9,7 +9,7 @@
         stack-up stack-down e2e-stack e2e-stack-run fac-up fac-down e2e-factory e2e-factory-run acc-up acc-down e2e-acceptance e2e-acceptance-run \
         demo-build demo-test demo-e2e demo-check \
         backup restore ops-backups ops-verify ops-health ops-reserved-hosts ops-cloudflare-plan ops-cloudflare-apply ops-test ops-test-worker \
-        academy-install academy-deps academy-content academy-dev academy-lint academy-test academy-build academy-assemble academy-pdf academy-e2e academy-shots site
+        academy-install academy-deps academy-content academy-readme academy-dev academy-lint academy-test academy-build academy-assemble academy-pdf academy-e2e academy-shots site
 
 DOTNET ?= dotnet
 DOTNET_ENV = MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
@@ -367,7 +367,11 @@ academy-content:
 academy-dev:
 	$(ACADEMY) npm run dev
 
+academy-readme:
+	$(ACADEMY) npm run readme
+
 academy-lint: academy-deps academy-content
+	$(ACADEMY) npm run readme:check
 	$(ACADEMY) npm run lint
 	$(ACADEMY) npm run typecheck
 

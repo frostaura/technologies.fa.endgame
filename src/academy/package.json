@@ -8,6 +8,8 @@
   },
   "scripts": {
     "content": "node tools/build-content.ts",
+    "readme": "node tools/readme-tracks.ts",
+    "readme:check": "node tools/readme-tracks.ts --check",
     "dev": "npm run content && vite",
     "build": "npm run content && tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",

@@ -4,15 +4,15 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 
 **Read from the code, not from the other docs.** On 2026-11-25 five readers each took one area and read the screens, the endpoints, the assistant tools, the edge, the app kit and the Makefile end to end. Where a flow could not be settled from code it says *not verified from code*. Nothing was run to produce it, so a flow's steps are what the code does, not a recording of a session.
 
-**323 flows** in five files:
+**326 flows** in five files:
 
 | File | Covers | Flows |
 | --- | --- | --- |
 | [Identity and access](01-identity-and-access.md) | Signing in, people and roles, AI-assistant keys and MCP, opening apps as a member or end user, the shell. | 48 |
-| [The organisation, home and conversations](02-organisation-home-and-conversations.md) | The home screen, the tree of divisions, projects and apps, the two graph views, conversations, notifications, system status. | 75 |
+| [The organisation, home and conversations](02-organisation-home-and-conversations.md) | The home screen, the tree of divisions, projects and apps, the two graph views, conversations, notifications, system status. | 77 |
 | [The factory](03-the-factory.md) | From an idea to a running app: ideas, research and the verdict, runs, plan, build, check, review, publish, autonomy and rule sets, changing an app. | 62 |
 | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) | Hiring, employees and contractors, employee memory, credits, budgets and the overdraft, the operator's screens. | 45 |
-| [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) | The app page, asking about an app, versions and export, sharing, secrets, what a hosted app can use, sleep and wake, running the platform. | 93 |
+| [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) | The app page, asking about an app, versions and export, sharing, secrets, what a hosted app can use, sleep and wake, running the platform. | 94 |
 
 ## How to read a flow
 
@@ -46,7 +46,7 @@ What every person needs on day one: signing in, reading the home screen, startin
 | ID-04 | Arrive signed out at any console address | Screen | [Identity and access](01-identity-and-access.md) |
 | ID-05 | Recover from a failed session check | Screen | [Identity and access](01-identity-and-access.md) |
 | ID-06 | Sign out of the console | Screen | [Identity and access](01-identity-and-access.md) |
-| ID-07 | Try to register without an invitation, or with one through the console | Screen | [Identity and access](01-identity-and-access.md) |
+| ID-07 | Try to register without an invitation | Screen | [Identity and access](01-identity-and-access.md) |
 | ID-09 | See who you are and every role you hold, and switch organisation | Screen | [Identity and access](01-identity-and-access.md) |
 | PPL-08 | Accept an invitation and register as an invited member | Screen | [Identity and access](01-identity-and-access.md) |
 | ACC-01 | Open a private app as a member who has a role | Screen | [Identity and access](01-identity-and-access.md) |
@@ -119,7 +119,7 @@ What every person needs on day one: signing in, reading the home screen, startin
 | HOST-01 | A sleeping app wakes on a visit | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | HOST-06 | Reach an app at either of its two addresses | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Core — 133 flows, 123 with a screen
+### Core — 141 flows, 131 with a screen
 
 Running an organisation day to day: people, hiring, credits, the app page, secrets, notifications, autonomy.
 
@@ -143,16 +143,16 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | SHL-02 | Reach system status from normal mode | Screen | [Identity and access](01-identity-and-access.md) |
 | ORG-06 | Use the shortcut row for the selected level | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ORG-13 | Home keeps itself live, and says when a refresh fails | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| ORG-14 | Rename the organisation | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-01 | Create a division by letting the factory place an idea | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| TREE-05 | Put new work into an existing division | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-02 | Create a division directly | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-03 | Create a project directly | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TREE-05 | Put new work into an existing division | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-06 | Rename a division, project or app | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-07 | Archive or reactivate a division or project | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-08 | Archive an app, or set an app's status by hand | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-11 | Describe a level: say what it is, for its work to read | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-12 | Read what applies at a level and what a lower level replaces, and remove a value set there | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| ORG-14 | Rename the organisation | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-13 | Manage a division from the console | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-01 | Switch between the three views | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-02 | Read "Who works on what" (desktop) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -168,6 +168,8 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | TALK-12 | See how a reply was reached | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-13 | A message that is not sent | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-14 | The reply's stream drops | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TALK-17 | Answer the conversation's own approval in the conversation | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TALK-18 | Ask the conversation to try stopped work again | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | NOTE-08 | The feed fails to load | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | NOTE-09 | Receive an urgent notice by e-mail | Automatic | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | SYS-01 | Switch between normal and technical mode | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -181,17 +183,17 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | IDEA-09 | Set a suggestion aside | Screen | [The factory](03-the-factory.md) |
 | IDEA-10 | Review suggestions already taken or set aside | Screen | [The factory](03-the-factory.md) |
 | VERD-04 | Read how often research says no, and how it was researched | Screen | [The factory](03-the-factory.md) |
-| VERD-06 | Build a "change" verdict as described | Screen | [The factory](03-the-factory.md) |
+| VERD-06 | Build a "change" verdict, with or without research's change | Screen | [The factory](03-the-factory.md) |
 | VERD-07 | Change the idea and have it researched again | Screen | [The factory](03-the-factory.md) |
 | VERD-08 | Overrule a "do not build" | Screen | [The factory](03-the-factory.md) |
 | VERD-11 | Let auto-mode decide after the verdict | Automatic | [The factory](03-the-factory.md) |
-| VERD-12 | See that research did not finish | Screen | [The factory](03-the-factory.md) |
+| VERD-12 | See that research did not finish, and research it again | Screen | [The factory](03-the-factory.md) |
 | RUN-04 | Pause a run | Screen | [The factory](03-the-factory.md) |
 | RUN-05 | Resume a paused run | Screen | [The factory](03-the-factory.md) |
 | RUN-06 | Cancel a run | Screen | [The factory](03-the-factory.md) |
 | RUN-07 | Answer an approval a run is waiting on | Screen | [The factory](03-the-factory.md) |
 | RUN-09 | See a run waiting for budget, and get it moving | Screen | [The factory](03-the-factory.md) |
-| RUN-10 | See a run stop because the budget ran out mid-way | Screen | [The factory](03-the-factory.md) |
+| RUN-10 | See a run stop because the budget ran out mid-way, and try it again | Screen | [The factory](03-the-factory.md) |
 | RUN-11 | Read a failed run | Screen | [The factory](03-the-factory.md) |
 | RUN-13 | Read what a run cost, and what was not charged | Screen | [The factory](03-the-factory.md) |
 | RUN-14 | Follow the tasks of a run | Screen | [The factory](03-the-factory.md) |
@@ -206,7 +208,9 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | AUTO-02 | Switch between auto-mode and checkpoints | Screen | [The factory](03-the-factory.md) |
 | AUTO-03 | Turn a checkpoint on or off | Screen | [The factory](03-the-factory.md) |
 | AUTO-04 | Go back to the inherited setting | Screen | [The factory](03-the-factory.md) |
-| CHG-01 | Ask the conversation to change an app | Screen | [The factory](03-the-factory.md) |
+| CHG-01 | Ask for a change to an app from its page | Screen | [The factory](03-the-factory.md) |
+| CHG-02 | Ask the conversation to change an app | Screen | [The factory](03-the-factory.md) |
+| CHG-03 | Try again after a failed, cancelled, budget-stopped or declined build | Screen | [The factory](03-the-factory.md) |
 | CHG-04 | Restore an earlier version | Screen | [The factory](03-the-factory.md) |
 | HIRE-01 | Open the hiring screen for a part of the organisation | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | HIRE-02 | Read a hire proposal | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
@@ -228,9 +232,9 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | MEM-02 | Add something an employee should know | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-03 | Correct a memory entry | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-04 | Remove a memory entry | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
+| CRED-03 | Set, change or remove a monthly cap at a level | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | CRED-04 | Read estimates against cost, and what was not charged | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | CRED-07 | Ask FrostAura for a top-up | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
-| CRED-03 | Set, change or remove a monthly cap at a level | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | CRED-09 | How AI work and hosting become spending | Automatic | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | OP-10 | The Owner reads the operator log | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | APP-04 | Choose how the app runs: Sleeps when unused or Always on | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
@@ -238,6 +242,7 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | APP-07 | Make the app public, which only a person can do | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | APP-08 | Read "What it uses" | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | APP-09 | See the secrets an app can read, from its page | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| APP-15 | Rebuild and restart an app | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | ASK-01 | See what a question will cost before asking it | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | ASK-02 | Ask the question and read the answer and its chart | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | ASK-03 | Keep an answer on the dashboard | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
@@ -262,7 +267,7 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | HOST-05 | A crashed app | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | HOST-07 | An idle app goes to sleep | Automatic | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Advanced — 38 flows, 25 with a screen
+### Advanced — 37 flows, 29 with a screen
 
 For the person who owns the setup: rule sets, tighter limits, assistants, technical mode.
 
@@ -283,31 +288,30 @@ For the person who owns the setup: rule sets, tighter limits, assistants, techni
 | SYS-04 | System status cannot be read, or reads oddly | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | RUN-03 | Read a run in technical mode | Screen | [The factory](03-the-factory.md) |
 | RUN-08 | Approve the estimate before work starts | Screen | [The factory](03-the-factory.md) |
-| RUN-12 | See a run recover after the Runner was interrupted | No route | [The factory](03-the-factory.md) |
+| RUN-12 | See a run recover after the Runner was interrupted | Automatic | [The factory](03-the-factory.md) |
 | BLD-04 | Approve or reject the plan | Screen | [The factory](03-the-factory.md) |
 | BLD-05 | See the build re-estimated from the plan | Automatic | [The factory](03-the-factory.md) |
 | BLD-11 | See an operations hire for a recurring job | Automatic | [The factory](03-the-factory.md) |
 | AUTO-05 | Set rules for a stage | Screen | [The factory](03-the-factory.md) |
 | AUTO-06 | Remove the rules set here | Screen | [The factory](03-the-factory.md) |
 | AUTO-07 | Change autonomy by asking the conversation | Screen | [The factory](03-the-factory.md) |
-| CHG-02 | Ask the conversation to change an app | Screen | [The factory](03-the-factory.md) |
 | HIRE-07 | Propose a recurring contractor role as a permanent hire | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | HIRE-08 | A recurring role is proposed automatically when a contractor finishes | Automatic | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | EMP-02 | Reassign an employee | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | MEM-05 | Start a memory review | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | CRED-05 | Set the organisation's own overdraft limit | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
 | CRED-06 | Hold a division, project or app to a tighter limit | Screen | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) |
-| APP-05 | Set how many idle minutes pass before the app sleeps | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| APP-05 | Set how many idle minutes pass before the app sleeps | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | APP-10 | Read "Underneath" in technical mode | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
-| APP-11 | Set an app's own monthly credit cap | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
-| APP-12 | Set an app's own AI allowance | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
-| APP-13 | Rename or archive an app | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
-| APP-14 | Delete an app | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| APP-11 | Set an app's own monthly credit cap | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| APP-12 | Set an app's own AI allowance | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| APP-13 | Rename or archive an app | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| APP-14 | Delete an app | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | ASK-07 | See the query and what failed, in technical mode | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | SEC-05 | Override an inherited secret at a lower level | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | KIT-20 | An AI assistant uses an app's own derived MCP tools | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Developer — 39 flows, 3 with a screen
+### Developer — 31 flows, 3 with a screen
 
 Through the API, an AI assistant or the app kit. Not console lessons.
 
@@ -382,13 +386,13 @@ FrostAura only: God mode, provisioning and topping up organisations, prices, bac
 | OPS-19 | List the reserved host names | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | OPS-20 | Plan the Cloudflare changes (dry run) | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | OPS-21 | Apply the Cloudflare plan | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
-| OPS-22 | Finish the Cloudflare setup in the dashboard by hand | Automatic | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
-| OPS-23 | CI publishes the images | Automatic | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
-| OPS-24 | First deploy on Portainer | Automatic | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
-| OPS-25 | Redeploy automatically or by hand | Automatic | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
-| OPS-26 | Go back to an earlier release | API or assistant only | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| OPS-22 | Finish the Cloudflare setup in the dashboard by hand | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| OPS-23 | CI publishes the images | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| OPS-24 | First deploy on Portainer | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| OPS-25 | Redeploy automatically or by hand | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
+| OPS-26 | Go back to an earlier release | Command line | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Not placed in a track — 5
+### Not placed in a track — 4
 
 Flows that do not exist yet or are purely automatic.
 
@@ -397,18 +401,17 @@ Flows that do not exist yet or are purely automatic.
 | AST-07 to AST-16 | What the assistant can do, by capability | API or assistant only | [Identity and access](01-identity-and-access.md) |
 | TREE-10 | Move a division, project or app | No route | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | BLD-12 | Design (icons and brand assets): not present | No route | [The factory](03-the-factory.md) |
-| CHG-03 | Build again after a failed, cancelled or rejected build | No route | [The factory](03-the-factory.md) |
 | CHG-06 | Change how an app runs or who may open it | API or assistant only | [The factory](03-the-factory.md) |
 
 ## What has no screen
 
 | Reached by | Flows |
 | --- | --- |
-| Screen | 238 |
-| API or assistant only | 33 |
-| Command line | 24 |
-| Automatic | 22 |
-| No route | 4 |
+| Screen | 251 |
+| API or assistant only | 24 |
+| Command line | 30 |
+| Automatic | 19 |
+| No route | 2 |
 
 ## What the reading found
 
@@ -434,25 +437,19 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | After "Change the idea" the second verdict had no decision buttons, and the change never reached the build. | VERD-06, VERD-07, VERD-11 | Fixed: the decisions return, "Earlier decisions" keeps the change, and the build is held to it. |
 | "Asks you first" rules refused instead of asking. | AUTO-05 | Fixed: a matching call raises an approval and waits for the answer. |
 | Two lines on the start screen were untrue in auto-mode. | IDEA-01, VERD-11, BLD-02 | Fixed: "What happens next" follows the autonomy at the place chosen. |
+| A budget cap could only be set through the API or an assistant. | CRED-03, APP-11, APP-12 | Fixed: caps are set, changed and removed on Credits and on an app's page. |
+| An employee could not be edited, a hire could not be raised by hand, and released employees were not listed. | EMP-10, HIRE-09, EMP-09 | Fixed: "Edit the job" on the record, "Ask for a hire" and "People let go" on Hiring. |
+| God mode followed the operator only onto the org chart. | OP-04 | Fixed: every screen but "Ideas from your portfolio" works on the organisation entered. |
+| Setting up an organisation did not screen it against the red lines. | OP-03 | Fixed: what it does is screened by a model, or by the operator with a reason when none answers. |
+| Pausing an employee did not stop it being given work. | EMP-04 | Fixed: its work pauses, and new work for it waits until it is resumed. |
 
-### Things the product cannot do from a screen
-
-| What | Flows | Status |
-| --- | --- | --- |
-| **Create, rename, archive or delete a division, project or app.** They appear when the factory places a built idea, or through the API or an assistant. Nothing can be moved by any route. | TREE-02 to TREE-10, TREE-13, ORG-14 | Confirmed |
-| **Set a budget cap** at any level, or an app's own. Caps are shown and enforced; they can only be set through the API or an assistant. | CRED-03, APP-11, APP-12 | Fixed: caps are set, changed and removed on Credits (CRED-03) and on an app's page (APP-11). |
-| **Describe a level.** Context is set only through the API or an assistant. | TREE-11 | Reported |
-| **Edit an employee** (name, role, mandate, tools, manager), raise a hire by hand, list released employees. | EMP-10, HIRE-09, EMP-09 | Fixed: "Edit the job" on the record, "Ask for a hire" and "People let go" on Hiring. |
-
-### Things that do not do what the screen says
+### Still open
 
 | What | Flows | Status |
 | --- | --- | --- |
-| **God mode follows the operator only onto the org chart.** Credits, Hiring, People, Secrets and the rest read the operator's own organisation. | OP-04 | Fixed: every screen but "Ideas from your portfolio" works on the organisation entered. |
-| **Setting up an organisation does not screen it against the red lines**, though the form says so and the project's rule 4 requires it. Only its name is checked. | OP-03 | Fixed: what it does is screened by a model, or by the operator with a reason when none answers. |
-| **Pausing an employee does not stop it being given work.** | EMP-04 | Fixed: its work pauses, and new work for it waits until it is resumed. |
-| **The console's mock-API browser specs are run by nothing** in the Makefile or CI; only the smoke spec runs. | OPS-07 | Reported |
+| **Nothing can be moved** to another place in the tree, by any route. Deliberate. | TREE-10 | Confirmed |
 | **The design stage in the spec does not exist** as a stage in the build. | BLD-12 | Reported |
+| **The console's mock-API browser specs are run by nothing** in CI; only the smoke spec runs there. They are run by hand and by each lane. | OPS-07 | Reported |
 
 ### What an AI assistant cannot do that the console can
 
