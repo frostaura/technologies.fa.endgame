@@ -282,6 +282,12 @@ async function setStatus(page: Page, title: string, status: "reading" | "finishe
     await button.first().click();
   } else {
     await page.getByText(title).first().click();
+    const own = page.getByRole("main").getByRole("button", { name: new RegExp(`^(mark )?(as )?${status}`, "i") });
+    if (await own.first().isVisible({ timeout: 10_000 }).catch(() => false)) {
+      await own.first().click();
+      expect((await saved).status()).toBeLessThan(300);
+      return;
+    }
     const control = page.getByLabel(/status/i).first();
     await expect(control).toBeVisible({ timeout: 20_000 });
     if ((await control.evaluate((e) => e.tagName)) === "SELECT") await control.selectOption({ label: status === "reading" ? "Reading" : "Finished" });
