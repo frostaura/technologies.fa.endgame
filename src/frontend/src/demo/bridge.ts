@@ -101,10 +101,16 @@ export function find(target: Target | string, field = false): HTMLElement | null
   const controls = [...document.querySelectorAll<HTMLElement>(CONTROLS)].filter(visible);
   const exact = controls.find((c) => nameOf(c) === want);
   if (exact) return exact.tagName === "LABEL" && field ? (controlFor(exact) ?? exact) : exact;
+  // A control that shows the words as its own heading or label (a card named by its title).
+  const titled = controls.find((c) => [...c.querySelectorAll("h1, h2, h3, h4, strong, span, p")].some((d) => norm(d.textContent) === want));
+  if (titled) return titled;
   const starts = controls.find((c) => nameOf(c).startsWith(want));
   if (starts) return starts;
-  const contains = controls.find((c) => nameOf(c).includes(want));
+  const contains = controls.filter((c) => nameOf(c).includes(want)).sort((a, b) => nameOf(a).length - nameOf(b).length)[0];
   if (contains) return contains;
+  // A region or list named for it (aria-label), such as "Parts of the plan".
+  const named = [...document.querySelectorAll<HTMLElement>("[aria-label]")].find((el) => norm(el.getAttribute("aria-label")) === want && visible(el));
+  if (named) return named;
   // Any visible element whose own text holds it: the smallest such element.
   const all = [...document.body.querySelectorAll<HTMLElement>("h1, h2, h3, h4, p, span, li, dt, dd, th, td, div, strong, em, code, legend, figcaption")].filter((el) => norm(el.textContent).includes(want) && visible(el));
   all.sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0));
@@ -213,9 +219,15 @@ export const endgameDemo = {
       clearSpotlight();
       return;
     }
-    const el = await waitFor(args, false, 5000);
+    // A spotlight is guidance, not an action: when nothing matches, the step still goes on, unlit.
+    const el = await waitFor(args, false, 5000).catch(() => null);
+    if (!el) {
+      clearSpotlight();
+      return false;
+    }
     el.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" });
     showSpotlight(el, args.note ?? null);
+    return true;
   },
   async act(actions: Action[], instant = false) {
     instantNow = instant;
@@ -258,8 +270,7 @@ async function handle(m: Envelope) {
         post({ id: m.id, op: "goto" });
         break;
       case "highlight":
-        await endgameDemo.highlight(args as Target & { note?: string });
-        post({ id: m.id, op: "highlight" });
+        post({ id: m.id, op: "highlight", args: { found: (await endgameDemo.highlight(args as Target & { note?: string })) !== false } });
         break;
       case "act": {
         post({ id: m.id, op: "act" });

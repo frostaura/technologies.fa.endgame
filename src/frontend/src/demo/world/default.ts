@@ -1,5 +1,6 @@
 import type { AppTelemetry, Employee, Idea, MemoryEntry, RunEvent, RunningCost, SavedQuestion, TrackRecord } from "@/store/types";
 import { blankTrackRecord, notEnoughHistory } from "../server/mutations";
+import { titleOf } from "../server/http";
 import { DEFAULT_PRICING, WORLD_VERSION, ago, uuidFor, type DemoApp, type DemoNode, type DemoRun, type World } from "../server/world";
 import { STORIES, storyFor } from "./story";
 
@@ -442,7 +443,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   });
 
   // Live work: research for the tide board, and the reading list being built ------------------
-  w.runs.push(liveRun(IDS.runResearchTides, "research", "Research: A tide-times board for the harbour café: the next high and low water beside our opening hours, on the screen by the door.", `${ORG}/learning`, IDS.ideaTides, 12, "research", { ideaId: IDS.ideaTides, story: "tide-board" }, [
+  w.runs.push(liveRun(IDS.runResearchTides, "research", `Research: ${titleOf(w.ideas.find((i) => i.id === IDS.ideaTides)?.text ?? "")}`, `${ORG}/learning`, IDS.ideaTides, 12, "research", { ideaId: IDS.ideaTides, story: "tide-board" }, [
     ["message", { via: "console", from: "owner", text: w.ideas.find((i) => i.id === IDS.ideaTides)?.text ?? "", change: null, constraints: "Readable from across the room" }],
     ["estimate.made", { credits: 12, basis: "research", reason: "The measured starting figure for research runs, used until 3 have finished here to learn from. It can never cost more than 111.09 credits, the most its steps could cost; it is charged at what it actually costs.", ceiling: 111.09 }],
   ]));
@@ -604,13 +605,13 @@ function verdictDocs() {
     build: {
       outcome: "build",
       headline: "Build it: labels the kitchen prints today, by hand",
-      summary: "Verdict: build. The kitchen writes allergen labels by hand at every prep, the label tools found are priced for factories, and a small app on the kitchen tablet that prints from the dish list would save an hour a day and remove the commonest labelling mistake.",
+      summary: "The kitchen writes allergen labels by hand at every prep, the label tools found are priced for factories, and a small app on the kitchen tablet that prints from the dish list would save an hour a day and remove the commonest labelling mistake.",
       against: ["Handwritten labels work, and a mistake on a printed label is repeated on every label until someone notices.", "The label printer must be bought; the app cannot help with that."],
       existing: { products: [{ name: "Labelforge", does: "Food labelling software for manufacturers, from 90 a month.", sources: ["https://labelforge.example/pricing"] }, { name: "PrepTag", does: "Day-dot labels with a phone app; no allergens.", sources: ["https://preptag.example"] }], evidence: "The tools found are either priced for factories or leave allergens out." },
       gap: { evidence: "No tool found prints allergens and use-by together for a small kitchen from its own dish list." },
       demand: { evidence: "The demand is the kitchen's own: an hour a day of handwritten labels.", signals: [{ text: "The kitchen writes about 60 labels a day by hand.", source: null }, { text: "Two near-misses with mislabelled sesame were logged this year.", source: "https://forum.kitchens.example/t/labels" }] },
       suggestedChange: null,
-      wouldChange: null,
+      wouldChange: { text: "If the café moved its dishes into a till system that already prints allergen labels, this would no longer be worth building.", changeLabel: null, estimateCredits: null },
       placement: { division: "technologies", project: "allergen-labels", app: "web", name: "Allergen Labels" },
       redLines: { breached: false, line: null, reasoning: "Labels that keep diners safe harm no one." },
       method: method(15, "high"),
@@ -618,7 +619,7 @@ function verdictDocs() {
     change: {
       outcome: "change",
       headline: "Change it: start with a waiting list, not paid accounts",
-      summary: "Verdict: change it. Families want to know when a place opens far more than they want another account; the cookery club fills by word of mouth and payment already works at the counter. A waiting list with a weekly email answers the real problem for a fraction of the cost.",
+      summary: "Families want to know when a place opens far more than they want another account; the cookery club fills by word of mouth and payment already works at the counter. A waiting list with a weekly email answers the real problem for a fraction of the cost.",
       against: ["Parent accounts and online payment are the costly part, and nothing found says families want them.", "Card payments bring refunds and disputes the café does not handle today."],
       existing: { products: [{ name: "Clubhouse Kids", does: "Bookings and payments for children's clubs, 3% a booking.", sources: ["https://clubhouse-kids.example"] }], evidence: "One product does all of it, at a fee per booking." },
       gap: { evidence: "Families complain about missing out when places open, not about paying." },
@@ -632,7 +633,7 @@ function verdictDocs() {
     doNotBuild: {
       outcome: "do-not-build",
       headline: "Do not build: the couriers already show this, for free",
-      summary: "Verdict: do not build. Both vans already run the delivery firm's app, which sends customers a live map link, and customers in the reviews found say a text with a time window is what they actually want. Building a second map would duplicate a free feature.",
+      summary: "Both vans already run the delivery firm's app, which sends customers a live map link, and customers in the reviews found say a text with a time window is what they actually want. Building a second map would duplicate a free feature.",
       against: ["The delivery firm's app already shares a live map with each customer, at no cost.", "Showing van positions publicly tells anyone where the vans are, all day."],
       existing: { products: [{ name: "RouteCourier", does: "The delivery firm's own app: routes, and a live map link per customer.", sources: ["https://routecourier.example/features"] }], evidence: "The feature exists in a tool the vans already use." },
       gap: { evidence: "Customers ask for a time window by text, not a map." },
@@ -646,7 +647,7 @@ function verdictDocs() {
     redLine: {
       outcome: "do-not-build",
       headline: "Not on Endgame: following staff after their shift is surveillance",
-      summary: "Verdict: do not build. Tracking where staff go outside working hours, from their own phones, to find out who else they work for is surveillance of people without their meaningful consent. It crosses one of FrostAura's red lines, so it cannot be built here, and no one can overrule that.",
+      summary: "Tracking where staff go outside working hours, from their own phones, to find out who else they work for is surveillance of people without their meaningful consent. It crosses one of FrostAura's red lines, so it cannot be built here, and no one can overrule that.",
       against: ["It follows people outside work without their meaningful consent.", "It would be used to act against staff for lawful things they do in their own time."],
       existing: { products: [], evidence: "Not looked into further once the red line was found." },
       gap: { evidence: "Not looked into." },

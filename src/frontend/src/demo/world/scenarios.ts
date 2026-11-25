@@ -100,8 +100,8 @@ defineScenario({ name: "verdict-build", title: "A verdict: build", route: "/idea
 defineScenario({ name: "verdict-change", title: "A verdict: change it", route: "/ideas/{idea}", featured: { ...BASE_FEATURED, idea: IDS.ideaCookery } });
 defineScenario({ name: "verdict-do-not-build", title: "A verdict: do not build", route: "/ideas/{idea}", featured: { ...BASE_FEATURED, idea: IDS.ideaVans } });
 defineScenario({ name: "verdict-red-line", title: "A verdict: a red line is crossed", route: "/ideas/{idea}", featured: { ...BASE_FEATURED, idea: IDS.ideaLocator } });
-defineScenario({ name: "build-running", title: "A build playing live", route: "/runs/{run}", featured: BASE_FEATURED }, "building");
-defineScenario({ name: "build-plan", title: "A build, at its plan", route: "/runs/{run}", seek: "build:plan", featured: BASE_FEATURED });
+defineScenario({ name: "build-running", title: "A build playing live", route: "/runs/{run}", featured: BASE_FEATURED });
+defineScenario({ name: "build-plan", title: "A build, at its plan", route: "/runs/{run}", seek: "build:plan", featured: BASE_FEATURED }, "building");
 defineScenario({ name: "build-sent-back", title: "A build, a part sent back", route: "/runs/{run}", seek: "build:sent-back", featured: BASE_FEATURED });
 defineScenario({ name: "build-security-finding", title: "A build, the security review's finding", route: "/runs/{run}", seek: "build:security-finding", featured: BASE_FEATURED });
 defineScenario({ name: "build-published", title: "A build, just published privately", route: "/runs/{run}", seek: "build:published", featured: { ...BASE_FEATURED, app: IDS.readingList } });

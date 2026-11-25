@@ -2,10 +2,10 @@ import { api, installTransport } from "@/store/api";
 import { makeStore, type AppStore } from "@/store";
 import { navigate } from "@/lib/router";
 import { createControlPlane } from "./server";
-import { clock, forgetScripts, seek, tick } from "./server/engine";
+import { clock, seek, tick } from "./server/engine";
 import { answerApproval } from "./server/routes/work";
 import { WORLD_VERSION, type World } from "./server/world";
-import { buildWorld, resolveRoute, type Persona, type Scenario } from "./world/scenarios";
+import { PERSONAS, buildWorld, resolveRoute, type Persona, type Scenario } from "./world/scenarios";
 import { installDevice } from "./device";
 
 /**
@@ -93,7 +93,6 @@ function changed(tags: string[]) {
 
 /** Start a world for a scenario and persona; `fresh` ignores a saved one. */
 function begin(scenario: string, persona: string, fresh: boolean) {
-  forgetScripts();
   const built = buildWorld(scenario, persona);
   const restored = fresh ? null : load(scenario, built.persona.name);
   world = restored ?? built.world;
@@ -133,7 +132,7 @@ export function startHost(params: URLSearchParams): AppStore {
   const scenario = params.get("scenario") ?? "default";
   const persona = params.get("persona") ?? "";
   begin(scenario, persona, false);
-  const cp = createControlPlane({ base: DEMO_BASE, world: () => world, afterChange: changed, latency: () => 90 + Math.floor(Math.random() * 120) });
+  const cp = createControlPlane({ base: DEMO_BASE, world: () => world, afterChange: changed, latency: (method) => (method === "GET" ? 90 + Math.floor(Math.random() * 120) : 650 + Math.floor(Math.random() * 350)) });
   installTransport({ base: cp.base, fetch: cp.fetch });
   Object.defineProperty(window, "EventSource", { value: cp.EventSource, configurable: true, writable: true });
   installDevice(() => world.users.filter((u) => u.passkeys > 0 && world.device.includes(u.id)).map((u) => ({ id: u.id, label: `${u.displayName} · ${u.email}` })));
@@ -153,7 +152,9 @@ export function startHost(params: URLSearchParams): AppStore {
 /** Switch persona and/or scenario. A new scenario is a new world; a persona alone keeps it. */
 export function goto(next: { route?: string; persona?: string; scenario?: string }) {
   const scenario = next.scenario ?? session.scenario;
-  const persona = next.persona ?? session.persona;
+  // With no persona named, whoever is signed in now (they may have signed in since) stays signed in.
+  const current = [...PERSONAS.values()].find((p) => p.userId !== null && p.userId === world.sessionUserId)?.name;
+  const persona = next.persona ?? current ?? session.persona;
   if (scenario !== session.scenario || persona !== session.persona) {
     if (scenario !== session.scenario) begin(scenario, persona, true);
     else {

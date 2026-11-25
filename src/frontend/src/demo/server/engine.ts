@@ -29,23 +29,23 @@ export function defineScript(name: string, build: ScriptBuilder) {
   scripts.set(name, build);
 }
 
-const built = new Map<string, { key: string; steps: Step[] }>();
+const built = new WeakMap<World, Map<string, { key: string; steps: Step[] }>>();
 
-/** A run's steps, built once per script and parameters (a script is deterministic in them). */
+/** A run's steps, built once per world, script and parameters (a script is deterministic in them). */
 export function stepsOf(world: World, run: DemoRun): Step[] {
   const build = run.playback ? scripts.get(run.playback.script) : undefined;
   if (!build || !run.playback) return [];
   const key = `${run.playback.script}:${JSON.stringify(run.playback.params)}`;
-  const hit = built.get(run.run.id);
+  let cache = built.get(world);
+  if (!cache) {
+    cache = new Map();
+    built.set(world, cache);
+  }
+  const hit = cache.get(run.run.id);
   if (hit?.key === key) return hit.steps;
   const steps = build(world, run);
-  built.set(run.run.id, { key, steps });
+  cache.set(run.run.id, { key, steps });
   return steps;
-}
-
-/** Forget built scripts (a reset rebuilds the world). */
-export function forgetScripts() {
-  built.clear();
 }
 
 /** A little builder for scripts: `s.wait(800).event(...)`. */

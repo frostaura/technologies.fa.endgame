@@ -261,6 +261,7 @@ defineScript("build", (world, run) => {
   s.wait(1200).event("plan.proposed", { agent: "planner", summary: story.plan.summary, items, requirements: story.plan.requirements, leftOut: story.plan.leftOut }, "build:plan");
   s.effect((w) => setStage(w, projectPath, "planning", null));
   s.event("message", { kind: "agent.reply", agent: "planner", final: true, reply: `${story.plan.items.length}-item plan: ${story.plan.summary}` });
+  s.event("message", { from: "builder", title: "The plan", text: `${story.plan.items.length} parts: ${story.plan.summary}`, milestone: "plan" });
   if (checkpointPlan) {
     s.approval({ title: `Agree the plan for ${story.name}?`, detail: `${story.plan.items.length} parts, about 90 credits. ${story.plan.summary}`, onApprove: { kind: "continue" } }, "build:waiting-on-plan");
     s.wait(200).event("plan.accepted", { by: "owner", items, summary: story.plan.summary, requirements: story.plan.requirements, leftOut: story.plan.leftOut });

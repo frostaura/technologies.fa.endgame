@@ -15,5 +15,5 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "playwright.stack.config.ts", "tailwind.config.ts", "tests-e2e", "tests-stack", "src/lib/tokens.ts"]
+  "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "playwright.stack.config.ts", "tailwind.config.ts", "tests-e2e", "tests-stack", "tests-demo", "playwright.demo.config.ts", "src/lib/tokens.ts"]
 }

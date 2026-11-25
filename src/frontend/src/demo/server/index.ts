@@ -31,7 +31,7 @@ export interface ControlPlaneOptions {
   /** Called after every request and every clock step that changed the world. */
   afterChange: (tags: string[]) => void;
   /** Simulated network time, in milliseconds. */
-  latency?: () => number;
+  latency?: (method: string) => number;
 }
 
 export async function dispatch(world: World, method: string, path: string, query: URLSearchParams, body: Record<string, unknown>): Promise<Reply> {
@@ -72,7 +72,7 @@ export function createControlPlane(options: ControlPlaneOptions): ControlPlane {
       }
     }
     const world = options.world();
-    await wait(options.latency?.() ?? 0);
+    await wait(options.latency?.(request.method) ?? 0);
     const reply = await dispatch(world, request.method, path, url.searchParams, body);
     const tags = world.changed.splice(0);
     options.afterChange(tags);

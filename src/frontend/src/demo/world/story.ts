@@ -91,7 +91,7 @@ export const STORIES: Record<string, Story> = {
       outcome: "build",
       headline: "A shared shelf the supper club will actually use",
       summary:
-        "Verdict: build. The supper club already runs this by hand in a shared sheet, and the public reading apps either show the club's reading to strangers or charge per club. A private list behind the organisation's own sign-in, on a phone, is small, cheap to run, and replaces a sheet eleven people already edit.",
+        "The supper club already runs this by hand in a shared sheet, and the public reading apps either show the club's reading to strangers or charge per club. A private list behind the organisation's own sign-in, on a phone, is small, cheap to run, and replaces a sheet eleven people already edit.",
       against: [
         "Free public shelves exist, and a keen member could use one of them today.",
         "The list is only as good as the members who keep it up; a quiet club will leave it stale.",
@@ -201,7 +201,7 @@ export const STORIES: Record<string, Story> = {
     verdict: {
       outcome: "build",
       headline: "Worth building: the café's own tide board, on its own screen",
-      summary: "Verdict: build. A board by the door that shows the next tides beside the café's hours answers the question staff hear most in summer, from data the harbour already publishes.",
+      summary: "A board by the door that shows the next tides beside the café's hours answers the question staff hear most in summer, from data the harbour already publishes.",
       against: ["A printed tide table by the till does most of this for free."],
       existing: { products: [{ name: "Tidecharts", does: "A general tide table app for 2 a month.", sources: ["https://tidecharts.example"] }], evidence: "General tide apps exist; none is a board for one place." },
       gap: { evidence: "Nothing shows the tides and the café's hours together." },
@@ -227,7 +227,7 @@ export function storyFor(text: string, key?: string | null): Story {
     g.verdict = {
       outcome: "do-not-build",
       headline: "Not on Endgame: this crosses a red line",
-      summary: `Verdict: do not build. ${red.reasoning} FrostAura never builds it, and no one can overrule that.`,
+      summary: `${red.reasoning} FrostAura never builds it, and no one can overrule that.`,
       against: [red.reasoning],
       existing: { products: [], evidence: "Not looked into further once the red line was found." },
       gap: { evidence: "Not looked into." },
@@ -296,7 +296,7 @@ function generic(name: string): Story {
     verdict: {
       outcome: "build",
       headline: `Worth building: ${name}, kept small`,
-      summary: `Verdict: build. The work is already done by hand every week, the general tools are priced per seat and slow to set up, and a small app on the organisation's own sign-in replaces the spreadsheet for very little each month.`,
+      summary: `The work is already done by hand every week, the general tools are priced per seat and slow to set up, and a small app on the organisation's own sign-in replaces the spreadsheet for very little each month.`,
       against: ["A shared spreadsheet does most of this today, for nothing.", "If the people who keep it up stop, the app will go stale like the sheet did."],
       existing: {
         products: [
