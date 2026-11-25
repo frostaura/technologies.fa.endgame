@@ -1,4 +1,5 @@
 import { plural } from "@/lib/format";
+import { isPlain, plainOrNull } from "@/lib/plain";
 import type { RunEvent } from "@/store/types";
 import { describeEvent, formatCredits, num, str, type Mode, type StepTone, type TraceStep } from "./runModel";
 
@@ -107,28 +108,99 @@ export function outcomeOf(text: string): string {
   return firstSentence(text);
 }
 
-const SPEAKERS: Record<string, string> = { owner: "You", researcher: "Research", runner: "Endgame", workflow: "Endgame" };
+const SPEAKERS: Record<string, string> = {
+  owner: "You",
+  researcher: "Research",
+  runner: "Endgame",
+  workflow: "Endgame",
+  assistant: "Endgame",
+  builder: "The builder",
+  planner: "The planner",
+  evaluator: "The checker",
+  "security-reviewer": "Security review",
+};
 
 function speaker(from: string | null): string {
   if (!from) return "Update";
-  return SPEAKERS[from] ?? from;
+  if (SPEAKERS[from]) return SPEAKERS[from];
+  const words = from.replace(/[-_.]+/g, " ").trim();
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/** "Built: Keep the club's books", or "Built part 2 of 3 of the plan" when the item has no plain words. */
+function named(verb: string, label: string): string {
+  return /^Part \d/.test(label) ? `${verb} ${lowerFirst(label)}` : `${verb}: ${label}`;
+}
+
+/**
+ * The factory's own agents, named for what they did: `builder-backend-books-0` is the build of one
+ * part of the plan, `evaluator-…` its check, `security-reviewer-1` the second review.
+ */
+export function factoryAgentTitle(agent: string, planItem: (id: string) => string | null): string | null {
+  if (agent === "builder-security-repair") return "Fixed what the security review found, at no charge";
+  const review = agent.match(/^security-reviewer-(\d+)$/);
+  if (review) return review[1] === "0" ? "Reviewed the app for misuse of the platform" : "Reviewed the fixes";
+  const part = agent.match(/^(builder|evaluator)-(.+)-(\d+)$/);
+  if (part) {
+    const label = planItem(part[2] ?? "");
+    if (!label) return null;
+    if (part[1] === "evaluator") return named("Checked", label);
+    return named(part[3] === "0" ? "Built" : "Rebuilt after a check", label);
+  }
+  return null;
 }
 
 const MILESTONES: Record<string, string> = {
   "estimate.gate": "Checked the estimate against your budget",
   "verdict.recorded": "Recorded the verdict",
+  verdict: "Recorded the verdict",
   "placement.made": "Found a home for it",
+  placement: "Found a home for it",
   "plan.made": "Drew up the plan",
+  plan: "Drew up the plan",
   "build.started": "Started building",
   "evaluate.started": "Started checking the work",
   "review.started": "Started the security review",
   "publish.started": "Started publishing",
+  publish: "Put it live",
 };
 
-function milestone(step: string): string {
+function article(role: string): string {
+  const lower = role.charAt(0).toLowerCase() + role.slice(1);
+  return /^[aeiou]/i.test(lower) ? `an ${lower}` : `a ${lower}`;
+}
+
+/**
+ * A workflow step as the owner reads it, or null when another line already says it (an item's
+ * check, a security review, a hire the runner announced) or when it has no plain wording. A raw key
+ * such as `hire:stage:research:frostaura` is never printed.
+ */
+export function workflowStepTitle(step: string, p: Record<string, unknown>, announced: ReadonlySet<string>): string | null {
+  const data = p.data && typeof p.data === "object" && !Array.isArray(p.data) ? (p.data as Record<string, unknown>) : {};
+  const given = plainOrNull(str(p, "title")) ?? plainOrNull(str(data, "title"));
+  const [head, ...rest] = step.split(":");
+  if (head === "hire" || head === "contractor" || head === "promotion") {
+    // The runner announces each hire in its own words; this step is its bookkeeping.
+    if (announced.has(`hired:${rest.join(":")}`) || announced.has(step)) return null;
+    if (given) return given;
+    const name = str(data, "name");
+    const role = str(data, "role");
+    if (!name || !role) return null;
+    const status = str(data, "status");
+    if (head === "contractor") return `Briefed ${name}, ${article(role)}`;
+    return status === "proposed" ? `Proposed hiring ${name} as ${article(role)}` : `${name} joined as ${article(role)}`;
+  }
+  // Each part of the plan is reported by its check; each review by the reviewer.
+  if (head === "item" || head === "security" || head === "evaluate" || head === "review" || step === "estimate.plan") return null;
+  if (given) return given;
   if (MILESTONES[step]) return MILESTONES[step];
+  if (!isPlain(step) || /[:/]/.test(step)) return null;
   const words = step.replace(/[._-]+/g, " ").trim();
-  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : "A step was taken";
+  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -296,6 +368,11 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
   const groups = new Map<string, { group: TimelineGroup; container: Container }>();
   const said = new Set<string>();
   const milestones = new Set<string>();
+  const announced = new Set<string>();
+  for (const e of events) {
+    const mark = e.type === "message" ? str(e.payload ?? {}, "milestone") : null;
+    if (mark) announced.add(mark);
+  }
   let modelCalls = 0;
   let replies = 0;
   let toolCalls = 0;
@@ -317,6 +394,11 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
   }
 
   const push = (owner: string, step: TraceStep, key = `e-${step.seq}`) => {
+    // Normal mode never prints a raw key, an id, a model or a file: a line that would is left to technical mode.
+    if (!technical) {
+      if (!isPlain(step.title)) return;
+      if (!isPlain(step.detail)) step = { ...step, detail: null };
+    }
     const c = containerOf(owner);
     c.activity = null;
     c.items.push({ ...step, kind: "step", key });
@@ -438,9 +520,10 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
         }
         if (kind === "workflow.step") {
           const name = str(p, "step") ?? "";
-          if (milestones.has(name)) continue;
-          milestones.add(name);
-          push(owner, { seq: e.seq, at: e.at, tone: "factory", icon: "plan", title: milestone(name), detail: null, credits: null, raw: null });
+          const title = workflowStepTitle(name, p, announced);
+          if (!title || milestones.has(`step:${title}`) || [...groups.values()].some((g) => g.group.title === title)) continue;
+          milestones.add(`step:${title}`);
+          push(owner, { seq: e.seq, at: e.at, tone: "factory", icon: name.startsWith("hire") ? "employee" : "plan", title, detail: null, credits: null, raw: null });
           continue;
         }
         if (kind) continue; // agent.start, nudges, notes, compaction: bookkeeping, not news.
@@ -469,6 +552,13 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
 
   // Activities are summarised once the whole log is read, so a line reads "Read 4 files", not "Read 1 file" four times.
   for (const a of opened) a.step.title = activitySummary(a);
+  if (!technical) {
+    for (const { group } of groups.values()) {
+      group.title = factoryAgentTitle(group.agent, planItem) ?? group.title;
+      if (!isPlain(group.title)) group.title = "A contractor's piece of the work";
+      group.outcome = plainOrNull(group.outcome);
+    }
+  }
 
   // Older research runs wrote their strands as workflow agents, never as `subagent.started`: each counts as one.
   const briefed = subagents > 0 ? subagents : [...groups.values()].length;

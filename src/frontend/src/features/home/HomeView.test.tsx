@@ -63,6 +63,22 @@ describe("HomeView", () => {
     expect(screen.queryByRole("region", { name: "Organisation chart" })).toBeNull();
   });
 
+  it("says a verdict waiting in a headline and one line, never its whole summary", async () => {
+    // The shape the control plane sends: the idea's text as the title, the verdict's entire summary as the detail.
+    const summary =
+      "The case against first. This idea is three commodities bolted together: an ingest endpoint, storage, and charts. Each one is already solved, free. Commercially it is worse: Oura, Whoop and Fitbit already sell trends. Verdict: do not build. Missing evidence of demand is a reason not to spend money.";
+    stub(json({ ...TREE, needsYou: [{ kind: "verdict", id: "n1", ideaId: "i1", title: "A personal health trends app. A device or script posts my health readings such as weight, resting heart rate and slee...", verdict: "do-not-build", detail: summary }] }));
+    renderWithStore(<HomeView />);
+    const needs = await screen.findByRole("region", { name: "Needs you" });
+    const card = within(needs).getByRole("link");
+    expect(card.textContent).toContain("Research says do not build “A personal health trends app.");
+    expect(card.textContent).toContain("This idea is three commodities bolted together: an ingest endpoint, storage, and charts.");
+    expect(card.textContent).not.toContain("Commercially it is worse");
+    expect(card.textContent).not.toContain("The case against first");
+    // Exactly the badge, a headline and one line.
+    expect(card.children).toHaveLength(3);
+  });
+
   it("records a failed read on the page, never as an empty organisation", async () => {
     stub(problem(500, "The tree could not be read"));
     renderWithStore(<HomeView />);

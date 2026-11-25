@@ -6,7 +6,7 @@ import type { Verdict } from "@/store/types";
 import { RESEARCH_VERDICT, ideaFixture } from "@/test/fixtures";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { VerdictView } from "./VerdictView";
-import { decisionOptions, normaliseVerdict, plainProductName } from "./verdictModel";
+import { decisionOptions, normaliseVerdict, plainProductName, shortSummary } from "./verdictModel";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const TREE = { generatedAt: "2026-11-24T10:00:00Z", viewerRole: "owner", organisation: { id: "o1", slug: "acme", name: "Acme", summary: null, spend: { monthCredits: 0 }, workers: [] }, divisions: [{ id: "d", slug: "tools", name: "Tools", spend: { monthCredits: 0 }, workers: [], projects: [] }], needsYou: [] };
@@ -119,7 +119,43 @@ describe("decisionOptions", () => {
   });
 });
 
+/** A long summary as research writes it: the case against first, then the verdict. */
+const LONG_SUMMARY =
+  "The case against first. This idea is three commodities bolted together. Each one is already solved, free. Nightscout has accepted posted readings for years. Commercially it is worse: the whole layer has converged to a few dollars a month. Demand exists but is expressed as do-it-yourself. Verdict: do not build. The evidence that people want trends is real; the evidence that they will pay for this is absent. Missing evidence of demand is a reason not to spend money, not a reason to hope.";
+
+describe("shortSummary", () => {
+  it("leads with research's own conclusion and stops after two sentences", () => {
+    const short = shortSummary(LONG_SUMMARY);
+    expect(short.text).toBe("The evidence that people want trends is real; the evidence that they will pay for this is absent. Missing evidence of demand is a reason not to spend money, not a reason to hope.");
+    expect(short.full).toBe(false);
+  });
+
+  it("is the whole summary when the summary is already short", () => {
+    expect(shortSummary("The gap is real but small.")).toEqual({ text: "The gap is real but small.", full: true });
+  });
+
+  it("opens with the first sentences, skipping the preamble, when there is no conclusion line", () => {
+    expect(shortSummary("The case against first. A is solved. B is solved. C is solved.").text).toBe("A is solved. B is solved.");
+  });
+});
+
 describe("VerdictView", () => {
+  it("keeps the hero to a headline and a short summary, with the rest behind the full reasoning", async () => {
+    stub(json(ideaFixture({ verdict: { ...STRUCTURED, outcome: "do-not-build", suggestedChange: null, summary: LONG_SUMMARY } })));
+    renderWithStore(<VerdictView ideaId="i1" />);
+    const heading = await screen.findByRole("heading", { level: 1, name: "Build it as a feature of Ledger." });
+    const hero = heading.closest("section") as HTMLElement;
+    expect(hero.textContent).toContain("Missing evidence of demand is a reason not to spend money");
+    expect(hero.textContent).not.toContain("Nightscout");
+    expect(screen.queryByRole("region", { name: "The full reasoning" })).toBeNull();
+    const more = within(hero).getByRole("button", { name: "Read the full reasoning" });
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(more);
+    expect(within(screen.getByRole("region", { name: "The full reasoning" })).getByText(/Nightscout has accepted posted readings/)).toBeTruthy();
+    expect(within(hero).getByRole("button", { name: "Hide the full reasoning" }).getAttribute("aria-expanded")).toBe("true");
+  });
+
+
   it("shows a skeleton while loading", () => {
     stub("pending");
     renderWithStore(<VerdictView ideaId="i1" />);

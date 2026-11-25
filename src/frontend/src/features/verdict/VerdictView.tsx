@@ -15,7 +15,7 @@ import { api, useDecideIdeaMutation, useGetIdeaQuery, useGetMeQuery, useGetTreeQ
 import type { DecisionChoice, ExistingProduct, Idea, Verdict, VerdictOutcome } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { namesFor } from "../home/treeModel";
-import { decisionOptions, plainProductName, redLineBreached, sourceLabel } from "./verdictModel";
+import { decisionOptions, paragraphs, plainProductName, redLineBreached, shortSummary, sourceLabel } from "./verdictModel";
 
 const OUTCOME: Record<VerdictOutcome, string> = { build: "Build", change: "Change", "do-not-build": "Do not build" };
 
@@ -101,6 +101,8 @@ function NoVerdictYet({ idea }: { idea: Idea }) {
 function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
   const stamp = verdict.outcome === "build" ? "bg-success-tint text-success-text" : verdict.outcome === "change" ? "bg-primary-tint text-primary-hover" : "bg-attention-chip text-attention-text";
   const redLine = redLineBreached(verdict, idea.redLine);
+  const short = verdict.summary ? shortSummary(verdict.summary) : null;
+  const [reasoning, setReasoning] = useState(false);
   return (
     <>
       <section className={cn("relative flex flex-col gap-3.5 overflow-hidden rounded-lg bg-night px-6 py-7 text-primary-ink sm:px-8", RISE)}>
@@ -109,9 +111,25 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
         <span className={cn("relative self-start rounded-full px-3.5 py-1.5 text-sm font-bold uppercase tracking-wide", stamp, "animate-stamp motion-reduce:animate-none")}>
           Verdict · {OUTCOME[verdict.outcome].toLowerCase()}
         </span>
-        <h1 className="relative text-3xl font-semibold leading-tight sm:text-4xl">{verdict.headline}</h1>
-        {verdict.summary && <p className="relative max-w-prose text-base text-primary-tint">{verdict.summary}</p>}
+        <h1 className="relative max-w-prose text-3xl font-semibold leading-tight sm:text-4xl">{verdict.headline}</h1>
+        {short && <p className="relative max-w-prose text-base text-primary-tint">{short.text}</p>}
+        {short && !short.full && (
+          <Button variant="white" size="sm" className="relative self-start" aria-expanded={reasoning} aria-controls="full-reasoning" onClick={() => setReasoning((x) => !x)}>
+            {reasoning ? "Hide the full reasoning" : "Read the full reasoning"}
+          </Button>
+        )}
       </section>
+
+      {short && !short.full && reasoning && (
+        <section id="full-reasoning" aria-label="The full reasoning" className={cn("flex flex-col gap-3 rounded-md border bg-surface p-5 shadow-card sm:p-6", RISE)}>
+          <h2 className="text-lg font-semibold">The full reasoning</h2>
+          {paragraphs(verdict.summary).map((p, i) => (
+            <p key={i} className="max-w-prose text-ink-body">
+              {p}
+            </p>
+          ))}
+        </section>
+      )}
 
       {redLine && (
         <section role="alert" aria-label="Red line" className="flex flex-col gap-2 rounded-md border-2 border-attention-text bg-attention-tint px-6 py-5">

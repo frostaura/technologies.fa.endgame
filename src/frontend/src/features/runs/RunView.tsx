@@ -8,13 +8,14 @@ import { formatCredits, formatNumber, formatTime, percent, plural } from "@/lib/
 import { RISE } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
+import { plainOrNull } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
 import { useAnswerApprovalMutation, useControlRunMutation, useGetMeQuery, useGetRunQuery } from "@/store/api";
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
-import { accuracy, deriveRun, isTerminal, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
+import { accuracy, deriveRun, isTerminal, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
 import { buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
 import { useRunStream } from "./useRunStream";
 
@@ -167,7 +168,7 @@ function RunBody({ run }: { run: Run }) {
 
       <Approvals runId={run.id} approvals={derived.approvals} />
 
-      {derived.plan && <PlanPanel plan={derived.plan} />}
+      {derived.plan && <PlanPanel plan={derived.plan} mode={mode} />}
 
       {derived.finishedSummary && (
         <section className="rounded-md border bg-surface p-5 shadow-card">
@@ -276,37 +277,59 @@ function ApprovalCard({ runId, approval }: { runId: string; approval: DerivedApp
   );
 }
 
-function PlanPanel({ plan }: { plan: DerivedPlan }) {
+/**
+ * The plan as a contract: each item in the owner's words, with whether it passed its check. The
+ * files, endpoints and test commands behind each item are technical detail, shown in technical mode.
+ */
+function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
+  const technical = mode === "technical";
+  const passed = plan.items.filter((i) => i.result === "passed").length;
   return (
-    <section className="flex flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
+    <section aria-labelledby="plan-title" className="flex flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
+        <h2 id="plan-title" className="flex items-center gap-2 text-lg font-semibold">
           <Icon name="plan" tinted />
           The plan
         </h2>
-        <Badge tone={plan.accepted ? "success" : "teal"}>{plan.accepted ? "Agreed" : "Proposed"}</Badge>
+        <span className="flex flex-wrap items-center gap-2">
+          {plan.items.length > 0 && <span className="text-sm text-ink-muted">{`${formatNumber(passed)} of ${plural(plan.items.length, "part")} done`}</span>}
+          <Badge tone={plan.accepted ? "success" : "teal"}>{plan.accepted ? "Agreed" : "Proposed"}</Badge>
+        </span>
       </div>
-      {plan.summary && <p className="text-ink-body">{plan.summary}</p>}
+      {(technical ? plan.summary : plainOrNull(plan.summary)) && <p className="text-ink-body">{plan.summary}</p>}
       {plan.items.length > 0 && (
-        <ol className="flex flex-col divide-y">
-          {plan.items.map((item) => (
-            <li key={item.id} className="flex flex-col gap-1 py-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <span className="font-medium">{item.text}</span>
-                {item.result && <Badge tone={item.result === "passed" ? "success" : "attention-strong"}>{item.result === "passed" ? "Passed" : "Failed"}</Badge>}
-              </div>
-              {item.check && <span className="text-sm text-ink-muted">Checked by: {item.check}</span>}
-              {item.evidence && <span className="text-sm text-ink-body">{item.evidence}</span>}
-            </li>
-          ))}
+        <ol aria-label="Parts of the plan" className="flex flex-col divide-y">
+          {plan.items.map((item) => {
+            const label = planItemLabel(plan, item.id, mode) ?? item.id;
+            const check = technical ? item.check : plainOrNull(item.check);
+            const evidence = technical ? item.evidence : plainOrNull(item.evidence);
+            return (
+              <li key={item.id} data-item={item.id} className="flex flex-col gap-1 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <span className="min-w-0 break-words font-medium">{technical ? `${item.id} · ${label}` : label}</span>
+                  {item.result ? (
+                    <Badge tone={item.result === "passed" ? "success" : "attention-strong"}>{item.result === "passed" ? "Passed its check" : "Sent back"}</Badge>
+                  ) : (
+                    <Badge tone="quiet">To do</Badge>
+                  )}
+                </div>
+                {technical && item.detail && <p className="whitespace-pre-line break-words text-sm text-ink-body">{item.detail}</p>}
+                {check && <span className="break-words text-sm text-ink-muted">{technical ? `Check: ${check}` : `How it is checked: ${check}`}</span>}
+                {evidence && <span className="break-words text-sm text-ink-body">{evidence}</span>}
+              </li>
+            );
+          })}
         </ol>
+      )}
+      {!technical && plan.items.some((i) => i.plain === null) && (
+        <p className="text-sm text-ink-muted">The files and tests behind each part are in technical mode.</p>
       )}
     </section>
   );
 }
 
 function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]; mode: Mode; derived: DerivedRun; stream: StreamStatus; terminal: boolean }) {
-  const planItem = (id: string) => derived.plan?.items.find((i) => i.id === id)?.text ?? null;
+  const planItem = (id: string) => planItemLabel(derived.plan, id, mode);
   const timeline = buildTimeline(events, mode, planItem);
   return (
     <section aria-labelledby="trace-title" className="flex flex-col gap-3">

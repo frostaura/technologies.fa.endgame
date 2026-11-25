@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { formatCredits } from "@/lib/format";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
@@ -19,6 +18,7 @@ import { AppShell, type Crumb } from "../shell/AppShell";
 import { ConversationDock } from "./ConversationDock";
 import { OrgChart } from "./OrgChart";
 import { OntologyView } from "./OntologyView";
+import { needLines } from "./needsYouModel";
 import { countTree, orgFigures, organisationSelection } from "./treeModel";
 
 /** How often the org chart refreshes. Status, spend and who is working are live, not a snapshot. */
@@ -221,6 +221,7 @@ function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
     <section aria-label="Needs you" className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3", RISE, stagger(1))}>
       {items.map((item) => {
         const style = NEED_STYLE[item.kind];
+        const lines = needLines(item);
         return (
           <Link
             key={item.id}
@@ -230,14 +231,8 @@ function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
             <Badge tone={style.tone} className="self-start bg-surface">
               {style.badge}
             </Badge>
-            <span className="text-base font-semibold">{item.title}</span>
-            {item.kind === "hire" ? (
-              <span className={style.detail}>
-                About {formatCredits(item.expectedMonthlyCredits)} a month.{item.detail ? ` ${item.detail}` : ""}
-              </span>
-            ) : (
-              item.detail && <span className={style.detail}>{item.detail}</span>
-            )}
+            <span className="line-clamp-2 break-words text-base font-semibold">{lines.headline}</span>
+            <span className={cn("line-clamp-1 break-words", style.detail)}>{lines.line}</span>
           </Link>
         );
       })}
