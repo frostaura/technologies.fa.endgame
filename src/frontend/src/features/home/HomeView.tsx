@@ -221,6 +221,10 @@ function ManageLinks({ tree, selection }: { tree: Tree; selection: Selection }) 
           {selection.trail[selection.trail.length - 1]}’s record and memory
         </Link>
       )}
+      <Link href={paths.manage(node.scope)} className={buttonVariants({ variant: "soft" })}>
+        <Icon name="organisation" tinted className="size-4" />
+        Manage
+      </Link>
       <Link href={paths.autonomy(node.scope)} className={buttonVariants({ variant: "soft" })}>
         <Icon name="plan" tinted className="size-4" />
         Autonomy for {node.name}

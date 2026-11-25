@@ -67,7 +67,8 @@ describe("Your account", () => {
   it("switches the organisation every screen works in", async () => {
     stub();
     renderWithStore(<AccountView />);
-    const select = (await screen.findByLabelText("Working in")) as HTMLSelectElement;
+    // The header carries a compact switcher too; this is the one on the account page itself.
+    const select = (await within(await screen.findByRole("main")).findByLabelText("Working in")) as HTMLSelectElement;
     expect(select.value).toBe("acme");
     fireEvent.change(select, { target: { value: "beta" } });
     await waitFor(() => expect(window.location.pathname).toBe("/"));

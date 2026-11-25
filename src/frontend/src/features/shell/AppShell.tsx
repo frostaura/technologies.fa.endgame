@@ -11,6 +11,7 @@ import { useGetCreditsQuery, useGetMeQuery, useLogoutMutation } from "@/store/ap
 import { modeSet } from "@/store/uiSlice";
 import { GodModeBand } from "./GodModeBand";
 import { NotificationsBell } from "./NotificationsBell";
+import { OrganisationSwitcher } from "@/features/account/OrganisationSwitcher";
 
 export interface Crumb {
   label: string;
@@ -49,9 +50,15 @@ export function AppShell({ crumbs, aside, children }: { crumbs: Crumb[]; aside?:
           </div>
           <div className="order-last flex w-full items-center justify-between gap-3 sm:order-none sm:w-auto sm:justify-end">
             <ModeToggle />
+            {me && <OrganisationSwitcher compact />}
             {org && <CreditsPill scope={org.slug} />}
           </div>
           {org && <NotificationsBell organisation={org.slug} />}
+          {me && (
+            <Link href={paths.account()} aria-label="Your account" title="Your account" className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-ink-muted hover:text-ink">
+              <Icon name="employee" className="size-5" />
+            </Link>
+          )}
           {me && <SignOut />}
         </div>
       </header>
