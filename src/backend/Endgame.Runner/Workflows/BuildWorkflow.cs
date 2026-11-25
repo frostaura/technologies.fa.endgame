@@ -235,21 +235,52 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         };
     }
 
-    /// <summary>What the app does now, part by part, from the progress file the factory keeps in its repository.</summary>
-    private static async Task<JsonObject> EarlierWorkAsync(IWorkspace workspace, CancellationToken cancellationToken)
+    /// <summary>
+    /// What the app does now, part by part, from the progress file in its repository. The factory's own lines
+    /// (<c>- [x] **id** — what the owner gets. Checked: …</c>) give each part in plain words. A builder may keep the file
+    /// in its own words (<c>- **id** — what was built</c>, a live build did); such a part is still checked again, named
+    /// by its place, with the builder's note as the detail the evaluator reads.
+    /// </summary>
+    public static JsonObject EarlierWork(string? progress)
     {
-        var bytes = await workspace.ReadBytesAsync($"{workspace.Root}/{ProgressFile}", cancellationToken);
         var parts = new JsonArray();
-        foreach (var line in (bytes is null ? "" : Encoding.UTF8.GetString(bytes)).Split('\n'))
+        var notes = new JsonArray();
+        var plain = new HashSet<string>(StringComparer.Ordinal);
+        var lines = (progress ?? "").Split('\n').Select(l => l.TrimEnd()).ToList();
+        foreach (var line in lines)
         {
-            var match = ProgressLine().Match(line.Trim());
-            if (match.Success && parts.Count < PlanContract.MaxRequirements - 10)
+            if (ProgressLine().Match(line.Trim()) is { Success: true } m && parts.Count < PlanContract.MaxRequirements - 10)
             {
-                parts.Add(match.Groups[1].Value.Trim());
+                plain.Add(m.Groups[1].Value);
+                parts.Add(m.Groups[2].Value.Trim());
             }
         }
 
-        return new JsonObject { ["parts"] = parts };
+        // A builder's own note: its first line, and the indented lines that continue it.
+        for (var i = 0; i < lines.Count && parts.Count < PlanContract.MaxRequirements - 10; i++)
+        {
+            if (BuilderLine().Match(lines[i].Trim()) is not { Success: true } m || plain.Any(p => p.EndsWith(m.Groups[1].Value, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            var note = new StringBuilder(m.Groups[2].Value.Trim());
+            for (var j = i + 1; j < lines.Count && lines[j].StartsWith("  ", StringComparison.Ordinal); j++)
+            {
+                note.Append(' ').Append(lines[j].Trim());
+            }
+
+            parts.Add($"Part {parts.Count + 1} of what was built before still works, as its note describes");
+            notes.Add($"k{parts.Count} ({m.Groups[1].Value}): {OutputText.Truncate(note.ToString(), 600)}");
+        }
+
+        return new JsonObject { ["parts"] = parts, ["notes"] = notes };
+    }
+
+    private static async Task<JsonObject> EarlierWorkAsync(IWorkspace workspace, CancellationToken cancellationToken)
+    {
+        var bytes = await workspace.ReadBytesAsync($"{workspace.Root}/{ProgressFile}", cancellationToken);
+        return EarlierWork(bytes is null ? null : Encoding.UTF8.GetString(bytes));
     }
 
     /// <summary>
@@ -266,13 +297,18 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
 
         var kept = parts.Select((p, i) => new PlanRequirement($"k{i + 1}", p)).ToList();
-        var item = new PlanItem(KeepItem, "Everything the app did before still works", "No new work: the app as changed is checked again against each part it already had.",
+        var notes = Json.Strings(earlier, "notes");
+        var detail = "No new work: the app as changed is checked again against each part it already had." + (notes.Count == 0 ? "" : " The builder's notes on the earlier parts: " + string.Join(" ", notes));
+        var item = new PlanItem(KeepItem, "Everything the app did before still works", detail,
             "Each earlier part shown working again in the running app, signed in as a test member.", kept.Select(k => k.Id).ToList());
         return plan with { Items = [.. plan.Items, item], Requirements = [.. plan.Requirements, .. kept] };
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"^- \[x\] \*\*[^*]+\*\* — (.+?)\. Checked:")]
+    [System.Text.RegularExpressions.GeneratedRegex(@"^- \[x\] \*\*([^*]+)\*\* — (.+?)\. Checked:")]
     private static partial System.Text.RegularExpressions.Regex ProgressLine();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^- \*\*([a-z0-9][a-z0-9-]*)\*\* — (.+)$")]
+    private static partial System.Text.RegularExpressions.Regex BuilderLine();
 
     /// <summary>
     /// Trying again (CHG-03): a new run picks up what the earlier attempt finished and agreed — where the app lives, the plan the
@@ -715,7 +751,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var text = existing is null ? "# Progress\n\nWhat is built and checked, feature by feature. Kept by the factory.\n\n" : Encoding.UTF8.GetString(existing);
         var evidence = (Json.Str(evaluation, "evidence") ?? "").Split('\n')[0];
         var line = $"- [x] **{id}** — {item.Text.TrimEnd('.')}. Checked: {OutputText.Truncate(evidence, 300)}\n";
-        if (!text.Contains($"**{id}**", StringComparison.Ordinal))
+        // The factory's own line, in the owner's words, even when the builder already noted the part in its own (a live build did).
+        if (!text.Contains($"- [x] **{id}**", StringComparison.Ordinal))
         {
             await workspace.WriteBytesAsync(path, Encoding.UTF8.GetBytes(text.TrimEnd('\n') + "\n" + line), cancellationToken);
             await workspace.CommitAsync($"Record progress: {id} is built and checked", "Endgame factory", $"factory@{run.Options.AuthorDomain}", cancellationToken);

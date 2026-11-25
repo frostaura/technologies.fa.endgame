@@ -75,6 +75,31 @@ public sealed partial class WorkflowTests
     }
 
     [Fact]
+    public void What_worked_before_is_read_from_the_factorys_lines_and_from_a_builders_own_notes()
+    {
+        // As a live build left it: the builder kept PROGRESS.md in its own words; the factory added its lines for a change.
+        const string progress = """
+            # Progress
+
+            ## Done
+
+            - **counter-api** — `api/Counters/` holds the `Counter` entity and its endpoints,
+              covered by `CountersApiTests`.
+            - **reset-counter** — `POST api/counters/{id}/reset`.
+
+            - [x] **78cc3e94-reset-counter** — A signed-in member can reset any counter's total back to zero. Checked: POST api/counters/1/reset → 201
+            """;
+        var earlier = BuildWorkflow.EarlierWork(progress);
+        Assert.Equal(["A signed-in member can reset any counter's total back to zero", "Part 2 of what was built before still works, as its note describes"],
+            earlier["parts"]!.AsArray().Select(p => p!.GetValue<string>()));
+        var note = Assert.Single(earlier["notes"]!.AsArray())!.GetValue<string>();
+        Assert.StartsWith("k2 (counter-api): `api/Counters/` holds the `Counter` entity and its endpoints, covered by `CountersApiTests`.", note, StringComparison.Ordinal);
+        var plan = BuildWorkflow.WithKeep(new Endgame.Harness.Planning.PlanContract("S", [new Endgame.Harness.Planning.PlanItem("a", "A thing.", "d", "c", ["r1"])], [new Endgame.Harness.Planning.PlanRequirement("r1", "a thing")]), earlier);
+        Assert.Contains("k2 (counter-api)", plan.Items[^1].Detail, StringComparison.Ordinal);
+        Assert.True(Endgame.Harness.Events.OwnerText.IsPlain(plan.Requirements[^1].Text));
+    }
+
+    [Fact]
     public async Task A_change_that_breaks_what_worked_before_is_repaired_unbilled_before_it_is_published()
     {
         var (cp, ws, dock) = ChangeRun();
