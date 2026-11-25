@@ -21,6 +21,7 @@ export type ScenarioName =
   | "workforce-refused"
   | "workforce-fails"
   | "viewer"
+  | "operator"
   | "slow";
 
 export interface MockEvent {
@@ -90,6 +91,9 @@ export interface ShareEntry {
 
 export interface MockState {
   signedIn: boolean;
+  /** A FrostAura operator, in God mode. */
+  isOperator: boolean;
+  breadth: BreadthState;
   /** The signed-in person's role over the tree, as GET /api/tree reports it. */
   viewerRole: "owner" | "admin" | "builder" | "viewer" | "none";
   failSecretWrite: boolean;
@@ -132,6 +136,8 @@ export interface MockState {
   addRun: (title: string, kind: string) => string;
   addConversation: (scope: string, message: string, employeeId?: string) => string;
 }
+
+import { breadthState, type BreadthState } from "./breadth.ts";
 
 const now = () => new Date().toISOString();
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
@@ -216,6 +222,8 @@ function researchScript(withApproval: boolean): Omit<MockEvent, "seq" | "at">[] 
 export function scenario(name: ScenarioName): MockState {
   const s: MockState = {
     signedIn: !name.startsWith("signed-out"),
+    isOperator: name === "operator",
+    breadth: breadthState(),
     viewerRole: name === "first-run" ? "none" : name === "not-owner" ? "admin" : name === "viewer" ? "viewer" : "owner",
     failSecretWrite: name === "secret-refused",
     developmentSignIn: name === "signed-out-dev",
@@ -229,7 +237,7 @@ export function scenario(name: ScenarioName): MockState {
     failDecision: false,
     failStream: false,
     user: { id: "u1", displayName: "Fixture Owner", email: "owner@example.test" },
-    org: name === "first-run" ? null : { id: "org1", slug: "northwind", name: "Northwind", summary: "Ada is chief of staff · all apps healthy" },
+    org: name === "first-run" || name === "operator" ? null : { id: "org1", slug: "northwind", name: "Northwind", summary: "Ada is chief of staff · all apps healthy" },
     runs: {},
     ideas: {},
     apps: {},
@@ -356,6 +364,33 @@ export function scenario(name: ScenarioName): MockState {
 
   s.runs["run-done"] = makeRun("run-done", { kind: "research", title: "Research: Court ladder", scope: "northwind", ideaId: "idea-ladder", status: "finished", estimateCredits: 60, spentCredits: 54, finishedAt: ago(5) }, researchScript(false));
   s.runs["run-done"].released = s.runs["run-done"].events.length;
+  // A finished build, its log in the shapes the real factory writes: hires as workflow steps beside
+  // the runner's own words, a plan whose items name files, checks with evidence about commands.
+  s.runs["run-factory"] = makeRun(
+    "run-factory",
+    { kind: "build", title: "Build: Booking desk", scope: "northwind", status: "finished", estimateCredits: 90, spentCredits: 15, finishedAt: ago(1), outcome: "succeeded", summary: "Booking desk is built and running privately." },
+    [
+      ev("message", { from: "owner", text: "A booking desk for the club's courts." }, 0),
+      ev("run.started", { holder: "runner-1" }, 0),
+      ev("estimate.made", { credits: 120, stage: "start", basis: "the starting figure for build runs" }, 0),
+      ev("message", { kind: "workflow.step", step: "estimate.gate", agent: "workflow", data: { autonomy: "auto", estimate: 120 } }, 0),
+      ev("message", { kind: "workflow.step", step: "hire:stage:build:northwind/software/booking", agent: "workflow", data: { name: "Lin", role: "Engineer", hireId: "h9", status: "accepted", employeeId: "e2" } }, 0),
+      ev("message", { from: "runner", title: "Hired Lin", milestone: "hired:stage:build:northwind/software/booking", text: "Lin joins as an engineer, at up to 1500 credits a month: the booking desk is entering its build." }, 0),
+      ev("message", { kind: "workflow.step", step: "hire:stage:research:northwind", agent: "workflow", data: { name: "Ada", role: "Product researcher", status: "accepted", employeeId: "e1" } }, 0),
+      ev("message", { kind: "agent.start", agent: "planner", task: "Plan the app", taskType: "plan" }, 0),
+      ev("tool.requested", { agent: "planner", name: "read_file", arguments: { path: "api/Program.cs" } }, 0),
+      ev("plan.proposed", { agent: "planner", items: [{ id: "backend-bookings", text: "api/Bookings/Booking.cs and BookingsEndpoints.cs with a fresh migration; api.tests/BookingsApiTests.cs", check: "make lint and make test pass" }] }, 0),
+      ev("plan.accepted", { by: "auto-mode", items: [{ id: "backend-bookings", text: "api/Bookings/Booking.cs and BookingsEndpoints.cs with a fresh migration; api.tests/BookingsApiTests.cs", check: "make lint and make test pass" }] }, 0),
+      ev("message", { kind: "agent.start", agent: "builder-backend-bookings-0", taskType: "build" }, 0),
+      ev("tool.requested", { agent: "builder-backend-bookings-0", name: "write_file", arguments: { path: "api/Bookings/Booking.cs" } }, 0),
+      ev("evaluation.passed", { item: "backend-bookings", text: "api/Bookings/Booking.cs and BookingsEndpoints.cs", tier: "build", round: 0, faults: [], evidence: "make test passed all 14 tests including BookingsApiTests" }, 0),
+      ev("message", { kind: "workflow.step", step: "item:backend-bookings", agent: "workflow", data: { passed: true } }, 0),
+      ev("message", { kind: "workflow.step", step: "publish", agent: "workflow", data: { commit: "f2a84f83c1f6d2852e9f62f57720ec931052273d", state: "running" } }, 0),
+      ev("message", { from: "builder", title: "Running privately", milestone: "published", text: "Booking desk is built and running privately. Only you and the people you choose can open it." }, 0),
+      ev("run.finished", { outcome: "succeeded", summary: "Booking desk is built and running privately.", totals: { credits: 15 } }, 0),
+    ],
+  );
+  s.runs["run-factory"].released = s.runs["run-factory"].events.length;
 
   // The agreed verdict document (ARCH-004, The verdict document), field for field.
   const verdict = {
@@ -606,7 +641,16 @@ export function scenario(name: ScenarioName): MockState {
         ]),
       ],
       needsYou: [
-        { kind: "verdict", id: "n1", ideaId: "idea-ladder", title: "Research says do not build “Court ladder”", verdict: "do-not-build", detail: "Read it, or overrule." },
+        // As the control plane sends it: the idea's own text as the title, the verdict's whole summary as the detail.
+        {
+          kind: "verdict",
+          id: "n1",
+          ideaId: "idea-ladder",
+          title: "Court ladder. A ladder league for squash club members to challenge one another on the courts they already book, with results...",
+          verdict: "do-not-build",
+          detail:
+            "The case against first. Three club apps already run ladders for free, and the clubs that want one use them. Commercially it is worse: ladder features are bundled into every booking product. Nobody in the evidence paid for a ladder on its own. Verdict: do not build. Missing evidence of demand is a reason not to spend money.",
+        },
         { kind: "approval", id: "n2", runId: "run-research", approvalId: "a1", title: "Spend 20 more credits on Tide tables research?", detail: "Ada is waiting for you." },
         ...Object.values(s.hires)
           .filter((h) => h.status === "proposed")

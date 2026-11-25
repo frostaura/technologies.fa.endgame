@@ -7,7 +7,7 @@
 | **Primary actor** | Owner |
 | **Scope** | Console, through Edge to the Control plane's public API (ARCH-004) |
 | **Cascade level** | Organisation, and any node beneath it the owner selects |
-| **Status** | Built (console side, Phases 2 and 3) |
+| **Status** | Built (console side, Phases 2 and 3, and the breadth surfaces) |
 
 ## Goal
 
@@ -85,6 +85,44 @@ and credit.
     "inherited from …" otherwise, and "use the inherited setting" / "remove here". Admin and above change
     them; others read. Rules read in plain words in normal mode and as the harness reads them in technical.
 
+16. **The app, completed** (`/apps/{id}`): *Ask about this app* shows the most a question can cost
+    before it is asked (`ask/estimate`), then the answer with its chart (number, bars, line or table) and
+    what it cost; a Builder keeps it on the *dashboard*, whose questions are re-run on every read and say
+    why when one no longer runs; the query is shown in technical mode only. *History* lists every version
+    with who made it (an employee, linked; a person; the factory) and which is live; a Builder brings one
+    back after a confirmation that says a public app becomes private, and the result says whether it is
+    running. *What it uses*: the services it depends on (from the ontology), its secrets by name, who it is
+    shared with, and that AI assistants can use it (the per-app address in technical mode). *It is yours*:
+    the Owner downloads the export; anyone else is told only the Owner can. Technical mode adds what the app
+    is underneath: lifecycle, container state, version, addresses, ids.
+17. **People** (`/people?scope=`, Admin): each person with their role and the level the grant was set at;
+    invite by e-mail to a role at any level beneath — the one-time code is shown once and the page says
+    whether it was e-mailed; change a role (to or from Admin, the Owner only) and remove a grant, both
+    optimistic; what each of the four roles may do, in plain words.
+18. **AI assistants** (`/assistants`): "Let an AI assistant work with your organisation" in normal mode,
+    "MCP access tokens" in technical. Make a key (name, a role no higher than yours — an Owner's is an
+    Admin's — and when it stops working); the key is shown once with a copy button and never stored; the
+    organisation's address and each app's; each key's role, last use and state; revoke after a confirmation.
+19. **Notifications**: a bell in the header with the unread count (unknown is shown as nothing, not zero);
+    on a desktop it opens the latest eight in place, on a phone it links to `/notifications`. Each item is a
+    short title and one line, links to what needs the person, and can be marked read; all can be.
+20. **Ideas from your portfolio** (`/suggestions?scope=`, the organisation or a division): the cost first,
+    then the suggestions run; each suggestion's gap, why this organisation, and what it would reuse; taking
+    one shows its research estimate first, then opens the new idea; setting one aside is optimistic.
+21. **Credits, completed**: the Owner's own overdraft limit, checked against FrostAura's and refused deeper;
+    a narrower limit for a division, project or app (Admin); asking FrostAura for a top-up (Owner); the
+    requests and what became of them.
+22. **God mode** (`/operator`, operators only; a coral band on every screen says so): every organisation with
+    balance, standing, overdraft, apps and last activity; enter one (the answer says where it is logged) and
+    open its org chart (`/?organisation=`); top up, optionally answering a request; decline a request with
+    a reason; set the deepest overdraft; the prices with confirmation and their change history; provision an
+    organisation for an invited Owner, the Owner's code shown once.
+23. **Normal mode in the run view** prints no `:`-separated key, id, model or file: plan items read their
+    plain `text` (an older plan whose `text` names files reads as its place in the plan, the detail in
+    technical mode), hires read from their people, and the factory's agents are named for what they did.
+    Needs-you cards and notifications are a headline and one line; the verdict's hero is the headline and a
+    short summary, the full reasoning behind a button.
+
 ## Alternate and failure flows
 
 - **A1 — a read fails.** Every screen shows loading, empty, loaded and failed as distinct states. A
@@ -137,13 +175,14 @@ is camelCase, errors are problem details. What the console relies on beyond ARCH
 | `GET/PUT/DELETE /api/secrets` | `{ scope, effective[] { name, setAtLevel, setAtPath, setAt, inherited, overrides[] }, setBelow[] { name, setAtPath } }`; `PUT { scope, name, value }` is sent with `fetch`, never through the store. |
 | `GET/POST/DELETE /api/apps/{id}/shares` | `[{ email, invitedAt, registered }]`; `POST { email }` → `{ email, invitationCode, expiresAt }`, sent with `fetch` so the code never reaches the store. |
 | `GET /api/audit/operator-access?organisation=` | `[{ id, at, action, operator { id, email, displayName }, detail }]`; 403 for anyone but the Owner. |
+| Breadth (ask, dashboard, versions, export, members, tokens, notifications, suggestions, top-up requests, overdraft, God mode) | As ARCH-004, field for field, read from a running stack on 2026-11-25. Differences: `POST …/enter` answers `logged` as **text** (where the entry is written), not a flag; `PATCH /api/members/{id}` answers the invitation shape, of which the console keeps only `member`; `POST /api/credits/top-ups` answers `{ id, amount, createdAt, organisation }`; a `suggest` run is a run kind. One-time values go through `store/sensitive.ts`. |
 
 ## Not built, because the contract has no backend for it
 
-The app's "ask about this app", its version history and download, changing the overdraft limit and
-asking for a top-up. Each appears in the approved design and returns when its endpoint exists. An
-employee's full run history needs a `GET /api/runs?employeeId=` the public API does not have yet; its
-recent work is its tasks and its current and last runs until then.
+An employee's full run history reads its tasks and its current and last runs; `GET /api/runs?employeeId=`
+now exists and is not used yet. An app's end-user count ("sign-in · 214 members" in the design) has no field
+in `GET /api/apps/{id}`, so *what it uses* says "Sign-in" without a count. The per-node overdraft limits a
+narrower limit sets are not in `GET /api/credits`, so the page confirms a change but cannot list them.
 
 ## Acceptance
 

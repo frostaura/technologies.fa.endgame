@@ -15,11 +15,11 @@ export function GodModeBand() {
         <Icon name="god-mode" className="size-4" />
         God mode
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="order-last min-w-0 basis-full sm:order-none sm:flex-1 sm:basis-auto">
         {entered ? `You are inside ${entered} as a FrostAura operator. Your entry is logged where its Owner can read it.` : "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it."}
       </span>
       {pathname !== paths.operator() && (
-        <Link href={paths.operator()} className="inline-flex min-h-touch items-center rounded-xs font-semibold text-primary-ink underline underline-offset-2">
+        <Link href={paths.operator()} className="ml-auto inline-flex min-h-touch items-center rounded-xs font-semibold text-primary-ink underline underline-offset-2 sm:ml-0">
           Every organisation
         </Link>
       )}

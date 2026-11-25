@@ -205,7 +205,7 @@ function newKey(): string {
 }
 
 /** A top-up, optionally answering a request. The key is made once per form, so a double press adds once. */
-function TopUpForm({ organisation, name, request, onDone }: { organisation: string; name: string; request?: TopUpRequest; onDone: () => void }) {
+function TopUpForm({ organisation, name, request, onDone, onAdded }: { organisation: string; name: string; request?: TopUpRequest; onDone: () => void; onAdded?: (text: string) => void }) {
   const [topUp, sending] = useTopUpMutation();
   const ids = { credits: useId(), note: useId() };
   const [key] = useState(newKey);
@@ -220,7 +220,10 @@ function TopUpForm({ organisation, name, request, onDone }: { organisation: stri
     setResult(null);
     try {
       await topUp({ organisation, credits: n, note: note.trim(), idempotencyKey: key, ...(request ? { requestId: request.id } : {}) }).unwrap();
-      setResult({ ok: true, text: `Added ${formatCredits(n)} to ${name}. Its Owner can read that you did.` });
+      const text = `Added ${formatCredits(n)} to ${name}${request ? " and closed the request" : ""}. Its Owner can read that you did.`;
+      setResult({ ok: true, text });
+      // A fulfilled request leaves the waiting list, so the outcome is said above it too.
+      onAdded?.(text);
     } catch (e) {
       setResult({ ok: false, text: `Nothing was added: ${describeError(e as never)}` });
     }
@@ -302,11 +305,17 @@ function Requests() {
   const view = viewOf(query);
   const open = view.kind === "loaded" ? view.data.filter((r) => r.status === "open") : [];
   const closed = view.kind === "loaded" ? view.data.filter((r) => r.status !== "open") : [];
+  const [done, setDone] = useState<string | null>(null);
   return (
     <section aria-labelledby="requests-title" className="flex flex-col gap-3">
       <h2 id="requests-title" className="text-lg font-semibold">
         Top-up requests
       </h2>
+      {done && (
+        <p role="status" className="rounded-xs bg-success-tint px-4 py-3 text-success-text">
+          {done}
+        </p>
+      )}
       {view.kind === "loading" && (
         <Loading label="Loading the top-up requests" className="flex flex-col gap-2">
           <Skeleton className="h-20 rounded-sm" />
@@ -323,7 +332,7 @@ function Requests() {
           ) : (
             <ul aria-label="Waiting requests" className="flex flex-col gap-3">
               {open.map((r) => (
-                <RequestRow key={r.id} request={r} />
+                <RequestRow key={r.id} request={r} onAdded={setDone} />
               ))}
             </ul>
           )}
@@ -348,7 +357,7 @@ function Requests() {
   );
 }
 
-function RequestRow({ request }: { request: TopUpRequest }) {
+function RequestRow({ request, onAdded }: { request: TopUpRequest; onAdded: (text: string) => void }) {
   const [mode, setMode] = useState<"fulfil" | "decline" | null>(null);
   const [close, closing] = useCloseTopUpRequestMutation();
   const [why, setWhy] = useState("");
@@ -373,7 +382,7 @@ function RequestRow({ request }: { request: TopUpRequest }) {
       {request.note && <p className="break-words text-ink-body">{request.note}</p>}
       {request.requestedByEmail && <span className="break-all text-sm text-ink-muted">From {request.requestedByEmail}</span>}
       {mode === "fulfil" ? (
-        <TopUpForm organisation={request.organisation} name={request.organisationName || request.organisation} request={request} onDone={() => setMode(null)} />
+        <TopUpForm organisation={request.organisation} name={request.organisationName || request.organisation} request={request} onDone={() => setMode(null)} onAdded={onAdded} />
       ) : mode === "decline" ? (
         <div className="flex flex-col gap-2 rounded-xs border border-border-strong p-4">
           <Field id={whyId} label="Why (the Owner reads this)">
@@ -448,6 +457,8 @@ function TopUps() {
 function PricingPanel() {
   const query = useGetPricingQuery(undefined);
   const view = viewOf(query);
+  // Kept here: a saved change reloads the form with the new figures.
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   return (
     <section aria-labelledby="pricing-title" className="flex flex-col gap-3">
       <h2 id="pricing-title" className="text-lg font-semibold">
@@ -464,7 +475,7 @@ function PricingPanel() {
         <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
           {view.stale && <Stale reason={view.stale.reason} className="xl:col-span-3" />}
           <div className="xl:col-span-2">
-            <PricingForm key={JSON.stringify(view.data.pricing)} pricing={view.data.pricing} source={view.data.source} updatedAt={view.data.updatedAt} />
+            <PricingForm key={JSON.stringify(view.data.pricing)} pricing={view.data.pricing} source={view.data.source} updatedAt={view.data.updatedAt} result={result} onResult={setResult} />
           </div>
           <div className="flex flex-col gap-2">
             <h3 className="font-display text-base font-semibold">Changes</h3>
@@ -508,12 +519,23 @@ const FIELDS: { key: string; label: string; hint: string; read: (p: Pricing) => 
   { key: "appModels", label: "Each app's AI allowance, credits a month", hint: "The default cap on an app's own model calls.", read: (p) => p.defaultAppModelMonthlyCredits, write: (p, v) => ({ ...p, defaultAppModelMonthlyCredits: v }) },
 ];
 
-function PricingForm({ pricing, source, updatedAt }: { pricing: Pricing; source: string; updatedAt: string | null }) {
+function PricingForm({
+  pricing,
+  source,
+  updatedAt,
+  result,
+  onResult: setResult,
+}: {
+  pricing: Pricing;
+  source: string;
+  updatedAt: string | null;
+  result: { ok: boolean; text: string } | null;
+  onResult: (r: { ok: boolean; text: string } | null) => void;
+}) {
   const [setPricing, saving] = useSetPricingMutation();
   const base = useId();
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(FIELDS.map((f) => [f.key, String(f.read(pricing))])));
   const [confirm, setConfirm] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const parsed = FIELDS.map((f) => ({ f, n: Number((values[f.key] ?? "").trim()) }));
   const bad = parsed.filter(({ f, n }) => !(values[f.key] ?? "").trim() || !Number.isFinite(n) || n < 0 || (f.key === "margin" && n < 1)).map(({ f }) => f.key);
   const next = parsed.reduce((p, { f, n }) => f.write(p, n), pricing);

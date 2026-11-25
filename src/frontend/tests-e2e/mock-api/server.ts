@@ -11,9 +11,12 @@ import { randomBytes } from "node:crypto";
 
 const now = () => new Date().toISOString();
 import { scenario, type MockState, type ScenarioName, type MockEvent } from "./fixtures.ts";
+import { handleBreadth } from "./breadth.ts";
 
 const port = Number(process.argv[2] ?? 5591);
 let state: MockState = scenario("populated");
+/** The Owner's own overdraft limit, once set through the console. */
+let ownLimit: number | null = null;
 const requests: { method: string; path: string; body: unknown }[] = [];
 const waiters = new Map<string, Set<() => void>>();
 
@@ -30,8 +33,8 @@ function send(res: ServerResponse, status: number, body?: unknown) {
   res.writeHead(status, { "content-type": status >= 400 ? "application/problem+json" : "application/json" }).end(json);
 }
 
-function problem(res: ServerResponse, status: number, title: string, detail?: string) {
-  send(res, status, { type: "about:blank", title, status, ...(detail ? { detail } : {}) });
+function problem(res: ServerResponse, status: number, title: string, detail?: string, code?: string) {
+  send(res, status, { type: "about:blank", title, status, ...(detail ? { detail } : {}), ...(code ? { code } : {}) });
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
@@ -51,7 +54,7 @@ function me() {
   return {
     user: state.user,
     organisation: org ? { id: org.id, slug: org.slug, name: org.name } : null,
-    isOperator: false,
+    isOperator: state.isOperator,
     passkeys: 1,
     memberships: org
       ? [{ id: "m1", scope: org.slug, level: "organisation", role: state.viewerRole === "none" ? "owner" : state.viewerRole, organisationId: org.id, organisationSlug: org.slug, organisationName: org.name }]
@@ -191,6 +194,7 @@ const server = createServer(async (req, res) => {
   // Test control -------------------------------------------------------------------------
   if (path === "/__mock/scenario" && method === "POST") {
     state = scenario(((body as { name?: string } | null)?.name ?? "populated") as ScenarioName);
+    ownLimit = null;
     requests.length = 0;
     return send(res, 204);
   }
@@ -242,6 +246,33 @@ const server = createServer(async (req, res) => {
   }
 
   if (!state.signedIn) return problem(res, 401, "Not signed in");
+
+  // The breadth endpoints: ask, versions, people, assistants, notifications, suggestions, top-ups, God mode.
+  {
+    const ctx = {
+      b: state.breadth,
+      isOperator: state.isOperator,
+      viewerRole: state.viewerRole,
+      orgSlug: state.org?.slug ?? null,
+      credits: () => {
+        const c = state.credits() as { overdraft: { ownLimit: number | null } | null };
+        if (ownLimit !== null && c.overdraft) c.overdraft.ownLimit = ownLimit;
+        return c as unknown as Record<string, unknown>;
+      },
+      setOwnLimit: (scope: string, credits: number) => {
+        if (scope === state.org?.slug) ownLimit = credits;
+      },
+    };
+    if (await handleBreadth(req, res, path, method, url, body, ctx, send, problem)) return;
+    const taken = path.match(/^\/api\/ideas\/suggestions\/([^/]+)\/take$/);
+    if (taken && method === "POST") {
+      const s = state.breadth.suggestions.find((x) => x.id === taken[1]);
+      const idea = state.addIdea({ text: String(s?.idea ?? ""), constraints: [] });
+      if (s) s.ideaId = idea.id;
+      pump(idea.runId);
+      return send(res, 201, idea);
+    }
+  }
 
   // Tree ---------------------------------------------------------------------------------
   if (path === "/api/tree") {
@@ -583,7 +614,9 @@ const server = createServer(async (req, res) => {
   // Credits ------------------------------------------------------------------------------
   if (path === "/api/credits") {
     if (state.failCredits) return problem(res, 500, "Credits could not be read");
-    return send(res, 200, state.credits());
+    const c = state.credits() as { overdraft: { ownLimit: number | null } | null };
+    if (ownLimit !== null && c.overdraft) c.overdraft.ownLimit = ownLimit;
+    return send(res, 200, c);
   }
 
   // System -------------------------------------------------------------------------------
