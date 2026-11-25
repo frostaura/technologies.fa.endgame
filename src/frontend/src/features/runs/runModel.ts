@@ -69,6 +69,8 @@ export interface DerivedApproval {
   detail: string | null;
   answer: string | null;
   seq: number;
+  /** What declining does: the step is skipped and the work goes on, or the work stops. */
+  onDecline: "continues" | "stops";
 }
 
 /**
@@ -140,6 +142,10 @@ export interface DerivedRun {
   messages: { seq: number; text: string; from: string | null; at: string }[];
   estimateCredits: number | null;
   scored: { estimated: number; actual: number } | null;
+  /** Credits the work used that were not charged: an agent repairing its own failed work. */
+  notCharged: number;
+  /** Parts an earlier attempt built and checked, kept by this one (a try again). */
+  carried: string[];
   /** Credits settled by finished model calls. */
   settledCredits: number;
   /** Credits held for model calls still in flight. */
@@ -160,6 +166,8 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
     messages: [],
     estimateCredits: null,
     scored: null,
+    notCharged: 0,
+    carried: [],
     settledCredits: 0,
     reservedCredits: 0,
     modelCalls: 0,
@@ -252,7 +260,7 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         break;
       case "approval.requested": {
         const id = str(p, "approvalId") ?? `approval-${e.seq}`;
-        approvals.set(id, { id, question: str(p, "title") ?? str(p, "question") ?? "Your approval is needed.", detail: str(p, "detail"), answer: null, seq: e.seq });
+        approvals.set(id, { id, question: str(p, "title") ?? str(p, "question") ?? "Your approval is needed.", detail: str(p, "detail"), answer: null, seq: e.seq, onDecline: str(p, "onDecline") === "stops" ? "stops" : "continues" });
         run.status = "waiting";
         break;
       }
@@ -280,9 +288,20 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
       case "estimate.scored": {
         const scored = readScored(p);
         if (scored) run.scored = scored;
+        run.notCharged = num(p, "nonBillableCredits") ?? run.notCharged;
         break;
       }
       case "message": {
+        if (str(p, "kind") === "plan.carried") {
+          const kept = Array.isArray(p.items) ? p.items.filter((x): x is string => typeof x === "string") : [];
+          run.carried = kept;
+          for (const item of run.plan?.items ?? []) {
+            if (kept.includes(item.id)) {
+              item.result = "passed";
+              item.outcome = "Built and checked in the earlier attempt; kept, not built or charged again.";
+            }
+          }
+        }
         // A message as written, for a person: harness bookkeeping (`kind`: agent.start, nudge…) is not one.
         const text = str(p, "text");
         if (text && !str(p, "kind")) run.messages.push({ seq: e.seq, text, from: str(p, "from"), at: e.at });
@@ -448,4 +467,10 @@ export function accuracy(estimated: number, actual: number): string {
   const diff = Math.round(((actual - estimated) / estimated) * 100);
   if (diff === 0) return "on the estimate";
   return diff > 0 ? `${diff}% over` : `${-diff}% under`;
+}
+
+/** What the person reads once they have answered: the truth about what happens next, never a promise the work does not keep. */
+export function answeredText(decision: "approve" | "reject", onDecline: DerivedApproval["onDecline"]): string {
+  if (decision === "approve") return "Approved. The work carries on from here.";
+  return onDecline === "stops" ? "Declined. It was not done, so the work has stopped." : "Declined. It was not done; the work continues without it.";
 }

@@ -119,6 +119,28 @@ public sealed class PermissionTests
     }
 
     [Fact]
+    public async Task An_asks_you_first_rule_raises_an_approval_even_unattended_and_a_decline_carries_the_note()
+    {
+        // The rule set asks, and lists no checkpoint: the rule itself is the person's wish to be asked (AUTO-05).
+        var asking = CascadeRuleSet.FromJson("build", "frostaura", JsonNode.Parse("""{ "ask": ["run(make deploy*)"] }"""));
+        var policy = new PermissionPolicy { Stage = "build", Cascade = [asking] };
+        var decision = policy.Decide("run", ToolEffect.Executes, Targets(null, "make deploy"), true);
+        Assert.Equal(PermissionVerdict.Ask, decision.Verdict);
+        Assert.Equal("frostaura:run(make deploy*)", decision.Checkpoint);
+
+        var ws = new FakeWorkspace();
+        var gate = new RecordingApprovals(false) { Note = "Not before the launch." };
+        var model = new ScriptedModel().ThenTool("run", new { command = "make deploy" }).ThenText("It was not deployed.");
+        var agent = TestAgents.Builder(change: a => a with { Permissions = policy });
+        var (_, log) = await TestAgents.RunAsync(agent, model, ws, services: TestAgents.Services(model) with { Approvals = gate });
+        Assert.Equal(["Let the agent run a check on the app?"], gate.Asked);
+        Assert.Equal(["continues"], gate.Consequences);
+        Assert.Empty(ws.Commands);
+        var result = log.Events.Single(e => e.Type == "tool.result").Payload["content"]!.GetValue<string>();
+        Assert.Contains("The owner declined this call, so it was not done. Their note: \"Not before the launch.\"", result, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Every_tool_call_is_checked_and_every_decision_is_an_event()
     {
         var ws = new FakeWorkspace().With("a.txt", "hello\n");
@@ -144,6 +166,16 @@ public sealed class PermissionTests
 
     private sealed class RecordingApprovals(bool answer) : IApprovalGate
     {
+        public string? Note { get; init; }
+
+        public List<string> Consequences { get; } = [];
+
+        public async Task<ApprovalAnswer> AskAsync(string title, string detail, string onDecline, CancellationToken cancellationToken)
+        {
+            Consequences.Add(onDecline);
+            return new ApprovalAnswer(await RequestAsync(title, detail, cancellationToken), Note);
+        }
+
         public List<string> Asked { get; } = [];
 
         public List<string> Details { get; } = [];

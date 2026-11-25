@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -9,11 +10,11 @@ import { Select } from "@/components/ui/field";
 import { formatCredits, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
-import { roleAt, roleRank } from "@/lib/roles";
+import { effectiveRole, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { useDismissSuggestionMutation, useEstimateIdeaMutation, useEstimateSuggestionsMutation, useGetMeQuery, useGetSuggestionsQuery, useGetTreeQuery, useStartSuggestionsMutation, useTakeSuggestionMutation } from "@/store/api";
+import { useDismissSuggestionMutation, useEstimateIdeaMutation, useEstimateSuggestionsMutation, useGetMeQuery, useGetSuggestionsQuery, useStartSuggestionsMutation, useTakeSuggestionMutation } from "@/store/api";
 import type { AskEstimate, Run, Suggestion } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 import { placements, scopeName } from "../workforce/workforceModel";
@@ -28,15 +29,16 @@ const POLL_WHILE_SUGGESTING_MS = 10_000;
 export function SuggestionsView() {
   const { search } = useLocation();
   const me = useGetMeQuery(undefined);
-  const tree = useGetTreeQuery(undefined);
-  const org = me.data?.organisation ?? null;
+  // The active organisation and its tree: the entered one in God mode, the person's own otherwise.
+  const tree = useActiveTree();
+  const org = useActiveOrganisation().organisation;
   const scope = search.get("scope") || org?.slug || "";
   const [started, setStarted] = useState<Run | null>(null);
   // A refusal to set one aside is said here: the card itself has gone and come back by then.
   const [pageProblem, setPageProblem] = useState<string | null>(null);
   const query = useGetSuggestionsQuery(scope, { skip: !scope, pollingInterval: started ? POLL_WHILE_SUGGESTING_MS : 0 });
   const view = viewOf(query);
-  const builder = roleRank(roleAt(me.data, scope)) >= roleRank("builder") || me.data?.isOperator === true;
+  const builder = roleRank(effectiveRole(tree.data, me.data, scope)) >= roleRank("builder");
   const here = scopeName(tree.data, scope);
   const open = view.kind === "loaded" ? view.data.filter((x) => x.status === "open") : [];
   const closed = view.kind === "loaded" ? view.data.filter((x) => x.status !== "open") : [];
@@ -117,7 +119,7 @@ export function SuggestionsView() {
 }
 
 function DivisionPicker({ scope }: { scope: string }) {
-  const tree = useGetTreeQuery(undefined);
+  const tree = useActiveTree();
   const id = useId();
   const options = placements(tree.data).filter((o) => o.depth <= 1);
   if (options.length <= 1) return null;

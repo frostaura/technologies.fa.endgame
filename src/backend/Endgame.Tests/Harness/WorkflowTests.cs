@@ -12,7 +12,7 @@ namespace Endgame.Tests.Harness;
 /// The factory's workflows, deterministically: a scripted model that answers by role, and fakes of the
 /// control plane and Dock. No network.
 /// </summary>
-public sealed class WorkflowTests
+public sealed partial class WorkflowTests
 {
     private static readonly Guid Idea = Guid.NewGuid();
 
@@ -251,12 +251,23 @@ public sealed class WorkflowTests
         /// <summary>A plan of the test's own (items and requirements), proposed instead of the recipe box's.</summary>
         public (object[] Items, object[] Requirements, string Summary)? Plan { get; set; }
 
+        /// <summary>What the red-line screen of a change answers.</summary>
+        public string ScreenReply { get; set; } = """{"breached": false, "line": null, "reasoning": "Ratings are an ordinary feature."}""";
+
+        public int Screens { get; set; }
+
         public ScriptedModel Model() => new() { Fallback = Answer };
 
         private ModelReply Answer(ChatCall call)
         {
             var system = System(call);
             var turn = call.Messages.Count(m => m!["role"]!.GetValue<string>() == "assistant");
+            if (system.Contains("You screen a requested change", StringComparison.Ordinal))
+            {
+                Screens++;
+                return ScriptedModel.Text(ScreenReply);
+            }
+
             if (system.Contains("You are the planner", StringComparison.Ordinal))
             {
                 foreach (var result in call.Messages.Where(m => m!["role"]!.GetValue<string>() == "tool"))
@@ -306,7 +317,7 @@ public sealed class WorkflowTests
                 }
 
                 var passed = EvaluationPasses(Evaluations++);
-                var requirements = new JsonArray(global::System.Text.RegularExpressions.Regex.Matches(system, @"^- (r\d+):", global::System.Text.RegularExpressions.RegexOptions.Multiline)
+                var requirements = new JsonArray(global::System.Text.RegularExpressions.Regex.Matches(system, @"^- ([rk]\d+):", global::System.Text.RegularExpressions.RegexOptions.Multiline)
                     .Select(m => (JsonNode)new JsonObject { ["id"] = m.Groups[1].Value, ["met"] = passed, ["evidence"] = calls ? "GET api/recipes as member-a → 200 with the recipe listed" : "The tests cover it." }).ToArray());
                 return ScriptedModel.Text(new JsonObject { ["passed"] = passed, ["evidence"] = "make test: 12 passed", ["requirements"] = requirements, ["faults"] = passed ? new JsonArray() : LongFaults is { } longer ? new JsonArray(longer, "POST without a title returns 500 " + longer) : Json("[\"RecipesApiTests fails: POST without a title returns 500\"]") }.ToJsonString());
             }

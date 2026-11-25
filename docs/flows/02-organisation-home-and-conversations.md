@@ -7,8 +7,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 **What most needs your attention**
 
 1. **The tree is managed on "Manage"** (`/tree`): create, rename, describe, archive, reactivate and delete divisions, projects and apps (TREE-02 to TREE-13). Moving is not possible by any route (TREE-10). The factory still places each built idea, creating its division when needed (TREE-01).
-2. **Talking to an employee is not answered by that employee.** The reply comes from the same general assistant, with no access to the employee's memory. The only difference is that the cost is charged to the employee. The page still says "answers from what it knows".
-3. **A conversation at a level is shared.** Everyone who talks at the same level and with the same employee writes into one conversation, and every person's message is drawn as "your" bubble.
+2. **A conversation at a level is shared.** Everyone who talks at the same level and with the same employee writes into one conversation; each message is named, not private.
 
 Throughout, "the dock" means the conversation panel. It is in `ConversationDock.tsx`, sits beside the org chart and is scoped to whatever is selected.
 
@@ -776,13 +775,17 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 **How every conversation works** (`ConversationService`, `ConversationWorkflow`):
 - Sending a message needs Builder at the scope. Reading the history needs Viewer.
 - Each message (1 to 20,000 characters) becomes a `conversation` run. The message is its first event, from "owner".
-- One conversation exists per scope plus employee, and every new message continues the latest one, whoever sends it.
-- The reply is written by a general assistant (system prompt `Runner/Prompts/conversation.md`). It remembers the last 6 turns and has three tools:
+- One conversation exists per scope plus employee, and every new message continues the latest one, whoever sends it. Every message says who sent it, by name.
+- Before a message is sent, the dock shows what it can cost at most (`POST /api/conversations/estimate`); the same estimate opens the turn's run.
+- The reply is written by Endgame's assistant (system prompt `Runner/Prompts/conversation.md`) or, with an employee, **by that employee** (TALK-05). It remembers the last 6 turns and has five tools:
   - `read_organisation`, which reads "overview", "workforce", "tasks", "runs" or "credits" at the scope or beneath it;
   - `start_idea`, a checkpoint (asks first);
+  - `change_app`, a checkpoint: asks the factory to change a built app (CHG-02);
+  - `try_again`, a checkpoint: starts stopped research, a build or a change again (TALK-18);
   - `adjust_setting`, a checkpoint, limited to `autonomy`, `checkpoint.start`, `checkpoint.plan`, `checkpoint.hire`, `sleep.mode`, `sleep.idle_minutes` and `workforce.idle_days`.
+- Each checkpoint is answered in the conversation itself (TALK-17), titled with what will happen.
 - It works in up to 12 steps.
-- It cannot create, rename or delete nodes, set budgets, secrets, context or access, answer approvals, hire, or decide verdicts.
+- It cannot create, rename or delete nodes, set budgets, secrets, context or access, hire, or decide verdicts.
 
 ### TALK-01 Talk to the whole organisation
 - **Who:** Builder or above at the organisation (to send); Viewer (to read).
@@ -793,13 +796,13 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   1. The dock shows a square avatar and "Talking to {org}", with the hint "Select a division, project or employee to narrow this."
   2. The history loads: a skeleton, screen-reader text "Loading what was said before" (TALK-11).
   3. If nothing has been said yet: "Ask what needs you, or tell it what to change. It answers for {org} and everything beneath it."
-  4. Below the log: label "Message {org}", input placeholder "Ask, or tell it what to change", and the button "Send" (disabled while the input is blank).
-  5. The person types a question (for example "what is over budget?") and presses "Send". Their bubble appears right away, faded while it sends (`POST /api/conversations {scope}`). Typing dots and "Working on it" show.
-  6. The Runner answers using `read_organisation`. The reply streams in as a grey bubble. When the run did tool work, the link "See how it got there" appears (TALK-12).
+  4. Below the log: label "Message {org}", input placeholder "Ask, or tell it what to change", the button "Send" (disabled while the input is blank or the cost is being worked out), and under it "A message here costs at most {ceiling} credits, usually about {credits} credits; it is charged at what it actually costs." ("Working out what a message costs…" while it loads).
+  5. The person types a question (for example "what is over budget?") and presses "Send". Their bubble, headed "You", appears right away, faded while it sends (`POST /api/conversations {scope}`). Typing dots and "Working on it" show.
+  6. The Runner answers using `read_organisation`. The reply streams in as a grey bubble headed "Endgame". When the run did tool work, the link "See how it got there" appears (TALK-12).
   7. Up to two lines under the log show employees working anywhere in the tree: "{Name} is {activity}".
 - **You know it worked when:** a grey reply bubble appears under your message.
-- **Variations and refusals:** see TALK-13 to TALK-15. No cost estimate is shown before a message is sent (see Gaps).
-- **Where:** `ConversationDock.tsx`; `POST`/`GET /api/conversations` (`WorkEndpoints`); `Runner/Workflows/ConversationWorkflow.cs`; `Runner/Agents/RunnerTools.cs` (`ReadOrganisationTool`); `GET /api/runs/{id}/events`.
+- **Variations and refusals:** see TALK-13 to TALK-15. If the cost cannot be worked out: "What a message costs could not be worked out: {reason} Its cost is still held before each step and shown with the reply." and Send stays available.
+- **Where:** `ConversationDock.tsx`; `POST /api/conversations/estimate`, `POST`/`GET /api/conversations` (`WorkEndpoints`); `FactoryEstimates.ConversationAsync`; `Runner/Workflows/ConversationWorkflow.cs`; `Runner/Agents/RunnerTools.cs` (`ReadOrganisationTool`); `GET /api/runs/{id}/events`.
 - **Reachable from:** UI.
 - **Covered by tests:**
   - `HomeView.test.tsx`: "scopes the breadcrumb and the conversation to the selected node, and streams the reply"
@@ -833,69 +836,65 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 
 ### TALK-04 Talk to an app
 - **Who:** Builder or above at the app.
-- **Starts at:** API `POST /api/conversations {scope: "{org}/{division}/{project}/{app}", message}`, or MCP `conversation_post`.
-- **Needs:** Builder.
-- **Level:** Developer · **Learn first:** TALK-03 · **What you learn:** the app level has a conversation of its own.
-- **Steps:** send the message. 201 with the run. Follow `GET /api/runs/{id}/events` for the reply. Read back with `GET /api/conversations?scope=…`.
-- **You know it worked when:** a `message` event from "assistant" arrives on the run.
-- **Variations and refusals:** **Finding: no console route.** App rows are links, so the dock never takes an app scope, though the spec names "an app" as a conversation scope. The app page's "Ask about this app" is a different feature (questions answered from the app's telemetry; apps reader).
-- **Where:** `WorkEndpoints` `/conversations`; `ControlPlaneTools` `conversation_post`.
-- **Reachable from:** API / MCP only.
-- **Covered by tests:** `IdeasAndConversationsTests` (per scope); `McpTests`.
+- **Starts at:** the app's page, where the app page mounts the conversation for that app (`AppConversation`, exported by `ConversationDock.tsx`); or API `POST /api/conversations {scope: "{org}/{division}/{project}/{app}", message}`, or MCP `conversation_post`.
+- **Needs:** an app.
+- **Level:** Core · **Learn first:** TALK-03 · **What you learn:** the app has a conversation of its own, about it only, which can ask for a change to it.
+- **Steps:**
+  1. The dock shows a square avatar and "Talking to {app}", with the hint "About {app} only: ask about it, or ask for a change to it."
+  2. Ask a question, or describe a change (CHG-02). Reads are limited to the app.
+  3. Replies, approvals and the cost before sending work as in TALK-01, TALK-17.
+- **You know it worked when:** "Talking to {app}" heads the dock and replies arrive.
+- **Variations and refusals:** the app page's "Ask about this app" is a different feature (questions answered from the app's telemetry; apps reader). An idea started here is raised at the division above.
+- **Where:** `ConversationDock.tsx` (`AppConversation`, the `app` selection); `WorkEndpoints` `/conversations`; `ControlPlaneTools` `conversation_post`.
+- **Reachable from:** UI (once the app page mounts it); API / MCP.
+- **Covered by tests:** `TryAgainAndChanges.test.tsx` ("the conversation… shows the cost first, answers its own approval inline…"); `IdeasAndConversationsTests` (per scope); `McpTests`.
 
 ### TALK-05 Talk to an employee from the chart
 - **Who:** Builder or above at the employee's level.
 - **Starts at:** `/`, select an employee chip (band, division or project).
 - **Needs:** an employee.
-- **Level:** Core · **Learn first:** ORG-11, TALK-01 · **What you learn:** each employee has its own conversation, apart from the level's.
+- **Level:** Core · **Learn first:** ORG-11, TALK-01 · **What you learn:** the employee itself answers — from its job, its mandate and what it remembers.
 - **Steps:**
   1. The dock shows a round avatar and "Talking to {Name}", the hint "Select the organisation band to talk to everything again.", and the link "See {Name}’s job, record and memory" (to `/employees/{id}`).
   2. The history loads for that level plus that employee (`GET /api/conversations?scope=…&employeeId=…`).
-  3. Typing lines show only that employee's activity.
-  4. Sending works as TALK-01, with `employeeId`. The run carries the employee's id, so its model cost is charged to them.
-- **You know it worked when:** "Talking to {Name}" with the link to their record.
-- **Variations and refusals:** **Finding:** the reply is written by the same general assistant with the same three tools. The employee's memory, job description and role are not given to it (`AgentFactory.Conversation` never calls `AgentFactory.As`). So "talking to an employee" is a separate thread charged to the employee, not the employee answering.
-- **Where:** `OrgChart.tsx` (`WorkerChip`), `ConversationDock.tsx`; `ConversationService.PostAsync`; `AgentFactory.Conversation`.
+  3. Typing lines show only that employee's activity. The cost shown before sending is priced on the employee's own model tier.
+  4. Sending works as TALK-01, with `employeeId`. The employee answers: its name, role and mandate, its curated memory as context, its own thinking power (model tier); it may keep a note with `remember`. The reply bubble is headed with its name.
+- **You know it worked when:** "Talking to {Name}", and the reply is headed "{Name}" and answers in the first person from its job.
+- **Variations and refusals:** the same tools and checkpoints as any conversation; the model cost is charged to the employee.
+- **Where:** `OrgChart.tsx` (`WorkerChip`), `ConversationDock.tsx`; `ConversationService.PostAsync`; `ConversationWorkflow` (`AsEmployee`, `AgentFactory.As`).
 - **Reachable from:** UI.
-- **Covered by tests:** `HomeView.test.tsx`: "asks for one employee's conversation by their id"; `workforce.spec.ts`: "the conversation is scoped to an employee from the chart, and leads to their screen".
+- **Covered by tests:** `WorkflowTests.Talking_to_an_employee_is_answered_by_that_employee_from_its_job_and_memory`; `TryAgainAndChanges.test.tsx` ("names the employee who answers"); `HomeView.test.tsx`: "asks for one employee's conversation by their id"; `workforce.spec.ts`.
 
 ### TALK-06 Talk to an employee on their own page
 - **Who:** Builder or above.
 - **Starts at:** `/employees/{id}`, section "Talk to {Name}".
 - **Needs:** the record is an employee (not a contractor) and has not been released; the tree has loaded.
 - **Level:** Core · **Learn first:** TALK-05 · **What you learn:** the same conversation is reachable from the employee's record.
-- **Steps:** the same dock as TALK-05. On this page the hint reads "Only {Name} hears this, and answers from what it knows.", and the link to the record is left out. It is the same conversation as from the chart, at the employee's level.
+- **Steps:** the same dock as TALK-05. On this page the hint reads "Only {Name} hears this, and answers from its job and what it remembers.", and the link to the record is left out. It is the same conversation as from the chart, at the employee's level.
 - **You know it worked when:** messages sent here also appear when the same employee is selected on home.
 - **Variations and refusals:**
   - Contractors and released employees have no conversation section.
-  - **Finding:** "answers from what it knows" is not true in code (see TALK-05).
 - **Where:** `features/workforce/EmployeeView.tsx`, `ConversationDock.tsx`.
 - **Reachable from:** UI.
 - **Covered by tests:** `EmployeeView.test.tsx` (workforce reader; not inspected in detail).
 
 ### TALK-07 Ask the conversation to start researching an idea
-- **Who:** Builder or above (to send). To approve: whoever may answer the run's approval, Builder at the run's scope (`POST /api/runs/{id}/approvals/{id}`).
+- **Who:** Builder or above (to send and to approve).
 - **Starts at:** any dock (TALK-01 to TALK-06).
 - **Needs:** a scope; credits (TALK-15).
-- **Level:** Core · **Learn first:** TALK-01, ORG-05 · **What you learn:** the conversation proposes; nothing happens until a person approves.
+- **Level:** Core · **Learn first:** TALK-01, ORG-05 · **What you learn:** the conversation proposes; nothing happens until you approve, there in the conversation.
 - **Steps:**
   1. The person writes, for example, "Start researching a booking app for dive centres." and presses "Send".
-  2. The assistant calls `start_idea`. It is a checkpoint, so the run raises an approval titled "Start researching an idea: {idea text}?" and waits. In the dock, the typing line "Working on it" stays and "See how it got there" appears. **The dock offers no approve or reject button.**
-  3. Home's "needs you" strip gains an "Approval needed" card with that headline. Within the sweep interval (about 30 seconds per UC-119), a notification "Approval needed: Start researching an idea: …?" appears too.
-  4. The person opens the card, or "See how it got there", to reach `/runs/{id}`, and approves there (runs reader).
-  5. The tool calls `POST /internal/ideas`. The idea is recorded (at the division, or at the division above for a project or app scope) with its research estimate, and research is queued.
-  6. The assistant replies in the dock, for example confirming research has started. A new research run appears on the chart.
+  2. The assistant calls `start_idea`. It is a checkpoint, so a card appears in the dock: **"Needs you"**, "Start researching an idea: {idea text}?", **"Add a note (optional)"**, **"Approve"** / **"Decline"** and "Declining skips only this step; the work goes on without it." The typing line reads "Waiting for your answer".
+  3. Home's "needs you" strip gains an "Approval needed" card too, and within the sweep interval a notification.
+  4. Press **"Approve"** (TALK-17). The idea is recorded (at the division, or at the division above for a project or app scope) with its research estimate, and research is queued.
+  5. The assistant replies in the dock, for example confirming research has started.
 - **You know it worked when:** the reply confirms it, and a "Researching" card or run appears, then a "Verdict waiting" card once research ends.
 - **Variations and refusals:**
-  - Rejected: TALK-09.
+  - Declined: TALK-09.
   - The idea is refused (for example a red line, or no credits): the tool reports "The idea could not be started ({status}): …" and the assistant must say it did not happen.
-  - The approval card's line is the raw detail. It names the tool, for example "start_idea: {text}. … Checkpoint: …" (`AgentLoop.AskAsync`), which is technical wording in normal mode.
-- **Where:**
-  - `RunnerTools.StartIdeaTool`, `AgentFactory.Conversation` (checkpoints)
-  - `Harness/Kernel/AgentLoop.cs` (`AskAsync`)
-  - `FactoryEndpoints` `POST /internal/ideas`
-  - `HomeView.tsx` (needs you)
-- **Reachable from:** UI (the approval is answered on the run page, not in the dock); MCP `conversation_post` plus `approval_answer`.
+- **Where:** `RunnerTools.StartIdeaTool` (`IApprovalTitle`), `AgentFactory.Conversation` (checkpoints); `Harness/Kernel/AgentLoop.cs` (`AskAsync`); `FactoryEndpoints` `POST /internal/ideas`; `ConversationDock.tsx` (`Replies`), `runs/ApprovalCard.tsx`.
+- **Reachable from:** UI; MCP `conversation_post` plus `approval_answer`.
 - **Covered by tests:** `WorkflowTests.A_conversation_answers_from_its_read_tools_and_asks_before_starting_an_idea`; `RunnerContractTests.The_conversation_starts_an_idea_and_changes_only_the_settings_an_agent_may`.
 
 ### TALK-08 Ask the conversation to change a setting at this level
@@ -905,35 +904,35 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Advanced · **Learn first:** TALK-07 · **What you learn:** a setting changed at a level applies beneath it; the assistant may only touch an allow-list, and only after you approve.
 - **Steps:**
   1. The person asks, for example, "switch this division to checkpoints", "keep apps awake", "let apps sleep after 30 minutes" or "flag idle employees after 14 days".
-  2. The assistant calls `adjust_setting {key, value}`. An approval titled "Change a setting for this part of the organisation?" is raised, appearing as in TALK-07.
+  2. The assistant calls `adjust_setting {key, value}`. A card in the dock asks what will change, in the screens' own words, for example "Stop for your sign-off at checkpoints here?", "Switch here to auto-mode?", "Turn on the “Before the plan is carried out” checkpoint here?", "Keep the apps here always on?", "Let the apps here sleep after 30 minutes without a visitor?" or "Flag employees here who have had no work for 14 days?" (TALK-17).
   3. Once approved, `PUT /internal/cascade` sets the value at this level, marked as set by an agent. For `sleep.*` keys, the edge's routes are refreshed.
   4. The assistant replies. The change shows wherever that setting is read, for example "Autonomy for …" (autonomy reader) or the app's running chip.
 - **You know it worked when:** the reply confirms it, and the relevant screen shows the value "set at" this level.
 - **Variations and refusals:**
   - Any key off the allow-list is refused with 403 "An agent may not change that": "Agents may change only these settings, each confirmed by the owner first: … Everything else, including who may open an app, is done by a person in the console."
-  - The approval title does not say which setting. Only the detail line does, with the raw key, for example "adjust_setting: sleep.mode=\"always_on\"…".
+  - The raw key and value are in the detail line, shown in technical mode only.
 - **Where:** `RunnerTools.AdjustSettingTool`; `FactoryEndpoints` `PUT /internal/cascade`; `Domain/Cascade/Autonomy.cs` (`AgentSettings.Allowed`).
-- **Reachable from:** UI (approval on the run page).
+- **Reachable from:** UI (approval in the conversation, or on the run page).
 - **Covered by tests:** `RunnerContractTests.The_conversation_starts_an_idea_and_changes_only_the_settings_an_agent_may`.
 
 ### TALK-09 Decline what the conversation proposed
 - **Who:** the approver.
-- **Starts at:** the run page from TALK-07 or TALK-08.
+- **Starts at:** the card in the conversation (TALK-17), or the run page.
 - **Needs:** a pending conversation approval.
-- **Level:** Core · **Learn first:** TALK-07 · **What you learn:** a rejection is final for that step; the assistant says it did not do it.
-- **Steps:** the person rejects on the run page. The tool is denied ("The owner rejected this call. Do the work another way, or finish and explain."). The assistant's reply in the dock says it did not do it.
-- **You know it worked when:** no idea or setting appears, and the reply says so.
+- **Level:** Core · **Learn first:** TALK-07 · **What you learn:** a decline is final for that step, your note reaches the assistant, and it says it did not do it.
+- **Steps:** optionally type a note, then press **"Decline"**. The card reads "Declined. It was not done; the work continues without it." The tool is denied ("The owner declined this call, so it was not done. Their note: “…” Carry on without it, or finish and say plainly that it was not done."). The assistant's reply says it did not do it.
+- **You know it worked when:** no idea, change or setting appears, and the reply says so.
 - **Variations and refusals:** none further.
-- **Where:** `AgentLoop.AskAsync`; `POST /api/runs/{id}/approvals/{approvalId}`.
-- **Reachable from:** UI (run page); MCP `approval_answer`.
-- **Covered by tests:** `WorkflowTests` (conversation test; whether it covers decline specifically was not verified).
+- **Where:** `AgentLoop.AskAsync`; `POST /api/runs/{id}/approvals/{approvalId} {decision, note}`.
+- **Reachable from:** UI; MCP `approval_answer`.
+- **Covered by tests:** `WorkflowTests.The_conversation_asks_in_plain_words_before_changing_an_app_or_trying_work_again_and_a_decline_is_told_truthfully`; `TryAgainAndChanges.test.tsx`.
 
 ### TALK-10 Ask the conversation for something it cannot do
 - **Who:** Builder or above.
 - **Starts at:** any dock.
 - **Needs:** —
-- **Level:** Core · **Learn first:** TALK-01 · **What you learn:** the conversation can read, start ideas and change a few settings, and nothing else.
-- **Steps:** the person asks, for example, to make an app public, create or rename a division, set a budget, set a secret, hire someone or approve something. The assistant has no tool for these. Its prompt says "Never claim to have done something a tool did not do." It should answer that it cannot, and may point to the screen. For an off-list setting, it gets the 403 in TALK-08.
+- **Level:** Core · **Learn first:** TALK-01 · **What you learn:** the conversation can read, start ideas, ask for a change to an app, try stopped work again and change a few settings, and nothing else.
+- **Steps:** the person asks, for example, to make an app public, create or rename a division, set a budget, set a secret, or hire someone. The assistant has no tool for these. Its prompt says "Never claim to have done something a tool did not do." It should answer that it cannot, and may point to the screen. For an off-list setting, it gets the 403 in TALK-08.
 - **You know it worked when:** the reply says it cannot, and nothing changes.
 - **Variations and refusals:** the wording of the reply is the model's own (not fixed in code).
 - **Where:** `Runner/Prompts/conversation.md`; `ConversationWorkflow`.
@@ -947,16 +946,16 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Foundation · **Learn first:** TALK-01 · **What you learn:** the conversation is kept on the server, per level.
 - **Steps:**
   1. Opening the dock reads `GET /api/conversations?scope=&employeeId=`: the last 200 messages, oldest first.
-  2. Earlier turns draw as blue bubbles (the person's) and grey bubbles (replies). Consecutive messages from one side of one run are merged.
+  2. Earlier turns draw as blue bubbles (people's) and grey bubbles (replies), each headed by who said it: "You" for your own, the sender's name for anyone else's, the employee's name or "Endgame" for replies. Endgame's own notices (TALK-15) draw as notices. Consecutive messages from one person on one run are merged.
   3. Messages sent during this visit are drawn from their live run, never twice.
 - **You know it worked when:** after a reload, your earlier exchange is still in the dock.
 - **Variations and refusals:**
   - History fails: "What was said before could not be loaded: {reason} New messages still send." with "Try again".
   - A failed refresh: "The latest refresh failed: {reason}".
-  - **Finding:** the conversation is shared by everyone at that level. Any member's message shows as a blue "you" bubble, with no name.
+  - The conversation is shared by everyone at that level; each message is named, so who said what is clear.
   - An unknown `conversationId` (API only) gives 404 "The conversation"; one from another level gives 409 "This conversation belongs to another scope; start a new one here."
 - **Where:** `ConversationDock.tsx` (`groupTurns`, `EarlierTurn`); `ReadModels.ConversationAsync`; `ConversationService`.
-- **Reachable from:** UI; API `GET /api/conversations`.
+- **Reachable from:** UI; API `GET /api/conversations`; MCP `conversation_history`.
 - **Covered by tests:**
   - `HomeView.test.tsx`: "reads what was said before at the selected scope…", "appends a new turn after the history, and does not draw a turn twice…", "records a failed history read on the page, and still lets a message be sent"
   - `console.spec.ts`: "the conversation survives a reload…"
@@ -1007,32 +1006,59 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Who:** anyone.
 - **Starts at:** any dock.
 - **Needs:** the balance is past the overdraft, a monthly cap on the chain is spent, or the model service is unavailable.
-- **Level:** Advanced · **Learn first:** TALK-01, credits (another reader) · **What you learn:** a conversation spends credits like any other work, and stops when they run out.
+- **Level:** Advanced · **Learn first:** TALK-01, credits (another reader) · **What you learn:** a conversation spends credits like any other work, shows its cost first, and says so when they run out.
 - **Steps:**
-  1. Sending still succeeds: the run is queued.
-  2. When the model call is refused for budget, the run fails with "The credit budget is exhausted, so the work stopped. Raise the budget or top up, then start it again." No reply bubble is added. The typing line simply stops.
-  3. That reason is visible only on the run page, and only if the "See how it got there" link appears.
+  1. Under the input, before sending: "A message here costs at most {ceiling} credits, usually about {credits} credits; it is charged at what it actually costs."
+  2. Sending still succeeds: the run is queued.
+  3. When the model call is refused for budget, a notice appears in the dock instead of a reply: "The credit budget ran out before a reply could be written, so nothing was answered and nothing more was charged. Top up or raise the budget, then ask again." with **"See credits"**. It is kept in the conversation's history.
   4. If the assistant cannot complete for another reason, the reply reads "I could not finish answering that. Please ask again."
-- **You know it worked when:** (a refusal) the typing stops with no reply; the run page says why.
-- **Variations and refusals:**
-  - **Not verified from code:** whether a missing or invalid model key ends as "I could not finish…" or as a failed run with no message.
-  - **Not verified:** whether starting a conversation run is checked against the remaining budget when it is queued.
-  - **No estimate is shown before a conversation message is sent.**
-- **Where:** `ConversationWorkflow`; `Runner/Execution/RunContext.cs` (`WorkflowOutcome.FromAgent`).
+- **You know it worked when:** (a refusal) the notice with "See credits" shows in the conversation.
+- **Variations and refusals:** **Not verified from code:** whether a missing or invalid model key ends as "I could not finish…" or as a failed run with no message.
+- **Where:** `ConversationWorkflow` (the `budget_exhausted` notice); `ConversationDock.tsx` (`Notice`); `Runner/Execution/RunContext.cs` (`WorkflowOutcome.FromAgent`).
 - **Reachable from:** UI.
-- **Covered by tests:** none found for the dock's behaviour here.
+- **Covered by tests:** `WorkflowTests.A_conversation_the_budget_stops_says_so_in_the_conversation`; `TryAgainAndChangesTests.A_message_shows_what_it_can_cost_first_and_the_conversation_names_who_said_what`; `TryAgainAndChanges.test.tsx`.
 
 ### TALK-16 Talk over MCP or the API
 - **Who:** an AI assistant with a token (Builder or above), or a developer.
 - **Starts at:** MCP `conversation_post {scope, message, employeeId?}`, or `POST /api/conversations {scope, message, employeeId?, conversationId?}`.
 - **Needs:** Builder; with a token, capped at the token's role.
 - **Level:** Developer · **Learn first:** TALK-01, AI assistants (another reader) · **What you learn:** the docked conversation is the same thing from outside.
-- **Steps:** send it. Get back the run. Read its events via MCP `run_events` or the stream. Pending approvals are answered with `approval_answer`. MCP has no tool to read the conversation history; it is read with `GET /api/conversations`.
+- **Steps:** send it. Get back the run. Read its events via MCP `run_events` or the stream. Pending approvals are answered with `approval_answer` (with `note`). The history is read with MCP `conversation_history`, and what a message costs with `conversation_estimate`.
 - **You know it worked when:** a `message` event from "assistant" on the run.
 - **Variations and refusals:** a Viewer's token changes nothing.
 - **Where:** `ControlPlaneTools` `conversation_post`; `WorkEndpoints`.
 - **Reachable from:** API / MCP.
 - **Covered by tests:** `McpTests.The_control_plane_tools_do_what_the_console_does_under_the_same_rules`, `McpTests.A_viewers_token_reads_and_changes_nothing`; `AuthorizationMatrixTests.Every_mcp_tool_is_held_to_the_same_roles…`.
+
+### TALK-17 Answer the conversation's own approval in the conversation
+- **Who:** Builder or above at the conversation's scope.
+- **Starts at:** a card in the dock, under the message that led to it.
+- **Needs:** the assistant asked for a checkpoint (`start_idea`, `change_app`, `try_again`, `adjust_setting`).
+- **Level:** Core · **Learn first:** TALK-07 · **What you learn:** you answer where you asked, and the answer says truthfully what happens next.
+- **Steps:**
+  1. The card shows **"Needs you"**, the title of what will happen ("Start researching an idea: …?", "Change the app: …?", "Try again: …?", a setting in plain words), **"Add a note (optional)"**, **"Approve"** / **"Decline"**, and "Declining skips only this step; the work goes on without it." The typing line reads "Waiting for your answer".
+  2. Optionally type a note; press **"Approve"** or **"Decline"**.
+  3. The card reads "Approved. The work carries on from here." or "Declined. It was not done; the work continues without it."; the assistant receives the answer and the note and replies.
+- **You know it worked when:** the card is answered and the reply follows.
+- **Variations and refusals:** a failed answer: "Your answer was not recorded: {reason}". In technical mode the detail (tool, arguments, rule) is shown under the title.
+- **Where:** `ConversationDock.tsx` (`Replies`), `runs/ApprovalCard.tsx`; `POST /api/runs/{id}/approvals/{approvalId}`.
+- **Reachable from:** UI; MCP `approval_answer`.
+- **Covered by tests:** `TryAgainAndChanges.test.tsx` ("the conversation… answers its own approval inline with a note…").
+
+### TALK-18 Ask the conversation to try stopped work again
+- **Who:** Builder or above.
+- **Starts at:** any dock whose scope holds the stopped work.
+- **Needs:** failed, cancelled or budget-stopped research, a build or a change in the conversation's part of the tree.
+- **Level:** Core · **Learn first:** CHG-03, TALK-17 · **What you learn:** the conversation can start stopped work again on your word, carrying on from where it stopped.
+- **Steps:**
+  1. Ask, for example, "Try the failed build again."
+  2. The assistant reads the runs, then asks **"Try again: {the work's title}?"** (TALK-17).
+  3. Approve. The new attempt starts with its estimate first and carries on from the earlier one (CHG-03); the assistant says so.
+- **You know it worked when:** a new run for the work appears.
+- **Variations and refusals:** work outside the conversation's scope is not found; work that has not stopped, or was already tried again, is refused with the reason, and the assistant says it did not start.
+- **Where:** `RunnerTools.TryAgainTool`; `POST /internal/runs/{id}/retry`; `RetryService`.
+- **Reachable from:** UI (conversation); MCP `run_retry`.
+- **Covered by tests:** `WorkflowTests.The_conversation_asks_in_plain_words_before_changing_an_app_or_trying_work_again_and_a_decline_is_told_truthfully`; `TryAgainAndChangesTests.A_built_app_is_changed…` (the internal retry's scope check).
 
 ---
 
@@ -1387,22 +1413,20 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 1. **Fixed:** the tree is managed on "Manage" (`/tree`): create, rename, describe, archive, reactivate and delete (TREE-02 to TREE-13), and `/start` offers "Where it goes" (TREE-05). Moving is still impossible by any route, on purpose (TREE-10).
 2. **Fixed:** the Owner renames the organisation on "Manage" (ORG-14); MCP `node_update` refuses organisations and names `PATCH /api/organisations/{id}`.
 3. **Fixed:** a level is described in "What this is" on "Manage" (TREE-11, TREE-12). The conversation still cannot set it.
-4. **The employee conversation is not the employee** (TALK-05, TALK-06). It is the general assistant without the employee's memory. The copy "answers from what it knows" overstates it.
-5. **Conversations are shared per level, unlabelled.** Every member's messages render as "you".
-6. **An app can never be selected for the conversation in the UI.** The spec says it can, and that "Selecting a node opens it". Divisions and projects open on "Manage" instead.
-7. **The dock cannot answer its own approvals.** start_idea and adjust_setting approvals must be answered on the run page or from "needs you". The approval title for a setting does not say which setting. The detail line shows raw tool names and keys in normal mode.
-8. **No estimate is shown before a conversation message** (CLAUDE.md rule 11). When budget runs out, the dock shows no reply and no reason.
-9. **Fixed:** a person granted below organisation level starts at their own level, and the graphs ask at the selection (ORG-19).
-10. **Dead UI branches**:
+4. **Fixed on 2026-11-25 (lane C):** the employee conversation is answered by the employee (TALK-05, TALK-06); messages are named (TALK-11); the dock works for an app scope and is exported for the app page (TALK-04 — the app page mounts it); the dock answers its own approvals, titled in plain words (TALK-17); a message's cost is shown first and a budget stop is said in the dock (TALK-15).
+5. **Conversations are shared per level.** Everyone at a level reads and continues the same conversation; messages are named, not private.
+6. **Divisions and projects have no page of their own**, though the spec says "Selecting a node opens it"; each opens on "Manage" instead.
+7. **Fixed:** a person granted below organisation level starts at their own level, and the graphs ask at the selection (ORG-19).
+8. **Dead UI branches**:
     - the "verdict" project stage, with "Read the verdict" and "Idea · paused at verdict";
     - the stages "idea", "evaluating", "publishing" and "dropped";
     - the "Nobody works on anything yet" empty state when divisions exist.
-11. **Fixed:** `topup.requested` is raised to operators and labelled "Top-up request" (NOTE).
-12. **Fixed:** archiving a division or project stops its apps being routed, and the tree, the outline and the chart mark archived nodes (TREE-07, ORG-08). A Builder can still set an app's status to "running" or "failed" by hand through `PATCH /api/apps/{id}` (TREE-08).
-13. **Fixed:** `GET /api/system/status` says only `overall` and `checkedAt` to someone signed out (SYS-05).
-14. **Fixed:** the empty "needs you" line claims only what it checks (ORG-05), and someone who can never name an organisation is told organisations are set up by FrostAura, on home and on `/start` (ORG-03).
-15. **Small mismatches with the UC docs.**
+9. **Fixed:** `topup.requested` is raised to operators and labelled "Top-up request" (NOTE).
+10. **Fixed:** archiving a division or project stops its apps being routed, and the tree, the outline and the chart mark archived nodes (TREE-07, ORG-08). A Builder can still set an app's status to "running" or "failed" by hand through `PATCH /api/apps/{id}` (TREE-08).
+11. **Fixed:** `GET /api/system/status` says only `overall` and `checkedAt` to someone signed out (SYS-05).
+12. **Fixed:** the empty "needs you" line claims only what it checks (ORG-05), and someone who can never name an organisation is told organisations are set up by FrostAura, on home and on `/start` (ORG-03).
+13. **Small mismatches with the UC docs.**
     - UC-102 and UC-001 describe `needsYou` as "verdicts and approvals" only; hires and idle employees are also sent.
     - UC-001 says selecting "a node or an employee" scopes the conversation; apps cannot be selected.
-    - MCP lacks mark-read for notifications, delete for nodes, and a conversation-history read.
-16. **The academy's demo world has research projects the product never draws.** Northwind's demo tree carries project cards for ideas still in research or at a verdict ("Idea · paused at verdict", "Researching"), which the real tree never sends (ORG-09). The academy's scripts do not point at them.
+    - MCP lacks mark-read for notifications and delete for nodes.
+14. **The academy's demo world has research projects the product never draws.** Northwind's demo tree carries project cards for ideas at a verdict or in research ("Idea · paused at verdict", "Researching"), which the real tree never sends (ORG-09). The academy's scripts do not point at them.
