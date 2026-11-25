@@ -76,8 +76,18 @@ function norm(s: string | null | undefined): string {
 
 /** The words as the page lays them out: a card's title and its line beneath are two runs of words, not one ("unusedcheapest"). */
 function shown(el: Element): string {
-  return (el as HTMLElement).innerText ?? el.textContent ?? "";
+  const known = laidOut?.get(el);
+  if (known !== undefined) return known;
+  const text = (el as HTMLElement).innerText ?? el.textContent ?? "";
+  laidOut?.set(el, text);
+  return text;
 }
+
+/** Laid-out words cost a layout read each; one search reads each element once. */
+let laidOut: WeakMap<Element, string> | null = null;
+
+/** The words with no spaces at all: a cheap first test before the laid-out words are read. */
+const compact = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, "").toLowerCase();
 
 function nameOf(el: Element): string {
   const labelled = el.getAttribute("aria-labelledby");
@@ -106,11 +116,16 @@ function documents(): Document[] {
 
 /** The element a target names, or null; `field` prefers form controls (for typing and selecting), `show` is a spotlight's search. */
 export function find(target: Target | string, field = false, strict = false, show = false): HTMLElement | null {
-  for (const doc of documents()) {
-    const el = findIn(doc, target, field, strict, show);
-    if (el) return el;
+  laidOut = new WeakMap();
+  try {
+    for (const doc of documents()) {
+      const el = findIn(doc, target, field, strict, show);
+      if (el) return el;
+    }
+    return null;
+  } finally {
+    laidOut = null;
   }
-  return null;
 }
 
 /** A control whose words undo or end something: a spotlight lands on one only when a step names it outright. */
@@ -165,7 +180,9 @@ function findIn(document: Document, target: Target | string, field: boolean, str
   // A control that shows the words as its own heading or label (a card named by its title).
   const titled = controls.find((c) => [...c.querySelectorAll("h1, h2, h3, h4, strong, span, p")].some((d) => norm(d.textContent) === want));
   if (titled) return titled;
-  const textOf = (el: HTMLElement) => norm(shown(el));
+  const bare = compact(want);
+  // Only an element whose raw text holds the words is worth reading laid out.
+  const textOf = (el: HTMLElement) => (compact(el.textContent).includes(bare) ? norm(shown(el)) : "");
   const smallest = (els: HTMLElement[]) => els.sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0))[0] ?? null;
   if (show) {
     // A spotlight shows a thing by what the page calls it: its heading or label, then any words that are exactly it.
@@ -288,9 +305,15 @@ function loading(subject: Element | null = null): boolean {
 export async function settled(ms = 4000, subject: () => Element | null = () => null) {
   const until = performance.now() + ms;
   let quietSince = 0;
+  let current: Element | null = null;
+  let subjectAt = -Infinity;
   for (;;) {
     const now = performance.now();
-    if (loading(subject())) quietSince = 0;
+    if (now - subjectAt > 500) {
+      current = subject();
+      subjectAt = now;
+    }
+    if (loading(current)) quietSince = 0;
     else if (!quietSince) quietSince = now;
     else if (now - quietSince >= 150) return;
     if (now > until) return;
