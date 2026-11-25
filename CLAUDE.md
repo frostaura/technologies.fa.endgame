@@ -62,6 +62,12 @@ red-lines gate.
 11. **An estimate is shown before work starts**, and is scored against what the work cost.
 12. **Normal mode never names infrastructure** — no containers, stacks or repositories in its copy.
 13. **One token layer for the look.** No raw colour or size literals outside it.
+14. **The academy is kept current with the product, in the same change.** Anything that changes
+    what a person can do or see — a screen, a label, a refusal, an endpoint, an assistant tool, a
+    command — changes its flow in `docs/flows/`, its step script, its demo data and its captured
+    images before the change is done. A new capability gets a new flow, scripted and walked in a
+    real browser, to the same depth as every other. An academy that describes yesterday's product
+    is a defect that blocks the change, exactly as stale docs do.
 
 ## Build, test, run
 
@@ -127,6 +133,8 @@ it. Both files, or neither.
   thresholds no longer exist; a stale skill is worse than a missing one because it fires with
   authority. A procedure that would be correct in a repository with nothing to do with this tree
   belongs upstream in a plugin, never forked into this tree.
+- **The academy — whenever what a person can do changed.** Flow, step script, demo data and
+  images, then the browser walk of the flows touched (rule 14). Never left for a later pass.
 - **Scratch — always.** Empty `.tmp/` before the session ends, promoting anything that still
   mattered first.
 
