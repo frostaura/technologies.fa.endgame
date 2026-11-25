@@ -45,12 +45,7 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   placed in a track". A learn-first cycle is reported and broken where it closes.
 - **The paths** are the README's tracks (Foundation → Core → Advanced → Developer, and the separate
   Operator handbook), each reordered so every learn-first comes ahead of the flow that needs it.
-- **Step scripts** (`src/academy/scripts/<FLOW-ID>.json`) say what each step shows, and may carry
-  `variations: [{ title, persona, scenario, start, steps }]`: the branches of "What else can happen"
-  that matter — a refusal, a role told who may, an empty or failed state — each played live from its
-  own person, world and start, with steps numbered from 1 whose notes say what each shows. The flow
-  page lists them under "What else can happen" as "Shown live", each with "Show me", which opens its
-  own console and walks its steps. Schema:
+- **Step scripts** (`src/academy/scripts/<FLOW-ID>.json`) say what each step shows (and its variations, below). Schema:
   `schema/step-script.schema.json`; TypeScript twin: `src/content/scripts.ts`; a unit test holds the
   enums of the two together. Validated at build against the schema and the parsed flows (flow
   exists, step exists, no step twice, images on disk). Coverage is printed by the build and shown on
