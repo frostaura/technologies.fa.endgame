@@ -164,7 +164,11 @@ public sealed class BreadthTests(PostgresServer postgres) : IAsyncLifetime
         await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/approvals", new { runId = run, title = "Publish bookings?", detail = "The plan is ready." }));
         await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/hires", new
         {
-            scope = "frostaura/products", name = "Grace", role = "Tester", reason = "Nobody tests.", expectedMonthlyCredits = 1000000,
+            scope = "frostaura/products",
+            name = "Grace",
+            role = "Tester",
+            reason = "Nobody tests.",
+            expectedMonthlyCredits = 1000000,
             jobDescription = new { mandate = "Test everything." },
         }));
         var raised = await sweep.RunOnceAsync(CancellationToken.None);
@@ -259,11 +263,17 @@ public sealed class BreadthTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal(1.0m, before["pricing"]!["margin"]!.GetValue<decimal>());
         await ControlPlaneApp.Expect(await dean.PutAsJsonAsync("/api/operator/pricing", new
         {
-            creditsPerUsd = 100, margin = 0.9, hosting = new { usdPerAwakeHour = 0.002, usdPerGbHourMemory = 0.004, usdPerGbMonthStorage = 0.1, usdPerMillionRequests = 0.2 }, defaultAppModelMonthlyCredits = 500,
+            creditsPerUsd = 100,
+            margin = 0.9,
+            hosting = new { usdPerAwakeHour = 0.002, usdPerGbHourMemory = 0.004, usdPerGbMonthStorage = 0.1, usdPerMillionRequests = 0.2 },
+            defaultAppModelMonthlyCredits = 500,
         }), HttpStatusCode.BadRequest);
         var after = await ControlPlaneApp.Ok(dean.PutAsJsonAsync("/api/operator/pricing", new
         {
-            creditsPerUsd = 100, margin = 1.25, hosting = new { usdPerAwakeHour = 1.0, usdPerGbHourMemory = 0, usdPerGbMonthStorage = 0, usdPerMillionRequests = 0 }, defaultAppModelMonthlyCredits = 250,
+            creditsPerUsd = 100,
+            margin = 1.25,
+            hosting = new { usdPerAwakeHour = 1.0, usdPerGbHourMemory = 0, usdPerGbMonthStorage = 0, usdPerMillionRequests = 0 },
+            defaultAppModelMonthlyCredits = 250,
         }));
         Assert.Equal(1.25m, after["pricing"]!["margin"]!.GetValue<decimal>());
         var change = after["history"]![0]!;

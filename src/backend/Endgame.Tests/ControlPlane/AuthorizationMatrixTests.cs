@@ -179,8 +179,13 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         async Task<Guid> Hire() =>
             Guid.Parse((await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/hires", new
             {
-                scope = $"{org}/{division}", name = Unique("Grace"), role = Unique("Tester"), reason = "Nobody tests.", expectedMonthlyCredits = 1_000_000,
-                needKey = Unique("need"), jobDescription = new { mandate = "Test." },
+                scope = $"{org}/{division}",
+                name = Unique("Grace"),
+                role = Unique("Tester"),
+                reason = "Nobody tests.",
+                expectedMonthlyCredits = 1_000_000,
+                needKey = Unique("need"),
+                jobDescription = new { mandate = "Test." },
             })))["id"]!.GetValue<string>());
 
         var finished = await Run();
