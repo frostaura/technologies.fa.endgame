@@ -73,7 +73,7 @@ function treeApp(world: World, a: DemoApp, userId: string): TreeApp {
     spend: { monthCredits: total(world, a.path) },
     workers: workersAt(world, a.path),
     role: roleOf(world, userId, a.path),
-    archived: false,
+    archived: a.status === "archived",
   };
 }
 
@@ -120,7 +120,7 @@ export function treeView(world: World, userId: string, org: string): Tree {
       spend: { monthCredits: total(world, d.path) },
       workers: workersAt(world, d.path),
       role: roleOf(world, userId, d.path),
-      archived: false,
+      archived: d.status === "archived",
       projects: world.nodes
         .filter((p) => p.level === "project" && p.path.startsWith(`${d.path}/`) && visible(p.path))
         .map((p) => ({
@@ -135,7 +135,7 @@ export function treeView(world: World, userId: string, org: string): Tree {
           workers: workersAt(world, p.path),
           apps: world.apps.filter((a) => a.path.startsWith(`${p.path}/`)).map((a) => treeApp(world, a, userId)),
           role: roleOf(world, userId, p.path),
-          archived: p.stage === "dropped",
+          archived: p.status === "archived",
         })),
     }));
   const projects = divisions.reduce((n, d) => n + d.projects.length, 0);
@@ -206,7 +206,7 @@ export function appView(world: World, a: DemoApp): AppDetail {
     running: a.running,
     addresses: { path: `https://endgame.example/${a.path}/`, subdomain: `https://${org}.endgame.example/${rest.join("/")}/` },
     telemetry: a.telemetry,
-    cost: { monthCredits: total(world, a.path), capCredits: a.capCredits },
+    cost: { monthCredits: total(world, a.path), capCredits: world.budgets.find((b) => b.path === a.path)?.cap ?? null },
     settings: { running: a.runningSetting, access: a.access },
     runningCost: a.runningCost,
     sharedWith: world.shares.filter((s) => s.appId === a.id).length,
@@ -231,7 +231,7 @@ export function creditsView(world: World, scope: string): Credits {
   }
   for (const e of world.employees.filter((x) => x.kind === "employee" && within(x.scope, scope) && x.status !== "released" && x.jobDescription.monthlyCreditLimit !== null)) {
     const tr = world.trackRecords.find((t) => t.employeeId === e.id);
-    lines.push({ scope: e.scope, name: e.name, level: "employee", depth: depthOf(e.scope) + 1, spentCredits: tr?.cost.monthCredits ?? 0, capCredits: e.jobDescription.monthlyCreditLimit, appId: null });
+    lines.push({ scope: e.scope, name: e.name, level: "employee", depth: depthOf(e.scope) + 1, spentCredits: tr?.cost.monthCredits ?? 0, capCredits: e.jobDescription.monthlyCreditLimit, appId: null, employeeId: e.id });
   }
   const balance = o?.balance ?? 0;
   const limit = o ? (o.ownLimit !== null ? Math.min(o.ownLimit, o.frostauraLimit) : o.frostauraLimit) : 0;

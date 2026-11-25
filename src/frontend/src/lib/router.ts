@@ -40,7 +40,20 @@ function written(to: string) {
   return mode === "hash" ? `${window.location.pathname}${window.location.search}#${to}` : to;
 }
 
-export function navigate(to: string, options: { replace?: boolean } = {}) {
+/**
+ * In hash mode the page's own address (its path and query, e.g. a sub-path's `index.html`) is the
+ * console's root: code that reads `window.location` to come back later names the page, not a route.
+ */
+function consoleAddress(to: string): string {
+  if (mode !== "hash") return to;
+  const page = window.location.pathname;
+  if (to !== page && !to.startsWith(`${page}?`) && !to.startsWith(`${page}#`)) return to;
+  const hash = to.indexOf("#");
+  return hash >= 0 ? to.slice(hash + 1) || "/" : "/";
+}
+
+export function navigate(target: string, options: { replace?: boolean } = {}) {
+  const to = consoleAddress(target);
   if (to === snapshot()) return;
   if (options.replace) window.history.replaceState(null, "", written(to));
   else window.history.pushState(null, "", written(to));

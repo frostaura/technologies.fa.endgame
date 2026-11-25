@@ -71,6 +71,8 @@ export interface DemoNode {
   stage: ProjectStage | null;
   ideaId: string | null;
   note: string | null;
+  /** `archived` for a division or project kept but not served; absent or `active` otherwise. */
+  status?: string;
 }
 
 export interface DemoMembership {
@@ -244,6 +246,8 @@ export interface World {
   pricing: PricingView;
   /** Counters for invented ids. */
   counter: number;
+  /** What each level says about itself ("What this is"): the cascade's context values. */
+  context?: { path: string; key: string; value: unknown; setAt: string }[];
   /** No model answers (the screening of a new organisation then needs an operator's own decision). */
   modelsOffline?: boolean;
   /** Organisations an operator acted in as an Admin during the request being answered; never saved. */

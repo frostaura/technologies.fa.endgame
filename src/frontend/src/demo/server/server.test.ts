@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { dispatch } from "./index";
 import { match } from "./http";
+import { consoleCalls } from "./consoleEndpoints";
 import { clock, seek, tick } from "./engine";
 import { answerApproval } from "./routes/work";
 import { buildWorld } from "../world/scenarios";
@@ -17,24 +18,8 @@ import type { World } from "./world";
 const src = path.join(import.meta.dirname, "..", "..", "store");
 
 /** Every METHOD path the console calls, read from api.ts and sensitive.ts. */
-function consoleEndpoints(): { method: string; path: string; from: string }[] {
-  const out: { method: string; path: string; from: string }[] = [];
-  const sample = (t: string) => t.replace(/\$\{[^}]*["'`][?&][^}]*\}/g, "").replace(/\$\{[^}]+\}/g, "x1").replace(/\?.*$/, "").replace(/^\/+/, "");
-  const api = readFileSync(path.join(src, "api.ts"), "utf8");
-  const blocks = api.split(/\n {4}(?=\w+: build\.(?:query|mutation)<)/).slice(1);
-  for (const block of blocks) {
-    const name = block.match(/^(\w+):/)?.[1] ?? "?";
-    const query = block.slice(block.indexOf("query:"));
-    const literals = [...query.matchAll(/(["`])((?:(?!\1)[^\\]|\\.)*?)\1/g)].map((m) => m[2] ?? "").filter((t) => /^[a-z][a-z-]*(\/|$|\?|\$)/.test(t) && !/^(GET|POST|PUT|PATCH|DELETE|same-origin)$/i.test(t));
-    const method = query.match(/method: "(\w+)"/)?.[1] ?? "GET";
-    const pathText = literals.find((l) => !l.startsWith("?")) ?? "";
-    if (!pathText) throw new Error(`could not read the address of ${name}`);
-    out.push({ method, path: sample(pathText), from: `api.ts ${name}` });
-  }
-  const sensitive = readFileSync(path.join(src, "sensitive.ts"), "utf8");
-  for (const m of sensitive.matchAll(/send(?:<\w+>)?\("(\w+)", (["`])(.*?)\2/g)) out.push({ method: m[1] ?? "GET", path: sample(m[3] ?? ""), from: "sensitive.ts send" });
-  for (const m of sensitive.matchAll(/apiFetch\(`\$\{API_BASE\}\/(.*?)`/g)) if (!m[1]?.startsWith("${path}")) out.push({ method: "GET", path: sample(m[1] ?? ""), from: "sensitive.ts apiFetch" });
-  return out;
+function consoleEndpoints() {
+  return consoleCalls(readFileSync(path.join(src, "api.ts"), "utf8"), readFileSync(path.join(src, "sensitive.ts"), "utf8"));
 }
 
 describe("endpoint coverage", () => {
@@ -210,6 +195,66 @@ describe("lane A's control plane: roles per node, invitations, screening, pauses
     w.sessionUserId = PEOPLE.owner.id;
     await call(w, "POST", "credits/top-up-requests", { organisation: ORG, credits: 300, note: "Tournament weekend." });
     expect(w.notifications.find((n) => n.kind === "topup.requested" && n.organisation === "frostaura")?.title).toBe("Northwind asks for 300 credits");
+  });
+});
+
+describe("lane B's control plane: managing the tree, the cascade, republishing, moving people", () => {
+  it("creates, renames, archives and deletes levels, refusing a delete with history attached", async () => {
+    const w = as("owner");
+    const made = await call(w, "POST", "projects", { parent: `${ORG}/operations`, name: "Lost Property", slug: "lost-property" });
+    expect(made.status).toBe(201);
+    const id = (made.body as { id: string }).id;
+    expect(detail(await call(w, "POST", "projects", { parent: `${ORG}/operations`, name: "Again", slug: "lost-property" }))).toBe("A sibling already uses that slug.");
+    expect(detail(await call(w, "POST", "apps", { parent: `${ORG}/operations`, name: "X", slug: "xx" }))).toBe(`A app is created under a project; '${ORG}/operations' is a division.`);
+    expect(((await call(w, "PATCH", `projects/${id}`, { name: "Lost and Found" })).body as { name: string }).name).toBe("Lost and Found");
+    expect(((await call(w, "PATCH", `projects/${id}`, { status: "archived" })).body as { status: string }).status).toBe("archived");
+    expect(detail(await call(w, "PATCH", `projects/${id}`, { status: "gone" }))).toBe("'gone' is not a status a project can have: use active, archived.");
+    expect((await call(w, "DELETE", `projects/${id}`)).status).toBe(204);
+    const events = w.nodes.find((n) => n.path === `${ORG}/events`);
+    expect(detail(await call(w, "DELETE", `divisions/${events?.id ?? ""}`))).toBe(`'${ORG}/events' still has children, work or credit history attached. Archive it instead (status: archived).`);
+    const org = w.organisations.find((o) => o.slug === ORG);
+    expect(((await call(w, "PATCH", `organisations/${org?.id ?? ""}`, { name: "Northwind Club" })).body as { name: string }).name).toBe("Northwind Club");
+    expect(detail(await call(w, "PATCH", `organisations/${org?.id ?? ""}`, { status: "suspended" }))).toBe("An organisation is suspended or reinstated by FrostAura.");
+  });
+
+  it("reads, sets and removes the cascade's values where they apply", async () => {
+    const w = as("owner");
+    await call(w, "PUT", "cascade", { scope: `${ORG}/learning/course-notes`, kind: "budget", key: "monthly_credits", value: 75 });
+    const caps = (await call(w, "GET", `cascade?scope=${ORG}/learning/course-notes/web&kind=budget`)).body as { value: number; setAtPath: string; overrides: string[] }[];
+    expect(caps[0]).toMatchObject({ value: 75, setAtPath: `${ORG}/learning/course-notes`, overrides: [`${ORG}/learning`] });
+    expect(detail(await call(w, "PUT", "cascade", { scope: ORG, kind: "budget", key: "monthly_credits", value: -1 }))).toBe("'monthly_credits' cannot be negative.");
+    expect(detail(await call(w, "PUT", "cascade", { scope: ORG, kind: "setting", key: "overdraft_limit", value: 5 }))).toBe("An organisation's deepest overdraft is set by a FrostAura operator. Set a tighter one of your own (overdraft_own_limit), or on a division, project or app.");
+    expect((await call(w, "DELETE", `cascade?scope=${ORG}&kind=setting&key=overdraft_own_limit`)).status).toBe(204);
+    expect(w.organisations.find((o) => o.slug === ORG)?.ownLimit).toBeNull();
+    const below = (await call(w, "GET", `cascade/below?scope=${ORG}&kind=context`)).body as { setAtPath: string }[];
+    expect(below.some((v) => v.setAtPath === `${ORG}/technologies`)).toBe(true);
+    await call(w, "PUT", "cascade", { scope: `${ORG}/learning`, kind: "context", key: "opening-hours", value: "Weekdays 15:00–19:00." });
+    expect(((await call(w, "GET", `cascade?scope=${ORG}/learning&kind=context`)).body as { key: string }[]).map((v) => v.key)).toContain("opening-hours");
+    expect(detail(await call(w, "DELETE", `cascade?scope=${ORG}&kind=context&key=nothing-here`))).toBe(`A context 'nothing-here' set at '${ORG}' was not found, or you cannot see it.`);
+    expect(detail(await call(as("viewer"), "PUT", "cascade", { scope: ORG, kind: "context", key: "x", value: "y" }))).toBe(`This needs the builder role at '${ORG}'; you are a viewer there (set at ${ORG}).`);
+  });
+
+  it("republishes a crashed app on its newest version", async () => {
+    const w = as("owner");
+    const r = await call(w, "POST", `apps/${IDS.shiftRota}/republish`);
+    expect((r.body as { published: boolean }).published).toBe(true);
+    expect(w.apps.find((a) => a.id === IDS.shiftRota)?.health).toBe("healthy");
+  });
+
+  it("moves an employee under a manager, and refuses a reporting loop", async () => {
+    const w = as("owner");
+    const ruth = w.employees.find((e) => e.name === "Ruth");
+    const pell = w.employees.find((e) => e.name === "Pell");
+    const moved = await call(w, "POST", `employees/${ruth?.id ?? ""}/reassign`, { scope: `${ORG}/learning/tutor-match`, reportsTo: pell?.id });
+    expect((moved.body as { reportsTo: { name: string } }).reportsTo.name).toBe("Pell");
+    expect(detail(await call(w, "POST", `employees/${pell?.id ?? ""}/reassign`, { scope: `${ORG}/learning`, reportsTo: ruth?.id }))).toBe("That would make a reporting loop: the manager already reports, directly or not, to this employee.");
+  });
+
+  it("lets a person in two organisations read each", async () => {
+    const w = buildWorld("two-organisations", "two-organisations").world;
+    const quayside = (await call(w, "GET", "tree?organisation=quayside")).body as { organisation: { name: string; role: string } };
+    expect(quayside.organisation).toMatchObject({ name: "Quayside Bakery", role: "admin" });
+    expect(((await call(w, "GET", "me")).body as { memberships: unknown[] }).memberships).toHaveLength(2);
   });
 });
 

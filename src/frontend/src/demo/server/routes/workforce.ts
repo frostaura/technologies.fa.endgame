@@ -69,6 +69,15 @@ function hireNow(world: World, h: Hire, via: string, by: string, note: string | 
   world.notifications = world.notifications.map((n) => (n.subject?.id === h.id ? { ...n, read: true } : n));
 }
 
+/** Who a moved employee reports to: the one named (on the payroll, no loop), or nobody. */
+function managerFor(world: World, e: Employee, id: string | undefined): Employee | null {
+  if (!id) return null;
+  const m = world.employees.find((x) => x.id === id && orgOf(x.scope) === orgOf(e.scope) && x.status !== "released" && x.kind === "employee");
+  if (!m) throw invalid("reportsTo names an employee of this organisation who is on the payroll.");
+  if (m.id === e.id || m.reportsTo?.id === e.id) throw invalid("That would make a reporting loop: the manager already reports, directly or not, to this employee.");
+  return m;
+}
+
 /** `RunService.PauseForEmployeeAsync`: every run under way that is theirs, or that they hold a task in, pauses. */
 function pauseWorkOf(world: World, e: Employee) {
   const live = world.runs.filter((r) => ["queued", "running", "waiting"].includes(r.run.status) && (r.run.employeeId === e.id || e.currentRun?.id === r.run.id));
@@ -202,8 +211,10 @@ area("WorkforceEndpoints", {
       if (e.kind === "contractor") throw conflict("A contractor works on its brief; it is not reassigned.");
       if (e.status === "released") throw conflict(`${e.name} has been released; rehire them first.`);
       requireRole(world, scope, "admin");
+      const manager = managerFor(world, e, str(req.body, "reportsTo"));
       e.scope = scope;
       e.jobDescription.scope = scope;
+      e.reportsTo = manager ? { id: manager.id, name: manager.name } : null;
     } else {
       throw new Refusal(problem(404, "not_found", "Not found", "There is nothing at this address."));
     }
@@ -283,6 +294,14 @@ area("WorkforceEndpoints", {
       const v = str(req.body, k);
       if (v !== undefined) h[k] = v;
     }
+    const reportsTo = str(req.body, "reportsTo");
+    if (reportsTo) {
+      const m = world.employees.find((x) => x.id === reportsTo && orgOf(x.scope) === orgOf(h.scope) && x.status !== "released" && x.kind === "employee");
+      if (!m) throw invalid("reportsTo names an employee of this organisation who is on the payroll.");
+      h.reportsTo = { id: m.id, name: m.name };
+    }
+    if (req.body.clearReportsTo === true) h.reportsTo = null;
+    if (req.body.clearMonthlyCreditLimit === true) h.jobDescription.monthlyCreditLimit = null;
     if (expected !== undefined) {
       h.expectedMonthlyCredits = expected;
       h.withinBudget = expected <= h.headroomCredits;
@@ -311,7 +330,8 @@ area("WorkforceEndpoints", {
     requireRole(world, scope, "admin");
     const trigger = (str(req.body, "trigger") ?? "owner") as Hire["trigger"];
     if (!["division", "stage", "recurring", "promotion", "owner"].includes(trigger)) throw invalid("trigger is one of division, stage, recurring, promotion, owner.");
-    const needKey = str(req.body, "needKey");
+    const contractorRole = (str(req.body, "contractorRole") ?? "").trim();
+    const needKey = str(req.body, "needKey") ?? (trigger === "promotion" && contractorRole ? `promotion:${scope}:${contractorRole.toLowerCase()}` : undefined);
     if (needKey !== undefined && (needKey.length < 1 || needKey.length > 200)) throw invalid("needKey is 1 to 200 characters, the same each time the same need is raised.");
     const same = needKey ? world.hires.find((x) => x.needKey === needKey && x.status !== "declined") : undefined;
     if (same) return ok(same);
@@ -336,11 +356,17 @@ area("WorkforceEndpoints", {
       name: (str(req.body, "name") ?? "").trim(),
       role: (str(req.body, "role") ?? "").trim(),
       jobDescription: { mandate: String(job.mandate ?? ""), scope, tools: strings(job, "tools"), services: strings(job, "services"), monthlyCreditLimit: typeof job.monthlyCreditLimit === "number" ? job.monthlyCreditLimit : null, modelTier: typeof job.modelTier === "string" ? job.modelTier : null },
-      reportsTo: null,
+      reportsTo: (() => {
+        const id = str(req.body, "reportsTo");
+        if (!id) return null;
+        const m = world.employees.find((x) => x.id === id && orgOf(x.scope) === orgOf(scope) && x.status !== "released" && x.kind === "employee");
+        if (!m) throw invalid("reportsTo names an employee of this organisation who is on the payroll.");
+        return { id: m.id, name: m.name };
+      })(),
       expectedMonthlyCredits: expected,
       withinBudget: expected <= room,
       headroomCredits: room,
-      contractorRole: null,
+      contractorRole: contractorRole ? contractorRole.slice(0, 200) : null,
       raisedBy: "person",
       raisedByRunId: null,
       decision: null,

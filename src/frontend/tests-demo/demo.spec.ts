@@ -56,7 +56,7 @@ async function walk(page: Page, start: string) {
 
   // The app's page, and the hosted app behind "Open the app".
   await page.getByRole("link", { name: "Northwind" }).first().click();
-  await page.getByRole("link", { name: /Locker/ }).first().click();
+  await page.locator('a[href^="/apps/"]', { hasText: /Locker/ }).first().click();
   await expect(page.getByRole("link", { name: "Open the app" })).toBeVisible();
   await page.getByRole("link", { name: "Open the app" }).click();
   await expect(page.getByRole("button", { name: "Back to Endgame" })).toBeVisible({ timeout: 10_000 });
@@ -164,5 +164,40 @@ test("the academy bridge: ready, goto, highlight, act to step-done, clock, reset
   await send("a2", "act", { actions: [{ click: { text: "New idea" } }, { type: { into: { selector: "textarea" }, text: "A court-booking app for our squash club, sold in playing minutes." } }], instant: true });
   await reply("step-done:a2");
   await expect(frame.locator("textarea").first()).toHaveValue("A court-booking app for our squash club, sold in playing minutes.");
+  expect(problems).toEqual([]);
+});
+
+test("managing the tree, your account, choosing where an idea goes, and switching organisations", async ({ page, baseURL }) => {
+  const problems = watch(page, baseURL ?? null);
+  // Manage: what has history is archived, not deleted; a new project joins the tree.
+  await page.goto(`${SUB}?persona=owner&scenario=manage-tree`);
+  await page.getByRole("button", { name: /^Events/ }).first().click();
+  await page.getByRole("button", { name: /^Delete Events/ }).click();
+  const confirm = page.getByRole("button", { name: /^(Yes, delete|Delete it)/ });
+  if (await confirm.count()) await confirm.first().click();
+  await expect(page.getByText(/still has children, work or credit history attached/).first()).toBeVisible();
+  await page.getByRole("button", { name: /^Operations/ }).first().click();
+  await page.getByRole("button", { name: "Add a project" }).click();
+  await page.getByLabel(/^Name/).last().fill("Lost Property");
+  await page.getByRole("button", { name: /^(Add|Create)/ }).last().click();
+  await expect(page.getByRole("button", { name: "Lost Property" }).first()).toBeVisible();
+
+  // Your account: another passkey on this device.
+  await demo(page, "goto", { route: "/account" });
+  await page.getByRole("button", { name: "Add another passkey" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Save the passkey" }).click();
+  await expect(page.getByText(/3 passkeys|passkey added|Added/i).first()).toBeVisible();
+
+  // Start: the idea goes to a division, named on the estimate and the idea.
+  await demo(page, "goto", { route: "/start" });
+  await page.getByLabel("Where it goes").selectOption({ label: "Learning" });
+  await page.getByLabel("The idea").fill("A holiday-camp sign-up for the kids' cookery club, with a waiting list when it is full.");
+  await page.getByRole("button", { name: /Research this idea/ }).click();
+  await expect(page.getByText("Research started").first()).toBeVisible({ timeout: 20_000 });
+
+  // A person in two organisations switches between them.
+  await demo(page, "goto", { route: "/", persona: "two-organisations", scenario: "two-organisations" });
+  await page.locator("header select").selectOption({ label: "Quayside Bakery" });
+  await expect(page.locator("main").getByRole("heading", { name: "Quayside Bakery" }).first()).toBeVisible();
   expect(problems).toEqual([]);
 });
