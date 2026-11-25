@@ -131,6 +131,7 @@ project **Court booking**, and the Admin **Ada Lovelace**.
 | --- | --- |
 | `make academy-install` | installs the academy, and the console's packages if missing (the preset needs them) |
 | `make academy-content` | the content pipeline alone, with its report |
+| `make academy-readme` | rewrites the counted parts of `docs/flows/README.md` (totals, the track tables, "What has no screen") from the five flow files; `make academy-lint` fails when they differ, so a flow added to a file cannot be left off its path |
 | `make academy-dev` | Vite on :5470 with the test double at `/demo/` |
 | `make academy-lint` / `academy-test` | ESLint (zero warnings) and tsc; Vitest |
 | `make academy-build` | the site into `src/academy/dist/` (`SITE_URL` sets the QR code) |
