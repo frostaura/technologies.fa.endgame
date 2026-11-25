@@ -99,9 +99,11 @@ smoke: up
 	exit 1
 
 # Parse the production stack file with throwaway values for its required variables, and prove it
-# can never turn the development sign-in on, whatever the environment says.
+# can never turn the development sign-in on, whatever the environment says, and that it refuses to
+# parse without the backup key (the ops service is the stack's only backup).
 PROD_CHECK_ENV = POSTGRES_PASSWORD=config-check CLOUDFLARE_TUNNEL_TOKEN=config-check ENDGAME_SERVICE_TOKEN=config-check \
-	DOCK_SECRET_KEY=config-check OPENROUTER_API_KEY=config-check ENDGAME_VAULT_MASTER_KEY=config-check ENDGAME_OPERATORS=config-check
+	DOCK_SECRET_KEY=config-check OPENROUTER_API_KEY=config-check ENDGAME_VAULT_MASTER_KEY=config-check ENDGAME_OPERATORS=config-check \
+	ENDGAME_BACKUP_KEY=config-check
 
 prod-config:
 	@env $(PROD_CHECK_ENV) docker compose -f docker-compose.prod.yml config -q
@@ -111,7 +113,10 @@ prod-config:
 	@if env $(PROD_CHECK_ENV) ENDGAME_DEV_LOGIN=true ASPNETCORE_ENVIRONMENT=Development docker compose -f docker-compose.prod.yml config \
 		| grep 'ASPNETCORE_ENVIRONMENT:' | grep -qv 'Production'; then \
 		echo "prod-config: a production service does not run as Production" >&2; exit 1; fi
-	@echo "prod-config: parses; development sign-in pinned off; every service Production."
+	@env $(PROD_CHECK_ENV) ENDGAME_BACKUP_KEY= docker compose -f docker-compose.prod.yml config -q 2>&1 \
+		| grep -q 'ENDGAME_BACKUP_KEY is required' \
+		|| { echo "prod-config: the production stack does not refuse a missing ENDGAME_BACKUP_KEY" >&2; exit 1; }
+	@echo "prod-config: parses; development sign-in pinned off; every service Production; backup key required."
 
 # ---------------------------------------------------------------------------------------------
 # The merged stack's acceptance test: a SECOND stack (its own project name, host ports, subnet

@@ -26,7 +26,7 @@ What is deployed is in `MEMORY.md`.
 | 5 | **Console** | `src/frontend` — React, TypeScript, Redux Toolkit, Tailwind, shadcn/ui; unprivileged nginx | Sign-in, the org chart home with conversation history, start, run trace, verdict, app (with sharing), credits, secrets, the operator-access log. | Calls nothing except through Edge. |
 | 6 | **PostgreSQL** | `postgres:16.16-alpine` | The platform database, and each app's own database and role. | Development only: `127.0.0.1:5446`. |
 | 7 | **Egress proxy** | `src/egress` — squid | Every outbound call from apps and workspaces; default deny, per-app allow-lists from Dock. The platform API is reached through it. | Strips `X-Forwarded-For`; re-resolves peer names every 10 s. |
-| 8 | **Tunnel and backup** | `cloudflared` and a `pg_dump` loop | Production compose only. | The offsite copy does not exist yet. |
+| 8 | **Tunnel** | `cloudflared` | Production compose only. Backups are the ops service's (row 10); there is no other backup service. | Pointed at the edge alone. |
 | 10 | **Ops** | `Endgame.Ops` ([`ARCH-007`](ARCH-007-cloudflare-and-backups.md)) | Cloudflare management, the outage Worker, encrypted backups; tells the control plane which organisation names FrostAura's own subdomains take. | No socket, no OpenRouter key; reached by the control plane with the service token. |
 | 9 | **Mail catcher** | `axllent/mailpit`, service `mailcatcher` | Development compose only: the control plane's SMTP server on `1025`; keeps every message, sends none. | Never in `docker-compose.prod.yml`. |
 
