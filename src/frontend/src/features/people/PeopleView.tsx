@@ -9,12 +9,13 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { formatDate } from "@/lib/format";
 import { RISE } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
-import { ROLE_MAY, ROLE_NAME, ROLES, roleAt, roleRank } from "@/lib/roles";
+import { ROLE_MAY, ROLE_NAME, ROLES, covers, effectiveRole, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { useChangeRoleMutation, useGetMeQuery, useGetMembersQuery, useGetTreeQuery, useRemoveMemberMutation } from "@/store/api";
-import { inviteMember } from "@/store/sensitive";
+import { useChangeRoleMutation, useGetMeQuery, useGetMembersQuery, useRemoveMemberMutation } from "@/store/api";
+import { inviteMember, reissueInvitation } from "@/store/sensitive";
 import type { Member, MemberInvitation, MemberRole, Tree } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 import { placements, scopeName } from "../workforce/workforceModel";
@@ -22,6 +23,8 @@ import { placements, scopeName } from "../workforce/workforceModel";
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Roles a person can be invited to. There is one Owner, the person the organisation was set up for. */
 const GRANTABLE: MemberRole[] = ["viewer", "builder", "admin"];
+/** How long an invitation code works: the control plane's `AccountService.InvitationLifetime`. */
+const INVITATION_DAYS = 7;
 
 /**
  * People (UC-001, *Members*): who holds a role here and at which level each grant was set, invite by
@@ -30,13 +33,16 @@ const GRANTABLE: MemberRole[] = ["viewer", "builder", "admin"];
 export function PeopleView() {
   const { search } = useLocation();
   const me = useGetMeQuery(undefined);
-  const tree = useGetTreeQuery(undefined);
-  const scope = search.get("scope") || me.data?.organisation?.slug || "";
+  // In God mode, the organisation entered (OP-04).
+  const active = useActiveOrganisation();
+  const tree = useActiveTree();
+  const scope = search.get("scope") || active.organisation?.slug || "";
   const query = useGetMembersQuery(scope, { skip: !scope });
   const view = viewOf(query);
-  const role = roleAt(me.data, scope);
-  const admin = roleRank(role) >= roleRank("admin") || me.data?.isOperator === true;
-  const org = me.data?.organisation;
+  // The role here exactly as the server resolves it: the deepest grant wins, the Owner everywhere (PPL-01).
+  const role = effectiveRole(tree.data, me.data, scope);
+  const admin = roleRank(role) >= roleRank("admin");
+  const org = active.organisation;
   const here = scopeName(tree.data, scope);
   // A removal refused after the person left the list is said here, where it stays readable.
   const [problem, setProblem] = useState<string | null>(null);
@@ -54,7 +60,7 @@ export function PeopleView() {
         <ScopePicker tree={tree.data} scope={scope} />
       </header>
 
-      {me.data && !scope ? (
+      {!active.isLoading && !scope ? (
         <Empty icon="organisation" title="There is no one to show until your organisation is named" />
       ) : (
         <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
@@ -140,10 +146,15 @@ function MemberRow({
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const [changeRole, changing] = useChangeRoleMutation();
   const [remove, removing] = useRemoveMemberMutation();
+  const dispatch = useAppDispatch();
   const [problem, setProblem] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const [renewing, setRenewing] = useState(false);
+  const [renewed, setRenewed] = useState<MemberInvitation | null>(null);
   const selectId = useId();
   const inherited = member.scope !== scope;
+  // Set above this level (the Owner, an organisation-wide Admin) rather than here or beneath it.
+  const fromAbove = inherited && covers(member.scope, scope);
   // The Owner's grant is not changed here; an Admin's grant, to or from Admin, is the Owner's to change.
   const editable = canChange && member.role !== "owner" && !self && (viewerIsOwner || member.role !== "admin");
 
@@ -154,6 +165,15 @@ function MemberRow({
     } catch (e) {
       setProblem(`The role was not changed: ${describeError(e as never)} It is back to ${ROLE_NAME[member.role]}.`);
     }
+  };
+  const renew = async () => {
+    setProblem(null);
+    setRenewed(null);
+    setRenewing(true);
+    const outcome = await dispatch(reissueInvitation(scope, member.membershipId));
+    setRenewing(false);
+    if (outcome.ok) setRenewed(outcome.data);
+    else setProblem(`No new code was sent: ${outcome.reason} The code ${member.displayName} has still works.`);
   };
   const drop = async () => {
     setConfirm(false);
@@ -197,8 +217,19 @@ function MemberRow({
           )}
         </div>
         <span className="text-sm text-ink-body">{inherited ? `Set at ${scopeName(tree, member.scope)}` : "Set here"}</span>
-        <span className="text-sm text-ink-muted">{member.hasPasskey ? `Since ${formatDate(member.grantedAt)}` : "No passkey yet: they sign in with the code they were given"}</span>
+        <span className="text-sm text-ink-muted">{member.hasPasskey ? `Since ${formatDate(member.grantedAt)}` : pendingLine(member.invitationExpiresAt)}</span>
       </div>
+      {renewed?.invitationCode && (
+        <OneTime label={`New invitation code for ${member.displayName}`} value={renewed.invitationCode} onDone={() => setRenewed(null)}>
+          {renewed.emailed ? "It was e-mailed to them too." : "E-mail is not set up here, so give them this code yourself."} It works
+          {renewed.expiresAt ? ` until ${formatDate(renewed.expiresAt)}` : ` for ${INVITATION_DAYS} days`}; the code they had before no longer does.
+        </OneTime>
+      )}
+      {editable && !inherited && !member.hasPasskey && !renewed && (
+        <Button size="sm" variant="soft" className="self-start" disabled={renewing} onClick={() => void renew()}>
+          {renewing ? "Sending a new code…" : "Send a new code"}
+        </Button>
+      )}
       {editable && !inherited && !confirm && (
         <Button size="sm" variant="ghost" className="self-start" disabled={removing.isLoading} onClick={() => setConfirm(true)}>
           Remove {member.displayName}
@@ -215,7 +246,7 @@ function MemberRow({
           </Button>
         </div>
       )}
-      {editable && inherited && <span className="text-sm text-ink-muted">Change this grant at {scopeName(tree, member.scope)}.</span>}
+      {editable && inherited && <span className="text-sm text-ink-muted">{fromAbove ? `This grant holds here from ${scopeName(tree, member.scope)}; change it there.` : `Change this grant at ${scopeName(tree, member.scope)}.`}</span>}
       {problem && (
         <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           {problem}
@@ -223,6 +254,14 @@ function MemberRow({
       )}
     </li>
   );
+}
+
+/** What a pending person's row says about their code. */
+function pendingLine(expiresAt: string | null): string {
+  if (!expiresAt) return "No passkey yet: they sign in with the code they were given";
+  return new Date(expiresAt).getTime() < Date.now()
+    ? `No passkey yet, and their code expired on ${formatDate(expiresAt)}: send a new one`
+    : `No passkey yet: their code works until ${formatDate(expiresAt)}`;
 }
 
 function Invite({ scope, tree, viewerIsOwner }: { scope: string; tree: Tree | undefined; viewerIsOwner: boolean }) {
@@ -305,6 +344,7 @@ function Invite({ scope, tree, viewerIsOwner }: { scope: string; tree: Tree | un
           </Field>
         </div>
         <p className="text-sm text-ink-body">{ROLE_MAY[role]}</p>
+        <p className="text-sm text-ink-muted">Someone new gets a one-time code to make their passkey with. It works for {INVITATION_DAYS} days; a new one can be sent from their row.</p>
         <Button type="submit" className="self-start" disabled={!typed || invalid || sending}>
           {sending ? "Inviting…" : "Invite"}
         </Button>

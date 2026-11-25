@@ -10,6 +10,7 @@ import type {
   AskEstimate,
   Member,
   MemberInvitation,
+  MemberRole,
   NotificationFeed,
   OperatorEntry,
   OperatorOrganisation,
@@ -108,7 +109,10 @@ const access = oneOf(["private", "shared", "public"] as const);
 const stage = oneOf(["idea", "researching", "verdict", "planning", "building", "evaluating", "reviewing", "publishing", "live", "paused", "dropped"] as const);
 const outcome = oneOf(["build", "change", "do-not-build"] as const);
 
-const treeApp = obj<TreeApp>({ id: s, slug: s, name: s, health, running, access, sharedWith: withDefault(num, 0), visitsToday: nn, lastVisitAt: ns, spend, workers });
+// A node's role: absent from an older control plane (unknown, so the console works it out), null where the viewer holds none.
+const nodeRole = withDefault<MemberRole | null | undefined>(nullable(role), undefined);
+const archived = withDefault(bool, false);
+const treeApp = obj<TreeApp>({ id: s, slug: s, name: s, health, running, access, sharedWith: withDefault(num, 0), visitsToday: nn, lastVisitAt: ns, spend, workers, role: nodeRole, archived });
 const treeProject = obj<TreeProject>({
   id: s,
   slug: s,
@@ -120,8 +124,10 @@ const treeProject = obj<TreeProject>({
   spend,
   workers,
   apps: arr(treeApp),
+  role: nodeRole,
+  archived,
 });
-const treeDivision = obj<TreeDivision>({ id: s, slug: s, name: s, spend, workers, projects: arr(treeProject) });
+const treeDivision = obj<TreeDivision>({ id: s, slug: s, name: s, spend, workers, projects: arr(treeProject), role: nodeRole, archived });
 
 const needsYou: Guard<NeedsYou | null> = (v, path) => {
   const kind = (record(v, path) as { kind?: unknown }).kind;
@@ -144,9 +150,11 @@ export const treeGuard: Guard<Tree> = (v, path) => {
   const t = obj<Omit<Tree, "needsYou"> & { needsYou: (NeedsYou | null)[] }>({
     generatedAt: s,
     viewerRole: withDefault(oneOf(["viewer", "builder", "admin", "owner", "none"] as const), "owner"),
-    organisation: nullable(obj<NonNullable<Tree["organisation"]>>({ id: s, slug: s, name: s, summary: ns, spend, workers })),
+    organisation: nullable(obj<NonNullable<Tree["organisation"]>>({ id: s, slug: s, name: s, summary: ns, spend, workers, role: nodeRole })),
     divisions: arr(treeDivision),
     needsYou: withDefault(arr(needsYou), []),
+    // An older control plane offered naming to everyone with no organisation.
+    firstRun: withDefault(bool, true),
   })(v, path);
   return { ...t, needsYou: t.needsYou.filter((n): n is NeedsYou => n !== null) };
 };
@@ -524,7 +532,17 @@ export const restoreGuard: Guard<RestoreResult> = obj<RestoreResult>({ version: 
 
 // People ----------------------------------------------------------------------------------------
 
-export const memberGuard: Guard<Member> = obj<Member>({ membershipId: s, userId: s, email: s, displayName: s, scope: s, role, hasPasskey: withDefault(bool, false), grantedAt: s });
+export const memberGuard: Guard<Member> = obj<Member>({
+  membershipId: s,
+  userId: s,
+  email: s,
+  displayName: s,
+  scope: s,
+  role,
+  hasPasskey: withDefault(bool, false),
+  grantedAt: s,
+  invitationExpiresAt: withDefault(ns, null),
+});
 export const membersGuard: Guard<Member[]> = arr(memberGuard);
 export const invitationGuard: Guard<MemberInvitation> = obj<MemberInvitation>({ member: memberGuard, invitationCode: ns, expiresAt: ns, emailed: withDefault(bool, false) });
 
@@ -641,4 +659,5 @@ export const provisionedGuard: Guard<OrganisationProvisioned> = obj<Organisation
   invitationExpiresAt: ns,
   invitationEmailed: withDefault(bool, false),
   nameCheck: withDefault(nullable(obj<NonNullable<OrganisationProvisioned["nameCheck"]>>({ slug: s, source: s, note: ns })), null),
+  screening: withDefault(nullable(obj<NonNullable<OrganisationProvisioned["screening"]>>({ method: oneOf(["model", "manual"] as const), result: oneOf(["clear"] as const), reason: s })), null),
 });

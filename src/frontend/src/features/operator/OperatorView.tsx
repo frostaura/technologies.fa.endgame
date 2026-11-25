@@ -6,7 +6,7 @@ import { OneTime } from "@/components/OneTime";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { formatCredits, formatDate, formatNumber, isValidSlug, slugify, timeAgo } from "@/lib/format";
 import { RISE } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -600,9 +600,19 @@ function PricingForm({
   );
 }
 
+/** Fewest characters in "What it does": enough to screen against the red lines (the control plane's own rule). */
+const MIN_DESCRIPTION = 10;
+/** Fewest characters in a manual screening's reason. */
+const MIN_REASON = 10;
+
 function ProvisionAside() {
   const dispatch = useAppDispatch();
-  const ids = { name: useId(), slug: useId(), email: useId(), owner: useId() };
+  const ids = { name: useId(), slug: useId(), email: useId(), owner: useId(), does: useId(), decision: useId(), reason: useId() };
+  const [does, setDoes] = useState("");
+  // Shown only when no model could be reached to screen it: the operator's own decision, with a reason.
+  const [manual, setManual] = useState(false);
+  const [decision, setDecision] = useState<"clear" | "breach">("clear");
+  const [reason, setReason] = useState("");
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
@@ -614,14 +624,16 @@ function ProvisionAside() {
   const shownSlug = slugTouched ? slug : slugify(name);
   const slugOk = isValidSlug(shownSlug);
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const doesOk = does.trim().length >= MIN_DESCRIPTION;
+  const reasonOk = !manual || reason.trim().length >= MIN_REASON;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!name.trim() || !slugOk || !emailOk) return;
+    if (!name.trim() || !slugOk || !emailOk || !doesOk || !reasonOk) return;
     setSending(true);
     setProblem(null);
     setMade(null);
-    const outcome = await dispatch(provisionOrganisation(name, shownSlug, email, owner));
+    const outcome = await dispatch(provisionOrganisation(name, shownSlug, email, owner, does, manual ? { decision, reason } : null));
     setSending(false);
     if (outcome.ok) {
       setMade(outcome.data);
@@ -630,7 +642,15 @@ function ProvisionAside() {
       setSlugTouched(false);
       setEmail("");
       setOwner("");
-    } else setProblem(`${name.trim() || "The organisation"} was not set up: ${outcome.reason}`);
+      setDoes("");
+      setManual(false);
+      setDecision("clear");
+      setReason("");
+    } else {
+      // No model could be reached to screen it: the operator may record their own decision instead.
+      if (outcome.status === 503 && /screen/i.test(outcome.reason)) setManual(true);
+      setProblem(`${name.trim() || "The organisation"} was not set up: ${outcome.reason}`);
+    }
   };
 
   return (
@@ -644,10 +664,11 @@ function ProvisionAside() {
           <OneTime label="The Owner's invitation code" value={made.ownerInvitationCode} onDone={() => setMade(null)}>
             {made.name} is set up for {made.ownerEmail}. {made.invitationEmailed ? "The code was e-mailed to them too." : "E-mail is not set up here, so give them this code yourself."} They use it to make their passkey
             {made.invitationExpiresAt ? ` before ${formatDate(made.invitationExpiresAt)}` : ""}.{made.nameCheck?.note ? ` ${made.nameCheck.note}` : ""}
+            {screeningLine(made)}
           </OneTime>
         ) : (
           <p role="status" className="rounded-sm border border-success-text bg-success-tint px-4 py-3">
-            {made.name} is set up. {made.ownerEmail} already has a passkey, so they can sign in as its Owner now.
+            {made.name} is set up. {made.ownerEmail} already has a passkey, so they can sign in as its Owner now.{screeningLine(made)}
           </p>
         ))}
       {problem && (
@@ -676,11 +697,42 @@ function ProvisionAside() {
         <Field id={ids.owner} label="The Owner's name" hint="Optional.">
           <Input id={ids.owner} value={owner} onChange={(e) => setOwner(e.target.value)} />
         </Field>
-        <p className="text-sm text-ink-muted">Its name is checked against FrostAura&rsquo;s own addresses, and every idea it has is screened against the red lines.</p>
-        <Button type="submit" className="self-start" disabled={!name.trim() || !slugOk || !emailOk || sending}>
+        <Field
+          id={ids.does}
+          label="What it does"
+          hint="A sentence or two on what the organisation does or will build. FrostAura does not set up anything that crosses a red line."
+          problem={does.trim() && !doesOk ? `At least ${MIN_DESCRIPTION} characters, so it can be screened.` : null}
+        >
+          <Textarea id={ids.does} value={does} maxLength={1000} rows={3} onChange={(e) => setDoes(e.target.value)} aria-describedby={`${ids.does}-hint`} />
+        </Field>
+        {manual && (
+          <fieldset className="flex flex-col gap-3 rounded-sm border border-attention-line bg-attention-tint px-4 py-3">
+            <legend className="px-1 font-semibold text-attention-text">Screen it yourself</legend>
+            <p className="text-sm text-attention-deep">No model could be reached to screen it. Decide yourself whether what it does crosses one of FrostAura&rsquo;s red lines, and say why; your decision and reason are written to its operator log.</p>
+            <Field id={ids.decision} label="Your decision">
+              <Select id={ids.decision} value={decision} onChange={(e) => setDecision(e.target.value === "breach" ? "breach" : "clear")}>
+                <option value="clear">It crosses no red line</option>
+                <option value="breach">It crosses a red line: do not set it up</option>
+              </Select>
+            </Field>
+            <Field id={ids.reason} label="Why" problem={reason.trim() && !reasonOk ? `At least ${MIN_REASON} characters.` : null}>
+              <Textarea id={ids.reason} value={reason} maxLength={1000} rows={2} onChange={(e) => setReason(e.target.value)} />
+            </Field>
+          </fieldset>
+        )}
+        <p className="text-sm text-ink-muted">What it does is screened against FrostAura&rsquo;s red lines before it is set up, its name is checked against FrostAura&rsquo;s own addresses, and every idea it has is screened again.</p>
+        <Button type="submit" className="self-start" disabled={!name.trim() || !slugOk || !emailOk || !doesOk || !reasonOk || sending}>
           {sending ? "Setting it up…" : "Set it up"}
         </Button>
       </form>
     </section>
   );
+}
+
+/** How it was screened against the red lines, in a sentence after the hand-over. */
+function screeningLine(made: OrganisationProvisioned): string {
+  if (!made.screening) return "";
+  return made.screening.method === "manual"
+    ? ` You screened it against the red lines yourself: ${made.screening.reason}`
+    : ` It was screened against the red lines and crosses none: ${made.screening.reason}`;
 }

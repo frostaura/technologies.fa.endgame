@@ -141,7 +141,9 @@ test("2. the organisation, a division, a project and two apps, through the API",
   let created = await owner.request.post("/api/organisations", { data: named });
   if (created.status() === 403) {
     // Not the stack's first run: organisations after the first are provisioned by an operator.
-    created = await operator.request.post("/api/organisations", { data: { ...named, ownerEmail } });
+    // Provisioning screens what it does against the red lines; the operator's own decision is used only if no model answers.
+    const screening = { decision: "clear", reason: "The acceptance test's own organisation: it builds and runs test apps." };
+    created = await operator.request.post("/api/organisations", { data: { ...named, ownerEmail, description: "Builds and runs the acceptance test's apps.", screening } });
   }
 
   story.organisationId = ((await ok(created, 201)) as { id: string }).id;

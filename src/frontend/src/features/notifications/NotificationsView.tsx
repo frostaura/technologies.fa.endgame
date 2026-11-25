@@ -4,14 +4,15 @@ import { Empty } from "@/components/states";
 import { RISE } from "@/lib/motion";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
-import { useGetMeQuery } from "@/store/api";
+import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { AppShell } from "../shell/AppShell";
 import { NotificationFeed } from "./NotificationFeed";
 
 /** Everything that needs the person (UC-119), newest first. Owners and Admins see the feed; others an empty one. */
 export function NotificationsView() {
-  const me = useGetMeQuery(undefined);
-  const org = me.data?.organisation ?? null;
+  // In God mode, the entered organisation's feed (OP-04).
+  const active = useActiveOrganisation();
+  const org = active.organisation;
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Notifications" }]}>
       <header className={cn("flex flex-col gap-1.5", RISE)}>
@@ -21,7 +22,7 @@ export function NotificationsView() {
         </h1>
         <p className="max-w-prose text-ink-body">What needs you, newest first. The urgent ones — a cap reached, credits at zero, the overdraft, an app that stopped, a security finding — are e-mailed too, when e-mail is set up.</p>
       </header>
-      {me.data && !org ? (
+      {!active.isLoading && !org ? (
         <Empty icon="organisation" title="There are no notifications until your organisation is named" />
       ) : org ? (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
@@ -40,6 +41,7 @@ export function NotificationsView() {
               <li>Credits at zero, halfway to the overdraft limit, and at it</li>
               <li>An app that stopped working</li>
               <li>A security review that found a problem</li>
+              <li>For FrostAura&rsquo;s operators: an Owner asking for a top-up</li>
             </ul>
             <p className="text-sm text-ink-muted">Owners and Admins are told about what their grant covers; others see an empty feed.</p>
           </aside>
