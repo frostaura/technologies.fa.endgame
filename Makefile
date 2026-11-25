@@ -6,7 +6,8 @@
 # set is broken and fails restore without it. Harmless everywhere else, so CI uses it too.
 .PHONY: up down lint lint-backend lint-frontend build build-backend build-frontend test test-backend test-frontend \
         e2e smoke docker-build docker-down prod-config appkit-build appkit-lint appkit-test appkit-proof appkit-vendor \
-        stack-up stack-down e2e-stack e2e-stack-run
+        stack-up stack-down e2e-stack e2e-stack-run \
+        backup restore ops-backups ops-verify ops-health ops-reserved-hosts ops-cloudflare-plan ops-cloudflare-apply ops-test ops-test-worker
 
 DOTNET ?= dotnet
 DOTNET_ENV = MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
@@ -50,7 +51,7 @@ build-backend:
 build-frontend:
 	$(FRONTEND) npm run build
 
-test: test-backend test-frontend appkit-test
+test: test-backend test-frontend appkit-test ops-test
 
 test-backend:
 	$(DOTNET_ENV) $(DOTNET) test src/backend/Endgame.Tests/Endgame.Tests.csproj --nologo
@@ -160,3 +161,56 @@ e2e-stack-run:
 		STACK_DOCK=http://127.0.0.1:$(STACK_DOCK_PORT) STACK_STATE=$(STACK_STATE) STACK_PROJECT=$(STACK_PROJECT) STACK_SERVICE_TOKEN=$(STACK_SERVICE_TOKEN) \
 		npx playwright test -c playwright.stack.config.ts
 	. $(STACK_STATE)/proof.env && PW_PATH_URL=$$PW_PATH_URL PW_HOST_URL=$$PW_HOST_URL PW_MEMBER_EMAIL=$$PW_MEMBER_EMAIL src/appkit/proof/edge.sh
+
+# ---------------------------------------------------------------------------------------------
+# Operations (ARCH-007): backups and Cloudflare, through the ops service's own command line.
+# OPS_COMPOSE names the stack: the default is the `make up` stack; production on this host is
+# OPS_COMPOSE="docker compose -f docker-compose.prod.yml". The rehearsal test sets its own.
+OPS_COMPOSE ?= docker compose
+OPS = $(OPS_COMPOSE) exec -T ops /app/Endgame.Ops
+
+# An encrypted archive of every database and the repositories volume, now, to the configured
+# bucket (or this machine's `backup` volume when there is none). Prints BACKUP_ID=<id>.
+backup:
+	$(OPS_COMPOSE) up -d --wait postgres ops
+	$(OPS) backup
+
+# Restores BACKUP=<id> onto an EMPTY stack: the archive is verified end to end before anything is
+# touched, and a database or volume that already holds data is refused unless OVERWRITE=1. The
+# services that write to the database and the volumes are stopped first and started again after.
+restore:
+	@test -n "$(BACKUP)" || { echo "restore: name the archive: make restore BACKUP=<id> (make ops-backups lists them)" >&2; exit 2; }
+	-$(OPS_COMPOSE) stop edge console runner dock control-plane
+	$(OPS_COMPOSE) up -d --wait postgres ops
+	$(OPS) restore $(BACKUP) $(if $(filter 1 yes true,$(OVERWRITE)),--overwrite)
+	$(OPS_COMPOSE) up -d --wait
+
+ops-backups:
+	$(OPS) backups
+
+ops-verify:
+	@test -n "$(BACKUP)" || { echo "ops-verify: make ops-verify BACKUP=<id>" >&2; exit 2; }
+	$(OPS) verify $(BACKUP)
+
+ops-health:
+	$(OPS_COMPOSE) exec -T ops curl -sS http://127.0.0.1:8080/health
+
+ops-reserved-hosts:
+	$(OPS) reserved-hosts
+
+# The dry-run diff of the Cloudflare account against Endgame's desired state. Changes nothing.
+ops-cloudflare-plan:
+	$(OPS) cloudflare-plan
+
+# Changes the live Cloudflare account: only with CONFIRM=yes, and never when the plan has a conflict.
+ops-cloudflare-apply:
+	@test "$(CONFIRM)" = yes || { echo "ops-cloudflare-apply changes the live Cloudflare account. Read make ops-cloudflare-plan, then run make ops-cloudflare-apply CONFIRM=yes." >&2; exit 2; }
+	$(OPS) cloudflare-apply --confirm
+
+# The ops service's tests (unit, the fake-Cloudflare reconciler, and the backup -> destroy ->
+# restore rehearsal on its own throwaway stack) and the outage Worker's tests under Node.
+ops-test: ops-test-worker
+	$(DOTNET_ENV) $(DOTNET) test src/backend/Endgame.Ops.Tests/Endgame.Ops.Tests.csproj --nologo
+
+ops-test-worker:
+	cd src/ops/outage-worker && node --test

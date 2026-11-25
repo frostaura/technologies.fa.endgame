@@ -180,7 +180,47 @@ services:
       console:
         condition: service_healthy
 
+  # Operations (ARCH-007): the nightly encrypted backup of every database and the repositories
+  # volume, and — only when a Cloudflare token is set — DNS, tunnel ingress and the outage page.
+  # With no bucket configured, archives go to ENDGAME_BACKUP_DIR (a host path) or, by default, the
+  # `backup` volume, and /health says they are not offsite. Its internal API needs the service token.
+  ops:
+    <<: *dotnet-service
+    build:
+      context: .
+      dockerfile: src/ops/Dockerfile
+    environment:
+      <<: *dotnet-env
+      # Development value only: production requires its own (docker-compose.prod.yml).
+      Ops__Backup__Key: ${ENDGAME_BACKUP_KEY:-656e6467616d652d6465762d6261636b75702d6b65792d6e6f742d7365637265}
+      Ops__Backup__Postgres: Host=postgres;Port=5432;Database=postgres;Username=${POSTGRES_USER:-endgame};Password=${POSTGRES_PASSWORD:-endgame_dev_password}
+      Ops__Backup__S3Endpoint: ${ENDGAME_BACKUP_S3_ENDPOINT:-}
+      Ops__Backup__S3Bucket: ${ENDGAME_BACKUP_S3_BUCKET:-}
+      Ops__Backup__S3AccessKeyId: ${ENDGAME_BACKUP_S3_ACCESS_KEY_ID:-}
+      Ops__Backup__S3SecretAccessKey: ${ENDGAME_BACKUP_S3_SECRET_ACCESS_KEY:-}
+      Ops__Backup__S3Region: ${ENDGAME_BACKUP_S3_REGION:-auto}
+      Ops__Backup__HourUtc: ${BACKUP_HOUR_UTC:-1}
+      Ops__Backup__KeepDaily: ${ENDGAME_BACKUP_KEEP_DAILY:-7}
+      Ops__Backup__KeepWeekly: ${ENDGAME_BACKUP_KEEP_WEEKLY:-4}
+      Ops__Backup__ScheduleEnabled: ${ENDGAME_BACKUP_SCHEDULE:-true}
+      Ops__Cloudflare__BaseUrl: ${CLOUDFLARE_API_BASE_URL:-https://api.cloudflare.com/client/v4}
+      Ops__Cloudflare__ApiToken: ${CLOUDFLARE_API_TOKEN:-}
+      Ops__Cloudflare__AccountId: ${CLOUDFLARE_ACCOUNT_ID:-}
+      Ops__Cloudflare__ZoneId: ${CLOUDFLARE_ZONE_ID:-}
+      Ops__Cloudflare__TunnelId: ${CLOUDFLARE_TUNNEL_ID:-}
+      Ops__Cloudflare__Zone: ${ENDGAME_ZONE:-}
+      Ops__Cloudflare__ConsoleHost: ${ENDGAME_CONSOLE_HOST:-}
+    volumes:
+      # Read for a backup, written by a restore (with Dock stopped): the same volume Dock keeps at /data.
+      - dock_data:/data/dock
+      - ${ENDGAME_BACKUP_DIR:-backup}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   # Every app's repository and Dock's small state. Code history: backed up with the database.
   dock_data:
+  # Local backups when no bucket is configured (see the ops service).
+  backup:
