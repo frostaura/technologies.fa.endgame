@@ -119,6 +119,40 @@ test.describe("home — the living org chart", () => {
     await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Normal" }).click();
   });
 
+  test("from phone to wide desktop the header keeps the mark clear, where you are on one line, and nothing crowded", async ({ page }) => {
+    test.skip(isPhone(page), "widths are set here, from a phone up");
+    await useScenario("populated");
+    await page.goto("/apps/app1");
+    await expect(page.getByRole("heading", { name: "Booking desk", exact: true })).toBeVisible();
+    for (const width of [390, 600, 680, 760, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const banner = page.getByRole("banner");
+      await expect(banner.getByRole("navigation", { name: "Where you are" })).toBeVisible();
+      const layout = await banner.evaluate((el) => {
+        const box = (e: Element | null) => e?.getBoundingClientRect() ?? null;
+        const shown = (r: DOMRect | null): r is DOMRect => !!r && r.width > 0 && r.height > 0;
+        const meets = (a: DOMRect, b: DOMRect) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+        const mark = box(el.querySelector('a[aria-label="Endgame home"]'));
+        const nav = el.querySelector('nav[aria-label="Where you are"]');
+        const crumbs = [...(nav?.querySelectorAll("li") ?? [])].filter((li) => shown(li.getBoundingClientRect()));
+        const controls = [...el.querySelectorAll<HTMLElement>('[role="group"][aria-label="Mode"], a[href="/credits"], a[aria-label="Your account"], button')].filter((c) => !nav?.contains(c) && !c.closest('[role="group"]')?.isSameNode(c.parentElement) && shown(c.getBoundingClientRect()));
+        const words = [...(nav?.querySelectorAll("a, button, span[aria-current]") ?? [])].filter((w) => shown(w.getBoundingClientRect()));
+        return {
+          oneLine: new Set(crumbs.map((li) => Math.round(li.getBoundingClientRect().top))).size === 1,
+          markClear: !!mark && [nav?.getBoundingClientRect(), ...controls.map((c) => c.getBoundingClientRect())].every((r) => !r || !shown(r) || !meets(mark, r)),
+          crowded: controls.flatMap((a, i) => controls.slice(i + 1).filter((b) => meets(a.getBoundingClientRect(), b.getBoundingClientRect())).map((b) => `${a.textContent} / ${b.textContent}`)),
+          cut: words.filter((w) => w.scrollWidth > w.clientWidth + 1).map((w) => w.textContent),
+        };
+      });
+      expect(layout.oneLine, `where you are is one line at ${width}px`).toBe(true);
+      expect(layout.markClear, `the mark stands clear at ${width}px`).toBe(true);
+      expect(layout.crowded, `no control overlaps another at ${width}px`).toEqual([]);
+      // Off a phone there is room for every step of a short trail: none is cut short.
+      if (width >= 640) expect(layout.cut, `no step is cut short at ${width}px`).toEqual([]);
+      await expectNoSidewaysScroll(page);
+    }
+  });
+
   test("a failed read is shown as a failure, with a way to try again", async ({ page }) => {
     await useScenario("tree-fails");
     await page.goto("/");

@@ -37,18 +37,24 @@ export function AppShell({ crumbs, aside, children }: { crumbs: Crumb[]; aside?:
       {me?.isOperator && <GodModeBand />}
       <header className="border-b bg-surface">
         {/*
-          Desktop: one row. Phone: two — the mark, where you are and sign-out; then the mode toggle
-          and the balance. Where you are keeps to one line there, showing its last two steps.
+          Phone: two rows — the mark, where you are (its last two steps) and the account controls;
+          then the mode toggle and the balance. Tablet and narrow desktop: the bar — the mark, then
+          every control at the right — with where you are on a full-width row of its own beneath.
+          Wide desktop (xl): one row, where you are between the mark and the controls. Where you are
+          is always one line; a step is cut short only when the row is too narrow, the middle
+          steps first.
         */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:gap-x-4 sm:gap-y-3 sm:px-8">
-          <div className="flex min-w-0 flex-1 items-center gap-x-3 sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
-            <Link href={paths.home()} aria-label="Endgame home" className="flex shrink-0 items-center gap-2.5 rounded-xs text-ink">
-              <img src="/brand/endgame-mark.svg" alt="" width={30} height={30} className="size-8" />
-              <span className={cn("font-display text-lg font-bold tracking-tight", crumbs.length > 0 && "hidden sm:inline")}>Endgame</span>
-            </Link>
-            {crumbs.length > 0 && <Breadcrumb crumbs={crumbs} />}
-          </div>
-          <div className="order-last flex w-full items-center justify-between gap-3 sm:order-none sm:w-auto sm:justify-end">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-8 xl:gap-x-5">
+          <Link href={paths.home()} aria-label="Endgame home" className="flex shrink-0 items-center gap-2.5 rounded-xs text-ink">
+            <img src="/brand/endgame-mark.svg" alt="" width={30} height={30} className="size-8" />
+            <span className={cn("font-display text-lg font-bold tracking-tight", crumbs.length > 0 && "hidden md:inline")}>Endgame</span>
+          </Link>
+          {crumbs.length > 0 && (
+            <div className="flex min-w-0 flex-1 sm:order-last sm:basis-full xl:order-none xl:basis-0">
+              <Breadcrumb crumbs={crumbs} />
+            </div>
+          )}
+          <div className="order-last flex w-full items-center justify-between gap-3 sm:order-none sm:ml-auto sm:w-auto sm:justify-end">
             <ModeToggle />
             {me && <OrganisationSwitcher compact />}
             {org && <CreditsPill scope={org.slug} />}
@@ -78,23 +84,30 @@ export function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
   // On a phone only the last two steps show, after an ellipsis, so the header stays two rows.
   const firstShownOnPhone = Math.max(0, crumbs.length - 2);
   return (
-    <nav aria-label="Where you are" className="min-w-0">
-      <ol className="flex min-w-0 items-center gap-2 text-ink-muted sm:flex-wrap">
+    <nav aria-label="Where you are" className="min-w-0 flex-1">
+      <ol className="flex min-w-0 items-center gap-2 text-ink-muted">
         {crumbs.map((crumb, i) => {
           const last = i === crumbs.length - 1;
+          const middle = i > 0 && !last;
           // A step is a name, not a paragraph: a run titled with its whole idea is cut to a line.
           const label = shortTitle(crumb.label, 48);
           return (
             <li
               key={`${i}-${crumb.label}`}
+              title={label !== crumb.label || middle ? crumb.label : undefined}
               className={cn(
                 "min-w-0 items-center gap-2",
                 i < firstShownOnPhone ? "hidden sm:flex" : "flex",
+                // Off a phone the row is one line: the first and last steps keep their words, and the
+                // steps between take what room is left, each up to its own width, cut short only when
+                // there is not enough.
+                i === 0 && !last && "sm:shrink-0",
+                middle && "sm:max-w-fit sm:shrink sm:grow sm:basis-0",
                 // The steps hidden on a phone leave an ellipsis, drawn by CSS with empty alternative text so it is never read out.
                 i === firstShownOnPhone && i > 0 && "before:shrink-0 before:[content:'…_/'_/_''] sm:before:[content:none]",
               )}
             >
-              {i > 0 && <span aria-hidden className={cn(i === firstShownOnPhone && "hidden sm:inline")}>/</span>}
+              {i > 0 && <span aria-hidden className={cn("shrink-0", i === firstShownOnPhone && "hidden sm:inline")}>/</span>}
               {crumb.onSelect && !last ? (
                 <button type="button" onClick={crumb.onSelect} className="min-h-touch min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover">
                   {label}
@@ -104,7 +117,7 @@ export function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
                   {label}
                 </Link>
               ) : (
-                <span aria-current={last ? "page" : undefined} title={label !== crumb.label ? crumb.label : undefined} className={cn("truncate", last && "font-medium text-ink")}>
+                <span aria-current={last ? "page" : undefined} className={cn("min-w-0 truncate", last && "font-medium text-ink")}>
                   {label}
                 </span>
               )}
@@ -125,7 +138,7 @@ function ModeToggle() {
       aria-pressed={mode === value}
       onClick={() => dispatch(modeSet(value))}
       className={cn(
-        "min-h-touch rounded-xs px-2.5 text-sm transition-colors sm:px-4",
+        "min-h-touch rounded-xs px-2.5 text-sm transition-colors lg:px-4",
         mode === value ? "bg-surface font-semibold text-ink shadow-toggle" : "bg-transparent text-ink-muted hover:text-ink",
       )}
     >
@@ -156,7 +169,7 @@ function CreditsPill({ scope }: { scope: string }) {
         <span aria-hidden className={cn("size-2 rounded-full", low ? "bg-attention-text" : "animate-pulse bg-success motion-reduce:animate-none")} />
         <span className="font-semibold">{formatNumber(query.data.balance)}</span>
         <span className={low ? "text-attention-text" : "text-success-text"}>
-          credits<span className="sr-only sm:not-sr-only"> left</span>
+          credits<span className="sr-only lg:not-sr-only"> left</span>
         </span>
       </Link>
     );
