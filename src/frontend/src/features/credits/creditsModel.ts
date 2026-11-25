@@ -19,3 +19,11 @@ export function paceLine(credits: Pick<Credits, "balance" | "monthsLeftAtPace" |
   if (months < 1) return "At this month’s pace, it runs out within the month.";
   return `At this month’s pace, about ${plural(Math.round(months), "month")}.`;
 }
+
+/** A whole number of credits typed by a person, or null when it is not one. */
+export function parseCredits(text: string): number | null {
+  const clean = text.replace(/[\s,]/g, "");
+  if (!/^\d+(\.\d+)?$/.test(clean)) return null;
+  const n = Number(clean);
+  return Number.isFinite(n) ? n : null;
+}

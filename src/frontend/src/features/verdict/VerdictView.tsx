@@ -260,7 +260,7 @@ function ExistingProducts({ products, evidence }: { products: ExistingProduct[];
             {p.does && <span className="break-words text-ink-body">{p.does}</span>}
             {p.sources.length > 0 && (
               <span className="flex flex-wrap gap-x-3">
-                {p.sources.map((u) => (
+                {[...new Set(p.sources)].map((u) => (
                   <SourceLink key={u} url={u} />
                 ))}
               </span>
@@ -448,7 +448,7 @@ function RecordAside({ idea }: { idea: Idea }) {
             <Link key={o.ideaId} href={paths.idea(o.ideaId)} className="flex flex-col gap-1 rounded-xs border border-border-strong bg-surface px-4 py-3.5 text-ink hover:bg-ground">
               <span className="font-semibold">{o.title}</span>
               <span className="text-ink-body">
-                Research said {OUTCOME[o.verdict].toLowerCase()}. {o.outcome}
+                Research said {OUTCOME[o.verdict].toLowerCase()}. {overruledOutcome(o.outcome)}
               </span>
             </Link>
           ))
@@ -497,7 +497,7 @@ function RecordAside({ idea }: { idea: Idea }) {
             <details>
               <summary className="min-h-touch cursor-pointer py-2 text-primary-link">Every source ({formatNumber(method.sources.length)})</summary>
               <ul className="flex flex-col gap-1">
-                {method.sources.map((u) => (
+                {[...new Set(method.sources)].map((u) => (
                   <li key={u} className="min-w-0">
                     <SourceLink url={u} />
                   </li>
@@ -528,6 +528,14 @@ function MethodRow({ label, children }: { label: string; children: ReactNode }) 
       <dd className="m-0">{children}</dd>
     </>
   );
+}
+
+/** How an overruled idea turned out, as a sentence: the control plane sends a status word. */
+function overruledOutcome(outcome: string): string {
+  const words: Record<string, string> = { finished: "It was built.", building: "It is being built.", failed: "The build did not succeed.", dropped: "It was dropped later.", live: "It is live." };
+  if (words[outcome]) return words[outcome];
+  const t = outcome.trim();
+  return t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}${/[.!?]$/.test(t) ? "" : "."}` : "";
 }
 
 const STRANDS: Record<string, string> = { existing: "existing products", gap: "the gap", demand: "demand" };

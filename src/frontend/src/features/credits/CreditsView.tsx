@@ -7,7 +7,10 @@ import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useGetCreditsQuery, useGetMeQuery } from "@/store/api";
 import type { BudgetLine, Credits } from "@/store/types";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { roleAt, roleRank } from "@/lib/roles";
 import { AppShell } from "../shell/AppShell";
+import { NarrowerLimit, OwnLimit, TopUpRequests } from "./CreditsActions";
 import { paceLine } from "./creditsModel";
 
 export function CreditsView() {
@@ -17,7 +20,7 @@ export function CreditsView() {
   const view = org ? viewOf(query) : me.isError ? { kind: "failed" as const, reason: "Your session could not be read.", status: null } : { kind: "loading" as const };
 
   return (
-    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Credits" }]} aside={view.kind === "loaded" ? <OverdraftAside credits={view.data} /> : undefined}>
+    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Credits" }]} aside={view.kind === "loaded" && org ? <OverdraftAside credits={view.data} organisation={org.slug} /> : undefined}>
       {me.data && !org && (
         <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-6 text-ink-body">
           There are no credits to show until your organisation is named. <Link href={paths.start()} className="font-semibold text-primary-link">Start</Link>
@@ -78,7 +81,7 @@ function CreditsBody({ credits }: { credits: Credits }) {
         ) : (
           <ul aria-label="Budgets" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
             {credits.budgets.map((line) => (
-              <BudgetRow key={line.scope} line={line} />
+              <BudgetRow key={`${line.scope}#${line.level}#${line.name}`} line={line} />
             ))}
           </ul>
         )}
@@ -143,7 +146,11 @@ function BudgetRow({ line }: { line: BudgetLine }) {
   );
 }
 
-function OverdraftAside({ credits }: { credits: Credits }) {
+function OverdraftAside({ credits, organisation }: { credits: Credits; organisation: string }) {
+  const me = useGetMeQuery(undefined);
+  const role = roleAt(me.data, organisation);
+  const isOwner = role === "owner";
+  const isAdmin = roleRank(role) >= roleRank("admin");
   return (
     <>
       <section className={cn("flex flex-col gap-3", RISE)}>
@@ -161,6 +168,17 @@ function OverdraftAside({ credits }: { credits: Credits }) {
             No overdraft is set for your organisation, so work stops at zero.
           </p>
         )}
+        {credits.overdraft && (
+          <ErrorBoundary name="Your overdraft limit">
+            <OwnLimit organisation={organisation} credits={credits} isOwner={isOwner} />
+          </ErrorBoundary>
+        )}
+        {credits.overdraft && isAdmin && (
+          <ErrorBoundary name="A tighter limit">
+            <NarrowerLimit organisation={organisation} credits={credits} />
+          </ErrorBoundary>
+        )}
+        <p className="text-sm text-ink-muted">An overdraft never carries interest or fees.</p>
       </section>
       <section className="flex flex-col gap-2.5">
         <h2 className="text-lg font-semibold">At the limit</h2>
@@ -170,6 +188,7 @@ function OverdraftAside({ credits }: { credits: Credits }) {
           <li>All data, code and memory are kept.</li>
           <li>A top-up brings everything back at once.</li>
         </ul>
+        <span className="text-sm text-ink-muted">You are warned at zero and again halfway to the limit.</span>
       </section>
       <section className="flex flex-col gap-2.5">
         <h2 className="text-lg font-semibold">Top-ups</h2>
@@ -190,6 +209,13 @@ function OverdraftAside({ credits }: { credits: Credits }) {
             ))}
           </ul>
         )}
+      </section>
+      <section className="flex flex-col gap-2.5">
+        <h2 className="text-lg font-semibold">Asking for more</h2>
+        <p className="text-ink-body">There is no card on file: FrostAura adds credits by hand when you ask.</p>
+        <ErrorBoundary name="Top-up requests">
+          <TopUpRequests organisation={organisation} isOwner={isOwner} isAdmin={isAdmin} />
+        </ErrorBoundary>
       </section>
     </>
   );

@@ -439,6 +439,7 @@ function GroupRow({ group }: { group: TimelineGroup }) {
 
 function RunAside({ runId }: { runId: string }) {
   const log = useAppSelector((s) => s.runs[runId]);
+  const run = useGetRunQuery(runId).data;
   const derived = deriveRun(log?.events ?? []);
   const me = useGetMeQuery(undefined);
   return (
@@ -449,7 +450,7 @@ function RunAside({ runId }: { runId: string }) {
         </h2>
         {derived.tasks.length === 0 ? (
           <p data-state="empty" className="text-ink-muted">
-            No tasks yet. They appear here as the work is broken down.
+            {isTerminal(derived.status ?? run?.status) ? "This work was not broken into tasks." : "No tasks yet. They appear here as the work is broken down."}
           </p>
         ) : (
           <ul aria-label="Tasks" className="flex flex-col gap-2">

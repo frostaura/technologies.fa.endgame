@@ -183,3 +183,8 @@ export function orgFigures(counts: OrgCounts, monthCredits: number): { value: st
     { value: formatNumber(monthCredits), label: "credits this month" },
   ];
 }
+
+/** "Kit · Engineer", or just the name when the name is the role (a standing hire named for its job). */
+export function workerLabel(w: { name: string; role: string }): string {
+  return w.name.trim().toLowerCase() === w.role.trim().toLowerCase() ? w.name : `${w.name} · ${w.role}`;
+}

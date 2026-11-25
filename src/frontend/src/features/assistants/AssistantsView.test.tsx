@@ -1,0 +1,97 @@
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { modeSet } from "@/store/uiSlice";
+import { TOKENS } from "@/test/breadth";
+import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
+import { AssistantsView } from "./AssistantsView";
+
+const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
+const TREE = {
+  generatedAt: "t",
+  viewerRole: "owner",
+  organisation: { id: "o1", slug: "acme", name: "Acme", summary: null, spend: { monthCredits: 0 }, workers: [] },
+  divisions: [{ id: "d1", slug: "tools", name: "Tools", spend: { monthCredits: 0 }, workers: [], projects: [{ id: "p1", slug: "ledger", name: "Ledger", stage: "live", ideaId: null, note: null, progress: null, spend: { monthCredits: 0 }, workers: [], apps: [{ id: "a1", slug: "web", name: "Ledger web", health: "healthy", running: "awake", access: "private", sharedWith: 0, visitsToday: null, lastVisitAt: null, spend: { monthCredits: 0 }, workers: [] }] }] }],
+  needsYou: [],
+};
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
+
+function stub(tokens: Response | "pending", extra = {}) {
+  return stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/tree": json(TREE), "GET /api/notifications": json({ organisation: "acme", unread: 0, notifications: [] }), "GET /api/tokens": tokens, ...extra });
+}
+
+describe("AssistantsView", () => {
+  it("speaks plainly in normal mode and names the protocol only in technical mode", async () => {
+    stub(json(TOKENS));
+    const { store } = renderWithStore(<AssistantsView />);
+    expect(await screen.findByRole("heading", { level: 1, name: "Let an AI assistant work with your organisation" })).toBeTruthy();
+    expect(document.querySelector("main")?.textContent).not.toMatch(/\bMCP\b|token/);
+    act(() => void store.dispatch(modeSet("technical")));
+    expect(screen.getByRole("heading", { level: 1, name: "MCP access tokens" })).toBeTruthy();
+  });
+
+  it("shows loading, a failed read and an empty list distinctly", async () => {
+    stub("pending");
+    renderWithStore(<AssistantsView />);
+    expect((await screen.findByText("Loading the assistants you let in")).closest("[data-state]")?.getAttribute("data-state")).toBe("loading");
+    cleanup();
+    stub(problem(500, "The database did not answer"));
+    renderWithStore(<AssistantsView />);
+    expect(await screen.findByText("The assistants you let in could not be loaded")).toBeTruthy();
+    cleanup();
+    stub(json([]));
+    renderWithStore(<AssistantsView />);
+    expect(await screen.findByText("No assistant has a key yet")).toBeTruthy();
+  });
+
+  it("lists each key with its role, when it was last used and whether it still works", async () => {
+    stub(json(TOKENS));
+    renderWithStore(<AssistantsView />);
+    const list = await screen.findByRole("list", { name: "Keys" });
+    const laptop = list.querySelector('[data-token="t1"]') as HTMLElement;
+    expect(within(laptop).getByText(/Last used/)).toBeTruthy();
+    expect(within(laptop).getByText("Active")).toBeTruthy();
+    expect(within(list.querySelector('[data-token="t2"]') as HTMLElement).getByText("Never used")).toBeTruthy();
+    expect(within(list.querySelector('[data-token="t2"]') as HTMLElement).getByText("Revoked")).toBeTruthy();
+  });
+
+  it("gives the two kinds of address: the organisation's and each app's", async () => {
+    stub(json(TOKENS));
+    renderWithStore(<AssistantsView />);
+    expect(await screen.findByText(`${window.location.origin}/mcp`)).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "App addresses" })).getByText(`${window.location.origin}/mcp/apps/a1`)).toBeTruthy();
+  });
+
+  it("makes a key no higher than the person's role and shows it once, never in the store", async () => {
+    const made = { token: "egp_secret_value_shown_once", accessToken: { ...TOKENS[0], id: "t3", name: "Desk assistant", role: "admin" } };
+    const api = stub(json(TOKENS), { "POST /api/tokens": json(made, 201) });
+    const { store } = renderWithStore(<AssistantsView />);
+    await screen.findByRole("list", { name: "Keys" });
+    const role = screen.getByLabelText("What it may do") as HTMLSelectElement;
+    expect([...role.options].map((o) => o.value)).toEqual(["admin", "builder", "viewer"]);
+    fireEvent.change(screen.getByLabelText("Which assistant is it for?"), { target: { value: "Desk assistant" } });
+    fireEvent.change(role, { target: { value: "admin" } });
+    fireEvent.change(screen.getByLabelText("It stops working"), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Make the key" }));
+    const once = await screen.findByRole("status", { name: "The new key" });
+    expect(within(once).getByText("egp_secret_value_shown_once")).toBeTruthy();
+    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ name: "Desk assistant", organisation: "acme", role: "admin", expiresInDays: 30 });
+    expect(JSON.stringify(store.getState())).not.toContain("egp_secret_value_shown_once");
+    expect(within(screen.getByRole("list", { name: "Keys" })).getByText("Desk assistant")).toBeTruthy();
+  });
+
+  it("revokes at once after a confirmation, and puts the key back when refused", async () => {
+    stub(json(TOKENS), { "DELETE /api/tokens/t1": () => new Promise<Response>((r) => setTimeout(() => r(problem(409, "Already revoked elsewhere")), 60)) });
+    renderWithStore(<AssistantsView />);
+    const row = (await screen.findByRole("list", { name: "Keys" })).querySelector('[data-token="t1"]') as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: "Revoke" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Revoke it" }));
+    await waitFor(() => expect(within(row).getByText("Revoked")).toBeTruthy());
+    expect(await within(row).findByText(/The key still works: Already revoked elsewhere/)).toBeTruthy();
+    await waitFor(() => expect(within(row).getByText("Active")).toBeTruthy());
+  });
+});

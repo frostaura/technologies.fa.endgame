@@ -9,13 +9,20 @@ import { formatCredits, formatDate, formatDuration, formatNumber, plural, timeAg
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
+import { plainOrNull } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store";
 import { useGetAppQuery, useGetMeQuery, useGetSecretsQuery, useGetSharesQuery, useGetTreeQuery, useRemoveShareMutation, useUpdateAppSettingsMutation } from "@/store/api";
 import { shareApp } from "@/store/sensitive";
 import type { AppAccess, AppDetail, AppShareCreated } from "@/store/types";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { roleAt, roleRank } from "@/lib/roles";
+import { useAppSelector } from "@/store";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { healthChip, namesFor } from "../home/treeModel";
+import { ItIsYours, TechnicalDetails, WhatItUses } from "./AppAside";
+import { AskPanel, Dashboard } from "./AskPanel";
+import { History } from "./History";
 
 export function AppView({ appId }: { appId: string }) {
   const query = useGetAppQuery(appId, { pollingInterval: 20_000, skipPollingIfUnfocused: true });
@@ -38,7 +45,7 @@ export function AppView({ appId }: { appId: string }) {
   } else crumbs.push({ label: "App" });
 
   return (
-    <AppShell crumbs={crumbs} aside={app ? <Settings app={app} orgName={org?.name ?? "your organisation"} /> : undefined}>
+    <AppShell crumbs={crumbs} aside={app ? <AppAsideColumn app={app} orgName={org?.name ?? "your organisation"} /> : undefined}>
       {view.kind === "loading" && (
         <Loading label="Loading the app" className="flex flex-col gap-6">
           <Skeleton className="h-12 w-1/2" />
@@ -63,8 +70,37 @@ export function AppView({ appId }: { appId: string }) {
 /** Shown wherever the app has not reported a figure yet: unknown is not zero. */
 const NOT_MEASURED = "Not measured yet";
 
+/** What the person may do here, as the cascade resolves their grants. An operator in God mode acts as an Admin. */
+function useAppRole(app: AppDetail) {
+  const me = useGetMeQuery(undefined);
+  const role = roleAt(me.data, app.scope);
+  const operator = me.data?.isOperator === true;
+  return { builder: roleRank(role) >= roleRank("builder") || operator, owner: role === "owner" };
+}
+
+function AppAsideColumn({ app, orgName }: { app: AppDetail; orgName: string }) {
+  const technical = useAppSelector((s) => s.ui.mode) === "technical";
+  const { owner } = useAppRole(app);
+  return (
+    <>
+      <ErrorBoundary name="The app's settings">
+        <Settings app={app} orgName={orgName} />
+      </ErrorBoundary>
+      <ErrorBoundary name="What it uses">
+        <WhatItUses app={app} />
+      </ErrorBoundary>
+      <ErrorBoundary name="The download">
+        <ItIsYours app={app} isOwner={owner} />
+      </ErrorBoundary>
+      {technical && <TechnicalDetails app={app} />}
+    </>
+  );
+}
+
 function AppBody({ app }: { app: AppDetail }) {
   const health = healthChip(app.health.state);
+  const { builder } = useAppRole(app);
+  const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const t = app.telemetry;
   const healthText = { success: "text-success-text", attention: "text-attention-text", "attention-strong": "text-attention-text" } as Record<string, string>;
   return (
@@ -87,8 +123,8 @@ function AppBody({ app }: { app: AppDetail }) {
         </a>
       </div>
 
-      <section aria-label="Today" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Tile index={1} label="Health" value={health.label} valueClass={healthText[health.tone] ?? "text-ink"} note={app.health.summary} pulse={app.health.state === "healthy"} />
+      <section aria-label="Today" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <Tile index={1} label="Health" value={health.label} valueClass={healthText[health.tone] ?? "text-ink"} note={healthNote(app, technical)} pulse={app.health.state === "healthy"} />
         {t ? (
           <>
             <Tile
@@ -113,12 +149,33 @@ function AppBody({ app }: { app: AppDetail }) {
         <Tile index={4} label="Cost this month" value={formatNumber(app.cost.monthCredits)} note={app.cost.capCredits !== null ? `Cap ${formatCredits(app.cost.capCredits)}` : "No cap of its own; the one above applies"} />
       </section>
 
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
-        {app.settings.access === "shared" ? <Sharing app={app} /> : <SharingOff app={app} />}
-        <AppSecrets scope={app.scope} />
+      <ErrorBoundary name="Asking about this app">
+        <AskPanel appId={app.id} canAsk={builder} />
+      </ErrorBoundary>
+      <ErrorBoundary name="The dashboard">
+        <Dashboard appId={app.id} canChange={builder} />
+      </ErrorBoundary>
+
+      <div className="grid grid-cols-1 items-start gap-6 2xl:grid-cols-2">
+        <ErrorBoundary name="The history">
+          <History app={app} canRestore={builder} />
+        </ErrorBoundary>
+        <div className="flex flex-col gap-6">
+          <ErrorBoundary name="Sharing">{app.settings.access === "shared" ? <Sharing app={app} /> : <SharingOff app={app} />}</ErrorBoundary>
+          <ErrorBoundary name="The secrets">
+            <AppSecrets scope={app.scope} />
+          </ErrorBoundary>
+        </div>
       </div>
     </>
   );
+}
+
+/** The health line: in normal mode a version is "the latest version", never its id. */
+function healthNote(app: AppDetail, technical: boolean): string {
+  if (technical) return app.health.summary;
+  if (app.health.state === "healthy" && app.telemetry) return app.telemetry.errorsToday === 0 ? "No errors today" : `${plural(app.telemetry.errorsToday, "error")} today`;
+  return plainOrNull(app.health.summary) ?? (app.publishedAt ? `Running the version from ${formatDate(app.publishedAt)}` : "Not published yet");
 }
 
 /** Private or public: there is no list of people to manage, and the page says how to start one. */

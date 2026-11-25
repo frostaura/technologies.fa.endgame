@@ -567,7 +567,7 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
 
 /** Credits spent by a group, as a label. */
 export function groupCredits(g: TimelineGroup): string | null {
-  return g.credits > 0 ? formatCredits(g.credits) : null;
+  return g.credits > 0 ? `${formatCredits(g.credits)} ${g.credits === 1 ? "credit" : "credits"}` : null;
 }
 
 export type { StepTone };
