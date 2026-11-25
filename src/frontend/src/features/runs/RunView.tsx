@@ -16,7 +16,7 @@ import { useControlRunMutation, useGetRunQuery } from "@/store/api";
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
-import { accuracy, deriveRun, isTerminal, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
+import { accuracy, deriveRun, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
 import { buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
 import { useRunStream } from "./useRunStream";
 import { ApprovalCard } from "./ApprovalCard";
@@ -31,6 +31,9 @@ const STATUS: Record<RunStatus, { label: string; tone: BadgeTone }> = {
   failed: { label: "Did not succeed", tone: "attention-strong" },
   cancelled: { label: "Cancelled", tone: "quiet" },
 };
+
+/** The events that change a run's state: once one arrives after a control, the log is the status again. */
+const STATE_EVENTS = new Set(["run.paused", "run.resumed", "run.finished"]);
 
 /** How many of the latest steps a long run draws at first; earlier ones are shown on request, this many at a time. */
 const STEPS_AT_ONCE = 200;
@@ -85,9 +88,13 @@ function RunBody({ run }: { run: Run }) {
   const [control, controlState] = useControlRunMutation();
   const [controlError, setControlError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // What a pause, resume or cancel just did, and how far the log had got then: until the log itself records a change
+  // of state after it, the screen keeps the answer, so a button never flips back to what it was before it was pressed.
+  const [settled, setSettled] = useState<{ status: RunStatus; seq: number } | null>(null);
+  const logMoved = settled !== null && log.events.some((e) => e.seq > settled.seq && STATE_EVENTS.has(e.type));
 
-  // While a control request is in flight the optimistic status wins; afterwards the log does.
-  const status: RunStatus = controlState.isLoading ? run.status : (derived.status ?? run.status);
+  // While a control request is in flight the optimistic status wins; then what it did; afterwards the log.
+  const status: RunStatus = controlState.isLoading ? run.status : settled && !logMoved ? settled.status : (derived.status ?? run.status);
   const terminal = isTerminal(status);
   // run.finished's summary may be technical (ARCH-004); normal mode says the closing message instead.
   const lastPlain = [...derived.messages].reverse().find((m) => m.from !== "owner" && plainOrNull(m.text))?.text ?? null;
@@ -101,7 +108,8 @@ function RunBody({ run }: { run: Run }) {
     setControlError(null);
     setConfirmCancel(false);
     try {
-      await control({ id: run.id, action }).unwrap();
+      const answered = await control({ id: run.id, action }).unwrap();
+      setSettled({ status: answered.status, seq: lastSeq(log.events) });
     } catch (e) {
       setControlError(`Could not ${action}: ${describeError(e as never)}`);
     }

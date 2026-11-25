@@ -168,6 +168,25 @@ describe("RunView", () => {
     expect(api.calls.some((c) => c.path === "/api/runs/r1/pause")).toBe(true);
   });
 
+  it("keeps what a pause did until the log records it, so the button never flips back", async () => {
+    base({ "POST /api/runs/r1/pause": json({ ...RUN, status: "paused" }) });
+    renderWithStore(<RunView runId="r1" />);
+    await screen.findByRole("heading", { name: "Researching Pager" });
+    feed([["run.started"]]);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    // Answered, and the log has not caught up yet: still paused, not "Working" with a Pause button again.
+    expect(await screen.findByRole("button", { name: "Resume" })).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
+    // The log moves on (the runner resumed it): the log is the status again.
+    act(() => {
+      FakeEventSource.latest().emit(2, "run.paused", { reason: "Paused by the owner." });
+      FakeEventSource.latest().emit(3, "run.resumed", {});
+      flushRunStreams();
+    });
+    expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
+  });
+
   it("draws a long build promptly, folding its earlier steps, and says one cost the log and the run agree on", async () => {
     // About 2,300 events, as a real build writes them: model calls, tools and messages, with free repairs among them.
     const events: [string, Record<string, unknown>?][] = [["run.started"], ["estimate.made", { credits: 40 }]];
