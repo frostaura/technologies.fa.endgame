@@ -1,6 +1,6 @@
 ---
 name: technologies-fa-endgame-state
-description: "Every service is merged and runs together; research works live end to end and returned a real verdict. No idea has yet become a running app. Nothing is deployed anywhere and there are no users."
+description: "All six phases merged; an idea becomes a running private app for real and the three acceptance tests passed on a local stack. CI on GitHub is red, a defect lane is open, nothing is deployed, no users."
 type: state
 last_verified: 2026-11-25
 ---
@@ -11,18 +11,26 @@ last_verified: 2026-11-25
 researched, designed and planned, then approved for Phase 0 of
 [`../docs/specs/endgame-build-plan.md`](../docs/specs/endgame-build-plan.md).
 
-- **Phase:** 2 of 6 closing, with parts of 3, 4 and 5 already merged. All four spikes that ran
-  are written up (`ARCH-003`, `ARCH-005`, `ARCH-006`); Cloudflare was not spiked.
-- **Merged to `main` and running together:** control plane (three passes: tree, cascade, sign-in,
-  credits with reservations and overdraft, model gateway, runs, tasks, the platform API for apps,
-  secrets vault, schedules, telemetry, workforce, autonomy, ontology), console, app kit, Dock,
-  Edge, egress proxy, Runner and harness. A stack acceptance suite (`make e2e-stack`) passed 13 of
-  13 steps on 2026-11-25.
-- **Proven for real on 2026-11-25:** an idea typed into the console was researched by the Runner
-  with live models and live web search, cost 5.8 credits against an estimate of 33, and returned
-  "do not build". **Not proven:** the build half — no idea has yet become a running app.
-- **Still in lanes, not merged:** the factory closure and second console pass
-  ([watch](watch.md)), and Cloudflare management with backups.
+- **Phase:** all six phases of the build plan are merged to `main`; a last lane is fixing the
+  defects in [watch](watch.md) and getting CI green. Cloudflare was built against a local fake
+  and never applied to the real account.
+- **Proven for real, 2026-11-25:** an idea typed into the console is researched with live models
+  and web search, given a verdict, and — when built — becomes a private app running in its own
+  container at its own address. The orchestrator did this itself in Chrome (a reading-list app)
+  and used the result. Repair after a failed evaluation and one-step model escalation were seen
+  working in a later run.
+- **The plan's three acceptance tests passed, run by an agent on its own stack:** FrostAura as
+  tenant zero with a workforce hired by the factory; a court-booking app (bookings that cost
+  minutes, an admin adding minutes, a signed hardware endpoint, a confirmation e-mail, a call
+  through the app's derived MCP tools) on its second build; and an invited organisation whose
+  owner registered a real passkey, built an app, shared it by e-mail, and was invisible to the
+  first organisation. Parts of the second and third were finished by replaying against apps
+  already built, not in one unbroken run.
+- **Suite on `main`:** 610 backend tests, the console's, the app kit's, the operations service's
+  and the outage page's, all passing with zero warnings when last run by a lane. **CI on GitHub
+  was red** on the last pushes: one console test fails on the Linux runner, and the jobs after it
+  have never run there.
+- **Model spend so far:** about US$9.20 across every spike, benchmark and factory run.
 - **Repository:** `frostaura/technologies.fa.endgame`, **public** by founder decision on
   2026-11-24, for free CI minutes. He accepts that it may be cloned before he later makes it
   private. It carries no licence file, so nothing is granted to anyone who does.
