@@ -273,6 +273,23 @@ test("3. placement, hires, plan, builders, evaluator, security review and a priv
   await note(`app ${story.appPath} (${story.appId}), access ${JSON.stringify(story.report.app)}`);
 });
 
+/** Sets a book's status the way the built app offers it: a "Mark …" button on its card, or a status control on its own page. */
+async function setStatus(page: Page, title: string, status: "reading" | "finished") {
+  const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: title }) }).first();
+  const button = card.getByRole("button", { name: new RegExp(`^(mark )?(as )?${status}`, "i") });
+  const saved = page.waitForResponse((r) => ["PATCH", "PUT", "POST"].includes(r.request().method()) && /books/.test(r.url()));
+  if (await button.count()) {
+    await button.first().click();
+  } else {
+    await page.getByText(title).first().click();
+    const control = page.getByLabel(/status/i).first();
+    await expect(control).toBeVisible({ timeout: 20_000 });
+    if ((await control.evaluate((e) => e.tagName)) === "SELECT") await control.selectOption({ label: status === "reading" ? "Reading" : "Finished" });
+    else await page.getByRole("button", { name: new RegExp(status, "i") }).or(page.getByRole("radio", { name: new RegExp(status, "i") })).first().click();
+  }
+  expect((await saved).status()).toBeLessThan(300);
+}
+
 async function openApp(page: Page) {
   await expect(async () => {
     const response = await page.goto(`${EDGE}/${story.appPath}/`);
@@ -296,8 +313,8 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   await page.screenshot({ path: path.join(STATE, "1-home.png"), fullPage: true });
 
   const books = [
-    { title: "The Left Hand of Darkness", author: "Ursula K. Le Guin", note: "Our pick for December." },
-    { title: "Piranesi", author: "Susanna Clarke", note: "Short and strange; everyone loved it." },
+    { title: `The Left Hand of Darkness (${run})`, author: "Ursula K. Le Guin", note: "Our pick for December." },
+    { title: `Piranesi (${run})`, author: "Susanna Clarke", note: "Short and strange; everyone loved it." },
   ];
   for (const book of books) {
     await page.getByRole("link", { name: /add a book|new book|add book/i }).or(page.getByRole("button", { name: /add a book|new book|add book/i })).first().click();
@@ -311,14 +328,8 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   for (const book of books) await expect(page.getByText(book.title).first()).toBeVisible();
   await page.screenshot({ path: path.join(STATE, "2-two-books.png"), fullPage: true });
 
-  // Mark the second one finished, where the app puts the control: the book's own page.
-  await page.getByText(books[1].title).first().click();
-  const status = page.getByLabel(/status/i).first();
-  await expect(status).toBeVisible({ timeout: 20_000 });
-  const saved = page.waitForResponse((r) => ["PATCH", "PUT", "POST"].includes(r.request().method()) && /books/.test(r.url()));
-  if ((await status.evaluate((e) => e.tagName)) === "SELECT") await status.selectOption({ label: "Finished" });
-  else await page.getByRole("button", { name: /finished/i }).or(page.getByRole("radio", { name: /finished/i })).first().click();
-  expect((await saved).status()).toBeLessThan(300);
+  // Mark the second one finished, wherever the app puts the control: a button on its card, or the book's own page.
+  await setStatus(page, books[1].title, "finished");
   await page.screenshot({ path: path.join(STATE, "3-finished.png"), fullPage: true });
 
   // A reload, and both are still there, the second one finished.
@@ -326,7 +337,7 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   await page.reload();
   await page.waitForLoadState("networkidle");
   for (const book of books) await expect(page.getByText(book.title).first()).toBeVisible();
-  const card = page.locator("li, article, a, [data-testid*=book]").filter({ hasText: books[1].title }).first();
+  const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: books[1].title }) }).first();
   await expect(card).toContainText(/finished/i);
   await page.screenshot({ path: path.join(STATE, "4-after-reload.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -336,20 +347,17 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   // What everyone is reading now: mark the first book "reading", then find the view that shows it as such.
   await page.setViewportSize({ width: 1440, height: 900 });
   await openApp(page);
-  await page.getByText(books[0].title).first().click();
-  const reading = page.getByLabel(/status/i).first();
-  await expect(reading).toBeVisible({ timeout: 20_000 });
-  if ((await reading.evaluate((e) => e.tagName)) === "SELECT") await reading.selectOption({ label: "Reading" });
-  else await page.getByRole("button", { name: /^reading/i }).or(page.getByRole("radio", { name: /^reading/i })).first().click();
+  await setStatus(page, books[0].title, "reading");
   await openApp(page);
   await page.waitForLoadState("networkidle");
-  const view = page.getByText(/reading now|currently reading|everyone is reading/i).first();
-  if (!(await view.isVisible())) {
-    await page.getByRole("link", { name: /reading now|currently reading|everyone/i }).or(page.getByRole("tab", { name: /reading now|currently reading|everyone/i })).first().click();
-  }
-  await expect(page.getByText(/reading now|currently reading|everyone is reading/i).first()).toBeVisible({ timeout: 20_000 });
-  const section = page.locator("section, [role=region], main").filter({ hasText: /reading now|currently reading|everyone is reading/i }).last();
-  await expect(section).toContainText(books[0].title);
+  // The app's own way to it: a link or tab when it has one, otherwise a section of the home page.
+  const link = page.getByRole("link", { name: /reading now|currently reading|everyone/i }).or(page.getByRole("tab", { name: /reading now|currently reading|everyone/i }));
+  if (await link.count()) await link.first().click();
+  await page.waitForLoadState("networkidle");
+  const region = page.getByRole("main").filter({ hasText: /reading now|currently reading|everyone is reading/i });
+  await expect(region).toBeVisible({ timeout: 20_000 });
+  await expect(region).toContainText(books[0].title);
+  await expect(region).not.toContainText(books[1].title); // finished, so not being read now
   await page.screenshot({ path: path.join(STATE, "6-reading-now.png"), fullPage: true });
   await note("what everyone is reading now: the book marked reading is shown there");
 });

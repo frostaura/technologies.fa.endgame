@@ -185,17 +185,17 @@ public sealed class AgentEventWriter(IEventSink sink, string agent)
         ArgumentNullException.ThrowIfNull(payload);
         var size = System.Text.Encoding.UTF8.GetByteCount(payload.ToJsonString(Json.Compact));
         var guard = 0;
-        while (size > HarnessEvents.MaxPayloadBytes - 1024 && guard++ < 32)
+        while (size > HarnessEvents.MaxPayloadBytes - 1024 && guard++ < 64)
         {
-            var (parent, key, length) = Largest(payload, null, "");
-            if (parent is null || length < 256)
+            // The longest string anywhere — an object's member or an array's element (a list of faults, say).
+            var (text, set) = Largest(payload, null, null);
+            if (text is null || set is null || text.Length < 256)
             {
                 break;
             }
 
-            var text = parent[key]!.GetValue<string>();
             var keep = Math.Max(128, text.Length - (size - (HarnessEvents.MaxPayloadBytes - 2048)) - 64);
-            parent[key] = OutputText.Truncate(text, Math.Min(keep, text.Length / 2));
+            set(OutputText.Truncate(text, Math.Min(keep, text.Length / 2)));
             payload["truncated"] = true;
             size = System.Text.Encoding.UTF8.GetByteCount(payload.ToJsonString(Json.Compact));
         }
@@ -203,34 +203,48 @@ public sealed class AgentEventWriter(IEventSink sink, string agent)
         return payload;
     }
 
-    private static (JsonObject? Parent, string Key, int Length) Largest(JsonNode node, JsonObject? best, string bestKey, int bestLength = 0)
+    private static (string? Text, Action<string>? Set) Largest(JsonNode node, string? best, Action<string>? bestSet)
     {
         switch (node)
         {
             case JsonObject o:
-                foreach (var (key, value) in o)
+                foreach (var (key, value) in o.ToList())
                 {
-                    if (value is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > bestLength)
+                    if (value is JsonValue v && v.TryGetValue<string>(out var s))
                     {
-                        (best, bestKey, bestLength) = (o, key, s.Length);
+                        if (s.Length > (best?.Length ?? 0))
+                        {
+                            (best, bestSet) = (s, t => o[key] = t);
+                        }
                     }
                     else if (value is JsonObject or JsonArray)
                     {
-                        (best, bestKey, bestLength) = Largest(value, best, bestKey, bestLength);
+                        (best, bestSet) = Largest(value, best, bestSet);
                     }
                 }
 
                 break;
             case JsonArray a:
-                foreach (var item in a.OfType<JsonNode>())
+                for (var i = 0; i < a.Count; i++)
                 {
-                    (best, bestKey, bestLength) = Largest(item, best, bestKey, bestLength);
+                    var index = i;
+                    if (a[i] is JsonValue v && v.TryGetValue<string>(out var s))
+                    {
+                        if (s.Length > (best?.Length ?? 0))
+                        {
+                            (best, bestSet) = (s, t => a[index] = t);
+                        }
+                    }
+                    else if (a[i] is { } child)
+                    {
+                        (best, bestSet) = Largest(child, best, bestSet);
+                    }
                 }
 
                 break;
         }
 
-        return (best, bestKey, bestLength);
+        return (best, bestSet);
     }
 }
 

@@ -57,7 +57,7 @@ public sealed class RunExecutor(
                 Run = run,
                 Holder = holder,
                 ControlPlane = controlPlane,
-                Sink = log,
+                Sink = new FittingSink(log),
                 LogReader = log,
                 History = history,
                 Control = control,
@@ -234,5 +234,19 @@ public sealed class RunExecutor(
             var signal = await keeper.CheckAsync(cancellationToken);
             return signal == RunSignal.Continue && shutdown() ? RunSignal.LeaseLost : signal;
         }
+    }
+}
+
+/// <summary>
+/// Every event a workflow appends goes through the same cleaning and fitting the agents' own writer applies: control
+/// characters scrubbed and the payload cut to the log's 64 KB limit, largest strings first — a live build failed when one
+/// evaluation's evidence and faults ran past it.
+/// </summary>
+public sealed class FittingSink(IEventSink inner) : IEventSink
+{
+    public Task<IReadOnlyList<RunEvent>> AppendAsync(IReadOnlyList<RunEvent> events, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        return inner.AppendAsync(events.Select(e => new RunEvent(e.Type, AgentEventWriter.Fit(AgentEventWriter.Clean(e.Payload)))).ToList(), cancellationToken);
     }
 }

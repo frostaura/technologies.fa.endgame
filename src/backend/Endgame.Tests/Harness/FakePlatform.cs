@@ -214,6 +214,12 @@ public sealed class FakeControlPlane : HttpMessageHandler
         }
 
         var appended = new JsonArray();
+        // The control plane's own limit (RunService.MaxPayloadBytes): a fake that accepted anything hid the defect a live build found.
+        if (body["events"]!.AsArray().OfType<JsonObject>().Any(e => System.Text.Encoding.UTF8.GetByteCount((e["payload"] ?? new JsonObject()).ToJsonString()) > 64 * 1024))
+        {
+            return Problem(HttpStatusCode.BadRequest, "invalid_request", "An event's payload is at most 65536 bytes; truncate tool results before logging them.");
+        }
+
         foreach (var e in body["events"]!.AsArray().OfType<JsonObject>())
         {
             Append(e["type"]!.GetValue<string>(), e["payload"]?.DeepClone().AsObject() ?? []);

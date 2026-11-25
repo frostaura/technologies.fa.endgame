@@ -245,6 +245,9 @@ public sealed class WorkflowTests
 
         public List<string> PlanToolResults { get; } = [];
 
+        /// <summary>When set, a failed evaluation names faults this long (twice), as a verbose evaluator does.</summary>
+        public string? LongFaults { get; set; }
+
         public ScriptedModel Model() => new() { Fallback = Answer };
 
         private ModelReply Answer(ChatCall call)
@@ -297,7 +300,7 @@ public sealed class WorkflowTests
                 var passed = EvaluationPasses(Evaluations++);
                 var requirements = new JsonArray(global::System.Text.RegularExpressions.Regex.Matches(system, @"^- (r\d+):", global::System.Text.RegularExpressions.RegexOptions.Multiline)
                     .Select(m => (JsonNode)new JsonObject { ["id"] = m.Groups[1].Value, ["met"] = passed, ["evidence"] = calls ? "GET api/recipes as member-a → 200 with the recipe listed" : "The tests cover it." }).ToArray());
-                return ScriptedModel.Text(new JsonObject { ["passed"] = passed, ["evidence"] = "make test: 12 passed", ["requirements"] = requirements, ["faults"] = passed ? new JsonArray() : Json("[\"RecipesApiTests fails: POST without a title returns 500\"]") }.ToJsonString());
+                return ScriptedModel.Text(new JsonObject { ["passed"] = passed, ["evidence"] = "make test: 12 passed", ["requirements"] = requirements, ["faults"] = passed ? new JsonArray() : LongFaults is { } longer ? new JsonArray(longer, "POST without a title returns 500 " + longer) : Json("[\"RecipesApiTests fails: POST without a title returns 500\"]") }.ToJsonString());
             }
 
             if (system.Contains("security reviewer", StringComparison.Ordinal))
@@ -685,6 +688,20 @@ public sealed class WorkflowTests
         Assert.StartsWith("Sent back for repair, at no charge: Families can keep their recipes in one place", failed["summary"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.Contains(model.Calls, c => c.Repair && c.TaskType == "build-t1");
         Assert.Equal(2, cp.Types.Count(t => t == "evaluation.passed"));
+    }
+
+    [Fact]
+    public async Task An_evaluation_whose_evidence_runs_past_the_logs_limit_is_fitted_not_refused()
+    {
+        // A live build failed here: the evaluator's faults and evidence made one evaluation event larger than 64 KB.
+        var (cp, ws, dock) = BuildRun();
+        var huge = new string('x', 40_000);
+        var factory = new Factory { EvaluationPasses = n => n != 0, LongFaults = huge };
+        await RunBuildAsync(cp, factory.Model(), ws, dock);
+        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+        var failed = cp.Payload("evaluation.failed")!;
+        Assert.True(global::System.Text.Encoding.UTF8.GetByteCount(failed.ToJsonString()) <= 64 * 1024);
+        Assert.True(failed["truncated"]!.GetValue<bool>());
     }
 
     [Fact]
