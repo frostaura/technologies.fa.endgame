@@ -19,6 +19,24 @@ function layer(className: string): HTMLDivElement {
   return el;
 }
 
+/**
+ * Where an element sits in the demo's own page: an Edge page is drawn in a frame, so its controls'
+ * boxes are moved by the frame's own place on the page.
+ */
+export function pageRect(el: Element): { left: number; top: number; width: number; height: number; bottom: number } {
+  const r = el.getBoundingClientRect();
+  let left = r.left;
+  let top = r.top;
+  let frame = el.ownerDocument.defaultView?.frameElement ?? null;
+  while (frame) {
+    const f = frame.getBoundingClientRect();
+    left += f.left + frame.clientLeft;
+    top += f.top + frame.clientTop;
+    frame = frame.ownerDocument.defaultView?.frameElement ?? null;
+  }
+  return { left, top, width: r.width, height: r.height, bottom: top + r.height };
+}
+
 function place() {
   frame = 0;
   if (!tracked || !ring) return;
@@ -26,7 +44,7 @@ function place() {
     clearSpotlight();
     return;
   }
-  const r = tracked.getBoundingClientRect();
+  const r = pageRect(tracked);
   Object.assign(ring.style, { left: `${r.left - 6}px`, top: `${r.top - 6}px`, width: `${r.width + 12}px`, height: `${r.height + 12}px` });
   if (note) {
     const below = r.bottom + 12 + 80 < window.innerHeight;

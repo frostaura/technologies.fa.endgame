@@ -1,3 +1,5 @@
+import { currentAddress } from "@/lib/router";
+
 /**
  * The address a signed-out visitor first asked for, kept while they sign in so they land there after,
  * not on the org chart. Only a console address is kept: never another site, never the sign-in page.
@@ -13,7 +15,8 @@ export function safeReturnTo(path: string | null | undefined): string | null {
 
 /** Called as the sign-in screen first draws, before the address is replaced with /sign-in. */
 export function rememberReturnTo(): string | null {
-  const here = typeof window === "undefined" ? null : safeReturnTo(window.location.pathname + window.location.search);
+  // The console's own address, which in the demo's hash mode is after the # (ARCH-009), not the page's path.
+  const here = typeof window === "undefined" ? null : safeReturnTo(currentAddress());
   try {
     if (here) window.sessionStorage.setItem(KEY, here);
     return here ?? safeReturnTo(window.sessionStorage.getItem(KEY));

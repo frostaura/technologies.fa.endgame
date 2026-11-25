@@ -29,6 +29,15 @@ document.addEventListener(
     const a = (e.target as Element | null)?.closest?.("a[href]");
     if (!a || e.defaultPrevented) return;
     const href = a.getAttribute("href") ?? "";
+    // An in-page link ("Skip to the content", `#main`): the address after the # is the console's
+    // route here, so the browser is not left to follow it; the target takes the focus, as it would.
+    if (/^#[^/]/.test(href)) {
+      e.preventDefault();
+      const target = document.getElementById(href.slice(1));
+      target?.focus();
+      target?.scrollIntoView({ block: "start" });
+      return;
+    }
     if (!/^https?:\/\//.test(href)) return;
     e.preventDefault();
     const app = getWorld().apps.find((x) => {

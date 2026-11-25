@@ -406,8 +406,8 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   );
   w.dashboard.push(...dashboard(a));
   w.tokens.push(
-    { id: uuidFor("token:desk"), name: "Mara's desktop assistant", organisation: ORG, role: "admin", prefix: "egp_7f3a", createdAt: a(20 * day), expiresAt: null, lastUsedAt: a(35), revokedAt: null, active: true },
-    { id: uuidFor("token:old"), name: "Old laptop", organisation: ORG, role: "builder", prefix: "egp_c19e", createdAt: a(50 * day), expiresAt: a(-40 * day), lastUsedAt: a(32 * day), revokedAt: a(31 * day), active: false },
+    { userId: PEOPLE.owner.id, id: uuidFor("token:desk"), name: "Mara's desktop assistant", organisation: ORG, role: "admin", prefix: "egp_7f3a", createdAt: a(20 * day), expiresAt: null, lastUsedAt: a(35), revokedAt: null, active: true },
+    { userId: PEOPLE.owner.id, id: uuidFor("token:old"), name: "Old laptop", organisation: ORG, role: "builder", prefix: "egp_c19e", createdAt: a(50 * day), expiresAt: a(-40 * day), lastUsedAt: a(32 * day), revokedAt: a(31 * day), active: false },
   );
 
   // What each level says about itself ("What this is") ---------------------------------------

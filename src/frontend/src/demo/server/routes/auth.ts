@@ -25,7 +25,7 @@ function credentialId(body: Record<string, unknown>): string {
 }
 
 area("AuthEndpoints", {
-  "GET auth/options": () => ok({ passkey: true, developmentSignIn: false }),
+  "GET auth/options": (_req, { world }) => ok({ passkey: true, developmentSignIn: !!world.developmentSignIn }),
 
   "POST auth/passkey/register/options": (req, { world }) => {
     const email = (str(req.body, "email") ?? "").trim().toLowerCase();
@@ -95,8 +95,23 @@ area("AuthEndpoints", {
     return ok(meView(world, u));
   },
 
-  // The development sign-in does not exist in the demo, exactly as on a deployment without it.
-  "POST auth/development": () => problem(404, "not_found", "Not found", "There is nothing at this address."),
+  // The development sign-in does not exist, exactly as on a deployment without it — except in the
+  // one scenario that plays a development deployment (`MapDevLoginIfEnabled`).
+  "POST auth/development": (req, { world }) => {
+    if (!world.developmentSignIn) return problem(404, "not_found", "Not found", "There is nothing at this address.");
+    const email = (str(req.body, "email") ?? world.developmentSignIn.email).trim().toLowerCase();
+    let u = world.users.find((x) => x.email === email);
+    if (!u) {
+      const fresh = world.organisations.length === 0 && world.users.length === 0;
+      const name = (str(req.body, "displayName") ?? "").trim() || (fresh ? "Development owner" : (email.split("@")[0] ?? email));
+      u = { id: uuidFor(`user:${email}`), displayName: name, email, passkeys: 0, isOperator: false, invitation: null };
+      world.users.push(u);
+    }
+    world.sessionUserId = u.id;
+    world.entered = [];
+    world.changed.push("Me", "Tree", "Credits");
+    return ok(meView(world, u));
+  },
 
   "POST auth/logout": (_req, { world }) => {
     world.sessionUserId = null;
@@ -104,5 +119,12 @@ area("AuthEndpoints", {
     return noContent();
   },
 
-  "GET me": (_req, { world }) => ok(meView(world, me(world))),
+  "GET me": (_req, { world }) => {
+    // The control plane did not answer (ID-05): a gateway's bare 503, not "signed out".
+    if (world.sessionCheckFailures) {
+      world.sessionCheckFailures -= 1;
+      return { status: 503 };
+    }
+    return ok(meView(world, me(world)));
+  },
 });
