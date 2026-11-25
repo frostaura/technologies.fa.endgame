@@ -188,8 +188,10 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
             using var response = await env.DockAsync(HttpMethod.Get, $"/internal/workspaces/{lapsing:D}");
             return response.StatusCode == HttpStatusCode.NotFound;
         }, TimeSpan.FromSeconds(30));
-        Assert.DoesNotContain(await DockerCli.OursAsync("container"), n => n.Contains(lapsing.ToString("D"), StringComparison.Ordinal));
-        Assert.DoesNotContain(await DockerCli.OursAsync("network"), n => n.Contains(lapsing.ToString("D"), StringComparison.Ordinal));
+        // The record goes first and the container and its network a moment after it.
+        await HostingEnvironment.WaitAsync("the lapsed workspace's container and network to go", async () =>
+            !(await DockerCli.OursAsync("container")).Any(n => n.Contains(lapsing.ToString("D"), StringComparison.Ordinal))
+            && !(await DockerCli.OursAsync("network")).Any(n => n.Contains(lapsing.ToString("D"), StringComparison.Ordinal)), TimeSpan.FromSeconds(30));
         using (var kept = await env.DockAsync(HttpMethod.Get, $"/internal/workspaces/{renewed:D}"))
         {
             Assert.Equal(HttpStatusCode.OK, kept.StatusCode);

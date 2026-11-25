@@ -325,7 +325,7 @@ test("11. hosting usage appears as credit entries", async () => {
   // The console's app page, with measured telemetry and cost, at desktop and phone width.
   const page = await owner.newPage();
   await page.goto(`/apps/${story.probeApp}`);
-  await expect(page.getByRole("heading", { name: "Notes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Notes", exact: true })).toBeVisible();
   await expect(page.getByText("Visits today")).toBeVisible();
   const still = { fullPage: true, animations: "disabled" } as const;
   await page.screenshot({ ...still, path: path.join(STATE, "console-app-desktop.png") });
