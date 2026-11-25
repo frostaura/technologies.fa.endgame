@@ -144,6 +144,14 @@ public sealed class TaskService(EndgameDbContext db, TenantSession session, Scop
             return null;
         }
 
+        if (employeeId is { } worker)
+        {
+            // Claiming work is activity: an employee who only ever works in runs it does not own (a factory build's
+            // engineer) is never flagged idle and released for it, and its last piece of work is this run.
+            await db.Employees.Where(e => e.OrganisationId == org && e.Id == worker)
+                .ExecuteUpdateAsync(x => x.SetProperty(e => e.LastActiveAt, now).SetProperty(e => e.LastRunId, runId), cancellationToken);
+        }
+
         await runs.AppendAsync(org, runId, [new NewEvent(RunEventTypes.TaskClaimed, new JsonObject { ["taskId"] = taskId.ToString(), ["employeeId"] = employeeId?.ToString(), ["previousHolder"] = expectedHolderRunId?.ToString() })], null, null, cancellationToken);
         return await GetAsync(org, taskId, cancellationToken);
     }

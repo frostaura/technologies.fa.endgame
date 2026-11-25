@@ -122,6 +122,8 @@ public sealed class FactoryAttributionTests(PostgresServer postgres) : IAsyncLif
 
         var detailWhileWorking = await ControlPlaneApp.Ok(owner.GetAsync($"/api/employees/{theo}"));
         Assert.Equal(build.ToString(), detailWhileWorking["employee"]!["currentRun"]!["id"]!.GetValue<string>());
+        // Claiming work is activity: its last piece of work is the build, though it owns no run.
+        Assert.Equal(build.ToString(), detailWhileWorking["employee"]!["lastRunId"]!.GetValue<string>());
 
         var check2 = await ClaimedAsync(build, "Check: Members hold playing minutes.", nadia);
         await AppendAsync(build, "evaluation.passed", Judgement("minutes", minutes, theo, nadia, check2, 0));
