@@ -9,7 +9,7 @@ export default function NoteDetailPage() {
   const note = useApiQuery<NoteDetail>(id ? `notes/${encodeURIComponent(id)}` : null);
 
   return (
-    <section className="flex flex-col gap-6">
+    <section className="flex flex-col gap-6" data-testid="page-note">
       <Link to="/" className="text-sm font-semibold text-primary hover:text-primary-hover">
         ← All notes
       </Link>

@@ -1,10 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
+import { jsonResponse as json } from "@endgame/appkit/testing";
 import { describe, expect, it, vi } from "vitest";
 import NewNotePage from "./NewNotePage";
-
-const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 const ada = { id: "usr_1", email: "ada@example.test", displayName: "ada", kind: "member", role: "builder" };
 
@@ -22,6 +20,7 @@ describe("NewNotePage", () => {
   it("offers sign-in, under the app's own address, to someone signed out", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(json(200, { user: null }));
     renderPage();
+    expect(screen.getByTestId("page-new-note")).toBeTruthy();
     const signIn = await screen.findByRole("link", { name: "Sign in" });
     expect(signIn.getAttribute("href")).toContain(new URL("_endgame/auth/sign-in?returnTo=", document.baseURI).toString());
   });
@@ -31,9 +30,9 @@ describe("NewNotePage", () => {
       .mockResolvedValueOnce(json(200, { user: ada }))
       .mockResolvedValueOnce(json(400, { title: "Validation failed", errors: { Title: ["The Title field is required."] } }));
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Save note" }));
+    fireEvent.click(await screen.findByTestId("save-note"));
     expect((await screen.findByRole("alert")).textContent).toBe("The Title field is required.");
-    expect(screen.getByLabelText("Title").getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByTestId("note-title").getAttribute("aria-invalid")).toBe("true");
   });
 
   it("opens the saved note", async () => {
@@ -42,8 +41,13 @@ describe("NewNotePage", () => {
       .mockResolvedValueOnce(json(200, { user: ada }))
       .mockResolvedValueOnce(json(201, { id: "n9", title: "Hi", body: "", authorName: "ada", createdAt: "2026-11-24T10:00:00Z" }));
     renderPage();
-    fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "Hi" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save note" }));
+    // Each input has a visible label, the test id <entity>-<field> and the API field as its name.
+    const title = await screen.findByTestId("note-title");
+    expect(screen.getByLabelText("Title")).toBe(title);
+    expect(title.getAttribute("name")).toBe("title");
+    expect(screen.getByTestId("note-body").getAttribute("name")).toBe("body");
+    fireEvent.change(title, { target: { value: "Hi" } });
+    fireEvent.click(screen.getByTestId("save-note"));
     expect(await screen.findByText("opened note")).toBeTruthy();
     const [, init] = fetchMock.mock.calls[1] ?? [];
     expect(init?.method).toBe("POST");
@@ -55,8 +59,8 @@ describe("NewNotePage", () => {
       .mockResolvedValueOnce(json(200, { user: ada }))
       .mockResolvedValueOnce(json(503, { title: "Unavailable", detail: "Try again in a moment." }));
     renderPage();
-    fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "Hi" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save note" }));
+    fireEvent.change(await screen.findByTestId("note-title"), { target: { value: "Hi" } });
+    fireEvent.click(screen.getByTestId("save-note"));
     expect((await screen.findByRole("alert")).textContent).toContain("The note was not saved");
   });
 });

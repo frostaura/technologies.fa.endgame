@@ -1,10 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
+import { jsonResponse as json } from "@endgame/appkit/testing";
 import { describe, expect, it, vi } from "vitest";
 import NoteDetailPage from "./NoteDetailPage";
-
-const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 const renderAt = (id: string) =>
   render(
@@ -21,7 +19,7 @@ describe("NoteDetailPage", () => {
       json(200, { id: "n1", title: "Groceries", body: "Milk", authorName: "ada", createdAt: "2026-11-24T10:00:00Z" }),
     );
     renderAt("n1");
-    expect(await screen.findByText("Milk")).toBeTruthy();
+    expect(await within(screen.getByTestId("page-note")).findByText("Milk")).toBeTruthy();
   });
 
   it("tells a missing note apart from a failed read", async () => {

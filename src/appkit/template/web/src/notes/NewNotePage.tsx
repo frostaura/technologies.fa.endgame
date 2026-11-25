@@ -6,6 +6,14 @@ import type { NoteDetail } from "./types";
 
 /** Writing needs a signed-in person; everyone else is offered the platform's sign-in. */
 export default function NewNotePage() {
+  return (
+    <section data-testid="page-new-note">
+      <NewNoteContent />
+    </section>
+  );
+}
+
+function NewNoteContent() {
   const me = useCurrentUser();
   if (me.status === "loading") return <LoadingState />;
   if (me.status === "failed") return <FailedState error={me.error} onRetry={me.reload} />;
@@ -66,16 +74,20 @@ function NewNoteForm() {
         <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
           <div className="flex flex-col gap-2">
             <Label htmlFor="title">Title</Label>
-            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} invalid={!!titleError} aria-describedby="title-error" maxLength={200} />
+            <Input
+              id="title"
+              name="title"
+              data-testid="note-title"
+              value={title} onChange={(e) => setTitle(e.target.value)} invalid={!!titleError} aria-describedby="title-error" maxLength={200} />
             <FieldError id="title-error">{titleError}</FieldError>
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="body">Body</Label>
-            <Textarea id="body" value={body} onChange={(e) => setBody(e.target.value)} />
+            <Textarea id="body" name="body" data-testid="note-body" value={body} onChange={(e) => setBody(e.target.value)} />
           </div>
           {failure && <FailedState title="The note was not saved" error={failure} />}
           <div>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving} data-testid="save-note">
               {saving ? "Saving…" : "Save note"}
             </Button>
           </div>
