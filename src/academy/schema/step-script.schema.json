@@ -69,7 +69,8 @@
         "below-zero",
         "top-ups-waiting",
         "operator-log",
-        "operator-log-empty"
+        "operator-log-empty",
+        "build-running"
       ]
     },
     "start": {
