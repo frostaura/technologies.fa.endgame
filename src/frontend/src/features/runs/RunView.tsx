@@ -11,13 +11,15 @@ import { paths } from "@/lib/router";
 import { plainOrNull } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { useAnswerApprovalMutation, useControlRunMutation, useGetMeQuery, useGetRunQuery } from "@/store/api";
+import { useControlRunMutation, useGetMeQuery, useGetRunQuery } from "@/store/api";
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
 import { accuracy, deriveRun, isTerminal, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
 import { buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
 import { useRunStream } from "./useRunStream";
+import { ApprovalCard } from "./ApprovalCard";
+import { TryAgain } from "./TryAgain";
 
 const STATUS: Record<RunStatus, { label: string; tone: BadgeTone }> = {
   queued: { label: "Waiting to start", tone: "quiet" },
@@ -174,7 +176,11 @@ function RunBody({ run }: { run: Run }) {
         </Link>
       )}
 
-      <CostPanel estimate={estimate} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} />
+      {terminal && status !== "finished" && (run.budgetExhausted || run.canTryAgain) && (
+        <StoppedPanel run={run} derived={derived} />
+      )}
+
+      <CostPanel estimate={estimate} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} />
 
       <Approvals runId={run.id} approvals={derived.approvals} />
 
@@ -206,13 +212,33 @@ function StreamBadge({ stream, terminal }: { stream: StreamStatus; terminal: boo
   return null;
 }
 
-function CostPanel({ estimate, spent, reserved, scored }: { estimate: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null }) {
+/**
+ * Why the work stopped and how to start it again (RUN-10, RUN-11): a budget stop is said plainly with the way to more
+ * credits; stopped research, a build or a change offers "Try again", which carries on from where it stopped.
+ */
+function StoppedPanel({ run, derived }: { run: Run; derived: DerivedRun }) {
+  const why = run.budgetExhausted ? "budget" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
+  if (run.canTryAgain) return <TryAgain runId={run.id} ideaId={run.ideaId} why={why} showCredits={run.budgetExhausted} />;
   return (
-    <section aria-label="Cost" className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <section aria-label="Stopped for budget" className="flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
+      <p className="font-medium text-ink">The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged.</p>
+      <Link href={paths.credits()} className={cn(buttonVariants({ variant: "outline" }), "self-start")}>
+        See credits
+      </Link>
+    </section>
+  );
+}
+
+function CostPanel({ estimate, spent, reserved, scored, notCharged }: { estimate: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number }) {
+  return (
+    <section aria-label="Cost" className={cn("grid grid-cols-1 gap-4", scored ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3")}>
       <Stat label="Estimate" value={estimate !== null ? formatCredits(estimate) : "Not yet made"} note="Shown before the work began" />
       <Stat label="Spent so far" value={formatCredits(spent)} note={estimate ? `${percent(spent, estimate)}% of the estimate` : "Settled from each call’s own cost"} bar={estimate ? percent(spent, estimate) : null} />
       {scored ? (
-        <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual)} note={`Estimated ${formatNumber(scored.estimated)}, cost ${formatNumber(scored.actual)}`} />
+        <>
+          <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual)} note={`Estimated ${formatNumber(scored.estimated)}, cost ${formatNumber(scored.actual)}`} />
+          <Stat label="Not charged" value={formatCredits(notCharged)} note="Repairs of the work’s own mistakes, never billed" />
+        </>
       ) : (
         <Stat label="Held for calls in flight" value={formatCredits(reserved)} note="Reserved before each call, released when it settles" />
       )}
@@ -240,51 +266,6 @@ function Approvals({ runId, approvals }: { runId: string; approvals: DerivedAppr
         <ApprovalCard key={a.id} runId={runId} approval={a} />
       ))}
     </section>
-  );
-}
-
-function ApprovalCard({ runId, approval }: { runId: string; approval: DerivedApproval }) {
-  const technical = useAppSelector((s) => s.ui.mode) === "technical";
-  const [answer, state] = useAnswerApprovalMutation();
-  const [optimistic, setOptimistic] = useState<"approve" | "reject" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const decide = async (decision: "approve" | "reject") => {
-    setOptimistic(decision);
-    setError(null);
-    try {
-      await answer({ runId, approvalId: approval.id, decision }).unwrap();
-    } catch (e) {
-      setOptimistic(null);
-      setError(describeError(e as never));
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
-      <Badge tone="white" className="self-start">
-        Needs you
-      </Badge>
-      <p className="text-base font-semibold">{approval.question}</p>
-      {technical && approval.detail && <p className="break-words font-mono text-xs text-attention-deep">{approval.detail}</p>}
-      {optimistic ? (
-        <p role="status" className="font-medium text-ink">
-          {optimistic === "approve" ? "Approved." : "Declined."} {state.isLoading ? "Sending…" : "The work carries on from here."}
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => void decide("approve")}>Approve</Button>
-          <Button variant="outline" onClick={() => void decide("reject")}>
-            Decline
-          </Button>
-        </div>
-      )}
-      {error && (
-        <p role="alert" className="text-sm text-attention-text">
-          Your answer was not recorded: {error}
-        </p>
-      )}
-    </div>
   );
 }
 

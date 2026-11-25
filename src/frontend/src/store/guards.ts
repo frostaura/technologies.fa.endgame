@@ -1,6 +1,9 @@
 import { arr, bool, dict, nullable, num, obj, oneOf, record, str, unknownValue, withDefault, type Guard } from "@/lib/guards";
 import { normaliseVerdict } from "@/features/verdict/verdictModel";
 import type {
+  ChangeEstimate,
+  ConversationEstimate,
+  RetryEstimate,
   AccessToken,
   AccessTokenCreated,
   AppVersion,
@@ -216,6 +219,24 @@ export const ideaGuard: Guard<Idea> = obj<Idea>({
     overruled: arr(obj<Idea["record"]["overruled"][number]>({ ideaId: s, title: s, verdict: outcome, outcome: s })),
   }),
   redLine: withDefault(ns, null),
+  history: withDefault(
+    arr(
+      obj<Idea["history"][number]>({
+        verdict: withDefault(nullable(outcome), null),
+        headline: withDefault(ns, null),
+        choice: oneOf(["change", "retry"] as const),
+        note: withDefault(ns, null),
+        by: withDefault(s, ""),
+        at: s,
+        runId: s,
+      }),
+    ),
+    [],
+  ),
+  tryAgain: withDefault(
+    nullable(obj<NonNullable<Idea["tryAgain"]>>({ runId: s, what: oneOf(["research", "build"] as const), why: oneOf(["failed", "cancelled", "budget", "plan-declined"] as const) })),
+    null,
+  ),
 });
 
 const runKind = oneOf(["research", "conversation", "build", "factory", "task", "review", "suggest"] as const);
@@ -239,6 +260,7 @@ export const runGuard: Guard<Run> = obj<Run>({
   outcome: withDefault(ns, null),
   summary: withDefault(ns, null),
   createdAt: withDefault(s, ""),
+  canTryAgain: withDefault(bool, false),
 });
 
 export const runEventGuard: Guard<RunEvent> = obj<RunEvent>({ seq: num, type: s, at: s, payload: withDefault(record, {}) });
@@ -247,8 +269,21 @@ export const conversationGuard: Guard<ConversationHistory> = obj<ConversationHis
   scope: s,
   conversationId: ns,
   employeeId: ns,
-  messages: arr(obj<ConversationHistory["messages"][number]>({ runId: s, seq: num, at: s, from: s, text: s })),
+  messages: arr(obj<ConversationHistory["messages"][number]>({ runId: s, seq: num, at: s, from: s, text: s, by: withDefault(ns, null), code: withDefault(ns, null) })),
 });
+
+export const retryEstimateGuard: Guard<RetryEstimate> = obj<RetryEstimate>({
+  runId: s,
+  what: oneOf(["research", "build", "change"] as const),
+  credits: num,
+  basis: s,
+  partsDone: withDefault(nn, null),
+  parts: withDefault(nn, null),
+});
+
+export const changeEstimateGuard: Guard<ChangeEstimate> = obj<ChangeEstimate>({ credits: num, basis: s });
+
+export const conversationEstimateGuard: Guard<ConversationEstimate> = obj<ConversationEstimate>({ credits: num, ceiling: withDefault(nn, null), basis: s });
 
 const runningChoice = obj<RunningChoiceCost>({ credits: num, awakeHoursPerMonth: num, basis: s });
 
