@@ -247,7 +247,13 @@ posts straight to the container instead.
 
 `POST /internal/routes/refresh` → `{ version, apps }`; `POST /internal/apps/{id}/state` (Dock's crash
 reports); `POST /internal/apps/{id}/platform/schedules/{name}` (platform callbacks, above);
-`POST /internal/usage/flush` (closes the hosting-usage period now); `GET /internal/apps`,
+`POST /internal/usage/flush` (closes the hosting-usage period now);
+`POST /internal/apps/{id}/probe { method, path, body? }` → `{ status, contentType, body, truncated }` — the evaluator's
+one request into a running (private) preview: woken if asleep, sent on the app's network at its path address as a
+signed-out visitor (forwarded prefix and host set, no session, no platform cookie), a text body up to 48 KB returned
+(anything else described, not returned); `400` for a method outside GET/POST/PUT/PATCH/DELETE or a path that is
+absolute, climbs out, or enters `_platform`/`_endgame`; `404` unknown app; `409` paused; `503` not woken;
+`GET /internal/apps`,
 `GET /internal/routes`. The control plane calls `routes/refresh` when access, settings, budgets,
 webhooks or the balance change, best effort.
 

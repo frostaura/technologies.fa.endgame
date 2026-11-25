@@ -49,6 +49,9 @@ public static class ControlEndpoints
 
         control.MapPost("/apps/{id:guid}/platform/schedules/{name}", PlatformCallbacks.ScheduleAsync);
 
+        // The evaluator's look at a private preview: one request, as a signed-out visitor, never from the public side.
+        control.MapPost("/apps/{id:guid}/probe", PreviewProbe.ProbeAsync);
+
         control.MapGet("/apps", (AppRegistry registry) => registry.All.Select(a => new
         {
             a.Route.AppId,

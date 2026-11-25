@@ -434,6 +434,48 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_evaluator_probes_a_private_preview_through_the_control_listener_only_as_a_signed_out_visitor()
+    {
+        await ControlAsync(HttpMethod.Post, $"/internal/apps/{privateApp:D}/state", new AppStateReport(privateApp, AppRuntimeState.Sleeping, 0, false, DateTimeOffset.UtcNow));
+        var wakes = backend.WakeCalls;
+        var answer = JsonDocument.Parse(await ControlAsync(HttpMethod.Post, $"/internal/apps/{privateApp:D}/probe", new { method = "GET", path = "api/books?shelf=1", body = (string?)null })).RootElement;
+        Assert.Equal(200, answer.GetProperty("status").GetInt32());
+        Assert.StartsWith("application/json", answer.GetProperty("contentType").GetString(), StringComparison.Ordinal);
+        var echoed = JsonDocument.Parse(answer.GetProperty("body").GetString()!).RootElement;
+        Assert.Equal("/api/books", echoed.GetProperty("path").GetString());
+        Assert.Equal("?shelf=1", echoed.GetProperty("query").GetString());
+        Assert.Equal("/acme/apps/secret/web", echoed.GetProperty("prefix").GetString());
+        Assert.Equal("endgame.test", echoed.GetProperty("forwardedHost").GetString());
+        Assert.Equal("", echoed.GetProperty("session").GetString()); // nobody is signed in
+        Assert.Equal(wakes + 1, backend.WakeCalls);
+
+        using var control = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{controlPort}") };
+        async Task<HttpStatusCode> Probe(object body, bool token = true, HttpClient? via = null)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/internal/apps/{privateApp:D}/probe") { Content = JsonContent.Create(body) };
+            if (token)
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+            }
+
+            using var response = await (via ?? control).SendAsync(request);
+            return response.StatusCode;
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await Probe(new { method = "GET", path = "" }, token: false));
+        Assert.Equal(HttpStatusCode.NotFound, await Probe(new { method = "GET", path = "" }, via: client));
+        foreach (var path in new[] { "_platform/schedules/x", "_endgame/auth/sign-in", "../other", "http://evil/" })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, await Probe(new { method = "GET", path }));
+        }
+
+        Assert.Equal(HttpStatusCode.BadRequest, await Probe(new { method = "TRACE", path = "" }));
+        using var paused = new HttpRequestMessage(HttpMethod.Post, $"/internal/apps/{pausedApp:D}/probe") { Content = JsonContent.Create(new { method = "GET", path = "" }) };
+        paused.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        Assert.Equal(HttpStatusCode.Conflict, (await control.SendAsync(paused)).StatusCode);
+    }
+
+    [Fact]
     public async Task Requests_an_app_served_are_reported_as_hosting_usage_once_per_period()
     {
         for (var i = 0; i < 3; i++)
