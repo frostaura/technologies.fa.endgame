@@ -8,7 +8,8 @@
         e2e smoke docker-build docker-down prod-config appkit-build appkit-lint appkit-test appkit-proof appkit-vendor \
         stack-up stack-down e2e-stack e2e-stack-run fac-up fac-down e2e-factory e2e-factory-run acc-up acc-down e2e-acceptance e2e-acceptance-run \
         demo-build demo-test demo-e2e demo-check \
-        backup restore ops-backups ops-verify ops-health ops-reserved-hosts ops-cloudflare-plan ops-cloudflare-apply ops-test ops-test-worker
+        backup restore ops-backups ops-verify ops-health ops-reserved-hosts ops-cloudflare-plan ops-cloudflare-apply ops-test ops-test-worker \
+        academy-install academy-content academy-dev academy-lint academy-test academy-build academy-assemble academy-pdf academy-e2e site
 
 DOTNET ?= dotnet
 DOTNET_ENV = MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
@@ -340,3 +341,49 @@ e2e-acceptance-run:
 	cd $(ACC_DRIVER) && npm ci --no-audit --no-fund && npx playwright install chromium
 	cd $(ACC_DRIVER) && CI=1 ACC_EDGE=http://localhost:$(ACC_EDGE_PORT) ACC_MAIL=http://127.0.0.1:$(ACC_MAIL_PORT) ACC_STATE=$(ACC_STATE) \
 		ACC_PROJECT=$(ACC_PROJECT) ACC_SPEND_STOP_USD=$(ACC_SPEND_STOP_USD) ACC_CLUB_APP=$(ACC_CLUB_APP) npx playwright test
+
+# ---------------------------------------------------------------------------------------------
+# The Endgame Academy (ARCH-010): the product's documentation and training, built from
+# docs/flows into a static site for GitHub Pages. `make site` assembles ./site/: the academy at
+# the root, lane D's demo console under ./site/demo/ when `make demo-build` exists, and the two
+# PDFs. The academy imports the console's Tailwind preset, so the console's packages come first.
+ACADEMY = cd src/academy &&
+SITE_URL ?= https://frostaura.github.io/technologies.fa.endgame/
+ACADEMY_PW_PORT ?= 5647
+
+academy-install:
+	@test -d src/frontend/node_modules || $(FRONTEND) npm ci --no-audit --no-fund
+	$(ACADEMY) npm ci --no-audit --no-fund
+
+# docs/flows -> typed content, validated step scripts, the search index and the QR code.
+academy-content:
+	$(ACADEMY) SITE_URL=$(SITE_URL) npm run content
+
+academy-dev:
+	$(ACADEMY) npm run dev
+
+academy-lint:
+	$(ACADEMY) npm run lint
+	$(ACADEMY) npm run typecheck
+
+academy-test:
+	$(ACADEMY) npm run test -- --run
+
+academy-build:
+	$(ACADEMY) SITE_URL=$(SITE_URL) VITE_PDFS=1 npm run build
+
+academy-assemble:
+	@if grep -q '^demo-build:' Makefile; then $(MAKE) demo-build; \
+	else echo "site: there is no demo-build target yet (lane D's demo); assembling the academy without ./demo/."; fi
+	$(ACADEMY) SITE_URL=$(SITE_URL) node tools/assemble-site.ts
+
+# academy.pdf and operator-handbook.pdf, rendered from the assembled site with headless Chromium.
+academy-pdf:
+	$(ACADEMY) node tools/render-pdf.ts ../../site
+
+# Playwright against the assembled site, served under /technologies.fa.endgame/ (`make site` first).
+academy-e2e:
+	$(ACADEMY) CI=1 PW_PORT=$(ACADEMY_PW_PORT) npm run test:e2e
+
+site: academy-build academy-assemble academy-pdf
+	@echo "site: ./site/ is ready for GitHub Pages ($(SITE_URL))."

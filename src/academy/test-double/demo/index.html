@@ -1,0 +1,95 @@
+<!doctype html>
+<!--
+  TEST DOUBLE — never built or published. The academy's stand-in for lane D's demo console: it
+  implements the same postMessage contract (src/bridge/protocol.ts) and shows what it was asked to
+  do, so the stepper can be developed and tested before the real demo exists. `vite dev` serves it
+  at /demo/; the Playwright spec routes ./demo/** to it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stand-in demo console</title>
+    <style>
+      body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: Canvas; color: CanvasText; }
+      header { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid GrayText; }
+      header b { font-size: 15px; }
+      main { padding: 14px; }
+      #route { font-family: ui-monospace, monospace; }
+      #screen { border: 1px dashed GrayText; border-radius: 12px; padding: 16px; min-height: 120px; }
+      #spot { margin-top: 10px; padding: 8px 10px; border: 2px solid Highlight; border-radius: 8px; display: none; }
+      ol { font-family: ui-monospace, monospace; font-size: 12px; color: GrayText; }
+      .acting { outline: 2px solid Highlight; }
+    </style>
+  </head>
+  <body>
+    <header><b>Stand-in console</b><span id="who"></span><span id="route">/</span></header>
+    <main>
+      <div id="screen"><span id="screen-text">Waiting for the academy.</span><div id="spot"></div></div>
+      <p>Ops received, in order:</p>
+      <ol id="log"></ol>
+    </main>
+    <script>
+      (function () {
+        "use strict";
+        var received = [];
+        window.__received = received;
+        var parentWin = window.parent;
+        function post(msg) {
+          msg.source = "endgame-demo";
+          parentWin.postMessage(msg, "*");
+        }
+        function log(op, args) {
+          received.push({ op: op, args: args || {} });
+          var li = document.createElement("li");
+          li.textContent = op + " " + JSON.stringify(args || {});
+          document.getElementById("log").appendChild(li);
+        }
+        function text(id, value) {
+          document.getElementById(id).textContent = value;
+        }
+        window.addEventListener("message", function (e) {
+          var m = e.data;
+          if (e.source !== parentWin || !m || m.source !== "endgame-academy" || typeof m.id !== "string") return;
+          var args = m.args || {};
+          log(m.op, args);
+          switch (m.op) {
+            case "goto":
+              text("route", args.route || "/");
+              text("who", (args.persona || "") + " · " + (args.scenario || ""));
+              text("screen-text", "Showing " + (args.route || "/"));
+              post({ id: "route-" + m.id, op: "route", args: { route: args.route || "/" } });
+              post({ id: m.id, op: "goto" });
+              break;
+            case "highlight":
+              var spot = document.getElementById("spot");
+              var what = args.text || args.testId || args.selector || "";
+              spot.style.display = what ? "block" : "none";
+              spot.textContent = what ? "Spotlight: " + what + (args.note ? " — " + args.note : "") : "";
+              post({ id: m.id, op: "highlight" });
+              break;
+            case "act":
+              var actions = Array.isArray(args.actions) ? args.actions : [];
+              var screen = document.getElementById("screen");
+              screen.className = "acting";
+              post({ id: m.id, op: "act" });
+              setTimeout(function () {
+                screen.className = "";
+                text("screen-text", "Did " + actions.map(function (a) { return Object.keys(a)[0]; }).join(", "));
+                post({ id: "done-" + m.id, op: "step-done", args: { id: m.id } });
+              }, args.instant ? 0 : 60 * Math.max(actions.length, 1));
+              break;
+            case "clock":
+            case "reset":
+              if (m.op === "reset") { text("route", "/"); document.getElementById("spot").style.display = "none"; }
+              post({ id: m.id, op: m.op });
+              break;
+            default:
+              post({ id: m.id, op: "error", args: { message: "Unknown op " + m.op } });
+          }
+        });
+        post({ id: "ready", op: "ready", args: { embed: /embed=1/.test(location.search) } });
+      })();
+    </script>
+  </body>
+</html>

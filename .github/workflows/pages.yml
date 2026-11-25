@@ -1,0 +1,80 @@
+name: Academy
+
+# The Endgame Academy on GitHub Pages (ARCH-010). Push to main and manual dispatch only — never a
+# schedule. Builds the academy from docs/flows, the demo console beside it (once lane D's
+# `make demo-build` exists; until then the site ships without ./demo/ and says so on each live
+# step), renders the two PDFs, and deploys ./site/ with the official Pages actions.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/flows/**"
+      - "src/academy/**"
+      - "src/frontend/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  SITE_URL: https://frostaura.github.io/technologies.fa.endgame/
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: |
+            src/academy/package-lock.json
+            src/frontend/package-lock.json
+
+      - name: Install (the academy imports the console's Tailwind preset)
+        run: make academy-install
+
+      - name: Install Chromium for the PDFs and the browser test
+        working-directory: src/academy
+        run: npx playwright install --with-deps chromium
+
+      - name: Lint and typecheck (zero warnings)
+        run: make academy-lint
+
+      - name: Unit tests (parser, scripts, search, bridge)
+        run: make academy-test
+
+      - name: Build the academy, the demo and the PDFs into ./site/
+        run: make site SITE_URL="$SITE_URL"
+
+      - name: Browser test against the assembled site
+        run: make academy-e2e
+
+      - uses: actions/configure-pages@v6.0.0
+
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5.0.1

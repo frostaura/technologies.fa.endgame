@@ -1,0 +1,47 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "APP-04",
+  "persona": "builder",
+  "scenario": "app-live",
+  "start": "/apps/{app}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sleeps when unused",
+        "note": "Each choice is priced from this app's own measured use."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Today's prices"
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Always on"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Always on",
+        "note": "The choice shows at once, before the server answers."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Always on",
+        "note": "Saved: the edge is told the routes changed, and the org chart refreshes."
+      }
+    }
+  ]
+}

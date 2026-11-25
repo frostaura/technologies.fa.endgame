@@ -1,0 +1,5 @@
+src/generated/
+public/schema/
+.tmp/
+site/
+public/brand/

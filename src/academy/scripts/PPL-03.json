@@ -1,0 +1,128 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "PPL-03",
+  "persona": "admin",
+  "scenario": "established",
+  "start": "/people",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "E-mail address"
+            },
+            "text": "sam@northwind.example"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Their name"
+            },
+            "text": "Sam Okafor"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Invite someone"
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Role"
+            },
+            "value": "Builder"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Role"
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "select": {
+            "into": {
+              "text": "Where"
+            },
+            "value": "Technologies"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Where",
+        "note": "The role holds here and beneath."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Role",
+        "note": "The chosen role's description appears under the form."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Invite"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Inviting…"
+      }
+    },
+    {
+      "step": 6,
+      "kind": "email",
+      "from": "Endgame",
+      "to": "sam@northwind.example",
+      "subject": "You are invited to Northwind on Endgame",
+      "body": [
+        "Ada Lovelace invited you to Technologies (northwind/technologies) as Builder.",
+        "Open https://endgame.northwind.example/ and register a passkey with this e-mail address and the code below.",
+        "No password is ever set.",
+        "Invitation code: K7Q2-M9XD",
+        "It works once, until 2026-12-02 10:15 UTC."
+      ],
+      "note": "Queued only when mail is configured; otherwise the screen says to hand the code over yourself."
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "highlight": {
+        "text": "is invited as",
+        "note": "The green box: who, which role, where."
+      }
+    },
+    {
+      "step": 8,
+      "kind": "demo",
+      "highlight": {
+        "text": "It will not be shown again."
+      }
+    },
+    {
+      "step": 9,
+      "kind": "demo",
+      "highlight": {
+        "text": "No passkey yet"
+      }
+    }
+  ]
+}

@@ -1,0 +1,489 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://frostaura.github.io/technologies.fa.endgame/schema/step-script.schema.json",
+  "title": "Endgame Academy step script",
+  "description": "What each numbered step of one flow shows beside its text. One file per flow: src/academy/scripts/<FLOW-ID>.json. The TypeScript twin is src/content/scripts.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "flow",
+    "persona",
+    "scenario",
+    "start",
+    "steps"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "flow": {
+      "type": "string",
+      "pattern": "^[A-Z]{2,5}-\\d{2}$",
+      "description": "The flow id; must match the file name."
+    },
+    "persona": {
+      "enum": [
+        "owner",
+        "admin",
+        "builder",
+        "viewer",
+        "operator",
+        "signed-out",
+        "end-user",
+        "assistant",
+        "host-admin"
+      ]
+    },
+    "scenario": {
+      "enum": [
+        "fresh-install",
+        "first-idea",
+        "established",
+        "researching",
+        "verdict-build",
+        "building",
+        "app-live",
+        "low-credits",
+        "god-mode"
+      ]
+    },
+    "start": {
+      "$ref": "#/definitions/route"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/step"
+      }
+    }
+  },
+  "definitions": {
+    "route": {
+      "type": "string",
+      "pattern": "^/[A-Za-z0-9/{}_?=&.-]*$",
+      "description": "A console address. {idea}, {run}, {app}, {employee} and {hire} are resolved by the demo inside the scenario."
+    },
+    "note": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 280
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "selector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "testId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "clock": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "play"
+          ],
+          "properties": {
+            "play": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pause"
+          ],
+          "properties": {
+            "pause": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "seek"
+          ],
+          "properties": {
+            "seek": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "click"
+          ],
+          "properties": {
+            "click": {
+              "$ref": "#/definitions/target"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "into",
+                "text"
+              ],
+              "properties": {
+                "into": {
+                  "$ref": "#/definitions/target"
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "select"
+          ],
+          "properties": {
+            "select": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "into",
+                "value"
+              ],
+              "properties": {
+                "into": {
+                  "$ref": "#/definitions/target"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "press"
+          ],
+          "properties": {
+            "press": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "wait"
+          ],
+          "properties": {
+            "wait": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "clock"
+          ],
+          "properties": {
+            "clock": {
+              "$ref": "#/definitions/clock"
+            }
+          }
+        }
+      ]
+    },
+    "step": {
+      "type": "object",
+      "required": [
+        "step",
+        "kind"
+      ],
+      "properties": {
+        "step": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kind": {
+          "enum": [
+            "demo",
+            "terminal",
+            "request",
+            "email",
+            "image"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "step": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "const": "demo"
+            },
+            "goto": {
+              "$ref": "#/definitions/route"
+            },
+            "highlight": {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "properties": {
+                "selector": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "testId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "note": {
+                  "$ref": "#/definitions/note"
+                }
+              }
+            },
+            "act": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/definitions/action"
+              }
+            },
+            "clock": {
+              "$ref": "#/definitions/clock"
+            },
+            "note": {
+              "$ref": "#/definitions/note"
+            },
+            "shot": {
+              "$ref": "#/definitions/shot"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "command",
+            "output"
+          ],
+          "properties": {
+            "step": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "const": "terminal"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "output": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "note": {
+              "$ref": "#/definitions/note"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "path",
+            "response"
+          ],
+          "properties": {
+            "step": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "const": "request"
+            },
+            "method": {
+              "enum": [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "body": {},
+            "response": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 599
+                },
+                "body": {}
+              }
+            },
+            "note": {
+              "$ref": "#/definitions/note"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "from",
+            "to",
+            "subject",
+            "body"
+          ],
+          "properties": {
+            "step": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "const": "email"
+            },
+            "from": {
+              "type": "string",
+              "minLength": 1
+            },
+            "to": {
+              "type": "string",
+              "minLength": 1
+            },
+            "subject": {
+              "type": "string",
+              "minLength": 1
+            },
+            "body": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "note": {
+              "$ref": "#/definitions/note"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "file",
+            "alt"
+          ],
+          "properties": {
+            "step": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "const": "image"
+            },
+            "file": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._/-]+\\.(png|jpg|jpeg|webp|svg)$"
+            },
+            "alt": {
+              "type": "string",
+              "minLength": 1
+            },
+            "note": {
+              "$ref": "#/definitions/note"
+            }
+          }
+        }
+      ]
+    },
+    "shot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "alt"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/-]+\\.(png|jpg|jpeg|webp|svg)$",
+          "description": "A file under src/academy/public/shots/."
+        },
+        "alt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "A captured image of this step, shown in print and whenever the live console cannot load."
+    }
+  }
+}

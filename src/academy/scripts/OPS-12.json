@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-12",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make backup",
+      "output": [
+        "docker compose up -d --wait postgres ops",
+        " ✔ Container endgame-postgres-1  Healthy",
+        " ✔ Container endgame-ops-1       Healthy",
+        "docker compose exec -T ops /app/Endgame.Ops backup"
+      ],
+      "note": "PostgreSQL and the ops service are started if they are not running. Production adds OPS_COMPOSE=\"docker compose -f docker-compose.prod.yml\"."
+    },
+    {
+      "step": 2,
+      "kind": "terminal",
+      "command": "docker compose exec -T ops /app/Endgame.Ops backup",
+      "output": [
+        "Backing up to a directory on this machine (/backups), not offsite: no bucket is configured...",
+        "Backup 20261125T101500Z: 48,213,504 bytes sealed (212,992,131 before encryption) in 6.4 s.",
+        "  databases: endgame",
+        "  volume repositories: 1,284 files, 37,551,920 bytes",
+        "BACKUP_ID=20261125T101500Z",
+        "0.048 GB in 1 archive(s) on this machine; nothing is offsite."
+      ],
+      "note": "The lines are the ops service's own; the id, sizes and timing are one run's."
+    }
+  ]
+}

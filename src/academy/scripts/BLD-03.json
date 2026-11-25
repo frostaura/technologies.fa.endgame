@@ -1,0 +1,60 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "BLD-03",
+  "persona": "viewer",
+  "scenario": "building",
+  "start": "/runs/{run}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "The plan",
+        "note": "The badge reads Proposed, then Agreed, with how many parts are done."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "The plan",
+        "note": "The summary of what will be built."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "What you asked for"
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Parts of the plan"
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Left out, on purpose"
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "The files and tests behind each part are in technical mode."
+      }
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "highlight": {
+        "text": "The builder · The plan"
+      }
+    }
+  ]
+}

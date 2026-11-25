@@ -1,0 +1,43 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "OPS-01",
+  "persona": "host-admin",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make up",
+      "output": [
+        "cp .env.example .env"
+      ],
+      "note": "A fresh clone has no .env, so make up copies the example first: key names, with development defaults."
+    },
+    {
+      "step": 2,
+      "kind": "terminal",
+      "command": "make -C src/appkit vendor",
+      "output": [
+        "rm -rf template/vendor/nuget",
+        "for p in sdk-dotnet/Endgame.AppKit sdk-dotnet/Endgame.AppKit.Testing dev/Endgame.AppKit.DevPlatform; do \\",
+        "\tMSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet pack $p -c Release --nologo || exit 1; done"
+      ],
+      "note": "make up runs this itself: Dock's image carries the app kit's template."
+    },
+    {
+      "step": 3,
+      "kind": "terminal",
+      "command": "docker compose up -d --build --wait",
+      "output": [
+        " ✔ Container endgame-postgres-1       Healthy",
+        " ✔ Container endgame-control-plane-1  Healthy",
+        " ✔ Container endgame-runner-1         Healthy",
+        " ✔ Container endgame-dock-1           Healthy",
+        " ✔ Container endgame-console-1        Healthy",
+        " ✔ Container endgame-edge-1           Healthy"
+      ],
+      "note": "--wait returns only when every service is healthy; then http://localhost:8095/ serves the console."
+    }
+  ]
+}

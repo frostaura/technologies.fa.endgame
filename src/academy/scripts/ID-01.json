@@ -1,0 +1,86 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-01",
+  "persona": "signed-out",
+  "scenario": "fresh-install",
+  "start": "/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign in",
+        "note": "No session yet, so the console shows only its sign-in screen."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "First time here? Create your passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Create your passkey"
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Your name"
+            },
+            "text": "Ada Lovelace"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Email address"
+            },
+            "text": "ada@northwind.example"
+          }
+        },
+        {
+          "click": {
+            "text": "Create passkey"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Waiting for your device…"
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Waiting for your device…",
+        "note": "The server checks this really is a fresh install before it sends passkey options."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 900
+        }
+      ],
+      "note": "On this device's approval the first person is created, under a lock, and a 14-day session opens."
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "Name your organisation, then describe your first idea."
+      }
+    }
+  ]
+}

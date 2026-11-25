@@ -1,0 +1,63 @@
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/space-grotesk/index.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* No colour or size is declared here: every value comes from the console's token layer. */
+@layer base {
+  html {
+    @apply bg-surface text-ink antialiased;
+    font-feature-settings: "cv11", "ss01";
+    scroll-padding-top: theme("inset.header");
+  }
+
+  body {
+    @apply min-h-screen bg-surface font-sans text-sm text-ink;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-surface;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Print: the print version lays every flow out as numbered steps; on screen pages, chrome goes. */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 0;
+  }
+  [data-print="hide"] {
+    display: none !important;
+  }
+  .print-page {
+    break-after: page;
+    min-height: auto;
+  }
+  .print-break {
+    break-before: page;
+  }
+  html,
+  body {
+    @apply bg-surface text-ink;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "VERD-03",
+  "persona": "owner",
+  "scenario": "verdict-build",
+  "start": "/ideas/{idea}",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Verdict ·",
+        "note": "The banner: the stamp, the headline and a two-sentence summary."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "No red line is crossed",
+        "note": "A red-line alert appears here only when one is breached."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "The case against, argued first"
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Who already does this",
+        "note": "Then “What gap is left” and “Who would want it”."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "What to change",
+        "note": "Shown on a “change” verdict."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "What would change the verdict"
+      }
+    },
+    {
+      "step": 7,
+      "kind": "demo",
+      "highlight": {
+        "text": "No red line is crossed"
+      }
+    },
+    {
+      "step": 8,
+      "kind": "demo",
+      "highlight": {
+        "text": "Build it",
+        "note": "The decision controls."
+      }
+    }
+  ]
+}
