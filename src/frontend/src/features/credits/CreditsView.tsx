@@ -10,7 +10,7 @@ import type { BudgetLine, Credits } from "@/store/types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { roleAt, roleRank } from "@/lib/roles";
 import { AppShell } from "../shell/AppShell";
-import { NarrowerLimit, OwnLimit, TopUpRequests } from "./CreditsActions";
+import { NarrowerLimit, NarrowerLimits, OwnLimit, TopUpRequests } from "./CreditsActions";
 import { paceLine } from "./creditsModel";
 
 export function CreditsView() {
@@ -171,6 +171,11 @@ function OverdraftAside({ credits, organisation }: { credits: Credits; organisat
         {credits.overdraft && (
           <ErrorBoundary name="Your overdraft limit">
             <OwnLimit organisation={organisation} credits={credits} isOwner={isOwner} />
+          </ErrorBoundary>
+        )}
+        {credits.overdraft && isAdmin && (
+          <ErrorBoundary name="The tighter limits">
+            <NarrowerLimits credits={credits} />
           </ErrorBoundary>
         )}
         {credits.overdraft && isAdmin && (

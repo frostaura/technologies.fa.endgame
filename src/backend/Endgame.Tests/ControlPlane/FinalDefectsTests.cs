@@ -201,6 +201,36 @@ public sealed class FinalDefectsTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal(435.19m, repriced["alwaysOn"]!["credits"]!.GetValue<decimal>());
         Assert.Contains("0.4 credits an awake hour", repriced["prices"]!.GetValue<string>());
     }
+
+    [Fact]
+    public async Task The_credits_view_lists_every_narrower_overdraft_limit_on_and_beneath_the_scope()
+    {
+        await owner.DivisionAsync("frostaura", "technologies", "Technologies");
+        await owner.DivisionAsync("frostaura", "labs", "Labs");
+        await owner.ProjectAsync("frostaura/technologies", "squash", "Squash");
+        await owner.AppAsync("frostaura/technologies/squash", "bookings", "Bookings");
+        await owner.SetAsync("frostaura", "setting", "overdraft_limit", 500);
+        await ControlPlaneApp.Ok(owner.PutAsJsonAsync("/api/credits/overdraft", new { scope = "frostaura", credits = 300 }));
+        await ControlPlaneApp.Ok(owner.PutAsJsonAsync("/api/credits/overdraft", new { scope = "frostaura/technologies", credits = 200 }));
+        await ControlPlaneApp.Ok(owner.PutAsJsonAsync("/api/credits/overdraft", new { scope = "frostaura/technologies/squash/bookings", credits = 50 }));
+        await ControlPlaneApp.Ok(owner.PutAsJsonAsync("/api/credits/overdraft", new { scope = "frostaura/labs", credits = 20 }));
+
+        var all = (await ControlPlaneApp.Ok(owner.GetAsync("/api/credits?scope=frostaura")))["overdraft"]!;
+        Assert.Equal(500m, all["frostauraLimit"]!.GetValue<decimal>());
+        Assert.Equal(300m, all["ownLimit"]!.GetValue<decimal>());
+        var limits = all["limits"]!.AsArray();
+        Assert.Equal(["frostaura/labs", "frostaura/technologies", "frostaura/technologies/squash/bookings"], limits.Select(l => l!["scope"]!.GetValue<string>()));
+        var bookings = limits.Single(l => l!["scope"]!.GetValue<string>().EndsWith("bookings", StringComparison.Ordinal))!;
+        Assert.Equal("Bookings", bookings["name"]!.GetValue<string>());
+        Assert.Equal("app", bookings["level"]!.GetValue<string>());
+        Assert.Equal(50m, bookings["credits"]!.GetValue<decimal>());
+        Assert.Equal("The Owner", bookings["setByName"]!.GetValue<string>());
+        Assert.NotNull(bookings["setAt"]);
+
+        // At the project: the division's limit above it and the app's beneath it apply; Labs' does not.
+        var project = (await ControlPlaneApp.Ok(owner.GetAsync("/api/credits?scope=frostaura/technologies/squash")))["overdraft"]!["limits"]!.AsArray();
+        Assert.Equal(["frostaura/technologies", "frostaura/technologies/squash/bookings"], project.Select(l => l!["scope"]!.GetValue<string>()));
+    }
 }
 
 public sealed class OperatorVisitsTests

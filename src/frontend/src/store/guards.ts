@@ -39,6 +39,7 @@ import type {
   NeedsYou,
   Ontology,
   OperatorAction,
+  OverdraftLimit,
   RecurringRole,
   RunningChoiceCost,
   RunningCost,
@@ -169,7 +170,13 @@ export const creditsGuard: Guard<Credits> = obj<Credits>({
   ),
   estimates: nullable(estimates),
   notCharged: obj<Credits["notCharged"]>({ credits: num, repairs: num }),
-  overdraft: nullable(obj<NonNullable<Credits["overdraft"]>>({ frostauraLimit: num, ownLimit: nn })),
+  overdraft: nullable(
+    obj<NonNullable<Credits["overdraft"]>>({
+      frostauraLimit: num,
+      ownLimit: nn,
+      limits: arr(obj<OverdraftLimit>({ scope: s, name: s, level: oneOf(["division", "project", "app"] as const), credits: num, setAt: s, setBy: ns, setByName: ns })),
+    }),
+  ),
   topUps: arr(obj<Credits["topUps"][number]>({ at: s, credits: num, note: s })),
   heldCredits: withDefault(num, 0),
   available: withDefault(num, 0),

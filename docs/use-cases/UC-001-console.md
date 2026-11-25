@@ -112,7 +112,8 @@ and credit.
     then the suggestions run; each suggestion's gap, why this organisation, and what it would reuse; taking
     one shows its research estimate first, then opens the new idea; setting one aside is optimistic.
 21. **Credits, completed**: the Owner's own overdraft limit, checked against FrostAura's and refused deeper;
-    a narrower limit for a division, project or app (Admin); asking FrostAura for a top-up (Owner); the
+    a narrower limit for a division, project or app (Admin), and the list of those already set with who set
+    them (Owner and Admin; the scope in technical mode); asking FrostAura for a top-up (Owner); the
     requests and what became of them.
 22. **God mode** (`/operator`, operators only; a coral band on every screen says so): every organisation with
     balance, standing, overdraft, apps and last activity; enter one (the answer says where it is logged) and

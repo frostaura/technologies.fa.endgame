@@ -677,7 +677,7 @@ export function scenario(name: ScenarioName): MockState {
     ],
     estimates: { pieces: 12, withinPercent: 8, under: 9, over: 3, largestMissPercent: 15 },
     notCharged: { credits: 37, repairs: 2 },
-    overdraft: { frostauraLimit: 3000, ownLimit: 1000 },
+    overdraft: { frostauraLimit: 3000, ownLimit: 1000, limits: [] },
     topUps: [{ at: ago(60 * 24 * 10), credits: 10_000, note: "Added by FrostAura" }],
     heldCredits: 12,
     available: (name === "empty-org" ? 0 : 9_548) + 3000,

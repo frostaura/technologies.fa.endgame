@@ -352,6 +352,17 @@ export interface RunningCost {
   measured: { awakeHours: number; memoryMb: number; storageMb: number; requestsPerMonth: number } | null;
 }
 
+/** A narrower overdraft limit set at a division, project or app, from `GET /api/credits`'s `overdraft.limits`. */
+export interface OverdraftLimit {
+  scope: string;
+  name: string;
+  level: "division" | "project" | "app";
+  credits: number;
+  setAt: string;
+  setBy: string | null;
+  setByName: string | null;
+}
+
 export interface AppTelemetry {
   visitsToday: number;
   requestsToday: number;
@@ -437,7 +448,7 @@ export interface Credits {
   budgets: BudgetLine[];
   estimates: Estimates | null;
   notCharged: { credits: number; repairs: number };
-  overdraft: { frostauraLimit: number; ownLimit: number | null } | null;
+  overdraft: { frostauraLimit: number; ownLimit: number | null; limits: OverdraftLimit[] } | null;
   topUps: { at: string; credits: number; note: string }[];
   /** Credits reserved for work in flight across the organisation. */
   heldCredits: number;

@@ -154,7 +154,17 @@ public sealed record EstimatesView(long Pieces, decimal WithinPercent, long Unde
 
 public sealed record NotChargedView(decimal Credits, long Repairs);
 
-public sealed record OverdraftView(decimal FrostauraLimit, decimal? OwnLimit);
+/// <summary>A narrower overdraft limit set at a division, project or app.</summary>
+/// <param name="Scope">The node's path.</param>
+/// <param name="Level"><c>division</c>, <c>project</c> or <c>app</c>.</param>
+/// <param name="SetByName">The display name of who set it; null when unknown.</param>
+public sealed record OverdraftLimitView(string Scope, string Name, string Level, decimal Credits, DateTimeOffset SetAt, Guid? SetBy, string? SetByName);
+
+/// <param name="FrostauraLimit">The deepest FrostAura allows the organisation.</param>
+/// <param name="OwnLimit">The tightest of the organisation's own limit and any narrower one on the scope's chain; null when none.</param>
+/// <param name="Limits">Every narrower limit at a division, project or app that applies at the scope (on its chain above it)
+/// or is set beneath it, in tree order.</param>
+public sealed record OverdraftView(decimal FrostauraLimit, decimal? OwnLimit, IReadOnlyList<OverdraftLimitView> Limits);
 
 public sealed record TopUpView(DateTimeOffset At, decimal Credits, string Note);
 
