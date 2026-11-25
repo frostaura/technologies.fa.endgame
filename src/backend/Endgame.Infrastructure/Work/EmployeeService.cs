@@ -51,10 +51,11 @@ public sealed record EmployeeView(
     int MemoryEntries,
     string? Brief);
 
-/// <param name="Accepted">Pieces of work accepted: evaluations passed, plus finished runs that were not evaluated.</param>
-/// <param name="SentBack">Pieces of work sent back: evaluations failed.</param>
+/// <param name="Accepted">Pieces of work accepted: judgements of its work that passed, plus tasks it finished and runs of its own that nobody judged.</param>
+/// <param name="SentBack">Pieces of work sent back: judgements of its work that failed.</param>
 /// <param name="AcceptedPercent">Accepted out of accepted and sent back; null before any.</param>
-public sealed record WorkCountsView(int Accepted, int SentBack, decimal? AcceptedPercent);
+/// <param name="Judged">Judgements it made of other employees' work (as the evaluator).</param>
+public sealed record WorkCountsView(int Accepted, int SentBack, decimal? AcceptedPercent, int Judged);
 
 public sealed record RunCountsView(int Finished, int Succeeded, int Failed, int Cancelled);
 
@@ -166,25 +167,45 @@ public sealed partial class EmployeeService(
         return new EmployeeDetailView(employee, track, views.Where(v => v.Kind == EmployeeKinds.Contractor).ToList(), views.Where(v => v.Kind == EmployeeKinds.Employee).ToList());
     }
 
-    /// <summary>The track record: work accepted and sent back, runs, repairs not charged, cost to date and this month, contractors, estimate accuracy.</summary>
+    /// <summary>
+    /// The track record: work accepted and sent back, judgements made, runs, repairs not charged, cost to date and this
+    /// month, contractors, estimate accuracy. Work is the employee's wherever the run belongs: a judgement
+    /// (<c>evaluation.*</c>) names whose work it judges (<c>employeeId</c>; an older one without it judges the run's owner)
+    /// and who judged it (<c>judgedBy</c>); a task the employee claimed and finished that nobody judged counts as accepted,
+    /// and so does a finished run of its own with neither. A run counts when the employee worked in it: its owner, a task
+    /// claimed in it, or a model call charged to the employee.
+    /// </summary>
     public async Task<TrackRecordView> TrackRecordAsync(Guid organisationId, Guid employeeId, CancellationToken cancellationToken)
     {
         session.UseOrganisation(organisationId);
         var month = CreditLedger.MonthStart(clock.GetUtcNow());
         await using var command = await db.CommandAsync("""
             WITH mine AS (SELECT id, status FROM runs WHERE organisation_id = @org AND employee_id = @employee),
+                 worked AS (
+                     SELECT r.id, r.status FROM runs r
+                     WHERE r.organisation_id = @org AND (r.employee_id = @employee
+                        OR EXISTS (SELECT 1 FROM tasks t WHERE t.organisation_id = r.organisation_id AND t.run_id = r.id AND t.employee_id = @employee)
+                        OR EXISTS (SELECT 1 FROM credit_entries c WHERE c.organisation_id = r.organisation_id AND c.run_id = r.id AND c.employee_id = @employee))),
                  evaluations AS (
-                     SELECT e.run_id, e.type FROM run_events e JOIN mine ON mine.id = e.run_id
+                     SELECT e.run_id, e.type, e.payload ->> 'employeeId' AS worker, e.payload ->> 'judgedBy' AS judge, e.payload ->> 'taskId' AS task
+                     FROM run_events e
                      WHERE e.organisation_id = @org AND e.type IN ('evaluation.passed', 'evaluation.failed')),
+                 judged AS (
+                     SELECT v.type FROM evaluations v
+                     WHERE v.worker = @employeeText OR (v.worker IS NULL AND v.run_id IN (SELECT id FROM mine))),
+                 done AS (SELECT t.id, t.run_id FROM tasks t WHERE t.organisation_id = @org AND t.employee_id = @employee AND t.status = 'done'),
                  briefed AS (SELECT id, status FROM employees WHERE organisation_id = @org AND briefed_by = @employee)
             SELECT
-                (SELECT COUNT(*) FROM mine WHERE status IN ('succeeded', 'failed', 'cancelled')),
-                (SELECT COUNT(*) FROM mine WHERE status = 'succeeded'),
-                (SELECT COUNT(*) FROM mine WHERE status = 'failed'),
-                (SELECT COUNT(*) FROM mine WHERE status = 'cancelled'),
-                (SELECT COUNT(*) FROM evaluations WHERE type = 'evaluation.passed')
-                  + (SELECT COUNT(*) FROM mine WHERE status = 'succeeded' AND NOT EXISTS (SELECT 1 FROM evaluations v WHERE v.run_id = mine.id)),
-                (SELECT COUNT(*) FROM evaluations WHERE type = 'evaluation.failed'),
+                (SELECT COUNT(*) FROM worked WHERE status IN ('succeeded', 'failed', 'cancelled')),
+                (SELECT COUNT(*) FROM worked WHERE status = 'succeeded'),
+                (SELECT COUNT(*) FROM worked WHERE status = 'failed'),
+                (SELECT COUNT(*) FROM worked WHERE status = 'cancelled'),
+                (SELECT COUNT(*) FROM judged WHERE type = 'evaluation.passed')
+                  + (SELECT COUNT(*) FROM done d WHERE NOT EXISTS (SELECT 1 FROM evaluations v WHERE v.task = d.id::text))
+                  + (SELECT COUNT(*) FROM mine WHERE status = 'succeeded'
+                       AND NOT EXISTS (SELECT 1 FROM evaluations v WHERE v.run_id = mine.id)
+                       AND NOT EXISTS (SELECT 1 FROM done d WHERE d.run_id = mine.id)),
+                (SELECT COUNT(*) FROM judged WHERE type = 'evaluation.failed'),
                 COALESCE((SELECT SUM(amount) FROM credit_entries WHERE organisation_id = @org AND employee_id = @employee AND kind IN ('settlement', 'hosting') AND billable), 0),
                 COALESCE((SELECT SUM(amount) FROM credit_entries WHERE organisation_id = @org AND employee_id = @employee AND kind IN ('settlement', 'hosting') AND billable AND created_at >= @month), 0),
                 COALESCE((SELECT SUM(amount) FROM credit_entries WHERE organisation_id = @org AND employee_id = @employee AND kind = 'settlement' AND NOT billable), 0),
@@ -192,14 +213,15 @@ public sealed partial class EmployeeService(
                 (SELECT COUNT(*) FROM briefed),
                 (SELECT COUNT(*) FROM briefed WHERE status = 'working'),
                 COALESCE((SELECT SUM(amount) FROM credit_entries c WHERE c.organisation_id = @org AND c.employee_id IN (SELECT id FROM briefed) AND c.kind IN ('settlement', 'hosting') AND c.billable), 0),
-                COALESCE((SELECT SUM(amount) FROM credit_entries c WHERE c.organisation_id = @org AND c.employee_id IN (SELECT id FROM briefed) AND c.kind IN ('settlement', 'hosting') AND c.billable AND c.created_at >= @month), 0)
-            """, cancellationToken, P("org", organisationId), P("employee", employeeId), P("month", month));
+                COALESCE((SELECT SUM(amount) FROM credit_entries c WHERE c.organisation_id = @org AND c.employee_id IN (SELECT id FROM briefed) AND c.kind IN ('settlement', 'hosting') AND c.billable AND c.created_at >= @month), 0),
+                (SELECT COUNT(*) FROM evaluations WHERE judge = @employeeText)
+            """, cancellationToken, P("org", organisationId), P("employee", employeeId), P("employeeText", employeeId.ToString()), P("month", month));
         long[] n;
         decimal[] credits;
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
             await reader.ReadAsync(cancellationToken);
-            n = [reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2), reader.GetInt64(3), reader.GetInt64(4), reader.GetInt64(5), reader.GetInt64(9), reader.GetInt64(10), reader.GetInt64(11)];
+            n = [reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2), reader.GetInt64(3), reader.GetInt64(4), reader.GetInt64(5), reader.GetInt64(9), reader.GetInt64(10), reader.GetInt64(11), reader.GetInt64(14)];
             credits = [reader.GetDecimal(6), reader.GetDecimal(7), reader.GetDecimal(8), reader.GetDecimal(12), reader.GetDecimal(13)];
         }
 
@@ -209,7 +231,7 @@ public sealed partial class EmployeeService(
         var sentBack = (int)n[5];
         return new TrackRecordView(
             employeeId,
-            new WorkCountsView(accepted, sentBack, accepted + sentBack == 0 ? null : decimal.Round(100m * accepted / (accepted + sentBack), 1)),
+            new WorkCountsView(accepted, sentBack, accepted + sentBack == 0 ? null : decimal.Round(100m * accepted / (accepted + sentBack), 1), (int)n[9]),
             new RunCountsView((int)n[0], (int)n[1], (int)n[2], (int)n[3]),
             new RepairsNotChargedView(credits[2], n[6]),
             new CostToDateView(credits[0], credits[1]),
@@ -618,18 +640,32 @@ public sealed partial class EmployeeService(
         var runTitles = await db.Runs.AsNoTracking().Where(r => r.OrganisationId == organisationId && runIds.Contains(r.Id))
             .ToDictionaryAsync(r => r.Id, r => r.Title, cancellationToken);
         var ids = rows.Select(r => r.Id).ToList();
+        // A run under way that an employee works in without owning it (a factory build's engineer, its QA engineer, the reviewer).
+        var underWay = await db.Runs.AsNoTracking()
+            .Where(r => r.OrganisationId == organisationId && (r.Status == RunStatuses.Running || r.Status == RunStatuses.WaitingApproval))
+            .OrderByDescending(r => r.CreatedAt).ToListAsync(cancellationToken);
+        var underWayIds = underWay.Select(r => r.Id).ToList();
+        var claimed = await db.Tasks.AsNoTracking()
+            .Where(t => t.OrganisationId == organisationId && t.RunId != null && t.EmployeeId != null && underWayIds.Contains(t.RunId.Value) && ids.Contains(t.EmployeeId.Value))
+            .Select(t => new { RunId = t.RunId!.Value, EmployeeId = t.EmployeeId!.Value }).ToListAsync(cancellationToken);
+        var charged = await db.CreditEntries.AsNoTracking()
+            .Where(c => c.OrganisationId == organisationId && c.RunId != null && c.EmployeeId != null && underWayIds.Contains(c.RunId.Value) && ids.Contains(c.EmployeeId.Value))
+            .Select(c => new { RunId = c.RunId!.Value, EmployeeId = c.EmployeeId!.Value }).Distinct().ToListAsync(cancellationToken);
+        var working = ReadModels.WorkingIn(underWay, claimed.Select(x => (x.RunId, x.EmployeeId)).Concat(charged.Select(x => (x.RunId, x.EmployeeId))));
+        var underWayTitles = underWay.ToDictionary(r => r.Id, r => r.Title);
         var memoryCounts = await db.EmployeeMemories.AsNoTracking()
             .Where(m => m.OrganisationId == organisationId && ids.Contains(m.EmployeeId) && m.ArchivedAt == null)
             .GroupBy(m => m.EmployeeId).Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Count, cancellationToken);
         var now = clock.GetUtcNow();
         return rows.Select(e => new EmployeeView(
-            e.Id, e.Kind, e.Name, e.Role, e.Status, e.Standing, paths(e),
+            e.Id, e.Kind, e.Name, e.Role, e.Status == EmployeeStatuses.Idle && e.CurrentRunId is null && working.ContainsKey(e.Id) ? EmployeeStatuses.Working : e.Status, e.Standing, paths(e),
             e.ReportsToId is { } m ? new PersonRef(m, names.GetValueOrDefault(m, "")) : null,
             e.BriefedById is { } b ? new PersonRef(b, names.GetValueOrDefault(b, "")) : null,
             new JobDescriptionView(e.JobDescription, paths(e), e.Tools, e.Services, e.MonthlyCreditLimit, e.ModelTier),
-            WorkforceRules.Idle(e, idleDays, now),
-            e.CurrentRunId is { } r ? new CurrentRunView(r, runTitles.GetValueOrDefault(r, "")) : null,
+            working.ContainsKey(e.Id) && e.CurrentRunId is null ? new IdleView(false, null, WorkforceRules.Idle(e, idleDays, now).AfterDays) : WorkforceRules.Idle(e, idleDays, now),
+            e.CurrentRunId is { } r ? new CurrentRunView(r, runTitles.GetValueOrDefault(r, ""))
+                : working.TryGetValue(e.Id, out var worked) ? new CurrentRunView(worked, underWayTitles[worked]) : null,
             e.LastRunId, e.LastActiveAt, e.CreatedAt, e.ReleasedAt, memoryCounts.GetValueOrDefault(e.Id), e.Brief)).ToList();
     }
 

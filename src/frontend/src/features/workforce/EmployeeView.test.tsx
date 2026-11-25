@@ -7,7 +7,8 @@ import { EmployeeView } from "./EmployeeView";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const TREE = { generatedAt: "t", viewerRole: "owner", organisation: { id: "o1", slug: "acme", name: "Acme", summary: null, spend: { monthCredits: 0 }, workers: [] }, divisions: [{ id: "d", slug: "tools", name: "Tools", spend: { monthCredits: 0 }, workers: [], projects: [] }], needsYou: [] };
-const TASKS = [{ id: "t1", scope: "acme/tools", runId: "r5", parentTaskId: null, title: "Research: Pager", description: "", status: "done", holderRunId: "r5", holderEmployeeId: "e1", claimedAt: null, estimateCredits: 60, actualCredits: 54, dependsOn: [], createdAt: "t", updatedAt: "t" }];
+// A finished task is no longer held by anyone; who did it stays on it.
+const TASKS = [{ id: "t1", scope: "acme/tools", runId: "r5", parentTaskId: null, title: "Research: Pager", description: "", status: "done", holderRunId: null, holderEmployeeId: null, employeeId: "e1", claimedAt: null, estimateCredits: 60, actualCredits: 54, dependsOn: [], createdAt: "t", updatedAt: "t" }];
 
 function stub(detail: Response | "pending", extra = {}) {
   return stubApi({
@@ -49,7 +50,7 @@ describe("EmployeeView", () => {
     const record = screen.getByRole("region", { name: "Track record" });
     expect(record.textContent).toContain("19 of 22");
     expect(record.textContent).toContain("3 pieces sent back");
-    expect(record.textContent).toContain("Within 12%");
+    expect(record.textContent).toContain("Usually 18% under the estimate");
     expect(screen.getByText("Standard, for reading and judging")).toBeTruthy();
     expect(screen.getByText("Read files, Search the web, Brief contractors")).toBeTruthy();
     expect(document.body.textContent).not.toContain("web_search");
@@ -59,6 +60,32 @@ describe("EmployeeView", () => {
     expect(within(memory).getByText("Proof before building")).toBeTruthy();
     expect(screen.getByText(/1 note merged, 1 removed as out of date, 1 habit corrected/)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Talk to Ada" })).toBeTruthy();
+  });
+
+  it("shows the work a factory build gave it: the tasks it claimed, judgements it made, and how its estimates went", async () => {
+    const trackRecord = {
+      employeeId: "e1",
+      work: { accepted: 3, sentBack: 0, acceptedPercent: 100, judged: 4 },
+      runs: { finished: 1, succeeded: 1, failed: 0, cancelled: 0 },
+      repairsNotCharged: { credits: 0, calls: 0 },
+      cost: { toDateCredits: 3.2, monthCredits: 3.2 },
+      contractors: { engaged: 0, working: 0, toDateCredits: 0, monthCredits: 0 },
+      estimates: { pieces: 1, withinPercent: 0, under: 1, over: 0, largestMissPercent: 83.8, typicalGapPercent: -83.8, typically: "under" },
+    };
+    const tasks = [
+      { id: "t7", scope: "acme/tools", runId: "b1", parentTaskId: null, title: "Check: Members book a court.", description: "", status: "done", holderRunId: null, holderEmployeeId: null, employeeId: "e1", claimedAt: "t", estimateCredits: null, actualCredits: null, dependsOn: [], createdAt: "t", updatedAt: "t" },
+    ];
+    const { calls } = stub(json({ ...employeeDetailFixture(), trackRecord }), { "GET /api/tasks": json(tasks) });
+    renderWithStore(<EmployeeView employeeId="e1" />);
+    const record = await screen.findByRole("region", { name: "Track record" });
+    expect(record.textContent).toContain("3 of 3");
+    expect(record.textContent).toContain("4 judgements of others’ work");
+    expect(record.textContent).toContain("Usually 84% under the estimate");
+    expect(record.textContent).not.toContain("Within 0%");
+    expect(await screen.findByRole("link", { name: "Check: Members book a court." })).toBeTruthy();
+    expect(screen.queryByText(/has not taken on any tasks/)).toBeNull();
+    // Its own tasks are asked for by name, wherever in the scope they sit.
+    expect(calls.some((c) => c.method === "GET" && c.path.startsWith("/api/tasks?") && c.path.includes("employeeId=e1"))).toBe(true);
   });
 
   it("technical mode names the tools and the tier", async () => {

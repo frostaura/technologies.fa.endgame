@@ -288,7 +288,7 @@ test.describe("app and credits", () => {
     await page.getByRole("link", { name: /credits left/ }).click();
     await expect(page.getByRole("heading", { name: "9,548" })).toBeVisible();
     await expect(page.getByRole("list", { name: "Budgets" }).getByRole("listitem")).toHaveCount(5);
-    await expect(page.getByText("Within 8%")).toBeVisible();
+    await expect(page.getByText("Usually 12% under the estimate")).toBeVisible();
 
     await useScenario("credits-fail");
     await page.reload();

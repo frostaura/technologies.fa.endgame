@@ -469,7 +469,7 @@ export function scenario(name: ScenarioName): MockState {
   });
   const track = (id: string, accepted: number, sentBack: number, estimates: unknown) => ({
     employeeId: id,
-    work: { accepted, sentBack, acceptedPercent: accepted + sentBack > 0 ? Math.round((accepted / (accepted + sentBack)) * 1000) / 10 : null },
+    work: { accepted, sentBack, acceptedPercent: accepted + sentBack > 0 ? Math.round((accepted / (accepted + sentBack)) * 1000) / 10 : null, judged: 0 },
     runs: { finished: accepted + sentBack, succeeded: accepted, failed: sentBack, cancelled: 0 },
     repairsNotCharged: { credits: 18, calls: sentBack },
     cost: { toDateCredits: 1240, monthCredits: 140 },
@@ -479,7 +479,7 @@ export function scenario(name: ScenarioName): MockState {
   s.employees = {
     e1: {
       employee: employee(ada, "northwind/research", job("northwind/research", "Research every new idea before anything is built, and argue the case against it first.", ["read_file", "web_search", "spawn"], "research", 200)),
-      trackRecord: track("e1", 19, 3, { pieces: 9, withinPercent: 12, under: 6, over: 3, largestMissPercent: 17 }),
+      trackRecord: track("e1", 19, 3, { pieces: 9, withinPercent: 12, under: 6, over: 3, largestMissPercent: 17, typicalGapPercent: -18, typically: "under" }),
       contractors: [
         { ...employee({ id: "c1", name: "Contractor", role: "Researcher", status: "working", standing: null }, "northwind/research/recipes", job("northwind/research/recipes", "", [], "research", null)), kind: "contractor", brief: "Sweep the competitors of Recipe box.", briefedBy: { id: "e1", name: "Ada" } },
       ],
@@ -531,8 +531,8 @@ export function scenario(name: ScenarioName): MockState {
   };
   s.recurringRoles = [{ scope: "northwind/research", role: "Competitor sweep", contractors: 3, windowDays: 30, costCredits: 90, lastBriefedBy: "e1", lastBrief: "Sweep the competitors of a new idea and name each with its price." }];
   s.tasks = [
-    { id: "t-1", scope: "northwind/research", runId: "run-done", parentTaskId: null, title: "Research: Court ladder", description: "", status: "done", holderRunId: "run-done", holderEmployeeId: "e1", claimedAt: ago(60 * 24), estimateCredits: 60, actualCredits: 54, dependsOn: [], createdAt: ago(60 * 24), updatedAt: ago(60 * 23) },
-    { id: "t-2", scope: "northwind/research/recipes", runId: "run-research", parentTaskId: null, title: "Competitor sweep: Recipe box", description: "", status: "in_progress", holderRunId: "run-research", holderEmployeeId: "e1", claimedAt: ago(30), estimateCredits: 90, actualCredits: null, dependsOn: [], createdAt: ago(30), updatedAt: ago(5) },
+    { id: "t-1", scope: "northwind/research", runId: "run-done", parentTaskId: null, title: "Research: Court ladder", description: "", status: "done", holderRunId: null, holderEmployeeId: null, employeeId: "e1", claimedAt: ago(60 * 24), estimateCredits: 60, actualCredits: 54, dependsOn: [], createdAt: ago(60 * 24), updatedAt: ago(60 * 23) },
+    { id: "t-2", scope: "northwind/research/recipes", runId: "run-research", parentTaskId: null, title: "Competitor sweep: Recipe box", description: "", status: "in_progress", holderRunId: "run-research", holderEmployeeId: "e1", employeeId: "e1", claimedAt: ago(30), estimateCredits: 90, actualCredits: null, dependsOn: [], createdAt: ago(30), updatedAt: ago(5) },
   ];
   s.autonomy = {
     northwind: { autonomy: "auto", checkpoints: { hire: true }, ruleSets: { all: { deny: ["run(rm -rf *)"], ask: [], allow: [], checkpoints: [] } } },
@@ -675,7 +675,7 @@ export function scenario(name: ScenarioName): MockState {
       { scope: "northwind/research", name: "Research", level: "division", depth: 1, spentCredits: 142, capCredits: null, appId: null },
       { scope: "northwind/research/field-notes", name: "Field notes", level: "project", depth: 2, spentCredits: 120, capCredits: 300, appId: null },
     ],
-    estimates: { pieces: 12, withinPercent: 8, under: 9, over: 3, largestMissPercent: 15 },
+    estimates: { pieces: 12, withinPercent: 8, under: 9, over: 3, largestMissPercent: 15, typicalGapPercent: -11.5, typically: "under" },
     notCharged: { credits: 37, repairs: 2 },
     overdraft: { frostauraLimit: 3000, ownLimit: 1000, limits: [] },
     topUps: [{ at: ago(60 * 24 * 10), credits: 10_000, note: "Added by FrostAura" }],

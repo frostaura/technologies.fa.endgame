@@ -14,7 +14,7 @@ const CREDITS: Credits = {
     { scope: "acme/tools", name: "Tools", level: "division", depth: 1, spentCredits: 250, capCredits: null, appId: null },
     { scope: "acme/tools/ledger/web", name: "Ledger web", level: "app", depth: 3, spentCredits: 90, capCredits: 100, appId: "a1" },
   ],
-  estimates: { pieces: 8, withinPercent: 11, under: 5, over: 3, largestMissPercent: 19 },
+  estimates: { pieces: 8, withinPercent: 11, under: 5, over: 3, largestMissPercent: 19, typicalGapPercent: -12.5, typically: "under" },
   notCharged: { credits: 42, repairs: 3 },
   overdraft: { frostauraLimit: 2000, ownLimit: null, limits: [] },
   topUps: [{ at: "2026-11-01T00:00:00Z", credits: 5000, note: "Added by FrostAura" }],
@@ -53,10 +53,30 @@ describe("CreditsView", () => {
     expect(within(budgets).getAllByRole("listitem")).toHaveLength(3);
     expect(within(budgets).getByText("No cap here; the one above holds")).toBeTruthy();
     expect(within(budgets).getByRole("link", { name: "Ledger web" }).getAttribute("href")).toBe("/apps/a1");
-    expect(screen.getByText("Within 11%")).toBeTruthy();
+    expect(screen.getByText("Usually 13% under the estimate")).toBeTruthy();
     expect(screen.getByText("42 credits")).toBeTruthy();
     expect(screen.getByText(/3 repairs where an employee got it wrong/)).toBeTruthy();
     expect(screen.getByText("Not set")).toBeTruthy();
+  });
+
+  it("says how far off the estimates usually are, and which way, rather than the share that landed close", async () => {
+    // Every build was estimated far too high (90 against 14.56): none came within 10%, but that is not "within 0%".
+    const estimates = { pieces: 4, withinPercent: 0, under: 4, over: 0, largestMissPercent: 85, typicalGapPercent: -83.8, typically: "under" };
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json({ ...CREDITS, estimates }) });
+    renderWithStore(<CreditsView />);
+    expect(await screen.findByText("Usually 84% under the estimate")).toBeTruthy();
+    expect(screen.queryByText(/Within 0%/)).toBeNull();
+    expect(screen.getByText(/Across 4 pieces of work this month\. None came within 10% of its estimate; 4 cost less, 0 more\. The largest miss was 85%\./)).toBeTruthy();
+  });
+
+  it("says when the estimates usually land close, or usually run over", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json({ ...CREDITS, estimates: { pieces: 3, withinPercent: 67, under: 1, over: 0, largestMissPercent: 14, typicalGapPercent: 3.2, typically: "within" } }) });
+    renderWithStore(<CreditsView />);
+    expect(await screen.findByText("Usually within 3%")).toBeTruthy();
+    cleanup();
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json({ ...CREDITS, estimates: { pieces: 2, withinPercent: 0, under: 0, over: 2, largestMissPercent: 40, typicalGapPercent: 21, typically: "over" } }) });
+    renderWithStore(<CreditsView />);
+    expect(await screen.findByText("Usually 21% over the estimate")).toBeTruthy();
   });
 
   it("says when nothing has been scored or topped up yet", async () => {

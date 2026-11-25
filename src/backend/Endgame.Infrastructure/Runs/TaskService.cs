@@ -11,6 +11,7 @@ using static Endgame.Infrastructure.Persistence.Db;
 
 namespace Endgame.Infrastructure.Runs;
 
+/// <summary>A task in the graph. <paramref name="HolderEmployeeId"/> holds it while it is in progress; <paramref name="EmployeeId"/> is who claimed it last, kept once it is finished.</summary>
 public sealed record TaskView(
     Guid Id,
     string Scope,
@@ -26,7 +27,8 @@ public sealed record TaskView(
     decimal? ActualCredits,
     IReadOnlyList<Guid> DependsOn,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    Guid? EmployeeId);
 
 public sealed record TaskPatch(string? Status, string? ExpectedStatus, string? Title, string? Description, decimal? EstimateCredits, decimal? ActualCredits, string? Summary);
 
@@ -119,7 +121,7 @@ public sealed class TaskService(EndgameDbContext db, TenantSession session, Scop
         Guid? claimed;
         await using (var command = await db.CommandAsync("""
             UPDATE tasks t
-            SET status = 'in_progress', holder_run_id = @run, holder_employee_id = @employee, claimed_at = @now, updated_at = @now
+            SET status = 'in_progress', holder_run_id = @run, holder_employee_id = @employee, employee_id = @employee, claimed_at = @now, updated_at = @now
             WHERE t.organisation_id = @org AND t.id = @task
               AND t.status = @expected
               AND t.holder_run_id IS NOT DISTINCT FROM @holder
@@ -142,7 +144,15 @@ public sealed class TaskService(EndgameDbContext db, TenantSession session, Scop
             return null;
         }
 
-        await runs.AppendAsync(org, runId, [new NewEvent(RunEventTypes.TaskClaimed, new JsonObject { ["taskId"] = taskId.ToString(), ["previousHolder"] = expectedHolderRunId?.ToString() })], null, null, cancellationToken);
+        if (employeeId is { } worker)
+        {
+            // Claiming work is activity: an employee who only ever works in runs it does not own (a factory build's
+            // engineer) is never flagged idle and released for it, and its last piece of work is this run.
+            await db.Employees.Where(e => e.OrganisationId == org && e.Id == worker)
+                .ExecuteUpdateAsync(x => x.SetProperty(e => e.LastActiveAt, now).SetProperty(e => e.LastRunId, runId), cancellationToken);
+        }
+
+        await runs.AppendAsync(org, runId, [new NewEvent(RunEventTypes.TaskClaimed, new JsonObject { ["taskId"] = taskId.ToString(), ["employeeId"] = employeeId?.ToString(), ["previousHolder"] = expectedHolderRunId?.ToString() })], null, null, cancellationToken);
         return await GetAsync(org, taskId, cancellationToken);
     }
 
@@ -221,7 +231,7 @@ public sealed class TaskService(EndgameDbContext db, TenantSession session, Scop
             var type = finishedAs == TaskStatuses.Done ? RunEventTypes.TaskDone : RunEventTypes.TaskFailed;
             try
             {
-                await runs.AppendAsync(org, run, [new NewEvent(type, new JsonObject { ["taskId"] = taskId.ToString(), ["summary"] = patch.Summary ?? task.Title })], null, null, cancellationToken);
+                await runs.AppendAsync(org, run, [new NewEvent(type, new JsonObject { ["taskId"] = taskId.ToString(), ["summary"] = patch.Summary ?? task.Title, ["employeeId"] = task.EmployeeId?.ToString() })], null, null, cancellationToken);
             }
             catch (EndgameProblem problem) when (problem.Status == 409)
             {
@@ -232,7 +242,8 @@ public sealed class TaskService(EndgameDbContext db, TenantSession session, Scop
         return await GetAsync(org, taskId, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<TaskView>> ListAsync(ResolvedScope scope, string? status, int limit, CancellationToken cancellationToken)
+    /// <summary>Tasks at the scope and beneath it, most recently changed first; with <paramref name="employeeId"/>, only the ones that employee claimed.</summary>
+    public async Task<IReadOnlyList<TaskView>> ListAsync(ResolvedScope scope, string? status, int limit, CancellationToken cancellationToken, Guid? employeeId = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (status is not null && !TaskStatuses.All.Contains(status))
@@ -246,6 +257,7 @@ public sealed class TaskService(EndgameDbContext db, TenantSession session, Scop
             .Where(t => scope.ProjectId == null || t.ProjectId == scope.ProjectId)
             .Where(t => scope.AppId == null || t.AppId == scope.AppId)
             .Where(t => status == null || t.Status == status)
+            .Where(t => employeeId == null || t.EmployeeId == employeeId)
             .OrderByDescending(t => t.UpdatedAt)
             .Take(Math.Clamp(limit, 1, MaxList))
             .ToListAsync(cancellationToken);
@@ -274,5 +286,5 @@ public sealed class TaskService(EndgameDbContext db, TenantSession session, Scop
 
     private static TaskView View(TaskRecord t, string scope) => new(
         t.Id, scope, t.RunId, t.ParentTaskId, t.Title, t.Description, t.Status, t.HolderRunId, t.HolderEmployeeId, t.ClaimedAt,
-        t.EstimateCredits, t.ActualCredits, t.DependsOn, t.CreatedAt, t.UpdatedAt);
+        t.EstimateCredits, t.ActualCredits, t.DependsOn, t.CreatedAt, t.UpdatedAt, t.EmployeeId);
 }

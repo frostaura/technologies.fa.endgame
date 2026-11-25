@@ -352,6 +352,7 @@ internal sealed class TaskConfiguration : IEntityTypeConfiguration<TaskRecord>
         builder.Property(t => t.Status).HasColumnName("status").HasMaxLength(20);
         builder.Property(t => t.HolderRunId).HasColumnName("holder_run_id");
         builder.Property(t => t.HolderEmployeeId).HasColumnName("holder_employee_id");
+        builder.Property(t => t.EmployeeId).HasColumnName("employee_id");
         builder.Property(t => t.ClaimedAt).HasColumnName("claimed_at");
         builder.Property(t => t.EstimateCredits).HasColumnName("estimate_credits").HasPrecision(20, 6);
         builder.Property(t => t.ActualCredits).HasColumnName("actual_credits").HasPrecision(20, 6);
@@ -370,6 +371,10 @@ internal sealed class TaskConfiguration : IEntityTypeConfiguration<TaskRecord>
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<EmployeeRecord>().WithMany()
             .HasForeignKey(t => new { t.OrganisationId, t.HolderEmployeeId })
+            .HasPrincipalKey(e => new { e.OrganisationId, e.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<EmployeeRecord>().WithMany()
+            .HasForeignKey(t => new { t.OrganisationId, t.EmployeeId })
             .HasPrincipalKey(e => new { e.OrganisationId, e.Id })
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<TaskRecord>().WithMany()

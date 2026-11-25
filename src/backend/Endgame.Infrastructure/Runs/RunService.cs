@@ -139,7 +139,10 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
             .Where(r => scope.AppId == null || r.AppId == scope.AppId)
             .Where(r => kind == null || r.Kind == kind)
             .Where(r => status == null || r.Status == status)
-            .Where(r => employeeId == null || r.EmployeeId == employeeId)
+            // An employee's runs are the ones it worked in: its own, one it claimed a task in, or one with a model call charged to it.
+            .Where(r => employeeId == null || r.EmployeeId == employeeId
+                || db.Tasks.Any(t => t.OrganisationId == r.OrganisationId && t.RunId == r.Id && t.EmployeeId == employeeId)
+                || db.CreditEntries.Any(c => c.OrganisationId == r.OrganisationId && c.RunId == r.Id && c.EmployeeId == employeeId))
             .OrderByDescending(r => r.CreatedAt)
             .Take(Math.Clamp(limit, 1, MaxRunsPerList))
             .ToListAsync(cancellationToken);

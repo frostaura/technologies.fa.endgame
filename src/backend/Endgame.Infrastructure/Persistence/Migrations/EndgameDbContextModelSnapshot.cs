@@ -2508,6 +2508,10 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("division_id");
 
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employee_id");
+
                     b.Property<decimal?>("EstimateCredits")
                         .HasPrecision(20, 6)
                         .HasColumnType("numeric(20,6)")
@@ -2554,6 +2558,8 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "EmployeeId");
 
                     b.HasIndex("OrganisationId", "HolderEmployeeId");
 
@@ -3689,6 +3695,12 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                     b.HasOne("Endgame.Domain.Tree.Division", null)
                         .WithMany()
                         .HasForeignKey("OrganisationId", "DivisionId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "EmployeeId")
                         .HasPrincipalKey("OrganisationId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
 
