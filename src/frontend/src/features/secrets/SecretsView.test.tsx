@@ -153,6 +153,14 @@ describe("SecretsView", () => {
     expect(within(screen.getByRole("list", { name: "Secrets" })).getByText("MAPS_KEY")).toBeTruthy();
   });
 
+  it("is headed plainly before an organisation is named, never with an empty name", async () => {
+    navigate("/secrets", { replace: true });
+    stubApi({ "GET /api/me": json({ ...ME, organisation: null, memberships: [] }), "GET /api/credits": problem(404, "Not found"), "GET /api/tree": json({ ...TREE, organisation: null, divisions: [] }), "GET /api/secrets": json(LIST) });
+    renderWithStore(<SecretsView />);
+    expect(await screen.findByText("There are no secrets until your organisation is named")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent?.trim()).toBe("Secrets");
+  });
+
   it("uses the organisation when no scope is named", async () => {
     navigate("/secrets", { replace: true });
     const api = stub(json({ scope: "acme", effective: [], setBelow: [] }));
