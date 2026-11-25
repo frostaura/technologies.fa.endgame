@@ -45,6 +45,10 @@ export type Route =
   | { name: "secrets" }
   | { name: "operator-access" }
   | { name: "system" }
+  | { name: "employee"; id: string }
+  | { name: "hire"; id: string }
+  | { name: "hires" }
+  | { name: "autonomy" }
   | { name: "not-found" };
 
 const id = "([A-Za-z0-9_-]{1,80})";
@@ -59,6 +63,10 @@ const table: [RegExp, (m: RegExpMatchArray) => Route][] = [
   [/^\/secrets\/?$/, () => ({ name: "secrets" })],
   [/^\/operator-access\/?$/, () => ({ name: "operator-access" })],
   [/^\/system\/?$/, () => ({ name: "system" })],
+  [new RegExp(`^/employees/${id}/?$`), (m) => ({ name: "employee", id: m[1] ?? "" })],
+  [new RegExp(`^/hires/${id}/?$`), (m) => ({ name: "hire", id: m[1] ?? "" })],
+  [/^\/hires\/?$/, () => ({ name: "hires" })],
+  [/^\/autonomy\/?$/, () => ({ name: "autonomy" })],
 ];
 
 export function matchRoute(pathname: string): Route {
@@ -81,4 +89,10 @@ export const paths = {
   secrets: (scope: string) => `/secrets?scope=${encodeURIComponent(scope)}`,
   operatorAccess: () => "/operator-access",
   system: () => "/system",
+  employee: (employeeId: string) => `/employees/${encodeURIComponent(employeeId)}`,
+  hire: (hireId: string) => `/hires/${encodeURIComponent(hireId)}`,
+  /** Hire proposals and recurring contractor roles at a scope. */
+  hires: (scope: string) => `/hires?scope=${encodeURIComponent(scope)}`,
+  /** Autonomy, checkpoints and stage rule sets at a scope. */
+  autonomy: (scope: string) => `/autonomy?scope=${encodeURIComponent(scope)}`,
 };

@@ -1,23 +1,30 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Link } from "@/components/Link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { errorStatus, describeError } from "@/lib/queryState";
-import { matchRoute, navigate, paths, useLocation } from "@/lib/router";
+import { matchRoute, navigate, paths, useLocation, type Route } from "@/lib/router";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetMeQuery } from "@/store/api";
 import { modeSet } from "@/store/uiSlice";
-import { AppView } from "@/features/apps/AppView";
-import { OperatorAccessView } from "@/features/audit/OperatorAccessView";
 import { SignInView } from "@/features/auth/SignInView";
-import { CreditsView } from "@/features/credits/CreditsView";
 import { HomeView } from "@/features/home/HomeView";
-import { RunView } from "@/features/runs/RunView";
-import { SecretsView } from "@/features/secrets/SecretsView";
 import { AppShell } from "@/features/shell/AppShell";
-import { StartView } from "@/features/start/StartView";
-import { SystemStatusView } from "@/features/status/SystemStatusView";
-import { VerdictView } from "@/features/verdict/VerdictView";
+
+/** Every screen but the org chart loads when first opened, so the console opens fast. */
+const AppView = lazy(() => import("@/features/apps/AppView").then((x) => ({ default: x.AppView })));
+const OperatorAccessView = lazy(() => import("@/features/audit/OperatorAccessView").then((x) => ({ default: x.OperatorAccessView })));
+const CreditsView = lazy(() => import("@/features/credits/CreditsView").then((x) => ({ default: x.CreditsView })));
+const RunView = lazy(() => import("@/features/runs/RunView").then((x) => ({ default: x.RunView })));
+const SecretsView = lazy(() => import("@/features/secrets/SecretsView").then((x) => ({ default: x.SecretsView })));
+const StartView = lazy(() => import("@/features/start/StartView").then((x) => ({ default: x.StartView })));
+const SystemStatusView = lazy(() => import("@/features/status/SystemStatusView").then((x) => ({ default: x.SystemStatusView })));
+const VerdictView = lazy(() => import("@/features/verdict/VerdictView").then((x) => ({ default: x.VerdictView })));
+const AutonomyView = lazy(() => import("@/features/autonomy/AutonomyView").then((x) => ({ default: x.AutonomyView })));
+const EmployeeView = lazy(() => import("@/features/workforce/EmployeeView").then((x) => ({ default: x.EmployeeView })));
+const HireView = lazy(() => import("@/features/workforce/HireView").then((x) => ({ default: x.HireView })));
+const HiresView = lazy(() => import("@/features/workforce/HiresView").then((x) => ({ default: x.HiresView })));
 
 /** The session decides what renders: signed out is the sign-in screen, never a broken console. */
 export function App() {
@@ -56,6 +63,24 @@ export function App() {
     );
   }
 
+  // A crash anywhere inside a screen is caught here at worst, never a blank page.
+  return (
+    <ErrorBoundary name="This screen" variant="route" resetKey={pathname}>
+      <Suspense
+        fallback={
+          <Loading label="Opening the screen" className="flex min-h-screen flex-col gap-6 px-4 py-8 sm:px-8">
+            <Skeleton className="h-10 w-2/3" />
+            <Skeleton className="h-64 rounded-md" />
+          </Loading>
+        }
+      >
+        <Screen route={route} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
+function Screen({ route }: { route: Route }) {
   switch (route.name) {
     case "home":
     case "sign-in":
@@ -76,6 +101,14 @@ export function App() {
       return <OperatorAccessView />;
     case "system":
       return <SystemRoute />;
+    case "employee":
+      return <EmployeeView key={route.id} employeeId={route.id} />;
+    case "hire":
+      return <HireView key={route.id} hireId={route.id} />;
+    case "hires":
+      return <HiresView />;
+    case "autonomy":
+      return <AutonomyView />;
     default:
       return <NotFound />;
   }

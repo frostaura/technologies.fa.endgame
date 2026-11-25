@@ -9,6 +9,7 @@ import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import type { Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import type { Selection } from "@/store/uiSlice";
+import { TypingDots } from "./ConversationDock";
 import { accessChip, contractorsLabel, healthChip, runningChip, splitWorkers, stageChip, type Chip } from "./treeModel";
 
 /** Each division takes the next hue in turn, as the design draws Technologies blue and Labs violet. */
@@ -96,6 +97,11 @@ function DivisionColumn({
           {formatCredits(division.spend.monthCredits)}
         </Badge>
       </div>
+      {division.workers.length > 0 && (
+        <div className="ml-wire border-l-2 border-transparent pl-6 pt-3">
+          <Workers workers={division.workers} scope={scope} trail={trail} selection={selection} onSelect={onSelect} />
+        </div>
+      )}
       <div className={cn("relative ml-wire flex flex-col gap-3.5 border-l-2 pl-6 pt-4", tone.wire)}>
         {isActive(division) && (
           <span aria-hidden className={cn("absolute -left-1.5 size-2.5 animate-travel rounded-full ring-4 motion-reduce:hidden", tone.signal)} />
@@ -196,19 +202,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect }: { project: 
         </ul>
       )}
 
-      {(employees.length > 0 || contractors) && (
-        <div className="relative flex flex-wrap gap-2">
-          {employees.map((w) => (
-            <WorkerChip key={w.id} worker={w} selected={selection?.employeeId === w.id && selection.scope === scope} onSelect={() => onSelect({ scope, kind: "employee", trail: [...trail, w.name], employeeId: w.id })} />
-          ))}
-          {contractors && (
-            <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-violet-dash px-3 py-1 text-sm text-violet-deep">
-              <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-violet-line border-t-violet motion-reduce:animate-none" />
-              {contractorsLabel(contractors)}
-            </span>
-          )}
-        </div>
-      )}
+      {(employees.length > 0 || contractors) && <Workers workers={unique} scope={scope} trail={trail} selection={selection} onSelect={onSelect} />}
     </article>
   );
 }
@@ -246,6 +240,37 @@ function Figure({ value, label, muted = false }: { value: string; label: string;
   );
 }
 
+/**
+ * The people on a node: each employee as a chip in its own colour, with what it is doing now;
+ * contractors as one spinning line, since they are a burst and not a roster. Selecting a chip
+ * scopes the conversation to that employee.
+ */
+export function Workers({ workers, scope, trail, selection, onSelect }: { workers: Worker[]; scope: string; trail: string[]; selection: Selection | null; onSelect: (s: Selection) => void }) {
+  const { employees, contractors } = splitWorkers(workers);
+  const busy = employees.filter((w) => w.activity && w.status !== "paused");
+  return (
+    <div className="relative flex flex-col gap-2">
+      <div className="flex flex-wrap gap-2">
+        {employees.map((w) => (
+          <WorkerChip key={w.id} worker={w} selected={selection?.employeeId === w.id && selection.scope === scope} onSelect={() => onSelect({ scope, kind: "employee", trail: [...trail, w.name], employeeId: w.id })} />
+        ))}
+        {contractors && (
+          <span className="inline-flex min-h-touch items-center gap-2 rounded-full border border-dashed border-violet-dash px-3 py-1 text-sm text-violet-deep">
+            <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-violet-line border-t-violet motion-reduce:animate-none" />
+            {contractorsLabel(contractors)}
+          </span>
+        )}
+      </div>
+      {busy.map((w) => (
+        <span key={w.id} className="flex items-center gap-2 text-sm text-ink-muted">
+          <TypingDots />
+          {w.name}: {w.activity}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function WorkerChip({ worker, selected, onSelect }: { worker: Worker; selected: boolean; onSelect: () => void }) {
   return (
     <button
@@ -260,6 +285,8 @@ function WorkerChip({ worker, selected, onSelect }: { worker: Worker; selected: 
     >
       <Avatar name={worker.name} seed={worker.id} size="xs" />
       {worker.name} · {worker.role}
+      {worker.status === "paused" && <Badge tone="attention">Paused</Badge>}
+      {worker.idle && <Badge tone="quiet">Nothing to do</Badge>}
       {worker.activity && <span className="sr-only">, working: {worker.activity}</span>}
     </button>
   );

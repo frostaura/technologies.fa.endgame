@@ -27,6 +27,7 @@ const config: Config = {
       fontSize: Object.fromEntries(Object.entries(typography.fontSize).map(([k, [size, rest]]) => [k, [size, { ...rest }]])),
       maxWidth: layout.width,
       width: layout.width,
+      maxHeight: layout.height,
       spacing: { aura: layout.width.aura },
       minHeight: { touch: layout.touch },
       minWidth: { touch: layout.touch },
