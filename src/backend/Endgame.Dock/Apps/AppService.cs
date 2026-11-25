@@ -160,7 +160,7 @@ public sealed class AppService(
                 Name = name,
                 Image = image,
                 User = User,
-                Env = Environment(appId, connection, token, "false"),
+                Env = [.. Environment(appId, connection, token, "false"), "ENDGAME_PREVIEW=true"],
                 Labels = labels,
                 StopTimeout = TimeSpan.FromSeconds(10),
                 HostConfig = Hardening.App(limits, network),

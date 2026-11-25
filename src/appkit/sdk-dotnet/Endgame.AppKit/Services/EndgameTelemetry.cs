@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace Endgame.AppKit;
 
 /// <summary>Queues events and sends them in batches, so tracking never slows a request.</summary>
-internal sealed partial class EndgameTelemetry(PlatformClient platform, ILogger<EndgameTelemetry> logger, TimeProvider clock)
+internal sealed partial class EndgameTelemetry(PlatformClient platform, Microsoft.Extensions.Options.IOptions<EndgameSettings> settings, ILogger<EndgameTelemetry> logger, TimeProvider clock)
     : BackgroundService, IEndgameTelemetry
 {
     private const int BatchSize = 100;
@@ -17,6 +17,12 @@ internal sealed partial class EndgameTelemetry(PlatformClient platform, ILogger<
     public void Track(string name, IReadOnlyDictionary<string, object?>? properties = null, string? userId = null)
     {
         Names.RequireEventName(name);
+        if (settings.Value.Preview)
+        {
+            // The evaluator's preview: its test members' actions are not the app's people's.
+            return;
+        }
+
         _queue.Writer.TryWrite(new TelemetryEvent(name, clock.GetUtcNow(), properties, userId));
     }
 
