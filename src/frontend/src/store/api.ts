@@ -62,7 +62,31 @@ export type * from "./types";
  * (the unit tests) a relative `Request` URL throws.
  */
 const origin = typeof window === "undefined" ? "http://localhost" : window.location.origin;
-export const API_BASE = `${origin}/api`;
+export let API_BASE = `${origin}/api`;
+
+/**
+ * The transport seam: where the console's requests go. In the product it is the browser's own
+ * `fetch` against this origin, unchanged. The demo build (ARCH-009) installs an in-browser fake
+ * of the control plane here before the first request, and nothing else in the console knows.
+ */
+export interface Transport {
+  /** The API's base address; every request and the run stream are built from it. */
+  base: string;
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+}
+
+const transport: Transport = { base: API_BASE, fetch: (input, init) => fetch(input, init) };
+
+/** Replace the transport (the demo build only). Call it before the first request is made. */
+export function installTransport(next: Partial<Transport>) {
+  Object.assign(transport, next);
+  API_BASE = transport.base;
+}
+
+/** A request through the transport, for the writes that bypass RTK Query (`store/sensitive.ts`). */
+export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return transport.fetch(input, init);
+}
 
 /** What an endpoint's answer is checked against before it reaches the store, and what it is called on the page. */
 export interface Checked {
@@ -70,7 +94,8 @@ export interface Checked {
   what?: string;
 }
 
-const raw = fetchBaseQuery({ baseUrl: API_BASE, credentials: "same-origin" });
+const raw: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = (args, api, extra) =>
+  fetchBaseQuery({ baseUrl: transport.base, credentials: "same-origin", fetchFn: transport.fetch })(args, api, extra);
 
 /**
  * Every answer passes its endpoint's guard (`store/guards.ts`). An answer in a shape the screen does

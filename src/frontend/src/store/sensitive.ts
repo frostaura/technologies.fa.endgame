@@ -1,6 +1,6 @@
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { describeError } from "@/lib/queryState";
-import { API_BASE, api } from "./api";
+import { API_BASE, api, apiFetch } from "./api";
 import type { AppDispatch } from "./index";
 import { check, type Guard } from "@/lib/guards";
 import { accessTokenCreatedGuard, invitationGuard, provisionedGuard } from "./guards";
@@ -18,7 +18,7 @@ export type Outcome<T> = { ok: true; data: T } | { ok: false; reason: string; st
 async function send<T>(method: string, path: string, body: unknown, guard?: Guard<T>): Promise<Outcome<T>> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/${path}`, {
+    response = await apiFetch(`${API_BASE}/${path}`, {
       method,
       credentials: "same-origin",
       headers: { "content-type": "application/json", accept: "application/json" },
@@ -166,7 +166,7 @@ export function provisionOrganisation(name: string, slug: string, ownerEmail: st
 export async function downloadExport(appId: string, fallbackName: string): Promise<Outcome<{ fileName: string; bytes: number }>> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/apps/${encodeURIComponent(appId)}/export`, { credentials: "same-origin", headers: { accept: "application/gzip" } });
+    response = await apiFetch(`${API_BASE}/apps/${encodeURIComponent(appId)}/export`, { credentials: "same-origin", headers: { accept: "application/gzip" } });
   } catch {
     return { ok: false, reason: describeError({ status: "FETCH_ERROR", error: "" }), status: null };
   }
