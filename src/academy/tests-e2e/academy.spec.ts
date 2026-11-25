@@ -109,7 +109,7 @@ test("stepping through a scripted flow sends the live console each op in order",
 test("a branch of \"What else can happen\" plays in a console of its own, step by step", async ({ page }) => {
   await withDemo(page);
   await page.goto("./#/flow/HIRE-03");
-  await page.getByText("What else can happen", { exact: true }).click();
+  await page.locator("summary", { hasText: "What else can happen" }).click();
   await page.getByRole("button", { name: "Show me: The manager it was drafted with has been let go" }).click();
   const variation = page.getByTestId("variation");
   await expect(variation.locator("[aria-current=step]")).toContainText("Lark was drafted to report to Tomas");
