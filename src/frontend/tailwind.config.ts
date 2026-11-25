@@ -29,6 +29,7 @@ const config: Config = {
       width: layout.width,
       maxHeight: layout.height,
       spacing: { aura: layout.width.aura },
+      gridTemplateColumns: layout.columns,
       minHeight: { touch: layout.touch },
       minWidth: { touch: layout.touch },
       margin: { wire: layout.wireInset },

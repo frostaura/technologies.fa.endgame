@@ -49,6 +49,11 @@ export type Route =
   | { name: "hire"; id: string }
   | { name: "hires" }
   | { name: "autonomy" }
+  | { name: "people" }
+  | { name: "assistants" }
+  | { name: "notifications" }
+  | { name: "suggestions" }
+  | { name: "operator" }
   | { name: "not-found" };
 
 const id = "([A-Za-z0-9_-]{1,80})";
@@ -67,6 +72,11 @@ const table: [RegExp, (m: RegExpMatchArray) => Route][] = [
   [new RegExp(`^/hires/${id}/?$`), (m) => ({ name: "hire", id: m[1] ?? "" })],
   [/^\/hires\/?$/, () => ({ name: "hires" })],
   [/^\/autonomy\/?$/, () => ({ name: "autonomy" })],
+  [/^\/people\/?$/, () => ({ name: "people" })],
+  [/^\/assistants\/?$/, () => ({ name: "assistants" })],
+  [/^\/notifications\/?$/, () => ({ name: "notifications" })],
+  [/^\/suggestions\/?$/, () => ({ name: "suggestions" })],
+  [/^\/operator\/?$/, () => ({ name: "operator" })],
 ];
 
 export function matchRoute(pathname: string): Route {
@@ -95,4 +105,15 @@ export const paths = {
   hires: (scope: string) => `/hires?scope=${encodeURIComponent(scope)}`,
   /** Autonomy, checkpoints and stage rule sets at a scope. */
   autonomy: (scope: string) => `/autonomy?scope=${encodeURIComponent(scope)}`,
+  /** The people with a role at a scope, and inviting more. */
+  people: (scope: string) => `/people?scope=${encodeURIComponent(scope)}`,
+  /** AI assistant access: tokens and the addresses to give an assistant. */
+  assistants: () => "/assistants",
+  notifications: () => "/notifications",
+  /** Ideas suggested from what the organisation already holds. */
+  suggestions: (scope: string) => `/suggestions?scope=${encodeURIComponent(scope)}`,
+  /** God mode, for FrostAura operators only. */
+  operator: () => "/operator",
+  /** The org chart of an organisation an operator entered in God mode. */
+  homeOf: (organisation: string) => `/?organisation=${encodeURIComponent(organisation)}`,
 };

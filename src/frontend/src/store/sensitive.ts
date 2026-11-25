@@ -2,7 +2,9 @@ import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { describeError } from "@/lib/queryState";
 import { API_BASE, api } from "./api";
 import type { AppDispatch } from "./index";
-import type { AppShareCreated, ScopeLevel, SecretName } from "./types";
+import { check, type Guard } from "@/lib/guards";
+import { accessTokenCreatedGuard, invitationGuard, provisionedGuard } from "./guards";
+import type { AccessTokenCreated, AppShareCreated, MemberInvitation, MemberRole, OrganisationProvisioned, ScopeLevel, SecretName, TokenRole } from "./types";
 
 /**
  * Writes that carry something no one may read back: a secret's value going in, an invitation's
@@ -13,7 +15,7 @@ import type { AppShareCreated, ScopeLevel, SecretName } from "./types";
 
 export type Outcome<T> = { ok: true; data: T } | { ok: false; reason: string; status: number | null };
 
-async function send<T>(method: string, path: string, body: unknown): Promise<Outcome<T>> {
+async function send<T>(method: string, path: string, body: unknown, guard?: Guard<T>): Promise<Outcome<T>> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE}/${path}`, {
@@ -35,6 +37,11 @@ async function send<T>(method: string, path: string, body: unknown): Promise<Out
     }
   }
   if (!response.ok) return { ok: false, reason: describeError({ status: response.status, data } as FetchBaseQueryError), status: response.status };
+  if (guard) {
+    const checked = check(guard, data);
+    if (!checked.ok) return { ok: false, reason: `Endgame answered in a shape this screen does not understand: ${checked.problem}.`, status: response.status };
+    return { ok: true, data: checked.value };
+  }
   return { ok: true, data: data as T };
 }
 
@@ -98,4 +105,82 @@ export function shareApp(appId: string, email: string) {
     dispatch(api.util.invalidateTags([{ type: "Shares", id: appId }, { type: "App", id: appId }, "Tree"]));
     return outcome;
   };
+}
+
+/**
+ * Invites a person to a role at a scope. The control plane answers with a one-time code (and says
+ * whether it was e-mailed); the code comes back to the caller only, to be shown once.
+ */
+export function inviteMember(scope: string, email: string, displayName: string, role: MemberRole) {
+  return async (dispatch: AppDispatch): Promise<Outcome<MemberInvitation>> => {
+    const outcome = await send<MemberInvitation>("POST", "members", { scope, email: email.trim().toLowerCase(), displayName: displayName.trim(), role }, invitationGuard);
+    if (outcome.ok) {
+      // Only the person's name and role reach the cache; the code never does.
+      const { member } = outcome.data;
+      dispatch(api.util.updateQueryData("getMembers", scope, (list) => (list.some((m) => m.membershipId === member.membershipId) ? list : [...list, member])));
+      dispatch(api.util.invalidateTags(["Members"]));
+    }
+    return outcome;
+  };
+}
+
+/** Makes an access token for an AI assistant. The token itself is returned this once, to the caller only. */
+export function createToken(name: string, organisation: string, role: TokenRole, expiresInDays: number | null) {
+  return async (dispatch: AppDispatch): Promise<Outcome<AccessTokenCreated>> => {
+    const outcome = await send<AccessTokenCreated>("POST", "tokens", { name: name.trim(), organisation, role, ...(expiresInDays ? { expiresInDays } : {}) }, accessTokenCreatedGuard);
+    if (outcome.ok) {
+      const { accessToken } = outcome.data;
+      dispatch(api.util.updateQueryData("getTokens", undefined, (list) => [accessToken, ...list.filter((t) => t.id !== accessToken.id)]));
+      dispatch(api.util.invalidateTags(["Tokens"]));
+    }
+    return outcome;
+  };
+}
+
+/** God mode: provisions an organisation for an invited Owner. The Owner's one-time code comes back once. */
+export function provisionOrganisation(name: string, slug: string, ownerEmail: string, ownerDisplayName: string) {
+  return async (dispatch: AppDispatch): Promise<Outcome<OrganisationProvisioned>> => {
+    const outcome = await send<OrganisationProvisioned>(
+      "POST",
+      "organisations",
+      { name: name.trim(), slug, ownerEmail: ownerEmail.trim().toLowerCase(), ...(ownerDisplayName.trim() ? { ownerDisplayName: ownerDisplayName.trim() } : {}) },
+      provisionedGuard,
+    );
+    if (outcome.ok) dispatch(api.util.invalidateTags(["Operator"]));
+    return outcome;
+  };
+}
+
+/**
+ * The Owner's export: code, its whole history and the app's data, as one archive. It is streamed
+ * to the browser and saved as a file; nothing of it is kept in the console.
+ */
+export async function downloadExport(appId: string, fallbackName: string): Promise<Outcome<{ fileName: string; bytes: number }>> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/apps/${encodeURIComponent(appId)}/export`, { credentials: "same-origin", headers: { accept: "application/gzip" } });
+  } catch {
+    return { ok: false, reason: describeError({ status: "FETCH_ERROR", error: "" }), status: null };
+  }
+  if (!response.ok) {
+    let data: unknown = null;
+    try {
+      data = await response.json();
+    } catch {
+      // A problem without a readable body still says its status.
+    }
+    return { ok: false, reason: describeError({ status: response.status, data } as FetchBaseQueryError), status: response.status };
+  }
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const fileName = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] ?? fallbackName;
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = decodeURIComponent(fileName);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { ok: true, data: { fileName: a.download, bytes: blob.size } };
 }

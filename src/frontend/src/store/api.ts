@@ -2,6 +2,24 @@ import { createApi, fetchBaseQuery, type BaseQueryFn, type FetchArgs, type Fetch
 import { check, type Guard } from "@/lib/guards";
 import * as g from "./guards";
 import type {
+  AccessToken,
+  AppVersions,
+  AskAnswer,
+  AskChart,
+  AskEstimate,
+  Member,
+  MemberRole,
+  NotificationFeed,
+  OperatorEntry,
+  OperatorOrganisation,
+  OperatorTopUp,
+  Pricing,
+  PricingView,
+  RestoreResult,
+  SavedQuestion,
+  Suggestion,
+  SuggestionsStarted,
+  TopUpRequest,
   Autonomy,
   Employee,
   EmployeeDetail,
@@ -75,7 +93,33 @@ const guarded = <T>(guard: Guard<T>, what: string): Checked => ({ guard: guard a
 export const api = createApi({
   reducerPath: "api",
   baseQuery: checkedQuery,
-  tagTypes: ["Me", "Tree", "Idea", "Run", "App", "Credits", "Conversation", "Secrets", "Shares", "OperatorAccess", "Employee", "Memory", "Hire", "Autonomy", "Ontology", "Tasks"],
+  tagTypes: [
+    "Me",
+    "Tree",
+    "Idea",
+    "Run",
+    "App",
+    "Credits",
+    "Conversation",
+    "Secrets",
+    "Shares",
+    "OperatorAccess",
+    "Employee",
+    "Memory",
+    "Hire",
+    "Autonomy",
+    "Ontology",
+    "Tasks",
+    "Dashboard",
+    "Versions",
+    "Members",
+    "Tokens",
+    "Notifications",
+    "Suggestions",
+    "TopUpRequests",
+    "Operator",
+    "Pricing",
+  ],
   endpoints: (build) => ({
     // Session -----------------------------------------------------------------------------
     getMe: build.query<Me, undefined>({ query: () => "me", providesTags: ["Me"], extraOptions: guarded(g.meGuard, "your session") }),
@@ -104,7 +148,12 @@ export const api = createApi({
     }),
 
     // Tree --------------------------------------------------------------------------------
-    getTree: build.query<Tree, undefined>({ query: () => "tree", providesTags: ["Tree"], extraOptions: guarded(g.treeGuard, "the organisation") }),
+    /** The organisation tree; an operator in God mode names the organisation they entered. */
+    getTree: build.query<Tree, string | undefined>({
+      query: (organisation) => (organisation ? `tree?organisation=${encodeURIComponent(organisation)}` : "tree"),
+      providesTags: ["Tree"],
+      extraOptions: guarded(g.treeGuard, "the organisation"),
+    }),
     createOrganisation: build.mutation<OrganisationRef, { name: string; slug: string }>({
       query: (body) => ({ url: "organisations", method: "POST", body }),
       invalidatesTags: ["Me", "Tree", "Credits"],
@@ -511,6 +560,331 @@ export const api = createApi({
       providesTags: ["Tasks"],
       extraOptions: guarded(g.tasksGuard, "the recent work"),
     }),
+
+    // Ask about this app ---------------------------------------------------------------------
+    estimateAsk: build.mutation<AskEstimate, { appId: string; question: string }>({
+      query: ({ appId, question }) => ({ url: `apps/${encodeURIComponent(appId)}/ask/estimate`, method: "POST", body: { question } }),
+      extraOptions: guarded(g.askEstimateGuard, "the estimate"),
+    }),
+    askApp: build.mutation<AskAnswer, { appId: string; question: string }>({
+      query: ({ appId, question }) => ({ url: `apps/${encodeURIComponent(appId)}/ask`, method: "POST", body: { question } }),
+      extraOptions: guarded(g.askAnswerGuard, "the answer"),
+      invalidatesTags: ["Credits"],
+    }),
+    getDashboard: build.query<SavedQuestion[], string>({
+      query: (appId) => `apps/${encodeURIComponent(appId)}/dashboard`,
+      providesTags: (_r, _e, appId) => [{ type: "Dashboard", id: appId }],
+      extraOptions: guarded(g.dashboardGuard, "the dashboard"),
+    }),
+    saveQuestion: build.mutation<SavedQuestion, { appId: string; question: string; sql: string; chart: AskChart; answer: string; columns: string[]; rows: Record<string, unknown>[]; truncated: boolean }>({
+      query: ({ appId, question, sql, chart, answer }) => ({ url: `apps/${encodeURIComponent(appId)}/dashboard`, method: "POST", body: { question, sql, chart, answer } }),
+      extraOptions: guarded(g.savedQuestionGuard, "the saved question"),
+      // Optimistic: the question joins the dashboard at once and leaves it again if refused.
+      async onQueryStarted({ appId, question, sql, chart, answer, columns, rows, truncated }, { dispatch, queryFulfilled }) {
+        const tempId = `pending-${Date.now()}`;
+        const at = new Date().toISOString();
+        const undo = dispatch(
+          api.util.updateQueryData("getDashboard", appId, (list) => {
+            list.push({ id: tempId, question, answer, sql, chart, columns, rows, truncated, askedAt: at, ranAt: at, error: null });
+          }),
+        );
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(api.util.updateQueryData("getDashboard", appId, (list) => list.map((q) => (q.id === tempId ? data : q))));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+    removeQuestion: build.mutation<null, { appId: string; questionId: string }>({
+      query: ({ appId, questionId }) => ({ url: `apps/${encodeURIComponent(appId)}/dashboard/${encodeURIComponent(questionId)}`, method: "DELETE" }),
+      async onQueryStarted({ appId, questionId }, { dispatch, queryFulfilled }) {
+        const undo = dispatch(api.util.updateQueryData("getDashboard", appId, (list) => list.filter((q) => q.id !== questionId)));
+        try {
+          await queryFulfilled;
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+
+    // Versions ---------------------------------------------------------------------------------
+    getVersions: build.query<AppVersions, { appId: string; limit: number }>({
+      query: ({ appId, limit }) => `apps/${encodeURIComponent(appId)}/versions?limit=${limit}`,
+      providesTags: (_r, _e, { appId }) => [{ type: "Versions", id: appId }],
+      extraOptions: guarded(g.versionsGuard, "the history"),
+    }),
+    restoreVersion: build.mutation<RestoreResult, { appId: string; commit: string }>({
+      query: ({ appId, commit }) => ({ url: `apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(commit)}/restore`, method: "POST" }),
+      extraOptions: guarded(g.restoreGuard, "the restore"),
+      invalidatesTags: (_r, _e, { appId }) => [{ type: "Versions", id: appId }, { type: "App", id: appId }, "Tree"],
+    }),
+
+    // People -----------------------------------------------------------------------------------
+    getMembers: build.query<Member[], string>({
+      query: (scope) => `members?scope=${encodeURIComponent(scope)}`,
+      providesTags: (_r, _e, scope) => [{ type: "Members", id: scope }],
+      extraOptions: guarded(g.membersGuard, "the people"),
+    }),
+    changeRole: build.mutation<Member, { scope: string; membershipId: string; role: MemberRole }>({
+      query: ({ membershipId, role }) => ({ url: `members/${encodeURIComponent(membershipId)}`, method: "PATCH", body: { role } }),
+      extraOptions: guarded(g.invitationGuard, "the changed grant"),
+      transformResponse: (r: { member: Member }) => r.member,
+      async onQueryStarted({ scope, membershipId, role }, { dispatch, queryFulfilled }) {
+        const undo = dispatch(
+          api.util.updateQueryData("getMembers", scope, (list) => {
+            const m = list.find((x) => x.membershipId === membershipId);
+            if (m) m.role = role;
+          }),
+        );
+        try {
+          await queryFulfilled;
+          dispatch(api.util.invalidateTags(["Members", "Me", "Tree"]));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+    removeMember: build.mutation<null, { scope: string; membershipId: string }>({
+      query: ({ membershipId }) => ({ url: `members/${encodeURIComponent(membershipId)}`, method: "DELETE" }),
+      async onQueryStarted({ scope, membershipId }, { dispatch, queryFulfilled }) {
+        const undo = dispatch(api.util.updateQueryData("getMembers", scope, (list) => list.filter((x) => x.membershipId !== membershipId)));
+        try {
+          await queryFulfilled;
+          dispatch(api.util.invalidateTags(["Members"]));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+
+    // AI assistant access ------------------------------------------------------------------------
+    getTokens: build.query<AccessToken[], undefined>({ query: () => "tokens", providesTags: ["Tokens"], extraOptions: guarded(g.accessTokensGuard, "the assistant access") }),
+    revokeToken: build.mutation<AccessToken, string>({
+      query: (id) => ({ url: `tokens/${encodeURIComponent(id)}`, method: "DELETE" }),
+      extraOptions: guarded(g.accessTokenGuard, "the revoked access"),
+      async onQueryStarted(id, { dispatch, queryFulfilled }) {
+        const at = new Date().toISOString();
+        const undo = dispatch(
+          api.util.updateQueryData("getTokens", undefined, (list) => {
+            const t = list.find((x) => x.id === id);
+            if (t) Object.assign(t, { active: false, revokedAt: at });
+          }),
+        );
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(api.util.updateQueryData("getTokens", undefined, (list) => list.map((t) => (t.id === id ? data : t))));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+
+    // Notifications ----------------------------------------------------------------------------
+    getNotifications: build.query<NotificationFeed, string>({
+      query: (organisation) => `notifications?organisation=${encodeURIComponent(organisation)}&limit=50`,
+      providesTags: ["Notifications"],
+      extraOptions: guarded(g.notificationsGuard, "your notifications"),
+    }),
+    markRead: build.mutation<null, { organisation: string; id: string }>({
+      query: ({ id }) => ({ url: `notifications/${encodeURIComponent(id)}/read`, method: "POST" }),
+      async onQueryStarted({ organisation, id }, { dispatch, queryFulfilled }) {
+        const undo = dispatch(
+          api.util.updateQueryData("getNotifications", organisation, (feed) => {
+            const n = feed.notifications.find((x) => x.id === id);
+            if (n && !n.read) {
+              n.read = true;
+              feed.unread = Math.max(0, feed.unread - 1);
+            }
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+    markAllRead: build.mutation<{ marked: number }, string>({
+      query: (organisation) => ({ url: `notifications/read-all?organisation=${encodeURIComponent(organisation)}`, method: "POST" }),
+      async onQueryStarted(organisation, { dispatch, queryFulfilled }) {
+        const undo = dispatch(
+          api.util.updateQueryData("getNotifications", organisation, (feed) => {
+            for (const n of feed.notifications) n.read = true;
+            feed.unread = 0;
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+
+    // Ideas from the portfolio -------------------------------------------------------------------
+    estimateSuggestions: build.mutation<AskEstimate, string>({
+      query: (scope) => ({ url: "ideas/suggestions/estimate", method: "POST", body: { scope } }),
+      extraOptions: guarded(g.estimateGuard, "the estimate"),
+    }),
+    startSuggestions: build.mutation<SuggestionsStarted, string>({
+      query: (scope) => ({ url: "ideas/suggestions", method: "POST", body: { scope } }),
+      extraOptions: guarded(g.suggestionsStartedGuard, "the request for ideas"),
+      invalidatesTags: ["Credits"],
+    }),
+    getSuggestions: build.query<Suggestion[], string>({
+      query: (scope) => `ideas/suggestions?scope=${encodeURIComponent(scope)}`,
+      providesTags: (_r, _e, scope) => [{ type: "Suggestions", id: scope }],
+      extraOptions: guarded(g.suggestionsGuard, "the suggested ideas"),
+    }),
+    takeSuggestion: build.mutation<Idea, { scope: string; id: string; constraints: string[] }>({
+      query: ({ id, constraints }) => ({ url: `ideas/suggestions/${encodeURIComponent(id)}/take`, method: "POST", body: { constraints } }),
+      extraOptions: guarded(g.ideaGuard, "the new idea"),
+      async onQueryStarted({ scope, id }, { dispatch, queryFulfilled }) {
+        const undo = dispatch(
+          api.util.updateQueryData("getSuggestions", scope, (list) => {
+            const x = list.find((q) => q.id === id);
+            if (x) x.status = "taken";
+          }),
+        );
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(
+            api.util.updateQueryData("getSuggestions", scope, (list) => {
+              const x = list.find((q) => q.id === id);
+              if (x) x.ideaId = data.id;
+            }),
+          );
+          dispatch(api.util.invalidateTags(["Tree", "Credits"]));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+    dismissSuggestion: build.mutation<Suggestion, { scope: string; id: string }>({
+      query: ({ id }) => ({ url: `ideas/suggestions/${encodeURIComponent(id)}/dismiss`, method: "POST" }),
+      extraOptions: guarded(g.suggestionGuard, "the suggestion"),
+      async onQueryStarted({ scope, id }, { dispatch, queryFulfilled }) {
+        const undo = dispatch(
+          api.util.updateQueryData("getSuggestions", scope, (list) => {
+            const x = list.find((q) => q.id === id);
+            if (x) x.status = "dismissed";
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+
+    // Top-ups and the overdraft ----------------------------------------------------------------
+    getTopUpRequests: build.query<TopUpRequest[], string>({
+      query: (organisation) => `credits/top-up-requests?organisation=${encodeURIComponent(organisation)}`,
+      providesTags: ["TopUpRequests"],
+      extraOptions: guarded(g.topUpRequestsGuard, "your top-up requests"),
+    }),
+    requestTopUp: build.mutation<TopUpRequest, { organisation: string; credits: number; note: string }>({
+      query: (body) => ({ url: "credits/top-up-requests", method: "POST", body }),
+      extraOptions: guarded(g.topUpRequestGuard, "the top-up request"),
+      async onQueryStarted({ organisation, credits, note }, { dispatch, queryFulfilled }) {
+        const tempId = `pending-${Date.now()}`;
+        const undo = dispatch(
+          api.util.updateQueryData("getTopUpRequests", organisation, (list) => {
+            list.unshift({ id: tempId, organisation, organisationName: "", credits, note, status: "open", requestedBy: "", requestedByEmail: null, requestedAt: new Date().toISOString(), closedAt: null, closeNote: null, topUpEntryId: null });
+          }),
+        );
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(api.util.updateQueryData("getTopUpRequests", organisation, (list) => list.map((r) => (r.id === tempId ? data : r))));
+          dispatch(api.util.invalidateTags(["Notifications"]));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+    setOverdraft: build.mutation<Credits, { organisation: string; scope: string; credits: number }>({
+      query: ({ scope, credits }) => ({ url: "credits/overdraft", method: "PUT", body: { scope, credits } }),
+      extraOptions: guarded(g.creditsGuard, "the credits"),
+      async onQueryStarted({ organisation, scope, credits }, { dispatch, queryFulfilled }) {
+        // At the organisation the Owner's own limit changes at once; beneath it the answer says.
+        const undo = dispatch(
+          api.util.updateQueryData("getCredits", organisation, (c) => {
+            if (scope === organisation && c.overdraft) c.overdraft.ownLimit = credits;
+          }),
+        );
+        try {
+          const { data } = await queryFulfilled;
+          if (scope === organisation) dispatch(api.util.upsertQueryData("getCredits", organisation, data));
+          else dispatch(api.util.invalidateTags(["Credits"]));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+
+    // God mode -----------------------------------------------------------------------------------
+    getOperatorOrganisations: build.query<OperatorOrganisation[], undefined>({
+      query: () => "operator/organisations",
+      providesTags: ["Operator"],
+      extraOptions: guarded(g.operatorOrganisationsGuard, "every organisation"),
+    }),
+    enterOrganisation: build.mutation<OperatorEntry, string>({
+      query: (slug) => ({ url: `operator/organisations/${encodeURIComponent(slug)}/enter`, method: "POST" }),
+      extraOptions: guarded(g.operatorEntryGuard, "the entry"),
+    }),
+    setOperatorOverdraft: build.mutation<OperatorOrganisation, { slug: string; credits: number }>({
+      query: ({ slug, credits }) => ({ url: `operator/organisations/${encodeURIComponent(slug)}/overdraft`, method: "PUT", body: { credits } }),
+      extraOptions: guarded(g.operatorOrganisationGuard, "the organisation"),
+      async onQueryStarted({ slug, credits }, { dispatch, queryFulfilled }) {
+        const undo = dispatch(
+          api.util.updateQueryData("getOperatorOrganisations", undefined, (list) => {
+            const o = list.find((x) => x.slug === slug);
+            if (o) o.overdraft.frostauraLimit = credits;
+          }),
+        );
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(api.util.updateQueryData("getOperatorOrganisations", undefined, (list) => list.map((o) => (o.slug === slug ? data : o))));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
+    getOperatorTopUps: build.query<OperatorTopUp[], string | undefined>({
+      query: (organisation) => (organisation ? `operator/top-ups?organisation=${encodeURIComponent(organisation)}` : "operator/top-ups"),
+      providesTags: ["Operator"],
+      extraOptions: guarded(g.operatorTopUpsGuard, "the top-ups"),
+    }),
+    topUp: build.mutation<{ id: string }, { organisation: string; credits: number; note: string; idempotencyKey: string; requestId?: string }>({
+      query: (body) => ({ url: "credits/top-ups", method: "POST", body }),
+      invalidatesTags: ["Operator", "TopUpRequests", "Credits"],
+    }),
+    getOperatorTopUpRequests: build.query<TopUpRequest[], string | undefined>({
+      query: (status) => (status ? `operator/top-up-requests?status=${encodeURIComponent(status)}` : "operator/top-up-requests"),
+      providesTags: ["TopUpRequests"],
+      extraOptions: guarded(g.topUpRequestsGuard, "the top-up requests"),
+    }),
+    closeTopUpRequest: build.mutation<TopUpRequest, { id: string; status: "fulfilled" | "declined"; note?: string; topUpEntryId?: string }>({
+      query: ({ id, ...body }) => ({ url: `operator/top-up-requests/${encodeURIComponent(id)}/close`, method: "POST", body }),
+      extraOptions: guarded(g.topUpRequestGuard, "the top-up request"),
+      invalidatesTags: ["TopUpRequests", "Operator"],
+    }),
+    getPricing: build.query<PricingView, undefined>({ query: () => "operator/pricing", providesTags: ["Pricing"], extraOptions: guarded(g.pricingGuard, "the prices") }),
+    setPricing: build.mutation<PricingView, Pricing>({
+      query: (body) => ({ url: "operator/pricing", method: "PUT", body }),
+      extraOptions: guarded(g.pricingGuard, "the prices"),
+      async onQueryStarted(pricing, { dispatch, queryFulfilled }) {
+        const undo = dispatch(api.util.updateQueryData("getPricing", undefined, (v) => void (v.pricing = pricing)));
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(api.util.upsertQueryData("getPricing", undefined, data));
+        } catch {
+          undo.undo();
+        }
+      },
+    }),
   }),
 });
 
@@ -566,4 +940,36 @@ export const {
   useClearRuleSetMutation,
   useGetOntologyQuery,
   useGetTasksQuery,
+  useEstimateAskMutation,
+  useAskAppMutation,
+  useGetDashboardQuery,
+  useSaveQuestionMutation,
+  useRemoveQuestionMutation,
+  useGetVersionsQuery,
+  useRestoreVersionMutation,
+  useGetMembersQuery,
+  useChangeRoleMutation,
+  useRemoveMemberMutation,
+  useGetTokensQuery,
+  useRevokeTokenMutation,
+  useGetNotificationsQuery,
+  useMarkReadMutation,
+  useMarkAllReadMutation,
+  useEstimateSuggestionsMutation,
+  useStartSuggestionsMutation,
+  useGetSuggestionsQuery,
+  useTakeSuggestionMutation,
+  useDismissSuggestionMutation,
+  useGetTopUpRequestsQuery,
+  useRequestTopUpMutation,
+  useSetOverdraftMutation,
+  useGetOperatorOrganisationsQuery,
+  useEnterOrganisationMutation,
+  useSetOperatorOverdraftMutation,
+  useGetOperatorTopUpsQuery,
+  useTopUpMutation,
+  useGetOperatorTopUpRequestsQuery,
+  useCloseTopUpRequestMutation,
+  useGetPricingQuery,
+  useSetPricingMutation,
 } = api;

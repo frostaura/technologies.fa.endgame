@@ -24,6 +24,7 @@ export const ICON_NAMES = [
   "schedules",
   "email",
   "god-mode",
+  "notifications",
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -54,4 +55,5 @@ export const ICON_KIND: Record<IconName, string> = {
   schedules: "text-primary",
   email: "text-primary",
   "god-mode": "text-attention-text",
+  notifications: "text-attention-text",
 };

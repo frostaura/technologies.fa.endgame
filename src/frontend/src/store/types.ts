@@ -242,7 +242,7 @@ export type RunStatus = "queued" | "running" | "waiting" | "paused" | "finished"
 
 export interface Run {
   id: string;
-  kind: "research" | "conversation" | "build" | "factory" | "task" | "review";
+  kind: "research" | "conversation" | "build" | "factory" | "task" | "review" | "suggest";
   title: string;
   scope: string;
   status: RunStatus;
@@ -704,4 +704,265 @@ export interface TaskItem {
   dependsOn: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Ask about this app — `POST /api/apps/{id}/ask*`, `GET/POST/DELETE /api/apps/{id}/dashboard`
+// ---------------------------------------------------------------------------------------------
+
+export interface AskEstimate {
+  credits: number;
+  basis: string;
+}
+
+export type ChartKind = "line" | "bar" | "number" | "table";
+
+export interface AskChart {
+  kind: ChartKind;
+  /** The column on the horizontal axis; null for a single number. */
+  x: string | null;
+  y: string[];
+  series: { name: string; points: { x: unknown; y: number | null }[] }[];
+}
+
+export interface AskAnswer {
+  question: string;
+  answer: string;
+  chart: AskChart;
+  /** The query that answered it. Technical mode only. */
+  sql: string;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  truncated: boolean;
+  credits: { estimate: number; charged: number };
+}
+
+/** A question kept on the dashboard, re-run on every read at no model cost. */
+export interface SavedQuestion {
+  id: string;
+  question: string;
+  answer: string;
+  sql: string;
+  chart: AskChart | null;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  truncated: boolean;
+  askedAt: string;
+  ranAt: string;
+  /** Why the saved query no longer runs, when it does not. */
+  error: string | null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Versions and export — `GET /api/apps/{id}/versions`, `…/restore`, `…/export`
+// ---------------------------------------------------------------------------------------------
+
+export interface AppVersion {
+  /** The version's id; technical mode only. */
+  commit: string;
+  message: string;
+  at: string;
+  author: { kind: "employee" | "person" | "factory"; id: string | null; name: string };
+  live: boolean;
+}
+
+export interface AppVersions {
+  appId: string;
+  live: string | null;
+  versions: AppVersion[];
+  hasMore: boolean;
+}
+
+export interface RestoreResult {
+  version: AppVersion;
+  published: boolean;
+  /** A public app becomes private when an earlier version is brought back. */
+  madePrivate: boolean;
+  publishError: string | null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// People — `GET/POST/PATCH/DELETE /api/members`
+// ---------------------------------------------------------------------------------------------
+
+export interface Member {
+  membershipId: string;
+  userId: string;
+  email: string;
+  displayName: string;
+  /** Where the grant was set. */
+  scope: string;
+  role: MemberRole;
+  hasPasskey: boolean;
+  grantedAt: string;
+}
+
+/** `POST /api/members` → the one-time code, shown once and never stored. */
+export interface MemberInvitation {
+  member: Member;
+  invitationCode: string | null;
+  expiresAt: string | null;
+  /** The code was e-mailed too (only when a mail server is configured). */
+  emailed: boolean;
+}
+
+// ---------------------------------------------------------------------------------------------
+// AI assistant access — `GET/POST/DELETE /api/tokens`
+// ---------------------------------------------------------------------------------------------
+
+export type TokenRole = "admin" | "builder" | "viewer";
+
+export interface AccessToken {
+  id: string;
+  name: string;
+  organisation: string;
+  role: TokenRole;
+  /** The first characters of the token, to recognise it by. */
+  prefix: string;
+  createdAt: string;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  active: boolean;
+}
+
+/** `POST /api/tokens` → the token itself, this once. */
+export interface AccessTokenCreated {
+  token: string;
+  accessToken: AccessToken;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Notifications — `GET /api/notifications`, `POST …/{id}/read`, `POST …/read-all`
+// ---------------------------------------------------------------------------------------------
+
+export interface NotificationItem {
+  id: string;
+  /** verdict, approval, hire, budget.80, budget.cap, credits.zero, overdraft.half, overdraft.limit, app.crashed, security.finding */
+  kind: string;
+  severity: "info" | "urgent";
+  title: string;
+  detail: string;
+  scope: string;
+  /** What needs the person: an idea, a run, a hire, an app… */
+  subject: { kind: string; id: string } | null;
+  createdAt: string;
+  read: boolean;
+  emailedAt: string | null;
+}
+
+export interface NotificationFeed {
+  organisation: string;
+  unread: number;
+  notifications: NotificationItem[];
+}
+
+// ---------------------------------------------------------------------------------------------
+// Ideas from the portfolio — `/api/ideas/suggestions*`
+// ---------------------------------------------------------------------------------------------
+
+export interface Suggestion {
+  id: string;
+  scope: string;
+  runId: string;
+  title: string;
+  idea: string;
+  /** The gap in the portfolio it fills. */
+  gap: string;
+  /** Why this organisation is placed to build it. */
+  whyUs: string;
+  /** What it would reuse of what the organisation already holds. */
+  reuses: string[];
+  status: "open" | "taken" | "dismissed";
+  ideaId: string | null;
+  createdAt: string;
+}
+
+export interface SuggestionsStarted {
+  run: Run;
+  estimate: IdeaEstimate;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Top-ups and the overdraft — `/api/credits/top-up-requests`, `PUT /api/credits/overdraft`
+// ---------------------------------------------------------------------------------------------
+
+export interface TopUpRequest {
+  id: string;
+  organisation: string;
+  organisationName: string;
+  credits: number;
+  note: string;
+  status: "open" | "fulfilled" | "declined";
+  requestedBy: string;
+  requestedByEmail: string | null;
+  requestedAt: string;
+  closedAt: string | null;
+  closeNote: string | null;
+  topUpEntryId: string | null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// God mode — `/api/operator/*`, `POST /api/organisations`, `POST /api/credits/top-ups`
+// ---------------------------------------------------------------------------------------------
+
+export interface OperatorOrganisation {
+  id: string;
+  slug: string;
+  name: string;
+  status: string;
+  createdAt: string;
+  balance: number;
+  standing: "in-credit" | "overdrawn" | "at-limit";
+  overdraft: { frostauraLimit: number; ownLimit: number | null; effective: number };
+  apps: number;
+  lastActivityAt: string | null;
+  openTopUpRequests: number;
+}
+
+/** `POST /api/operator/organisations/{slug}/enter`: `logged` says where the Owner reads it. */
+export interface OperatorEntry {
+  organisationId: string;
+  organisation: string;
+  role: string;
+  enteredAt: string;
+  logged: string;
+}
+
+export interface OperatorTopUp {
+  id: string;
+  organisation: string;
+  credits: number;
+  note: string;
+  at: string;
+  by: string | null;
+  byEmail: string | null;
+}
+
+export interface Pricing {
+  creditsPerUsd: number;
+  /** A factor: 1.0 is no margin. */
+  margin: number;
+  hosting: { usdPerAwakeHour: number; usdPerGbHourMemory: number; usdPerGbMonthStorage: number; usdPerMillionRequests: number };
+  defaultAppModelMonthlyCredits: number;
+}
+
+export interface PricingView {
+  pricing: Pricing;
+  source: "defaults" | "stored";
+  updatedAt: string | null;
+  updatedBy: string | null;
+  history: { at: string; by: string; byEmail: string | null; before: unknown; after: unknown }[];
+}
+
+/** `POST /api/organisations` with an owner: the Owner's one-time code, returned once. */
+export interface OrganisationProvisioned {
+  id: string;
+  slug: string;
+  name: string;
+  ownerEmail: string;
+  ownerInvitationCode: string | null;
+  invitationExpiresAt: string | null;
+  invitationEmailed: boolean;
+  nameCheck: { slug: string; source: string; note: string | null } | null;
 }

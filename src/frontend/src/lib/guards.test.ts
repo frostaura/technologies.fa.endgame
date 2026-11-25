@@ -1,4 +1,22 @@
 import { describe, expect, it } from "vitest";
+import {
+  accessTokensGuard,
+  askAnswerGuard,
+  askEstimateGuard,
+  dashboardGuard,
+  membersGuard,
+  notificationsGuard,
+  operatorEntryGuard,
+  operatorOrganisationsGuard,
+  operatorTopUpsGuard,
+  pricingGuard,
+  provisionedGuard,
+  runGuard,
+  suggestionsGuard,
+  topUpRequestsGuard,
+  versionsGuard,
+} from "@/store/guards";
+import { ASK_ANSWER, ASK_ESTIMATE, MEMBERS, NOTIFICATIONS, OPERATOR_ORGS, OPERATOR_TOP_UPS, PRICING, SAVED, SUGGESTIONS, TOKENS, TOP_UP_REQUESTS, VERSIONS } from "@/test/breadth";
 import { appGuard, autonomyGuard, creditsGuard, employeeDetailGuard, hireGuard, memoryChangesGuard, memoryGuard, ontologyGuard, treeGuard } from "@/store/guards";
 import { MEMORY, MEMORY_CHANGES, ONTOLOGY, autonomyFixture, employeeDetailFixture, hireFixture } from "@/test/fixtures";
 import { arr, check, either, nullable, num, obj, oneOf, str, withDefault } from "./guards";
@@ -45,5 +63,34 @@ describe("endpoint guards against the control plane's real shapes", () => {
   it("refuse a credits answer whose budgets are not a list, and an app with no health", () => {
     expect(check(creditsGuard, { scope: "o", balance: 1, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: {}, estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] })).toMatchObject({ ok: false, problem: expect.stringContaining("budgets") });
     expect(check(appGuard, { id: "a" })).toMatchObject({ ok: false });
+  });
+});
+
+describe("the breadth endpoints' guards", () => {
+  it.each([
+    ["notifications", notificationsGuard, NOTIFICATIONS],
+    ["versions", versionsGuard, VERSIONS],
+    ["an ask estimate", askEstimateGuard, ASK_ESTIMATE],
+    ["an answer", askAnswerGuard, ASK_ANSWER],
+    ["the dashboard", dashboardGuard, [SAVED, { ...SAVED, id: "q2", chart: null, error: "relation \"bookings\" does not exist" }]],
+    ["members", membersGuard, MEMBERS],
+    ["tokens", accessTokensGuard, TOKENS],
+    ["suggestions", suggestionsGuard, SUGGESTIONS],
+    ["top-up requests", topUpRequestsGuard, TOP_UP_REQUESTS],
+    ["every organisation", operatorOrganisationsGuard, OPERATOR_ORGS],
+    ["top-ups", operatorTopUpsGuard, OPERATOR_TOP_UPS],
+    ["the prices", pricingGuard, PRICING],
+    ["an entry", operatorEntryGuard, { organisationId: "o1", organisation: "acme", role: "admin", enteredAt: "2026-11-25T02:00:00Z", logged: "operator_actions: organisation.entered, readable by the Owner" }],
+    ["a provisioned organisation", provisionedGuard, { id: "o2", slug: "beta", name: "Beta", ownerEmail: "b@example.test", ownerInvitationCode: "code", invitationExpiresAt: "2026-12-09T00:00:00Z", invitationEmailed: false, nameCheck: { slug: "beta", source: "built-in", note: null } }],
+  ])("read %s as the control plane sends it", (_name, guard, value) => {
+    expect(check(guard as never, value)).toMatchObject({ ok: true });
+  });
+
+  it("refuse an answer whose chart has no kind, naming the field", () => {
+    expect(check(askAnswerGuard, { ...ASK_ANSWER, chart: { x: "day" } })).toMatchObject({ ok: false, problem: expect.stringContaining("chart.kind") });
+  });
+
+  it("read a suggest run, a run kind the factory added", () => {
+    expect(check(runGuard, { id: "r", kind: "suggest", title: "Ideas", scope: "acme", status: "queued", startedAt: "t", finishedAt: null, ideaId: null, estimateCredits: 80 })).toMatchObject({ ok: true });
   });
 });
