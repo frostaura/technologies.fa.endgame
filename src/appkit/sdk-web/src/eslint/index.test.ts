@@ -75,5 +75,6 @@ tester.run("no-location-read", locationRule, {
     { code: "const { search } = window.location;", errors: [{ messageId: "whole" }] },
     { code: "const where = String(window.location);", errors: [{ messageId: "whole" }] },
     { code: "const where = location.toString();", errors: [{ messageId: "read" }] },
+    { code: "const host = window.location.origin;", errors: [{ messageId: "host", data: { property: "origin" } }] },
   ],
 });

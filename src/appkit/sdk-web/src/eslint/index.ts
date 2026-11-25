@@ -99,6 +99,9 @@ const LOCATION_OWNERS = new Set(["window", "document", "globalThis", "self"]);
 /** Calls on `location` that leave the page (or reload it) rather than read where it is. */
 const NAVIGATIONS = new Set(["assign", "replace", "reload"]);
 
+/** Parts of the address that name the host, not the page: the app's own address is `document.baseURI`. */
+const HOST_PARTS = new Set(["origin", "host", "hostname", "port", "protocol"]);
+
 /** The router hook that answers each part of the address. */
 const ROUTER_HOOK: Record<string, string> = {
   search: "useSearchParams()",
@@ -129,6 +132,9 @@ const noLocationRead: Rule.RuleModule = {
       read:
         "Reading location.{{property}} does not change when a <Link> or navigate() moves to another page, so this page is not re-rendered there. " +
         "Read it from the router instead: {{use}} (from react-router).",
+      host:
+        "Reading location.{{property}} ignores the app's address prefix. The app's own address is document.baseURI " +
+        "(e.g. new URL(document.baseURI).{{property}}); build URLs with api(), apiUrl() or new URL('…', document.baseURI).",
       whole:
         "Reading window.location does not change when a <Link> or navigate() moves to another page, so this page is not re-rendered there. " +
         "Read the address from the router: useParams(), useSearchParams() or useLocation() (from react-router).",
@@ -144,6 +150,10 @@ const noLocationRead: Rule.RuleModule = {
         if (property && NAVIGATIONS.has(property) && grand?.type === "CallExpression" && grand.callee === parent) return;
         if (property === "href" && grand?.type === "AssignmentExpression" && grand.left === parent) return;
         const name = property ?? "[…]";
+        if (HOST_PARTS.has(name)) {
+          context.report({ node: parent, messageId: "host", data: { property: name } });
+          return;
+        }
         context.report({ node: parent, messageId: "read", data: { property: name, use: ROUTER_HOOK[name] ?? "useLocation()" } });
         return;
       }
