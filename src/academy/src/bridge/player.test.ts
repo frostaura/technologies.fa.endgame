@@ -24,8 +24,8 @@ describe("the step player", () => {
     expect(p[1]?.args).toEqual({ route: "/sign-in", persona: "signed-out", scenario: "fresh-install" });
   });
 
-  it("moving on by one plays only that step, in the order goto, clock, highlight, act", () => {
-    expect(ops(plan(script, 1, 2))).toEqual(["highlight", "act"]);
+  it("moving on by one plays only that step, in the order goto, clock, act, highlight", () => {
+    expect(ops(plan(script, 1, 2))).toEqual(["act", "highlight"]);
     expect(ops(plan(script, 3, 4))).toEqual(["goto", "clock"]);
   });
 
@@ -41,7 +41,7 @@ describe("the step player", () => {
   });
 
   it("show me again replays even when moving on by one", () => {
-    expect(ops(plan(script, 1, 2, true))).toEqual(["reset", "goto", "highlight", "act"]);
+    expect(ops(plan(script, 1, 2, true))).toEqual(["reset", "goto", "act", "highlight"]);
   });
 
   it("an unscripted screen flow opens on its own start address", () => {

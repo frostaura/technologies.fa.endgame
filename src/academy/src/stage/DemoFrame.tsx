@@ -11,7 +11,8 @@ export interface FrameRequest {
 export const DEMO_SRC = "./demo/index.html?embed=1";
 
 /**
- * The live console in a frame, driven only through the bridge. While the learner watches, a
+ * The live console in a frame, driven only through the bridge. Requests play strictly in order,
+ * so the console never skips a step's state. While the learner watches, a
  * transparent shield keeps a stray click from derailing the tour; "Try it yourself" lifts it.
  */
 export function DemoFrame({
@@ -61,12 +62,15 @@ export function DemoFrame({
     if (!b || state !== "ready" || !request) return;
     const gen = ++generation.current;
     queue.current = queue.current.then(async () => {
-      if (gen !== generation.current) return;
       setBusy(true);
       for (const op of request.ops) {
-        if (gen !== generation.current) break;
+        // A newer step is waiting: still bring the console to this step's state, but instantly
+        // and without its spotlight, so the next step starts from the state it expects.
+        const superseded = gen !== generation.current;
+        if (superseded && op.op === "highlight") continue;
+        const args = superseded && op.op === "act" ? { ...op.args, instant: true } : op.args;
         try {
-          await b.send(op.op, op.args);
+          await b.send(op.op, args);
         } catch {
           // A refused or unanswered op leaves the frame where it is; the step's text still teaches it.
         }

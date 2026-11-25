@@ -2,7 +2,9 @@ import type { DemoStep, ScriptStep, StepScript } from "../content/scripts.ts";
 import type { Op } from "./protocol.ts";
 
 /**
- * Turns "the learner is now on step n" into the ops the embedded console must receive. Moving on
+ * Turns "the learner is now on step n" into the ops the embedded console must receive, in the
+ * order goto, clock, act, highlight: the demo performs the action with visible motion, then the
+ * spotlight lands on what the step asks the learner to look at. Moving on
  * by one step plays just that step. Jumping, going back, or "Show me again" resets the console and
  * replays every earlier step's navigation and actions quickly (without spotlights), then plays the
  * target step in full, so the frame is always in the state the step's text describes.
@@ -28,8 +30,8 @@ function opsFor(script: StepScript, s: DemoStep, catchUp: boolean): PlannedOp[] 
   const who = { persona: script.persona, scenario: script.scenario };
   if (s.goto) ops.push({ op: "goto", args: { route: s.goto, ...who }, catchUp });
   if (s.clock) ops.push({ op: "clock", args: { ...s.clock }, catchUp });
-  if (!catchUp && s.highlight) ops.push({ op: "highlight", args: { ...s.highlight }, catchUp });
   if (s.act) ops.push({ op: "act", args: { actions: s.act, ...(catchUp ? { instant: true } : {}) }, catchUp });
+  if (!catchUp && s.highlight) ops.push({ op: "highlight", args: { ...s.highlight }, catchUp });
   return ops;
 }
 

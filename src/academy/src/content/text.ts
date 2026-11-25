@@ -13,3 +13,8 @@ export function plain(text: string): string {
 export function curly(text: string): string {
   return text.replace(/"([^"]*)"/g, "“$1”").replace(/(\w)'(\w)/g, "$1’$2");
 }
+
+/** "the band totals…" → "The band totals…": a field fragment shown as a sentence. */
+export function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

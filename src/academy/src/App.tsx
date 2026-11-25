@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { LEVELS, type Level } from "./content/types.ts";
 import { useLocation, href } from "./lib/router.ts";
 import { flow, isOperator } from "./lib/data.ts";
@@ -21,10 +21,17 @@ export function App() {
   const { parts, query, hash } = useLocation();
   const [head = "", a = "", b = "", c = ""] = parts;
 
-  // A new page starts at its top, unless the address names a step to land on.
+  // A new page starts at its top, unless the address names a step to land on, and keyboard focus
+  // moves to its content so the next Tab or arrow key acts on the page that was opened.
   const deep = b === "step";
+  const first = useRef(true);
   useEffect(() => {
     if (!deep) window.scrollTo({ top: 0 });
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    document.getElementById("main")?.focus({ preventScroll: true });
   }, [head, a, deep]);
 
   if (head === "print") return <PrintPage operator={a === "operator"} />;

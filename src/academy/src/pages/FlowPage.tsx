@@ -9,14 +9,10 @@ import { Blocks } from "../components/Blocks.tsx";
 import { Inline } from "../components/Inline.tsx";
 import { LevelBadge, ReachChip } from "../components/Chips.tsx";
 import { Eyebrow } from "../components/Shell.tsx";
+import { sentence } from "../content/text.ts";
 import { Stage } from "../stage/Stage.tsx";
 import { mediaOf, type Media } from "../stage/media.ts";
 import { NotFound } from "./NotFound.tsx";
-
-/** "the band totals…" → "The band totals…": a field fragment shown as a sentence. */
-function sentence(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
 
 const MEDIA_LABEL: Record<Media, string> = {
   demo: "Live",

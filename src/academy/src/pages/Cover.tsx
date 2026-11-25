@@ -1,5 +1,5 @@
 import { CLIENT_LEVELS } from "../content/types.ts";
-import { content, clientFlows, flow, site, track } from "../lib/data.ts";
+import { content, clientFlows, flow, track } from "../lib/data.ts";
 import { LEVEL_BLURB } from "../lib/labels.ts";
 import { href } from "../lib/router.ts";
 import { useProgress } from "../lib/progress.ts";
@@ -46,7 +46,6 @@ export function Cover() {
             <div className="flex flex-col items-center gap-4">
               <Qr />
               <p className="max-w-qr text-center text-sm text-ink-muted">Scan to follow along on your phone.</p>
-              <span className="sr-only">{site.siteUrl}</span>
             </div>
           </div>
         </div>

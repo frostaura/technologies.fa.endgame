@@ -1,7 +1,7 @@
 import type { Flow } from "../content/types.ts";
 import { href } from "../lib/router.ts";
 import { useProgress } from "../lib/progress.ts";
-import { plain } from "../content/text.ts";
+import { plain, sentence } from "../content/text.ts";
 import { ProgressDot, ReachChip } from "./Chips.tsx";
 
 /** A list of flows as rows: progress, id, title, what it teaches, how it is reached. */
@@ -19,7 +19,7 @@ export function FlowList({ flows, numbered = false }: { flows: Flow[]; numbered?
                 <span className="font-mono text-xs font-semibold text-primary-link">{f.id}</span>
                 <span className="text-base font-medium text-ink group-hover:text-primary-link">{f.title}</span>
               </span>
-              {f.whatYouLearn && <span className="mt-1 block text-sm text-ink-muted">{plain(f.whatYouLearn)}</span>}
+              {f.whatYouLearn && <span className="mt-1 block text-sm text-ink-muted">{sentence(plain(f.whatYouLearn))}</span>}
             </span>
             <span className="hidden shrink-0 sm:block"><ReachChip reach={f.reach} /></span>
           </a>

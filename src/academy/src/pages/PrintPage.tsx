@@ -6,6 +6,7 @@ import { Inline } from "../components/Inline.tsx";
 import { Mark } from "../components/Mark.tsx";
 import { Qr } from "../components/Qr.tsx";
 import { stepOf } from "../bridge/player.ts";
+import { sentence } from "../content/text.ts";
 
 /**
  * The print version, which `make academy-pdf` renders to academy.pdf and operator-handbook.pdf: a
@@ -55,7 +56,7 @@ export function PrintPage({ operator }: { operator: boolean }) {
             <article key={f.id} className="mt-10 break-inside-avoid-page border-t pt-6">
               <p className="font-mono text-xs font-semibold text-primary-link">{f.id}</p>
               <h3 className="mt-1 font-display text-2xl font-semibold">{f.title}</h3>
-              {f.whatYouLearn && <p className="mt-2 text-base text-ink-body"><Inline text={f.whatYouLearn} plainIds /></p>}
+              {f.whatYouLearn && <p className="mt-2 text-base text-ink-body"><Inline text={sentence(f.whatYouLearn)} plainIds /></p>}
               {f.who && <p className="mt-2 text-xs text-ink-muted">Who: <Inline text={f.who} plainIds /> · Starts at: <Inline text={f.startsAt} plainIds /></p>}
               <ol className="mt-4 space-y-3">
                 {f.steps.map((st) => {

@@ -4,12 +4,11 @@ import { Blocks } from "../components/Blocks.tsx";
 import { Inline } from "../components/Inline.tsx";
 import { ReachChip } from "../components/Chips.tsx";
 
-/** What the flow document says about where this flow lives: shown where there is nothing to play. */
+/** What the flow document says about where this flow lives and how it is proved: shown where there is nothing to play. */
 export function Facts({ flow }: { flow: Flow }) {
+  // Who, where it starts and what it needs are already in the page's header.
   const rows: [string, string][] = [
-    ["Who", flow.who],
-    ["Starts at", flow.startsAt],
-    ["Needs", flow.needs],
+    ["You know it worked when", flow.workedWhen],
     ["Where in the code", flow.where],
   ];
   return (

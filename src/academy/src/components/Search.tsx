@@ -33,6 +33,7 @@ export function Search({ scope = "client", autoFocus = false, wide = false }: { 
   const choose = (i: number) => {
     const h = hits[i];
     setOpen(false);
+    input.current?.blur();
     if (h) {
       setQ("");
       go(`/flow/${h.flow.id}`);
