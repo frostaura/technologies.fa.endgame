@@ -5,6 +5,7 @@ import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/format";
 import { shortTitle } from "@/lib/plain";
+import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetCreditsQuery, useGetMeQuery, useLogoutMutation } from "@/store/api";
 import { modeSet } from "@/store/uiSlice";
@@ -24,7 +25,8 @@ export interface Crumb {
  */
 export function AppShell({ crumbs, aside, children }: { crumbs: Crumb[]; aside?: ReactNode; children: ReactNode }) {
   const { data: me } = useGetMeQuery(undefined);
-  const org = me?.organisation ?? null;
+  // The balance and the bell are the organisation's being shown: in God mode, the one entered.
+  const org = useActiveOrganisation().organisation;
 
   return (
     <div className="flex min-h-screen flex-col">

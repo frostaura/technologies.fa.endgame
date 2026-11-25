@@ -29,13 +29,18 @@
    operator's last entry or read in that organisation is more than `Operators:EntryLogWindowMinutes` (10)
    ago — the visit slides on with each read, so a polling org chart is one entry. Concurrent first reads
    write one row (an advisory lock on organisation and operator). The last-seen time is kept per process;
-   after a restart the log is the record, so the rule only errs toward logging.
+   after a restart the log is the record, so the rule only errs toward logging. Every change the operator
+   makes there as Admin is one more entry (`admin.<EndpointName>`, titled plainly); a refused change is none.
+   In the console every screen works on the entered organisation, which is named in the God-mode band.
 5. The sweep releases reservations that lapsed with their lease and requeues runs whose lease lapsed.
 6. God mode's screens (operators only, never by access token): `GET /api/operator/organisations` — each
    organisation's balance, standing (`in-credit`, `overdrawn`, `at-limit`), overdraft, apps, last
    activity and open top-up requests; `POST /api/operator/organisations/{slug}/enter` (logged);
    `PUT …/{slug}/overdraft { credits }` (logged); `GET /api/operator/top-ups`; the top-up requests; the prices.
-7. Provisioning hands over: `POST /api/organisations { name, slug, ownerEmail }` returns the Owner's
+7. Provisioning screens, then hands over: `POST /api/organisations { name, slug, ownerEmail, description }`
+   puts what the organisation does to a model against the four red lines (a platform cost in `platform_costs`,
+   charged to no organisation), refuses a breach (422 `red_line`, naming the line and why), and writes the
+   screening (who, how, the reason, the result) to the new organisation's operator log. It returns the Owner's
    one-time code once and e-mails it when a mail server is configured (`invitationEmailed`).
 
 ## Alternate and failure flows
@@ -43,11 +48,17 @@
 - **A1 — limits.** The organisation's own limit may be tighter than FrostAura's, never deeper (400); only the
   Owner sets it, only an operator sets FrostAura's (403).
 - **A2 — bad samples.** Longer than 24 hours, negative, or awake beyond the period: 400; an unknown app: 404.
+- **A3 — no model to screen with.** Provisioning is refused (503 `screening_unavailable`) unless the operator
+  sends their own decision with a written reason (`screening { decision, reason }`), which is logged as manual.
+  A model's answer always outranks it.
+- **A4 — an Owner asks for a top-up.** Every operator is told in their own feed (`topup.requested`, UC-119);
+  answering it with a top-up closes it with the top-up's note and logs `topup_request.fulfilled`.
 
 ## Rules this use case must honour
 
 - Overdraft carries no interest and no fees (rule 3): nothing in the ledger accrues with time.
-- God-mode entry is never silent (rule 1).
+- God-mode entry is never silent (rule 1), and neither is anything done there.
+- No organisation may build a red-line product (rule 4): provisioning screens the organisation.
 
 ## Acceptance
 
@@ -56,4 +67,4 @@
 Tests: [`TEST-102`](../testing/TEST-102-platform-api.md) — `ControlPlaneDebtsTests`;
 [`TEST-010`](../testing/TEST-010-hosting.md) — `UsageLedgerTests`, `EdgePipelineTests` (requests);
 [`TEST-090`](../testing/TEST-090-stack-acceptance.md) — usage as credits, the paused page and the top-up;
-[`TEST-101`](../testing/TEST-101-control-plane.md) — `BreadthTests` (God mode's screens, hand-over).
+[`TEST-101`](../testing/TEST-101-control-plane.md) — `BreadthTests` (God mode's screens, hand-over), `ScreensAndRolesTests` (screening, the per-action log, top-up requests).

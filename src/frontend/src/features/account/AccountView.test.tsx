@@ -88,7 +88,8 @@ describe("the active organisation", () => {
     expect(result.current.role).toBe("owner");
     act(() => chooseOrganisation("beta"));
     await waitFor(() => expect(result.current.organisation?.slug).toBe("beta"));
-    expect(result.current.role).toBe("builder");
+    // Their only grant in Beta is at a division, so they hold no role at the organisation itself.
+    expect(result.current.role).toBeNull();
     expect(result.current.entered).toBe(false);
   });
 

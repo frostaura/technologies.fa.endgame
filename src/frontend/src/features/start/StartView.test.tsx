@@ -86,7 +86,7 @@ const TREE = {
   organisation: { id: "o1", slug: "acme", name: "Acme", summary: null, spend: { monthCredits: 0 }, workers: [] },
   divisions: [
     { id: "d1", slug: "labs", name: "Labs", spend: { monthCredits: 0 }, workers: [], projects: [] },
-    { id: "d2", slug: "old", name: "Old", status: "archived", spend: { monthCredits: 0 }, workers: [], projects: [] },
+    { id: "d2", slug: "old", name: "Old", archived: true, spend: { monthCredits: 0 }, workers: [], projects: [] },
   ],
   needsYou: [],
 };
@@ -115,7 +115,7 @@ describe("where the idea goes", () => {
   });
 
   it("tells someone below Builder why they cannot start, instead of a form that fails", async () => {
-    stubApi({ "GET /api/me": json({ ...ME, memberships: [{ ...ME.memberships[0], role: "viewer" }] }), "GET /api/credits": json(CREDITS), "GET /api/tree": json(TREE) });
+    stubApi({ "GET /api/me": json({ ...ME, memberships: [{ ...ME.memberships[0], role: "viewer" }] }), "GET /api/credits": json(CREDITS), "GET /api/tree": json({ ...TREE, viewerRole: "viewer" }) });
     renderWithStore(<StartView />);
     expect(await screen.findByRole("heading", { name: "Only a Builder or above starts an idea" })).toBeTruthy();
     expect(screen.getByText(/You are a Viewer in Acme/)).toBeTruthy();

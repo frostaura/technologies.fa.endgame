@@ -67,7 +67,7 @@ control-plane ──/internal/ops/reserved-hosts, /health──▶ ops          
 The cascade tree (`organisations`, `divisions`, `projects`, `apps`); `memberships`; `cascade_entries`
 (budgets, rule sets, context, settings, and secrets sealed with envelope encryption); the workforce
 and the work (`employees`, `runs`, `run_events`, `tasks`, `approvals`, `ideas`, `conversations`); the
-one ledger (`credit_entries`) and `operator_actions`; Identity's tables (members only) and the
+one ledger (`credit_entries`), `operator_actions` and `platform_costs` (what FrostAura spent on its own model calls, charged to no organisation); Identity's tables (members only) and the
 data-protection key ring. The platform API adds `app_tokens`, `app_end_users`,
 `app_end_user_passkeys`, `app_sessions`, `app_handoffs`, `app_shares`, `app_schedules`,
 `app_webhooks`, `email_messages`, `telemetry_events`, `telemetry_spans`, `telemetry_metrics`,
@@ -128,7 +128,7 @@ and removes it.
 ## Not built yet
 
 The offsite copy runs once R2 is configured (ARCH-007). Builders work one plan item at a time in one workspace:
-parallel builders are not built (ARCH-006, *Sub-agents*). A preview's e-mail and custom events still reach the platform
+parallel builders are not built (ARCH-006, *Sub-agents*). A preview's e-mail still reaches the platform's outbox
 under the app's id (ARCH-006, *Checking the work*).
 
 ## Links

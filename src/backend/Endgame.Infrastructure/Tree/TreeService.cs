@@ -269,7 +269,8 @@ public sealed class TreeService(
                           join p in db.Projects.AsNoTracking() on a.ProjectId equals p.Id
                           join d in db.Divisions.AsNoTracking() on p.DivisionId equals d.Id
                           join o in db.Organisations.AsNoTracking() on d.OrganisationId equals o.Id
-                          where a.Status != NodeStatuses.Archived && o.Status == NodeStatuses.Active
+                          // An archived app, or one inside an archived project or division, is not served (TREE-07).
+                          where a.Status != NodeStatuses.Archived && p.Status != NodeStatuses.Archived && d.Status != NodeStatuses.Archived && o.Status == NodeStatuses.Active
                           orderby o.Slug, d.Slug, p.Slug, a.Slug
                           select new { App = a, Org = o.Slug, Division = d.Slug, DivisionId = d.Id, Project = p.Slug }).ToListAsync(cancellationToken);
         string[] keys = [CascadeKeys.SleepMode, CascadeKeys.SleepIdleMinutes, CascadeKeys.Access, CascadeKeys.OverdraftLimit, CascadeKeys.OverdraftOwnLimit];

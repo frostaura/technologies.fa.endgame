@@ -84,7 +84,7 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
               {view.data.versions.map((v) => (
                 <li key={v.commit} data-version={v.commit} className="flex flex-col gap-2 border-b px-5 py-3 last:border-b-0">
                   <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                    <span className="min-w-0 flex-1 break-words font-medium">{versionTitle(v, technical)}</span>
+                    <span className="min-w-0 flex-1 basis-full break-words font-medium sm:basis-0">{versionTitle(v, technical)}</span>
                     <span className="flex flex-wrap items-center gap-2 text-sm text-ink-muted">
                       <Author v={v} />
                       <span aria-hidden>·</span>

@@ -10,7 +10,8 @@ import { describeError, errorStatus, viewOf, type ViewState } from "@/lib/queryS
 import { paths, useLocation } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store";
-import { useGetMeQuery, useGetSecretsQuery, useGetTreeQuery, useRemoveSecretMutation } from "@/store/api";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
+import { useGetMeQuery, useGetSecretsQuery, useRemoveSecretMutation } from "@/store/api";
 import { secretNameProblem, setSecret } from "@/store/sensitive";
 import type { SecretList, SecretName, Tree } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
@@ -23,8 +24,9 @@ import { namesFor } from "../home/treeModel";
 export function SecretsView() {
   const { search } = useLocation();
   const me = useGetMeQuery(undefined);
-  const tree = useGetTreeQuery(undefined);
-  const scope = search.get("scope") || me.data?.organisation?.slug || "";
+  const active = useActiveOrganisation();
+  const tree = useActiveTree();
+  const scope = search.get("scope") || active.organisation?.slug || "";
   const query = useGetSecretsQuery(scope, { skip: !scope });
   // With no scope named, the organisation's own is used; before one exists there is nothing to show.
   const view: ViewState<SecretList> | "no-organisation" = scope

@@ -7,12 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { RISE } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
-import { roleAt, roleRank } from "@/lib/roles";
+import { effectiveRole, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
-import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { useGetAppQuery, useGetMeQuery, useGetTreeQuery, type TreeArg } from "@/store/api";
+import { useGetAppQuery, useGetMeQuery, type TreeArg } from "@/store/api";
 import type { ManagedLevel, MemberRole } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 import { ContextPanel } from "./ContextPanel";
@@ -31,8 +31,8 @@ const ICON = { organisation: "organisation", division: "division", project: "pro
 export function ManageView() {
   const active = useActiveOrganisation();
   const me = useGetMeQuery(undefined);
-  const arg = treeArgFor(active, me.data);
-  const query = useGetTreeQuery(arg, { skip: !active.organisation });
+  const query = useActiveTree();
+  const arg: TreeArg = undefined;
   const view = viewOf(query);
   const { search } = useLocation();
   const nodes = view.kind === "loaded" ? flatten(view.data) : [];
@@ -40,7 +40,7 @@ export function ManageView() {
   const asked = search.get("scope");
   const selected = nodeAt(nodes, asked ?? "") ?? nodes[0] ?? null;
   const entered = active.entered ? org?.slug : undefined;
-  const roleOf = (scope: string): MemberRole | null => (active.entered ? "admin" : roleAt(me.data, scope));
+  const roleOf = (scope: string): MemberRole | null => effectiveRole(query.data, me.data, scope);
   const nameOf = (path: string) => nodeAt(nodes, path)?.name ?? path.split("/").pop() ?? path;
   const select = (scope: string) => navigate(paths.manage(scope, entered), { replace: true });
 

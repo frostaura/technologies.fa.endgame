@@ -18,13 +18,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Endgame.ControlPlane.Endpoints;
 
-public sealed record CreateOrganisationRequest(string? Name, string? Slug, string? OwnerEmail, string? OwnerDisplayName);
+/// <param name="Description">What the organisation does: screened against FrostAura's red lines before it is set up (an operator's provisioning).</param>
+/// <param name="Screening">The operator's own screening decision, taken only when no model can be reached.</param>
+public sealed record CreateOrganisationRequest(string? Name, string? Slug, string? OwnerEmail, string? OwnerDisplayName, string? Description = null, ManualScreening? Screening = null);
 
 /// <param name="OwnerInvitationCode">Returned once, when the Owner is new and has no passkey yet.</param>
 /// <param name="InvitationEmailed">The code was also e-mailed to the Owner (only when a mail server is configured).</param>
 /// <param name="NameCheck">How the name was checked against FrostAura's own subdomains.</param>
+/// <param name="Screening">How it was screened against the red lines (null on first run).</param>
 public sealed record OrganisationCreated(Guid Id, string Slug, string Name, string OwnerEmail, string? OwnerInvitationCode, DateTimeOffset? InvitationExpiresAt,
-    bool InvitationEmailed = false, NameCheck? NameCheck = null);
+    bool InvitationEmailed = false, NameCheck? NameCheck = null, ScreeningView? Screening = null);
+
+/// <param name="Method"><c>model</c> or <c>manual</c>.</param>
+/// <param name="Result"><c>clear</c>: a breach is refused, so a created organisation is always clear.</param>
+public sealed record ScreeningView(string Method, string Result, string Reason);
 
 public sealed record CreateNodeRequest(string? Parent, string? Name, string? Slug);
 
@@ -42,14 +49,14 @@ internal static class TreeEndpoints
 {
     public static void MapTree(this RouteGroupBuilder api)
     {
-        api.MapGet("/tree", async (string? organisation, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, ReadModels reads, CancellationToken ct) =>
+        api.MapGet("/tree", async (string? organisation, ClaimsPrincipal principal, AccessService access, AccountService accounts, ScopeResolver scopes, ReadModels reads, CancellationToken ct) =>
         {
             var me = principal.Id();
             var memberships = await access.MembershipsOfAsync(me, ct);
             if (memberships.Count == 0 && organisation is null)
             {
-                // First run, or a person not yet given a role: a real, empty answer.
-                return Results.Ok(reads.FirstRun());
+                // First run, or a person not yet given a role: a real, empty answer that says which (ORG-03).
+                return Results.Ok(reads.FirstRun(await accounts.IsFirstRunAsync(ct)));
             }
 
             var chosen = organisation is null ? memberships.FirstOrDefault() : memberships.FirstOrDefault(m => m.OrganisationSlug == organisation);
@@ -75,7 +82,8 @@ internal static class TreeEndpoints
 
         var organisations = api.MapGroup("/organisations").WithTags("Tree");
         organisations.MapPost("", async (CreateOrganisationRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access,
-            AccountService accounts, TreeService tree, EndgameDbContext db, ReservedNames reserved, InvitationMailer mailer, ScopeResolver scopes, TimeProvider clock, CancellationToken ct) =>
+            AccountService accounts, TreeService tree, EndgameDbContext db, ReservedNames reserved, InvitationMailer mailer, ScopeResolver scopes, OrganisationScreening screening,
+            TimeProvider clock, CancellationToken ct) =>
         {
             var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
             var named = AccountService.ValidateOrganisation(new NewOrganisation(request.Name ?? "", request.Slug ?? ""));
@@ -94,26 +102,39 @@ internal static class TreeEndpoints
                 return Results.Created($"/api/organisations/{first.Id}", new OrganisationCreated(first.Id, first.Slug, first.Name, me.Email!, null, null, false, check));
             }
 
+            // Provisioning screens the organisation against the red lines (CLAUDE.md rule 4) before anything exists.
+            var screened = await screening.ScreenAsync(named.Name, named.Slug, request.Description, request.Screening, me.Id, ct);
             var owner = request.OwnerEmail is null ? me : await accounts.FindOrCreateAsync(AccountService.NormaliseEmail(request.OwnerEmail), request.OwnerDisplayName, ct);
             var created = await tree.CreateOrganisationAsync(named.Name, named.Slug, owner.Id, ct);
+            var now = clock.GetUtcNow();
+            db.OperatorActions.Add(new OperatorActionRecord
+            {
+                Id = Guid.NewGuid(),
+                OrganisationId = created.Id,
+                OperatorUserId = me.Id,
+                Action = "organisation.screened",
+                DetailJson = screened.ToDetail().ToJsonString(),
+                At = now,
+            });
             db.OperatorActions.Add(new OperatorActionRecord
             {
                 Id = Guid.NewGuid(),
                 OrganisationId = created.Id,
                 OperatorUserId = me.Id,
                 Action = "organisation.provisioned",
-                DetailJson = new JsonObject { ["ownerUserId"] = owner.Id.ToString() }.ToJsonString(),
-                At = clock.GetUtcNow(),
+                DetailJson = new JsonObject { ["ownerUserId"] = owner.Id.ToString(), ["description"] = request.Description!.Trim() }.ToJsonString(),
+                At = now,
             });
             await db.SaveChangesAsync(ct);
             var (code, expires) = owner.Id == me.Id ? ((string?)null, (DateTimeOffset?)null) : await accounts.IssueInvitationIfNeededAsync(owner);
             // The hand-over: the code to the operator, once, and by e-mail to the Owner when mail is configured.
             var emailed = code is not null && expires is { } until
                 && await mailer.SendAsync(await scopes.RequireAsync(created.Slug, ct), owner.Email!, code, until, "Owner", me.DisplayName, ct);
-            return Results.Created($"/api/organisations/{created.Id}", new OrganisationCreated(created.Id, created.Slug, created.Name, owner.Email!, code, expires, emailed, check));
+            return Results.Created($"/api/organisations/{created.Id}", new OrganisationCreated(created.Id, created.Slug, created.Name, owner.Email!, code, expires, emailed, check,
+                new ScreeningView(screened.Method, "clear", screened.Reason)));
         })
         .WithName("CreateOrganisation")
-        .WithSummary("On first run, the signed-in person names the first organisation and becomes its Owner; after that, FrostAura operators provision organisations.")
+        .WithSummary("On first run, the signed-in person names the first organisation and becomes its Owner; after that, FrostAura operators provision organisations, each screened against the red lines from what it does (description) — refused on a breach, and when no model can be reached unless the operator records a screening decision with a reason.")
         .Produces<OrganisationCreated>(201);
         MapNodeChanges(organisations, NodeLevel.Organisation, MemberRole.Owner, MemberRole.Owner);
 
@@ -248,9 +269,16 @@ internal static class TreeEndpoints
             if (request.RequestId is { } requestId)
             {
                 session.UseOrganisation(organisation.OrganisationId);
-                await db.TopUpRequests.Where(r => r.OrganisationId == organisation.OrganisationId && r.Id == requestId && r.Status == TopUpRequestStatuses.Open)
+                var closeNote = request.Note is { Length: > 500 } lengthy ? lengthy[..500] : request.Note;
+                var closed = await db.TopUpRequests.Where(r => r.OrganisationId == organisation.OrganisationId && r.Id == requestId && r.Status == TopUpRequestStatuses.Open)
                     .ExecuteUpdateAsync(u => u.SetProperty(r => r.Status, TopUpRequestStatuses.Fulfilled).SetProperty(r => r.ClosedAt, entry.CreatedAt)
-                        .SetProperty(r => r.ClosedBy, me.Id).SetProperty(r => r.TopUpEntryId, entry.Id), ct);
+                        .SetProperty(r => r.ClosedBy, me.Id).SetProperty(r => r.TopUpEntryId, entry.Id).SetProperty(r => r.CloseNote, closeNote), ct);
+                if (closed == 1)
+                {
+                    // The answer is on the record as well as the top-up (OP-06): the Owner reads that their request was met.
+                    await access.LogActionAsync(me.Id, organisation.OrganisationId, "topup_request.fulfilled",
+                        new JsonObject { ["requestId"] = requestId.ToString(), ["credits"] = request.Credits, ["note"] = closeNote }, ct);
+                }
             }
 
             // A top-up settles the debt first and restores paused apps at once (spec, Overdraft).
@@ -262,7 +290,8 @@ internal static class TreeEndpoints
 
     private static void MapNodeChanges(RouteGroupBuilder group, NodeLevel level, MemberRole changeRole, MemberRole deleteRole)
     {
-        group.MapPatch("/{id:guid}", async (Guid id, UpdateNodeRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, ScopeResolver scopes, TreeService tree, CancellationToken ct) =>
+        group.MapPatch("/{id:guid}", async (Guid id, UpdateNodeRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, ScopeResolver scopes, TreeService tree,
+            EdgeNotifier edge, CancellationToken ct) =>
         {
             var scope = await scopes.FindNodeAsync(level, id, ct) ?? throw EndgameProblem.NotFound($"The {level.ToWire()}");
             await access.RequireAsync(principal.Id(), scope, changeRole, ct);
@@ -275,7 +304,14 @@ internal static class TreeEndpoints
                 }
             }
 
-            return Results.Ok(await tree.UpdateAsync(scope, request.Name, request.Status, ct));
+            var updated = await tree.UpdateAsync(scope, request.Name, request.Status, ct);
+            if (request.Status is not null)
+            {
+                // Archiving or reactivating a level, or suspending an organisation, changes what is served.
+                edge.RoutesChanged();
+            }
+
+            return Results.Ok(updated);
         })
         .WithName($"Update{level}").WithSummary($"Renames a {level.ToWire()} or changes its status.").Produces<NodeView>();
         group.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, TreeService tree, CancellationToken ct) =>

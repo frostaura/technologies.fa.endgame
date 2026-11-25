@@ -5,13 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { formatCredits, formatDate, formatNumber } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
-import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { useActiveTree } from "@/lib/useActiveOrganisation";
 import { useAppDispatch, useAppSelector } from "@/store";
 import {
   api,
-  useGetMeQuery,
   useGetTopUpRequestsQuery,
-  useGetTreeQuery,
   useRemoveCascadeMutation,
   useRequestTopUpMutation,
   useSetCascadeMutation,
@@ -188,9 +186,7 @@ export function NarrowerLimits({ credits, organisation }: { credits: Credits; or
 
 /** A narrower overdraft for one division, project or app (Admin): it may stop sooner, never go deeper. */
 export function NarrowerLimit({ organisation, credits }: { organisation: string; credits: Credits }) {
-  const active = useActiveOrganisation();
-  const me = useGetMeQuery(undefined);
-  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !active.organisation });
+  const tree = useActiveTree();
   const nodes = placements(tree.data).filter((p) => p.depth > 0);
   const [setOverdraft, saving] = useSetOverdraftMutation();
   const ids = { node: useId(), value: useId() };

@@ -6,11 +6,11 @@ import { Select } from "@/components/ui/field";
 import { formatCredits, isValidSlug, slugify } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
-import { ROLE_NAME, roleAt, roleRank } from "@/lib/roles";
+import { ROLE_NAME, effectiveRole, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
-import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
-import { useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetMeQuery, useGetTreeQuery } from "@/store/api";
+import { useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetMeQuery } from "@/store/api";
 import type { Autonomy, IdeaEstimate, MemberRole } from "@/store/types";
 import { isArchived } from "../tree/treeManage";
 import { nextSteps, researchPromise } from "./startModel";
@@ -30,10 +30,11 @@ export function StartView() {
   const me = useGetMeQuery(undefined);
   const active = useActiveOrganisation();
   const org = active.organisation;
-  const firstRun = me.data ? me.data.organisation === null && !active.entered : false;
   const { search } = useLocation();
-  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !org || firstRun });
-  const roleOf = (scope: string): MemberRole | null => (active.entered ? "admin" : roleAt(me.data, scope));
+  const tree = useActiveTree();
+  // The organisation field is for the very first one only: once one exists, organisations are provisioned by FrostAura.
+  const firstRun = me.data ? me.data.organisation === null && !active.entered && tree.data?.firstRun !== false : false;
+  const roleOf = (scope: string): MemberRole | null => effectiveRole(tree.data, me.data, scope);
   // Where it may go: the whole organisation and each active division, wherever the person may start work.
   const places = org
     ? [

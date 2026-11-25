@@ -6,10 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
+import { effectiveRole } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
+import { useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { useClearAutonomyMutation, useClearRuleSetMutation, useGetAutonomyQuery, useGetTreeQuery, useSetAutonomyMutation, useSetRuleSetMutation } from "@/store/api";
+import { useClearAutonomyMutation, useClearRuleSetMutation, useGetAutonomyQuery, useGetMeQuery, useSetAutonomyMutation, useSetRuleSetMutation } from "@/store/api";
 import type { Autonomy, RuleSet, Tree } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 import { KNOWN_TOOLS, placements, scopeName, toolLabel } from "../workforce/workforceModel";
@@ -44,13 +46,17 @@ function Origin({ setAtPath, scope, tree, fallback }: { setAtPath: string | null
 /** Autonomy, checkpoints and stage rule sets at any level of the tree. */
 export function AutonomyView() {
   const { search } = useLocation();
-  const tree = useGetTreeQuery(undefined);
+  // In God mode, the organisation the operator entered (OP-04).
+  const tree = useActiveTree();
+  const me = useGetMeQuery(undefined);
   const org = tree.data?.organisation;
   const scope = search.get("scope") ?? org?.slug ?? "";
   const query = useGetAutonomyQuery(scope, { skip: !scope });
   const view = scope ? viewOf(query) : tree.isError ? { kind: "failed" as const, reason: "The organisation could not be read.", status: null } : { kind: "loading" as const };
   const name = scopeName(tree.data, scope);
-  const admin = tree.data?.viewerRole === "admin" || tree.data?.viewerRole === "owner";
+  // The role at this level, as the server resolves it: the deepest grant wins (PPL-01).
+  const role = effectiveRole(tree.data, me.data, scope);
+  const admin = role === "admin" || role === "owner";
 
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: `Autonomy · ${name}` }]} aside={<CascadeAside />}>

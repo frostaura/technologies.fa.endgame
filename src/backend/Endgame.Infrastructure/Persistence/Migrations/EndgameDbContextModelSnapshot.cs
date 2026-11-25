@@ -2190,6 +2190,53 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                     b.ToTable("operator_actions", (string)null);
                 });
 
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.PlatformCostRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<Guid?>("By")
+                        .HasColumnType("uuid")
+                        .HasColumnName("by");
+
+                    b.Property<decimal>("CostUsd")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("numeric(18,8)")
+                        .HasColumnName("cost_usd");
+
+                    b.Property<string>("DetailJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("detail");
+
+                    b.Property<string>("GenerationId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("generation_id");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("model");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("purpose");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Purpose", "At");
+
+                    b.ToTable("platform_costs", (string)null);
+                });
+
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.PlatformSettingChangeRecord", b =>
                 {
                     b.Property<Guid>("Id")

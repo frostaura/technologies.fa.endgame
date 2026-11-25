@@ -8,7 +8,7 @@ import { AutonomyView } from "./AutonomyView";
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const TREE = { generatedAt: "t", viewerRole: "owner", organisation: { id: "o1", slug: "acme", name: "Acme", summary: null, spend: { monthCredits: 0 }, workers: [] }, divisions: [{ id: "d", slug: "tools", name: "Tools", spend: { monthCredits: 0 }, workers: [], projects: [] }], needsYou: [] };
 
-function stub(autonomy: Response | "pending", extra = {}, tree = TREE) {
+function stub(autonomy: Response | "pending", extra = {}, tree: object = TREE) {
   return stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/tree": json(tree), "GET /api/autonomy": autonomy, ...extra });
 }
 
@@ -90,5 +90,13 @@ describe("AutonomyView", () => {
     expect(await screen.findByText(/An Admin or the Owner sets them/)).toBeTruthy();
     expect((screen.getByRole("switch", { name: "Before work starts" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole("button", { name: "Set rules here" })).toBeNull();
+  });
+
+  it("decides who may change by the role at this level, as the server resolves it", async () => {
+    // An organisation Admin who is a Viewer in Tools reads Tools' settings but cannot change them.
+    stub(json(autonomyFixture()), {}, { ...TREE, viewerRole: "admin", organisation: { ...TREE.organisation, role: "admin" }, divisions: [{ ...TREE.divisions[0], role: "viewer" }] });
+    renderWithStore(<AutonomyView />);
+    expect(await screen.findByText(/An Admin or the Owner sets them/)).toBeTruthy();
+    expect((screen.getByRole("switch", { name: "Before work starts" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

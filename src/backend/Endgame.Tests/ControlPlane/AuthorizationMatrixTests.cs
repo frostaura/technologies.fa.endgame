@@ -133,7 +133,7 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         owner = await app.OwnerWithOrganisationAsync("acme", "boss@acme.example");
         service = app.Internal();
         operatorClient = await app.SignInAsync("dean@frostaura.net");
-        await ControlPlaneApp.Created(operatorClient.PostAsJsonAsync("/api/organisations", new { name = "Other", slug = "other", ownerEmail = "boss@acme.example" }));
+        await ControlPlaneApp.Created(operatorClient.PostAsJsonAsync("/api/organisations", new { name = "Other", slug = "other", ownerEmail = "boss@acme.example", description = Provisioning.Description, screening = Provisioning.Manual }));
         await operatorClient.TopUpAsync("acme", 1000m);
 
         inside = await SideAsync("acme", "alpha");
@@ -245,7 +245,7 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
     private static IReadOnlyList<Row> Rows() =>
     [
         // The tree
-        new("POST", "/api/organisations", MemberRole.Owner, Level.Operator, s => R("/api/organisations", new { name = "New", slug = $"n{Guid.NewGuid():N}"[..12], ownerEmail = "new@example.com" })),
+        new("POST", "/api/organisations", MemberRole.Owner, Level.Operator, s => R("/api/organisations", new { name = "New", slug = $"n{Guid.NewGuid():N}"[..12], ownerEmail = "new@example.com", description = Provisioning.Description, screening = Provisioning.Manual })),
         new("PATCH", "/api/organisations/{id:guid}", MemberRole.Owner, Level.Organisation, s => R($"/api/organisations/{s.OrgId}", new { name = s.Org == "acme" ? "Acme" : "Other" })),
         new("DELETE", "/api/organisations/{id:guid}", MemberRole.Owner, Level.Organisation, s => R($"/api/organisations/{s.OrgId}")),
         new("POST", "/api/divisions", MemberRole.Admin, Level.Organisation, s => R("/api/divisions", new { parent = s.Org, name = "D", slug = $"d{Guid.NewGuid():N}"[..10] })),
@@ -274,6 +274,7 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         new("POST", "/api/members", MemberRole.Admin, Level.Branch, s => R("/api/members", new { scope = s.Project, email = $"{Guid.NewGuid():N}@example.com", role = "viewer" })),
         new("PATCH", "/api/members/{membershipId:guid}", MemberRole.Admin, Level.Branch, async s => new Req($"/api/members/{await s.FreshMembership()}", new { role = "builder" })),
         new("DELETE", "/api/members/{membershipId:guid}", MemberRole.Admin, Level.Branch, async s => new Req($"/api/members/{await s.FreshMembership()}")),
+        new("POST", "/api/members/{membershipId:guid}/invitation", MemberRole.Admin, Level.Branch, async s => new Req($"/api/members/{await s.FreshMembership()}/invitation")),
         new("GET", "/api/credits", MemberRole.Viewer, Level.Branch, s => R($"/api/credits?scope={s.Division}")),
         new("POST", "/api/credits/top-ups", MemberRole.Owner, Level.Operator, s => R("/api/credits/top-ups", new { organisation = s.Org, credits = 1, note = "matrix" })),
         new("POST", "/api/credits/top-up-requests", MemberRole.Owner, Level.Organisation, s => R("/api/credits/top-up-requests", new { organisation = s.Org, credits = 1 })),

@@ -59,7 +59,7 @@ public static class UnavailablePage
         Unavailable.Slow => ("This app is taking longer than usual",
             "It is still starting. Please try again in a few seconds."),
         Unavailable.Forbidden => ("You don't have access to this app",
-            "You are signed in, but this app has not been shared with you. Ask its owner for access."),
+            "You are signed in, but your account has no access to this app. Ask its owner for access."),
         _ => ("This app is temporarily unavailable",
             "Endgame could not reach it just now. Please try again in a moment."),
     };

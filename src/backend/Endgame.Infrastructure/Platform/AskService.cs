@@ -72,7 +72,40 @@ public sealed class AskService(
     {
         ArgumentNullException.ThrowIfNull(app);
         var q = Question(question);
-        return Estimate(q, await WritingPromptAsync(cancellationToken));
+        return Estimate(q, await WritingPromptAsync(cancellationToken) + await AppEventsAsync(app, cancellationToken));
+    }
+
+    /// <summary>The most event names the prompt lists for one app.</summary>
+    public const int MaxEventNames = 30;
+
+    /// <summary>
+    /// What this app itself records: the names of its custom events over the last 30 days, how often, and one example
+    /// of their properties — read from its own events view, so the model asks for events that exist (a live model
+    /// declined "how many books were added" because it could not know the app records <c>book.created</c>).
+    /// </summary>
+    public async Task<string> AppEventsAsync(ResolvedScope app, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        var verdict = TelemetrySqlGuard.Check(
+            $"SELECT name, count(*) AS times, max(properties::text) AS example FROM events WHERE at >= now() - interval '30 days' GROUP BY name ORDER BY times DESC, name LIMIT {MaxEventNames}");
+        QueryResult result;
+        try
+        {
+            result = await runner.RunAsync(app.OrganisationId, app.AppId!.Value, verdict.Sql, cancellationToken);
+        }
+        catch (EndgameProblem)
+        {
+            return "\nThis app's custom events could not be listed just now; ask the events view by name if the question needs one.\n";
+        }
+
+        if (result.Rows.Count == 0)
+        {
+            return "\nThis app has recorded no custom events in the last 30 days: questions about things people did in it (beyond visits and requests) cannot be answered.\n";
+        }
+
+        var lines = result.Rows.Select(r => $"- {Text(r["name"])} ({Number(r["times"])?.ToString(CultureInfo.InvariantCulture)} in 30 days; properties e.g. {Clip(Text(r["example"]) ?? "{}", 200)})");
+        return "\nThe custom events this app records (events.name, exactly), most frequent first — use them for questions about what people did in it, e.g. \"books added\" is count(*) FILTER (WHERE name = 'book.created'):\n"
+               + string.Join("\n", lines) + "\n";
     }
 
     private AskEstimate Estimate(string question, string prompt)
@@ -88,7 +121,7 @@ public sealed class AskService(
     {
         ArgumentNullException.ThrowIfNull(app);
         var q = Question(question);
-        var prompt = await WritingPromptAsync(cancellationToken);
+        var prompt = await WritingPromptAsync(cancellationToken) + await AppEventsAsync(app, cancellationToken);
         var estimate = Estimate(q, prompt).Credits;
         var charged = 0m;
 
@@ -135,7 +168,15 @@ public sealed class AskService(
             },
         ], repair: false, cancellationToken);
         charged += explained.Charged;
-        var answer = Text(JsonObjectOf(explained.Content)?["answer"]) ?? explained.Content.Trim();
+        var answer = Text(JsonObjectOf(explained.Content)?["answer"])?.Trim() ?? explained.Content.Trim();
+        if (answer.Length == 0 || answer.StartsWith('{'))
+        {
+            // A model that put nothing into words still answered with rows: say so plainly rather than show a blank.
+            answer = result.Rows.Count == 0
+                ? "Nothing the app recorded matches that question."
+                : string.Create(CultureInfo.InvariantCulture, $"Here {(result.Rows.Count == 1 ? "is the one result that answers it" : $"are the {result.Rows.Count}{(result.Truncated ? "+" : "")} results that answer it")}.");
+        }
+
         if (answer.Length > 2000)
         {
             answer = answer[..2000];

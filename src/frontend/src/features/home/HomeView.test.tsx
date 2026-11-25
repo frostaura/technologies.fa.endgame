@@ -276,4 +276,59 @@ describe("HomeView", () => {
     // Autonomy and hiring are readable by everyone; changing them is refused below Admin.
     expect(within(builder).getByRole("link", { name: "Autonomy for Acme" }).getAttribute("href")).toBe("/autonomy?scope=acme");
   });
+
+  it("does not offer a first organisation to someone who can never name one", async () => {
+    stub(json({ generatedAt: "2026-11-24T10:00:00Z", viewerRole: "none", organisation: null, divisions: [], needsYou: [], firstRun: false }));
+    renderWithStore(<HomeView />);
+    expect(await screen.findByRole("heading", { name: "Organisations are set up by FrostAura" })).toBeTruthy();
+    expect(screen.getByText(/You are signed in as o@example.test, but you hold no role in any organisation yet/)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Start" })).toBeNull();
+  });
+
+  it("claims only what it checks when nothing needs you", async () => {
+    stub(json({ ...TREE, needsYou: [] }));
+    renderWithStore(<HomeView />);
+    const line = await screen.findByText(/Nothing needs you right now/);
+    expect(line.textContent).toBe("Nothing needs you right now: no verdict, approval or hire is waiting, and no one is idle.");
+    expect(line.textContent).not.toContain("budget");
+  });
+
+  it("starts someone granted only a division at that division, and asks the conversation and the graphs there", async () => {
+    const partial: Tree = {
+      ...TREE,
+      viewerRole: "builder",
+      organisation: { ...(TREE.organisation as NonNullable<Tree["organisation"]>), role: null, workers: [] },
+      divisions: TREE.divisions.map((d) => ({ ...d, role: "builder" as const, projects: d.projects.map((p) => ({ ...p, role: "builder" as const })) })),
+      needsYou: [],
+    };
+    const api = stub(json(partial), { "GET /api/ontology": json({ scope: "acme/tools", view: "org-chart", nodes: [], edges: [] }) });
+    renderWithStore(<HomeView />);
+    await waitFor(() => expect(api.calls.some((c) => c.path === "/api/conversations?scope=acme%2Ftools")).toBe(true));
+    expect(api.calls.some((c) => c.path === "/api/conversations?scope=acme")).toBe(false);
+    // The organisation is a name on the way down, not a level they may be scoped to.
+    const where = screen.getByRole("navigation", { name: "Where you are" });
+    expect(within(where).queryByRole("button", { name: "Acme" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Acme" }));
+    expect(api.calls.some((c) => c.path === "/api/conversations?scope=acme")).toBe(false);
+    fireEvent.click(screen.getByRole("tab", { name: "Who works on what" }));
+    await waitFor(() => expect(api.calls.some((c) => c.path === "/api/ontology?scope=acme%2Ftools&view=org-chart")).toBe(true));
+    expect(api.calls.some((c) => c.path.startsWith("/api/ontology?scope=acme&"))).toBe(false);
+  });
+
+  it("offers People and Secrets by the role at the level selected, as the server resolves it", async () => {
+    // An organisation Admin who is a Viewer in Tools is a Viewer there: the deepest grant wins.
+    const mixed: Tree = {
+      ...TREE,
+      viewerRole: "admin",
+      organisation: { ...(TREE.organisation as NonNullable<Tree["organisation"]>), role: "admin" },
+      divisions: TREE.divisions.map((d) => ({ ...d, role: "viewer" as const })),
+    };
+    stub(json(mixed));
+    renderWithStore(<HomeView />);
+    const manage = await screen.findByRole("navigation", { name: "Manage" });
+    expect(within(manage).getByRole("link", { name: "People" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Tools/ }));
+    await waitFor(() => expect(within(manage).queryByRole("link", { name: "People" })).toBeNull());
+    expect(within(manage).queryByRole("link", { name: /Secrets/ })).toBeNull();
+  });
 });

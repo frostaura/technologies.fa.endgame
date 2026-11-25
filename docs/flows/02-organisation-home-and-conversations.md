@@ -78,15 +78,15 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Needs:** at least one organisation exists; this person holds no membership.
 - **Level:** Foundation · **Learn first:** ORG-01 · **What you learn:** organisations are provisioned by FrostAura; there is no self-sign-up.
 - **Steps:**
-  1. Home shows the same first-run band as ORG-01: "Name your organisation, then describe your first idea." and "Start".
-  2. On `/start` they see the "Your organisation" field, fill it and the idea in, and press "Research this idea".
-  3. `POST /api/organisations` answers 403 "Organisations are provisioned by FrostAura; there is no self-serve sign-up."
-  4. The page shows "Research did not start: Organisations are provisioned by FrostAura; there is no self-serve sign-up. (403) Nothing was charged."
-- **You know it worked when:** (a refusal) the red notice above appears.
-- **Variations and refusals:** none further.
-- **Where:** `HomeView.tsx`, `StartView.tsx`; `POST /api/organisations`.
-- **Reachable from:** UI. **Finding:** the first-run invitation is shown to someone who can never complete it.
-- **Covered by tests:** none found for this case in the UI. `AuthorizationMatrixTests` covers the endpoint's refusal.
+  1. `GET /api/tree` answers `organisation: null` with `firstRun: false`: an organisation already exists, so this person may not name one.
+  2. Home shows **"Organisations are set up by FrostAura"** and "You are signed in as {email}, but you hold no role in any organisation yet, and an organisation cannot be started here. FrostAura sets one up for each person it invites. If you were invited, sign in with the invitation code you were sent; if someone already works here, ask them to give you a role." There is no "Start".
+- **You know it worked when:** the panel above appears instead of the first-run band.
+- **Variations and refusals:**
+  - Typing `/start` still reaches the Start screen; naming an organisation there is refused with 403 "Organisations are provisioned by FrostAura; there is no self-serve sign-up.", shown as "Research did not start: … (403) Nothing was charged."
+  - An older control plane that sends no `firstRun` is read as a first run, as before.
+- **Where:** `HomeView.tsx` (`NotInvited`), `StartView.tsx`; `GET /api/tree` (`ReadModels.FirstRun`, `AccountService.IsFirstRunAsync`), `POST /api/organisations`.
+- **Reachable from:** UI.
+- **Covered by tests:** `HomeView.test.tsx` "does not offer a first organisation to someone who can never name one"; `ScreensAndRolesTests.Someone_with_no_role_is_offered_the_first_organisation_only_on_a_first_run`; `AuthorizationMatrixTests` covers the endpoint's refusal.
 
 ### ORG-04 Read the organisation band and the header
 - **Who:** any member (Owner, Admin, Builder, Viewer); an operator who has entered the organisation.
@@ -142,12 +142,12 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   2. The person selects a card and is taken to that page (other readers' areas).
 - **You know it worked when:** the card's subject page opens.
 - **Variations and refusals:**
-  - With nothing waiting, the strip shows "Nothing needs you right now. Everything is running inside its budget." **Finding:** the budget part of that claim is not checked. The strip never includes budget states.
+  - With nothing waiting, the strip shows "Nothing needs you right now: no verdict, approval or hire is waiting, and no one is idle." — exactly the four kinds it checks. Budgets are told in notifications (NOTE).
   - Someone with a role on only part of the tree sees only items on the nodes they can see.
 - **Where:** `HomeView.tsx` (`NeedsYouStrip`, `needHref`), `needsYouModel.ts`; `GET /api/tree` (`needsYou`; `ReadModels.NeedsYouAsync`, `WorkforceNeedsAsync`).
 - **Reachable from:** UI. MCP `tree_get` returns the same list.
 - **Covered by tests:**
-  - `HomeView.test.tsx`: "says a verdict waiting in a headline and one line…"
+  - `HomeView.test.tsx`: "says a verdict waiting in a headline and one line…", "claims only what it checks when nothing needs you"
   - `breadth.spec.ts`: "a needs-you card is a headline and one line"
   - `workforce.spec.ts`: "employees and contractors on their nodes, hires and idle employees in needs you…", "a proposal is read from needs you and accepted…"
 
@@ -315,10 +315,13 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Level:** Core · **Learn first:** TREE-13 · **What you learn:** the organisation's name can change; its address (and every app's) does not.
 - **Steps:** as TREE-06: type the name, press **"Save the name"**; "It is called {name} now." The header, breadcrumb and chart follow.
 - **You know it worked when:** the organisation band shows the new name.
-- **Variations and refusals:** anyone but the Owner reads "The Owner renames the organisation." Suspending or reinstating is FrostAura's (ORG-15).
-- **Where:** `NodeControls.tsx` (RenameNode, level organisation); `TreeEndpoints.MapNodeChanges`.
+- **Variations and refusals:**
+  - Anyone but the Owner reads "The Owner renames the organisation." Empty: "A name cannot be empty."; over 200 characters refused.
+  - MCP `node_update` refuses organisations with "An organisation is renamed by its Owner, through PATCH /api/organisations/{id} with a signed-in session; not with an assistant's key."
+  - Suspending or reinstating is FrostAura's (ORG-15).
+- **Where:** `NodeControls.tsx` (RenameNode, level organisation); `TreeEndpoints.MapNodeChanges`, `TreeService.UpdateAsync`.
 - **Reachable from:** UI; API.
-- **Covered by tests:** `ManageView.test.tsx` ("tells a Viewer who may change each thing…"); `TreeEndpointTests`.
+- **Covered by tests:** `ManageView.test.tsx` ("tells a Viewer who may change each thing…"); `AuthorizationMatrixTests`.
 
 ### ORG-15 Suspend or reinstate an organisation
 - **Who:** FrostAura operator.
@@ -365,16 +368,16 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Level:** Operator · **Learn first:** ORG-17 · **What you learn:** reading another organisation's tree is itself a logged entry.
 - **Steps:**
   1. `GET /api/tree?organisation={slug}`. The control plane records an operator entry (as Admin) and returns that organisation's tree.
-  2. The band reads "You are inside {slug} as a FrostAura operator. Your entry is logged where its Owner can read it."
-  3. Everything else is as ORG-04 to ORG-11, with Admin shortcuts ("People", "Secrets for …").
+  2. The band reads "You are inside {Name} as a FrostAura operator, acting as an Admin. Your entry and everything you change here are logged where its Owner can read them.", with "Leave {Name}" (SHL-05).
+  3. Everything else is as ORG-04 to ORG-11, with Admin shortcuts ("People", "Secrets for …"). The header's balance and bell are the entered organisation's.
+  4. The organisation is remembered for the tab: home without `?organisation=`, and every other screen, keep showing it until the operator leaves.
 - **You know it worked when:** the coral band names the organisation you are inside.
 - **Variations and refusals:**
   - An unknown slug: 404 "The organisation '{slug}'", shown as "The organisation could not be loaded".
   - A non-operator who adds `?organisation=` is ignored: they read their own organisation.
-  - The header's credits pill and bell still use the operator's own `me.organisation`, so an operator with no own organisation has neither while inside another (inferred).
-- **Where:** `HomeView.tsx`, `GodModeBand.tsx`; `GET /api/tree` (`AccessService.OperatorEntryAsync`).
+- **Where:** `HomeView.tsx`, `GodModeBand.tsx`, `AppShell.tsx`, `lib/useActiveOrganisation.ts`; `GET /api/tree` (`AccessService.OperatorEntryAsync`).
 - **Reachable from:** UI.
-- **Covered by tests:** `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry`; `breadth.spec.ts` (God mode).
+- **Covered by tests:** `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry`; `GodModeBand.test.tsx`; `breadth.spec.ts` "is marked on every screen, lists every organisation, enters one and says it is logged".
 
 ### ORG-19 A person granted only part of the tree uses home
 - **Who:** an Admin, Builder or Viewer whose grant is on a division, project or app, not the organisation.
@@ -382,17 +385,15 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Needs:** such a grant.
 - **Level:** Advanced · **Learn first:** ORG-07 · **What you learn:** you see your branch and the path to it, nothing else.
 - **Steps:**
-  1. The tree shows only their branch and its ancestors. The band shows no organisation-level workers.
-  2. **Finding:** the selection starts at the whole organisation, where they hold no role. So:
-     - the dock's history read (`GET /api/conversations?scope={org}`) fails with 404 "The scope '{org}'". The dock shows "What was said before could not be loaded: … New messages still send.";
-     - sending also fails, shown as "Not sent: …";
-     - both graph tabs fail: "The organisation graph could not be loaded".
-  3. Selecting their own division or project makes the dock work at that level. The graph tabs always ask at organisation level, so they keep failing.
-- **You know it worked when:** after selecting their own level, the dock heading reads "Talking to {their level}" with no error.
-- **Variations and refusals:** none further.
-- **Where:** `HomeView.tsx`, `ConversationDock.tsx`, `OntologyView.tsx`; `AccessService.RequireAsync`.
+  1. The tree shows only their branch and its ancestors. The band shows no organisation-level workers. Each node carries their role there; the organisation's is null.
+  2. Home starts at the highest level they hold a role at — their division, else their project, else their app — so the conversation asks there (`GET /api/conversations?scope={their level}`) and the breadcrumb starts "{Org} / {their level}".
+  3. The levels above their grant are names on the way down: the organisation in the breadcrumb is not a button, and the organisation's name in the band takes them back to their own level.
+  4. "Who works on what" and "How data flows" ask at the level selected (`GET /api/ontology?scope={selection}`), never at the organisation.
+- **You know it worked when:** the dock heading reads "Talking to {their level}" with no error, and both graph tabs draw.
+- **Variations and refusals:** someone with grants in two divisions starts at the first; selecting the other works too.
+- **Where:** `HomeView.tsx` (`homeSelection`, `selectable`), `lib/roles.ts` (`roleInTree`), `ConversationDock.tsx`, `OntologyView.tsx`; `GET /api/tree` (each node's `role`).
 - **Reachable from:** UI.
-- **Covered by tests:** none found for the home UI in this case. The backend branch view is covered by `TreeEndpointTests` / `AuthorizationMatrixTests`.
+- **Covered by tests:** `HomeView.test.tsx` "starts someone granted only a division at that division, and asks the conversation and the graphs there"; `ScreensAndRolesTests.The_tree_carries_each_nodes_effective_role_and_archived_levels_are_marked_and_not_served`; `TreeEndpointTests` / `AuthorizationMatrixTests`.
 
 ---
 
@@ -509,17 +510,16 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Needs:** the role above.
 - **Level:** Core · **Learn first:** TREE-06 · **What you learn:** anything with history is archived rather than deleted, and can come back.
 - **Steps:**
-  1. Press **"Archive {name}"**. The confirmation reads "Archive {name}?" and "It is marked archived and keeps its history, spending and people. Its apps are not archived with it: archive each one to stop it being served."
-  2. Press **"Yes, archive {name}"** ("Keep it active" cancels). "{name} is archived. Nothing in it was deleted." appears; the outline and the org chart draw it with the badge "Archived" (a dashed card).
-  3. To bring it back, press **"Reactivate {name}"**: "{name} is active again."
-- **You know it worked when:** the badge "Archived" shows, or goes.
+  1. Press **"Archive {name}"**. The confirmation reads "Archive {name}?" and "It is marked archived and keeps its history, spending and people. None of its apps is served until it is reactivated."
+  2. Press **"Yes, archive {name}"** ("Keep it active" cancels). "{name} is archived. Nothing in it was deleted." appears; the routing table is recalculated at once. The outline and the org chart draw it with the badge "Archived" (a dashed card).
+  3. To bring it back, press **"Reactivate {name}"**: "{name} is active again." and its apps are served again.
+- **You know it worked when:** the badge "Archived" shows, and its apps no longer answer.
 - **Variations and refusals:**
   - Refused: "{name} was not archived: {reason} It is as it was."
-  - **Archiving a division or project does not stop its apps being served** (only the app's own status and the organisation's are routed on), which the confirmation says.
-  - The chart reads the status from the tree answer; an older control plane that sends none draws every node as active.
-- **Where:** `NodeControls.tsx` (ArchiveNode); `treeManage.ts` (`statusOf`); `OrgChart.tsx`; `TreeService.UpdateAsync`.
+  - Divisions and projects only accept "active" or "archived". The tree marks the node `archived: true`.
+- **Where:** `NodeControls.tsx` (ArchiveNode); `treeManage.ts` (`isArchived`); `OrgChart.tsx`; `TreeService.UpdateAsync`, `TreeService.RoutesAsync`; `TreeEndpoints.MapNodeChanges`.
 - **Reachable from:** UI; API; MCP.
-- **Covered by tests:** `ManageView.test.tsx` ("reactivates an archived division…"); `OrgChart.test.tsx`; `tests-e2e/manage.spec.ts`; `CascadeCreditsAndAppsTests`.
+- **Covered by tests:** `ManageView.test.tsx` ("reactivates an archived division…"); `OrgChart.test.tsx`; `tests-e2e/manage.spec.ts`; `CascadeCreditsAndAppsTests`; `ScreensAndRolesTests.The_tree_carries_each_nodes_effective_role_and_archived_levels_are_marked_and_not_served`.
 
 ### TREE-08 Archive an app, or set an app's status by hand
 - **Who:** Builder at the app.
@@ -1004,8 +1004,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 | overdraft.limit | "The overdraft limit is reached: work has stopped and apps are paused" | urgent | `/credits` |
 | app.crashed | "{app} stopped working" (raised at once from Dock's report) | urgent | the app |
 | security.finding | "The security review found {n} problem(s)" | urgent | the run |
-
-A `topup.requested` kind is defined, but nothing raises it.
+| topup.requested | "{Org} asks for {n} credits" — raised when an Owner asks (CRED-07), to FrostAura's operators only, in each organisation where an operator holds a role at the top; the line is the Owner's note | info | `/operator`, labelled "Top-up request" |
 
 ### NOTE-01 See how many notices are unread
 - **Who:** any member (the count is 0 for Builders and Viewers).
@@ -1017,7 +1016,7 @@ A `topup.requested` kind is defined, but nothing raises it.
 - **Variations and refusals:**
   - While the count is unknown (loading or failed), no badge and the label "Notifications".
   - No organisation: no bell.
-  - An operator inside another organisation sees their own organisation's bell, if any.
+  - An operator inside an organisation they entered sees that organisation's bell (OP-04).
 - **Where:** `shell/NotificationsBell.tsx`, `notifications/useUnread.ts`, `NotificationFeed.tsx` (`BellIcon`).
 - **Reachable from:** UI.
 - **Covered by tests:** `Notifications.test.tsx`: "the bell — shows the unread count and opens the feed in place", "says nothing about a count it does not know"; `breadth.spec.ts`: "the bell counts the unread, leads to the feed…".
@@ -1222,16 +1221,18 @@ A `topup.requested` kind is defined, but nothing raises it.
 - **Covered by tests:** `SystemStatusView.test.tsx`: "renders a failed read as a failure…", "says so when the control plane cannot be reached at all", "keeps the last good answer, marked stale…"; `statusModel.test.ts`.
 
 ### SYS-05 Read system status by API
-- **Who:** anyone. **The endpoint does not require sign-in.**
+- **Who:** anyone for the summary; a signed-in person for the services.
 - **Starts at:** `GET /api/system/status`.
-- **Needs:** nothing.
-- **Level:** Developer · **Learn first:** SYS-03 · **What you learn:** health is a single live read.
-- **Steps:** the answer is `{overall, checkedAt, services[{key, name, state, latencyMs, detail}]}`.
+- **Needs:** nothing for `overall`; a console session for the rest.
+- **Level:** Developer · **Learn first:** SYS-03 · **What you learn:** health is a single live read, and only the whole is public.
+- **Steps:**
+  1. Signed out, the answer is `{overall, checkedAt}` only — what `make smoke` and a load balancer need.
+  2. Signed in, it is `{overall, checkedAt, services[{key, name, state, latencyMs, detail}]}`.
 - **You know it worked when:** a 200 answer.
-- **Variations and refusals:** **Finding:** it is mapped outside the authenticated group (`Program.cs`), so anyone who can reach `/api` can read the service list, latencies and error details.
-- **Where:** `Program.cs`.
-- **Reachable from:** API (anonymous).
-- **Covered by tests:** `SystemStatusEndpointTests`.
+- **Variations and refusals:** which services exist, how fast they answer and what went wrong are never shown to someone signed out.
+- **Where:** `Program.cs`, `Application/Status/ServiceHealth.cs` (`SystemStatusSummary`).
+- **Reachable from:** API (the summary anonymously).
+- **Covered by tests:** `SystemStatusEndpointTests` (including "Signed_out_it_says_only_whether_the_whole_is_healthy_and_when").
 
 ### SYS-06 Open an address that does not exist
 - **Who:** anyone signed in.
@@ -1317,22 +1318,22 @@ A `topup.requested` kind is defined, but nothing raises it.
 ## Gaps and oddities found
 
 1. **No console route to manage the tree.** Creating, renaming, archiving and deleting divisions, projects and apps are API/MCP only; creation also happens through factory placement. Moving is impossible by any route. The owner cannot choose a division on `/start`.
-2. **MCP points to a console control that does not exist.** `node_update` refuses organisations with "An organisation is renamed by its Owner at the console." There is no such control; renaming is `PATCH /api/organisations/{id}` only.
+2. **Fixed:** MCP `node_update` no longer points to a console control that does not exist; it names `PATCH /api/organisations/{id}`. There is still no console control to rename the organisation.
 3. **There is no way to describe a level from the console.** No node has a description field, and context is set only through `PUT /api/cascade` or MCP `cascade_set`. The conversation cannot set it.
 4. **The employee conversation is not the employee** (TALK-05, TALK-06). It is the general assistant without the employee's memory. The copy "answers from what it knows" overstates it.
 5. **Conversations are shared per level, unlabelled.** Every member's messages render as "you".
 6. **An app can never be selected for the conversation in the UI.** The spec says it can, and that "Selecting a node opens it". Divisions and projects have no page of their own.
 7. **The dock cannot answer its own approvals.** start_idea and adjust_setting approvals must be answered on the run page or from "needs you". The approval title for a setting does not say which setting. The detail line shows raw tool names and keys in normal mode.
 8. **No estimate is shown before a conversation message** (CLAUDE.md rule 11). When budget runs out, the dock shows no reply and no reason.
-9. **A person granted below organisation level hits 404s on home**: the dock's history, sending, and both graph tabs (ORG-19). The graphs always ask at organisation level and ignore the selection.
+9. **Fixed:** a person granted below organisation level starts at their own level, and the graphs ask at the selection (ORG-19).
 10. **Dead UI branches**:
     - the "verdict" project stage, with "Read the verdict" and "Idea · paused at verdict";
     - the stages "idea", "evaluating", "publishing" and "dropped";
     - the "Nobody works on anything yet" empty state when divisions exist.
-11. **`topup.requested` is never raised**, and the UI has no label for it (it would show "Update").
-12. **Archiving does not reach the chart or the routes.** Archived divisions show unchanged on the chart, and archiving a division or project does not stop its apps from being routed. A Builder can set an app's status to "running" or "failed" by hand through `PATCH /api/apps/{id}`.
-13. **`GET /api/system/status` is anonymous.**
-14. **Two first-run problems.** The empty "needs you" text claims "Everything is running inside its budget." without checking budgets. The first-run band and organisation form are offered to people who will always be refused (ORG-03).
+11. **Fixed:** `topup.requested` is raised to operators and labelled "Top-up request" (NOTE).
+12. **Partly fixed:** archiving a division or project stops its apps being routed, and the tree marks archived nodes (TREE-07); the chart does not draw "Archived" on a division yet. A Builder can still set an app's status to "running" or "failed" by hand through `PATCH /api/apps/{id}`.
+13. **Fixed:** `GET /api/system/status` says only `overall` and `checkedAt` to someone signed out (SYS-05).
+14. **Fixed:** the empty "needs you" line claims only what it checks (ORG-05), and someone who can never name an organisation is told organisations are set up by FrostAura (ORG-03). `/start` itself still offers the organisation field to them.
 15. **Small mismatches with the UC docs.**
     - UC-102 and UC-001 describe `needsYou` as "verdicts and approvals" only; hires and idle employees are also sent.
     - UC-001 says selecting "a node or an employee" scopes the conversation; apps cannot be selected.

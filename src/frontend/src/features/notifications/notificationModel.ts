@@ -18,6 +18,8 @@ export function notificationHref(n: NotificationItem): string {
         return paths.app(s.id);
       case "employee":
         return paths.employee(s.id);
+      case "topup_request":
+        return paths.operator();
       default:
         break;
     }
@@ -38,6 +40,7 @@ const KIND: Record<string, string> = {
   "overdraft.limit": "Overdraft",
   "app.crashed": "App",
   "security.finding": "Security",
+  "topup.requested": "Top-up request",
 };
 
 /** A notification as the owner reads it: a short title, one line, and what kind of thing it is. */

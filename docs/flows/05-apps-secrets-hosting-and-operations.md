@@ -825,7 +825,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Learn first:** KIT-01
 - **What you learn:** being signed in is not the same as having access.
 - **You know it worked when:** the refusal page below appears.
-- **Steps:** Edge answers 403 with "You don't have access to this app" and "You are signed in, but this app has not been shared with you. Ask its owner for access."
+- **Steps:** Edge answers 403 with "You don't have access to this app" and "You are signed in, but your account has no access to this app. Ask its owner for access."
 - **Variations and refusals:** none.
 - **Where:** `Pages/UnavailablePage.cs` (Forbidden)
 - **Reachable from:** UI

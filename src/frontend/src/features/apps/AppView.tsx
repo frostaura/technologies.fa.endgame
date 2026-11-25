@@ -12,12 +12,12 @@ import { paths } from "@/lib/router";
 import { plainOrNull } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store";
-import { useGetAppQuery, useGetCascadeQuery, useGetMeQuery, useGetSecretsQuery, useGetSharesQuery, useGetTreeQuery, useRemoveShareMutation, useUpdateAppSettingsMutation } from "@/store/api";
+import { useGetAppQuery, useGetCascadeQuery, useGetMeQuery, useGetSecretsQuery, useGetSharesQuery, useRemoveShareMutation, useUpdateAppSettingsMutation } from "@/store/api";
 import { shareApp } from "@/store/sensitive";
 import type { AppAccess, AppDetail, AppShareCreated } from "@/store/types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { roleAt, roleRank } from "@/lib/roles";
-import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { effectiveRole, roleRank } from "@/lib/roles";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { useAppSelector } from "@/store";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { healthChip, namesFor } from "../home/treeModel";
@@ -30,17 +30,18 @@ import { History } from "./History";
 export function AppView({ appId }: { appId: string }) {
   const query = useGetAppQuery(appId, { pollingInterval: 20_000, skipPollingIfUnfocused: true });
   const view = viewOf(query);
-  const tree = useGetTreeQuery(undefined);
+  const tree = useActiveTree();
+  const active = useActiveOrganisation();
   const me = useGetMeQuery(undefined);
   const app = view.kind === "loaded" ? view.data : null;
 
   const crumbs: Crumb[] = [];
   // The app's own organisation, from its scope: the person's first organisation may be another one.
-  const first = me.data?.organisation;
+  const first = active.organisation ?? me.data?.organisation;
   const appOrg = app?.scope.split("/")[0];
   const member = me.data?.memberships.find((m) => m.organisationSlug === appOrg);
   const org = first && (!appOrg || first.slug === appOrg) ? first : appOrg ? { name: member?.organisationName ?? appOrg, slug: appOrg } : null;
-  if (org) crumbs.push({ label: org.name, href: paths.home() });
+  if (org) crumbs.push({ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() });
   if (app) {
     const names = namesFor(tree.data, app.scope);
     for (const n of names.slice(1, -1)) crumbs.push({ label: n });
@@ -76,19 +77,15 @@ const NOT_MEASURED = "Not measured yet";
 /** What the person may do here, as the cascade resolves their grants. An operator in God mode acts as an Admin. */
 function useAppRole(app: AppDetail) {
   const me = useGetMeQuery(undefined);
-  const active = useActiveOrganisation();
-  const role = roleAt(me.data, app.scope);
-  const operator = me.data?.isOperator === true && (active.entered || role === null);
-  return {
-    builder: roleRank(role) >= roleRank("builder") || operator,
-    admin: roleRank(role) >= roleRank("admin") || operator,
-    owner: role === "owner",
-  };
+  const tree = useActiveTree();
+  // The tree carries the role the server resolved for this app; in God mode, an Admin's.
+  const role = effectiveRole(tree.data, me.data, app.scope);
+  return { builder: roleRank(role) >= roleRank("builder"), admin: roleRank(role) >= roleRank("admin"), owner: role === "owner" };
 }
 
 /** A path's name from the tree, or its last part. */
 function useNameOf() {
-  const tree = useGetTreeQuery(undefined);
+  const tree = useActiveTree();
   return (path: string) => {
     const names = namesFor(tree.data, path);
     return names[names.length - 1] ?? path;
@@ -375,6 +372,7 @@ function Sharing({ app }: { app: AppDetail }) {
             That does not look like an e-mail address.
           </span>
         )}
+        <span className="text-sm text-ink-muted">They register at the app with a one-time code, which lasts 14 days.</span>
       </form>
     </section>
   );
@@ -395,8 +393,8 @@ function InvitationCode({ created, appName, onDone }: { created: AppShareCreated
     <div role="status" aria-label="Invitation code" className="flex flex-col gap-3 rounded-sm border border-success-text bg-success-tint px-4 py-3">
       <p className="text-ink">
         {created.emailed
-          ? `${created.email} is invited, and the code was e-mailed to them. If it does not arrive, give them this code; they register with it at ${appName}’s sign-up page before ${formatDate(created.expiresAt)}.`
-          : `${created.email} is invited. No e-mail was sent, so give them this code; they register with it at ${appName}’s sign-up page before ${formatDate(created.expiresAt)}.`}
+          ? `${created.email} is invited, and the code was e-mailed to them. If it does not arrive, give them this code; they register with it at ${appName}’s sign-up page within 14 days, before ${formatDate(created.expiresAt)}.`
+          : `${created.email} is invited. No e-mail was sent, so give them this code; they register with it at ${appName}’s sign-up page within 14 days, before ${formatDate(created.expiresAt)}.`}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <code className="min-w-0 break-all rounded-xs bg-surface px-3 py-2 font-mono text-base">{created.invitationCode}</code>

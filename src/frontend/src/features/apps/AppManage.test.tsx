@@ -43,11 +43,11 @@ afterEach(() => {
   localStorage.clear();
 });
 
-function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {}, me: unknown = ME, app: AppDetail = APP) {
+function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {}, me: { memberships: { role: string }[] } = ME, app: AppDetail = APP) {
   return stubApi({
     "GET /api/me": json(me),
     "GET /api/credits": json(CREDITS),
-    "GET /api/tree": json(TREE),
+    "GET /api/tree": json({ ...TREE, viewerRole: me.memberships[0]?.role ?? "none" }),
     "GET /api/notifications": json({ organisation: "acme", unread: 0, notifications: [] }),
     "GET /api/apps/a1": json(app),
     "GET /api/secrets": json({ scope: APP.scope, effective: [], setBelow: [] }),

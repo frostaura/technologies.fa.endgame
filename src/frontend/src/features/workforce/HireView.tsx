@@ -10,9 +10,10 @@ import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
-import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { effectiveRole, roleRank } from "@/lib/roles";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { api, useDecideHireMutation, useEditHireMutation, useGetEmployeesQuery, useGetHireQuery, useGetMeQuery, useGetTreeQuery } from "@/store/api";
+import { api, useDecideHireMutation, useEditHireMutation, useGetEmployeesQuery, useGetHireQuery, useGetMeQuery } from "@/store/api";
 import type { Hire, Tree } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { JobFields } from "./JobFields";
@@ -23,12 +24,11 @@ export function HireView({ hireId }: { hireId: string }) {
   const query = useGetHireQuery(hireId);
   const view = viewOf(query);
   const active = useActiveOrganisation();
-  const me = useGetMeQuery(undefined);
-  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !active.organisation });
+  const tree = useActiveTree();
   const hire = view.kind === "loaded" ? view.data : null;
   const org = tree.data?.organisation;
   const crumbs: Crumb[] = [
-    ...(org ? [{ label: org.name, href: paths.home() }, { label: "Hiring", href: paths.hires(hire?.scope ?? org.slug) }] : []),
+    ...(org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }, { label: "Hiring", href: paths.hires(hire?.scope ?? org.slug) }] : []),
     { label: hire ? `${hire.name} · ${hire.role}` : "Hire proposal" },
   ];
   return (
@@ -60,7 +60,8 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
   const [editError, setEditError] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const job = hire.jobDescription;
-  const admin = tree?.viewerRole === undefined || tree.viewerRole === "admin" || tree.viewerRole === "owner";
+  const me = useGetMeQuery(undefined);
+  const admin = roleRank(effectiveRole(tree, me.data, hire.scope)) >= roleRank("admin");
   return (
     <>
       <section className={cn("relative flex flex-col gap-3 overflow-hidden rounded-lg bg-violet px-6 py-7 text-primary-ink sm:px-8", RISE)}>

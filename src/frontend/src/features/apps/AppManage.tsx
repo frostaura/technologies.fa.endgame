@@ -7,9 +7,9 @@ import { Field, Input } from "@/components/ui/field";
 import { formatCredits, plural } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { navigate, paths } from "@/lib/router";
-import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { api, useGetCascadeQuery, useGetMeQuery, useRemoveCascadeMutation, useRepublishAppMutation, useSetCascadeMutation, useUpdateAppSettingsMutation } from "@/store/api";
+import { api, useGetCascadeQuery, useRemoveCascadeMutation, useRepublishAppMutation, useSetCascadeMutation, useUpdateAppSettingsMutation } from "@/store/api";
 import type { AppDetail, CascadeValue, RestoreResult } from "@/store/types";
 import { parseCredits } from "../credits/creditsModel";
 import { ArchiveNode, DeleteNode, Outcome, RenameNode } from "../tree/NodeControls";
@@ -213,8 +213,7 @@ export function IdleMinutes({ app, canChange }: { app: AppDetail; canChange: boo
 /** Rename, archive or delete the app itself (APP-13, APP-14), with the tree's own controls. */
 export function AppItself({ app, canChange, isAdmin }: { app: AppDetail; canChange: boolean; isAdmin: boolean }) {
   const active = useActiveOrganisation();
-  const me = useGetMeQuery(undefined);
-  const tree = treeArgFor(active, me.data);
+  const tree = undefined;
   const slug = app.scope.split("/").pop() ?? app.scope;
   const archived = isArchived(app);
   const entered = active.entered ? active.organisation?.slug : undefined;

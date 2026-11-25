@@ -90,6 +90,7 @@ public sealed partial class EmployeeService(
     MemoryService memory,
     ReadModels reads,
     ModelGatewayOptions routes,
+    Runs.RunService runs,
     TimeProvider clock)
 {
     /// <summary>The platform services an employee may be allowed to use.</summary>
@@ -317,15 +318,19 @@ public sealed partial class EmployeeService(
             row.ReportsToId = clearReportsTo ? null : reportsTo;
         }
 
+        var paused = false;
+        var resumed = false;
         switch (status)
         {
             case null:
                 break;
             case EmployeeStatuses.Paused when row.Status is EmployeeStatuses.Idle or EmployeeStatuses.Working:
                 row.Status = EmployeeStatuses.Paused;
+                paused = true;
                 break;
             case EmployeeStatuses.Idle when row.Status == EmployeeStatuses.Paused:
                 row.Status = row.CurrentRunId is null ? EmployeeStatuses.Idle : EmployeeStatuses.Working;
+                resumed = true;
                 break;
             case EmployeeStatuses.Paused or EmployeeStatuses.Idle:
                 break;
@@ -333,8 +338,19 @@ public sealed partial class EmployeeService(
                 throw EndgameProblem.Invalid("status is 'paused' (stop giving it work) or 'idle' (resume). Release and rehire have their own actions.");
         }
 
+        var who = row.Name;
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
+        if (paused)
+        {
+            // Pausing stops the work, not only the badge (EMP-04): what they are doing pauses at its next step.
+            await runs.PauseForEmployeeAsync(organisationId, employeeId, who, cancellationToken);
+        }
+        else if (resumed)
+        {
+            await runs.ResumeForEmployeeAsync(organisationId, employeeId, cancellationToken);
+        }
+
         return await GetAsync(organisationId, employeeId, cancellationToken);
     }
 

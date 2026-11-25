@@ -114,17 +114,60 @@ describe("God mode", () => {
   });
 
   it("provisions an organisation for an invited Owner and shows their code once", async () => {
-    const api = stub({ "POST /api/organisations": json({ id: "o2", slug: "beta-works", name: "Beta Works", ownerEmail: "b@example.test", ownerInvitationCode: "owner-code-xyz", invitationExpiresAt: "2026-12-09T00:00:00Z", invitationEmailed: true, nameCheck: { slug: "beta-works", source: "built-in", note: null } }, 201) });
+    const api = stub({
+      "POST /api/organisations": json(
+        {
+          id: "o2",
+          slug: "beta-works",
+          name: "Beta Works",
+          ownerEmail: "b@example.test",
+          ownerInvitationCode: "owner-code-xyz",
+          invitationExpiresAt: "2026-12-09T00:00:00Z",
+          invitationEmailed: true,
+          nameCheck: { slug: "beta-works", source: "built-in", note: null },
+          screening: { method: "model", result: "clear", reason: "It makes garden tools." },
+        },
+        201,
+      ),
+    });
     const { store } = renderWithStore(<OperatorView />);
     fireEvent.change(await screen.findByLabelText("Its name"), { target: { value: "Beta Works" } });
     expect((screen.getByLabelText("Its address name") as HTMLInputElement).value).toBe("beta-works");
     fireEvent.change(screen.getByLabelText("The Owner's e-mail"), { target: { value: "b@example.test" } });
+    // What it does is required: it is screened against the red lines before anything is set up.
+    expect((screen.getByRole("button", { name: "Set it up" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/What it does is screened against FrostAura’s red lines before it is set up/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("What it does"), { target: { value: "Makes and sells garden tools." } });
     fireEvent.click(screen.getByRole("button", { name: "Set it up" }));
     const code = await screen.findByRole("status", { name: "The Owner's invitation code" });
     expect(within(code).getByText("owner-code-xyz")).toBeTruthy();
     expect(code.textContent).toContain("The code was e-mailed to them too.");
-    expect(api.calls.find((c) => c.path === "/api/organisations")?.body).toEqual({ name: "Beta Works", slug: "beta-works", ownerEmail: "b@example.test" });
+    expect(code.textContent).toContain("It was screened against the red lines and crosses none: It makes garden tools.");
+    expect(api.calls.find((c) => c.path === "/api/organisations")?.body).toEqual({ name: "Beta Works", slug: "beta-works", ownerEmail: "b@example.test", description: "Makes and sells garden tools." });
     expect(JSON.stringify(store.getState())).not.toContain("owner-code-xyz");
+  });
+
+  it("asks for the operator's own screening, with a reason, when no model can be reached; a breach is refused", async () => {
+    let attempt = 0;
+    const api = stub({
+      "POST /api/organisations": () =>
+        ++attempt === 1
+          ? json({ status: 503, code: "screening_unavailable", title: "The organisation could not be screened", detail: "It is screened against FrostAura's red lines before it is set up, and no model could be reached. Try again shortly, or record your own screening decision with a written reason." }, 503)
+          : json({ status: 422, code: "red_line", title: "FrostAura does not set this organisation up", detail: "What it does crosses a red line — surveillance and authoritarian tooling: It tracks protesters." }, 422),
+    });
+    renderWithStore(<OperatorView />);
+    fireEvent.change(await screen.findByLabelText("Its name"), { target: { value: "Watch" } });
+    fireEvent.change(screen.getByLabelText("The Owner's e-mail"), { target: { value: "w@example.test" } });
+    fireEvent.change(screen.getByLabelText("What it does"), { target: { value: "Tracks protesters for clients." } });
+    fireEvent.click(screen.getByRole("button", { name: "Set it up" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("no model could be reached");
+    const own = screen.getByRole("group", { name: "Screen it yourself" });
+    fireEvent.change(within(own).getByLabelText("Your decision"), { target: { value: "breach" } });
+    expect((screen.getByRole("button", { name: "Set it up" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(own).getByLabelText("Why"), { target: { value: "It is surveillance of citizens." } });
+    fireEvent.click(screen.getByRole("button", { name: "Set it up" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("surveillance and authoritarian tooling: It tracks protesters."));
+    expect(api.calls.filter((c) => c.path === "/api/organisations")[1]?.body).toMatchObject({ screening: { decision: "breach", reason: "It is surveillance of citizens." } });
   });
 
   it("names each top-up's organisation by its display name, and its address name only in technical mode", async () => {

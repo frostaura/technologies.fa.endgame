@@ -9,9 +9,9 @@ import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { navigate, paths, useLocation } from "@/lib/router";
 import { cn } from "@/lib/utils";
-import { roleAt, roleRank } from "@/lib/roles";
-import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
-import { useGetEmployeesQuery, useGetEmployeesWithReleasedQuery, useGetHiresQuery, useGetMeQuery, useGetRecurringRolesQuery, useGetTreeQuery, useProposeHireMutation } from "@/store/api";
+import { effectiveRole, roleRank } from "@/lib/roles";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
+import { useGetEmployeesQuery, useGetEmployeesWithReleasedQuery, useGetHiresQuery, useGetMeQuery, useGetRecurringRolesQuery, useProposeHireMutation } from "@/store/api";
 import type { Employee, Hire, RecurringRole, Tree } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 import { JobFields, type JobDraft } from "./JobFields";
@@ -22,11 +22,11 @@ export function HiresView() {
   const { search } = useLocation();
   const active = useActiveOrganisation();
   const me = useGetMeQuery(undefined);
-  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !active.organisation });
+  const tree = useActiveTree();
   const org = tree.data?.organisation;
   const scope = search.get("scope") ?? org?.slug ?? active.organisation?.slug ?? "";
   const name = scopeName(tree.data, scope);
-  const isAdmin = active.entered || roleRank(roleAt(me.data, scope)) >= roleRank("admin");
+  const isAdmin = roleRank(effectiveRole(tree.data, me.data, scope)) >= roleRank("admin");
   const home = active.entered && org ? paths.homeOf(org.slug) : paths.home();
   return (
     <AppShell

@@ -1,4 +1,4 @@
-import { organisationsOf, treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { organisationsOf, useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { useId, useState, type FormEvent } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
@@ -14,7 +14,7 @@ import { ROLE_MAY, ROLE_NAME, highestIn, roleRank } from "@/lib/roles";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { useGetMeQuery, useGetTokensQuery, useGetTreeQuery, useRevokeTokenMutation } from "@/store/api";
+import { useGetMeQuery, useGetTokensQuery, useRevokeTokenMutation } from "@/store/api";
 import { createToken } from "@/store/sensitive";
 import type { AccessToken, AccessTokenCreated, TokenRole, Tree } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
@@ -37,7 +37,7 @@ function origin(): string {
 export function AssistantsView() {
   const me = useGetMeQuery(undefined);
   const active = useActiveOrganisation();
-  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !active.organisation });
+  const tree = useActiveTree();
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const org = active.organisation;
   // A key belongs to one organisation; the list holds keys for every one the person is in, each named.

@@ -5,7 +5,8 @@ import { Bar } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { formatCredits, formatNumber, percent, timeAgo } from "@/lib/format";
-import { roleRank } from "@/lib/roles";
+import { effectiveRole, roleRank } from "@/lib/roles";
+import { useGetMeQuery } from "@/store/api";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { RISE, stagger } from "@/lib/motion";
 import { paths } from "@/lib/router";
@@ -39,10 +40,11 @@ function useManageHref(): (scope: string) => string {
 export function OrgChart({ tree, selection, onSelect }: Props) {
   const org = tree.organisation;
   const manage = useManageHref();
+  const me = useGetMeQuery(undefined);
   if (!org) return null;
   // A lone division takes the whole width, its projects side by side, rather than leaving half the page empty.
   const lone = tree.divisions.length === 1;
-  const mayAddDivision = roleRank(tree.viewerRole === "none" ? null : tree.viewerRole) >= roleRank("admin");
+  const mayAddDivision = roleRank(effectiveRole(tree, me.data, org.slug)) >= roleRank("admin");
   return (
     <section aria-label="Organisation chart" className={cn("grid grid-cols-1 items-start gap-6", !lone && "md:grid-cols-2 2xl:grid-cols-3")}>
       {tree.divisions.map((division, i) => (
@@ -112,8 +114,11 @@ function DivisionColumn({
         <button
           type="button"
           aria-pressed={selected}
+          // A part the person holds no role in is drawn on the way to theirs, but is not theirs to open.
+          disabled={division.role === null}
+          title={division.role === null ? "You hold no role here" : undefined}
           onClick={() => onSelect({ scope, kind: "division", trail })}
-          className="flex min-w-0 items-center gap-3.5 rounded-xs text-left after:absolute after:inset-0 after:rounded-md"
+          className="flex min-w-0 items-center gap-3.5 rounded-xs text-left after:absolute after:inset-0 after:rounded-md disabled:cursor-default"
         >
           <span aria-hidden className={cn("flex size-10 shrink-0 items-center justify-center rounded-xs font-display text-lg font-bold text-primary-ink", tone.badge)}>
             {division.name.trim()[0]?.toUpperCase()}
@@ -128,9 +133,11 @@ function DivisionColumn({
           <Badge tone={archived ? "quiet" : tone.chip} className="px-3 py-1 text-sm">
             {formatCredits(division.spend.monthCredits)}
           </Badge>
-          <Link href={manage(scope)} aria-label={`Manage ${division.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
-            Manage
-          </Link>
+          {division.role !== null && (
+            <Link href={manage(scope)} aria-label={`Manage ${division.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
+              Manage
+            </Link>
+          )}
         </div>
       </div>
       {division.workers.length > 0 && (
@@ -192,17 +199,21 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
         <button
           type="button"
           aria-pressed={selected}
+          disabled={project.role === null}
+          title={project.role === null ? "You hold no role here" : undefined}
           onClick={() => onSelect({ scope, kind: "project", trail })}
-          className="rounded-xs text-left text-base font-semibold after:absolute after:inset-0 after:rounded-md"
+          className="rounded-xs text-left text-base font-semibold after:absolute after:inset-0 after:rounded-md disabled:cursor-default"
         >
           {project.name}
         </button>
         <div className="relative z-10 flex flex-wrap items-center gap-1.5">
           {archived ? <Badge tone="quiet">Archived</Badge> : showStage && <ChipRow chips={[stageChip(project.stage)]} />}
           <span className="text-sm text-ink-muted">{formatCredits(project.spend.monthCredits)} this month</span>
-          <Link href={manage(scope)} aria-label={`Manage ${project.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
-            Manage
-          </Link>
+          {project.role !== null && (
+            <Link href={manage(scope)} aria-label={`Manage ${project.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
+              Manage
+            </Link>
+          )}
         </div>
       </div>
 

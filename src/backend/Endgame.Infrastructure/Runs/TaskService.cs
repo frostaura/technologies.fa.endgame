@@ -117,6 +117,14 @@ public sealed class TaskService(EndgameDbContext db, TenantSession session, Scop
 
         var org = run.OrganisationId;
         session.UseOrganisation(org);
+        if (employeeId is { } claimer && await db.Employees.AsNoTracking().Where(e => e.OrganisationId == org && e.Id == claimer && e.Status == EmployeeStatuses.Paused)
+                .Select(e => e.Name).FirstOrDefaultAsync(cancellationToken) is { } pausedName)
+        {
+            // A paused employee is given no task: the run waits for them, and says so (EMP-04).
+            await runs.AppendAsync(org, runId, RunService.EmployeePaused(claimer, pausedName), null, null, cancellationToken);
+            return null;
+        }
+
         var now = clock.GetUtcNow();
         Guid? claimed;
         await using (var command = await db.CommandAsync("""

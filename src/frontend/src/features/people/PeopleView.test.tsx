@@ -101,4 +101,52 @@ describe("PeopleView", () => {
     await waitFor(() => expect(screen.queryByText("kit@example.test")).toBeNull());
     expect(api.calls.some((c) => c.method === "DELETE" && c.path === "/api/members/ms2")).toBe(true);
   });
+
+  it("below the organisation, shows the Owner and grants from above as set there", async () => {
+    window.history.replaceState(null, "", "/people?scope=acme/tools");
+    stub(json([MEMBERS[0], { ...MEMBERS[1], scope: "acme/tools" }]));
+    renderWithStore(<PeopleView />);
+    const list = await screen.findByRole("list", { name: "People" });
+    const owner = list.querySelector('[data-member="o@example.test"]') as HTMLElement;
+    expect(within(owner).getByText("Set at Acme")).toBeTruthy();
+    expect(within(list.querySelector('[data-member="kit@example.test"]') as HTMLElement).getByText("Set here")).toBeTruthy();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("does not offer inviting where the role is below Admin, though the organisation grant is higher", async () => {
+    window.history.replaceState(null, "", "/people?scope=acme/tools");
+    const me = { ...ME, memberships: [
+      { id: "m1", scope: "acme", level: "organisation", role: "admin", organisationId: "o1", organisationSlug: "acme", organisationName: "Acme" },
+      { id: "m2", scope: "acme/tools", level: "division", role: "viewer", organisationId: "o1", organisationSlug: "acme", organisationName: "Acme" },
+    ] };
+    stub(problem(403, "Only an Admin or the Owner"), {
+      "GET /api/me": json(me),
+      "GET /api/tree": json({ ...TREE, viewerRole: "admin", organisation: { ...TREE.organisation, role: "admin" }, divisions: [{ ...TREE.divisions[0], role: "viewer" }] }),
+    });
+    renderWithStore(<PeopleView />);
+    expect(await screen.findByText("Only an Admin or the Owner can see the people here")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Invite someone" })).toBeNull();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("sends a pending person a new code, shown once, and says how long a code works", async () => {
+    const own = { ...MEMBERS[1], scope: "acme", invitationExpiresAt: "2099-12-02T00:00:00Z" };
+    const api = stub(json([MEMBERS[0], own]), {
+      "POST /api/members/ms2/invitation": json({ member: { ...own, invitationExpiresAt: "2099-12-09T00:00:00Z" }, invitationCode: "fresh-code-456", expiresAt: "2099-12-09T00:00:00Z", emailed: true }),
+    });
+    const { store } = renderWithStore(<PeopleView />);
+    const list = await screen.findByRole("list", { name: "People" });
+    const kit = list.querySelector('[data-member="kit@example.test"]') as HTMLElement;
+    expect(within(kit).getByText(/No passkey yet: their code works until/)).toBeTruthy();
+    expect(screen.getByText(/It works for 7 days; a new one can be sent from their row./)).toBeTruthy();
+    // The Owner, who has a passkey, has no such control.
+    expect(within(list.querySelector('[data-member="o@example.test"]') as HTMLElement).queryByRole("button", { name: "Send a new code" })).toBeNull();
+    fireEvent.click(within(kit).getByRole("button", { name: "Send a new code" }));
+    const code = await screen.findByRole("status", { name: "New invitation code for Kit" });
+    expect(within(code).getByText("fresh-code-456")).toBeTruthy();
+    expect(code.textContent).toContain("It was e-mailed to them too.");
+    expect(code.textContent).toContain("the code they had before no longer does");
+    expect(api.calls.some((c) => c.method === "POST" && c.path === "/api/members/ms2/invitation")).toBe(true);
+    expect(JSON.stringify(store.getState())).not.toContain("fresh-code-456");
+  });
 });

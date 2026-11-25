@@ -21,11 +21,11 @@ const TREE = {
 const BOSS = employeeFixture({ id: "e2", name: "Grace", role: "Division lead" });
 const PEOPLE = [employeeFixture(), BOSS, employeeFixture({ id: "e3", name: "Old Tom", role: "Tester", status: "released", releasedAt: "2026-11-01T00:00:00Z" })];
 
-function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {}, me: unknown = ME) {
+function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {}, me: { memberships: { role: string }[] } = ME) {
   return stubApi({
     "GET /api/me": json(me),
     "GET /api/credits": json(CREDITS),
-    "GET /api/tree": json(TREE),
+    "GET /api/tree": json({ ...TREE, viewerRole: me.memberships[0]?.role ?? "none" }),
     "GET /api/notifications": json({ organisation: "acme", unread: 0, notifications: [] }),
     "GET /api/employees": (req) => json(req.path.includes("includeReleased") ? PEOPLE : PEOPLE.filter((p) => p.status !== "released")),
     "GET /api/employees/e1": json(employeeDetailFixture({ reportsTo: { id: "e2", name: "Grace" } })),

@@ -31,7 +31,9 @@ known monthly cost, with a job description and a track record the owner can read
 4. **The employee works.** Its job description (mandate, scope, tools, services, monthly credit limit, model tier),
    manager (`reportsTo`), status and current run are on `GET /api/employees/{id}` and on the org chart.
 5. **Movement.** `POST …/reassign { scope, reportsTo? }` moves it (its memory travels); `PATCH` changes budget, tier,
-   tools, mandate or manager, or pauses and resumes it; `POST …/release` lets it go (memory archived; anyone who reported
+   tools, mandate or manager, or pauses and resumes it — pausing pauses every run of theirs or holding their task at the
+   next step boundary, the factory's new work for them waits, a person's direct start is refused (409), and resuming
+   puts what waited back in the queue; `POST …/release` lets it go (memory archived; anyone who reported
    to it moves up); `POST …/rehire { scope? }` brings it back with its memory.
 6. **Contractors.** The Runner calls `POST /internal/contractors { scope, briefedBy, role, brief, runId }`; the contractor
    is on the chart while it works and its model calls carry its id. `POST …/{id}/finish { learned[] }` takes it off the

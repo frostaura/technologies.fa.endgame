@@ -40,4 +40,12 @@ describe("OrgChart", () => {
     renderWithStore(<OrgChart tree={{ ...TREE, viewerRole: "builder" }} selection={null} onSelect={() => undefined} />);
     expect(screen.queryByRole("link", { name: "Add a division" })).toBeNull();
   });
+
+  it("draws a part the person holds no role in, but not as theirs to open or manage", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const tree = { ...TREE, divisions: TREE.divisions.map((d, i) => (i === 0 ? { ...d, role: null } : d)) } as Tree;
+    renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    expect((screen.getByRole("button", { name: /Tools/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("link", { name: "Manage Tools" })).toBeNull();
+  });
 });

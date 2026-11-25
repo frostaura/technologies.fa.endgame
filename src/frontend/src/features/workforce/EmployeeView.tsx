@@ -12,7 +12,8 @@ import { describeError, viewOf, type ViewState } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { effectiveRole, roleRank } from "@/lib/roles";
+import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import {
   api,
   useGetEmployeesQuery,
@@ -26,7 +27,6 @@ import {
   useGetMemoryChangesQuery,
   useGetMemoryQuery,
   useGetTasksQuery,
-  useGetTreeQuery,
   useRemoveMemoryMutation,
   useReviewMemoryMutation,
   useUpdateEmployeeMutation,
@@ -63,8 +63,7 @@ export function EmployeeView({ employeeId }: { employeeId: string }) {
   const query = useGetEmployeeQuery(employeeId);
   const view = viewOf(query);
   const active = useActiveOrganisation();
-  const me = useGetMeQuery(undefined);
-  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !active.organisation });
+  const tree = useActiveTree();
   const detail = view.kind === "loaded" ? view.data : null;
 
   const crumbs: Crumb[] = [];
@@ -110,16 +109,15 @@ export function EmployeeView({ employeeId }: { employeeId: string }) {
   );
 }
 
-function canAdmin(tree: Tree | undefined): boolean {
-  const role = tree?.viewerRole;
-  return role === undefined || role === "admin" || role === "owner";
-}
-
-function canBuild(tree: Tree | undefined): boolean {
-  return canAdmin(tree) || tree?.viewerRole === "builder";
+/** What the person may do at the employee's place, as the server resolves their role there. */
+function useCan(tree: Tree | undefined, scope: string) {
+  const me = useGetMeQuery(undefined);
+  const rank = roleRank(effectiveRole(tree, me.data, scope));
+  return { admin: rank >= roleRank("admin"), build: rank >= roleRank("builder") };
 }
 
 function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | undefined }) {
+  const can = useCan(tree, detail.employee.scope);
   const mode = useAppSelector((s) => s.ui.mode);
   const { employee, trackRecord } = detail;
   const job = employee.jobDescription;
@@ -151,7 +149,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
             )}
           </div>
         </div>
-        {employee.kind === "employee" && canAdmin(tree) && <EmployeeActions employee={employee} tree={tree} />}
+        {employee.kind === "employee" && can.admin && <EmployeeActions employee={employee} tree={tree} />}
       </div>
 
       <section aria-label="Track record" className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-4", RISE, stagger(1))}>
@@ -619,7 +617,8 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
   const view = viewOf(memory);
   const changeView = viewOf(changes);
   const [adding, setAdding] = useState(false);
-  const editable = canBuild(tree) && !includeArchived && employee.kind === "employee";
+  const can = useCan(tree, employee.scope);
+  const editable = can.build && !includeArchived && employee.kind === "employee";
   const changeList = changeView.kind === "loaded" ? changeView.data : [];
 
   return (

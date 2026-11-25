@@ -82,7 +82,7 @@ export function ArchiveNode({ level, id, name, archived, published, tree, onArch
   const effect =
     level === "app"
       ? "It stops being served at its address. Its code, data and history are kept, and reactivating it brings it back."
-      : `It is marked archived and keeps its history, spending and people. Its apps are not archived with it: archive each one to stop it being served.`;
+      : `It is marked archived and keeps its history, spending and people. None of its apps is served until it is reactivated.`;
 
   return (
     <div className="flex flex-col gap-2">

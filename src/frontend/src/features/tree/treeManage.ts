@@ -29,6 +29,8 @@ export function statusOf(node: object): string | null {
 }
 
 export function isArchived(node: object): boolean {
+  const n = node as { archived?: unknown };
+  if (typeof n.archived === "boolean") return n.archived;
   return statusOf(node) === "archived";
 }
 

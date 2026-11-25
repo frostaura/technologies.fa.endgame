@@ -319,6 +319,13 @@ const server = createServer(async (req, res) => {
   // Tree ---------------------------------------------------------------------------------
   if (path === "/api/tree") {
     if (state.failTree) return problem(res, 500, "The tree could not be read", "The database did not answer.");
+    // God mode: an operator reads an organisation they entered, as its Admin.
+    const entered = url.searchParams.get("organisation");
+    const org = entered ? state.breadth.operatorOrgs.find((o) => o.slug === entered) : undefined;
+    if (entered && org) {
+      const tree = applyTree(state.tree() as never) as unknown as { organisation: Record<string, unknown> | null };
+      return send(res, 200, { ...tree, viewerRole: "admin", organisation: { summary: null, spend: { monthCredits: 0 }, workers: [], ...tree.organisation, id: org.id, slug: org.slug, name: org.name, role: "admin" } });
+    }
     return send(res, 200, applyTree(state.tree() as never));
   }
   if (path === "/api/organisations" && method === "POST") {

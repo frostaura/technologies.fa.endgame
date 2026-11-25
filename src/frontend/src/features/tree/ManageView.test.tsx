@@ -13,19 +13,19 @@ const TREE = {
   organisation: { id: "o1", slug: "acme", name: "Acme", summary: null, spend: { monthCredits: 1 }, workers: [] },
   divisions: [
     { id: "d1", slug: "tools", name: "Tools", spend: { monthCredits: 1 }, workers: [], projects: [project] },
-    { id: "d2", slug: "old", name: "Old things", status: "archived", spend: { monthCredits: 0 }, workers: [], projects: [] },
+    { id: "d2", slug: "old", name: "Old things", archived: true, spend: { monthCredits: 0 }, workers: [], projects: [] },
   ],
   needsYou: [],
 };
 const CONTEXT = [{ kind: "context", key: "house-style", value: "Plain English.", setAtLevel: "organisation", setAtPath: "acme", setAt: "2026-11-01T00:00:00Z", overrides: [] }];
 const BELOW = [{ kind: "context", key: "house-style", value: "Ledger words.", setAtLevel: "project", setAtPath: "acme/tools/ledger", setAt: "2026-11-02T00:00:00Z", overrides: [] }];
 
-function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {}, me: unknown = ME) {
+function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {}, me: { memberships: { role: string }[] } = ME) {
   return stubApi({
     "GET /api/me": json(me),
     "GET /api/credits": json(CREDITS),
     "GET /api/notifications": json({ organisation: "acme", unread: 0, notifications: [] }),
-    "GET /api/tree": json(TREE),
+    "GET /api/tree": json({ ...TREE, viewerRole: me.memberships[0]?.role ?? "none" }),
     "GET /api/cascade": json(CONTEXT),
     "GET /api/cascade/below": json(BELOW),
     ...extra,

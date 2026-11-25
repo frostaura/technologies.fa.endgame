@@ -1040,20 +1040,24 @@ export const manageApi = withCascade.injectEndpoints({
       invalidatesTags: ["Tree", "Credits", "Ontology"],
     }),
     /** Renames, archives or reactivates a node: shown at once on the tree it was read with, and put back if refused. */
-    updateNode: build.mutation<import("./types").TreeNode, { level: import("./types").ManagedLevel | "organisation"; id: string; name?: string; status?: string; tree: TreeArg }>({
+    updateNode: build.mutation<import("./types").TreeNode, { level: import("./types").ManagedLevel | "organisation"; id: string; name?: string; status?: string; tree?: TreeArg }>({
       query: ({ level, id, name, status }) => ({
         url: `${level === "organisation" ? "organisations" : PLURAL[level]}/${encodeURIComponent(id)}`,
         method: "PATCH",
         body: { ...(name !== undefined ? { name } : {}), ...(status !== undefined ? { status } : {}) },
       }),
       extraOptions: guarded(g.treeNodeGuard, "the changed part"),
-      async onQueryStarted({ id, name, status, tree }, { dispatch, queryFulfilled }) {
-        const undo = dispatch(
-          api.util.updateQueryData("getTree", tree, (t) => {
+      async onQueryStarted({ id, name, status }, { dispatch, getState, queryFulfilled }) {
+        // Every tree read on screen shows it (the person's own and an entered or chosen organisation's).
+        const undos = api.util.selectCachedArgsForQuery(getState() as never, "getTree").map((arg) => dispatch(
+          api.util.updateQueryData("getTree", arg, (t) => {
             const patch = (n: { id: string; name: string }) => {
               if (n.id !== id) return;
               if (name !== undefined) n.name = name;
-              if (status !== undefined) (n as { status?: string }).status = status;
+              if (status !== undefined) {
+                (n as { status?: string }).status = status;
+                (n as { archived?: boolean }).archived = status === "archived";
+              }
             };
             if (t.organisation) patch(t.organisation);
             for (const d of t.divisions) {
@@ -1064,12 +1068,12 @@ export const manageApi = withCascade.injectEndpoints({
               }
             }
           }),
-        );
+        ));
         try {
           await queryFulfilled;
           dispatch(api.util.invalidateTags(["Tree", "App", "Credits", "Me", "Ontology"]));
         } catch {
-          undo.undo();
+          for (const undo of undos) undo.undo();
         }
       },
     }),
