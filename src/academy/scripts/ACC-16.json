@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-16",
+  "persona": "builder",
+  "scenario": "s1-app-not-published",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "This app isn't ready yet",
+        "note": "An address, and no published version yet."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "goto": "/__app/0b0e0000-0000-4000-8000-000000000000/path/",
+      "highlight": {
+        "text": "This app is temporarily unavailable",
+        "note": "An address Edge does not know, or the access check unavailable."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/__app/16c54191-b459-4235-a608-a265aae2e485/path/_platform/health",
+      "highlight": {
+        "testId": "hosted-not-found",
+        "note": "Under a published app, Court booking: _platform is never served from the public side. 404."
+      }
+    }
+  ]
+}

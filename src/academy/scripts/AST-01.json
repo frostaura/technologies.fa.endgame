@@ -1,0 +1,70 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AST-01",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "AI assistants"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Let an AI assistant work with your organisation",
+        "note": "From the org chart: AI assistants."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Give an assistant a key",
+        "note": "What a key can do, and what it never can."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Personal access tokens",
+        "note": "Technical mode: “MCP access tokens”, egp_… tokens, /mcp and /mcp/apps/{appId}."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Normal"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The addresses to give it",
+        "note": "One address for the whole organisation, and one for each app, each with Copy."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "The organisation's address lets it do",
+        "note": "Which address does what."
+      }
+    }
+  ]
+}

@@ -94,7 +94,8 @@ area("BreadthEndpoints", {
   // Tokens ------------------------------------------------------------------------------------
   "GET tokens": (_req, { world }) => {
     const u = me(world);
-    return ok(world.tokens.filter((t) => world.memberships.some((m) => m.userId === u.id && orgOf(m.path) === t.organisation)));
+    // The caller's own keys, from every organisation (AccessTokenService.ListAsync).
+    return ok(world.tokens.filter((t) => t.userId === u.id).map((t) => omit(t, "userId")));
   },
 
   "POST tokens": (req, { world }) => {
@@ -110,20 +111,20 @@ area("BreadthEndpoints", {
     const role = (req.body.role === undefined ? (highest === "owner" ? "admin" : highest) : parseRole(req.body.role)) as MemberRole;
     if (role === "owner") throw invalid("A token never acts as the Owner: what only the Owner may do stays with the person. Use admin at most.");
     if (!atLeast(highest, role)) throw forbidden(`A token's role is no higher than yours: you hold ${highest} at most in '${org}'.`);
-    if (world.tokens.filter((t) => t.active && t.organisation === org).length >= 50) throw conflict("You hold 50 live tokens here; revoke one first.");
+    if (world.tokens.filter((t) => t.userId === u.id && !t.revokedAt).length >= 50) throw conflict("You hold 50 live tokens here; revoke one first.");
     const secret = `egp_${newId(world, "token").replace(/-/g, "")}`;
     const at = new Date().toISOString();
     const accessToken = { id: newId(world, "token-id"), name, organisation: org, role: role as TokenRole, prefix: secret.slice(0, 8), createdAt: at, expiresAt: days ? new Date(Date.now() + days * 86_400_000).toISOString() : null, lastUsedAt: null, revokedAt: null, active: true };
-    world.tokens.unshift(accessToken);
+    world.tokens.unshift({ ...accessToken, userId: u.id });
     return created({ token: secret, accessToken });
   },
 
   "DELETE tokens/{id}": (req, { world }) => {
-    me(world);
-    const t = world.tokens.find((x) => x.id === req.params.id);
+    const u = me(world);
+    const t = world.tokens.find((x) => x.id === req.params.id && x.userId === u.id);
     if (!t) throw notFound("The token");
     Object.assign(t, { active: false, revokedAt: new Date().toISOString() });
-    return ok(t);
+    return ok(omit(t, "userId"));
   },
 
   // Ask about an app --------------------------------------------------------------------------

@@ -50,6 +50,12 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   enums of the two together. Validated at build against the schema and the parsed flows (flow
   exists, step exists, no step twice, images on disk). Coverage is printed by the build and shown on
   the "About this academy" page.
+- **Variations** (`variations: [{ title, persona, scenario, start, steps }]` in a script) are the
+  branches under "What else can happen" — a refusal, a validation message, an empty state, a limit —
+  each played in the live console from its own start, as its own persona and world. Their steps are
+  numbered 1, 2, … within the variation and each carries a `note` (there is no flow text beside
+  them). The flow page lists them as "Watch it in the live console"; choosing one plays it in the
+  stage, with Previous, Next and "Back to the steps".
 - **The site** (`src/academy/src/`) is React with hash routing and relative URLs, built as one
   classic deferred script (iife) so it runs from `file://`. Content, scripts and the prebuilt search
   index are bundled. Progress (not started / seen / done, and where the learner left off) lives in
@@ -107,9 +113,9 @@ skips a state.
 
 ### Personas and scenarios
 
-`persona` is one of owner, admin, builder, viewer, operator, signed-out, end-user, assistant,
-host-admin. `scenario` is one of fresh-install, first-idea, established, researching, verdict-build,
-building, app-live, low-credits, god-mode. Routes may name the scenario's records as `{idea}`,
+`persona` and `scenario` are the demo's own (ARCH-009); the schema lists the ones scripts use
+(`properties.persona.enum`, `properties.scenario.enum`, held to `src/content/scripts.ts` by a unit
+test), and a name is added there when a script first needs it. Routes may name the scenario's records as `{idea}`,
 `{run}`, `{app}`, `{employee}`, `{hire}`; the demo resolves them. The scripts written so far assume
 the `established` world is the organisation **Northwind**, with the division **Technologies**, its
 project **Court booking**, and the Admin **Ada Lovelace**.
@@ -171,7 +177,7 @@ Nothing is stored server-side. The browser keeps `endgame-academy:progress:v1` i
   degraded stage show text and facts where a picture would go.
 - Scripts for the remaining flows (15 of 321 are scripted); a later lane writes them with
   `npm run script:new`.
-- Linking each refusal in "What else can happen" to a scenario that shows it.
+- A variation for every refusal in "What else can happen": scripts carry them flow by flow.
 
 ## Links
 

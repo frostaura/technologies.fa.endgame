@@ -9,8 +9,8 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "text": "Sign in",
-        "note": "No session yet, so the console shows only its sign-in screen."
+        "text": "Sign in with a passkey",
+        "note": "No session yet, so the console shows only its sign-in screen. Nobody has registered here."
       }
     },
     {
@@ -24,7 +24,8 @@
         }
       ],
       "highlight": {
-        "text": "Create your passkey"
+        "text": "Create your passkey",
+        "note": "The same screen, now asking who you are."
       }
     },
     {
@@ -54,7 +55,8 @@
         }
       ],
       "highlight": {
-        "text": "Waiting for your device…"
+        "text": "Waiting for your device…",
+        "note": "The code field stays empty: only the very first person may register without one."
       }
     },
     {
@@ -73,13 +75,14 @@
           "wait": 900
         }
       ],
-      "note": "On this device's approval the first person is created, under a lock, and a 14-day session opens."
+      "note": "Your device approves; the first person is created, under a lock, and a 14-day session opens."
     },
     {
       "step": 6,
       "kind": "demo",
       "highlight": {
-        "text": "Name your organisation, then describe your first idea."
+        "text": "Name your organisation, then describe your first idea.",
+        "note": "Signed in, with no organisation yet: the first-run screen."
       }
     }
   ]

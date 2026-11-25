@@ -116,11 +116,40 @@
                 "type": "text",
                 "text": "{ \"organisation\": { \"name\": \"Northwind\", … } }"
               }
-            ]
+            ],
+            "isError": false
           }
         }
       },
       "note": "Each call runs the same service as the console, behind the same role check, capped by the key."
+    }
+  ],
+  "variations": [
+    {
+      "title": "A revoked, expired or unknown key",
+      "persona": "assistant",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/mcp",
+          "headers": {
+            "Authorization": "Bearer egp_revoked…"
+          },
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list"
+          },
+          "response": {
+            "status": 401
+          },
+          "note": "401, with WWW-Authenticate: Bearer realm=\"endgame-mcp\", error=\"invalid_token\". No bearer at all is answered the same."
+        }
+      ]
     }
   ]
 }

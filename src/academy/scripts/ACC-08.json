@@ -1,0 +1,48 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-08",
+  "persona": "signed-out",
+  "scenario": "s1-app-private",
+  "start": "/__app/{app}/subdomain/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Opened at northwind.endgame.example: its sign-in page moved to the platform's host, with an absolute returnTo."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign in with a passkey",
+        "note": "Already signed in on the platform's host, they would be sent straight back; here they are not."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in with a passkey"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "note": "Signed in, the server answers with a one-time hand-off link that lasts one minute."
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Edge on the subdomain redeemed it, set a cookie for that host alone, and opened the app there."
+      }
+    }
+  ]
+}

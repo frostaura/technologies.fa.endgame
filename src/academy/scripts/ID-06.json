@@ -1,0 +1,40 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-06",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign out",
+        "note": "In the header of every screen. There is no confirmation."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign out"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "note": "The console session ends, and with it every app session this browser held."
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "h1",
+        "note": "The session check now answers 401: the sign-in screen, at /sign-in."
+      }
+    }
+  ]
+}

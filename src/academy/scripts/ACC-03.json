@@ -1,0 +1,57 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-03",
+  "persona": "signed-out",
+  "scenario": "s1-app-private",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Sign in with a passkey"
+          }
+        }
+      ],
+      "note": "On the app's sign-in page, the member signs in with their Endgame passkey and approves on their device."
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1500
+        }
+      ],
+      "note": "It is the console's own sign-in, so the console session starts too."
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "testId": "signed-in-as",
+        "note": "Sent back to the address first asked for: Tutor Match opens, signed in as Mara Ellison."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A member with no role on the app",
+      "persona": "division-admin",
+      "scenario": "s1-app-private",
+      "start": "/__app/{app}/path/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "You don't have access to this app",
+            "note": "Signed in, but Ines holds no role on Tutor Match: refused, not asked to sign in (ACC-10)."
+          }
+        }
+      ]
+    }
+  ]
+}

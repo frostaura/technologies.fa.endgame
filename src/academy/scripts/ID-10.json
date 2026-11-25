@@ -1,0 +1,73 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ID-10",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Operator access"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Every time someone from FrostAura entered",
+        "note": "Only the Owner sees this link and this page."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ol[aria-label='Operator log']",
+        "note": "While it loads, three skeleton cards; then the newest 500 entries."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Entered the organisation",
+        "note": "Each card says what was done in plain words, when, and which operator did it."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Technical"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "organisation.entered",
+        "note": "Technical mode adds the raw action and its detail."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Anyone but the Owner is refused",
+      "persona": "admin",
+      "scenario": "established",
+      "start": "/operator-access",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "Only the Owner can read the operator log",
+            "note": "Ada is an Admin: the server answers 403, and the screen says why."
+          }
+        }
+      ]
+    }
+  ]
+}

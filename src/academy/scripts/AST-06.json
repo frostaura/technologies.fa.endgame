@@ -1,0 +1,168 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "AST-06",
+  "persona": "assistant",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp/apps/{appId}",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "tools": [
+              {
+                "name": "listBooks",
+                "annotations": {
+                  "readOnlyHint": true
+                }
+              },
+              {
+                "name": "addBook"
+              },
+              "… one per operation"
+            ]
+          }
+        }
+      },
+      "note": "One tool per operation in the app's OpenAPI document, named from its operationId (these names are illustrative). GET operations are read-only."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp/apps/{appId}",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+          "name": "listBooks",
+          "arguments": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ \"status\": 200, \"body\": [ … ], \"truncated\": false }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "The control plane makes a short-lived member session for the key's person and calls the app through Edge."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "POST",
+      "path": "/mcp/apps/{appId}",
+      "headers": {
+        "Authorization": "Bearer egp_…"
+      },
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "addBook",
+          "arguments": {
+            "title": "…"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{ \"status\": 201, \"body\": { … }, \"truncated\": false }"
+              }
+            ],
+            "isError": false
+          }
+        }
+      },
+      "note": "Every result is { status, body, truncated }: the app saw the person, as at its own door."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The app refuses the call",
+      "persona": "assistant",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/mcp/apps/{appId}",
+          "headers": {
+            "Authorization": "Bearer egp_…"
+          },
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+              "name": "addBook",
+              "arguments": {}
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "jsonrpc": "2.0",
+              "id": 1,
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "…"
+                  }
+                ],
+                "structuredContent": {
+                  "status": 400,
+                  "code": "app_error",
+                  "title": "The app refused the call",
+                  "detail": "…"
+                },
+                "isError": true
+              }
+            }
+          },
+          "note": "The app's own 4xx comes back as an error result, carrying its code (app_error when it gives none) and its words."
+        }
+      ]
+    }
+  ]
+}
