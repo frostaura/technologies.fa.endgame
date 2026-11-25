@@ -106,6 +106,41 @@ public sealed class PlatformApiTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_evaluator_gets_a_session_for_a_test_member_the_app_resolves_with_its_role_and_nobody_else_can_mint_one()
+    {
+        // The factory's evaluator calls the running app signed in (ARCH-004): the control plane mints an
+        // app-scoped session for a named test member, which the app resolves like any member's.
+        var minted = await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "member-a", role = "builder" }));
+        var session = minted["sessionToken"]!.GetValue<string>();
+        Assert.StartsWith("egs_", session, StringComparison.Ordinal);
+        var resolved = await ControlPlaneApp.Ok(Kit().PostAsJsonAsync("/platform/v1/identity/resolve", new { session }));
+        Assert.Equal("member", resolved["user"]!["kind"]!.GetValue<string>());
+        Assert.Equal("builder", resolved["user"]!["role"]!.GetValue<string>());
+        Assert.Equal("member-a@test-members.endgame.invalid", resolved["user"]!["email"]!.GetValue<string>());
+        Assert.Equal(minted["user"]!["id"]!.GetValue<string>(), resolved["user"]!["id"]!.GetValue<string>());
+
+        // The same persona is the same person every time (an owner check holds across calls); another is someone else.
+        var again = await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "member-a", role = "builder" }));
+        var admin = await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "club-admin", role = "admin" }));
+        Assert.Equal(minted["user"]!["id"]!.GetValue<string>(), again["user"]!["id"]!.GetValue<string>());
+        Assert.NotEqual(minted["user"]!["id"]!.GetValue<string>(), admin["user"]!["id"]!.GetValue<string>());
+        Assert.Equal("admin", (await ControlPlaneApp.Ok(Kit().PostAsJsonAsync("/platform/v1/identity/resolve", new { session = admin["sessionToken"]!.GetValue<string>() })))["user"]!["role"]!.GetValue<string>());
+
+        // Never the Owner's role, never a bad persona, never for an app that does not exist, never without the service token.
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "boss", role = "owner" }), HttpStatusCode.BadRequest);
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "Not A Slug!", role = "builder" }), HttpStatusCode.BadRequest);
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync($"/internal/apps/{Guid.NewGuid()}/test-session", new { persona = "member-a", role = "builder" }), HttpStatusCode.NotFound);
+        var anonymous = app.Internal();
+        anonymous.DefaultRequestHeaders.Authorization = null;
+        await ControlPlaneApp.Expect(await anonymous.PostAsJsonAsync($"/internal/apps/{appId}/test-session", new { persona = "member-a", role = "builder" }), HttpStatusCode.Unauthorized);
+
+        // A test member's session is for this app only.
+        var otherApp = await owner.AppAsync("frostaura/technologies/squash", "other");
+        var otherToken = (await ControlPlaneApp.Ok(service.PostAsync($"/internal/apps/{otherApp}/token", null)))["token"]!.GetValue<string>();
+        await ControlPlaneApp.Expect(await Kit(otherToken).PostAsJsonAsync("/platform/v1/identity/resolve", new { session }), HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task Identity_resolves_a_member_and_an_end_user_from_the_session_edge_hands_the_app()
     {
         // A member: the console's own session cookie, sent by Edge in the access check.

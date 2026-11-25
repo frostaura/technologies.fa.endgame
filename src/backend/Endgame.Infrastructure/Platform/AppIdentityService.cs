@@ -240,6 +240,38 @@ public sealed class AppIdentityService(
         return IssueToken(app.AppId!.Value, "member", memberId, null, clock.GetUtcNow().AddMinutes(options.Value.TokenMinutes));
     }
 
+    /// <summary>The roles a test member may hold: never the Owner's.</summary>
+    public static readonly IReadOnlySet<string> TestMemberRoles = new HashSet<string>(StringComparer.Ordinal) { "admin", "builder", "viewer" };
+
+    /// <summary>
+    /// The factory's evaluator calling the running app signed in (ARCH-004, <i>Checking the work</i>): an app-scoped
+    /// session for a named test member — a person who exists only in this token, the same person for the same app
+    /// and persona every time, with a role below the Owner's. Minted only on the internal API (the service token).
+    /// </summary>
+    public (string Token, AppUserView User, DateTimeOffset ExpiresAt) TestMemberToken(ResolvedScope app, string persona, string role)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        if (string.IsNullOrEmpty(persona) || persona.Length > 30 || !persona.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-') || persona[0] == '-')
+        {
+            throw EndgameProblem.Invalid("persona is a lowercase slug of 1 to 30 letters, digits and hyphens, for example 'member-a'.");
+        }
+
+        if (!TestMemberRoles.Contains(role))
+        {
+            throw EndgameProblem.Invalid("role is admin, builder or viewer; a test member is never the Owner.");
+        }
+
+        var subject = TestMemberId(app.AppId!.Value, persona);
+        var until = clock.GetUtcNow().AddMinutes(options.Value.TokenMinutes);
+        return (IssueToken(app.AppId!.Value, $"test:{role}:{persona}", subject, null, until), TestMember(subject, persona, role), until);
+    }
+
+    private static Guid TestMemberId(Guid appId, string persona) =>
+        new(SHA256.HashData(Encoding.UTF8.GetBytes($"endgame-test-member:{appId:N}:{persona}"))[..16]);
+
+    private static AppUserView TestMember(Guid subject, string persona, string role) =>
+        new(UserId(subject), $"{persona}@test-members.endgame.invalid", $"Test member ({persona})", "member", role);
+
     /// <summary><c>identity/resolve</c>: who an app-scoped token stands for, now. Null when it is invalid, expired, for another app, or no longer admitted.</summary>
     public async Task<ResolvedAppSession?> ResolveAsync(AppCaller caller, string? token, CancellationToken cancellationToken)
     {
@@ -272,6 +304,12 @@ public sealed class AppIdentityService(
         if (payload.S is { } sid && !await db.AppSessions.AsNoTracking().AnyAsync(s => s.OrganisationId == app.OrganisationId && s.Id == sid && s.RevokedAt == null && s.ExpiresAt > now, cancellationToken))
         {
             return null;
+        }
+
+        if (payload.K.StartsWith("test:", StringComparison.Ordinal) && payload.K.Split(':') is [_, var testRole, var persona]
+            && TestMemberRoles.Contains(testRole) && payload.U == TestMemberId(caller.AppId, persona))
+        {
+            return new ResolvedAppSession(TestMember(payload.U, persona, testRole), expires);
         }
 
         if (payload.K == "member")
