@@ -136,7 +136,16 @@ public sealed class ControlPlaneApp : IAsyncDisposable
 
     public AsyncServiceScope Scope() => factory.Services.CreateAsyncScope();
 
-    public async ValueTask DisposeAsync() => await factory.DisposeAsync();
+    /// <summary>
+    /// Stops the app and closes its database's pooled connections: every app has a database of its own, and pools left to
+    /// idle out held the test server's 300 connections until RunnerIntegrationTests were refused ("too many clients").
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        await factory.DisposeAsync();
+        using var pooled = new Npgsql.NpgsqlConnection(ConnectionString);
+        Npgsql.NpgsqlConnection.ClearPool(pooled);
+    }
 
     public static async Task<JsonNode> Expect(HttpResponseMessage response, HttpStatusCode status)
     {
