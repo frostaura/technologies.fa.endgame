@@ -50,10 +50,49 @@ The example feature is **Notes**; replace it with the real product, keeping its 
   scripts from other hosts. Light, calm, one accent. Use the width on large screens.
 - **Errors in the UI:** `api()` throws `ValidationError` (show `errors` by field),
   `NotSignedInError` (go to `signInUrl`), `NotFoundError`, `BudgetExhaustedError`.
+- **Reads stay current by themselves:** after any successful write through `api()` (POST, PUT,
+  PATCH, DELETE), every `useApiQuery` on screen re-reads, keeping its data shown meanwhile. Do not
+  hand-wire refreshes between pages or lists; write through `api()` and every read follows.
+- **The address comes from the router:** `useParams()`, `useSearchParams()`, `useLocation()` —
+  never `window.location.search`, `.hash` or `.pathname`, which do not change when a `<Link>`
+  moves to a page, so the page is not shown. ESLint (`endgame/no-location-read`) fails the build.
+  `location.assign(signInUrl())` to leave the app is fine.
 - **Product events:** `IEndgameTelemetry.Track("note.created")` for what matters to the business.
   Health, traffic, errors and latency are recorded without any code.
 - **Recurring work:** `app.MapSchedule("nightly-digest", "0 3 * * *", run => …)`.
   **Inbound calls** from devices or services: `app.MapWebhook("name", WebhookVerification.HmacSha256(…), …)`.
+
+## Test ids — every screen carries them
+
+The factory's browser checks drive every app the same way, so every app names its elements the
+same way, with `data-testid`. `<entity>` is the singular noun in kebab-case (`note`,
+`court-booking`), `<view>` a page's name (`home`, `note`, `new-note`), `<field>` the API field and
+`<value>` an enum value, both in kebab-case (`WantToRead` → `want-to-read`).
+
+| Test id | On |
+| --- | --- |
+| `page-<view>` | each page's root element, in every state; the first page is `page-home` |
+| `nav-<view>` | each link (or tab) in the app's navigation to that page |
+| `<entity>-list` | the element holding a list of them — also when empty (wrap the empty state) |
+| `<entity>-item` | each item of a list, plus `data-id="<the item's id>"` |
+| `new-<entity>` | the link or button that opens the form to add one |
+| `open-<entity>` | inside an item, the link to its own page |
+| `<entity>-<field>` | each form input, with a visible `<label>` and `name="<api field>"` |
+| `save-<entity>` | the form's submit button |
+| `set-<field>-<value>` | a button that sets one field to one value (`set-status-finished`), on an item or its page |
+
+The Notes example carries all but the last (`page-home`, `note-list`, `note-item`, `open-note`,
+`new-note`, `note-title`, `note-body`, `save-note`, `page-note`, `page-new-note`). A test id is
+never repeated on one screen. The plan item names the test ids its screens carry; the factory
+checks that each one is in `web/src` as `data-testid="…"`. Tests select by them
+(`getByTestId("note-item")`), as the template's do.
+
+## Navigation tests — every link between pages has one
+
+A page can render when its address is loaded directly and still not appear when a link routes to
+it. `web/src/App.test.tsx` renders the real app with `renderApp(<App />, { at: "/" })` from
+`@endgame/appkit/testing` and clicks from page to page, checking the page it lands on by its
+`page-<view>` id. Every link or button that moves between pages gets such a test.
 
 ## Build, test, run
 
@@ -66,7 +105,8 @@ make migration name=AddSomething
 ```
 
 A change is done when `make lint` and `make test` pass with zero warnings, there is a test for the
-behaviour (back end and front end), and `docs/` says what changed.
+behaviour (back end and front end) and a navigation test for each new link between pages, the
+screens carry their test ids, and `docs/` says what changed.
 
 ## When start-up fails
 

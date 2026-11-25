@@ -16,15 +16,18 @@
 6. Models, secrets, email, schedules, webhooks and events behave per `src/appkit/PLATFORM-API.md`, including the error codes.
 7. Traces, metrics and logs reach the platform collector; every platform call goes out through the egress proxy.
 8. Front-end reads distinguish loading, failed, empty and loaded; a URL starting with "/" fails lint.
+9. After a successful write through `api()`, every mounted read re-reads without flashing to loading; a failed re-read shows as failed; a read or a failed write re-reads nothing.
+10. Reading the address from `window.location` fails lint (navigations away stay allowed); a click on a link between pages shows the page it routes to, under a path prefix too.
+11. The template carries the test-id convention in `template/AGENTS.md`, and its tests select by those ids.
 
 ## Tests
 
 | Level | Where | What it proves |
 | --- | --- | --- |
 | Unit + integration (.NET, 48) | `src/appkit/sdk-dotnet/Endgame.AppKit.Tests` | 2–7, against a real PostgreSQL and the in-memory dev platform |
-| Unit (web SDK, 54) | `src/appkit/sdk-web/src/**/*.test.ts(x)` | `api()`/errors, router base, sign-in URLs, hooks' three states, the ESLint rule (RuleTester), token layer |
+| Unit (web SDK, 83) | `src/appkit/sdk-web/src/**/*.test.ts(x)` | `api()`/errors, router base, sign-in URLs, hooks' three states, 9 (two reads re-read after one write), the ESLint rules (RuleTester), `renderApp` (10), token layer |
 | Template (.NET, 10) | `src/appkit/template/api.tests` | Notes API end to end; pages under a prefix; health; OpenAPI ids |
-| Template (web, 13) | `src/appkit/template/web/src/**/*.test.ts(x)` | 8 — each page's states; the lint rule is wired into the app's config |
+| Template (web, 21) | `src/appkit/template/web/src/**/*.test.ts(x)` | 8, 10, 11 — each page's states by test id; navigation by clicking through the real app (`App.test.tsx`); both lint rules are wired into the app's config |
 | Browser proof (10) | `src/appkit/proof` (`make -C src/appkit proof`) | 1 and 7 on the real image, desktop and phone, through the dev edge, at four-segment addresses (`/acme/labs/demo/notes/`, `acme.localhost/labs/demo/notes/`) |
 | Browser proof, real Edge (8 + 1 skipped) | `src/appkit/proof/edge.sh` (run by `make e2e-stack`) | 1 on an app Dock built from the untouched template, through the real stack's Edge: the edge's own sign-in page with the development sign-in, and on the subdomain the hand-off. 7 is the dev platform's state view, so it is skipped there; `TEST-090` checks telemetry in the real control plane. |
 
@@ -33,6 +36,7 @@
 - Contract checks: the same app with `.WithName` or `.WithDescription` removed fails start-up (ApiContractTests); with them it starts.
 - Base rewrite: the same index served with prefix `null`, `/acme/labs/demo` and `/acme/labs/demo/` yields `/`, `/acme/labs/demo/`, `/acme/labs/demo/` (HostingTests).
 - Signature: changing the key, the body or the clock by 6 minutes each fails verification.
+- Reads after a write: the test that two mounted reads both re-read after one `PATCH` failed on the kit before the change (each read only once per mount); the same write answered `400` re-reads nothing.
 - Proof: the first run failed on the path form because client navigation home writes the prefix without its trailing slash — the test caught it; the expectation now also reloads there through Edge's redirect.
 
 ## Against the running system

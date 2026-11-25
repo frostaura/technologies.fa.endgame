@@ -44,3 +44,37 @@ tester.run("no-root-relative-url", rule, {
     { code: '<link href="//fonts.example.com/inter.css" />', errors: [{ messageId: "otherHost" }] },
   ],
 });
+
+const locationRule = plugin.rules?.["no-location-read"] as Parameters<RuleTester["run"]>[1];
+
+tester.run("no-location-read", locationRule, {
+  valid: [
+    // Navigations away from the app (or a full reload) are what `location` is for.
+    "location.assign(signInUrl())",
+    "window.location.assign(error.signInUrl ?? signInUrl())",
+    "window.location.replace(signOutUrl())",
+    "location.reload()",
+    "window.location.href = signInUrl()",
+    "window.location = signInUrl()",
+    // The router's own location is the right way to read the address.
+    "const location = useLocation(); const where = location.pathname + location.search;",
+    "function Page({ location }) { return location.hash; }",
+    "const [params] = useSearchParams(); params.get('court');",
+    "const { id } = useParams();",
+    // Other objects' `location` properties are not the address.
+    "const where = court.location.name;",
+  ],
+  invalid: [
+    { code: "const q = new URLSearchParams(window.location.search);", errors: [{ messageId: "read", data: { property: "search", use: "useSearchParams()" } }] },
+    { code: "const q = new URLSearchParams(location.search);", errors: [{ messageId: "read", data: { property: "search", use: "useSearchParams()" } }] },
+    { code: "const tab = window.location.hash.slice(1);", errors: [{ messageId: "read", data: { property: "hash", use: "useLocation().hash" } }] },
+    { code: "const id = location.pathname.split('/').pop();", errors: [{ messageId: "read", data: { property: "pathname", use: "useParams()" } }] },
+    { code: "const here = document.location.href;", errors: [{ messageId: "read" }] },
+    { code: "const here = globalThis.location.href;", errors: [{ messageId: "read" }] },
+    { code: "const here = window.location['search'];", errors: [{ messageId: "read" }] },
+    { code: "const { search } = window.location;", errors: [{ messageId: "whole" }] },
+    { code: "const where = String(window.location);", errors: [{ messageId: "whole" }] },
+    { code: "const where = location.toString();", errors: [{ messageId: "read" }] },
+    { code: "const host = window.location.origin;", errors: [{ messageId: "host", data: { property: "origin" } }] },
+  ],
+});
