@@ -197,7 +197,7 @@ fac-down: .env
 	-docker images -q --filter label=endgame.dock=$(FAC_PROJECT) | xargs docker image rm -f
 	-test -f $(FAC_STATE)/apps && for app in $$(cat $(FAC_STATE)/apps); do \
 		docker images --format '{{.Repository}}:{{.Tag}}' | grep "^app-$$app:" | xargs docker image rm -f; done
-	-rm -f $(FAC_STATE)/apps $(FAC_STATE)/report.json
+	-rm -f $(FAC_STATE)/apps
 
 e2e-factory: .env
 	$(MAKE) fac-up
