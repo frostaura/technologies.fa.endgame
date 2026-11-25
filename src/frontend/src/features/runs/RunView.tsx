@@ -11,10 +11,11 @@ import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
 import { useAnswerApprovalMutation, useControlRunMutation, useGetMeQuery, useGetRunQuery } from "@/store/api";
-import type { Run, RunStatus } from "@/store/types";
+import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
-import { accuracy, deriveRun, describeEvent, isTerminal, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone, type TraceStep } from "./runModel";
+import { accuracy, deriveRun, isTerminal, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
+import { buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
 import { useRunStream } from "./useRunStream";
 
 const STATUS: Record<RunStatus, { label: string; tone: BadgeTone }> = {
@@ -304,22 +305,22 @@ function PlanPanel({ plan }: { plan: DerivedPlan }) {
   );
 }
 
-function Trace({ events, mode, derived, stream, terminal }: { events: { seq: number; type: string; at: string; payload: Record<string, unknown> }[]; mode: Mode; derived: DerivedRun; stream: StreamStatus; terminal: boolean }) {
+function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]; mode: Mode; derived: DerivedRun; stream: StreamStatus; terminal: boolean }) {
   const planItem = (id: string) => derived.plan?.items.find((i) => i.id === id)?.text ?? null;
-  const steps = events.map((e) => describeEvent(e, mode, planItem)).filter((s): s is TraceStep => s !== null);
+  const timeline = buildTimeline(events, mode, planItem);
   return (
     <section aria-labelledby="trace-title" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="trace-title" className="text-lg font-semibold">
           {mode === "technical" ? "Trace" : "Step by step"}
         </h2>
-        <span className="text-sm text-ink-muted">
+        <span className="text-sm text-ink-muted" data-testid="action-count">
           {mode === "technical"
-            ? `${plural(derived.modelCalls, "model call")} · ${plural(derived.toolCalls, "tool call")} · ${plural(derived.toolDenials, "denial")}`
-            : `${plural(derived.toolCalls, "action")} taken${derived.toolDenials > 0 ? `, ${formatNumber(derived.toolDenials)} refused by your rules` : ""}`}
+            ? `${plural(timeline.modelCalls, "model call")} · ${plural(timeline.toolCalls, "tool call")} · ${plural(timeline.denials, "denial")}`
+            : `${plural(timeline.actions, "action")} taken${timeline.denials > 0 ? `, ${formatNumber(timeline.denials)} refused by your rules` : ""}`}
         </span>
       </div>
-      {steps.length === 0 ? (
+      {timeline.items.length === 0 ? (
         stream === "failed" ? null : terminal ? (
           <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
             This work recorded no steps.
@@ -332,32 +333,84 @@ function Trace({ events, mode, derived, stream, terminal }: { events: { seq: num
         )
       ) : (
         <ol aria-label="Steps" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-          {steps.map((s) => (
-            <li key={s.seq} data-seq={s.seq} className={cn("flex gap-3 border-b px-4 py-3 last:border-b-0 sm:px-5", RISE)}>
-              <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xs", TONE_CLASS[s.tone])}>
-                <Icon name={s.icon} className="size-4" />
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                  <span className="break-words font-medium">{s.title}</span>
-                  <span className="flex items-baseline gap-3 text-sm text-ink-muted">
-                    {s.credits && <span className="font-medium text-success-text">{s.credits}</span>}
-                    <time dateTime={s.at}>{formatTime(s.at)}</time>
-                  </span>
-                </div>
-                {s.detail && <p className="whitespace-pre-line break-words text-ink-body">{s.detail}</p>}
-                {s.raw && s.raw !== "{}" && (
-                  <details className="mt-1">
-                    <summary className="min-h-touch cursor-pointer py-2 text-sm text-ink-muted">Raw event #{s.seq}</summary>
-                    <pre className="overflow-x-auto rounded-xs bg-ground p-3 font-mono text-xs">{s.raw}</pre>
-                  </details>
-                )}
-              </div>
-            </li>
+          {timeline.items.map((item) => (
+            <TimelineRow key={item.key} item={item} />
           ))}
         </ol>
       )}
     </section>
+  );
+}
+
+function TimelineRow({ item }: { item: TimelineItem }) {
+  if (item.kind === "group") return <GroupRow group={item} />;
+  return (
+    <li data-seq={item.seq} className={cn("flex gap-3 border-b px-4 py-3 last:border-b-0 sm:px-5", RISE)}>
+      <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xs", TONE_CLASS[item.tone])}>
+        <Icon name={item.icon} className="size-4" />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <span className="break-words font-medium">{item.title}</span>
+          <span className="flex items-baseline gap-3 text-sm text-ink-muted">
+            {item.credits && <span className="font-medium text-success-text">{item.credits}</span>}
+            {item.at && <time dateTime={item.at}>{formatTime(item.at)}</time>}
+          </span>
+        </div>
+        {item.detail && <p className="whitespace-pre-line break-words text-ink-body">{item.detail}</p>}
+        {item.raw && item.raw !== "{}" && (
+          <details className="mt-1 min-w-0">
+            <summary className="min-h-touch cursor-pointer py-2 text-sm text-ink-muted">Raw event #{item.seq}</summary>
+            <pre className="max-h-96 overflow-auto rounded-xs bg-ground p-3 font-mono text-xs">{item.raw}</pre>
+          </details>
+        )}
+      </div>
+    </li>
+  );
+}
+
+const GROUP_STATUS: Record<TimelineGroup["status"], { label: string; tone: BadgeTone }> = {
+  working: { label: "Working", tone: "solid" },
+  done: { label: "Done", tone: "success" },
+  stopped: { label: "Stopped", tone: "attention-strong" },
+};
+
+/** A sub-agent's piece of the work: one line with its outcome, its own steps folded beneath. */
+function GroupRow({ group }: { group: TimelineGroup }) {
+  const credits = groupCredits(group);
+  const status = GROUP_STATUS[group.status];
+  return (
+    <li data-group={group.agent} className={cn("border-b last:border-b-0", RISE)}>
+      <details open={group.status === "working"} className="group/sub">
+        <summary className="flex min-h-touch cursor-pointer list-none gap-3 px-4 py-3 hover:bg-ground sm:px-5 [&::-webkit-details-marker]:hidden">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xs bg-violet-tint text-violet">
+            <Icon name="contractors" className="size-4" />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="break-words font-medium">{group.title}</span>
+              <span className="flex items-center gap-2 text-sm text-ink-muted">
+                {group.searches > 0 && <span>{plural(group.searches, "search", "searches")}</span>}
+                {credits && <span className="font-medium text-success-text">{credits}</span>}
+                <Badge tone={status.tone}>{status.label}</Badge>
+              </span>
+            </span>
+            {group.outcome && <span className="break-words text-ink-body">{group.outcome}</span>}
+            <span className="text-sm text-primary-link">
+              <span className="group-open/sub:hidden">Show its {plural(group.items.length, "step")}</span>
+              <span className="hidden group-open/sub:inline">Hide its steps</span>
+            </span>
+          </span>
+        </summary>
+        {group.items.length > 0 && (
+          <ol aria-label={`Steps: ${group.title}`} className="ml-6 flex flex-col border-l-2 border-violet-line sm:ml-9">
+            {group.items.map((item) => (
+              <TimelineRow key={item.key} item={item} />
+            ))}
+          </ol>
+        )}
+      </details>
+    </li>
   );
 }
 

@@ -225,14 +225,14 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         run.estimateCredits = num(p, "credits");
         break;
       case "estimate.scored": {
-        const estimated = num(p, "estimated");
-        const actual = num(p, "actual");
-        if (estimated !== null && actual !== null) run.scored = { estimated, actual };
+        const scored = readScored(p);
+        if (scored) run.scored = scored;
         break;
       }
       case "message": {
+        // A message as written, for a person: harness bookkeeping (`kind`: agent.start, nudge…) is not one.
         const text = str(p, "text");
-        if (text) run.messages.push({ seq: e.seq, text, from: str(p, "from"), at: e.at });
+        if (text && !str(p, "kind")) run.messages.push({ seq: e.seq, text, from: str(p, "from"), at: e.at });
         break;
       }
       default:
@@ -359,14 +359,13 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     case "estimate.made":
       return { ...base, tone: "money", icon: "credits", title: "Estimated the cost", credits: credits(num(p, "credits")) };
     case "estimate.scored": {
-      const estimated = num(p, "estimated");
-      const actual = num(p, "actual");
+      const scored = readScored(p);
       return {
         ...base,
         tone: "money",
         icon: "credits",
         title: "Scored the estimate",
-        detail: estimated !== null && actual !== null ? `Estimated ${formatCredits(estimated)}, cost ${formatCredits(actual)} (${accuracy(estimated, actual)})` : null,
+        detail: scored ? `Estimated ${formatCredits(scored.estimated)}, cost ${formatCredits(scored.actual)} (${accuracy(scored.estimated, scored.actual)})` : null,
       };
     }
     case "message":
@@ -375,6 +374,13 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
       if (!technical) return null;
       return { ...base, tone: "quiet", icon: "plan", title: e.type };
   }
+}
+
+/** `estimate.scored` is `{ expectedCredits, actualCredits, nonBillableCredits, modelCalls }`; older runs wrote `{ estimated, actual }`. */
+export function readScored(p: Record<string, unknown>): { estimated: number; actual: number } | null {
+  const estimated = num(p, "expectedCredits") ?? num(p, "estimated");
+  const actual = num(p, "actualCredits") ?? num(p, "actual");
+  return estimated !== null && actual !== null ? { estimated, actual } : null;
 }
 
 function itemName(p: Record<string, unknown>, planItem: (id: string) => string | null): string {

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useGetCreditsQuery, useGetMeQuery } from "@/store/api";
 import type { BudgetLine, Credits } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
+import { paceLine } from "./creditsModel";
 
 export function CreditsView() {
   const me = useGetMeQuery(undefined);
@@ -49,9 +50,7 @@ function CreditsBody({ credits }: { credits: Credits }) {
         <div className="relative flex flex-col gap-1.5">
           <span className="text-eyebrow font-semibold uppercase text-primary-ink-soft">{negative ? "Below zero" : "Credits left"}</span>
           <h1 className="font-display text-5xl font-bold sm:text-balance">{formatNumber(credits.balance)}</h1>
-          <span className="text-primary-tint">
-            {credits.monthsLeftAtPace !== null ? `At this month’s pace, about ${plural(Math.round(credits.monthsLeftAtPace), "month")}.` : "Nothing spent yet this month, so there is no pace to project."}
-          </span>
+          <span className="text-primary-tint">{paceLine(credits)}</span>
         </div>
         <div className="relative flex flex-wrap gap-8">
           {[
