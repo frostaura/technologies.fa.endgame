@@ -599,22 +599,26 @@ function dashboard(a: (m: number) => string): (SavedQuestion & { appId: string }
       error: null,
       technical: null,
     },
-    {
-      appId: IDS.tableBookings,
-      id: uuidFor("q:old"),
-      question: "How many league blocks were refunded?",
-      answer: "",
-      sql: "select count(*) from events where name = 'deposit.refunded'",
-      chart: null,
-      columns: [],
-      rows: [],
-      truncated: false,
-      askedAt: a(20 * 24 * 60),
-      ranAt: a(1),
-      error: "It can no longer be worked out from what the app records. Ask it again, and keep the new answer.",
-      technical: { sql: "select count(*) from events where name = 'deposit.refunded'", error: "the event deposit.refunded is no longer recorded" },
-    },
   ];
+}
+
+/** A kept question whose query no longer runs: what it counted is no longer recorded (scenario `dashboard-question-broken`). */
+export function brokenQuestion(a: (m: number) => string): SavedQuestion & { appId: string } {
+  return {
+    appId: IDS.tableBookings,
+    id: uuidFor("q:old"),
+    question: "How many league blocks were refunded?",
+    answer: "",
+    sql: "select count(*) from events where name = 'deposit.refunded'",
+    chart: null,
+    columns: [],
+    rows: [],
+    truncated: false,
+    askedAt: a(20 * 24 * 60),
+    ranAt: a(1),
+    error: "It can no longer be worked out from what the app records. Ask it again, and keep the new answer.",
+    technical: { sql: "select count(*) from events where name = 'deposit.refunded'", error: "the event deposit.refunded is no longer recorded" },
+    };
 }
 
 function verdictDocs() {
