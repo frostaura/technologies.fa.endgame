@@ -7,7 +7,7 @@
 | **Primary actor** | Owner |
 | **Scope** | Console, through Edge to the Control plane's public API (ARCH-004) |
 | **Cascade level** | Organisation, and any node beneath it the owner selects |
-| **Status** | Built (console side, Phase 2) |
+| **Status** | Built (console side, Phases 2 and 3) |
 
 ## Goal
 
@@ -35,10 +35,19 @@ and credit.
 3. **Start**: on first run the owner names the organisation; the idea and optional constraints are
    described; the research estimate is shown before anything is charged; research starts.
 4. **Run view**: the live, resumable trace — plan, tasks, cost (estimate, spent, held), approvals
-   answered inline, pause / resume / cancel. Normal mode speaks plainly and never names
-   infrastructure; technical mode (header toggle, remembered) shows models, tools, rules and raw events.
-5. **Verdict**: the verdict, who already does this, the gap, who would want it, what would change it,
-   and the decision — change, overrule (confirmed, recorded as an overrule) or drop.
+   answered inline, pause / resume / cancel. Normal mode speaks plainly: `message` events without a
+   `kind` as written (each milestone once), each sub-agent as its title with a one-line outcome and its
+   own steps folded beneath it, tool and model work summarised ("Read 4 files", "Ran the tests — 12
+   passed"), and actions counted as ARCH-004 counts them (tool calls plus contractors briefed). It never
+   shows a payload, a model, a tool's arguments or the rule that decided; technical mode (header toggle,
+   remembered) shows every event raw, still grouped under its sub-agent.
+5. **Verdict**: the agreed verdict document (ARCH-004, *The verdict document*): the case against, argued
+   first; existing products with what each does and its source; the gap; demand and its signals; what to
+   change; what would change the verdict; the red-line screen; the method (strands, searches, sources,
+   confidence, rules applied). Decisions as the control plane allows them: build after build or change;
+   overrule (confirmed, recorded) only over a "do not build"; change, with what should change, sent as the
+   note for a new round of research; drop (confirmed). Over a breached red line neither build nor overrule
+   is offered, and the page says why. Normal mode never names a repository.
 6. **App**: health, both addresses, today's telemetry, cost against cap; running (sleeps / always on)
    and who can open it, changed optimistically. Making an app public waits on an explicit confirmation
    dialog. Telemetry and running cost the app has not measured yet read "not measured yet", never zero.
@@ -56,14 +65,40 @@ and credit.
 10. **System status** is reachable only in technical mode.
 11. **The header** is one row on a desktop and at most two on a phone (375–412 px): the mark, where you
     are (its last two steps) and sign-out; then the mode toggle and the balance.
+12. **The workforce on the chart** (`GET /api/tree`): employees on every node in their own colour with
+    role and what they are doing now, contractors as one spinning line, paused and idle marked; hire
+    proposals and idle employees in "needs you". The org chart can also be read as a graph from
+    `GET /api/ontology` — *who works on what* (owns, works-on, reports-to) and *how data flows* (depends-on,
+    data-flows-to): a layered diagram that pans on a desktop, a readable list on a phone and for screen
+    readers. Selecting an employee scopes the conversation to them and offers their screen.
+13. **Employee** (`/employees/{id}`): header with reassign, change budget, pause / resume, let go (confirmed;
+    never a standing hire) and rehire; track record (work accepted and sent back, repairs not charged,
+    cost against budget, estimate accuracy); the job description in plain words (model tier as
+    "thinking power", tools as what they let it do); recent work (its current and last runs and the tasks
+    it held) linking to runs; contractors it briefed; a conversation with it; its memory — read, add,
+    correct, remove (with why), the last review and what it merged, removed and corrected, and "review now".
+14. **Hiring** (`/hires?scope=`, `/hires/{id}`): proposals waiting and decided; one proposal's drafted job,
+    expected monthly cost and whether it fits the budget; accept (with a note), edit, or decline (confirmed).
+    Contractor roles that keep recurring are proposed as permanent hires.
+15. **Autonomy** (`/autonomy?scope=`, any level): auto-mode or checkpoints; the start, plan and hire
+    checkpoints; a rule set per stage (may not, asks first, may do). Each value shows the level that set it,
+    "inherited from …" otherwise, and "use the inherited setting" / "remove here". Admin and above change
+    them; others read. Rules read in plain words in normal mode and as the harness reads them in technical.
 
 ## Alternate and failure flows
 
 - **A1 — a read fails.** Every screen shows loading, empty, loaded and failed as distinct states. A
   failed read is recorded on the page with the reason and a retry; it is never drawn as an empty list.
-  A failed refresh keeps the last good data, marked stale.
+  A failed refresh keeps the last good data, marked stale. **An answer in an unexpected shape** is
+  refused at the boundary by that endpoint's guard (`src/store/guards.ts`) and drawn as a failed read
+  naming the field, never passed to a component.
+- **A7 — something crashes while drawing.** Every route and every major panel sits in an error boundary:
+  the page says, in plain words, which part stopped working and what failed, and offers "try again" and
+  "back to the org chart". Nothing outside the boundary is lost; a crash never leaves a blank screen.
 - **A2 — a write is refused.** Optimistic changes (app settings, pause / resume / cancel, approvals,
-  a secret set or removed, an invitation or a removed share) roll back, and the reason stays on the page.
+  a secret set or removed, an invitation or a removed share, an employee paused or re-budgeted, a memory
+  entry added, corrected or removed, a hire edited or decided, autonomy, a checkpoint or a rule set) roll
+  back, and the reason stays on the page.
 - **A6 — a role is missing.** A 403 (secrets below Admin, the operator log for anyone but the Owner,
   sharing below Admin) is drawn as a failed read with the control plane's reason, never as an empty list.
 - **A3 — the event stream drops.** It reconnects with `after=<last sequence held>`; repeats are dropped.
@@ -95,16 +130,20 @@ is camelCase, errors are problem details. What the console relies on beyond ARCH
 | `GET /api/runs/{id}` | Also `employeeId`, `conversationId`, `budgetExhausted`, `outcome`, `summary`, `createdAt`. A conversation run's log opens with the owner's own `message { from: "owner", text }`. |
 | `GET /api/conversations?scope=&employeeId=` | `{ scope, conversationId \| null, employeeId \| null, messages[] { runId, seq, at, from, text } }`, oldest first, at most 200. |
 | `GET /api/apps/{id}` | `telemetry` and `runningCost` are **null** until measured; also `status`, `version`, `publishedAt`, `idleMinutes`. |
-| `GET /api/credits?scope=` | Also `heldCredits` and `available`. |
+| `GET /api/credits?scope=` | Also `heldCredits` and `available`. A zero or negative balance has no "months left"; the page says what is left of the overdraft instead. |
+| `GET /api/ideas/{id}` | `verdict` is the agreed verdict document (older runs' `{ evidence }` sections and products as text are read too); `redLine` names a breached red line by its code; `decision.via`. |
+| `GET /api/tree` | Workers also carry `status`, `idle`, `standing`, `briefedBy`; `needsYou` adds `hire` and `idle`. Older answers without them still read. |
+| `GET /api/employees/{id}`, `…/memory`, `…/memory/changes`, `/api/hires*`, `/api/employees/recurring-roles`, `/api/autonomy*`, `/api/ontology`, `/api/tasks` | As ARCH-004 *Workforce*, *Autonomy*, *Ontology*, field for field. An employee's recent work is read from `GET /api/tasks?scope=` filtered by `holderEmployeeId`, plus its `currentRun` and `lastRunId`. |
 | `GET/PUT/DELETE /api/secrets` | `{ scope, effective[] { name, setAtLevel, setAtPath, setAt, inherited, overrides[] }, setBelow[] { name, setAtPath } }`; `PUT { scope, name, value }` is sent with `fetch`, never through the store. |
 | `GET/POST/DELETE /api/apps/{id}/shares` | `[{ email, invitedAt, registered }]`; `POST { email }` → `{ email, invitationCode, expiresAt }`, sent with `fetch` so the code never reaches the store. |
 | `GET /api/audit/operator-access?organisation=` | `[{ id, at, action, operator { id, email, displayName }, detail }]`; 403 for anyone but the Owner. |
 
 ## Not built, because the contract has no backend for it
 
-The Employee screen (job, track record, memory), the app's "ask about this app", its version history
-and download, hire proposals, changing the overdraft limit and asking for a
-top-up. Each appears in the approved design and returns when its endpoint exists.
+The app's "ask about this app", its version history and download, changing the overdraft limit and
+asking for a top-up. Each appears in the approved design and returns when its endpoint exists. An
+employee's full run history needs a `GET /api/runs?employeeId=` the public API does not have yet; its
+recent work is its tasks and its current and last runs until then.
 
 ## Acceptance
 
