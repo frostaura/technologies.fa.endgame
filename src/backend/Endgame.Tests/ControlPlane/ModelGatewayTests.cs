@@ -55,7 +55,7 @@ public sealed class ModelGatewayTests(PostgresServer postgres) : IAsyncLifetime
     private decimal ReservationFor(object chat)
     {
         var options = app.Services.GetRequiredService<ModelGatewayOptions>();
-        var credits = app.Services.GetRequiredService<CreditOptions>();
+        var credits = app.Services.GetRequiredService<Endgame.Infrastructure.Credits.PricingService>().Credits();
         var request = JsonSerializer.Deserialize<ChatRequest>(JsonSerializer.Serialize(chat, ControlPlaneApp.Web), ControlPlaneApp.Web)!;
         return ModelGateway.Prepare(options, credits, request, options.Routes[request.TaskType], request.Stream).ReservedCredits;
     }

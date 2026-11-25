@@ -65,6 +65,9 @@ public sealed class ControlPlaneApp : IAsyncDisposable
             builder.UseSetting("Smtp:Host", "");
             builder.UseSetting("Scheduler:Enabled", "false");
             builder.UseSetting("Email:DispatchEnabled", "false");
+            // No ops service in a test (reserved names use the built-in list) and no background notification sweep.
+            builder.UseSetting("Services:Ops", "");
+            builder.UseSetting("Notifications:Enabled", "false");
             foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
             {
                 builder.UseSetting(key, value);
@@ -95,6 +98,24 @@ public sealed class ControlPlaneApp : IAsyncDisposable
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ServiceToken);
         return client;
     }
+
+    /// <summary>A client that presents a bearer token (an MCP client's personal access token) and no cookie.</summary>
+    public HttpClient Bearer(string token)
+    {
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = BaseAddress, HandleCookies = false });
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    /// <summary>An MCP client (the SDK's own) on <paramref name="path"/>, authenticated by <paramref name="token"/>.</summary>
+    public async Task<ModelContextProtocol.Client.McpClient> McpAsync(string token, string path = "/mcp") =>
+        await ModelContextProtocol.Client.McpClient.CreateAsync(new ModelContextProtocol.Client.HttpClientTransport(
+            new ModelContextProtocol.Client.HttpClientTransportOptions { Endpoint = new Uri(BaseAddress, path), TransportMode = ModelContextProtocol.Client.HttpTransportMode.StreamableHttp },
+            Bearer(token), loggerFactory: null, ownsHttpClient: true));
+
+    /// <summary>A personal access token made through the console's API by a signed-in person.</summary>
+    public static async Task<string> TokenAsync(HttpClient person, string organisation, string? role = null) =>
+        (await Created(person.PostAsJsonAsync("/api/tokens", new { name = "test client", organisation, role })))["token"]!.GetValue<string>();
 
     /// <summary>A client signed in through the development sign-in as <paramref name="email"/>.</summary>
     public async Task<HttpClient> SignInAsync(string email = "owner@frostaura.net", string? displayName = null)
