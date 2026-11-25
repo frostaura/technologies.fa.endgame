@@ -409,6 +409,19 @@ public sealed class AskTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_aggregated_list_comes_back_as_a_list_not_a_type_name()
+    {
+        openRouter.Chat = Answers(
+            """{"sql": "SELECT count(*) AS errors, array_agg(DISTINCT status) AS statuses, array_agg(DISTINCT route) AS routes FROM errors", "chart": {"kind": "table"}}""",
+            """{"answer": "Two errors."}""");
+        var answer = await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/apps/{bookings}/ask", new { question = "What errors were there?" }));
+        var row = answer["rows"]![0]!;
+        Assert.IsType<JsonArray>(row["statuses"]);
+        Assert.IsType<JsonArray>(row["routes"]);
+        Assert.DoesNotContain("System.", row.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task The_prompt_names_the_custom_events_this_app_records_and_no_other_apps()
     {
         // A live model declined "How many books were added today?" — it could not know the app records book.created.
