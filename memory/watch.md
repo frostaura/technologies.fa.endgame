@@ -11,13 +11,23 @@ Found by merging the build lanes and by the first real run through the console o
 first lanes' debts (operator rights, margin, service addresses, contract docs, missing console
 screens) were paid by later lanes; what is listed here is still owed.
 
-**Found by the first real research run (being fixed in the factory and second console lanes)**
-- **The verdict page crashed to a blank screen**: the Runner wrote the verdict in one shape, the
-  console expected another, and nothing validated it. No route had an error boundary.
-- Normal mode showed raw contractor output labelled "Update", repeated the verdict three times,
-  and counted "0 actions taken".
-- Research strands were capped at two web searches each and reported low confidence.
-- **No real end-to-end factory build has finished.** The research half is proven; the build half is not.
+**Found by the orchestrator's own Chrome walk of the real stack, 2026-11-25 — owed**
+- **"Ask about this app" fails with a real model**: it answered `column "id" does not exist (422)`,
+  and showed that raw database error in normal mode. Only ever tested with a faked model.
+- **An employee's track record and recent work are empty after real builds** ("No work judged yet",
+  "has not taken on any tasks yet") although the engineer built the whole app: factory work is not
+  attributed to tasks the track record reads.
+- Estimate accuracy on the credits page reads "Within 0%" when every estimate was far too high.
+- The monthly cost shown for "sleeps when unused" (about 113 credits) and "always on" (about 184)
+  is far from what the app actually cost (0.3 this month): the hosting rates are placeholders.
+- A build run's page still shows "The verdict is ready — Read it".
+- The export fails until Dock serves the data dump (the wiring lane).
+
+**Seen working in that walk** — home with the real org chart, the verdict page on the agreed
+schema, the run view in plain language and in technical mode, the app page with real history,
+credits, people, AI-assistant keys, notifications, an employee's screen with real memory, autonomy,
+both graph views; and an app built by the factory, opened at its own address, taking a book and
+keeping it across a reload.
 
 **Founder's numbers still owed**
 - The credit margin is 1.0 (none); the hosting rates and the 500-credit monthly model cap per app
