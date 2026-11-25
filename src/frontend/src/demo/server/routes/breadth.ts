@@ -204,6 +204,19 @@ area("BreadthEndpoints", {
     return ok({ version, published: true, madePrivate, publishError: null });
   },
 
+  "POST apps/{id}/republish": (req, { world }) => {
+    const a = app(world, req.params.id ?? "");
+    requireRole(world, a.path, "builder");
+    const newest = (world.versions[a.id] ?? [])[0];
+    if (!newest) throw conflict("Nothing has been built for this app yet, so there is no version to publish again.");
+    for (const v of world.versions[a.id] ?? []) v.live = v === newest;
+    Object.assign(a, { status: "running", health: "healthy", healthSummary: "Running again: its newest version was built and restarted.", running: a.runningSetting === "always-on" ? "always-on" : "awake", version: newest.commit, pausedReason: a.pausedReason });
+    if (a.running === "paused") a.running = "awake";
+    world.notifications = world.notifications.map((n) => (n.kind === "app.crashed" && n.subject?.id === a.id ? { ...n, read: true } : n));
+    world.changed.push("Versions", "App", "Tree");
+    return ok({ version: newest, published: true, madePrivate: false, publishError: null });
+  },
+
   "GET apps/{id}/export": (req, { world }) => {
     const a = app(world, req.params.id ?? "");
     requireRole(world, a.path, "owner");

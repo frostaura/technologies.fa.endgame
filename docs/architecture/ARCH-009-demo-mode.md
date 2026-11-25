@@ -21,7 +21,7 @@ builds, approvals and conversations move as they do live. It is published as sta
 | Component | Where | Owns | Never |
 | --- | --- | --- | --- |
 | Transport seam | `store/api.ts` (`installTransport`, `apiFetch`) | Where requests go: by default the browser's own `fetch` against this origin, unchanged. | Knows the demo exists. The product build tree-shakes `installTransport` away. |
-| Hash routing | `lib/router.ts` (`routeByHash`) | Console addresses after `#`, so a static host needs no rewrites. | Changes the product, which stays on the History API. |
+| Hash routing | `lib/router.ts` (`routeByHash`) | Console addresses after `#`, so a static host needs no rewrites. An address naming the page itself (its path and query, as code that reads `window.location` to come back later writes it) is the console's root. | Changes the product, which stays on the History API. |
 | Entry | `demo/main.tsx` | Boot order: hash routing, the host, the device, the bridge, the first route. | Is imported by `src/main.tsx` — the product entry never imports `src/demo`. |
 | Host | `demo/host.ts` | The world, the clock's 100 ms tick, sessionStorage, telling the console's cache what changed (`api.util.invalidateTags`), persona and scenario switches. | Holds console state: a reset makes a new Redux store. |
 | Fake control plane | `demo/server/**` | One file per control-plane endpoint file in `routes/`, the same role rules (`access.ts`) and the same refusal words (`http.ts` problem bodies), and a fake `EventSource` for run logs. | Answers an address it has no handler for: that is a loud console error naming it, and a failing unit test. |
@@ -69,6 +69,7 @@ app's address opens its pages inside the demo; anything else shows a small notic
 | `end-user` | Signed out of the console; a registered end user of a shared app | |
 | `signed-out` | Nobody | |
 | `first-run` | Kit Marlow, signed in on a fresh install with no organisation | |
+| `two-organisations` | Kai Moreno, a Builder at Northwind and an Admin at Quayside Bakery (the organisation switcher) | `two-orgs` |
 
 A persona switch keeps the world; a scenario switch builds a new one.
 
@@ -93,6 +94,10 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `employee-memory`, `hire-pending` | An employee with history; a hire waiting | |
 | `low-credits`, `at-overdraft-limit`, `budget-spent` | Credits nearly gone; the overdraft limit reached; a division's budget spent | |
 | `god-mode` | Every organisation, as an operator | |
+| `manage-tree` | Manage: the archived division Events (with history, so it cannot be deleted) and the empty project Gift Cards (which can) | `archived-division` |
+| `account` | Your account: passkeys and roles | |
+| `employee-released` | An employee who was let go, memory archived | `employee-let-go` |
+| `two-organisations` | A person in two organisations | |
 | `screening-offline` | God mode with no model to screen a new organisation (it needs the operator's own decision) | |
 
 ### Named moments (`clock { seek }`)
@@ -205,6 +210,17 @@ A handler that changes something also gets its plain title in `server/operatorLo
 change inside an entered organisation is written to that organisation's operator log as
 `admin.<METHOD-path>` with that title (`OperatorActionLog.cs`), and an untitled one reads "Changed
 something as an Admin".
+
+The cascade (`GET/PUT/DELETE /api/cascade`, `GET /api/cascade/below`) is `server/cascade.ts`: one
+adapter per kind over the world's own stores — a budget is the same cap the credits page reads, a
+secret the same name the secrets page lists, an app's idle minutes the app's own — so a value set on
+one screen is the value every other screen shows. A new kind or key with no store of its own lands
+in `world.settings` or `world.context`.
+
+The coverage test reads `store/api.ts` (every endpoint block, `injectEndpoints` too) with
+`server/consoleEndpoints.ts`, which resolves literals, nested templates, ternaries and lookups in
+a constant map (`PLURAL[level]`) to every address they can make; it fails, naming the endpoint, only
+when an address truly cannot be read.
 
 ### Adding a scenario
 

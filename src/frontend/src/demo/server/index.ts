@@ -7,6 +7,7 @@ import "./routes/workforce";
 import "./routes/breadth";
 import "./routes/operator";
 import "./routes/platformConsole";
+import "./routes/treeManage";
 import { listen } from "./engine";
 import { match, problem, Refusal, routes, type Reply } from "./http";
 import { runRecord, type World } from "./world";

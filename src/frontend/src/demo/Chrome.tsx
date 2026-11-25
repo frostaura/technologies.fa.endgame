@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useDeviceRequest } from "./device";
-import { getSession, goto, onHostChange, reset } from "./host";
+import { getSession, getWorld, goto, onHostChange, reset } from "./host";
 import { clock } from "./server/engine";
 import { PERSONAS, SCENARIOS } from "./world/scenarios";
 import { INVITATION_CODE } from "./world/default";
@@ -21,6 +21,9 @@ function useHost() {
 
 export function DemoStrip() {
   const session = useHost();
+  // Whoever is signed in now: they may have signed in, or out, since the persona was chosen.
+  const signedIn = getWorld().sessionUserId;
+  const shown = [...PERSONAS.values()].find((p) => p.userId !== null && p.userId === signedIn)?.name ?? (signedIn ? session.persona : PERSONAS.get(session.persona)?.userId ? "signed-out" : session.persona);
   const [playing, setPlaying] = useState(clock.playing);
   const [speed, setSpeed] = useState(clock.speed);
   return (
@@ -28,7 +31,7 @@ export function DemoStrip() {
       <strong className="font-semibold">Demo — mock data</strong>
       <label className="flex items-center gap-2">
         <span className="sr-only text-surface/70 sm:not-sr-only">Signed in as</span>
-        <select value={session.persona} onChange={(e) => goto({ persona: e.target.value })} className="min-h-touch w-40 rounded-xs bg-surface px-2 text-ink sm:w-auto">
+        <select value={shown} onChange={(e) => goto({ persona: e.target.value })} className="min-h-touch w-40 rounded-xs bg-surface px-2 text-ink sm:w-auto">
           {[...PERSONAS.values()].map((p) => (
             <option key={p.name} value={p.name}>
               {p.title}

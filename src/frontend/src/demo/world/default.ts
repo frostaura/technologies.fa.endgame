@@ -20,6 +20,7 @@ export const PEOPLE = {
   divisionAdmin: { id: uuidFor("user:ines"), displayName: "Ines Duarte", email: "ines@northwind.example" },
   operator: { id: uuidFor("user:nell"), displayName: "Nell Avery", email: "nell@frostaura.example" },
   invited: { id: uuidFor("user:tobi"), displayName: "Tobi Adeyemi", email: "tobi@northwind.example" },
+  twoOrganisations: { id: uuidFor("user:kai"), displayName: "Kai Moreno", email: "kai@northwind.example" },
   quaysideOwner: { id: uuidFor("user:hal"), displayName: "Hal Bryce", email: "hal@quayside.example" },
   northfieldOwner: { id: uuidFor("user:rhea"), displayName: "Rhea Quill", email: "rhea@northfield.example" },
 };
@@ -56,7 +57,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     persona,
     sessionUserId: PEOPLE.owner.id,
     entered: [],
-    device: [PEOPLE.owner.id, PEOPLE.admin.id, PEOPLE.builder.id, PEOPLE.viewer.id, PEOPLE.divisionAdmin.id, PEOPLE.operator.id],
+    device: [PEOPLE.owner.id, PEOPLE.admin.id, PEOPLE.builder.id, PEOPLE.viewer.id, PEOPLE.divisionAdmin.id, PEOPLE.operator.id, PEOPLE.twoOrganisations.id],
     users: [
       { ...PEOPLE.owner, passkeys: 2, isOperator: false, invitation: null },
       { ...PEOPLE.admin, passkeys: 1, isOperator: false, invitation: null },
@@ -67,6 +68,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
       { ...PEOPLE.invited, passkeys: 0, isOperator: false, invitation: { code: INVITATION_CODE, expiresAt: ago(-6 * day, T) } },
       { ...PEOPLE.quaysideOwner, passkeys: 1, isOperator: false, invitation: null },
       { ...PEOPLE.northfieldOwner, passkeys: 1, isOperator: false, invitation: null },
+      { ...PEOPLE.twoOrganisations, passkeys: 1, isOperator: false, invitation: null },
     ],
     organisations: [
       { id: uuidFor("org:northwind"), slug: ORG, name: "Northwind", status: "active", createdAt: a(62 * day), balance: 1840.25, frostauraLimit: 1000, ownLimit: 800, lastActivityAt: a(1) },
@@ -86,6 +88,9 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
       { id: uuidFor("m:rhea"), userId: PEOPLE.northfieldOwner.id, path: "northfield", role: "owner", grantedAt: a(21 * day) },
       // FrostAura's own organisation: the operator's home, where top-up requests reach them.
       { id: uuidFor("m:nell"), userId: PEOPLE.operator.id, path: "frostaura", role: "owner", grantedAt: a(90 * day) },
+      // Kai belongs to two organisations: a Builder at Northwind and an Admin at Quayside Bakery.
+      { id: uuidFor("m:kai:northwind"), userId: PEOPLE.twoOrganisations.id, path: ORG, role: "builder", grantedAt: a(20 * day) },
+      { id: uuidFor("m:kai:quayside"), userId: PEOPLE.twoOrganisations.id, path: "quayside", role: "admin", grantedAt: a(12 * day) },
     ],
     apps: [],
     ideas: [],
@@ -146,6 +151,11 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   n(`${ORG}/operations/shift-rota`, "Shift Rota");
   n(`${ORG}/operations/shift-rota/web`, "Shift Rota");
   n(`${ORG}/operations/van-tracker`, "Delivery Van Tracker", { stage: "verdict", ideaId: IDS.ideaVans, note: "Research says do not build. Waiting for your call." });
+  // Kept but not served: last summer's events, with history, so it can be archived and not deleted.
+  n(`${ORG}/events`, "Events", { status: "archived" });
+  n(`${ORG}/events/summer-ladder`, "Summer Ladder", { status: "archived", stage: "paused", note: "Archived after the summer season." });
+  // Nothing attached yet: this one can be deleted.
+  n(`${ORG}/operations/gift-cards`, "Gift Cards", { stage: "idea", note: "Named, nothing built yet." });
   for (const [slug, name] of [
     ["quayside", "Quayside Bakery"],
     ["quayside/shop", "Shop"],
@@ -217,6 +227,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   sp(`${ORG}/operations/stock-counter/web`, 116.8, 3.2);
   sp(`${ORG}/operations/shift-rota/web`, 71.5, 4.4);
   sp(`${ORG}/operations/van-tracker`, 8.7, 0);
+  w.spend.push({ path: `${ORG}/events/summer-ladder`, ai: 0, hosting: 0 });
   sp("quayside/shop/orders/web", 140.2, 6.1);
   sp("northfield/tuition/homework/web", 96.4, 3.6);
   w.budgets.push({ path: `${ORG}/technologies`, cap: 450 }, { path: `${ORG}/learning`, cap: 400 }, { path: `${ORG}/operations/stock-counter`, cap: 120 }, { path: `${ORG}/technologies/court-booking/web`, cap: 400 });
@@ -398,6 +409,17 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     { id: uuidFor("token:desk"), name: "Mara's desktop assistant", organisation: ORG, role: "admin", prefix: "egp_7f3a", createdAt: a(20 * day), expiresAt: null, lastUsedAt: a(35), revokedAt: null, active: true },
     { id: uuidFor("token:old"), name: "Old laptop", organisation: ORG, role: "builder", prefix: "egp_c19e", createdAt: a(50 * day), expiresAt: a(-40 * day), lastUsedAt: a(32 * day), revokedAt: a(31 * day), active: false },
   );
+
+  // What each level says about itself ("What this is") ---------------------------------------
+  w.context = [
+    { path: ORG, key: "purpose", value: "Northwind is a squash and social club: eight courts, a café, a cookery school for children and a small shop. Members book courts in playing minutes.", setAt: a(60 * day) },
+    { path: ORG, key: "tone", value: "Plain, friendly and short. Members read us on a phone between games.", setAt: a(58 * day) },
+    { path: `${ORG}/technologies`, key: "audience", value: "Members, coaches and front-of-house staff; most use a phone at the courts.", setAt: a(40 * day) },
+    { path: `${ORG}/technologies/court-booking`, key: "rules", value: "Courts are booked in 40-minute slots from 06:20 to 22:20. League nights hold four courts for two hours.", setAt: a(35 * day) },
+    { path: `${ORG}/learning`, key: "audience", value: "Parents booking for children aged 7 to 14, and the tutors who teach them.", setAt: a(30 * day) },
+  ];
+  w.settings.push({ path: `${ORG}/technologies/court-booking/web`, key: "app_models.monthly_credits", value: "150" });
+  w.spend.push({ path: `${ORG}/events/summer-ladder`, ai: 3.4, hosting: 0 });
 
   // Autonomy and rule sets --------------------------------------------------------------------
   w.settings.push({ path: ORG, key: "autonomy", value: "auto" }, { path: ORG, key: "checkpoint.hire", value: "true" }, { path: `${ORG}/operations`, key: "autonomy", value: "checkpoints" }, { path: `${ORG}/operations`, key: "checkpoint.plan", value: "true" });

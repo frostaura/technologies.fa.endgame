@@ -174,6 +174,10 @@ defineScenario({
   featured: BASE_FEATURED,
 });
 
+defineScenario({ name: "manage-tree", title: "Managing the tree: an archived division, one that cannot be deleted, one that can", route: "/tree?scope=northwind", featured: BASE_FEATURED }, "archived-division");
+defineScenario({ name: "account", title: "Your account: passkeys and roles", route: "/account", featured: BASE_FEATURED });
+defineScenario({ name: "employee-released", title: "An employee who was let go", route: "/employees/{employee}", featured: { ...BASE_FEATURED, employee: uuidFor(`employee:${ORG}/operations/stock-counter:engineer`) } }, "employee-let-go");
+defineScenario({ name: "two-organisations", title: "A person in two organisations", route: "/", persona: "two-organisations", featured: BASE_FEATURED });
 defineScenario({ name: "screening-offline", title: "God mode with no model to screen a new organisation", apply: (w) => (w.modelsOffline = true), route: "/operator", persona: "operator", featured: BASE_FEATURED });
 defineScenario({ name: "god-mode", title: "God mode: every organisation", route: "/operator", persona: "operator", featured: BASE_FEATURED });
 
@@ -210,6 +214,7 @@ definePersona({ name: "builder", title: `${PEOPLE.builder.displayName} · Builde
 definePersona({ name: "viewer", title: `${PEOPLE.viewer.displayName} · Viewer`, userId: PEOPLE.viewer.id, visitor: "member" });
 definePersona({ name: "division-admin", title: `${PEOPLE.divisionAdmin.displayName} · Admin of Technologies`, userId: PEOPLE.divisionAdmin.id, visitor: "member-without-access" });
 definePersona({ name: "operator", title: `${PEOPLE.operator.displayName} · FrostAura operator`, userId: PEOPLE.operator.id, visitor: "member-without-access" });
+definePersona({ name: "two-organisations", title: `${PEOPLE.twoOrganisations.displayName} · in Northwind and Quayside Bakery`, userId: PEOPLE.twoOrganisations.id, visitor: "member" }, "two-orgs");
 definePersona({ name: "invited", title: `${PEOPLE.invited.displayName} · invited, not yet registered`, userId: null, visitor: "invited" });
 definePersona({ name: "end-user", title: "An end user of a shared app", userId: null, visitor: "end-user" });
 definePersona({ name: "signed-out", title: "Signed out", userId: null, visitor: "signed-out" });
