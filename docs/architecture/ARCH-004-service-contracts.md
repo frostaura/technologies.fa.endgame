@@ -273,6 +273,21 @@ assigned by the control plane and gapless per run. Types: `run.started`, `run.pa
 plan, tool, sub-agent, evaluation and estimate types the harness writes. `model.requested` and
 `model.replied` carry the `employeeId` the call is charged to, and every ledger line carries it too.
 `estimate.scored` is `{ expectedCredits, actualCredits, nonBillableCredits, modelCalls }` (older `{ estimated, actual }` is read too).
+`model.replied` also carries `searches`, the web searches the call made.
+
+What the owner reads (normal mode) and what only technical mode shows:
+
+| Event | Payload the console reads | Normal mode |
+| --- | --- | --- |
+| `message` **without** `kind` | `{ from, title, text, milestone? }` — `from` is who speaks (`owner`, `researcher`, `builder`, `evaluator`, `security-reviewer`, `assistant`, `runner`); `title` a heading of 1–60 characters; `text` one plain-language sentence or short paragraph, at most 600 characters, never JSON and never naming infrastructure. A `milestone` (e.g. `verdict`, `placed`, `published`) is written once per run. | Shown |
+| `message` **with** `kind` | The harness's own bookkeeping for replay (`agent.start`, `agent.reply`, `agent.stopped`, `nudge`, `compaction`, `notes`, `plan.mark`, `workflow.step`). None carries `text`. | Hidden |
+| `subagent.started` | `{ subagent, title, brief, role }` — `title` is what the contractor does, for people ("Looked for existing products"); `brief` its objective as a plain string. | Shown, counted as an action |
+| `subagent.finished` | `{ subagent, title, summary, stopReason, searches, report }` — `summary` one plain sentence of what it found; `report` the raw report. | Shown (`summary`); `report` technical only |
+| `tool.requested` | `{ name, arguments }` | Hidden, counted as an action |
+| `plan.proposed`, `plan.accepted` | `{ summary, items: [{ id, text, check }] }`; `plan.accepted` adds `by` (`auto-mode` or `owner`). | Shown |
+| `evaluation.passed`, `evaluation.failed` | `{ item, text, round, tier, evidence, faults[] }` | Shown |
+
+**Actions**, as the console counts them, are `tool.requested` plus `subagent.started` events.
 
 ## Credits
 
