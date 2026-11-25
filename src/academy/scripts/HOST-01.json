@@ -24,7 +24,7 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "text": "The reading list",
+        "text": "This term's notes",
         "note": "Once the app answers, the edge forwards the request; the reply carries how long the wake took."
       }
     }

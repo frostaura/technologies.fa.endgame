@@ -20,6 +20,9 @@ import {
 import { accessCheck, decide, inside, addressesOf, isInside, resolve, type GateOutcome } from "./gate";
 import { HostedAppView } from "./HostedAppView";
 import { CLUB_MEMBERS, newReadingList, readingListFor } from "./readingList";
+import { pageKeyFor, type AppPageKey } from "./apps";
+import { defaultWorld } from "../world/default";
+import { STORIES, storyFor } from "../world/story";
 import type { HostedApp, HostedAppState, HostedContext, HostedVisitor } from "./types";
 
 // ---------------------------------------------------------------------------------------------
@@ -446,5 +449,106 @@ describe("HostedAppView", () => {
     render(<HostedAppView ctx={ctx} />);
     fireEvent.click(screen.getByRole("button", { name: "Back to Endgame" }));
     expect(ctx.exit).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Every app has a page of its own
+// ---------------------------------------------------------------------------------------------
+
+describe("each hosted app's own page", () => {
+  afterEach(cleanup);
+
+  const at = (name: string, path: string): Pick<HostedApp, "name" | "addresses"> => ({ name, addresses: { path: `https://endgame.example/${path}/`, subdomain: `https://x.endgame.example/${path}/` } });
+
+  it("knows every app the default world holds, and the reading list a build publishes", () => {
+    const keys = defaultWorld().apps.map((a) => [a.name, pageKeyFor(at(a.name, a.path))] as const);
+    expect(Object.fromEntries(keys)).toEqual({
+      "Court booking": "court-booking",
+      "Course Notes": "course-notes",
+      "Tutor Match": "tutor-match",
+      "Stock Counter": "stock-counter",
+      "Shift Rota": "shift-rota",
+      "Pre-orders": "pre-orders",
+      "Homework Planner": "homework",
+    });
+    const story = must(STORIES["reading-list"]);
+    expect(pageKeyFor(at(story.name, `northwind/${story.division.slug}/${story.project}/web`))).toBe("reading-list");
+  });
+
+  it("keeps a renamed app's page by its project, and gives an app it does not know a page of its own", () => {
+    expect(pageKeyFor(at("Courts", "northwind/technologies/court-booking/web"))).toBe("court-booking");
+    const typed = storyFor("A members' locker booking app for the club");
+    expect(pageKeyFor(at(typed.name, `northwind/${typed.division.slug}/${typed.project}/web`))).toBe("generic");
+  });
+
+  const pages: [string, string, AppPageKey, string, string][] = [
+    ["Court booking", "northwind/technologies/court-booking/web", "court-booking", "Book a court", "court-row"],
+    ["Course Notes", "northwind/learning/course-notes/web", "course-notes", "This term's notes", "course-note"],
+    ["Tutor Match", "northwind/learning/tutor-match/web", "tutor-match", "Find a tutor", "tutor-item"],
+    ["Stock Counter", "northwind/operations/stock-counter/web", "stock-counter", "Today's count", "stock-item"],
+    ["Shift Rota", "northwind/operations/shift-rota/web", "shift-rota", "This week's rota", "shift-row"],
+    ["Pre-orders", "quayside/shop/orders/web", "pre-orders", "Orders for collection", "order-item"],
+    ["Homework Planner", "northfield/tuition/homework/web", "homework", "Homework this week", "homework-item"],
+    ["Harbour Tide Board", "northwind/learning/tide-board/web", "tide-board", "Tides at the harbour", "tide-day"],
+  ];
+  it.each(pages)("%s shows its own page, not the reading list", (name, path, key, heading, item) => {
+    render(<HostedAppView ctx={context({ app: { id: `app-page-${key}`, name, addresses: at(name, path).addresses }, visitor: V.member })} />);
+    expect(screen.getByTestId("hosted-app-page").getAttribute("data-page")).toBe(key);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(heading);
+    expect(screen.getAllByTestId(item).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("signed-in-as").textContent).toBe("Amara Okafor");
+    expect(screen.queryByText("The reading list")).toBeNull();
+    expect(screen.queryByTestId("book-item")).toBeNull();
+  });
+
+  it("Court booking shows the member's own booking, books a free slot and cancels it", () => {
+    render(<HostedAppView ctx={context({ app: { id: "app-court", name: "Court booking", addresses: at("Court booking", "northwind/technologies/court-booking/web").addresses }, visitor: V.member })} />);
+    expect(screen.getAllByTestId("court-row")).toHaveLength(8);
+    expect(screen.getByTestId("own-booking").textContent).toContain("Court 3");
+    expect(screen.getByTestId("own-bookings").textContent).toContain("280 playing minutes left");
+    fireEvent.click(screen.getByRole("button", { name: "Book court 2 at 17:00" }));
+    expect(screen.getAllByTestId("own-booking")).toHaveLength(2);
+    expect(screen.getByTestId("own-bookings").textContent).toContain("240 playing minutes left");
+    fireEvent.click(must(screen.getAllByRole("button", { name: "Cancel" })[0]));
+    expect(screen.getAllByTestId("own-booking")).toHaveLength(1);
+  });
+
+  it("Court booking, public and signed out, shows the free slots and no booking", () => {
+    render(<HostedAppView ctx={context({ app: { id: "app-court-public", name: "Court booking", access: "public", addresses: at("Court booking", "northwind/technologies/court-booking/web").addresses } })} />);
+    expect(screen.queryByTestId("own-bookings")).toBeNull();
+    expect(screen.getAllByText("Free").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /^Book court/ })).toBeNull();
+  });
+
+  it("Tutor Match narrows the tutors by subject", () => {
+    render(<HostedAppView ctx={context({ app: { id: "app-tutors", name: "Tutor Match", addresses: at("Tutor Match", "northwind/learning/tutor-match/web").addresses }, visitor: V.member })} />);
+    const all = screen.getAllByTestId("tutor-item").length;
+    fireEvent.change(screen.getByTestId("tutor-subject"), { target: { value: "Pastry" } });
+    const pastry = screen.getAllByTestId("tutor-item");
+    expect(pastry.length).toBeLessThan(all);
+    for (const t of pastry) expect(t.textContent).toContain("Pastry");
+  });
+
+  it("an app it does not know gets a page made from its name", () => {
+    render(<HostedAppView ctx={context({ app: { id: "app-generic", name: "Locker Rota", addresses: at("Locker Rota", "northwind/studio/locker-rota/web").addresses }, visitor: V.member })} />);
+    expect(screen.getByTestId("hosted-app-page").getAttribute("data-page")).toBe("generic");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Locker Rota");
+    expect(screen.getAllByTestId("entry-item")[0]?.textContent).toContain("Locker Rota");
+    expect(screen.queryByText("The reading list")).toBeNull();
+  });
+
+  it("an address inside an app it has no page for says so, and links home", () => {
+    const ctx = context({ app: { id: "app-court-404", name: "Court booking", addresses: at("Court booking", "northwind/technologies/court-booking/web").addresses }, visitor: V.member, rest: "nowhere" });
+    render(<HostedAppView ctx={ctx} />);
+    fireEvent.click(screen.getByText("Back to the courts"));
+    expect(ctx.navigate).toHaveBeenCalledWith("");
+  });
+
+  it("the reading list keeps its own page", () => {
+    render(<HostedAppView ctx={context({ app: { id: "app-reading-kept" }, visitor: V.member })} />);
+    expect(screen.getByTestId("reading-list-app")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("The reading list");
+    expect(screen.getByTestId("new-book").textContent).toBe("Add a book");
   });
 });
