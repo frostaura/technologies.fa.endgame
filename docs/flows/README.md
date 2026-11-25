@@ -418,6 +418,7 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | --- | --- | --- |
 | An invited person could not register: the sign-in screen had no field for the invitation code. | ID-07, PPL-08 | Fixed the same day; both flows now describe the screen with the field. |
 | No second passkey, no way to switch organisation, and the address asked for was lost at sign-in. | ID-08, ID-09, ID-02 | Fixed: "Your account", the "Working in" switcher, and the kept address. |
+| The console and the server disagreed on a person's role where grants at two levels differ. | PPL-01, PPL-03 | Fixed: the tree carries each node's role as the server resolves it. |
 | Signing out left a blank page. | ID-06 | Fixed the same day, found in a browser. |
 
 ### Things the product cannot do from a screen
@@ -446,7 +447,6 @@ Each area file ends with its own full list of gaps and oddities. These are the o
 | **Two lines on the start screen are untrue in auto-mode:** "Nothing is built until you have seen the verdict", and that hires are "proposed". | IDEA-01, VERD-11, BLD-02 | Reported |
 | **A conversation at a level is shared by everyone there**, each message drawn as "you". | TALK-11 | Reported |
 | **A person granted only one division gets "not found" on the home screen.** | ORG-19 | Reported |
-| **The console and the server disagree on a person's role** where grants at two levels differ: the console takes the highest, the server the deepest. | PPL-01, PPL-03 | Reported |
 | **The system status endpoint answers without sign-in.** | SYS-05 | Confirmed |
 | **Archiving a division or project does not stop its apps being served.** | TREE-07 | Reported |
 | **The console's mock-API browser specs are run by nothing** in the Makefile or CI; only the smoke spec runs. | OPS-07 | Reported |
