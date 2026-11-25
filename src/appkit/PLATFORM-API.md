@@ -86,6 +86,9 @@ that names the levels searched.
 ← 400 { "code": "invalid_request" }
 ```
 
+From the factory's preview (its own token), the answer is the same 202, and the message is held: kept for the evaluator,
+never delivered.
+
 ### 3.5 Schedules — `PUT /platform/v1/schedules`
 
 Replaces the app's whole set; sent on every start (an empty list removes them all).

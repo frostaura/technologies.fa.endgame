@@ -117,8 +117,10 @@ exporting no telemetry, never published, sampled or charged as the app — and d
 round ends (even when the run is cancelled). The evaluator's `call_app`, `check_preview` and `call_webhook` always name the
 preview (`X-Endgame-Preview: 1` on Edge's control listener). The app itself is built and started once, to publish it, with
 its own clean database. The preview runs with `ENDGAME_PREVIEW=true`, so the kit exports no telemetry and records no
-custom events from it (the live run before this showed 17 `book.created` events for 8 real books). What still reaches the
-platform from a preview: e-mail it asks to send (to the test members' `.invalid` addresses), under the app's id.
+custom events from it (the live run before this showed 17 `book.created` events for 8 real books). The preview carries a
+platform token of its own (`POST /internal/apps/{id}/token?preview=true`), which never replaces the app's: e-mail it asks
+to send is checked as the app's would be and **held** (`email_messages.status = 'held'`), never delivered, and
+`sent_emails` shows it as held, so an e-mail requirement is still evidenced.
 
 **Screens are predictable.** A plan item with anything on screen lists the `testIds` its screens carry, by the app kit's
 convention (`page-<view>`, `nav-<view>`, `<entity>-list`, `<entity>-item`, `new-<entity>`, `open-<entity>`,

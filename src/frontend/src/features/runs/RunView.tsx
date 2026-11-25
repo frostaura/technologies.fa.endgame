@@ -443,7 +443,10 @@ function GroupRow({ group }: { group: TimelineGroup }) {
   const open = toggled ?? group.status === "working";
   return (
     <li data-group={group.agent} className={cn("border-b last:border-b-0", RISE)}>
-      <details open={open} onToggle={(e) => setToggled(e.currentTarget.open)} className="group/sub">
+      <details open={open} onToggle={(e) => {
+          // Only the person's own click counts: the browser also fires this when the page opens or folds it.
+          if (e.currentTarget.open !== open) setToggled(e.currentTarget.open);
+        }} className="group/sub">
         <summary className="flex min-h-touch cursor-pointer list-none gap-3 px-4 py-3 hover:bg-ground sm:px-5 [&::-webkit-details-marker]:hidden">
           <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xs bg-violet-tint text-violet">
             <Icon name="contractors" className="size-4" />
