@@ -931,7 +931,10 @@ export interface OperatorEntry {
 
 export interface OperatorTopUp {
   id: string;
+  /** The organisation's address name (slug): technical mode and links only. */
   organisation: string;
+  /** Its display name: what normal mode shows. */
+  organisationName: string;
   credits: number;
   note: string;
   at: string;

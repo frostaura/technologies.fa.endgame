@@ -418,6 +418,7 @@ function RequestRow({ request, onAdded }: { request: TopUpRequest; onAdded: (tex
 
 function TopUps() {
   const query = useGetOperatorTopUpsQuery(undefined);
+  const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const view = viewOf(query);
   return (
     <section aria-labelledby="topups-title" className="flex flex-col gap-3">
@@ -438,7 +439,10 @@ function TopUps() {
             {view.data.map((t) => (
               <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3 last:border-b-0">
                 <span className="flex min-w-0 flex-col">
-                  <span className="font-medium">{t.organisation}</span>
+                  <span className="font-medium">
+                    {t.organisationName || t.organisation}
+                    {technical && <code className="ml-2 font-mono text-xs text-ink-muted">{t.organisation}</code>}
+                  </span>
                   <span className="break-words text-sm text-ink-body">{t.note}</span>
                   <span className="break-all text-xs text-ink-muted">
                     {formatDate(t.at)}

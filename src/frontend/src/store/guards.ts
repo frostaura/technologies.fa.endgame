@@ -584,7 +584,7 @@ export const operatorOrganisationGuard: Guard<OperatorOrganisation> = obj<Operat
 });
 export const operatorOrganisationsGuard: Guard<OperatorOrganisation[]> = arr(operatorOrganisationGuard);
 export const operatorEntryGuard: Guard<OperatorEntry> = obj<OperatorEntry>({ organisationId: s, organisation: s, role: s, enteredAt: s, logged: withDefault(s, "") });
-export const operatorTopUpsGuard: Guard<OperatorTopUp[]> = arr(obj<OperatorTopUp>({ id: s, organisation: s, credits: num, note: withDefault(s, ""), at: s, by: ns, byEmail: ns }));
+export const operatorTopUpsGuard: Guard<OperatorTopUp[]> = arr(obj<OperatorTopUp>({ id: s, organisation: s, organisationName: withDefault(s, ""), credits: num, note: withDefault(s, ""), at: s, by: ns, byEmail: ns }));
 export const pricingGuard: Guard<PricingView> = obj<PricingView>({
   pricing: obj<PricingView["pricing"]>({
     creditsPerUsd: num,

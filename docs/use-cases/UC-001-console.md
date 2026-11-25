@@ -114,7 +114,8 @@ and credit.
     requests and what became of them.
 22. **God mode** (`/operator`, operators only; a coral band on every screen says so): every organisation with
     balance, standing, overdraft, apps and last activity; enter one (the answer says where it is logged) and
-    open its org chart (`/?organisation=`); top up, optionally answering a request; decline a request with
+    open its org chart (`/?organisation=`); top up, optionally answering a request; the top-ups made, each
+    named by the organisation's display name (its address name added in technical mode); decline a request with
     a reason; set the deepest overdraft; the prices with confirmation and their change history; provision an
     organisation for an invited Owner, the Owner's code shown once.
 23. **Normal mode in the run view** prints no `:`-separated key, id, model or file: plan items read their

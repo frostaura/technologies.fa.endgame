@@ -127,6 +127,21 @@ describe("God mode", () => {
     expect(JSON.stringify(store.getState())).not.toContain("owner-code-xyz");
   });
 
+  it("names each top-up's organisation by its display name, and its address name only in technical mode", async () => {
+    stub({ "GET /api/operator/top-ups": json([{ ...OPERATOR_TOP_UPS[0], organisation: "acme-hq", organisationName: "Acme Holdings" }]) });
+    const { unmount } = renderWithStore(<OperatorView />);
+    const list = await screen.findByRole("list", { name: "Top-ups" });
+    expect(within(list).getByText("Acme Holdings")).toBeTruthy();
+    expect(list.textContent).not.toContain("acme-hq");
+    unmount();
+
+    localStorage.setItem("endgame.mode", "technical");
+    renderWithStore(<OperatorView />);
+    const technical = await screen.findByRole("list", { name: "Top-ups" });
+    expect(within(technical).getByText("Acme Holdings")).toBeTruthy();
+    expect(technical.textContent).toContain("acme-hq");
+  });
+
   it("reads a price change figure by figure", () => {
     expect(pricingRows({ margin: 1, hosting: { usdPerAwakeHour: 0.002 } }, { margin: 1.2, hosting: { usdPerAwakeHour: 0.002 } })).toEqual([{ label: "Margin", before: "1", after: "1.2" }]);
   });

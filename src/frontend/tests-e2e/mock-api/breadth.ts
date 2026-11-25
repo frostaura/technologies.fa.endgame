@@ -72,7 +72,7 @@ export function breadthState(): BreadthState {
       { id: "org1", slug: "northwind", name: "Northwind", status: "active", createdAt: ago(60 * 24 * 60), balance: 9548, standing: "in-credit", overdraft: { frostauraLimit: 3000, ownLimit: 1000, effective: 1000 }, apps: 3, lastActivityAt: ago(2), openTopUpRequests: 1 },
       { id: "org2", slug: "harbour", name: "Harbour Co", status: "active", createdAt: ago(60 * 24 * 9), balance: -420, standing: "overdrawn", overdraft: { frostauraLimit: 1000, ownLimit: null, effective: 1000 }, apps: 1, lastActivityAt: ago(60 * 5), openTopUpRequests: 0 },
     ],
-    topUps: [{ id: "tu1", organisation: "northwind", credits: 10000, note: "Added by FrostAura", at: ago(60 * 24 * 10), by: "op-u1", byEmail: "support@example.test" }],
+    topUps: [{ id: "tu1", organisation: "northwind", organisationName: "Northwind", credits: 10000, note: "Added by FrostAura", at: ago(60 * 24 * 10), by: "op-u1", byEmail: "support@example.test" }],
     pricing: { creditsPerUsd: 100, margin: 1.2, hosting: { usdPerAwakeHour: 0.002, usdPerGbHourMemory: 0.004, usdPerGbMonthStorage: 0.1, usdPerMillionRequests: 0.2 }, defaultAppModelMonthlyCredits: 500 },
     pricingHistory: [{ at: ago(60 * 24 * 3), by: "op-u1", byEmail: "support@example.test", before: { margin: 1.0 }, after: { margin: 1.2 } }],
   };
@@ -326,7 +326,8 @@ export async function handleBreadth(req: IncomingMessage, res: ServerResponse, p
     return true;
   }
   if (path === "/api/credits/top-ups" && method === "POST") {
-    const entry = { id: `tu-${randomBytes(3).toString("hex")}`, organisation: B.organisation, credits: Number(B.credits), note: B.note, at: now(), by: "op-u1", byEmail: "support@example.test" };
+    const named = b.operatorOrgs.find((x) => x.slug === B.organisation) as { name?: string } | undefined;
+    const entry = { id: `tu-${randomBytes(3).toString("hex")}`, organisation: B.organisation, organisationName: named?.name ?? B.organisation, credits: Number(B.credits), note: B.note, at: now(), by: "op-u1", byEmail: "support@example.test" };
     b.topUps.unshift(entry);
     const r = b.topUpRequests.find((x) => x.id === B.requestId);
     if (r) Object.assign(r, { status: "fulfilled", closedAt: now(), topUpEntryId: entry.id });

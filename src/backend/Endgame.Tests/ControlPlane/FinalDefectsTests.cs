@@ -53,6 +53,16 @@ public sealed class FinalDefectsTests(PostgresServer postgres) : IAsyncLifetime
             .Where(e => e!["action"]!.GetValue<string>() == "organisation.entered").ToList();
         Assert.Single(entries);
     }
+
+    [Fact]
+    public async Task Operator_top_ups_name_the_organisation_by_its_display_name_and_keep_its_address_name()
+    {
+        await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme Holdings", slug = "acme", ownerEmail = "ceo@acme.example" }));
+        await owner.TopUpAsync("acme", 40m);
+        var row = Assert.Single((await ControlPlaneApp.Ok(owner.GetAsync("/api/operator/top-ups?organisation=acme"))).AsArray())!;
+        Assert.Equal("acme", row["organisation"]!.GetValue<string>());
+        Assert.Equal("Acme Holdings", row["organisationName"]!.GetValue<string>());
+    }
 }
 
 public sealed class OperatorVisitsTests
