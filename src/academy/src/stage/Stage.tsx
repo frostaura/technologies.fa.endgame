@@ -18,7 +18,16 @@ let toldUnavailable = false;
  * The sticky panel beside a flow's steps: the live console, or whatever truly shows the step — a
  * terminal, a request, an e-mail, a captured image — or, with nothing to show, the flow's facts.
  */
-export function Stage({ flow, script, active, run, interactive, onTry, onReplay }: {
+/** A branch from "What else can happen" being played instead of the flow's own steps. */
+export interface Branch {
+  title: string;
+  step: number;
+  total: number;
+  onStep: (n: number) => void;
+  onClose: () => void;
+}
+
+export function Stage({ flow, script, active, run, interactive, onTry, onReplay, branch }: {
   flow: Flow;
   script: StepScript | undefined;
   active: number;
@@ -27,6 +36,7 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay 
   interactive: boolean;
   onTry: () => void;
   onReplay: () => void;
+  branch?: Branch;
 }) {
   const [frameState, setFrameState] = useState<BridgeState>("loading");
   const [notice] = useState(() => !toldUnavailable);
@@ -34,13 +44,16 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay 
   const usesFrame = useMemo(() => flow.steps.some((s) => mediaOf(flow, script, s.n) === "demo"), [flow, script]);
   const played = useRef(0);
   const lastRun = useRef(run);
+  // A variation swaps the script being played: the console then starts again from its start.
+  const lastScript = useRef(script);
   const [request, setRequest] = useState<FrameRequest | null>(null);
   const step: ScriptStep | undefined = stepOf(script, active);
 
   useEffect(() => {
     if (!usesFrame || media !== "demo") return;
-    const replay = lastRun.current !== run;
+    const replay = lastRun.current !== run || lastScript.current !== script;
     lastRun.current = run;
+    lastScript.current = script;
     const ops = script ? plan(script, played.current, active, replay) : played.current ? [] : planExplore(flow.startRoute ?? "/");
     played.current = active;
     if (ops.length) setRequest({ key: `${flow.id}:${active}:${run}`, ops });
@@ -56,6 +69,24 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay 
 
   return (
     <div className="flex h-full flex-col gap-3">
+      {branch && (
+        <div role="group" aria-label="What else can happen" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md bg-attention-wash px-4 py-2" data-print="hide">
+          <p className="min-w-0 flex-1 text-sm text-ink">
+            <span className="text-eyebrow font-semibold uppercase text-attention-text">What else can happen</span>{" "}
+            <span className="font-semibold">{branch.title}</span>
+            {branch.total > 1 && <span className="text-ink-muted"> · step {branch.step} of {branch.total}</span>}
+          </p>
+          <span className="flex gap-2">
+            {branch.total > 1 && (
+              <>
+                <button type="button" disabled={branch.step <= 1} onClick={() => branch.onStep(branch.step - 1)} className="min-h-touch rounded-full border px-3 text-sm font-semibold text-ink hover:bg-surface disabled:opacity-40">Previous</button>
+                <button type="button" disabled={branch.step >= branch.total} onClick={() => branch.onStep(branch.step + 1)} className="min-h-touch rounded-full border px-3 text-sm font-semibold text-ink hover:bg-surface disabled:opacity-40">Next</button>
+              </>
+            )}
+            <button type="button" onClick={branch.onClose} className="min-h-touch rounded-full bg-ink px-3 text-sm font-semibold text-primary-ink hover:bg-ink/90">Back to the steps</button>
+          </span>
+        </div>
+      )}
       <div className="relative min-h-0 flex-1">
         {usesFrame && (
           <div className={showFrame ? "h-full" : "hidden"}>

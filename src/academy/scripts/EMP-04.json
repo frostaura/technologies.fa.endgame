@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "EMP-04",
   "persona": "owner",
-  "scenario": "employee-working",
+  "scenario": "s4-employee-working",
   "start": "/employees/{employee}",
   "steps": [
     {

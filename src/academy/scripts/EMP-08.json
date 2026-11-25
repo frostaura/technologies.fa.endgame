@@ -39,7 +39,7 @@
     {
       "title": "Not offered once someone is let go",
       "persona": "owner",
-      "scenario": "released-with-memory",
+      "scenario": "s4-released-with-memory",
       "start": "/employees/14b08848-f257-450f-ad4f-c91e519ce679",
       "steps": [
         {

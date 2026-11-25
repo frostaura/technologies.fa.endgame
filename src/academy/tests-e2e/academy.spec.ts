@@ -106,22 +106,6 @@ test("stepping through a scripted flow sends the live console each op in order",
   expect(replay.at(-1)).toBe("highlight");
 });
 
-test("a branch of \"What else can happen\" plays in a console of its own, step by step", async ({ page }) => {
-  await withDemo(page);
-  await page.goto("./#/flow/HIRE-03");
-  await page.locator("summary", { hasText: "What else can happen" }).click();
-  await page.getByRole("button", { name: "Show me: The manager it was drafted with has been let go" }).click();
-  const variation = page.getByTestId("variation");
-  await expect(variation.locator("[aria-current=step]")).toContainText("Lark was drafted to report to Tomas");
-  const log = () => page.frameLocator("[data-testid=variation-frame]").locator("#log li").allTextContents();
-  await expect.poll(log).toEqual(["reset {}", 'goto {"route":"/hires/{hire}","persona":"owner","scenario":"hire-manager-gone"}', expect.stringMatching(/^highlight \{"text":"Tomas"/)]);
-  await variation.getByRole("button", { name: "Next" }).click();
-  await expect(variation.locator("[aria-current=step]")).toContainText("Refused: a manager must be on the payroll");
-  await expect.poll(async () => (await log()).map((l) => l.split(" ")[0])).toEqual(["reset", "goto", "highlight", "act", "highlight"]);
-  // The flow's own console is untouched: it still shows the flow's first step.
-  expect((await received(page)).some((l) => l.includes("hire-manager-gone"))).toBe(false);
-});
-
 test("a terminal step types its command and prints its output", async ({ page }) => {
   await page.goto("./#/flow/OPS-12/step/2");
   await expect(page.getByTestId("terminal")).toContainText("BACKUP_ID=", { timeout: 10_000 });

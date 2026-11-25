@@ -4,14 +4,14 @@ import { blankTrackRecord } from "../server/mutations";
 import { headroom, hireNow } from "../server/routes/workforce";
 import { ago, organisation, setting, uuidFor, type DemoRun, type World } from "../server/world";
 import { IDS, ORG, PEOPLE } from "./default";
-import type { Featured, Scenario } from "./scenarios";
+import { defineScenario, type Featured, type Scenario } from "./scenarios";
 
 /**
  * The academy's workforce, credits and God-mode scenarios (docs/flows/04, lane S4): hiring with a
  * history, a manager who has gone, contractors working and finishing, an employee at work, at its
  * cap, idle and swept, memory worth tidying, the balance at zero and below it, top-up requests
  * piling up, and an operator log with every kind of entry. Each edits the default world; the
- * scenario file registers them all with one line.
+ * host registers them all with one import line.
  */
 
 const day = 24 * 60;
@@ -206,7 +206,7 @@ function contractorFinishes(w: World) {
   Object.assign(odile, { status: "working", currentRun: { id: id.reportRun, title: "Weekly bookings report" } });
   const at = ago(1);
   w.runs.push({
-    run: { id: id.reportRun, kind: "task", title: "Weekly bookings report", scope: TECH, status: "running", startedAt: at, finishedAt: null, lastSeq: 1, ideaId: null, estimateCredits: 3, spentCredits: 0, employeeId: odile.id, conversationId: null, budgetExhausted: false, outcome: null, summary: null, createdAt: at },
+    run: { id: id.reportRun, kind: "task", title: "Weekly bookings report", scope: TECH, status: "running", startedAt: at, finishedAt: null, lastSeq: 1, ideaId: null, estimateCredits: 3, spentCredits: 0, employeeId: odile.id, conversationId: null, budgetExhausted: false, outcome: null, summary: null, canTryAgain: false, createdAt: at },
     events: [{ seq: 1, type: "message", at, payload: { from: "owner", text: "Write this week's bookings report for Technologies." } }],
     playback: { script: "s4-contractor-report", params: {}, elapsed: 0, cursor: 0 },
   });
@@ -283,7 +283,7 @@ function employeeWorking(w: World) {
   const at = ago(2);
   Object.assign(kasper, { status: "working", currentRun: { id: id.workRun, title: "League block bookings: hold four courts for two hours" }, lastActiveAt: at });
   w.runs.push({
-    run: { id: id.workRun, kind: "task", title: "League block bookings: hold four courts for two hours", scope: COURT, status: "running", startedAt: at, finishedAt: null, lastSeq: 1, ideaId: null, estimateCredits: 6, spentCredits: 0, employeeId: kasper.id, conversationId: null, budgetExhausted: false, outcome: null, summary: null, createdAt: at },
+    run: { id: id.workRun, kind: "task", title: "League block bookings: hold four courts for two hours", scope: COURT, status: "running", startedAt: at, finishedAt: null, lastSeq: 1, ideaId: null, estimateCredits: 6, spentCredits: 0, employeeId: kasper.id, conversationId: null, budgetExhausted: false, outcome: null, summary: null, canTryAgain: false, createdAt: at },
     events: [{ seq: 1, type: "message", at, payload: { from: "owner", text: "League nights should hold four courts for two hours from the league's own minutes." } }],
     playback: { script: "s4-league-blocks", params: {}, elapsed: 0, cursor: 0 },
   });
@@ -435,23 +435,28 @@ function operatorLogEmpty(w: World) {
   w.operatorLog = w.operatorLog.filter((x) => x.organisation !== ORG);
 }
 
-/** Registered by `scenarios.ts`, each with its aliases. */
-export const SCENARIOS_S4: [Scenario, ...string[]][] = [
-  [{ name: "hiring", title: "Hiring with a history: one waiting, one hired by auto-mode, one declined", apply: hiring, route: `/hires?scope=${TECH}`, featured: { ...FEATURED, hire: id.solHire, employee: id.sol } }],
-  [{ name: "hires-all-decided", title: "Hiring with every proposal decided", apply: hiresAllDecided, route: `/hires?scope=${TECH}`, featured: { ...FEATURED, hire: id.lark } }],
-  [{ name: "hire-manager-gone", title: "A hire drafted to report to someone since let go", apply: hireManagerGone, route: "/hires/{hire}", featured: FEATURED }],
-  [{ name: "contractor-working", title: "A contractor at work, briefed by Odile", apply: (w) => contractorWorking(w), route: "/employees/{employee}", featured: { ...FEATURED, employee: id.odile } }],
-  [{ name: "contractor-finishes", title: "A contractor finishes, and its recurring role is proposed as a hire", apply: contractorFinishes, route: "/employees/{employee}", featured: { ...FEATURED, employee: id.odile, run: id.reportRun } }],
-  [{ name: "employee-working", title: "Kasper at work on league block bookings", apply: employeeWorking, route: "/employees/{employee}", featured: { ...FEATURED, run: id.workRun } }],
-  [{ name: "employee-record", title: "Kasper's record, with the work behind it", apply: employeeRecord, route: "/employees/{employee}", featured: FEATURED }],
-  [{ name: "employee-team", title: "Kasper with Mina reporting to him", apply: team, route: "/employees/{employee}", featured: FEATURED }],
-  [{ name: "employee-at-cap", title: "Kasper has spent his monthly budget", apply: employeeAtCap, route: "/employees/{employee}", featured: FEATURED }],
-  [{ name: "idle-sweep", title: "An idle employee held for you, and one auto-mode let go", apply: idleSweep, route: "/", featured: { ...FEATURED, employee: id.ruth } }],
-  [{ name: "released-with-memory", title: "Tomas, let go with his memory archived", apply: releasedWithMemory, route: "/employees/{employee}", featured: { ...FEATURED, employee: id.tomas } }],
-  [{ name: "memory-to-tidy", title: "Kasper's memory, with a note learned twice", apply: memoryToTidy, route: "/employees/{employee}", featured: FEATURED }],
-  [{ name: "credits-at-zero", title: "The balance at exactly zero", apply: (w) => balance(w, 0), route: "/credits", featured: FEATURED }],
-  [{ name: "below-zero", title: "Below zero, inside the overdraft", apply: (w) => balance(w, -120), route: "/credits", featured: FEATURED }],
-  [{ name: "top-ups-waiting", title: "Five top-up requests already waiting", apply: topUpsWaiting, route: "/credits", featured: FEATURED }],
-  [{ name: "operator-log", title: "Northwind's operator log, with every kind of entry", apply: operatorLog, route: "/operator-access", featured: FEATURED }],
-  [{ name: "operator-log-empty", title: "Nobody from FrostAura has entered Northwind", apply: operatorLogEmpty, route: "/operator-access", featured: FEATURED }],
+/**
+ * Registered by one import in `host.ts` (not `scenarios.ts`: this file calls its `defineScenario`, so
+ * it must run after it); the names carry `s4-` so another file's scenarios never collide.
+ */
+const SCENARIOS_S4: [Scenario, ...string[]][] = [
+  [{ name: "s4-hiring", title: "Hiring with a history: one waiting, one hired by auto-mode, one declined", apply: hiring, route: `/hires?scope=${TECH}`, featured: { ...FEATURED, hire: id.solHire, employee: id.sol } }],
+  [{ name: "s4-hires-all-decided", title: "Hiring with every proposal decided", apply: hiresAllDecided, route: `/hires?scope=${TECH}`, featured: { ...FEATURED, hire: id.lark } }],
+  [{ name: "s4-hire-manager-gone", title: "A hire drafted to report to someone since let go", apply: hireManagerGone, route: "/hires/{hire}", featured: FEATURED }],
+  [{ name: "s4-contractor-working", title: "A contractor at work, briefed by Odile", apply: (w) => contractorWorking(w), route: "/employees/{employee}", featured: { ...FEATURED, employee: id.odile } }],
+  [{ name: "s4-contractor-finishes", title: "A contractor finishes, and its recurring role is proposed as a hire", apply: contractorFinishes, route: "/employees/{employee}", featured: { ...FEATURED, employee: id.odile, run: id.reportRun } }],
+  [{ name: "s4-employee-working", title: "Kasper at work on league block bookings", apply: employeeWorking, route: "/employees/{employee}", featured: { ...FEATURED, run: id.workRun } }],
+  [{ name: "s4-employee-record", title: "Kasper's record, with the work behind it", apply: employeeRecord, route: "/employees/{employee}", featured: FEATURED }],
+  [{ name: "s4-employee-team", title: "Kasper with Mina reporting to him", apply: team, route: "/employees/{employee}", featured: FEATURED }],
+  [{ name: "s4-employee-at-cap", title: "Kasper has spent his monthly budget", apply: employeeAtCap, route: "/employees/{employee}", featured: FEATURED }],
+  [{ name: "s4-idle-sweep", title: "An idle employee held for you, and one auto-mode let go", apply: idleSweep, route: "/", featured: { ...FEATURED, employee: id.ruth } }],
+  [{ name: "s4-released-with-memory", title: "Tomas, let go with his memory archived", apply: releasedWithMemory, route: "/employees/{employee}", featured: { ...FEATURED, employee: id.tomas } }],
+  [{ name: "s4-memory-to-tidy", title: "Kasper's memory, with a note learned twice", apply: memoryToTidy, route: "/employees/{employee}", featured: FEATURED }],
+  [{ name: "s4-credits-at-zero", title: "The balance at exactly zero", apply: (w) => balance(w, 0), route: "/credits", featured: FEATURED }],
+  [{ name: "s4-below-zero", title: "Below zero, inside the overdraft", apply: (w) => balance(w, -120), route: "/credits", featured: FEATURED }],
+  [{ name: "s4-top-ups-waiting", title: "Five top-up requests already waiting", apply: topUpsWaiting, route: "/credits", featured: FEATURED }],
+  [{ name: "s4-operator-log", title: "Northwind's operator log, with every kind of entry", apply: operatorLog, route: "/operator-access", featured: FEATURED }],
+  [{ name: "s4-operator-log-empty", title: "Nobody from FrostAura has entered Northwind", apply: operatorLogEmpty, route: "/operator-access", featured: FEATURED }],
 ];
+
+for (const [s, ...aliases] of SCENARIOS_S4) defineScenario(s, ...aliases);

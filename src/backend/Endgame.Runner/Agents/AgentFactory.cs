@@ -94,8 +94,9 @@ public sealed class AgentFactory(RunnerOptions options)
     {
         SystemPrompt = RunnerResources.Prompt("conversation", new Dictionary<string, string> { ["scope"] = run.Run.Scope }),
         Tools = new ToolRegistry(tools),
-        // Starting an idea or changing a setting is the owner's call: each asks, as a checkpoint, before it happens.
-        Permissions = Policy(run, "conversation", ["read_organisation"], checkpoints: ["start_idea", "adjust_setting"]),
+        // Starting an idea, changing an app, trying stopped work again or changing a setting is the owner's call: each asks, as a
+        // checkpoint the person answers in the conversation itself, before it happens.
+        Permissions = Policy(run, "conversation", ["read_organisation"], checkpoints: ["start_idea", "change_app", "try_again", "adjust_setting"]),
         StopHooks = [],
         Limits = new AgentLimits { MaxSteps = 12, MaxOutputTokens = 4000 },
     };

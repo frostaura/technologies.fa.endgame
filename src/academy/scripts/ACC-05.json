@@ -1,0 +1,76 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-05",
+  "persona": "signed-out",
+  "scenario": "s1-app-public",
+  "start": "/__app/{app}/path/_endgame/auth/sign-up",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Anyone may use Tutor Match",
+        "note": "A public app: no invitation code field."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "E-mail address"
+            },
+            "text": "parent@example.com"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Your name"
+            },
+            "text": "Sasha"
+          }
+        },
+        {
+          "click": {
+            "text": "Create a passkey"
+          }
+        }
+      ],
+      "note": "An e-mail, an optional name, and one approval on the device."
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "testId": "signed-in-as",
+        "note": "Back at the app, signed in by name."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A private app has no sign-up",
+      "persona": "signed-out",
+      "scenario": "s1-app-private",
+      "start": "/__app/{app}/path/_endgame/auth/sign-up",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "is private: only members of Northwind can open it",
+            "note": "No form is shown, and the server would refuse one."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "HIRE-08",
   "persona": "owner",
-  "scenario": "contractor-finishes",
+  "scenario": "s4-contractor-finishes",
   "start": "/employees/{employee}",
   "steps": [
     {

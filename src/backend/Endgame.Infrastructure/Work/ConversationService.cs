@@ -21,7 +21,8 @@ public sealed class ConversationService(EndgameDbContext db, TenantSession sessi
 {
     public const int MaxMessageLength = 20_000;
 
-    public async Task<ConversationTurn> PostAsync(ResolvedScope scope, string message, Guid? conversationId, Guid? employeeId, Guid by, CancellationToken cancellationToken)
+    /// <param name="estimate">What the turn is expected to cost and the most it can, shown before the message was sent; it opens the run's log.</param>
+    public async Task<ConversationTurn> PostAsync(ResolvedScope scope, string message, Guid? conversationId, Guid? employeeId, Guid by, CancellationToken cancellationToken, Application.Gateway.Estimate? estimate = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         var text = message?.Trim() ?? "";
@@ -69,12 +70,18 @@ public sealed class ConversationService(EndgameDbContext db, TenantSession sessi
         db.ChangeTracker.Clear();
         var title = text.Split('\n', 2)[0];
         var run = await runs.CreateAsync(scope, RunKinds.Conversation, title.Length <= 120 ? title : title[..117] + "...", employeeId, null, conversation.Id, conversation.LastRunId, by, cancellationToken);
-        await runs.AppendAsync(scope.OrganisationId, run.Id, [new NewEvent(RunEventTypes.Message, new JsonObject
+        List<NewEvent> opening = [new NewEvent(RunEventTypes.Message, new JsonObject
         {
             ["from"] = "owner",
             ["userId"] = by.ToString(),
             ["text"] = text,
-        })], null, by, cancellationToken);
+        })];
+        if (estimate is not null)
+        {
+            opening.Add(new NewEvent("estimate.made", new JsonObject { ["credits"] = estimate.Credits, ["basis"] = "conversation", ["reason"] = estimate.Basis, ["ceiling"] = estimate.Ceiling }));
+        }
+
+        await runs.AppendAsync(scope.OrganisationId, run.Id, opening, null, by, cancellationToken);
         session.UseOrganisation(scope.OrganisationId);
         await db.Conversations.Where(c => c.OrganisationId == scope.OrganisationId && c.Id == conversation.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.LastRunId, run.Id), cancellationToken);

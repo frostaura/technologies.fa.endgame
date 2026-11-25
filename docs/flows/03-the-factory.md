@@ -103,12 +103,12 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** the assistant may start research for you, but only after you approve it.
 - **Steps:**
   1. Describe the idea in the conversation.
-  2. The assistant calls `start_idea`. Its rules mark that call as needing a checkpoint, so the run raises an approval and waits. The dock shows "Working on it" and the link **"See how it got there"**. The home strip also shows an **"Approval needed"** card.
-  3. Open the run and press **"Approve"** on the card (RUN-07).
+  2. The assistant calls `start_idea`. Its rules mark that call as needing a checkpoint, so the run raises an approval and waits. The dock shows the card **"Start researching an idea: {text}?"** and "Waiting for your answer". The home strip also shows an **"Approval needed"** card.
+  3. Press **"Approve"** on the card in the dock (TALK-17), or on the run page (RUN-07).
   4. The idea is created through `POST /internal/ideas`. From a project or app scope it is proposed to the division above.
   5. The assistant's reply arrives in the dock, starting "Research started…".
 - **You know it worked when:** a new research run exists and the home page lists the idea under research.
-- **Variations and refusals:** pressing "Decline" refuses the call, and the assistant explains instead. **The dock itself shows no approval card**; you answer on the run page or through the needs-you card.
+- **Variations and refusals:** pressing "Decline" refuses the call ("Declined. It was not done; the work continues without it."), and the assistant says it did not start it.
 - **Where:** `ConversationWorkflow.cs`, `RunnerTools.cs` `StartIdeaTool`, `AgentFactory.Conversation` (checkpoints `start_idea`, `adjust_setting`); `POST /internal/ideas` (FactoryEndpoints).
 - **Reachable from:** UI (conversation) and MCP `conversation_post`.
 - **Covered by tests:** `RunnerContractTests…The_conversation_starts_an_idea_and_changes_only_the_settings_an_agent_may` (named in UC-114; I did not open it).
@@ -155,7 +155,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - A project or app scope is moved up to its division.
   - The run can fail with "No usable suggestion was made: …" or "What the organisation holds could not be read…".
 - **Where:** `features/suggestions/SuggestionsView.tsx`; `POST /api/ideas/suggestions/estimate`, `POST /api/ideas/suggestions`, `GET /api/ideas/suggestions` (BreadthEndpoints); `SuggestionService`; `SuggestWorkflow.cs`.
-- **Reachable from:** UI; MCP `ideas_suggest` and `ideas_suggestions`. MCP has no estimate-only call for suggestions.
+- **Reachable from:** UI; MCP `ideas_suggest_estimate`, `ideas_suggest` and `ideas_suggestions`.
 - **Covered by tests:** `SuggestionsView.test.tsx`; `BreadthTests.Ideas_are_suggested_from_the_portfolio…`; `WorkflowTests.A_suggest_run_…` (two tests); `RunnerIntegrationTests.A_suggest_run_queued_by_the_owner…`; `tests-e2e/breadth.spec.ts` ("shows the cost first, then suggestions…").
 
 ### IDEA-08 Take a suggested idea into research
@@ -191,7 +191,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **You know it worked when:** the "Taken or set aside ({n})" count goes up.
 - **Variations and refusals:** if refused, the card comes back and the page says "“{title}” was not set aside: {reason} It is back in the list." No confirmation step.
 - **Where:** `POST /api/ideas/suggestions/{id}/dismiss`.
-- **Reachable from:** UI and API. **There is no MCP tool for it**, although the console can do it.
+- **Reachable from:** UI, API and MCP `suggestion_dismiss`.
 - **Covered by tests:** `SuggestionsView.test.tsx` ("sets an idea aside at once and brings it back when refused"); `tests-e2e/breadth.spec.ts`.
 
 ### IDEA-10 Review suggestions already taken or set aside
@@ -310,39 +310,39 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Reachable from:** UI; MCP `idea_decide`.
 - **Covered by tests:** `IdeasAndConversationsTests.An_idea_queues_research…`; `VerdictView.test.tsx` (option sets).
 
-### VERD-06 Build a "change" verdict as described
+### VERD-06 Build a "change" verdict, with or without research's change
 - **Who:** Builder.
-- **Starts at:** outcome change. Buttons: **"Change the idea"** (primary), **"Build it as described"**, **"Drop the idea"**.
-- **Needs:** verdict change.
+- **Starts at:** outcome change. Buttons: **"Change the idea"** (primary), **"Build it as described"**, **"Build it with this change"**, **"Drop the idea"**. Under them: "“Build it with this change” builds the idea with research’s change as part of what is asked for; “Build it as described” builds your own words."
+- **Needs:** verdict change (**"Build it with this change"** only when research named its change).
 - **Level:** Core. **Learn first:** VERD-05.
-- **What you learn:** you can accept research's evidence and still keep your own wording.
+- **What you learn:** you can accept research's change and have it built in, or keep your own wording.
 - **Steps:**
-  1. Press **"Build it as described"**. There is no confirmation.
-  2. A build run starts and you are taken to it.
-- **You know it worked when:** "You chose to build it on {date}."
-- **Variations and refusals:** the suggested change is **not** passed to the build. The planner receives only the idea's original text and constraints (`BuildWorkflow` uses the owner message `text`).
-- **Where:** as VERD-05.
-- **Reachable from:** UI; MCP.
-- **Covered by tests:** `VerdictView.test.tsx` ("…never overrule for a change").
+  1. Press **"Build it with this change"** (or **"Build it as described"**). There is no confirmation.
+  2. A build run starts and you are taken to it. With the change, the planner is held to the idea **plus** research's change ("Agreed after research, and part of what is built: …"); as described, to the idea plus any change you asked for earlier (VERD-07).
+- **You know it worked when:** "You chose to build it on {date}." and the plan's "What you asked for" quotes the change.
+- **Variations and refusals:** `applyChange` on any verdict but "change" is 409 ("There is no change from research to apply…").
+- **Where:** `VerdictView.tsx` `Decisions`; `POST /api/ideas/{id}/decision {choice:"build", applyChange:true}`; `IdeaService.DecideAsync` (`changes[]`, `appliedChange` on the build's owner message); `BuildWorkflow.WithAgreedChanges`.
+- **Reachable from:** UI; MCP `idea_decide` (`applyChange`).
+- **Covered by tests:** `TryAgainAndChanges.test.tsx` ("builds a change verdict with research's change applied only when asked to"); `TryAgainAndChangesTests.A_new_verdict_clears_the_decision…`; `WorkflowTests.The_change_agreed_after_research_is_part_of_what_the_planner_is_held_to`.
 
 ### VERD-07 Change the idea and have it researched again
 - **Who:** Builder.
 - **Starts at:** **"Change the idea"**, available on every outcome and on a red line. (The label would read "Change it: {label}" if research gave one, but today's Runner never does.)
 - **Needs:** a verdict.
 - **Level:** Core. **Learn first:** VERD-03.
-- **What you learn:** a change is a new round of research with your note, and a new verdict comes before anything is built.
+- **What you learn:** a change is a new round of research with your note; the new verdict comes back to you, and your change is part of what is built.
 - **Steps:**
   1. Press **"Change the idea"** and the form **"What should change?"** opens. It is pre-filled with research's suggested change or with "what would change the verdict".
   2. The hint reads "Research runs again with your change, and you see a new verdict before anything is built."
   3. Press **"Research it again with this change"** (disabled while empty) or **"Not now"**.
-  4. The verdict is cleared, the idea goes back to researching, and you are taken to the new research run. The note goes to research as "The owner asked for this change after the last verdict: …".
-- **You know it worked when:** a new research run opens. The idea page shows "You asked for the idea to be changed and researched again on {date}." and the research-in-progress panel.
-- **Variations and refusals:**
-  - **The idea's text is never updated.** A later build still plans from the original wording without the note.
-  - **The new verdict appears to lose its buttons (not verified in a browser).** The "change" decision stays on the idea after the new verdict lands; nothing in `RecordVerdictAsync` clears `Decision`. `Decisions` renders the old decision whenever `idea.decision` is set, so Build / Overrule / Drop do not appear for the second verdict. The API accepts a decision (the test drops after a second verdict). In auto-mode a build or change re-verdict still builds on its own.
-- **Where:** `VerdictView.tsx`; `IdeaService.DecideAsync` (Change), `StartResearchAsync`.
-- **Reachable from:** UI (first round); API/MCP for deciding afterwards.
-- **Covered by tests:** `VerdictView.test.tsx` ("asks what should change, and sends it as the note"); `IdeasAndConversationsTests.Change_runs_the_research_again_and_drop_ends_it`.
+  4. The idea goes back to researching and you are taken to the new research run. The note goes to research as "The owner asked for this change after the last verdict: …".
+  5. When the new verdict lands it **clears your earlier decision**, so the decision buttons return for it. The earlier decision is kept under **"Earlier decisions"**: "{Name} asked for the idea to be changed after a “{outcome}” verdict on {date}.", your note in quotes, and **"See the research that followed"**.
+  6. Whatever you build next, the planner is given the idea's words **plus** every change you asked for.
+- **You know it worked when:** a new research run opens; after its verdict, the buttons are back and "Earlier decisions" lists your change.
+- **Variations and refusals:** the idea's own text is kept as you first wrote it; the changes travel beside it (`changes[]`).
+- **Where:** `VerdictView.tsx` (`Decisions`, `DecisionHistory`); `IdeaService.DecideAsync` (Change), `RecordVerdictAsync` (clears the decision), `OwnerChangesAsync`; `ReadModels.DecisionHistoryAsync`.
+- **Reachable from:** UI; API/MCP.
+- **Covered by tests:** `VerdictView.test.tsx` ("asks what should change, and sends it as the note"); `TryAgainAndChanges.test.tsx` ("…keeps earlier decisions in the history"); `TryAgainAndChangesTests.A_new_verdict_clears_the_decision_keeps_it_in_the_history_and_the_agreed_changes_reach_the_build`; `IdeasAndConversationsTests.Change_runs_the_research_again_and_drop_ends_it`.
 
 ### VERD-08 Overrule a "do not build"
 - **Who:** Builder.
@@ -403,33 +403,34 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** in auto-mode a "build" or "change" verdict builds on its own, while a "do not build" always waits for you.
 - **Steps:**
   1. The research run calls `POST /internal/ideas/{id}/decision {decision:"build", by:"auto-mode"}`.
-  2. "Endgame · Building has started" appears: "Auto-mode is building it now, on that verdict. You can follow the build, pause it or stop it at any time."
+  2. "Endgame · Building has started" appears: "Auto-mode is building it now, on that verdict. You can follow the build, pause it or stop it at any time." On a "change" verdict it reads "Auto-mode is building it now, with research's change applied: {change}. You can follow the build, pause it or stop it at any time", and the build is held to that change too.
   3. On the idea page: "Auto-mode chose to build it on {date}." with "Watch the work that followed".
 - **You know it worked when:** the idea page shows "Auto-mode chose to build it…".
 - **Variations and refusals:**
   - Do-not-build: no call is made; the idea waits for you.
   - Checkpoints mode: 409; "Endgame · Waiting for your decision": "The verdict waits for you: build it, change it or drop it. Autonomy at … is 'checkpoints'…".
   - Red line: "It will not be built".
-  - **On a "change" verdict auto-mode builds the original wording**; the change is not applied.
   - The start screen says what auto-mode will do at the place chosen (IDEA-02).
 - **Where:** `ResearchWorkflow.cs`; `FactoryEndpoints` `DecideIdeaAutomatically`; `IdeaService.DecideAutomaticallyAsync`.
 - **Reachable from:** internal only (no person calls it).
-- **Covered by tests:** `WorkflowTests.With_checkpoints_on_a_build_verdict_waits_for_the_owner`, `…No_evidence_of_demand_turns_a_build_into_do_not_build_which_waits_for_the_owner`.
+- **Covered by tests:** `IdeaService.DecideAutomaticallyAsync` applies the change (`applyChange`); `WorkflowTests.With_checkpoints_on_a_build_verdict_waits_for_the_owner`, `…No_evidence_of_demand_turns_a_build_into_do_not_build_which_waits_for_the_owner`.
 
-### VERD-12 See that research did not finish
-- **Who:** Viewer or above.
+### VERD-12 See that research did not finish, and research it again
+- **Who:** Viewer reads; Builder tries again.
 - **Starts at:** `/ideas/{id}` when the latest research run failed or was cancelled.
 - **Needs:** a failed or cancelled research run.
 - **Level:** Core. **Learn first:** VERD-02.
-- **What you learn:** a failed research run records no verdict and nothing is built.
+- **What you learn:** a failed research run records no verdict and nothing is built; it can be started again, its cost shown first.
 - **Steps:**
   1. The idea page shows the alert **"Research did not finish"**, "No verdict could be reached.", "Research stopped before it reached a verdict. The trace shows where." and **"See what happened"**.
-  2. That link opens the run, which shows "Did not succeed" and "Endgame · Stopped".
-- **You know it worked when:** the alert shows and the run's Outcome explains the stop.
-- **Variations and refusals:** **There is no way to research it again.** "Change" needs a verdict (409), and there is no retry endpoint. The owner must describe the idea again as a new one. The Runner's fault message even says "Nothing was lost; it can be started again."
-- **Where:** `VerdictView.tsx` `NoVerdictYet`; `ReadModels.IdeaAsync` (status `failed`).
-- **Reachable from:** UI.
-- **Covered by tests:** `WorkflowTests.A_judge_without_a_verdict_document_fails_the_research_rather_than_guessing`.
+  2. Below it the panel says why ("This work stopped before it finished. What was finished is kept.", "This work was cancelled. What was finished is kept." or "The credit budget ran out, so this work stopped…") with **"Try again"** and "It picks up where this stopped; you see what it costs first."
+  3. Press **"Try again"** ("Working it out…"). It reads "Research starts again with the same idea, and you see the verdict before anything is built.", **"Estimated {credits}"** and the basis.
+  4. Press **"Start it again"** ("Starting…") or **"Not now"**. You are taken to the new research run (VERD-01), with the same idea, constraints and change.
+- **You know it worked when:** the new research run opens; the idea page now follows it, and "Earlier decisions" says "Research that did not finish was started again on {date}."
+- **Variations and refusals:** only the idea's latest research can be tried, once (409); refused: "It was not started again: {reason}"; no estimate: "No estimate could be made: {reason} Nothing was started."
+- **Where:** `VerdictView.tsx` `NoVerdictYet`; `runs/TryAgain.tsx`; `POST /api/runs/{id}/retry/estimate`, `POST /api/runs/{id}/retry`; `RetryService`, `IdeaService.RetryResearchAsync`.
+- **Reachable from:** UI; MCP `run_retry_estimate`, `run_retry`; the conversation (`try_again`, TALK-18).
+- **Covered by tests:** `TryAgainAndChangesTests.Research_that_did_not_finish_is_tried_again_once_with_its_estimate_first`; `TryAgainAndChanges.test.tsx` ("offers to research again when research did not finish…"); `WorkflowTests.A_judge_without_a_verdict_document_fails_the_research_rather_than_guessing`.
 
 ### VERD-13 Read a decision already taken
 - **Who:** Viewer or above.
@@ -441,7 +442,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   1. The panel shows one of: "You chose to build it", "You asked for the idea to be changed and researched again", "You overruled the verdict and chose to build it", "You dropped the idea" (or "Auto-mode chose…" / "Auto-mode asked…"), followed by "on {date}."
   2. **"Watch the work that followed"** opens the build run, or the new research run for a change.
 - **You know it worked when:** the panel is shown instead of the buttons.
-- **Variations and refusals:** see the VERD-07 defect.
+- **Variations and refusals:** after "change", the panel shows until the new verdict lands; then the decision is cleared and kept under "Earlier decisions" (VERD-07). A stopped build shows the try-again panel under it (CHG-03).
 - **Where:** `VerdictView.tsx`.
 - **Reachable from:** UI.
 - **Covered by tests:** `VerdictView.test.tsx`.
@@ -546,32 +547,30 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **You know it worked when:** the control buttons disappear and the badge reads "Cancelled".
 - **Variations and refusals:**
   - An already finished run gives 409.
-  - **A cancelled build cannot be started again**: the idea stays "building" and no endpoint rebuilds it.
-  - A cancelled research run leaves the idea showing "Research did not finish" (VERD-12).
+  - A cancelled build, change or research can be started again from the run page's **"Try again"** (CHG-03, VERD-12).
 - **Where:** `POST /api/runs/{id}/cancel`.
 - **Reachable from:** UI; MCP.
 - **Covered by tests:** `RunView.test.tsx` ("asks before cancelling"); `RunsAndTasksTests.Pause_resume_and_cancel…`.
 
 ### RUN-07 Answer an approval a run is waiting on
 - **Who:** Builder at the run's scope.
-- **Starts at:** the run page's section "Waiting for your approval", or the home **"Approval needed"** card.
+- **Starts at:** the run page's section "Waiting for your approval", the home **"Approval needed"** card, or the conversation itself (TALK-17).
 - **Needs:** a pending approval.
 - **Level:** Core. **Learn first:** RUN-01, AUTO-03.
-- **What you learn:** a checkpoint pauses the work for your word and nothing else.
+- **What you learn:** a checkpoint pauses the work for your word, your note goes back to the work, and declining is told truthfully.
 - **Steps:**
-  1. The card shows the badge **"Needs you"** and the question. In technical mode the detail is added.
-  2. Press **"Approve"** or **"Decline"**.
-  3. The card reads "Approved." or "Declined.", then "Sending…", then "The work carries on from here."
-  4. The step "You answered: approved" or "rejected" is logged.
+  1. The card shows the badge **"Needs you"** and what will happen if you approve, in plain words. In technical mode the detail is added.
+  2. Optionally type into **"Add a note (optional)"**.
+  3. Under the buttons: "Declining skips only this step; the work goes on without it." or, for the start and plan checkpoints, "Declining stops this work."
+  4. Press **"Approve"** or **"Decline"**. The card reads "Approved. Sending…" or "Declined. Sending…", then "Approved. The work carries on from here.", "Declined. It was not done; the work continues without it." or "Declined. It was not done, so the work has stopped."
+  5. The step "You answered: approved" or "rejected" is logged; the note is given back to the agent ("Their note: …").
 - **You know it worked when:** the card disappears from the list and the badge leaves "Waiting for you".
 - **Variations and refusals:**
-  - A failed answer: "Your answer was not recorded: {reason}" and the buttons come back. A second answer gives 409.
-  - **A note can only be sent through API or MCP.**
-  - **"The work carries on from here." also shows after declining**, although declining the start or the plan checkpoint fails the run.
-  - What each approval means: RUN-08 (start), BLD-04 (plan), IDEA-05 (conversation), AUTO-05 (a rule-set checkpoint).
-- **Where:** `RunView.tsx` `ApprovalCard`; `POST /api/runs/{id}/approvals/{approvalId}`; `ApprovalService`.
-- **Reachable from:** UI; MCP `approval_answer`.
-- **Covered by tests:** `RunView.test.tsx` ("streams… an inline approval", "rolls an approval back…"); `RunsAndTasksTests.A_run_waits_on_an_approval…`; `console.spec.ts` ("an approval is answered inline…").
+  - A failed answer: "Your answer was not recorded: {reason}" and the buttons come back. A second answer gives 409. A note is at most 2000 characters.
+  - What each approval means: RUN-08 (start), BLD-04 (plan), TALK-07/TALK-17 (conversation), AUTO-05 (an "Asks you first" rule).
+- **Where:** `runs/ApprovalCard.tsx`, `runModel.answeredText`; `POST /api/runs/{id}/approvals/{approvalId} {decision, note}`; `ApprovalService` (`onDecline`, `comment`); `AgentLoop.AskAsync`.
+- **Reachable from:** UI; MCP `approval_answer` (with `note`).
+- **Covered by tests:** `RunView.test.tsx` ("streams… an inline approval", "rolls an approval back…"); `TryAgainAndChanges.test.tsx` ("tells the truth after a decline"); `PermissionTests.An_asks_you_first_rule_raises_an_approval_even_unattended_and_a_decline_carries_the_note`; `RunsAndTasksTests.A_run_waits_on_an_approval…`; `console.spec.ts`.
 
 ### RUN-08 Approve the estimate before work starts
 - **Who:** Builder.
@@ -582,7 +581,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Steps:**
   1. The card asks "Start this work? Estimated {n} credits." The detail (technical mode) reads "{h} credits are left in the budget."
   2. Press **"Approve"** to start.
-  3. Press **"Decline"** to end the run "Did not succeed", with the outcome "The owner declined to start this work at its estimate."
+  3. Press **"Decline"** to end the run "Did not succeed", with the outcome "You declined to start this work at its estimate, so nothing was done and nothing was charged." The card says "Declined. It was not done, so the work has stopped."
 - **You know it worked when:** after approving, "Work started" and the work appear.
 - **Variations and refusals:** this applies to every run kind the Runner gates, including research, build, suggest and conversation runs.
 - **Where:** `RunExecutor.GateAsync`.
@@ -605,23 +604,22 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Reachable from:** UI.
 - **Covered by tests:** `EstimateTests.In_auto_mode_work_whose_estimate_would_break_the_budget_does_not_begin`.
 
-### RUN-10 See a run stop because the budget ran out mid-way
-- **Who:** Viewer or above.
+### RUN-10 See a run stop because the budget ran out mid-way, and try it again
+- **Who:** Viewer reads; Builder tries again.
 - **Starts at:** a run that "Did not succeed".
 - **Needs:** headroom exhausted during the work.
 - **Level:** Core. **Learn first:** RUN-09.
-- **What you learn:** credits are held before every model call, so a cap is never exceeded.
+- **What you learn:** credits are held before every model call, so a cap is never exceeded, and what was finished is kept.
 - **Steps:**
   1. The gateway refuses to hold credits for the next call, and the run is marked budget-exhausted.
-  2. A message reads "The credit budget is exhausted, so this run cannot call a model again. Top up or raise the budget, then start new work." (it shows as "Update", because no speaker is set).
-  3. The run fails with "The credit budget is exhausted, so the work stopped. Raise the budget or top up, then start it again."
-- **You know it worked when:** the badge reads "Did not succeed" and the Outcome says so.
-- **Variations and refusals:**
-  - **The run's `budgetExhausted` flag is not shown anywhere in the console.**
-  - **"Start it again" has no control**: a build cannot be rebuilt (see Gaps).
-- **Where:** `RunService.MarkBudgetExhaustedAsync`; `WorkflowOutcome.FromAgent`.
+  2. A message reads "The credit budget is exhausted, so this run cannot call a model again. Top up or raise the budget; what was finished is kept, and the work can then be tried again." (it shows as "Update", because no speaker is set).
+  3. The run fails with "The credit budget ran out, so the work stopped. Top up or raise the budget, then try it again; what was finished is kept."
+  4. Above the cost panel: "The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged." with **"See credits"** and, for research, a build or a change, **"Try again"** (CHG-03).
+- **You know it worked when:** the badge reads "Did not succeed", the panel says the budget ran out, and "Try again" is offered.
+- **Variations and refusals:** for other kinds of work (a conversation, a review) only "See credits" is offered.
+- **Where:** `RunService.MarkBudgetExhaustedAsync`; `WorkflowOutcome.FromAgent`; `RunView.tsx` `StoppedPanel`.
 - **Reachable from:** UI.
-- **Covered by tests:** `RunnerIntegrationTests.A_refused_budget_reaches_the_harness_as_terminal`.
+- **Covered by tests:** `RunnerIntegrationTests.A_refused_budget_reaches_the_harness_as_terminal`; `TryAgainAndChanges.test.tsx` ("says a budget stop plainly…").
 
 ### RUN-11 Read a failed run
 - **Who:** Viewer or above.
@@ -632,13 +630,14 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Steps:**
   1. The step "Stopped: it did not succeed" is logged.
   2. "Endgame · Stopped" gives the reason. Examples:
-     - "Planning did not produce a plan that covers everything the idea asks for, so nothing was built. Starting the build again plans it afresh."
-     - "\"{part}\" still did not work after 3 rounds of repair, each on a stronger model, so the app was not published. Its work so far is saved; the repairs were not charged."
-     - "The security review still found problems after one repair, so the app was not published…"
-     - "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; it can be started again."
+     - "Planning did not produce a plan that covers everything the idea asks for, so nothing was built. “Try again” plans it afresh."
+     - "\"{part}\" still did not work after 3 rounds of repair, each on a stronger model, so the app was not published. Its work so far is saved and the repairs were not charged; “Try again” carries on from it."
+     - "The security review still found problems after one repair, so the app was not published. Its work is saved, technical mode lists each finding, and “Try again” carries on from it."
+     - "You declined the plan, so nothing was built. “Try again” plans it afresh."
+     - "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; use “Try again” to carry on from where it stopped." (other kinds: "…Nothing was lost.")
   3. **"Outcome"** repeats the reason. Technical mode shows the technical summary.
 - **You know it worked when:** the Outcome section names the reason.
-- **Variations and refusals:** several messages promise a restart that nothing offers.
+- **Variations and refusals:** every message that promises a restart points at **"Try again"** on the same page (CHG-03).
 - **Where:** `RunExecutor.FinishAsync`; `BuildWorkflow`.
 - **Reachable from:** UI.
 - **Covered by tests:** `WorkflowTests.Repair_rounds_are_capped…`, `…A_security_finding_blocks_publishing_after_one_repair`, `…Work_that_never_passes_its_check_fails_its_task…`.
@@ -669,14 +668,14 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   1. **"Estimate"** shows "Not yet made" or the figure, with "Shown before the work began".
   2. **"Spent so far"** shows a bar and "{p}% of the estimate". The bar turns to the attention colour above 100%.
   3. While running, **"Held for calls in flight"** shows "Reserved before each call, released when it settles".
-  4. When finished, **"Estimate against actual"** shows "on the estimate", "{n}% over" or "{n}% under", with "Estimated {x}, cost {y}".
+  4. When finished, **"Estimate against actual"** shows "on the estimate", "{n}% over" or "{n}% under", with "Estimated {x}, cost {y}", and **"Not charged"** shows the credits the work used repairing its own mistakes, "Repairs of the work’s own mistakes, never billed".
   5. The aside **"Where the credits go"** says "Credits are held before each step and settled from what it really cost. Repairing a mistake of its own is never billed." with **"See credits"**.
   6. Free repairs are named in the steps: "Sent back for repair, at no charge: …", and "Fixed what the security review found, at no charge".
 - **You know it worked when:** "Estimate against actual" appears on a finished run.
-- **Variations and refusals:** **the run page never shows the not-charged amount.** `estimate.scored.nonBillableCredits` and `run.finished.totals.nonBillableCredits` are written but not read. Only the credits page shows "not charged" (another reader's area).
+- **Variations and refusals:** "Not charged" appears once the run has finished (from `estimate.scored.nonBillableCredits`); while it runs, each free repair is named in the steps.
 - **Where:** `RunView.tsx` `CostPanel`, `RunAside`; `Estimator.Score`.
 - **Reachable from:** UI; MCP `credits_get`.
-- **Covered by tests:** `runModel.test.ts`; `EstimateTests.An_estimate_is_made_before_work_and_scored…`.
+- **Covered by tests:** `runModel.test.ts`; `TryAgainAndChanges.test.tsx` ("…shows what was not charged…"); `EstimateTests.An_estimate_is_made_before_work_and_scored…`.
 
 ### RUN-14 Follow the tasks of a run
 - **Who:** Viewer or above.
@@ -769,12 +768,12 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Steps:**
   1. Read the plan (the card's detail in technical mode, and the plan panel).
   2. Press **"Approve"**: the plan becomes "Agreed" and building begins.
-  3. Press **"Decline"**: the run fails with "The owner rejected the plan."
+  3. Press **"Decline"** (optionally with a note): the card says "Declined. It was not done, so the work has stopped." and the run fails with "You declined the plan, so nothing was built. Your note: “…” “Try again” plans it afresh."
 - **You know it worked when:** after approving, the badge reads "Agreed".
-- **Variations and refusals:** **after a rejection there is no way to plan again.** The idea stays "building".
+- **Variations and refusals:** after a decline, **"Try again"** on the run or the idea page plans afresh (CHG-03). A change's plan asks "Accept this plan for the change?".
 - **Where:** `BuildWorkflow` (`Checkpoint(run,"plan")`).
 - **Reachable from:** UI; MCP.
-- **Covered by tests:** none found specific to the plan checkpoint.
+- **Covered by tests:** `WorkflowTests.A_declined_plan_says_so_and_a_try_again_plans_afresh`.
 
 ### BLD-05 See the build re-estimated from the plan
 - **Who:** nobody acts.
@@ -982,11 +981,11 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **What it changes:** every agent's permission check at that stage. "May not" is refused whatever else applies. "May do" is allowed.
 - **Variations and refusals:**
   - Refused: "The rules were not saved: {reason} They are as they were." (400 for a malformed rule or stage).
-  - **"Asks you first" does not ask.** Runs are always unattended, so an "ask" rule without a matching checkpoint is **denied**. The rule set's `checkpoints` list, which would turn it into an approval, **cannot be edited in the console**; the page only keeps the existing ones ("Also stops for you at: …"). API/MCP only.
+  - **"Asks you first" asks.** A matching call raises an approval (RUN-07) and the work waits for your answer, even though nobody watches the run; declined, the step is not taken and the work goes on without it. The rule set's separate `checkpoints` list is kept as it was ("Also stops for you at: …") and is API/MCP only.
   - Empty list labels: "Nothing extra is refused", "Nothing waits for you", "Only what the job allows".
 - **Where:** `AutonomyView.tsx` `StageRules`; `PUT /api/autonomy/rule-sets`; `PermissionPolicy.Decide`.
 - **Reachable from:** UI (deny, ask, allow); API/MCP `rule_set_set` (adds `checkpoints`).
-- **Covered by tests:** `AutonomyView.test.tsx` ("sets a stage's rules here and removes them again", "technical mode shows the rules as the harness reads them"); `PermissionTests` (all).
+- **Covered by tests:** `AutonomyView.test.tsx` ("sets a stage's rules here and removes them again", "technical mode shows the rules as the harness reads them"); `PermissionTests` (all, including `An_asks_you_first_rule_raises_an_approval_even_unattended_and_a_decline_carries_the_note`).
 
 ### AUTO-06 Remove the rules set here
 - **Who:** Admin.
@@ -1011,7 +1010,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **What you learn:** an agent may change only a short list of settings, and only on your word.
 - **Steps:**
   1. Ask for the change, for example "turn on the plan checkpoint here".
-  2. The approval appears on the conversation run (RUN-07). Approve it.
+  2. The approval appears in the conversation itself, titled with what will change, for example "Turn on the “Before the plan is carried out” checkpoint here?" (TALK-17). Approve it.
   3. The setting is written as made by an agent.
 - **You know it worked when:** the autonomy page shows the value "Set here".
 - **Variations and refusals:**
@@ -1023,56 +1022,70 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 
 ## Changing an app after it is built (CHG)
 
-### CHG-01 Ask the conversation to change an app
-- **Who:** Builder.
-- **Starts at:** the conversation with an app selected ("Ask, or tell it what to change").
-- **Needs:** an app.
-- **Level:** Core. **Learn first:** BLD-10, IDEA-05.
-- **What you learn:** today, the conversation cannot change an app's code.
+### CHG-01 Ask for a change to an app from its page
+- **Who:** Builder at the app.
+- **Starts at:** the app page `/apps/{id}`, the panel **"Change {app}"** (`features/apps/ChangeRequest.tsx`, mounted by the app page).
+- **Needs:** an app that has been built and published, with no other build or change of it under way.
+- **Level:** Core. **Learn first:** BLD-10.
+- **What you learn:** a change goes through the same stages as a build — but research is not repeated — and what the app already does is checked again before the new version goes out.
 - **Steps:**
-  1. Ask for a feature.
-  2. The assistant's only tools are `read_organisation`, `start_idea` and `adjust_setting`. It can answer, change an allowed setting (AUTO-07) or start a **new idea**, which is proposed to the app's **division** (CHG-02).
-- **You know it worked when:** nothing in the app's code changes. At most a new research run appears.
-- **Variations and refusals:** not applicable.
-- **Where:** `ConversationWorkflow.cs`.
-- **Reachable from:** UI. No route changes the code.
-- **Covered by tests:** none found.
-
-### CHG-02 Describe a new idea about an existing app
-- **Who:** Builder.
-- **Starts at:** `/start`, or the conversation.
-- **Needs:** an app.
-- **Level:** Advanced. **Learn first:** IDEA-02, BLD-01.
-- **What you learn:** an idea always starts as new research; it cannot name an app to change.
-- **Steps:**
-  1. Describe the change.
-  2. It is researched as a new product, with a verdict.
-  3. On build, placement makes or reuses a project and app by slug.
-- **You know it worked when:** not verified from code.
+  1. The panel reads "Describe the change in your own words. It is checked against FrostAura’s red lines, planned from your words, built and checked part by part in a private preview, and everything {app} does now is checked again before the new version is published. Who may open it does not change."
+  2. Type into **"What should change?"** and press **"See what it costs"** ("Working it out…").
+  3. Read **"Estimated {credits}"** and the basis. Press **"Make this change"** ("Starting…") or **"Not now"**. Editing the text throws the estimate away.
+  4. You are taken to the change's run, titled "Change: {first line}" (RUN-01).
+  5. On the run: the request is screened against the red lines; "The builder · The plan" lists what the change asks for, quoted, and a last part **"Everything the app did before still works"**; each part is built and "Checked: …" in a private preview; the old parts are checked again with nothing built first; then the security review (BLD-09).
+  6. "The builder · New version running": "The new version of {app} is running, with the change and everything it did before checked in the running app. Who may open it has not changed. Its history shows the change."
+- **You know it worked when:** the run reads "Finished", and the app's history (CHG-04) shows the change's versions by the employee who made them, the newest live.
 - **Variations and refusals:**
-  - **Not verified from code: what happens if the slugs match.** Only if the verdict happens to propose the existing project's slug and the app slug "web" would the build work on the existing app's history. The planner is still told the app "starts from the app kit's template (the Notes example), which it replaces", so the result is not a controlled change.
-  - There is no field anywhere that targets an existing app.
-- **Where:** `BuildWorkflow.PlaceAsync`, the planner prompt.
-- **Reachable from:** UI, but not as a change flow.
-- **Covered by tests:** none found.
+  - Never built: 409 "This app has not been built yet". Another build or change under way: 409 "This app is already being worked on". The panel says "The change was not started: {reason}".
+  - An employee who works on the app is paused: 409 "{Name}, who works on this app, is paused, so no new work is started for them. Resume them first."
+  - A request that crosses a red line: the run stops with "This change crosses a red line ({line}). FrostAura never builds it, and no one can overrule that, so nothing was changed."
+  - Something that worked before is broken by the change: "Sent back for repair, at no charge: Everything the app did before still works…", repaired one tier up, at most 3 rounds; still broken, the run stops and the app keeps running its previous version.
+  - With the plan checkpoint on, "Accept this plan for the change?" waits for you (BLD-04).
+  - A change that stopped can be tried again (CHG-03).
+- **Where:** `ChangeRequest.tsx`; `POST /api/apps/{id}/changes/estimate`, `POST /api/apps/{id}/changes` (WorkEndpoints); `ChangeService`; `TaskWorkflow` → `BuildWorkflow.ChangeAsync`; `Prompts/change-screen.md`.
+- **Reachable from:** UI; MCP `app_change_estimate`, `app_change`; the conversation (CHG-02).
+- **Covered by tests:** `WorkflowTests.A_change_is_screened_planned_from_the_request_built_checked_with_what_worked_before_reviewed_and_republished`, `…A_change_that_breaks_what_worked_before_is_repaired_unbilled_before_it_is_published`, `…A_change_over_a_red_line_changes_nothing`; `TryAgainAndChangesTests.A_built_app_is_changed_by_a_run_that_shows_its_estimate_first_and_one_change_at_a_time`; `TryAgainAndChanges.test.tsx` ("changing a built app").
 
-### CHG-03 Build again after a failed, cancelled or rejected build
+### CHG-02 Ask the conversation to change an app
 - **Who:** Builder.
-- **Starts at:** none.
-- **Needs:** not applicable.
-- **Level:** not applicable. **Learn first:** RUN-11. **What you learn:** not applicable. **You know it worked when:** not applicable.
-- **Steps:** none exist. The idea stays `building`; `POST /api/ideas/{id}/decision` needs `awaiting_decision` (409); there is no retry or rebuild endpoint, screen control or MCP tool.
-- **Variations and refusals:** messages that promise it anyway: "Starting the build again plans it afresh.", "…it can be started again.", "…then start it again."
-- **Where:** `IdeaService.DecideAsync`; `RunExecutor`; `BuildWorkflow`.
-- **Reachable from:** nowhere.
-- **Covered by tests:** none.
+- **Starts at:** the conversation about an app (TALK-04), or any conversation, naming the app.
+- **Needs:** a built app inside the conversation's part of the tree.
+- **Level:** Core. **Learn first:** CHG-01, TALK-07.
+- **What you learn:** the conversation asks for the change on your word, and the change then runs as in CHG-01.
+- **Steps:**
+  1. Describe the change, for example "Let members reset a counter back to zero."
+  2. The assistant calls `change_app`. In the conversation a card asks **"Change the app: {your words}?"** with **"Approve"** / **"Decline"** and **"Add a note (optional)"** (TALK-17).
+  3. Approve. The change's run starts with its estimate first; the assistant replies that it has started.
+- **You know it worked when:** a "Change: …" run appears and the reply says so.
+- **Variations and refusals:** declined: "Declined. It was not done; the work continues without it." and the assistant says it was not done. An app outside the conversation's scope is refused by the tool. The refusals of CHG-01 come back as "The change could not be started (409): …".
+- **Where:** `RunnerTools.ChangeAppTool`; `POST /internal/apps/changes`; `ConversationWorkflow`.
+- **Reachable from:** UI (conversation); MCP `conversation_post`.
+- **Covered by tests:** `WorkflowTests.The_conversation_asks_in_plain_words_before_changing_an_app_or_trying_work_again_and_a_decline_is_told_truthfully`; `TryAgainAndChangesTests` (the internal change).
+
+### CHG-03 Try again after a failed, cancelled, budget-stopped or declined build
+- **Who:** Builder.
+- **Starts at:** the stopped run's page, or the idea page under "You chose to build it…".
+- **Needs:** the idea's latest build (or a change's run) that failed, was cancelled, stopped for budget or had its plan declined.
+- **Level:** Core. **Learn first:** RUN-11.
+- **What you learn:** trying again carries on from where the work stopped: what was placed, agreed and finished is kept, not rebuilt or charged again.
+- **Steps:**
+  1. The panel says why it stopped: "This work stopped before it finished. What was finished is kept.", "This work was cancelled. What was finished is kept.", "The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged." (with **"See credits"**) or "The plan was declined, so nothing was built."
+  2. Press **"Try again"** ("Working it out…"). It reads, for example, "1 of its 2 parts are already built and checked; they are kept, not built or charged again." (or "The plan agreed before is kept, and all {n} of its parts are built." / "It is planned afresh, then built part by part."), **"Estimated {credits}"** — priced for what is left — and the basis.
+  3. Press **"Start it again"** ("Starting…") or **"Not now"**. You are taken to the new run.
+  4. The new run says "Endgame · Carrying on": "This picks up where the earlier attempt stopped: {n} of {m} parts were already built and checked, so they are kept, not rebuilt or charged again." The plan shows those parts as "Built and checked in the earlier attempt; kept, not built or charged again."
+- **You know it worked when:** the new run finishes; the idea's "Watch the work that followed" now opens it.
+- **Variations and refusals:** a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable". While an employee on the project is paused, a build or change is not started again: "It was not started again: {Name}, who works on this app, is paused…".
+- **Where:** `runs/TryAgain.tsx`, `RunView.tsx` `StoppedPanel`, `VerdictView.tsx`; `POST /api/runs/{id}/retry/estimate`, `POST /api/runs/{id}/retry`; `RetryService`, `IdeaService.RetryBuildAsync`, `FactoryEstimates`; `BuildWorkflow.CarryOverAsync`.
+- **Reachable from:** UI; MCP `run_retry_estimate`, `run_retry`; the conversation (`try_again`, TALK-18).
+- **Covered by tests:** `WorkflowTests.A_build_tried_again_keeps_its_placement_plan_and_finished_parts_and_builds_only_the_rest`, `…A_declined_plan_says_so_and_a_try_again_plans_afresh`; `TryAgainAndChangesTests.A_stopped_build_is_built_again_priced_for_what_is_left_and_carrying_on_from_the_earlier_attempt`; `TryAgainAndChanges.test.tsx`.
 
 ### CHG-04 Restore an earlier version
 - **Who:** Builder (another reader covers the details).
 - **Starts at:** the app page's history.
 - **Needs:** an app with versions.
 - **Level:** Core. **Learn first:** BLD-10.
-- **What you learn:** this is the only person-driven change to built code: going back.
+- **What you learn:** going back is a person's change too; a change by the factory (CHG-01) appears in the same history.
 - **Steps:** see the other reader's entry (`POST /api/apps/{id}/versions/{commit}/restore`; a public app becomes private).
 - **You know it worked when:** see the other reader's entry.
 - **Variations and refusals:** see the other reader's entry.
@@ -1081,19 +1094,17 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Covered by tests:** `breadth.spec.ts` ("history names who made each version…"); `VersionsAndExportTests`.
 
 ### CHG-05 Give an employee a task on an app (internal only)
-- **Who:** not reachable by a person.
-- **Starts at:** `POST /internal/runs {kind:"task", scope: app}` (service token only).
+- **Who:** not reachable by a person; a person's change is CHG-01.
+- **Starts at:** `POST /internal/runs {kind:"task", scope: app}` (service token only), with an owner message that is not a change.
 - **Needs:** an app scope.
-- **Level:** Developer. **Learn first:** not applicable.
-- **What you learn:** the Runner can already change an app's code; no one can ask it to.
-- **Steps:**
-  1. A builder agent works in the app's workspace on the request and commits.
-  2. **Nothing republishes the app afterwards** (`TaskWorkflow` never calls build or start).
-- **You know it worked when:** a commit lands in the app's history (only visible to whoever drove the internal call).
-- **Variations and refusals:** not applicable.
+- **Level:** Developer. **Learn first:** CHG-01.
+- **What you learn:** the Runner keeps a plain task for internal work; anything a person asks for goes through CHG-01's stages.
+- **Steps:** a builder agent works in the app's workspace on the request and commits; nothing is published.
+- **You know it worked when:** a commit lands in the app's history.
+- **Variations and refusals:** an owner message with `kind: change` makes it a change (CHG-01).
 - **Where:** `Endgame.Runner/Workflows/TaskWorkflow.cs`; `InternalEndpoints` `POST /internal/runs`.
 - **Reachable from:** internal/test only.
-- **Covered by tests:** `RunnerIntegrationTests`, `RunnerContractTests` (they create task runs).
+- **Covered by tests:** `RunnerIntegrationTests`, `RunnerContractTests`.
 
 ### CHG-06 Change how an app runs or who may open it
 This is another reader's area (app settings, sharing, going public): `POST /api/apps/{id}/settings`. Listed only so this section is complete.
@@ -1101,25 +1112,16 @@ This is another reader's area (app settings, sharing, going public): `POST /api/
 ---
 
 ## Gaps and oddities found
-1. **An app cannot be changed after it is built** (CHG-01, CHG-02, CHG-05). The `task` run exists but only an internal call creates it, and it does not republish. The conversation's placeholder "Ask, or tell it what to change" implies it can.
-2. **No "try again" anywhere** (CHG-03, VERD-12). This covers failed, cancelled and plan-rejected builds, and failed research. Several owner-facing messages promise a restart.
-3. **The second verdict after "Change the idea" appears to lose its buttons** (VERD-07; not verified in a browser).
-4. **The change never reaches the build** (VERD-06, VERD-07, VERD-11). The note and the suggested change go to research only, and the build plans from the original text. Auto-mode builds "change" verdicts as written.
-5. **"Asks you first" denies instead of asking** (AUTO-05), and a rule set's `checkpoints` list is API/MCP only.
-6. **The checkpoints mode skips the budget pause** at the start and at the plan (IDEA-04, BLD-05). Only auto-mode pauses.
-7. ~~The console cannot target a division~~ — fixed (IDEA-02). Formerly: The start screen never sends `scope`; API, MCP and the conversation can.
-8. ~~The estimate shown can differ from the one recorded~~ — fixed: both name the same place (IDEA-02). Formerly: The start screen and "Take this idea" estimate without a scope, while creation uses the organisation's history.
-9. ~~Some start-screen copy is untrue in auto-mode~~ — fixed: the steps follow the autonomy at the place chosen (IDEA-02). Formerly: "Nothing is built until you have seen the verdict" and "The people this needs are proposed" both are; auto-mode builds and hires on its own.
-10. **Some fields are written but never shown.**
-    - The run page never shows what was not charged, or the `budgetExhausted` flag.
-    - "Change it: {label}", "Estimated {n}" under "What would change the verdict", and the method rows "Argued" and "Briefed" never render, because the Runner does not write those fields.
-11. **"The work carries on from here." shows even after "Decline"**, which fails the run on the start and plan checkpoints.
-12. **Endpoints or tools with no screen.**
-    - An approval note, the `reason` on pause and cancel, constraints on taking a suggestion, and rule-set checkpoints have no screen.
-    - MCP has no suggestion-dismiss tool and no suggestion-estimate tool.
-    - The internal `POST /internal/runs` for task runs is only used by tests.
-13. **Doc mismatches.** The spec's design stage (icons, brand assets) does not exist (BLD-12). The spec says a person can "step in and change anything at any point"; in code, a person can only pause, cancel, approve or reject, and has no way to edit a plan or a placement.
-14. **Smaller permission and refusal oddities.**
+1. **Fixed on 2026-11-25 (lane C):** changing a built app (CHG-01, CHG-02); trying again (CHG-03, VERD-12, RUN-10, RUN-11); the second verdict's buttons and the agreed change reaching the build (VERD-06, VERD-07, VERD-11); "Asks you first" asking (AUTO-05); "The work carries on from here." after a decline (RUN-07); the run page's not-charged amount and budget stop (RUN-10, RUN-13); MCP suggestion dismiss and estimate.
+2. **The checkpoints mode skips the budget pause** at the start and at the plan (IDEA-04, BLD-05). Only auto-mode pauses.
+3. ~~The console cannot target a division~~ — fixed (IDEA-02): the start screen chooses the organisation or a division.
+4. ~~The estimate shown can differ from the one recorded~~ — fixed: both name the same place (IDEA-02).
+5. ~~Some start-screen copy is untrue in auto-mode~~ — fixed: the steps follow the autonomy at the place chosen (IDEA-02).
+6. **Some fields are written but never shown.** "Change it: {label}", "Estimated {n}" under "What would change the verdict", and the method rows "Argued" and "Briefed" never render, because the Runner does not write those fields.
+7. **Endpoints or tools with no screen.** The `reason` on pause and cancel, constraints on taking a suggestion, and rule-set checkpoints have no screen. The internal `POST /internal/runs` for task runs is only used by tests.
+8. **Doc mismatches.** The spec's design stage (icons, brand assets) does not exist (BLD-12). The spec says a person can "step in and change anything at any point"; a person can pause, cancel, approve or decline with a note, try again, or ask for a change, but cannot edit a plan or a placement.
+9. **Smaller permission and refusal oddities.**
     - The conversation lets a Builder change autonomy and checkpoints, which the autonomy page reserves for Admins (AUTO-07).
     - ~~A Viewer sees the full form and is refused only on submit~~ — fixed (IDEA-02); the home screen's "New idea" button is still shown to a Viewer.
     - An auto-mode decision other than "build" returns 403, while UC-104 lists every auto-mode refusal as 409.
+10. **A change's check of what worked before reads the progress file.** Parts built before the progress file existed, or by hand, are not re-checked by name; the evaluator still runs the app's own tests.

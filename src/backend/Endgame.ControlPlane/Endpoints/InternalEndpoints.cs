@@ -31,7 +31,8 @@ public sealed record CheckoutRequest(Guid TaskId, Guid RunId, Guid? EmployeeId, 
 
 public sealed record CreateTaskRequest(string? Scope, Guid? RunId, Guid? ParentTaskId, string? Title, string? Description, decimal? EstimateCredits, IReadOnlyList<Guid>? DependsOn);
 
-public sealed record RaiseApprovalRequest(Guid RunId, string? Title, string? Detail);
+/// <param name="OnDecline"><c>continues</c> (the step is not taken, the work goes on) or <c>stops</c> (the work stops); the console says which.</param>
+public sealed record RaiseApprovalRequest(Guid RunId, string? Title, string? Detail, string? OnDecline = null);
 
 public sealed record PublishedRequest(string? Version);
 
@@ -176,7 +177,7 @@ internal static class InternalEndpoints
         .WithName("GetContext").WithSummary("The resolved cascade for a scope: context, rule sets, budgets, settings, secret names and roles, each with the level that set it.").Produces<ContextView>();
 
         group.MapPost("/approvals", async (RaiseApprovalRequest request, ApprovalService approvals, CancellationToken ct) =>
-            Results.Created("/internal/approvals", await approvals.RaiseAsync(request.RunId, request.Title ?? "", request.Detail, ct)))
+            Results.Created("/internal/approvals", await approvals.RaiseAsync(request.RunId, request.Title ?? "", request.Detail, ct, request.OnDecline)))
         .WithName("RaiseApproval").WithSummary("Raises a checkpoint; the run waits until someone with rights answers it.").Produces<ApprovalView>(201);
 
         group.MapGet("/routes", async (TreeService tree, CancellationToken ct) => Results.Ok(await tree.RoutesAsync(ct)))

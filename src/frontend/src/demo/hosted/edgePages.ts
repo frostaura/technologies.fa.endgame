@@ -400,7 +400,10 @@ export type AuthAction =
   | { kind: "member-passkey" }
   | { kind: "visitor-passkey" }
   | { kind: "sign-up"; email: string; displayName: string; invitationCode: string }
-  | { kind: "follow"; href: string };
+  | { kind: "follow"; href: string }
+  /** The development sign-in (ACC-13): as a member (a console account), or as a visitor of this app. */
+  | { kind: "dev-member"; email: string }
+  | { kind: "dev-visitor"; email: string; displayName: string };
 
 /**
  * The script's event wiring, with each call to the control plane handed to `act`. As in the
@@ -438,6 +441,9 @@ export function wireAuthPage(doc: Document, act: (action: AuthAction) => Promise
 
   on($("member-passkey"), "click", (event) => void run(event.currentTarget as HTMLButtonElement, { kind: "member-passkey" }));
   on($("visitor-passkey"), "click", (event) => void run(event.currentTarget as HTMLButtonElement, { kind: "visitor-passkey" }));
+  on($("dev-member"), "click", (event) => void run(event.currentTarget as HTMLButtonElement, { kind: "dev-member", email: value("dev-email") }));
+  on($("dev-visitor"), "click", (event) => void run(event.currentTarget as HTMLButtonElement, { kind: "dev-visitor", email: value("dev-email"), displayName: "" }));
+  on($("dev-visitor-up"), "click", (event) => void run(event.currentTarget as HTMLButtonElement, { kind: "dev-visitor", email: value("email"), displayName: value("display-name") }));
   on($("sign-up"), "submit", (event) => {
     event.preventDefault();
     void run($("create") as HTMLButtonElement | null, {

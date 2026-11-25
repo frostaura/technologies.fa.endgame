@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "EMP-06",
   "persona": "owner",
-  "scenario": "idle-sweep",
+  "scenario": "s4-idle-sweep",
   "start": "/",
   "steps": [
     {

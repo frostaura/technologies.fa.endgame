@@ -1,0 +1,60 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "PPL-07",
+  "persona": "admin",
+  "scenario": "established",
+  "start": "/people",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Remove Lena Fischer"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "loses this role at once",
+        "note": "Asked first: Remove, or Keep them."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Remove"
+          }
+        },
+        {
+          "wait": 1500
+        }
+      ],
+      "highlight": {
+        "selector": "ul[aria-label='People']",
+        "note": "Lena's row is gone. Grants set elsewhere, her account and her passkey stay."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "The Owner's grant cannot be removed",
+      "persona": "admin",
+      "scenario": "established",
+      "start": "/people",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "selector": "li[data-member='mara@northwind.example']",
+            "note": "No Remove in the Owner's row: “The Owner's role cannot be revoked.”"
+          }
+        }
+      ]
+    }
+  ]
+}

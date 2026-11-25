@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "EMP-05",
   "persona": "owner",
-  "scenario": "employee-team",
+  "scenario": "s4-employee-team",
   "start": "/employees/{employee}",
   "steps": [
     {
@@ -86,7 +86,7 @@
     {
       "title": "Not while it is working on a run",
       "persona": "owner",
-      "scenario": "employee-working",
+      "scenario": "s4-employee-working",
       "start": "/employees/{employee}",
       "steps": [
         {

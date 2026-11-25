@@ -1,0 +1,182 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-04",
+  "persona": "invited",
+  "scenario": "established",
+  "start": "/__app/{app}/path/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Create your sign-in"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Create your sign-in for Court booking",
+        "note": "From the app's sign-in page."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "is shared with chosen people",
+        "note": "Use the address it was shared with, and the code."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "E-mail address"
+            },
+            "text": "weekend.cover@northwind.example"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Your name"
+            },
+            "text": "Weekend cover"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Invitation code"
+            },
+            "text": "TB-7QW2"
+          }
+        },
+        {
+          "click": {
+            "text": "Create a passkey"
+          }
+        }
+      ],
+      "note": "The address it was shared with, an optional name, and the invitation code."
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "note": "The code is checked without being used up; then the device makes a passkey for this app alone.",
+      "act": [
+        {
+          "wait": 900
+        }
+      ]
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": 1200
+        }
+      ],
+      "note": "Checked again and used up: the end user is created, with a 14-day session at this app."
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "testId": "signed-in-as",
+        "note": "Back at the app, signed in by name."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A wrong code",
+      "persona": "invited",
+      "scenario": "established",
+      "start": "/__app/{app}/path/_endgame/auth/sign-up",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "E-mail address"
+                },
+                "text": "weekend.cover@northwind.example"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Invitation code"
+                },
+                "text": "TB-0000"
+              }
+            },
+            {
+              "click": {
+                "text": "Create a passkey"
+              }
+            },
+            {
+              "wait": 800
+            }
+          ],
+          "highlight": {
+            "text": "register with the address it was shared with",
+            "note": "Wrong address or code, or a used or expired one: refused, and no passkey is made."
+          }
+        }
+      ]
+    },
+    {
+      "title": "An address already registered",
+      "persona": "invited",
+      "scenario": "established",
+      "start": "/__app/{app}/path/_endgame/auth/sign-up",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "type": {
+                "into": {
+                  "text": "E-mail address"
+                },
+                "text": "chef@northwind.example"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Invitation code"
+                },
+                "text": "TB-91KD"
+              }
+            },
+            {
+              "click": {
+                "text": "Create a passkey"
+              }
+            },
+            {
+              "wait": 800
+            }
+          ],
+          "highlight": {
+            "text": "already registered with this app",
+            "note": "Refused: they sign in instead."
+          }
+        }
+      ]
+    }
+  ]
+}

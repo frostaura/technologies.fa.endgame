@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "EMP-07",
   "persona": "owner",
-  "scenario": "contractor-working",
+  "scenario": "s4-contractor-working",
   "start": "/employees/f844ad47-51af-4b59-a15a-535703f4b405",
   "steps": [
     {

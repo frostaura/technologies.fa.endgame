@@ -32,7 +32,10 @@
         "end-user",
         "assistant",
         "host-admin",
-        "division-admin"
+        "division-admin",
+        "invited",
+        "first-run",
+        "two-organisations"
       ]
     },
     "scenario": {
@@ -47,30 +50,44 @@
         "app-live",
         "low-credits",
         "god-mode",
+        "account",
+        "two-organisations",
+        "app-asleep",
+        "app-paused",
+        "app-crashed",
+        "at-overdraft-limit",
+        "s1-app-made-private",
+        "s1-app-not-published",
+        "s1-app-private",
+        "s1-app-public",
+        "s1-app-unshared",
+        "s1-development-apps",
+        "s1-development-sign-in",
+        "s1-keys-at-limit",
+        "s1-session-check-fails",
         "quiet",
         "hire-pending",
         "employee-memory",
         "employee-released",
-        "at-overdraft-limit",
         "screening-offline",
-        "hiring",
-        "hires-all-decided",
-        "hire-manager-gone",
-        "contractor-working",
-        "contractor-finishes",
-        "employee-working",
-        "employee-record",
-        "employee-team",
-        "employee-at-cap",
-        "idle-sweep",
-        "released-with-memory",
-        "memory-to-tidy",
-        "credits-at-zero",
-        "below-zero",
-        "top-ups-waiting",
-        "operator-log",
-        "operator-log-empty",
-        "build-running"
+        "build-running",
+        "s4-hiring",
+        "s4-hires-all-decided",
+        "s4-hire-manager-gone",
+        "s4-contractor-working",
+        "s4-contractor-finishes",
+        "s4-employee-working",
+        "s4-employee-record",
+        "s4-employee-team",
+        "s4-employee-at-cap",
+        "s4-idle-sweep",
+        "s4-released-with-memory",
+        "s4-memory-to-tidy",
+        "s4-credits-at-zero",
+        "s4-below-zero",
+        "s4-top-ups-waiting",
+        "s4-operator-log",
+        "s4-operator-log-empty"
       ]
     },
     "start": {
@@ -85,48 +102,13 @@
     },
     "variations": {
       "type": "array",
-      "description": "What else can happen: each refusal, limit or branch that matters, played on its own beside the flow's \"What else can happen\".",
+      "description": "What else can happen: each refusal or branch that matters, played in the live console from its own start, as its own person and world. Shown under \"What else can happen\" on the flow's page.",
       "items": {
         "$ref": "#/definitions/variation"
       }
     }
   },
   "definitions": {
-    "variation": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "title",
-        "persona",
-        "scenario",
-        "start",
-        "steps"
-      ],
-      "description": "One branch of the flow, played in its own console. Its steps are numbered 1, 2, 3 in order and have no text in the flow, so each says what it shows in its note (or its spotlight's note).",
-      "properties": {
-        "title": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 120
-        },
-        "persona": {
-          "$ref": "#/properties/persona"
-        },
-        "scenario": {
-          "$ref": "#/properties/scenario"
-        },
-        "start": {
-          "$ref": "#/definitions/route"
-        },
-        "steps": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "$ref": "#/definitions/step"
-          }
-        }
-      }
-    },
     "route": {
       "type": "string",
       "pattern": "^/[A-Za-z0-9/{}_?=&.-]*$",
@@ -556,6 +538,42 @@
         }
       },
       "description": "A captured image of this step, shown in print and whenever the live console cannot load."
+    },
+    "variation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "persona",
+        "scenario",
+        "start",
+        "steps"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140,
+          "description": "The branch in a few words, as the learner picks it."
+        },
+        "persona": {
+          "$ref": "#/properties/persona"
+        },
+        "scenario": {
+          "$ref": "#/properties/scenario"
+        },
+        "start": {
+          "$ref": "#/definitions/route"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/step"
+          },
+          "description": "Numbered 1, 2, … within the variation; each step's note says what it shows."
+        }
+      }
     }
   }
 }

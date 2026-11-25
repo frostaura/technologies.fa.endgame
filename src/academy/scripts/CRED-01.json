@@ -52,7 +52,7 @@
     {
       "title": "Exactly zero, with an overdraft",
       "persona": "owner",
-      "scenario": "credits-at-zero",
+      "scenario": "s4-credits-at-zero",
       "start": "/credits",
       "steps": [
         {
@@ -68,7 +68,7 @@
     {
       "title": "Below zero, inside the overdraft",
       "persona": "owner",
-      "scenario": "below-zero",
+      "scenario": "s4-below-zero",
       "start": "/credits",
       "steps": [
         {

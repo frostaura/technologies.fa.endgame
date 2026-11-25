@@ -21,19 +21,17 @@ export function DemoFrame({
   onState,
   onTry,
   title,
-  testId = "demo-frame",
 }: {
   request: FrameRequest | null;
   interactive: boolean;
   onState: (s: BridgeState) => void;
   onTry: () => void;
   title: string;
-  /** The frame's test id; a second console on the page (a variation) carries its own. */
-  testId?: string;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const bridge = useRef<DemoBridge | null>(null);
   const [state, setState] = useState<BridgeState>("loading");
+  // The console's address; a hosted app's pages carry their own address bar inside the frame.
   const [route, setRoute] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const stateRef = useRef(onState);
@@ -88,7 +86,7 @@ export function DemoFrame({
         <span className="h-2.5 w-2.5 rounded-full bg-attention-line" />
         <span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
         <span className="h-2.5 w-2.5 rounded-full bg-success/40" />
-        <span className="ml-2 min-w-0 flex-1 truncate rounded-full bg-ground px-3 py-1 font-mono text-xs text-ink-muted">endgame{route ?? ""}</span>
+        <span className="ml-2 min-w-0 flex-1 truncate rounded-full bg-ground px-3 py-1 font-mono text-xs text-ink-muted">endgame{route && !route.startsWith("/__app/") ? route : ""}</span>
         <span className={`h-2 w-2 rounded-full ${state === "ready" ? (busy ? "animate-pulse bg-success" : "bg-success") : "bg-border-strong"}`} />
       </div>
       <iframe
@@ -97,7 +95,7 @@ export function DemoFrame({
         title={title}
         className={`h-full w-full flex-1 bg-surface ${state === "unavailable" ? "invisible" : ""}`}
         onError={() => bridge.current?.fail("The live console could not be loaded.")}
-        data-testid={testId}
+        data-testid="demo-frame"
       />
       {state === "ready" && !interactive && (
         <button

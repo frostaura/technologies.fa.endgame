@@ -129,7 +129,7 @@
     {
       "title": "The manager it was drafted with has been let go",
       "persona": "owner",
-      "scenario": "hire-manager-gone",
+      "scenario": "s4-hire-manager-gone",
       "start": "/hires/{hire}",
       "steps": [
         {

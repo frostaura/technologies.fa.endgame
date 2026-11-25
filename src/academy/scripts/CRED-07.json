@@ -70,7 +70,7 @@
     {
       "title": "Five requests already waiting",
       "persona": "owner",
-      "scenario": "top-ups-waiting",
+      "scenario": "s4-top-ups-waiting",
       "start": "/credits",
       "steps": [
         {

@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "OP-10",
   "persona": "owner",
-  "scenario": "operator-log",
+  "scenario": "s4-operator-log",
   "start": "/",
   "steps": [
     {
@@ -36,7 +36,7 @@
     {
       "title": "Nobody from FrostAura has been in",
       "persona": "owner",
-      "scenario": "operator-log-empty",
+      "scenario": "s4-operator-log-empty",
       "start": "/operator-access",
       "steps": [
         {
@@ -52,7 +52,7 @@
     {
       "title": "Only the Owner reads it",
       "persona": "admin",
-      "scenario": "operator-log",
+      "scenario": "s4-operator-log",
       "start": "/operator-access",
       "steps": [
         {
@@ -68,7 +68,7 @@
     {
       "title": "Technical mode shows the raw entry",
       "persona": "owner",
-      "scenario": "operator-log",
+      "scenario": "s4-operator-log",
       "start": "/operator-access",
       "steps": [
         {

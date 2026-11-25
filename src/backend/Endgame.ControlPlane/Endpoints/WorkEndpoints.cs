@@ -27,7 +27,16 @@ public sealed record IdeaRequest(string? Text, IReadOnlyList<string>? Constraint
 /// <param name="Scope">Optional: the organisation (or a scope in it) the idea is for, so the estimate uses its own history.</param>
 public sealed record EstimateRequest(string? Text, IReadOnlyList<string>? Constraints, string? Scope = null);
 
-public sealed record DecisionRequest(string? Choice, string? Note);
+/// <param name="ApplyChange">On a "change" verdict with choice <c>build</c>: build with research's suggested change as part of what is built.</param>
+public sealed record DecisionRequest(string? Choice, string? Note, bool? ApplyChange = null);
+
+/// <param name="Request">The change, in the person's own words.</param>
+public sealed record ChangeRequest(string? Request);
+
+public sealed record ConversationEstimateRequest(string? Scope, Guid? EmployeeId);
+
+/// <summary>What one conversation turn is expected to cost, and the most it can (every call reserved at its worst case).</summary>
+public sealed record ConversationEstimateView(decimal Credits, decimal? Ceiling, string Basis);
 
 public sealed record ControlRequest(string? Reason);
 
@@ -93,10 +102,10 @@ internal static class WorkEndpoints
         {
             var org = await service.OrganisationOfAsync(id, ct);
             await access.RequireAsync(principal.Id(), await service.ScopeOfAsync(org, id, ct), MemberRole.Builder, ct);
-            await service.DecideAsync(org, id, request.Choice ?? "", request.Note, principal.Id(), ct);
+            await service.DecideAsync(org, id, request.Choice ?? "", request.Note, principal.Id(), ct, applyChange: request.ApplyChange == true);
             return Results.Ok(await reads.IdeaAsync(org, id, ct));
         })
-        .WithName("DecideIdea").WithSummary("build, change, overrule or drop, after the verdict; returns the idea, whose decision.runId is the run that follows. Building over 'do-not-build' needs an overrule.").Produces<PublicIdeaView>();
+        .WithName("DecideIdea").WithSummary("build, change, overrule or drop, after the verdict; returns the idea, whose decision.runId is the run that follows. Building over 'do-not-build' needs an overrule. On a 'change' verdict, build with applyChange: true builds research's change in.").Produces<PublicIdeaView>();
 
         var runs = api.MapGroup("/runs").WithTags("Runs");
         runs.MapGet("/{id:guid}", async (Guid id, ClaimsPrincipal principal, AccessService access, RunService service, ReadModels reads, CancellationToken ct) =>
@@ -139,6 +148,24 @@ internal static class WorkEndpoints
             .WithName($"{char.ToUpperInvariant(action[0])}{action[1..]}Run").WithSummary(summary).Accepts<ControlRequest>("application/json").Produces<PublicRunView>();
         }
 
+        runs.MapPost("/{id:guid}/retry/estimate", async (Guid id, ClaimsPrincipal principal, AccessService access, RunService service, RetryService retries, CancellationToken ct) =>
+        {
+            var (_, scope) = await service.RequireAsync(id, ct);
+            await access.RequireAsync(principal.Id(), scope, MemberRole.Builder, ct);
+            return Results.Ok(await retries.EstimateAsync(id, ct));
+        })
+        .WithName("EstimateRetry").WithSummary("What trying a stopped research, build or change again would cost, and how many of its parts are already built and kept. Free.").Produces<RetryEstimateView>();
+        runs.MapPost("/{id:guid}/retry", async (Guid id, ClaimsPrincipal principal, AccessService access, RunService service, RetryService retries, ReadModels reads, CancellationToken ct) =>
+        {
+            var (run, scope) = await service.RequireAsync(id, ct);
+            await access.RequireAsync(principal.Id(), scope, MemberRole.Builder, ct);
+            var again = await retries.RetryAsync(id, principal.Id(), ct);
+            return Results.Created($"/api/runs/{again.Id}", await reads.RunAsync(run.OrganisationId, again.Id, ct));
+        })
+        .WithName("RetryRun")
+        .WithSummary("Tries a failed, cancelled or budget-stopped research, build or change again as a new run, keeping what was placed, agreed and finished. 409 not_retryable for anything else, or for an attempt that is not the latest.")
+        .Produces<PublicRunView>(201);
+
         runs.MapPost("/{id:guid}/approvals/{approvalId:guid}", async (Guid id, Guid approvalId, AnswerRequest request, ClaimsPrincipal principal, AccessService access,
             RunService service, ApprovalService approvals, CancellationToken ct) =>
         {
@@ -170,6 +197,24 @@ internal static class WorkEndpoints
             return Results.Ok(await reads.AppAsync(scope, ct));
         })
         .WithName("GetApp").WithSummary("An app's health, running state, both addresses, cost against its cap and settings.").Produces<PublicAppView>();
+        apps.MapPost("/{id:guid}/changes/estimate", async (Guid id, ChangeRequest request, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, ChangeService changes, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
+            await access.RequireAsync(principal.Id(), scope, MemberRole.Builder, ct);
+            var estimate = await changes.EstimateAsync(scope, request.Request, ct);
+            return Results.Ok(new ChangeEstimateView(estimate.Credits, estimate.Basis));
+        })
+        .WithName("EstimateChange").WithSummary("What changing an app as described is expected to cost, before anything starts. Free.").Produces<ChangeEstimateView>();
+        apps.MapPost("/{id:guid}/changes", async (Guid id, ChangeRequest request, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, ChangeService changes, ReadModels reads, CancellationToken ct) =>
+        {
+            var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
+            await access.RequireAsync(principal.Id(), scope, MemberRole.Builder, ct);
+            var run = await changes.CreateAsync(scope, request.Request, principal.Id(), "console", ct);
+            return Results.Created($"/api/runs/{run.Id}", await reads.RunAsync(scope.OrganisationId, run.Id, ct));
+        })
+        .WithName("ChangeApp")
+        .WithSummary("Asks the factory to change a built app: screened against the red lines, planned, built and checked part by part, what worked before checked again, reviewed, and the new version published. 409 app_not_built or app_busy.")
+        .Produces<PublicRunView>(201);
         apps.MapPost("/{id:guid}/settings", async (Guid id, AppSettingsRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access,
             ScopeResolver scopes, CascadeService cascade, ReadModels reads, EdgeNotifier edge, CancellationToken ct) =>
         {
@@ -217,10 +262,18 @@ internal static class WorkEndpoints
         .WithName("UpdateAppSettings").WithSummary("Changes how the app runs (sleeps when idle, or always on) and who may open it (private, shared, public) on the app itself; both otherwise inherit down the cascade.").Produces<PublicAppView>();
 
         var conversations = api.MapGroup("/conversations").WithTags("Conversation");
-        conversations.MapPost("", async (ConversationRequest request, ClaimsPrincipal principal, AccessService access, ConversationService service, ReadModels reads, CancellationToken ct) =>
+        conversations.MapPost("/estimate", async (ConversationEstimateRequest request, ClaimsPrincipal principal, AccessService access, FactoryEstimates estimates, EmployeeService employees, CancellationToken ct) =>
+        {
+            var (scope, _) = await access.RequireAsync(principal.Id(), request.Scope, MemberRole.Viewer, ct);
+            var estimate = await estimates.ConversationAsync(scope.OrganisationId, await TierAsync(employees, scope.OrganisationId, request.EmployeeId, ct), ct);
+            return Results.Ok(new ConversationEstimateView(estimate.Credits, estimate.Ceiling, estimate.Basis));
+        })
+        .WithName("EstimateMessage").WithSummary("What one message in the conversation at a scope (or with one employee) is expected to cost, and the most it can. Free.").Produces<ConversationEstimateView>();
+        conversations.MapPost("", async (ConversationRequest request, ClaimsPrincipal principal, AccessService access, ConversationService service, FactoryEstimates estimates, EmployeeService employees, ReadModels reads, CancellationToken ct) =>
         {
             var (scope, _) = await access.RequireAsync(principal.Id(), request.Scope, MemberRole.Builder, ct);
-            var turn = await service.PostAsync(scope, request.Message ?? "", request.ConversationId, request.EmployeeId, principal.Id(), ct);
+            var estimate = await estimates.ConversationAsync(scope.OrganisationId, await TierAsync(employees, scope.OrganisationId, request.EmployeeId, ct), ct);
+            var turn = await service.PostAsync(scope, request.Message ?? "", request.ConversationId, request.EmployeeId, principal.Id(), ct, estimate);
             return Results.Created($"/api/runs/{turn.Run.Id}", await reads.RunAsync(scope.OrganisationId, turn.Run.Id, ct));
         })
         .WithName("PostMessage")
@@ -232,6 +285,10 @@ internal static class WorkEndpoints
         })
         .WithName("GetConversation").WithSummary("The conversation docked at a scope (or with one employee): its messages, oldest first, at most the last 200.").Produces<ConversationHistoryView>();
     }
+
+    /// <summary>The thinking power an employee answers with (its model tier), or null for Endgame's own assistant.</summary>
+    internal static async Task<string?> TierAsync(EmployeeService employees, Guid organisationId, Guid? employeeId, CancellationToken ct) =>
+        employeeId is { } id ? (await employees.DetailAsync(organisationId, id, ct)).Employee.JobDescription.ModelTier : null;
 
     /// <summary>Writes the log as server-sent events, each with its sequence number as the event id, until the run has finished and been drained.</summary>
     private static async Task StreamEventsAsync(HttpContext http, RunService service, Guid organisationId, Guid runId, long after, RunStreamOptions options, CancellationToken ct)

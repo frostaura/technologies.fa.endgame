@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { Ajv } from "ajv";
 import type { Flow } from "../src/content/types.ts";
-import { stepCaption, type ScriptStep, type StepScript } from "../src/content/scripts.ts";
+import type { StepScript } from "../src/content/scripts.ts";
 
 /**
  * Validates every `scripts/<FLOW-ID>.json` against the JSON Schema and against the parsed flows:
@@ -16,9 +16,9 @@ export interface Coverage {
   steps: number;
   stepsWithMedia: number;
   byKind: Record<string, number>;
-  /** Branches of "What else can happen" with a console of their own. */
-  variations: number;
   scripted: string[];
+  /** Branches under "What else can happen" that play in the console. */
+  variations: number;
 }
 
 export interface ScriptReport {
@@ -73,14 +73,14 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
     }
     (script.variations ?? []).forEach((v, i) => {
       const where = `${file}: variation ${i + 1} ("${v.title}")`;
-      v.steps.forEach((step: ScriptStep, k) => {
-        if (step.step !== k + 1) problems.push(`${where}: its steps are numbered 1, 2, 3 in order, and step ${k + 1} says ${step.step}`);
-        if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${where}: step ${step.step} sends the console nothing`);
-        if (step.kind === "demo" && step.persona && !step.goto) problems.push(`${where}: step ${step.step} changes who is signed in, so it needs a goto`);
-        if (!stepCaption(step)) problems.push(`${where}: step ${step.step} says nothing; a variation has no text in the flow, so give it a note`);
+      const numbers = v.steps.map((s) => s.step);
+      if (numbers.some((n, k) => n !== k + 1)) problems.push(`${where}: its steps are numbered ${numbers.join(", ")}; number them 1 to ${numbers.length} in order`);
+      for (const step of v.steps) {
+        if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${where}: step ${step.step} is a demo step that sends the console nothing`);
+        if (!step.note && !(step.kind === "demo" && step.highlight?.note)) problems.push(`${where}: step ${step.step} has no note, and a variation's steps have no flow text to show beside them`);
         if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${where}: step ${step.step} names public/shots/${step.shot.file}, which does not exist`);
         if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${where}: step ${step.step} names public/shots/${step.file}, which does not exist`);
-      });
+      }
     });
     scripts[id] = script;
   }
@@ -100,8 +100,8 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
       steps: flows.reduce((n, f) => n + f.steps.length, 0),
       stepsWithMedia,
       byKind,
-      variations: Object.values(scripts).reduce((n, s) => n + (s.variations?.length ?? 0), 0),
       scripted: Object.keys(scripts),
+      variations: Object.values(scripts).reduce((n, s) => n + (s.variations?.length ?? 0), 0),
     },
   };
 }

@@ -2,6 +2,9 @@ import { createApi, fetchBaseQuery, type BaseQueryFn, type FetchArgs, type Fetch
 import { check, type Guard } from "@/lib/guards";
 import * as g from "./guards";
 import type {
+  ChangeEstimate,
+  ConversationEstimate,
+  RetryEstimate,
   AccessToken,
   AppVersions,
   AskAnswer,
@@ -195,7 +198,7 @@ export const api = createApi({
       extraOptions: guarded(g.ideaGuard, "the idea"),
     }),
     getIdea: build.query<Idea, string>({ query: (id) => `ideas/${encodeURIComponent(id)}`, providesTags: (_r, _e, id) => [{ type: "Idea", id }], extraOptions: guarded(g.ideaGuard, "the verdict") }),
-    decideIdea: build.mutation<Idea, { id: string; choice: DecisionChoice; note?: string }>({
+    decideIdea: build.mutation<Idea, { id: string; choice: DecisionChoice; note?: string; applyChange?: boolean }>({
       query: ({ id, ...body }) => ({ url: `ideas/${encodeURIComponent(id)}/decision`, method: "POST", body }),
       invalidatesTags: (_r, _e, { id }) => [{ type: "Idea", id }, "Tree", "Credits"],
       extraOptions: guarded(g.ideaGuard, "the decision"),
@@ -231,7 +234,35 @@ export const api = createApi({
       invalidatesTags: ["Tree"],
     }),
 
+    // Trying again ------------------------------------------------------------------------
+    /** What trying a stopped research, build or change again costs, and what of it is kept. Free; shown before the person confirms. */
+    estimateRetry: build.mutation<RetryEstimate, string>({
+      query: (runId) => ({ url: `runs/${encodeURIComponent(runId)}/retry/estimate`, method: "POST" }),
+      extraOptions: guarded(g.retryEstimateGuard, "the estimate"),
+    }),
+    retryRun: build.mutation<Run, { runId: string; ideaId?: string | null }>({
+      query: ({ runId }) => ({ url: `runs/${encodeURIComponent(runId)}/retry`, method: "POST" }),
+      invalidatesTags: (_r, _e, { runId, ideaId }) => [{ type: "Run", id: runId }, ...(ideaId ? [{ type: "Idea" as const, id: ideaId }] : []), "Tree", "Credits"],
+      extraOptions: guarded(g.runGuard, "the new attempt"),
+    }),
+
+    // Changing a built app ----------------------------------------------------------------
+    estimateChange: build.mutation<ChangeEstimate, { appId: string; request: string }>({
+      query: ({ appId, request }) => ({ url: `apps/${encodeURIComponent(appId)}/changes/estimate`, method: "POST", body: { request } }),
+      extraOptions: guarded(g.changeEstimateGuard, "the estimate"),
+    }),
+    requestChange: build.mutation<Run, { appId: string; request: string }>({
+      query: ({ appId, request }) => ({ url: `apps/${encodeURIComponent(appId)}/changes`, method: "POST", body: { request } }),
+      invalidatesTags: (_r, _e, { appId }) => [{ type: "App", id: appId }, "Tree", "Credits"],
+      extraOptions: guarded(g.runGuard, "the change"),
+    }),
+
     // Conversation ------------------------------------------------------------------------
+    /** What one message can cost at most, shown before it is sent (CLAUDE.md rule 11). */
+    estimateMessage: build.query<ConversationEstimate, { scope: string; employeeId?: string }>({
+      query: (body) => ({ url: "conversations/estimate", method: "POST", body }),
+      extraOptions: guarded(g.conversationEstimateGuard, "the estimate"),
+    }),
     startConversation: build.mutation<Run, ConversationRequest>({
       query: (body) => ({ url: "conversations", method: "POST", body }),
       extraOptions: guarded(g.runGuard, "the reply"),
@@ -933,6 +964,11 @@ export const {
   useAnswerApprovalMutation,
   useStartConversationMutation,
   useGetConversationQuery,
+  useEstimateRetryMutation,
+  useRetryRunMutation,
+  useEstimateChangeMutation,
+  useRequestChangeMutation,
+  useEstimateMessageQuery,
   useGetSharesQuery,
   useRemoveShareMutation,
   useGetSecretsQuery,

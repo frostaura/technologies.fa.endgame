@@ -124,7 +124,7 @@
     {
       "title": "At the cap, it stops",
       "persona": "owner",
-      "scenario": "employee-at-cap",
+      "scenario": "s4-employee-at-cap",
       "start": "/employees/{employee}",
       "steps": [
         {

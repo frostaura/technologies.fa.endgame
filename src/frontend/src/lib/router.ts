@@ -35,6 +35,11 @@ function snapshot() {
   return window.location.pathname + window.location.search;
 }
 
+/** The console address being shown now: `/credits?scope=…`, in either mode. */
+export function currentAddress(): string {
+  return snapshot();
+}
+
 /** The address written to the location bar for a console address. */
 function written(to: string) {
   return mode === "hash" ? `${window.location.pathname}${window.location.search}#${to}` : to;

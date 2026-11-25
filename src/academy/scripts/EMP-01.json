@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "EMP-01",
   "persona": "owner",
-  "scenario": "employee-record",
+  "scenario": "s4-employee-record",
   "start": "/employees/{employee}",
   "steps": [
     {
@@ -68,7 +68,7 @@
     {
       "title": "Technical mode adds the identifier",
       "persona": "owner",
-      "scenario": "employee-record",
+      "scenario": "s4-employee-record",
       "start": "/employees/{employee}",
       "steps": [
         {
@@ -94,7 +94,7 @@
     {
       "title": "A Viewer reads the record, with no actions",
       "persona": "viewer",
-      "scenario": "employee-record",
+      "scenario": "s4-employee-record",
       "start": "/employees/{employee}",
       "steps": [
         {

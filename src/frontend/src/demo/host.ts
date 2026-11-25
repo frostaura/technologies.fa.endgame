@@ -6,6 +6,9 @@ import { clock, seek, tick } from "./server/engine";
 import { answerApproval } from "./server/routes/work";
 import { WORLD_VERSION, type World } from "./server/world";
 import { PERSONAS, buildWorld, resolveRoute, type Persona, type Scenario } from "./world/scenarios";
+// Scenarios kept per flow file. Imported here, after scenarios.ts has run: they call its defineScenario.
+import "./world/scenarios.s1";
+import "./world/scenarios.s4";
 import { installDevice } from "./device";
 
 /**
@@ -201,4 +204,11 @@ export function registerShare(appId: string, email: string) {
   share.registered = true;
   app.endUsers += 1;
   changed(["Shares", "App"]);
+}
+
+/** The console session ends (a member signed out at an app on the platform's host): the console asks again who is signed in. */
+export function endConsoleSession() {
+  world.sessionUserId = null;
+  world.entered = [];
+  changed(["Me", "Tree", "Credits"]);
 }

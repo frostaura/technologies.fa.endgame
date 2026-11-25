@@ -52,6 +52,12 @@
 - **A1 — the Runner dies part-way.** The journal (`message {kind: workflow.step}`) lets the resumed build skip
   placement, planning and every finished feature.
 - **A2 — a build failure.** The image's build log is the failed evaluation; no evaluator is needed.
+- **A3 — try again.** A build that failed, was cancelled, stopped for budget or had its plan declined is started again
+  (UC-105 A6): the new run keeps the placement, the agreed plan and every passed part, and builds only the rest.
+- **A4 — a change to the built app.** `POST /api/apps/{id}/changes`: a red-line screen of the request, then the same
+  stages — a plan quoting the request, each part built and checked on a preview, a `keep` part re-checking everything the
+  app did before, the security review — and the new version published (ARCH-006, *Changing a built app*).
+- **A5 — the change agreed after research.** The planner is given the idea plus every agreed change (UC-104 A9).
 
 ## Rules this use case must honour
 

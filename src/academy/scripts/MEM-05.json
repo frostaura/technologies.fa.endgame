@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "MEM-05",
   "persona": "owner",
-  "scenario": "memory-to-tidy",
+  "scenario": "s4-memory-to-tidy",
   "start": "/employees/{employee}",
   "steps": [
     {

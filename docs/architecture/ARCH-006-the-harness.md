@@ -129,6 +129,55 @@ view of the data after each change of state (a finished book must leave "reading
 person moves: each link reaches a route that renders its page, pages read the address through the router only, and the
 item's tests click through it with the kit's `renderApp`. The factory's browser proof drives built apps by these ids.
 
+## Checkpoints, asked rules and the person's answer
+
+- **An "asks you first" rule asks.** A rule set's `ask` rule raises an approval even in an unattended run: the rule is
+  the person's own wish to be asked, so it is its own checkpoint (`PermissionPolicy`, the rule's `<level>:<rule>`). Only
+  the default — a tool no rule allows — is still denied when nobody is watching.
+- **The approval says what will happen, in words.** A tool that knows its own plain wording implements `IApprovalTitle`
+  (`start_idea`, `change_app`, `try_again`, `adjust_setting` — the last names the setting as the autonomy and app screens
+  do, never its key); the rest get the loop's generic sentence. The tool, its arguments and the rule stay in `detail`.
+- **The answer comes back with its note.** `IApprovalGate.AskAsync(title, detail, onDecline)` returns the answer and the
+  person's note; the tool result says it was approved or declined and quotes the note, and a declined call tells the agent
+  to carry on without it or say plainly it was not done. `onDecline` is `continues` for a tool call and `stops` for the
+  start and plan checkpoints, whose decline ends the run — so the console can tell the truth after a decline.
+
+## The conversation, as the one it is with
+
+A conversation turn with an employee (`run.EmployeeId`) is answered **as that employee**: its name, role and mandate
+from `GET /internal/employees/{id}` are added to the prompt, its curated memory follows as context, it runs on its own
+model tier (thinking power) and may `remember` (`AgentFactory.As`). The answer carries `by` (the employee's name). The
+conversation's tools are `read_organisation`, `start_idea`, `change_app`, `try_again` and `adjust_setting`; every one
+that acts is a checkpoint the person answers in the conversation itself. A turn the budget stops writes Endgame's own
+notice into the conversation (`from: runner`, `code: budget_exhausted`) instead of leaving it silent.
+
+## Trying again
+
+A retried build or change (`retryOf` in the owner message) reads the earlier run's journal and records into its own:
+placement (and a change's red-line screen and earlier parts), the **agreed** plan with `plan.accepted { by:
+earlier-attempt }`, the plan's estimate (the try's own estimate, made for what is left, stands), and every item that
+passed its check. Those items are neither built nor checked again, so they are not billed twice; a `plan.carried`
+message lists them and the owner hears "Carrying on". A plan that was declined was never recorded, so it is planned
+afresh; a part that failed is built again with fresh repair rounds. The workspace is recreated from the app's last
+commit, which holds every finished part.
+
+## Changing a built app
+
+A change is a `task` run whose owner message has `kind: change` (`TaskWorkflow` → `BuildWorkflow.ChangeAsync`), through
+the build's own stages, not a fork of them:
+
+1. **Red-line screen** of the request (research is not repeated: it is the same product) — one call on the summary
+   route, `{ breached, line, reasoning }`; a breach, or no answer in that form, changes nothing.
+2. **Placement** is the app itself, from the run's scope; nothing is created.
+3. **The plan** is the same contract as a build's, faithful to the request's words (`ProposePlanTool(request)`), with the
+   plan checkpoint honoured. Code then adds its own last item, `keep` — "Everything the app did before still works" —
+   whose requirements are the parts `PROGRESS.md` lists (`k1…`).
+4. **Each part** is built, committed and checked by the separate evaluator on a preview with its own data; `keep` has
+   nothing to build, so it is checked first and repaired, unbilled and one tier up, only if the check finds something
+   broken. A change's parts are recorded in `PROGRESS.md` keyed by the run (`<run>-<item>`), never hiding the build's.
+5. **The security review**, then **the new version** is built and the app restarted; who may open it does not change.
+   The app's history shows the change's commits by the employee who made them, and restore works as before.
+
 ## Not verified
 
 Tasks harder than a multi-file feature in a small app; long sessions that need compaction;

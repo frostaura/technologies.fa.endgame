@@ -1,0 +1,79 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "ACC-13",
+  "persona": "signed-out",
+  "scenario": "s1-development-apps",
+  "start": "/__app/{app}/path/_endgame/auth/sign-in",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Development sign-in",
+        "note": "A development deployment: the box with an e-mail field, As a member and As a visitor."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "E-mail address"
+            },
+            "text": "lena@northwind.example"
+          }
+        },
+        {
+          "click": {
+            "text": "As a member"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "testId": "signed-in-as",
+        "note": "Signed in as that console account, without a passkey; the default development account if the field is empty."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "goto": "/__app/{app}/path/_endgame/auth/sign-in",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "E-mail address"
+            },
+            "text": "chef@northwind.example"
+          }
+        },
+        {
+          "click": {
+            "text": "As a visitor"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "testId": "signed-in-as",
+        "note": "As a visitor: an end user, found or created, where the app admits them — Court booking is shared with this address."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/__app/{app}/path/_endgame/auth/sign-up",
+      "highlight": {
+        "text": "Create a passkey",
+        "note": "Court booking is shared, so the sign-up page offers no “Continue without a passkey”."
+      }
+    }
+  ]
+}

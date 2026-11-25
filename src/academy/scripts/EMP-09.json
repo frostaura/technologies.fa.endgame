@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "EMP-09",
   "persona": "owner",
-  "scenario": "released-with-memory",
+  "scenario": "s4-released-with-memory",
   "start": "/hires?scope=northwind/operations",
   "steps": [
     {

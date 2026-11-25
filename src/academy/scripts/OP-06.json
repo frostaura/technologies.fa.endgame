@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "OP-06",
   "persona": "operator",
-  "scenario": "top-ups-waiting",
+  "scenario": "s4-top-ups-waiting",
   "start": "/operator",
   "steps": [
     {

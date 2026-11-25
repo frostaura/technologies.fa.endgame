@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHL-02",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/system",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "System status is technical detail",
+        "note": "In normal mode the services are not named."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Switch to technical mode"
+          }
+        },
+        {
+          "wait": 1200
+        }
+      ],
+      "highlight": {
+        "selector": "[role=group][aria-label='Mode']",
+        "note": "Technical mode is on, and the status itself shows."
+      }
+    }
+  ]
+}

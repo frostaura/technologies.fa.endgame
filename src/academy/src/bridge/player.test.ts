@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StepScript } from "../content/scripts.ts";
+import { variationScript, type StepScript } from "../content/scripts.ts";
 import { plan, planExplore } from "./player.ts";
 
 const script: StepScript = {
@@ -65,5 +65,18 @@ describe("the step player", () => {
 
   it("an unscripted screen flow opens on its own start address", () => {
     expect(planExplore("/credits").map((o) => [o.op, o.args.route])).toEqual([["reset", undefined], ["goto", "/credits"]]);
+  });
+
+  it("plays a branch from \"What else can happen\" from its own start, as its own person and world", () => {
+    const withBranch: StepScript = {
+      ...script,
+      variations: [{ title: "A stranger is refused", persona: "signed-out", scenario: "established", start: "/sign-in", steps: [{ step: 1, kind: "demo", act: [{ click: { text: "Create passkey" } }], highlight: { text: "invite-only", note: "Refused." } }] }],
+    };
+    const branch = variationScript(withBranch, 0);
+    expect(branch?.scenario).toBe("established");
+    expect(variationScript(withBranch, 1)).toBeUndefined();
+    const p = plan(branch as StepScript, 0, 1, true);
+    expect(ops(p)).toEqual(["reset", "goto", "act", "highlight"]);
+    expect(p[1]?.args).toEqual({ route: "/sign-in", persona: "signed-out", scenario: "established" });
   });
 });

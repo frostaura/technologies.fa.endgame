@@ -1,0 +1,35 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHL-06",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/no-such-page",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "text": "Nothing lives at this address",
+        "note": "A stale link gets a plain answer."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Back to the org chart"
+          }
+        },
+        {
+          "wait": 800
+        }
+      ],
+      "highlight": {
+        "text": "Organisation chart",
+        "note": "Back at the root address."
+      }
+    }
+  ]
+}

@@ -5,7 +5,7 @@
  */
 
 /** Who the embedded console is signed in as. */
-export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin", "division-admin"] as const;
+export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin", "division-admin", "invited", "first-run", "two-organisations"] as const;
 export type Persona = (typeof PERSONAS)[number];
 
 /**
@@ -13,7 +13,7 @@ export type Persona = (typeof PERSONAS)[number];
  * script may name its records as `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}`, which the
  * demo resolves inside the scenario.
  */
-export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode", "quiet", "hire-pending", "employee-memory", "employee-released", "at-overdraft-limit", "screening-offline", "hiring", "hires-all-decided", "hire-manager-gone", "contractor-working", "contractor-finishes", "employee-working", "employee-record", "employee-team", "employee-at-cap", "idle-sweep", "released-with-memory", "memory-to-tidy", "credits-at-zero", "below-zero", "top-ups-waiting", "operator-log", "operator-log-empty", "build-running"] as const;
+export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode", "account", "two-organisations", "app-asleep", "app-paused", "app-crashed", "at-overdraft-limit", "s1-app-made-private", "s1-app-not-published", "s1-app-private", "s1-app-public", "s1-app-unshared", "s1-development-apps", "s1-development-sign-in", "s1-keys-at-limit", "s1-session-check-fails", "quiet", "hire-pending", "employee-memory", "employee-released", "screening-offline", "build-running", "s4-hiring", "s4-hires-all-decided", "s4-hire-manager-gone", "s4-contractor-working", "s4-contractor-finishes", "s4-employee-working", "s4-employee-record", "s4-employee-team", "s4-employee-at-cap", "s4-idle-sweep", "s4-released-with-memory", "s4-memory-to-tidy", "s4-credits-at-zero", "s4-below-zero", "s4-top-ups-waiting", "s4-operator-log", "s4-operator-log-empty"] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 /** Where a spotlight lands: a CSS selector, a `data-testid`, or the visible text of a control. */
@@ -97,19 +97,6 @@ export interface ImageStep {
 export type ScriptStep = DemoStep | TerminalStep | RequestStep | EmailStep | ImageStep;
 export type ScriptKind = ScriptStep["kind"];
 
-/**
- * One branch of "What else can happen" — a refusal, a limit, an empty state — played in its own
- * console. Its steps are numbered 1, 2, 3 in order; the flow has no text for them, so each says what
- * it shows in its `note` or its spotlight's note.
- */
-export interface Variation {
-  title: string;
-  persona: Persona;
-  scenario: Scenario;
-  start: string;
-  steps: ScriptStep[];
-}
-
 export interface StepScript {
   $schema?: string;
   flow: string;
@@ -118,15 +105,22 @@ export interface StepScript {
   /** The console address the frame opens at before step 1. */
   start: string;
   steps: ScriptStep[];
+  /** What else can happen: refusals and branches, each played from its own start (shown under the steps). */
   variations?: Variation[];
 }
 
-/** A variation as a script of its own, so the player plays it exactly as it plays a flow. */
-export function variationScript(flow: string, v: Variation): StepScript {
-  return { flow, persona: v.persona, scenario: v.scenario, start: v.start, steps: v.steps };
+/** One branch of a flow, played on its own: its steps are numbered 1, 2, … within it. */
+export interface Variation {
+  /** The branch in a few words, as the learner picks it. */
+  title: string;
+  persona: Persona;
+  scenario: Scenario;
+  start: string;
+  steps: ScriptStep[];
 }
 
-/** What a step says beside the console: its note, or its spotlight's note. */
-export function stepCaption(step: ScriptStep | undefined): string | undefined {
-  return step?.note ?? (step?.kind === "demo" ? step.highlight?.note : undefined);
+/** A variation as a script of its own, so the stage and the player play it like any flow. */
+export function variationScript(script: StepScript, index: number): StepScript | undefined {
+  const v = script.variations?.[index];
+  return v ? { flow: script.flow, persona: v.persona, scenario: v.scenario, start: v.start, steps: v.steps } : undefined;
 }

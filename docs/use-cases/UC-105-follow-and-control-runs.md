@@ -39,6 +39,14 @@ reservations in the same transaction.
 - **A2 — a lock held by a dead run.** Taken over only when the holder finished or its lease lapsed.
 - **A3 — appending to a finished run, or without the live lease.** 409. Unknown event types and payloads over 64 KiB: 400.
 - **A4 — a second answer to an approval.** 409.
+- **A5 — an answer with a note.** `{ decision, note }`; the note (at most 2000 characters) goes back to the waiting work.
+  The approval's `onDecline` (`continues` or `stops`) says what a decline does, and the console says it after a decline.
+- **A6 — try again.** For the latest failed or cancelled research, build or change (`canTryAgain`):
+  `POST /api/runs/{id}/retry/estimate` shows what it costs and what is kept, then `POST /api/runs/{id}/retry` starts a new
+  run that carries on from the earlier one's placement, agreed plan and finished parts (ARCH-006, *Trying again*). Anything
+  else is `409 not_retryable`; trying the same run twice is `409`.
+- **A7 — a budget stop.** `budgetExhausted` on the run; the run page says so with the way to more credits and, where it
+  applies, "Try again". The cost panel shows what was not charged (`estimate.scored.nonBillableCredits`).
 
 ## Postconditions
 

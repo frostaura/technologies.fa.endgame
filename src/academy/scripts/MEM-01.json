@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "MEM-01",
   "persona": "owner",
-  "scenario": "memory-to-tidy",
+  "scenario": "s4-memory-to-tidy",
   "start": "/employees/{employee}",
   "steps": [
     {
@@ -42,7 +42,7 @@
     {
       "title": "What changed in it",
       "persona": "owner",
-      "scenario": "memory-to-tidy",
+      "scenario": "s4-memory-to-tidy",
       "start": "/employees/{employee}",
       "steps": [
         {
@@ -73,7 +73,7 @@
     {
       "title": "Let go: archived, read only",
       "persona": "owner",
-      "scenario": "released-with-memory",
+      "scenario": "s4-released-with-memory",
       "start": "/employees/14b08848-f257-450f-ad4f-c91e519ce679",
       "steps": [
         {
@@ -89,7 +89,7 @@
     {
       "title": "A contractor keeps no memory",
       "persona": "owner",
-      "scenario": "contractor-working",
+      "scenario": "s4-contractor-working",
       "start": "/employees/500160d7-881e-4bf3-a1fb-d72df02a59fd",
       "steps": [
         {

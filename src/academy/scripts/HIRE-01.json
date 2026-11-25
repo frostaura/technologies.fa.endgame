@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "HIRE-01",
   "persona": "owner",
-  "scenario": "hiring",
+  "scenario": "s4-hiring",
   "start": "/",
   "steps": [
     {
@@ -76,7 +76,7 @@
     {
       "title": "Every proposal is decided",
       "persona": "owner",
-      "scenario": "hires-all-decided",
+      "scenario": "s4-hires-all-decided",
       "start": "/hires?scope=northwind/technologies",
       "steps": [
         {

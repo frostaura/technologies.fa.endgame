@@ -7,6 +7,7 @@ import { consoleCalls } from "./consoleEndpoints";
 import { clock, seek, tick } from "./engine";
 import { answerApproval } from "./routes/work";
 import { buildWorld } from "../world/scenarios";
+import "../world/scenarios.s4";
 import { IDS, ORG, PEOPLE } from "../world/default";
 import type { World } from "./world";
 
@@ -323,14 +324,14 @@ describe("the workforce, credits and God mode as the academy shows them (S4)", (
   });
 
   it("refuses to hire under a manager who has been let go", async () => {
-    const w = as("owner", "hire-manager-gone");
+    const w = as("owner", "s4-hire-manager-gone");
     const r = await call(w, "POST", `hires/${w.hires.find((h) => h.name === "Lark")?.id}/accept`, {});
     expect(r.status).toBe(400);
     expect(detail(r)).toBe("reportsTo names an employee of this organisation who is on the payroll.");
   });
 
   it("finishes a contractor: its lesson goes to its briefer, and the recurring role is hired in auto-mode", () => {
-    const w = as("owner", "contractor-finishes");
+    const w = as("owner", "s4-contractor-finishes");
     seek(w, "s4:contractor-finished", () => undefined);
     expect(w.employees.find((e) => e.kind === "contractor" && e.role === "Data contractor")?.status).toBe("released");
     expect(w.memory.some((m) => m.title === "Empty courts cluster on Tuesday and Wednesday" && m.sourceRunId)).toBe(true);
@@ -340,7 +341,7 @@ describe("the workforce, credits and God mode as the academy shows them (S4)", (
   });
 
   it("keeps a removed memory entry in its employee's change log, newest first", async () => {
-    const w = as("owner", "memory-to-tidy");
+    const w = as("owner", "s4-memory-to-tidy");
     const kasper = w.employees.find((e) => e.name === "Kasper");
     const changes = (await call(w, "GET", `employees/${kasper?.id}/memory/changes`)).body as { action: string; at: string }[];
     expect(changes.some((c) => c.action === "removed")).toBe(true);
