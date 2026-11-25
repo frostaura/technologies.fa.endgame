@@ -440,6 +440,146 @@ const server = createServer(async (req, res) => {
     return send(res, 200, state.operatorLog);
   }
 
+  // The workforce ------------------------------------------------------------------------
+  const workforceRead = path.startsWith("/api/employees") || path.startsWith("/api/hires") || path.startsWith("/api/autonomy") || path === "/api/ontology" || path === "/api/tasks";
+  if (workforceRead && method === "GET" && state.failWorkforceRead) return problem(res, 503, "Unavailable", "The workforce could not be read.");
+  if (workforceRead && method !== "GET" && state.failWorkforceWrite) {
+    await new Promise((r) => setTimeout(r, 300));
+    return problem(res, 403, "Forbidden", "This needs the admin role here; you are a builder.");
+  }
+  if (path === "/api/employees/recurring-roles") return send(res, 200, state.recurringRoles);
+  if (path === "/api/employees" && method === "GET") return send(res, 200, Object.values(state.employees).map((d) => d.employee));
+  m = path.match(/^\/api\/employees\/([^/]+)$/);
+  if (m) {
+    const d = state.employees[m[1] as string];
+    if (!d) return problem(res, 404, "Not found", "No such employee.");
+    if (method === "GET") return send(res, 200, d);
+    if (method === "PATCH") {
+      const b = (body ?? {}) as { status?: string; clearMonthlyCreditLimit?: boolean; jobDescription?: { monthlyCreditLimit?: number } };
+      if (b.status) d.employee.status = b.status;
+      const jd = d.employee.jobDescription as Record<string, unknown>;
+      if (b.clearMonthlyCreditLimit) jd.monthlyCreditLimit = null;
+      if (b.jobDescription?.monthlyCreditLimit !== undefined) jd.monthlyCreditLimit = b.jobDescription.monthlyCreditLimit;
+      return send(res, 200, d.employee);
+    }
+  }
+  m = path.match(/^\/api\/employees\/([^/]+)\/(release|rehire|reassign)$/);
+  if (m && method === "POST") {
+    const d = state.employees[m[1] as string];
+    if (!d) return problem(res, 404, "Not found");
+    if (m[2] === "release") {
+      if (d.employee.standing) return problem(res, 409, "Conflict", "A standing hire is never released.");
+      d.employee.status = "released";
+      d.employee.releasedAt = now();
+    } else if (m[2] === "rehire") {
+      d.employee.status = "idle";
+      d.employee.releasedAt = null;
+    } else {
+      d.employee.scope = String((body as { scope?: string }).scope ?? d.employee.scope);
+    }
+    return send(res, 200, d.employee);
+  }
+  m = path.match(/^\/api\/employees\/([^/]+)\/memory(?:\/(changes|[^/]+))?$/);
+  if (m) {
+    const id = m[1] as string;
+    const list = (state.memory[id] ??= []);
+    const changes = (state.memoryChanges[id] ??= []);
+    if (m[2] === "changes") return send(res, 200, changes);
+    if (!m[2] && method === "GET") return send(res, 200, list);
+    if (!m[2] && method === "POST") {
+      const b = body as { title: string; body: string; kind: string };
+      const entry = { id: `mem-${randomBytes(4).toString("hex")}`, employeeId: id, scope: String(state.employees[id]?.employee.scope ?? ""), title: b.title, body: b.body, kind: b.kind, sourceRunId: null, createdAt: now(), updatedAt: now(), lastReviewedAt: null, archived: false };
+      list.unshift(entry);
+      changes.unshift({ id: `ch-${entry.id}`, memoryId: entry.id, action: "added", by: "person", userId: "u1", runId: null, detail: null, at: now() });
+      return send(res, 201, entry);
+    }
+    const entry = list.find((e) => e.id === m?.[2]);
+    if (!entry) return problem(res, 404, "Not found");
+    if (method === "PATCH") {
+      Object.assign(entry, body as object, { updatedAt: now() });
+      changes.unshift({ id: `ch-${randomBytes(4).toString("hex")}`, memoryId: entry.id, action: "corrected", by: "person", userId: "u1", runId: null, detail: null, at: now() });
+      return send(res, 200, entry);
+    }
+    if (method === "DELETE") {
+      list.splice(list.indexOf(entry), 1);
+      changes.unshift({ id: `ch-${randomBytes(4).toString("hex")}`, memoryId: entry.id, action: "removed", by: "person", userId: "u1", runId: null, detail: { why: url.searchParams.get("why") }, at: now() });
+      return send(res, 204);
+    }
+  }
+  m = path.match(/^\/api\/employees\/([^/]+)\/reviews$/);
+  if (m && method === "POST") {
+    const runId = state.addRun(`Memory review: ${String(state.employees[m[1] as string]?.employee.name ?? "")}`, "review");
+    return send(res, 201, state.runs[runId]?.summary);
+  }
+
+  // Hires --------------------------------------------------------------------------------
+  if (path === "/api/hires" && method === "GET") return send(res, 200, Object.values(state.hires).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+  if (path === "/api/hires" && method === "POST") {
+    const b = body as Record<string, unknown> & { scope: string; role: string; reason: string; expectedMonthlyCredits: number; jobDescription: Record<string, unknown> };
+    const id = `h-${randomBytes(4).toString("hex")}`;
+    state.hires[id] = { id, status: "proposed", trigger: String(b.trigger ?? "owner"), needKey: b.needKey ?? null, scope: b.scope, reason: b.reason, name: String(b.name), role: b.role, jobDescription: { mandate: "", scope: b.scope, tools: [], services: [], monthlyCreditLimit: null, modelTier: null, ...b.jobDescription }, reportsTo: null, expectedMonthlyCredits: b.expectedMonthlyCredits, withinBudget: true, headroomCredits: 690, contractorRole: b.role, raisedBy: "person", raisedByRunId: null, decision: null, employeeId: null, createdAt: now() };
+    return send(res, 201, state.hires[id]);
+  }
+  m = path.match(/^\/api\/hires\/([^/]+)(?:\/(accept|decline))?$/);
+  if (m) {
+    const hire = state.hires[m[1] as string];
+    if (!hire) return problem(res, 404, "Not found", "No such hire proposal.");
+    if (method === "GET") return send(res, 200, hire);
+    if (method === "PATCH") {
+      const b = body as Record<string, unknown> & { jobDescription?: Record<string, unknown> };
+      Object.assign(hire, { ...b, jobDescription: { ...(hire.jobDescription as object), ...(b.jobDescription ?? {}) } });
+      return send(res, 200, hire);
+    }
+    if (method === "POST") {
+      if (hire.status !== "proposed") return problem(res, 409, "Conflict", "This proposal was already decided.");
+      const note = (body as { note?: string } | null)?.note ?? null;
+      hire.decision = { via: "person", by: state.user.displayName, at: now(), note };
+      if (m[2] === "accept") {
+        hire.status = "accepted";
+        hire.employeeId = "e2";
+      } else hire.status = "declined";
+      return send(res, 200, hire);
+    }
+  }
+
+  // Autonomy -----------------------------------------------------------------------------
+  if (path === "/api/autonomy" || path === "/api/autonomy/rule-sets") {
+    const scope = method === "GET" || method === "DELETE" ? (url.searchParams.get("scope") ?? "") : String((body as { scope?: string }).scope ?? "");
+    const here = (state.autonomy[scope] ??= { checkpoints: {}, ruleSets: {} });
+    if (path === "/api/autonomy" && method === "PUT") {
+      const b = body as { autonomy?: string; checkpoints?: Record<string, boolean> };
+      if (b.autonomy) here.autonomy = b.autonomy;
+      Object.assign(here.checkpoints, b.checkpoints ?? {});
+    }
+    if (path === "/api/autonomy" && method === "DELETE") {
+      const key = url.searchParams.get("key") ?? "";
+      if (key === "autonomy") delete here.autonomy;
+      else here.checkpoints = Object.fromEntries(Object.entries(here.checkpoints).filter(([k]) => k !== key.replace("checkpoint.", "")));
+    }
+    if (path === "/api/autonomy/rule-sets" && method === "PUT") {
+      const b = body as { stage: string; deny: string[]; ask: string[]; allow: string[]; checkpoints: string[] };
+      here.ruleSets[b.stage] = { deny: b.deny, ask: b.ask, allow: b.allow, checkpoints: b.checkpoints };
+    }
+    if (path === "/api/autonomy/rule-sets" && method === "DELETE") here.ruleSets = Object.fromEntries(Object.entries(here.ruleSets).filter(([k]) => k !== url.searchParams.get("stage")));
+    const parts = scope.split("/");
+    const chain = parts.map((_, i) => parts.slice(0, i + 1).join("/"));
+    let autonomy: { value: string; at: string | null } = { value: "auto", at: null };
+    const checkpoints: Record<string, { on: boolean; setAtPath: string | null }> = { start: { on: false, setAtPath: null }, plan: { on: false, setAtPath: null }, hire: { on: false, setAtPath: null } };
+    const rules: Record<string, Record<string, unknown> & { setAtPath: string; overrides: string[] }> = {};
+    for (const at of chain) {
+      const level = state.autonomy[at];
+      if (!level) continue;
+      if (level.autonomy) autonomy = { value: level.autonomy, at };
+      for (const [k, on] of Object.entries(level.checkpoints)) checkpoints[k] = { on, setAtPath: at };
+      for (const [stage, r] of Object.entries(level.ruleSets)) rules[stage] = { stage, ...r, setAtPath: at, overrides: rules[stage] ? [rules[stage].setAtPath, ...rules[stage].overrides] : [] };
+    }
+    return send(res, 200, { scope, autonomy: autonomy.value, autonomySetAtPath: autonomy.at, checkpoints, ruleSets: Object.values(rules), stages: ["all", "research", "plan", "build", "evaluate", "review", "conversation"] });
+  }
+
+  // The ontology and tasks ---------------------------------------------------------------
+  if (path === "/api/ontology") return send(res, 200, state.ontology());
+  if (path === "/api/tasks") return send(res, 200, state.tasks);
+
   // Credits ------------------------------------------------------------------------------
   if (path === "/api/credits") {
     if (state.failCredits) return problem(res, 500, "Credits could not be read");

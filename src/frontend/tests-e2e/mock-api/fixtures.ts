@@ -18,6 +18,9 @@ export type ScenarioName =
   | "conversation-fails"
   | "not-owner"
   | "secret-refused"
+  | "workforce-refused"
+  | "workforce-fails"
+  | "viewer"
   | "slow";
 
 export interface MockEvent {
@@ -109,6 +112,20 @@ export interface MockState {
   secrets: SecretEntry[];
   shares: Record<string, ShareEntry[]>;
   operatorLog: unknown[];
+  /** The workforce, as `GET /api/employees/{id}` answers (employee, trackRecord, contractors, reports). */
+  employees: Record<string, { employee: Record<string, unknown>; trackRecord: Record<string, unknown>; contractors: unknown[]; reports: unknown[] }>;
+  memory: Record<string, Record<string, unknown>[]>;
+  memoryChanges: Record<string, Record<string, unknown>[]>;
+  hires: Record<string, Record<string, unknown> & { status: string; role: string; scope: string; reason: string; expectedMonthlyCredits: number }>;
+  recurringRoles: Record<string, unknown>[];
+  tasks: Record<string, unknown>[];
+  /** Autonomy settings and rule sets set at each scope; the view walks the chain. */
+  autonomy: Record<string, { autonomy?: string; checkpoints: Record<string, boolean>; ruleSets: Record<string, { deny: string[]; ask: string[]; allow: string[]; checkpoints: string[] }> }>;
+  /** Writes to the workforce, hires and autonomy are refused. */
+  failWorkforceWrite: boolean;
+  /** Reads of the workforce, hires, autonomy and the ontology fail. */
+  failWorkforceRead: boolean;
+  ontology: () => unknown;
   tree: () => unknown;
   credits: () => unknown;
   addIdea: (b: { text: string; constraints: string[] }) => IdeaFixture;
@@ -172,13 +189,14 @@ function researchScript(withApproval: boolean): Omit<MockEvent, "seq" | "at">[] 
     ev("task.claimed", { taskId: "t1", holder: "Ada", summary: "Sweep existing products" }),
     ev("model.requested", { callId: "k1", taskType: "research.sweep", model: "fixture/model-small", reservedCredits: 4 }),
     ev("model.replied", { callId: "k1", taskType: "research.sweep", model: "fixture/model-small", tokens: { input: 1200, output: 340 }, settledCredits: 1.5 }),
-    ev("tool.requested", { tool: "web.search", arguments: { query: "club ladder software" } }),
-    ev("tool.permitted", { tool: "web.search", rule: "research may search the web" }),
-    ev("tool.result", { tool: "web.search", result: "12 results" }),
-    ev("tool.requested", { tool: "shell.exec", arguments: { command: "curl example" } }),
-    ev("tool.denied", { tool: "shell.exec", rule: "protected floor: no shell in research", reason: "Research never runs commands." }),
-    ev("subagent.started", { subagentId: "s1", brief: "Find three products that already sell club ladders." }),
-    ev("subagent.finished", { subagentId: "s1", summary: "Found three, each with pricing." }),
+    ev("tool.requested", { agent: "main", callId: "c1", name: "web_search", arguments: { query: "club ladder software" } }),
+    ev("tool.permitted", { agent: "main", callId: "c1", name: "web_search", rule: "allow web_search" }),
+    ev("tool.result", { agent: "main", callId: "c1", name: "web_search", content: "12 results" }),
+    ev("tool.requested", { agent: "main", callId: "c2", name: "run", arguments: { command: "curl example" } }),
+    ev("tool.denied", { agent: "main", callId: "c2", name: "run", rule: "protected floor: no shell in research", reason: "Research never runs commands." }),
+    ev("subagent.started", { agent: "main", subagent: "s1", title: "Looked for existing products", brief: "Find three products that already sell club ladders.", role: "researcher" }),
+    ev("tool.requested", { agent: "s1", callId: "c3", name: "web_search", arguments: { query: "ladder league app" } }),
+    ev("subagent.finished", { agent: "main", subagent: "s1", title: "Looked for existing products", summary: "Found three, each with pricing.", stopReason: "completed", searches: 2, report: "{}" }),
     ev("evaluation.passed", { item: "c1", evidence: "Three products named with sources." }),
     ev("task.done", { taskId: "t1", summary: "Three competitors found." }),
     ...(withApproval
@@ -189,8 +207,8 @@ function researchScript(withApproval: boolean): Omit<MockEvent, "seq" | "at">[] 
       : []),
     ev("task.claimed", { taskId: "t2", holder: "Ada" }),
     ev("task.done", { taskId: "t2", summary: "No buyer asked for it." }),
-    ev("estimate.scored", { estimated: 60, actual: 54 }),
-    ev("message", { from: "Ada", text: "Research is done. The verdict is ready for you." }),
+    ev("estimate.scored", { expectedCredits: 60, actualCredits: 54, nonBillableCredits: 0, modelCalls: 1 }),
+    ev("message", { from: "researcher", title: "The verdict", text: "Research is done. The verdict is ready for you.", milestone: "verdict" }),
     ev("run.finished", { outcome: "succeeded", summary: "Verdict: do not build as its own app.", totals: { credits: 54 } }),
   ];
 }
@@ -198,7 +216,7 @@ function researchScript(withApproval: boolean): Omit<MockEvent, "seq" | "at">[] 
 export function scenario(name: ScenarioName): MockState {
   const s: MockState = {
     signedIn: !name.startsWith("signed-out"),
-    viewerRole: name === "first-run" ? "none" : name === "not-owner" ? "admin" : "owner",
+    viewerRole: name === "first-run" ? "none" : name === "not-owner" ? "admin" : name === "viewer" ? "viewer" : "owner",
     failSecretWrite: name === "secret-refused",
     developmentSignIn: name === "signed-out-dev",
     delayMs: name === "slow" ? 1500 : 0,
@@ -227,6 +245,16 @@ export function scenario(name: ScenarioName): MockState {
         { email: "taster@example.test", invitedAt: ago(60 * 30), registered: false },
       ],
     },
+    employees: {},
+    memory: {},
+    memoryChanges: {},
+    hires: {},
+    recurringRoles: [],
+    tasks: [],
+    autonomy: {},
+    failWorkforceWrite: name === "workforce-refused",
+    failWorkforceRead: name === "workforce-fails",
+    ontology: () => null,
     operatorLog: [
       { id: "op2", at: ago(60 * 26), action: "credits.top_up", operator: { id: "op-u1", email: "support@example.test", displayName: "Fixture Operator" }, detail: { credits: 10000, note: "Added by FrostAura", entryId: "ce1" } },
       { id: "op1", at: ago(60 * 24 * 10), action: "organisation.entered", operator: { id: "op-u1", email: "support@example.test", displayName: "Fixture Operator" }, detail: { path: "northwind" } },
@@ -239,9 +267,9 @@ export function scenario(name: ScenarioName): MockState {
   };
 
   let counter = 0;
-  const ada = { id: "e1", name: "Ada", role: "Product researcher", kind: "employee", activity: null as string | null };
-  const lin = { id: "e2", name: "Lin", role: "Engineer", kind: "employee", activity: "Building Field notes" };
-  const ruth = { id: "e3", name: "Ruth", role: "Security reviewer", kind: "employee", activity: null };
+  const ada = { id: "e1", name: "Ada", role: "Product researcher", kind: "employee", activity: null as string | null, status: "idle", idle: false, standing: null, briefedBy: null };
+  const lin = { id: "e2", name: "Lin", role: "Engineer", kind: "employee", activity: "Building Field notes", status: "working", idle: false, standing: null, briefedBy: null };
+  const ruth = { id: "e3", name: "Ruth", role: "Security reviewer", kind: "employee", activity: null, status: "idle", idle: true, standing: "security-reviewer", briefedBy: null };
 
   s.apps = {
     app1: {
@@ -329,18 +357,36 @@ export function scenario(name: ScenarioName): MockState {
   s.runs["run-done"] = makeRun("run-done", { kind: "research", title: "Research: Court ladder", scope: "northwind", ideaId: "idea-ladder", status: "finished", estimateCredits: 60, spentCredits: 54, finishedAt: ago(5) }, researchScript(false));
   s.runs["run-done"].released = s.runs["run-done"].events.length;
 
+  // The agreed verdict document (ARCH-004, The verdict document), field for field.
   const verdict = {
     outcome: "do-not-build",
     headline: "Do not build this as its own app.",
     summary: "Ladders for clubs are already sold, and nothing in the idea is something they lack.",
-    existing: [
-      { name: "Fixture Ladders", description: "Ladders and leagues for clubs.", url: "https://example.test/ladders" },
-      { name: "Fixture Leagues", description: "Club management with box leagues.", url: null },
-    ],
-    gap: ["A challenge that books the court in the same step.", "That is a feature, not a product."],
-    demand: { paragraphs: ["Members of one club. No one outside it has asked."], evidenceFound: false },
-    wouldChange: { text: "Build it as a feature of Booking desk instead.", changeLabel: "add to Booking desk", estimateCredits: 120 },
-    method: "Ada briefed one contractor per question. The case against the idea was argued first.",
+    against: "Ladders and leagues are sold to clubs today. The one gap, booking the court in the same step, only has value where the booking system already lives.",
+    suggestedChange: null,
+    existing: {
+      evidence: "Two products already sell ladders to clubs.",
+      products: [
+        { name: "Fixture Ladders", what: "Ladders and leagues for clubs.", url: "https://example.test/ladders" },
+        { name: "Fixture Leagues", what: "Club management with box leagues.", url: null },
+      ],
+      sources: ["https://example.test/ladders", "https://example.test/leagues/pricing"],
+    },
+    gap: { evidence: "A challenge that books the court in the same step. That is a feature, not a product." },
+    demand: { evidence: "No evidence of demand was found beyond members of one club.", signals: [] },
+    wouldChange: "Build it as a feature of Booking desk instead.",
+    redLines: { breached: false, line: null, reasoning: "None of the four red lines is near this." },
+    placement: { division: "software", project: "court-ladder", app: "ladder", name: "Court ladder" },
+    method: {
+      searches: 9,
+      strands: [
+        { id: "existing", title: "Existing products", searches: 4, sources: 5, confidence: "high" },
+        { id: "gap", title: "The gap", searches: 2, sources: 2, confidence: "medium" },
+        { id: "demand", title: "Demand", searches: 3, sources: 1, confidence: "low" },
+      ],
+      confidence: "medium",
+    },
+    rulesApplied: ["No evidence of demand was found, and missing demand counts against building."],
   };
   const record = { total: 4, build: 2, change: 1, doNotBuild: 1, overruled: [{ ideaId: "idea-notes", title: "Field notes", verdict: "change", outcome: "You built it as described. It is still in build." }] };
 
@@ -356,8 +402,152 @@ export function scenario(name: ScenarioName): MockState {
     verdict,
     decision: null,
     record,
+    redLine: null,
   };
   s.ideas["idea-researching"] = { ...(s.ideas["idea-ladder"] as IdeaFixture), id: "idea-researching", title: "Tide tables", status: "researching", runId: "run-research", verdict: null, research: { estimatedCredits: 60, spentCredits: 8, by: "Ada" } };
+
+  // The workforce ------------------------------------------------------------------------
+  const job = (scope: string, mandate: string, tools: string[], tier: string, limit: number | null) => ({ mandate, scope, tools, services: ["models"], monthlyCreditLimit: limit, modelTier: tier });
+  const employee = (w: { id: string; name: string; role: string; status: string; standing: string | null }, scope: string, j: ReturnType<typeof job>, extra: Record<string, unknown> = {}) => ({
+    id: w.id,
+    kind: "employee",
+    name: w.name,
+    role: w.role,
+    status: w.status,
+    standing: w.standing,
+    scope,
+    reportsTo: null,
+    briefedBy: null,
+    jobDescription: j,
+    idle: { flagged: w.id === "e3", since: w.id === "e3" ? ago(60 * 24 * 15) : null, afterDays: 14 },
+    currentRun: w.id === "e2" ? { id: "run-build", title: "Building Field notes" } : null,
+    lastRunId: w.id === "e1" ? "run-done" : null,
+    lastActiveAt: ago(60),
+    createdAt: ago(60 * 24 * 84),
+    releasedAt: null,
+    memoryEntries: 3,
+    brief: null,
+    ...extra,
+  });
+  const track = (id: string, accepted: number, sentBack: number, estimates: unknown) => ({
+    employeeId: id,
+    work: { accepted, sentBack, acceptedPercent: accepted + sentBack > 0 ? Math.round((accepted / (accepted + sentBack)) * 1000) / 10 : null },
+    runs: { finished: accepted + sentBack, succeeded: accepted, failed: sentBack, cancelled: 0 },
+    repairsNotCharged: { credits: 18, calls: sentBack },
+    cost: { toDateCredits: 1240, monthCredits: 140 },
+    contractors: { engaged: 6, working: 2, toDateCredits: 300, monthCredits: 40 },
+    estimates,
+  });
+  s.employees = {
+    e1: {
+      employee: employee(ada, "northwind/research", job("northwind/research", "Research every new idea before anything is built, and argue the case against it first.", ["read_file", "web_search", "spawn"], "research", 200)),
+      trackRecord: track("e1", 19, 3, { pieces: 9, withinPercent: 12, under: 6, over: 3, largestMissPercent: 17 }),
+      contractors: [
+        { ...employee({ id: "c1", name: "Contractor", role: "Researcher", status: "working", standing: null }, "northwind/research/recipes", job("northwind/research/recipes", "", [], "research", null)), kind: "contractor", brief: "Sweep the competitors of Recipe box.", briefedBy: { id: "e1", name: "Ada" } },
+      ],
+      reports: [],
+    },
+    e2: { employee: employee(lin, "northwind/research/field-notes", job("northwind/research/field-notes", "Build Field notes to its plan.", ["read_file", "edit_file", "run"], "build-t1", 300)), trackRecord: track("e2", 4, 1, null), contractors: [], reports: [] },
+    e3: { employee: employee(ruth, "northwind", job("northwind", "Check every app for misuse of the platform's services.", ["read_file", "search"], "review", null)), trackRecord: track("e3", 0, 0, null), contractors: [], reports: [] },
+  };
+  s.memory = {
+    e1: [
+      { id: "mem1", employeeId: "e1", scope: "northwind", title: "Proof before building", body: "Northwind wants proof someone will pay before it builds.", kind: "preference", sourceRunId: null, createdAt: ago(60 * 24 * 40), updatedAt: ago(60 * 24 * 9), lastReviewedAt: ago(60 * 24 * 9), archived: false },
+      { id: "mem2", employeeId: "e1", scope: "northwind/software", title: "Check Booking desk first", body: "Ideas near bookings should be checked against Booking desk first. A feature there usually beats a separate app.", kind: "practice", sourceRunId: "run-done", createdAt: ago(60 * 24 * 20), updatedAt: ago(60 * 24 * 20), lastReviewedAt: ago(60 * 24 * 9), archived: false },
+      { id: "mem3", employeeId: "e1", scope: "northwind/research", title: "Three contractors, not six", body: "Splitting the sweep too finely ran 17% over. Use three contractors, not six.", kind: "lesson", sourceRunId: null, createdAt: ago(60 * 24 * 30), updatedAt: ago(60 * 24 * 9), lastReviewedAt: ago(60 * 24 * 9), archived: false },
+    ],
+    e2: [],
+    e3: [],
+  };
+  s.memoryChanges = {
+    e1: [
+      { id: "ch3", memoryId: "mem3", action: "corrected", by: "review", userId: null, runId: "run-review", detail: { why: "Habit corrected" }, at: ago(60 * 24 * 9) },
+      { id: "ch2", memoryId: "mem9", action: "removed", by: "review", userId: null, runId: "run-review", detail: { why: "Out of date" }, at: ago(60 * 24 * 9) },
+      { id: "ch1", memoryId: "mem1", action: "merged", by: "review", userId: null, runId: "run-review", detail: { from: ["mem7", "mem8"] }, at: ago(60 * 24 * 9) },
+    ],
+    e2: [],
+    e3: [],
+  };
+  s.hires = {
+    h1: {
+      id: "h1",
+      status: "proposed",
+      trigger: "recurring",
+      needKey: "recurring:northwind/software:support",
+      scope: "northwind/software",
+      reason: "Members asked 14 questions this week with nobody assigned to answer them.",
+      name: "Noor",
+      role: "Support writer",
+      jobDescription: job("northwind/software", "Answer member questions about Booking desk within a day, and write up what keeps coming back.", ["read_file", "search"], "chat", 300),
+      reportsTo: null,
+      expectedMonthlyCredits: 300,
+      withinBudget: true,
+      headroomCredits: 690,
+      contractorRole: null,
+      raisedBy: "runner",
+      raisedByRunId: "run-build",
+      decision: null,
+      employeeId: null,
+      createdAt: ago(60 * 3),
+    },
+  };
+  s.recurringRoles = [{ scope: "northwind/research", role: "Competitor sweep", contractors: 3, windowDays: 30, costCredits: 90, lastBriefedBy: "e1", lastBrief: "Sweep the competitors of a new idea and name each with its price." }];
+  s.tasks = [
+    { id: "t-1", scope: "northwind/research", runId: "run-done", parentTaskId: null, title: "Research: Court ladder", description: "", status: "done", holderRunId: "run-done", holderEmployeeId: "e1", claimedAt: ago(60 * 24), estimateCredits: 60, actualCredits: 54, dependsOn: [], createdAt: ago(60 * 24), updatedAt: ago(60 * 23) },
+    { id: "t-2", scope: "northwind/research/recipes", runId: "run-research", parentTaskId: null, title: "Competitor sweep: Recipe box", description: "", status: "in_progress", holderRunId: "run-research", holderEmployeeId: "e1", claimedAt: ago(30), estimateCredits: 90, actualCredits: null, dependsOn: [], createdAt: ago(30), updatedAt: ago(5) },
+  ];
+  s.autonomy = {
+    northwind: { autonomy: "auto", checkpoints: { hire: true }, ruleSets: { all: { deny: ["run(rm -rf *)"], ask: [], allow: [], checkpoints: [] } } },
+    "northwind/software": { checkpoints: { start: true }, ruleSets: { build: { deny: [], ask: ["run"], allow: ["read_file", "edit_file"], checkpoints: [] } } },
+  };
+  s.ontology = () => ({
+    scope: "northwind",
+    generatedAt: now(),
+    nodes: [
+      { id: "organisation:org1", type: "organisation", name: "Northwind", scope: "northwind", status: "active", attributes: null },
+      { id: "division:d1", type: "division", name: "Software", scope: "northwind/software", status: "active", attributes: null },
+      { id: "division:d2", type: "division", name: "Research", scope: "northwind/research", status: "active", attributes: null },
+      { id: "project:p1", type: "project", name: "Booking", scope: "northwind/software/booking", status: "active", attributes: null },
+      { id: "project:p3", type: "project", name: "Recipes", scope: "northwind/research/recipes", status: "active", attributes: null },
+      { id: "project:p4", type: "project", name: "Field notes", scope: "northwind/research/field-notes", status: "active", attributes: null },
+      { id: "app:app1", type: "app", name: "Booking desk", scope: "northwind/software/booking/desk", status: "running", attributes: { version: "1.4.0" } },
+      { id: "app:app2", type: "app", name: "Recipe box", scope: "northwind/research/recipes/box", status: "sleeping", attributes: { version: "0.9.2" } },
+      { id: "employee:e1", type: "employee", name: "Ada", scope: "northwind/research", status: "idle", attributes: { role: "Product researcher" } },
+      { id: "employee:e2", type: "employee", name: "Lin", scope: "northwind/research/field-notes", status: "working", attributes: { role: "Engineer" } },
+      { id: "employee:e3", type: "employee", name: "Ruth", scope: "northwind", status: "idle", attributes: { role: "Security reviewer", standing: "security-reviewer" } },
+      { id: "contractor:c1", type: "contractor", name: "Contractor", scope: "northwind/research/recipes", status: "working", attributes: { role: "Researcher" } },
+      { id: "person:u1", type: "person", name: "Fixture Owner", scope: null, status: null, attributes: null },
+      { id: "secret:MAIL_API_KEY", type: "secret", name: "MAIL_API_KEY", scope: "northwind", status: null, attributes: null },
+      { id: "service:identity", type: "service", name: "identity", scope: null, status: null, attributes: null },
+      { id: "service:email", type: "service", name: "email", scope: null, status: null, attributes: null },
+      { id: "service:models", type: "service", name: "models", scope: null, status: null, attributes: null },
+      { id: "webhook:w1", type: "webhook", name: "court-sensor", scope: null, status: null, attributes: { path: "/hooks/court-sensor" } },
+    ],
+    edges: [
+      { from: "organisation:org1", to: "division:d1", type: "owns", label: null },
+      { from: "organisation:org1", to: "division:d2", type: "owns", label: null },
+      { from: "division:d1", to: "project:p1", type: "owns", label: null },
+      { from: "division:d2", to: "project:p3", type: "owns", label: null },
+      { from: "division:d2", to: "project:p4", type: "owns", label: null },
+      { from: "project:p1", to: "app:app1", type: "owns", label: null },
+      { from: "project:p3", to: "app:app2", type: "owns", label: null },
+      { from: "organisation:org1", to: "secret:MAIL_API_KEY", type: "owns", label: null },
+      { from: "employee:e1", to: "division:d2", type: "works-on", label: "Product researcher" },
+      { from: "employee:e2", to: "project:p4", type: "works-on", label: "now: Building Field notes" },
+      { from: "employee:e3", to: "organisation:org1", type: "works-on", label: "Security reviewer" },
+      { from: "contractor:c1", to: "project:p3", type: "works-on", label: "now: competitor sweep" },
+      { from: "contractor:c1", to: "employee:e1", type: "reports-to", label: "briefed by" },
+      { from: "person:u1", to: "organisation:org1", type: "works-on", label: "owner" },
+      { from: "app:app1", to: "service:identity", type: "depends-on", label: null },
+      { from: "service:identity", to: "app:app1", type: "data-flows-to", label: "signed-in end users" },
+      { from: "app:app1", to: "service:email", type: "depends-on", label: null },
+      { from: "app:app1", to: "service:email", type: "data-flows-to", label: "outbound mail" },
+      { from: "app:app1", to: "service:models", type: "depends-on", label: null },
+      { from: "app:app1", to: "service:models", type: "data-flows-to", label: "prompts" },
+      { from: "webhook:w1", to: "app:app1", type: "data-flows-to", label: "inbound calls" },
+    ],
+    views: { "org-chart": ["owns", "works-on", "reports-to"], "data-flow": ["depends-on", "data-flows-to"] },
+  });
 
   const division = (id: string, slug: string, name: string, monthCredits: number, projects: unknown[]) => ({ id, slug, name, spend: { monthCredits }, workers: [], projects });
 
@@ -395,7 +585,7 @@ export function scenario(name: ScenarioName): MockState {
             note: null,
             progress: null,
             spend: { monthCredits: 22 },
-            workers: [ada, { id: "c1", name: "Contractor", role: "Researcher", kind: "contractor", activity: "competitor sweep" }, { id: "c2", name: "Contractor", role: "Researcher", kind: "contractor", activity: null }],
+            workers: [ada, { id: "c1", name: "Contractor", role: "Researcher", kind: "contractor", activity: "competitor sweep", status: "working", idle: false, standing: null, briefedBy: "e1" }, { id: "c2", name: "Contractor", role: "Researcher", kind: "contractor", activity: null, status: "working", idle: false, standing: null, briefedBy: "e1" }],
             apps: [
               { id: "app2", slug: "box", name: "Recipe box", health: "healthy", running: "asleep", access: "shared", sharedWith: s.shares.app2?.length ?? 0, visitsToday: null, lastVisitAt: ago(60 * 50), spend: { monthCredits: 22 }, workers: [] },
               { id: "app3", slug: "tides", name: "Tide board", health: "healthy", running: "awake", access: "public", sharedWith: 0, visitsToday: null, lastVisitAt: null, spend: { monthCredits: 0 }, workers: [] },
@@ -418,6 +608,10 @@ export function scenario(name: ScenarioName): MockState {
       needsYou: [
         { kind: "verdict", id: "n1", ideaId: "idea-ladder", title: "Research says do not build “Court ladder”", verdict: "do-not-build", detail: "Read it, or overrule." },
         { kind: "approval", id: "n2", runId: "run-research", approvalId: "a1", title: "Spend 20 more credits on Tide tables research?", detail: "Ada is waiting for you." },
+        ...Object.values(s.hires)
+          .filter((h) => h.status === "proposed")
+          .map((h) => ({ kind: "hire", id: `n-${h.id}`, hireId: h.id, title: `A ${String(h.role).toLowerCase()} for ${h.scope === "northwind/research" ? "Research" : "Software"}`, detail: String(h.reason), scope: h.scope, expectedMonthlyCredits: h.expectedMonthlyCredits })),
+        { kind: "idle", id: "n4", employeeId: "e3", title: "Ruth has had nothing to do for 14 days", detail: "Give Ruth work, or let Ruth go. Its memory is kept." },
       ],
     };
   };

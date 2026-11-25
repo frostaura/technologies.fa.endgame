@@ -49,7 +49,7 @@ test.describe("home — the living org chart", () => {
     await page.goto("/");
     const chart = page.getByRole("region", { name: "Organisation chart" });
     await expect(chart.getByRole("article", { name: "Booking" }).getByText("Always on")).toBeVisible();
-    await expect(page.getByRole("region", { name: "Needs you" }).getByRole("link")).toHaveCount(2);
+    await expect(page.getByRole("region", { name: "Needs you" }).getByRole("link")).toHaveCount(4);
     await expect(page.getByRole("heading", { name: "Talking to Northwind" })).toBeVisible();
 
     await chart.getByRole("button", { name: /Research/ }).first().click();
@@ -177,12 +177,13 @@ test.describe("from idea to verdict", () => {
     await expect(approval).toContainText("Spend 20 more credits on a wider demand sweep?", { timeout: 15_000 });
     const steps = page.getByRole("list", { name: "Steps" });
     await expect(steps).toContainText("An action was refused by your rules");
-    await expect(steps).not.toContainText("shell.exec");
+    await expect(steps).not.toContainText("curl");
+    await expect(steps).toContainText("Looked for existing products");
     await approval.getByRole("button", { name: "Approve" }).click();
     await expect(page.getByRole("link", { name: /The verdict is ready/ })).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" }).click();
-    await expect(steps).toContainText("Denied: shell.exec");
+    await expect(steps).toContainText("Denied: run");
     await expect(steps).toContainText("Rule: protected floor: no shell in research");
     await expect(steps).toContainText("Model replied: fixture/model-small");
     await page.reload();
@@ -371,6 +372,10 @@ test.describe("every screen, every width", () => {
     ["secrets", "populated", "/secrets?scope=northwind%2Fsoftware%2Fbooking%2Fdesk", "Secrets for Booking desk"],
     ["operator access", "populated", "/operator-access", "Operator access"],
     ["credits", "populated", "/credits", "Budgets"],
+    ["employee", "populated", "/employees/e1", "Talk to Ada"],
+    ["hire proposal", "populated", "/hires/h1", "Noor, support writer"],
+    ["hiring", "populated", "/hires?scope=northwind", "Hiring for Northwind"],
+    ["autonomy", "populated", "/autonomy?scope=northwind%2Fsoftware", "How much Software does on its own"],
     ["sign-in", "signed-out", "/sign-in", "Sign in"],
   ];
   for (const [name, scenario, path, heading] of screens) {
