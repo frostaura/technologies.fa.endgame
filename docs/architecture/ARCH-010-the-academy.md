@@ -114,7 +114,15 @@ Moving on by one step plays only that step. Jumping, going back, or "Show me aga
 `goto` the script's start, replays every earlier step's `goto`/`clock`/`act` with `instant: true`
 and no spotlight, then plays the target step in full. Requests play strictly in order; one
 superseded by a newer step still plays, instantly and without its spotlight, so the console never
-skips a state.
+skips a state. A step with no spotlight of its own sends `highlight {}`, and the demo clears the
+ring and note as a step's actions start, so the step before's caption never stands over the new
+state.
+
+**One moment per step.** A step's live play, a link straight to it, and its captured picture show
+the same moment: the end of that step's actions and spotlight. Nothing in the demo moves on a timer
+of its own that a step relies on — the device sheet waits for a step to choose on it or to `wait`
+(ARCH-009) — and `make academy-shots` plays each step's actions as the learner's console does (not
+instantly), so a busy moment a step teaches ("Inviting…") is what its picture shows.
 
 ### Personas and scenarios
 
@@ -138,7 +146,7 @@ project **Court booking**, and the Admin **Ada Lovelace**.
 | `make academy-assemble` | runs `make demo-build` when that target exists, then assembles `site/` |
 | `make academy-pdf` | `site/academy.pdf` and `site/operator-handbook.pdf`, headless Chromium |
 | `make academy-e2e` | Playwright against `site/` served under `/technologies.fa.endgame/` |
-| `make academy-shots` | plays every step script against the built demo (fixed clock and viewport, reduced motion, each act awaited) and saves one WebP per demo step and per variation's last step under `public/shots/<FLOW-ID>/`, with `index.json`; a picture identical to the step before is named, not saved again, and unchanged files are not rewritten. `ACADEMY_FLOWS` limits it; `SHOTS_PORT` (default 5691) moves its server |
+| `make academy-shots` | plays every step script against the built demo (fixed clock and viewport, reduced motion, each act played as the academy plays the step and awaited) and saves one WebP per demo step and per variation's last step under `public/shots/<FLOW-ID>/`, with `index.json`; a picture identical to the step before is named, not saved again, and unchanged files are not rewritten. `ACADEMY_FLOWS` limits it; `SHOTS_PORT` (default 5691) moves its server |
 | `make site` | shots, build, assemble, PDFs — the print version sets each step's picture beside its text |
 | `npm run script:new -- <FLOW-ID>` | scaffolds `scripts/<FLOW-ID>.json` from the parsed flow |
 

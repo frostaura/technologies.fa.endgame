@@ -13,8 +13,17 @@ import { expect, test } from "@playwright/test";
  * Each of a script's variations ("What else can happen") is played the same way, from its own start,
  * as its own persona and scenario; its steps are allow-listed as `{ flow, variation, step }`.
  *
+ * A step is one moment however it is reached: played after the step before it (as a learner walks
+ * the steps), or caught up to instantly (as a link straight to the step, and the picture captured
+ * for it, reach it). For the flows in SAME_MOMENT the script is played a second time, caught up
+ * step by step, and each step's state (`endgameDemo.state()`: address, who is signed in, the device
+ * sheet, the heading) must equal the state the live play left.
+ *
  * `ACADEMY_FLOWS=ID,PPL` plays only the scripts whose flow id starts with one of those prefixes.
  */
+
+/** The flows held to "a step is one moment" (the identity flows first: their passkey sheet used to race a timer). */
+const SAME_MOMENT = ["ID-"];
 
 interface Step {
   step: number;
@@ -71,6 +80,22 @@ for (const { script, variation, name } of plays) {
     const call = (op: string, ...args: unknown[]) =>
       page.evaluate(async ([o, a]) => (window as unknown as { endgameDemo: Record<string, (...x: unknown[]) => unknown> }).endgameDemo[o as string]?.(...(a as unknown[])), [op, args] as const);
     await call("goto", { route: script.start, persona: script.persona, scenario: script.scenario });
+    /** The demo's state once what the step started has been answered and nothing still changes (two reads 400 ms apart agree; at most 8 s). */
+    const steady = async () => {
+      const read = async () => {
+        const { answering, ...rest } = (await call("state")) as { answering: boolean };
+        return answering ? null : JSON.stringify(rest);
+      };
+      let last = await read();
+      for (let i = 0; i < 20; i++) {
+        await page.waitForTimeout(400);
+        const now = await read();
+        if (now !== null && now === last) return now;
+        last = now;
+      }
+      return last ?? "still answering";
+    };
+    const live: Record<number, string> = {};
     const failures: string[] = [];
     const passedButAllowed: string[] = [];
     for (const step of script.steps.filter((s) => s.kind === "demo")) {
@@ -94,6 +119,23 @@ for (const { script, variation, name } of plays) {
       const ok = allowed(script.flow, step.step, variation);
       if (failed && !ok) failures.push(`${where}: ${failed}`);
       if (!failed && ok) passedButAllowed.push(`${where} is on the allow-list ("${ok.reason}") but now passes: remove it`);
+      if (SAME_MOMENT.some((p) => script.flow.startsWith(p))) live[step.step] = await steady();
+    }
+    if (Object.keys(live).length) {
+      // Caught up, as a link to each step and its captured picture reach it.
+      await call("reset");
+      await call("goto", { route: script.start, persona: script.persona, scenario: script.scenario });
+      for (const step of script.steps.filter((s) => s.kind === "demo")) {
+        try {
+          if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}) });
+          if (step.clock) await call("clock", step.clock);
+          if (step.act) await call("act", step.act, true);
+        } catch {
+          // The live play above names an action that fails.
+        }
+        const caught = await steady();
+        if (caught !== live[step.step]) failures.push(`${script.flow}${variation ? ` variation ${variation}` : ""} step ${step.step}: played, it ends at ${live[step.step]}; reached directly (a link, its picture), at ${caught}`);
+      }
     }
     expect([...failures, ...passedButAllowed, ...errors.map((e) => `${script.flow}: console error: ${e}`)]).toEqual([]);
   });

@@ -83,6 +83,14 @@ function load(scenario: string, persona: string): World | null {
   }
 }
 
+/** Requests the fake control plane is still answering (each takes its latency). */
+let inFlight = 0;
+
+/** Whether the console is still waiting on the fake control plane. */
+export function answering(): boolean {
+  return inFlight > 0;
+}
+
 let pending = new Set<string>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -143,7 +151,18 @@ export function startHost(params: URLSearchParams): AppStore {
   begin(scenario, persona, false);
   const cp = createControlPlane({ base: DEMO_BASE, world: () => world, afterChange: changed, latency: (method) => (method === "GET" ? 90 + Math.floor(Math.random() * 120) : 650 + Math.floor(Math.random() * 350)) });
   // Every address the console prints is the demo world's own host, never the page's (a static site's origin is no Endgame address).
-  installTransport({ base: cp.base, fetch: cp.fetch, publicOrigin: DEMO_ORIGIN });
+  installTransport({
+    base: cp.base,
+    fetch: async (input, init) => {
+      inFlight += 1;
+      try {
+        return await cp.fetch(input, init);
+      } finally {
+        inFlight -= 1;
+      }
+    },
+    publicOrigin: DEMO_ORIGIN,
+  });
   Object.defineProperty(window, "EventSource", { value: cp.EventSource, configurable: true, writable: true });
   installDevice(() => world.users.filter((u) => u.passkeys > 0 && world.device.includes(u.id)).map((u) => ({ id: u.id, label: `${u.displayName} · ${u.email}` })));
   store = makeStore();

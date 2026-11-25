@@ -4,8 +4,13 @@ import { useSyncExternalStore } from "react";
  * "Your device": the passkey ceremonies, simulated. The console's own WebAuthn calls
  * (`navigator.credentials.create` and `.get`) are answered here, behind the demo seam, by a small
  * in-page sheet that asks the person to approve or cancel — so every sign-in, registration and
- * invitation flow can be walked without a real authenticator. Embedded in the academy, the sheet
- * approves itself after a moment, as a learner's device would.
+ * invitation flow can be walked without a real authenticator.
+ *
+ * Embedded in the academy the sheet answers the lesson, never a timer: it stays open until a step
+ * approves it — by choosing on the sheet, or by waiting (a step's `wait`: the person approves while
+ * the console waits). So what a step shows depends only on the steps played, and a step reached by
+ * playing every step before it, by a link straight to it, or by the picture captured for it is the
+ * same moment. Standalone with `device=auto`, it approves itself after a moment.
  */
 
 export interface DeviceRequest {
@@ -21,6 +26,8 @@ export interface DeviceRequest {
 let current: DeviceRequest | null = null;
 const listeners = new Set<() => void>();
 let autoApproveMs: number | null = null;
+/** While a lesson waits: a request open now, or opened meanwhile, is approved after `approveAfterMs`. */
+let approving: { afterMs: number } | null = null;
 
 function emit() {
   for (const l of listeners) l();
@@ -28,6 +35,26 @@ function emit() {
 
 export function setAutoApprove(ms: number | null) {
   autoApproveMs = ms;
+}
+
+/**
+ * The lesson is waiting (`on`), as a person approving on their device: an open sheet is approved,
+ * and so is one that opens before the wait ends. `afterMs` lets the sheet be seen first.
+ */
+export function approveWhileWaiting(on: boolean, afterMs = 0) {
+  approving = on ? { afterMs } : null;
+  if (on && current) approveSoon(current, afterMs);
+}
+
+/** Whether a sheet is open. */
+export function deviceAsking(): boolean {
+  return current !== null;
+}
+
+function approveSoon(req: DeviceRequest, ms: number) {
+  const go = () => current === req && req.resolve(req.choices[0]?.id ?? "ok");
+  if (ms <= 0) go();
+  else setTimeout(go, ms);
 }
 
 /** A reset of the demo: a sheet still open is cancelled, as closing it would. */
@@ -49,7 +76,8 @@ export function askDevice(request: Omit<DeviceRequest, "resolve">): Promise<stri
     };
     current = req;
     emit();
-    if (autoApproveMs !== null) setTimeout(() => current === req && req.resolve(req.choices[0]?.id ?? "ok"), autoApproveMs);
+    if (approving) approveSoon(req, approving.afterMs);
+    else if (autoApproveMs !== null) approveSoon(req, autoApproveMs);
   });
 }
 

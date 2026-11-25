@@ -18,7 +18,8 @@ const embedded = params.get("embed") === "1";
 
 routeByHash();
 startHost(params);
-if (embedded || params.get("device") === "auto") setAutoApprove(700);
+// Embedded, the device answers the lesson's steps instead (device.ts); standalone it can approve itself.
+if (!embedded && params.get("device") === "auto") setAutoApprove(700);
 installBridge(embedded);
 if (!window.location.hash || window.location.hash === "#") navigate(startRoute(), { replace: true });
 

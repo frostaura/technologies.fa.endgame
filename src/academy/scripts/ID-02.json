@@ -24,7 +24,7 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "text": "Waiting for your device…",
+        "text": "Sign in to endgame.example with a passkey?",
         "note": "No e-mail is asked for, so the device offers any Endgame passkey it holds."
       }
     },
@@ -33,14 +33,26 @@
       "kind": "demo",
       "act": [
         {
-          "wait": 1200
+          "hover": {
+            "text": "Mara Ellison"
+          }
         }
       ],
-      "note": "You choose a key and approve; the server verifies it and signs you in."
+      "highlight": {
+        "text": "Mara Ellison",
+        "note": "You choose a key and approve; the server verifies it and signs you in."
+      }
     },
     {
       "step": 4,
       "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Mara Ellison"
+          }
+        }
+      ],
       "highlight": {
         "text": "Sign out",
         "note": "Signed in as Mara Ellison: the org chart, with Sign out in the header."

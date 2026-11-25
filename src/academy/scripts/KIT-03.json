@@ -55,6 +55,9 @@
           "click": {
             "text": "Create a passkey"
           }
+        },
+        {
+          "wait": 1200
         }
       ],
       "highlight": {
