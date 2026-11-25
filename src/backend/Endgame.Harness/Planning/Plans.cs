@@ -52,7 +52,11 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
         ["requirements"] = RequirementsJson(),
         ["items"] = new JsonArray(Items.Select(i => (JsonNode)new JsonObject
         {
-            ["id"] = i.Id, ["text"] = i.Text, ["detail"] = i.Detail, ["check"] = i.Check, ["covers"] = Strings(i.Covers),
+            ["id"] = i.Id,
+            ["text"] = i.Text,
+            ["detail"] = i.Detail,
+            ["check"] = i.Check,
+            ["covers"] = Strings(i.Covers),
         }).ToArray()),
         ["leftOut"] = new JsonArray(LeftOut.Select(l => (JsonNode)new JsonObject { ["requirement"] = l.Requirement, ["reason"] = l.Reason }).ToArray()),
     };
@@ -68,7 +72,11 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
         ["requirements"] = RequirementsJson(),
         ["items"] = new JsonArray(Items.Select(i => (JsonNode)new JsonObject
         {
-            ["id"] = i.Id, ["text"] = i.Text, ["detail"] = i.Detail, ["check"] = i.Check, ["covers"] = Strings(i.Covers),
+            ["id"] = i.Id,
+            ["text"] = i.Text,
+            ["detail"] = i.Detail,
+            ["check"] = i.Check,
+            ["covers"] = Strings(i.Covers),
         }).ToArray()),
         ["leftOut"] = new JsonArray(LeftOut.Select(l => (JsonNode)new JsonObject
         {

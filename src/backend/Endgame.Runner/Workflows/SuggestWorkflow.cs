@@ -39,7 +39,8 @@ public sealed class SuggestWorkflow : IWorkflow
         catch (ServiceProblemException e)
         {
             return WorkflowOutcome.Failure($"What the organisation holds could not be read ({e.Code}: {e.Detail}), so no ideas were suggested.")
-                with { ForOwner = "What the organisation holds could not be read just now, so no ideas were suggested. Asking again starts afresh." };
+                with
+            { ForOwner = "What the organisation holds could not be read just now, so no ideas were suggested. Asking again starts afresh." };
         }
 
         var scope = Json.Str(context, "scope") ?? run.Run.Scope;
@@ -92,7 +93,8 @@ public sealed class SuggestWorkflow : IWorkflow
         if (kept.Count == 0)
         {
             return WorkflowOutcome.Failure($"No usable suggestion was made: {why}")
-                with { ForOwner = "No new idea worth suggesting came out of what the organisation holds this time, so nothing was added. Asking again later, once there is more to build on, may find one." };
+                with
+            { ForOwner = "No new idea worth suggesting came out of what the organisation holds this time, so nothing was added. Asking again later, once there is more to build on, may find one." };
         }
 
         try

@@ -56,7 +56,8 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             if (plan is null || plan.Faults(idea).Count > 0)
             {
                 return WorkflowOutcome.Failure("Planning produced no valid contract, so nothing was built." + (plan is null ? "" : " " + string.Join(" ", plan.Faults(idea))))
-                    with { ForOwner = "Planning did not produce a plan that covers everything the idea asks for, so nothing was built. Starting the build again plans it afresh." };
+                    with
+                { ForOwner = "Planning did not produce a plan that covers everything the idea asks for, so nothing was built. Starting the build again plans it afresh." };
             }
 
             if (Checkpoint(run, "plan"))
@@ -271,7 +272,8 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
         if (Json.Bool(lastEvaluation, "passed") != true)
         {
             return WorkflowOutcome.Failure($"'{item.Deliverable}' still failed its check after {run.Options.MaxRepairRounds} repair rounds: {string.Join(" ", Json.Strings(lastEvaluation, "faults"))}")
-                with { ForOwner = $"\"{item.Text.TrimEnd('.')}\" still did not work after {run.Options.MaxRepairRounds} rounds of repair, each on a stronger model, so the app was not published. Its work so far is saved; the repairs were not charged." };
+                with
+            { ForOwner = $"\"{item.Text.TrimEnd('.')}\" still did not work after {run.Options.MaxRepairRounds} rounds of repair, each on a stronger model, so the app was not published. Its work so far is saved; the repairs were not charged." };
         }
 
         await RecordProgressAsync(run, item, lastEvaluation!, workspace, cancellationToken);
@@ -398,7 +400,8 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
 
         var list = (run.Journal.Get("security:1")?["findings"] as JsonArray ?? []).OfType<JsonObject>().Select(f => $"{Json.Str(f, "file")}: {Json.Str(f, "problem")}");
         return WorkflowOutcome.Failure($"Publishing is blocked by the security review: {string.Join("; ", list)}")
-            with { ForOwner = "The security review still found problems after one repair, so the app was not published. Its work is saved, and technical mode lists each finding." };
+            with
+        { ForOwner = "The security review still found problems after one repair, so the app was not published. Its work is saved, and technical mode lists each finding." };
     }
 
     private static bool Passed(JsonObject findings) =>

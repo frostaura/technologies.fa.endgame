@@ -93,7 +93,8 @@ public sealed class RunExecutor(
         {
             logger.LogError(e, "Run {RunId} failed in the Runner.", run.Id);
             outcome = WorkflowOutcome.Failure($"The work stopped on an internal fault and has been logged: {OutputText.Truncate(e.Message, 300)}")
-                with { ForOwner = "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; it can be started again." };
+                with
+            { ForOwner = "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; it can be started again." };
         }
 
         switch (outcome.End)
