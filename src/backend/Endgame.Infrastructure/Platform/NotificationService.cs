@@ -81,6 +81,28 @@ public sealed class NotificationService(
         return inserted;
     }
 
+    /// <summary>
+    /// An Owner asked FrostAura for credits: every operator is told, in each organisation where they hold
+    /// a role at the top — their own feed — and only operators see it there (<see cref="FeedAsync"/>).
+    /// </summary>
+    public async Task<int> RaiseTopUpRequestedAsync(Guid requestId, string organisationName, decimal credits, string note, CancellationToken cancellationToken)
+    {
+        session.UseSystem();
+        var operatorIds = await access.OperatorIdsAsync(cancellationToken);
+        var homes = await db.Memberships.AsNoTracking().Where(m => operatorIds.Contains(m.UserId) && m.DivisionId == null).Select(m => m.OrganisationId).Distinct().ToListAsync(cancellationToken);
+        var raised = 0;
+        foreach (var home in homes)
+        {
+            var root = await scopes.ForRowAsync(home, null, null, null, cancellationToken);
+            var amount = decimal.Round(credits, 2).ToString("#,0.##", CultureInfo.InvariantCulture);
+            raised += await RaiseAsync(root, NotificationKinds.TopUpRequested, $"{organisationName} asks for {amount} credits",
+                note.Length > 0 ? note : "No note was given. Answer it under Every organisation.", new NotificationSubject("topup_request", requestId), $"topup.requested:{requestId:N}", cancellationToken) ? 1 : 0;
+        }
+
+        session.Clear();
+        return raised;
+    }
+
     /// <summary>The feed for one person in one organisation, newest first: what their grants make theirs to act on.</summary>
     public async Task<NotificationFeed> FeedAsync(Guid userId, string? organisation, bool unreadOnly, int limit, CancellationToken cancellationToken)
     {
@@ -95,7 +117,11 @@ public sealed class NotificationService(
         session.UseOrganisation(org.OrganisationId);
         var everything = covering.Any(g => g.Level == NodeLevel.Organisation) || covering.Count == 0;
         var nodes = covering.Select(g => g.NodeId).ToHashSet();
-        var rows = await db.Notifications.AsNoTracking().Where(n => n.OrganisationId == org.OrganisationId).OrderByDescending(n => n.CreatedAt).Take(1000).ToListAsync(cancellationToken);
+        // Another organisation's top-up request is for FrostAura's operators only, never their colleagues.
+        var operatorOnly = !await access.IsOperatorAsync(userId, cancellationToken);
+        session.UseOrganisation(org.OrganisationId);
+        var rows = await db.Notifications.AsNoTracking().Where(n => n.OrganisationId == org.OrganisationId && (!operatorOnly || n.Kind != NotificationKinds.TopUpRequested))
+            .OrderByDescending(n => n.CreatedAt).Take(1000).ToListAsync(cancellationToken);
         var visible = rows.Where(n => everything || new[] { n.DivisionId, n.ProjectId, n.AppId }.Any(id => id is { } x && nodes.Contains(x))).ToList();
         var ids = visible.Select(n => n.Id).ToList();
         var read = (await db.NotificationReads.AsNoTracking().Where(r => r.OrganisationId == org.OrganisationId && r.UserId == userId && ids.Contains(r.NotificationId))

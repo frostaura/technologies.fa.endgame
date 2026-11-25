@@ -32,9 +32,11 @@ rule sets, context, settings, secrets and roles that apply beneath it.
 4. `POST /api/members { scope, email, displayName, role }` grants Admin, Builder or Viewer at any node
    (only the Owner grants Admin); a new person gets a one-time invitation code, returned once and also
    e-mailed when a mail server is configured (`emailed`); they register a passkey with it and land in
-   the organisation with exactly that role. `GET /api/members?scope=` lists each grant with where it
-   was set; `PATCH /api/members/{id} { role }` changes it where it was set (to or from Admin, the
-   Owner); `DELETE /api/members/{id}` removes it.
+   the organisation with exactly that role. `GET /api/members?scope=` lists every grant that holds at
+   the scope — set there, beneath it, or above it on its chain (the Owner included) — with where it was
+   set; `PATCH /api/members/{id} { role }` changes it where it was set (to or from Admin, the Owner)
+   and never touches a pending person's code; `POST /api/members/{id}/invitation` sends a pending person
+   a new code (the old one stops working); `DELETE /api/members/{id}` removes it.
 5. A new organisation's name may not take a FrostAura subdomain: the ops service lists them
    (`409 reserved_name`); while Cloudflare is managed and that list cannot be read, no new name is
    accepted (`503 reserved_names_unavailable`); with Cloudflare not managed here, the built-in list
@@ -49,7 +51,8 @@ rule sets, context, settings, secrets and roles that apply beneath it.
 - **A2 — duplicate sibling slug.** 409 `conflict`.
 - **A3 — deleting a node with children, work or credit history.** 409; archive it instead.
 - **A4 — no role at a scope.** 404 (the tree's shape is not disclosed); a role too low there is 403, naming the role held and where it was set.
-- **A5 — first run.** `GET /api/tree` is 200 with `organisation: null`, empty `divisions` and `needsYou` — empty because it is empty.
+- **A5 — first run.** `GET /api/tree` is 200 with `organisation: null`, empty `divisions` and `needsYou` — empty because it is empty — and `firstRun: true`. Someone with no role after the first organisation exists gets `firstRun: false`: organisations are provisioned by FrostAura.
+- **A6 — archived.** An archived division or project keeps its history and is marked `archived` in the tree; none of its apps is served until it is reactivated.
 - **A6 — a deeper overdraft.** An organisation's overdraft is set by an operator; lower levels may only tighten it (400 otherwise).
 
 ## Postconditions
@@ -61,7 +64,7 @@ rule sets, context, settings, secrets and roles that apply beneath it.
 ## Rules this use case must honour
 
 - The cascade resolver is the only implementation of inheritance (CLAUDE.md, *The cascade*).
-- Roles: deepest grant wins; the organisation's Owner is never narrowed.
+- Roles: deepest grant wins; the organisation's Owner is never narrowed. The tree carries each node's effective role, so the console never works it out itself.
 
 ## Acceptance
 

@@ -134,6 +134,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var everything = grants.Any(g => g.Level == NodeLevel.Organisation);
         var visible = grants.Select(g => g.NodeId).ToHashSet();
         bool Visible(Guid id, params Guid[] ancestors) => everything || visible.Contains(id) || ancestors.Any(visible.Contains);
+        string? RoleAt(Guid? division, Guid? project, Guid? app) => RoleResolver.Resolve(grants.Where(g => g.Level == NodeLevel.Organisation
+            || (g.Level == NodeLevel.Division && g.NodeId == division) || (g.Level == NodeLevel.Project && g.NodeId == project) || (g.Level == NodeLevel.App && g.NodeId == app)))?.Role.ToWire();
         var runTitles = liveRuns.ToDictionary(r => r.Id, r => r.Title);
         // Who works in each run that is under way: its owner, whoever claimed a task in it, whoever its model calls were charged to.
         var working = WorkingIn(liveRuns.Where(r => r.Status is RunStatuses.Running or RunStatuses.WaitingApproval).ToList(),
@@ -189,7 +191,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                     var summary = measured.GetValueOrDefault(a.Id);
                     return new AppNodeView(a.Id, a.Slug, a.Name, AppHealth(a.Status, summary), route?.Paused == true ? "paused" : AppRunning(a.Status, alwaysOn),
                         route?.Access ?? Domain.Platform.AppAccess.Private, shares.GetValueOrDefault(a.Id), summary is null ? null : (int)Math.Min(int.MaxValue, summary.VisitsToday), summary?.LastVisitAt,
-                        Spend(s => s.AppId == a.Id), Workers(d.Id, p.Id, a.Id));
+                        Spend(s => s.AppId == a.Id), Workers(d.Id, p.Id, a.Id), RoleAt(d.Id, p.Id, a.Id), a.Status == NodeStatuses.Archived);
                 }).ToList();
 
                 var active = liveRuns.FirstOrDefault(r => r.ProjectId == p.Id && r.Kind != RunKinds.Conversation);
@@ -204,10 +206,11 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                 }
 
                 projectViews.Add(new ProjectNodeView(p.Id, p.Slug, p.Name, stage, (active ?? last)?.IdeaId, note, progress,
-                    Spend(s => s.ProjectId == p.Id), Workers(d.Id, p.Id, null), appViews));
+                    Spend(s => s.ProjectId == p.Id), Workers(d.Id, p.Id, null), appViews, RoleAt(d.Id, p.Id, null), p.Status == NodeStatuses.Archived));
             }
 
-            divisionViews.Add(new DivisionNodeView(d.Id, d.Slug, d.Name, Spend(s => s.DivisionId == d.Id), Workers(d.Id, null, null), projectViews));
+            divisionViews.Add(new DivisionNodeView(d.Id, d.Slug, d.Name, Spend(s => s.DivisionId == d.Id), Workers(d.Id, null, null), projectViews,
+                RoleAt(d.Id, null, null), d.Status == NodeStatuses.Archived));
         }
 
         var shownApps = divisionViews.Sum(d => d.Projects.Sum(p => p.Apps.Count));
@@ -215,7 +218,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var summary = $"{Count(divisionViews.Count, "division")} · {Count(shownProjects, "project")} · {Count(shownApps, "app")} · {Count(employees.Count(e => e.Kind == Domain.Workforce.EmployeeKinds.Employee), "employee")}";
         var root = new OrganisationNodeView(organisation.Id, organisation.Slug, organisation.Name, summary,
             everything ? Spend(_ => true) : new SpendView(divisionViews.Sum(v => v.Spend.MonthCredits)),
-            everything ? Workers(null, null, null) : []);
+            everything ? Workers(null, null, null) : [], RoleAt(null, null, null));
         var needs = await NeedsYouAsync(organisationId, everything, visible, cancellationToken);
         needs = [.. needs, .. await WorkforceNeedsAsync(organisationId, everything, visible, employees.Where(e => idle[e.Id].Flagged).ToList(), idle, cancellationToken)];
         var viewer = RoleResolver.Resolve(grants)?.Role.ToWire() ?? "none";
@@ -239,7 +242,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         return working;
     }
 
-    public TreeView FirstRun() => new(clock.GetUtcNow(), "none", null, [], []);
+    /// <summary>No organisation to show: <paramref name="canName"/> is true only on a first run, when the person may name the first one.</summary>
+    public TreeView FirstRun(bool canName = true) => new(clock.GetUtcNow(), "none", null, [], [], canName);
 
     private async Task<IReadOnlyList<object>> NeedsYouAsync(Guid organisationId, bool everything, HashSet<Guid> visible, CancellationToken cancellationToken)
     {

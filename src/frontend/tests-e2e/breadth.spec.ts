@@ -250,6 +250,16 @@ test.describe("God mode", () => {
     await expect(northwind).toContainText("Logged: in the organisation's operator log, which its Owner reads");
     await expect(northwind.getByRole("link", { name: "Open its org chart" })).toHaveAttribute("href", "/?organisation=northwind");
     await expectNoSidewaysScroll(page);
+
+    // Inside, every screen works on Northwind and says so, until the operator leaves.
+    await northwind.getByRole("link", { name: "Open its org chart" }).click();
+    const band = page.getByRole("note", { name: "God mode" });
+    await expect(band).toContainText("You are inside Northwind as a FrostAura operator, acting as an Admin.");
+    await page.goto("/notifications");
+    await expect(band).toContainText("You are inside Northwind");
+    await band.getByRole("button", { name: "Leave Northwind" }).click();
+    await expect(page).toHaveURL(/\/operator$/);
+    await expect(band).toContainText("You are a FrostAura operator.");
   });
 
   test("fulfils a top-up request, sets a deepest overdraft and changes the prices after a confirmation", async ({ page }) => {
@@ -283,12 +293,16 @@ test.describe("God mode", () => {
     await page.goto("/operator");
     await page.getByLabel("Its name").fill("www");
     await page.getByLabel("The Owner's e-mail").fill("new@example.test");
+    // What it does is screened against the red lines: the form cannot be sent without it.
+    await expect(page.getByRole("button", { name: "Set it up" })).toBeDisabled();
+    await page.getByLabel("What it does").fill("Makes and sells garden tools.");
     await page.getByRole("button", { name: "Set it up" }).click();
     await expect(page.getByRole("alert").filter({ hasText: "is one of FrostAura's own addresses" })).toBeVisible();
     await page.getByLabel("Its name").fill("Beta Works");
     await expect(page.getByLabel("Its address name")).toHaveValue("beta-works");
     await page.getByRole("button", { name: "Set it up" }).click();
     await expect(page.getByRole("status", { name: "The Owner's invitation code" })).toContainText("give them this code yourself");
+    await expect(page.getByRole("status", { name: "The Owner's invitation code" })).toContainText("It was screened against the red lines and crosses none");
     await expect(page.getByRole("list", { name: "Organisations" }).locator('[data-org="beta-works"]')).toBeVisible();
   });
 

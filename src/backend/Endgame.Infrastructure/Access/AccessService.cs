@@ -49,6 +49,14 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
 
     private IReadOnlySet<string>? operatorEmails;
     private readonly Dictionary<Guid, bool> operatorById = [];
+    private readonly Dictionary<Guid, string> actedAsOperator = [];
+
+    /// <summary>
+    /// The organisations this request reached by an operator's God-mode entry (as an Admin, not by a
+    /// role of their own), each with the first scope it touched: what makes a change made there one
+    /// entry in that organisation's operator log (<c>OperatorActionLog</c>).
+    /// </summary>
+    public IReadOnlyDictionary<Guid, string> ActedAsOperatorIn => actedAsOperator;
 
     /// <summary>The grants on the chain of <paramref name="scope"/> for one person.</summary>
     public async Task<IReadOnlyList<RoleGrant>> GrantsOnChainAsync(Guid userId, ResolvedScope scope, CancellationToken cancellationToken)
@@ -158,6 +166,15 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
         return email is { Length: > 0 } && operatorEmails.Contains(email.Trim().ToLowerInvariant());
     }
 
+    /// <summary>The accounts of every FrostAura operator who has signed up. Runs as the platform.</summary>
+    public async Task<IReadOnlyList<Guid>> OperatorIdsAsync(CancellationToken cancellationToken)
+    {
+        operatorEmails ??= operators.Value.All(configuration[OperatorOptions.Variable]);
+        var emails = operatorEmails.ToArray();
+        var ids = await db.Users.AsNoTracking().Where(u => u.Email != null && emails.Contains(u.Email.ToLower())).Select(u => u.Id).ToListAsync(cancellationToken);
+        return ids;
+    }
+
     public async Task<bool> IsOperatorAsync(Guid userId, CancellationToken cancellationToken)
     {
         if (ceiling.Active)
@@ -189,6 +206,7 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
         }
 
         await LogVisitAsync(userId, scope.OrganisationId, scope.Path.ToString(), cancellationToken);
+        actedAsOperator.TryAdd(scope.OrganisationId, scope.Path.ToString());
         return new RoleGrant(userId, MemberRole.Admin, NodeLevel.Organisation, scope.OrganisationId, scope.Nodes[0].Path);
     }
 
@@ -222,6 +240,23 @@ public sealed class AccessService(EndgameDbContext db, ScopeResolver scopes, Ten
 
         await InsertEntryAsync(operatorId, organisationId, scope, onlyIfNoneSince: now - window, cancellationToken);
         visits.Seen(operatorId, organisationId, now);
+    }
+
+    /// <summary>One thing an operator did inside an organisation, written to its operator log (CLAUDE.md rule 1).</summary>
+    public async Task LogActionAsync(Guid operatorId, Guid organisationId, string action, System.Text.Json.Nodes.JsonObject detail, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(detail);
+        session.UseOrganisation(organisationId);
+        db.OperatorActions.Add(new OperatorActionRecord
+        {
+            Id = Guid.NewGuid(),
+            OrganisationId = organisationId,
+            OperatorUserId = operatorId,
+            Action = action.Length > 60 ? action[..60] : action,
+            DetailJson = detail.ToJsonString(),
+            At = clock.GetUtcNow(),
+        });
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     private async Task InsertEntryAsync(Guid operatorId, Guid organisationId, string scope, DateTimeOffset? onlyIfNoneSince, CancellationToken cancellationToken)

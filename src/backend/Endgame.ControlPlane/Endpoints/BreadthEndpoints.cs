@@ -208,12 +208,33 @@ internal static class BreadthEndpoints
                 var needed = role == MemberRole.Admin || membership.Role == MemberRole.Admin.ToWire() ? MemberRole.Owner : MemberRole.Admin;
                 var mine = await access.RequireAsync(principal.Id(), scope, needed, ct);
                 var person = await users.FindByIdAsync(membership.UserId.ToString()) ?? throw EndgameProblem.NotFound("The member");
-                return Results.Ok(await accounts.GrantAsync(scope, mine, person.Email ?? "", null, role, principal.Id(), ct));
+                // A role change never touches the invitation: the code a pending person was sent keeps working (PPL-06).
+                return Results.Ok(await accounts.GrantAsync(scope, mine, person.Email ?? "", null, role, principal.Id(), ct, issueInvitation: false));
             })
-            .WithTags("Members").WithName("ChangeRole").WithSummary("Changes the role of one grant, where it was set (Admin; to or from Admin, the Owner).").Produces<Invitation>();
+            .WithTags("Members").WithName("ChangeRole").WithSummary("Changes the role of one grant, where it was set (Admin; to or from Admin, the Owner). The person's invitation code, if they have one, is unchanged.").Produces<Invitation>();
+
+        api.MapPost("/members/{membershipId:guid}/invitation", async (Guid membershipId, ClaimsPrincipal principal, AccessService access, AccountService accounts, ScopeResolver scopes,
+                UserManager<EndgameUser> users, InvitationMailer mailer, CancellationToken ct) =>
+            {
+                var (_, membership) = await accounts.MembershipAsync(membershipId, ct);
+                var scope = await scopes.ForRowAsync(membership.OrganisationId, membership.DivisionId, membership.ProjectId, membership.AppId, ct);
+                await access.RequireAsync(principal.Id(), scope, membership.Role == MemberRole.Admin.ToWire() ? MemberRole.Owner : MemberRole.Admin, ct);
+                var invitation = await accounts.ReissueInvitationAsync(scope, membership, ct);
+                var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
+                if (invitation.InvitationCode is { } code && invitation.ExpiresAt is { } until)
+                {
+                    invitation = invitation with { Emailed = await mailer.SendAsync(scope, invitation.Member.Email, code, until, membership.Role, me.DisplayName, ct) };
+                }
+
+                return Results.Ok(invitation);
+            })
+            .WithTags("Members").WithName("ReissueInvitation")
+            .WithSummary("Sends a pending person a new invitation code, returned once (the old one stops working). Refused for someone who already has a passkey.")
+            .Produces<Invitation>();
 
         var requests = api.MapGroup("/credits/top-up-requests").WithTags("Credits");
-        requests.MapPost("", async (TopUpAskRequest request, ClaimsPrincipal principal, AccessService access, EndgameDbContext db, TenantSession session, TimeProvider clock, CancellationToken ct) =>
+        requests.MapPost("", async (TopUpAskRequest request, ClaimsPrincipal principal, AccessService access, EndgameDbContext db, TenantSession session, NotificationService notifications,
+                TimeProvider clock, CancellationToken ct) =>
             {
                 var slug = request.Organisation ?? (await access.MembershipsOfAsync(principal.Id(), ct)).FirstOrDefault()?.OrganisationSlug;
                 var (org, _) = await access.RequireAsync(principal.Id(), slug, MemberRole.Owner, ct);
@@ -245,9 +266,10 @@ internal static class BreadthEndpoints
                 };
                 db.TopUpRequests.Add(record);
                 await db.SaveChangesAsync(ct);
+                await notifications.RaiseTopUpRequestedAsync(record.Id, org.Node.Name, record.Credits, record.Note, ct);
                 return Results.Created($"/api/credits/top-up-requests/{record.Id}", (await TopUpRequestViewsAsync(db, session, r => r.Id == record.Id, ct)).Single());
             })
-            .WithName("RequestTopUp").WithSummary("The Owner asks FrostAura for a top-up. No payment is taken; it appears to operators, who top up by hand.").Produces<TopUpRequestView>(201);
+            .WithName("RequestTopUp").WithSummary("The Owner asks FrostAura for a top-up. No payment is taken; it appears to operators — in their notification feed too — who top up by hand.").Produces<TopUpRequestView>(201);
         requests.MapGet("", async (string? organisation, ClaimsPrincipal principal, AccessService access, EndgameDbContext db, TenantSession session, CancellationToken ct) =>
             {
                 var slug = organisation ?? (await access.MembershipsOfAsync(principal.Id(), ct)).FirstOrDefault()?.OrganisationSlug;

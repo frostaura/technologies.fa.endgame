@@ -69,4 +69,30 @@ describe("OperatorAccessView", () => {
     renderWithStore(<OperatorAccessView />);
     expect((await screen.findByText("No one from FrostAura has entered Acme")).closest("[data-state]")?.getAttribute("data-state")).toBe("empty");
   });
+
+  it("titles every action plainly, including each change an operator made inside as an Admin", async () => {
+    const op = { id: "u9", email: "support@frostaura.test", displayName: "Fixture Operator" };
+    stub(
+      json([
+        { id: "b1", at: "2026-11-24T10:00:00Z", action: "overdraft.set", operator: op, detail: { credits: 300 } },
+        { id: "b2", at: "2026-11-24T09:00:00Z", action: "topup_request.declined", operator: op, detail: { credits: 50, note: "Not this month." } },
+        { id: "b3", at: "2026-11-24T08:00:00Z", action: "topup_request.fulfilled", operator: op, detail: { credits: 250 } },
+        { id: "b4", at: "2026-11-24T07:00:00Z", action: "pricing.changed", operator: op, detail: { margin: 1.2 } },
+        { id: "b5", at: "2026-11-24T06:00:00Z", action: "admin.CreateDivision", operator: op, detail: { title: "Added a division", scope: "acme" } },
+        { id: "b6", at: "2026-11-24T05:00:00Z", action: "organisation.screened", operator: op, detail: { method: "manual", result: "clear", reason: "A bakery." } },
+      ]),
+    );
+    renderWithStore(<OperatorAccessView />);
+    const log = await screen.findByRole("list", { name: "Operator log" });
+    for (const title of [
+      "Changed the deepest overdraft to 300 credits below zero",
+      "Declined a top-up request for 50 credits: Not this month.",
+      "Answered a top-up request with 250 credits",
+      "Changed the prices for every organisation",
+      "As an Admin: Added a division",
+      "Screened against the red lines: it crosses none (by hand: A bakery.)",
+    ])
+      expect(within(log).getByText(title)).toBeTruthy();
+    expect(within(log).queryByText("Acted on the organisation")).toBeNull();
+  });
 });

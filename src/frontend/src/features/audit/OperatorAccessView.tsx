@@ -5,23 +5,48 @@ import { RISE } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
+import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { useAppSelector } from "@/store";
-import { useGetMeQuery, useGetOperatorAccessQuery } from "@/store/api";
+import { useGetOperatorAccessQuery } from "@/store/api";
 import type { OperatorAction } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 
+const LINES: Record<string, string> = {
+  "tobacco-gambling-finance": "tobacco, exploitative gambling or predatory finance",
+  weapons: "weapons used against civilians",
+  "animal-harm": "animal harm and industrial cruelty",
+  surveillance: "surveillance and authoritarian tooling",
+};
+
 /** What an operator did, in plain words. Technical mode adds the raw action and its detail. */
 function describeAction(action: OperatorAction): string {
-  const credits = typeof action.detail?.credits === "number" ? action.detail.credits : null;
+  const detail = action.detail ?? {};
+  const credits = typeof detail.credits === "number" ? detail.credits : null;
+  const text = (key: string) => (typeof detail[key] === "string" ? (detail[key] as string) : null);
   switch (action.action) {
     case "organisation.entered":
       return "Entered the organisation";
     case "organisation.provisioned":
       return "Set up the organisation";
+    case "organisation.screened": {
+      const how = text("method") === "manual" ? `by hand${text("reason") ? `: ${text("reason")}` : ""}` : "by a model";
+      return text("result") === "breach"
+        ? `Screened against the red lines: it crosses ${LINES[text("line") ?? ""] ?? "a red line"} (${how})`
+        : `Screened against the red lines: it crosses none (${how})`;
+    }
     case "credits.top_up":
       return credits !== null ? `Added ${formatCredits(credits)}` : "Added credits";
+    case "overdraft.set":
+      return credits !== null ? `Changed the deepest overdraft to ${formatCredits(credits)} below zero` : "Changed the deepest overdraft";
+    case "topup_request.fulfilled":
+      return credits !== null ? `Answered a top-up request with ${formatCredits(credits)}` : "Answered a top-up request";
+    case "topup_request.declined":
+      return `Declined a top-up request${credits !== null ? ` for ${formatCredits(credits)}` : ""}${text("note") ? `: ${text("note")}` : ""}`;
+    case "pricing.changed":
+      return "Changed the prices for every organisation";
     default:
-      return "Acted on the organisation";
+      // Everything else an operator changed inside the organisation, as an Admin, carries its own title.
+      return action.action.startsWith("admin.") && text("title") ? `As an Admin: ${text("title")}` : "Acted on the organisation";
   }
 }
 
@@ -31,8 +56,8 @@ function describeAction(action: OperatorAction): string {
  * is refused by the control plane, and that refusal is shown as what it is.
  */
 export function OperatorAccessView() {
-  const me = useGetMeQuery(undefined);
-  const org = me.data?.organisation ?? null;
+  const active = useActiveOrganisation();
+  const org = active.organisation;
   const query = useGetOperatorAccessQuery(org?.slug ?? "", { skip: !org });
   const view = viewOf(query);
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
@@ -49,7 +74,7 @@ export function OperatorAccessView() {
         </p>
       </header>
 
-      {me.data && !org ? (
+      {!active.isLoading && !org ? (
         <Empty icon="organisation" title="There is no log until your organisation is named" />
       ) : (
         <>

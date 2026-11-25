@@ -369,12 +369,16 @@ export async function handleBreadth(req: IncomingMessage, res: ServerResponse, p
   }
   if (path === "/api/organisations" && method === "POST" && B.ownerEmail) {
     const slug = String(B.slug ?? "");
+    if (String(B.description ?? "").trim().length < 10) {
+      problem(res, 400, "Invalid request", "Say what the organisation does, in 10 to 1000 characters: it is screened against FrostAura's red lines before it is set up.", "invalid_request");
+      return true;
+    }
     if (slug === "www" || slug === "endgame") {
       problem(res, 409, "That name is reserved", `"${slug}" is one of FrostAura's own addresses.`, "reserved_name");
       return true;
     }
     b.operatorOrgs.push({ id: `org-${slug}`, slug, name: B.name, status: "active", createdAt: now(), balance: 0, standing: "in-credit", overdraft: { frostauraLimit: 0, ownLimit: null, effective: 0 }, apps: 0, lastActivityAt: null, openTopUpRequests: 0 });
-    send(res, 201, { id: `org-${slug}`, slug, name: B.name, ownerEmail: B.ownerEmail, ownerInvitationCode: randomBytes(12).toString("hex"), invitationExpiresAt: ago(-60 * 24 * 14), invitationEmailed: false, nameCheck: { slug, source: "built-in", note: null } });
+    send(res, 201, { id: `org-${slug}`, slug, name: B.name, ownerEmail: B.ownerEmail, ownerInvitationCode: randomBytes(12).toString("hex"), invitationExpiresAt: ago(-60 * 24 * 14), invitationEmailed: false, nameCheck: { slug, source: "built-in", note: null }, screening: { method: "model", result: "clear", reason: "It makes garden tools; no red line is crossed." } });
     return true;
   }
 

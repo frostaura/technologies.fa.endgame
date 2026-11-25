@@ -16,3 +16,6 @@ public sealed record ServiceHealth(string Key, string Name, HealthState State, l
 
 /// <summary>Every service's health at one moment.</summary>
 public sealed record SystemStatus(HealthState Overall, DateTimeOffset CheckedAt, IReadOnlyList<ServiceHealth> Services);
+
+/// <summary>What anyone may read without signing in: whether the whole is healthy, and when it was checked.</summary>
+public sealed record SystemStatusSummary(HealthState Overall, DateTimeOffset CheckedAt);

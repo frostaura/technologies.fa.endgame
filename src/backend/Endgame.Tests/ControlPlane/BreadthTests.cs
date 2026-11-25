@@ -58,10 +58,10 @@ public sealed class BreadthTests(PostgresServer postgres) : IAsyncLifetime
     [Fact]
     public async Task Organisation_names_that_frostaura_uses_are_refused_and_an_incomplete_zone_pauses_new_names()
     {
-        var refused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync("/api/organisations", new { name = "Shop", slug = "shop", ownerEmail = "a@example.com" }), HttpStatusCode.Conflict);
+        var refused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync("/api/organisations", new { name = "Shop", slug = "shop", ownerEmail = "a@example.com", description = Provisioning.Description, screening = Provisioning.Manual }), HttpStatusCode.Conflict);
         Assert.Equal("reserved_name", refused["code"]!.GetValue<string>());
-        await ControlPlaneApp.Expect(await owner.PostAsJsonAsync("/api/organisations", new { name = "Console", slug = "console", ownerEmail = "a@example.com" }), HttpStatusCode.BadRequest);
-        var created = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example" }));
+        await ControlPlaneApp.Expect(await owner.PostAsJsonAsync("/api/organisations", new { name = "Console", slug = "console", ownerEmail = "a@example.com", description = Provisioning.Description, screening = Provisioning.Manual }), HttpStatusCode.BadRequest);
+        var created = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = Provisioning.Description, screening = Provisioning.Manual }));
         Assert.Equal("cloudflare", created["nameCheck"]!["source"]!.GetValue<string>());
         // The hand-over: the code once to the operator, and e-mailed to the Owner because mail is configured.
         Assert.NotNull(created["ownerInvitationCode"]);
@@ -70,12 +70,12 @@ public sealed class BreadthTests(PostgresServer postgres) : IAsyncLifetime
 
         // Cloudflare managed, zone not read: no new name at all.
         reserved = new JsonObject { ["complete"] = false, ["labels"] = new JsonArray("www"), ["reason"] = "Cloudflare did not answer." };
-        var paused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync("/api/organisations", new { name = "Beta", slug = "beta", ownerEmail = "b@example.com" }), HttpStatusCode.ServiceUnavailable);
+        var paused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync("/api/organisations", new { name = "Beta", slug = "beta", ownerEmail = "b@example.com", description = Provisioning.Description, screening = Provisioning.Manual }), HttpStatusCode.ServiceUnavailable);
         Assert.Equal("reserved_names_unavailable", paused["code"]!.GetValue<string>());
 
         // Cloudflare not managed here: the built-in list, said plainly.
         cloudflare = "idle";
-        var local = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Beta", slug = "beta", ownerEmail = "b@example.com" }));
+        var local = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Beta", slug = "beta", ownerEmail = "b@example.com", description = Provisioning.Description, screening = Provisioning.Manual }));
         Assert.Equal("built-in", local["nameCheck"]!["source"]!.GetValue<string>());
         Assert.Contains("built-in list", local["nameCheck"]!["note"]!.GetValue<string>(), StringComparison.Ordinal);
 

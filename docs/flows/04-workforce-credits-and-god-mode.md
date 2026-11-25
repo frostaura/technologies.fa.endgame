@@ -283,20 +283,23 @@ Shared vocabulary used below:
 - **Who:** Admin or Owner.
 - **Level:** Core
 - **Learn first:** EMP-01.
-- **What you learn:** pausing is meant to stop an employee being given work without letting it go.
+- **What you learn:** pausing stops an employee's work and keeps it from being given more, without letting it go.
 - **Starts at:** `/employees/<id>`. Press "Pause", or "Resume" when paused.
 - **Needs:** Admin. Not released.
 - **Steps:**
   1. Press "Pause". The badge becomes "Paused" at once.
-  2. Press "Resume". The status returns to "Free", or to "Working" if it still has a current run.
-- **You know it worked when:** the badge reads "Paused", or "Free"/"Working" after resuming.
+  2. Every run under way that is theirs, or in which they hold a task, pauses: the Runner learns it at its next lease renewal and stops at the next step boundary. Its log says "Waiting for {Name}, who is paused. This work carries on when they are resumed."
+  3. While they are paused, the factory's new work for them waits the same way (it is created paused, and a task they would claim pauses its run instead), and the Runner is never handed it.
+  4. Press "Resume". The status returns to "Free", or to "Working" if it still has a current run, and every run that waited for them goes back to the queue.
+- **You know it worked when:** the badge reads "Paused" and their work reads paused; or "Free"/"Working" after resuming and the work carries on.
 - **Variations and refusals:**
   - "Could not pause: …" or "Could not resume: …" rolls the badge back.
+  - A person starting work for them directly — talking to them (EMP-08), a memory review (MEM-05) — is refused with 409 "{Name} is paused, so they are given no new work. Resume them first."
+  - A run paused for another reason (by a person, or over budget) is not resumed by resuming the employee.
   - API: any status other than paused or idle is 400 "status is 'paused' (stop giving it work) or 'idle' (resume). Release and rehire have their own actions."
-  - **Not verified from code that pause stops anything.** Starting a run only refuses released employees, so a paused employee can still be given a run. Its current run is not stopped.
-- **Where:** `EmployeeView.tsx`. `PATCH /api/employees/{id} { status }`. `EmployeeService.UpdateAsync`. `RunService.cs:67`.
+- **Where:** `EmployeeView.tsx`. `PATCH /api/employees/{id} { status }`. `EmployeeService.UpdateAsync`; `RunService.CreateAsync`, `PauseForEmployeeAsync` and `ResumeForEmployeeAsync`; `TaskService.CheckoutAsync`.
 - **Reachable from:** UI. Also MCP `employee_update` (status).
-- **Covered by tests:** `EmployeeView.test.tsx` ("pauses at once and rolls back…"). `workforce.spec.ts`.
+- **Covered by tests:** `EmployeeView.test.tsx` ("pauses at once and rolls back…"). `workforce.spec.ts`. `ScreensAndRolesTests.Pausing_an_employee_stops_their_work_and_resuming_releases_what_waited`.
 
 ### EMP-05 Let an employee go
 - **Who:** Admin or Owner. The system does it in auto-mode for idle employees (EMP-06).
@@ -464,7 +467,7 @@ Shared vocabulary used below:
   2. Press "Save the correction". The entry changes at once.
   3. Its origin becomes "Corrected by a person".
 - **You know it worked when:** the origin line reads "Corrected by a person".
-- **Variations and refusals:** "The correction was not saved: <reason>" rolls the entry back. "Cancel" closes the form.
+- **Variations and refusals:** "The correction was not saved: <reason>" rolls the entry back. "Cancel" closes the form. A released employee's archived memory is refused over the API too: 409 "<Name> has been released; their memory is archived until a rehire."
 - **Where:** `PATCH /api/employees/{id}/memory/{entryId}`. `MemoryService.CorrectAsync`.
 - **Reachable from:** UI.
 - **Covered by tests:** `EmployeeView.test.tsx` ("corrects and removes an entry, with why"). `workforce.spec.ts`.
@@ -480,7 +483,7 @@ Shared vocabulary used below:
   1. Fill in "Why should <Name> forget this? (optional)".
   2. Press "Remove it". The entry disappears at once ("Keep it" cancels).
 - **You know it worked when:** the entry is no longer listed.
-- **Variations and refusals:** "It was not removed: <reason>" puts it back. An empty reason is logged as "Removed by a person".
+- **Variations and refusals:** "It was not removed: <reason>" puts it back. An empty reason is logged as "Removed by a person". A released employee's archived memory is refused over the API too (409, as MEM-03).
 - **Where:** `DELETE /api/employees/{id}/memory/{entryId}?why=`. `MemoryService.RemoveAsync`.
 - **Reachable from:** UI.
 - **Covered by tests:** `EmployeeView.test.tsx`. `workforce.spec.ts`.
@@ -722,13 +725,13 @@ Shared vocabulary used below:
 - **Needs:** for an operator, an email listed in `ENDGAME_OPERATORS` / `Operators:Emails`.
 - **Steps:**
   1. Operators see a band on every screen: "GOD MODE · You are a FrostAura operator. Entering an organisation is logged where its Owner can read it." and the link "Every organisation" to `/operator`.
-  2. On the org chart of an entered organisation the band reads "You are inside <slug> as a FrostAura operator. Your entry is logged where its Owner can read it."
+  2. On every screen inside an entered organisation the band reads "You are inside <Name> as a FrostAura operator, acting as an Admin. Your entry and everything you change here are logged where its Owner can read them.", with "Leave <Name>" (SHL-05).
   3. A non-operator opening `/operator` sees the heading "God mode" and "God mode is for FrostAura operators" / "Your account is not one of FrostAura's operators, so these screens are closed to you."
 - **You know it worked when:** the band is shown, or the refusal is shown.
 - **Variations and refusals:** every `/api/operator/*` call returns 403 "Only FrostAura operators may do this." to non-operators and to any access token, because God mode is never available by token or MCP.
-- **Where:** `shell/GodModeBand.tsx`, `operator/OperatorView.tsx`, `AccessService.IsOperatorEmail`.
+- **Where:** `shell/GodModeBand.tsx`, `lib/useActiveOrganisation.ts`, `operator/OperatorView.tsx`, `AccessService.IsOperatorEmail`.
 - **Reachable from:** UI.
-- **Covered by tests:** `OperatorView.test.tsx` ("is closed to anyone who is not an operator…", "is marked as God mode on every screen"). `breadth.spec.ts`. `ControlPlaneDebtsTests.Operators_come_from_the_explicit_list_only_and_every_entry_is_logged_for_the_owner`.
+- **Covered by tests:** `OperatorView.test.tsx` ("is closed to anyone who is not an operator…", "is marked as God mode on every screen"). `GodModeBand.test.tsx`. `breadth.spec.ts`. `ControlPlaneDebtsTests.Operators_come_from_the_explicit_list_only_and_every_entry_is_logged_for_the_owner`.
 
 ### OP-02 See every organisation
 - **Who:** operator.
@@ -751,17 +754,18 @@ Shared vocabulary used below:
 - **Who:** operator. Also the first person on a fresh install, through Start (another reader's area).
 - **Level:** Operator
 - **Learn first:** OP-01.
-- **What you learn:** organisations are provisioned by FrostAura, not signed up for, and the Owner's one-time code is shown once.
+- **What you learn:** organisations are provisioned by FrostAura, not signed up for; each is screened against the red lines first; and the Owner's one-time code is shown once.
 - **Starts at:** the `/operator` aside "Set up an organisation" ("For a person FrostAura has invited. They become its Owner; there is no self-serve sign-up.").
 - **Needs:** operator.
 - **Steps:**
   1. Fill in "Its name" (up to 80 characters). "Its address name" fills itself from the name and can be edited, with the hint "Its apps live at /<slug>/… and <slug>.<domain>."
   2. Fill in "The Owner's e-mail" and, optionally, "The Owner's name".
-  3. The form notes "Its name is checked against FrostAura’s own addresses, and every idea it has is screened against the red lines."
-  4. Press "Set it up" ("Setting it up…").
-  5. A new Owner gets a one-time panel "The Owner's invitation code", with "<Name> is set up for <email>. The code was e-mailed to them too." or "E-mail is not set up here, so give them this code yourself." and "They use it to make their passkey before <date>." plus any name-check note.
-  6. An Owner who already has an account gets "<Name> is set up. <email> already has a passkey, so they can sign in as its Owner now."
-  7. The organisation appears in the list with its standing security reviewer, and "Set up the organisation" is written to its operator log.
+  3. Fill in "What it does" (required, at least 10 characters; hint "A sentence or two on what the organisation does or will build. FrostAura does not set up anything that crosses a red line.").
+  4. The form notes "What it does is screened against FrostAura’s red lines before it is set up, its name is checked against FrostAura’s own addresses, and every idea it has is screened again."
+  5. Press "Set it up" ("Setting it up…"). The control plane puts the name and what it does to a model through the model gateway, against the four red lines (tobacco, exploitative gambling or predatory finance; weapons used against civilians; animal harm and industrial cruelty; surveillance and authoritarian tooling — prediction markets and regulated forecasting markets are not gambling). The call is recorded as a platform cost, charged to no organisation.
+  6. A new Owner gets a one-time panel "The Owner's invitation code", with "<Name> is set up for <email>. The code was e-mailed to them too." or "E-mail is not set up here, so give them this code yourself." and "They use it to make their passkey before <date>." plus any name-check note, and "It was screened against the red lines and crosses none: <reason>" (or "You screened it against the red lines yourself: <reason>").
+  7. An Owner who already has an account gets "<Name> is set up. <email> already has a passkey, so they can sign in as its Owner now." with the same screening sentence.
+  8. The organisation appears in the list with its standing security reviewer. Its operator log gets "Screened against the red lines: it crosses none (by a model)" — or "(by hand: <reason>)" — with who screened it, how and when, and "Set up the organisation".
 - **You know it worked when:** the code panel or the success line appears, and a new card is listed.
 - **Variations and refusals:**
   - Local checks: "2 to 40 lowercase letters, digits and hyphens." · "That does not look like an e-mail address." (the button is disabled).
@@ -771,10 +775,13 @@ Shared vocabulary used below:
     - "A sibling already uses that slug." (probably).
     - A non-operator after first run gets 403 "Organisations are provisioned by FrostAura; there is no self-serve sign-up."
   - Failure: "<Name> was not set up: <reason>".
-  - **No red-line screening of the organisation happens here**, despite the form's sentence and CLAUDE.md rule 4. Only its ideas are screened later, by research.
-- **Where:** `OperatorView.tsx` (ProvisionAside), `store/sensitive.ts` (provisionOrganisation). `POST /api/organisations`. `ReservedNames.cs`.
+  - A breach: 422 "FrostAura does not set this organisation up" — "What it does crosses a red line — <line>: <why>". Nothing is created.
+  - No model can be reached (or its answer cannot be read): 503 "The organisation could not be screened" — "… Try again shortly, or record your own screening decision with a written reason." The form then opens "Screen it yourself": "Your decision" ("It crosses no red line" / "It crosses a red line: do not set it up") and "Why" (at least 10 characters). A model that answers always outranks a manual decision; a manual "breach" is refused like the model's.
+  - API: `description` missing or under 10 characters is 400 "Say what the organisation does, in 10 to 1000 characters: it is screened against FrostAura's red lines before it is set up."
+  - The first organisation of a fresh install (ORG-02) is not screened here.
+- **Where:** `OperatorView.tsx` (ProvisionAside), `store/sensitive.ts` (provisionOrganisation). `POST /api/organisations { name, slug, ownerEmail, ownerDisplayName?, description, screening? }`. `Platform/OrganisationScreening.cs`, `Application/Gateway/PlatformModelCalls.cs` (`platform_costs`), `ReservedNames.cs`.
 - **Reachable from:** UI.
-- **Covered by tests:** `OperatorView.test.tsx` ("provisions an organisation…shows their code once"). `breadth.spec.ts` ("…a reserved name is refused"). `BreadthTests.Organisation_names_that_frostaura_uses_are_refused_and_an_incomplete_zone_pauses_new_names`.
+- **Covered by tests:** `OperatorView.test.tsx` ("provisions an organisation…shows their code once", "asks for the operator's own screening…; a breach is refused"). `breadth.spec.ts` ("…a reserved name is refused"). `BreadthTests.Organisation_names_that_frostaura_uses_are_refused_and_an_incomplete_zone_pauses_new_names`. `ScreensAndRolesTests` (`Provisioning_screens_what_the_organisation_does_as_a_platform_cost_and_logs_how`, `A_breach_is_refused_naming_the_line_and_why_and_nothing_is_set_up`, `With_no_model_provisioning_is_refused_unless_the_operator_records_a_decision_with_a_reason`).
 
 ### OP-04 Enter an organisation in God mode, and act there as Admin
 - **Who:** operator.
@@ -785,23 +792,18 @@ Shared vocabulary used below:
 - **Needs:** operator.
 - **Steps:**
   1. Press "Enter <Name>" ("Entering…"). The card shows "You entered <Name> as an Admin, <time ago>." and "Logged: This entry is in the organisation's operator log, which its Owner reads."
-  2. Press "Open its org chart". `/?organisation=<slug>` shows that organisation's tree, with the in-organisation band.
-  3. Any call the operator makes inside that organisation is treated as Admin. Reads continue the visit. Coming back more than 10 minutes later logs a new entry.
-  4. As Admin the operator can do anything an Admin can: decide hires, change employees, set tighter limits, manage people and secrets, change caps through the API.
-  5. The operator cannot set the own limit, read the operator log, grant Admin, ask for a top-up, or act as Owner.
+  2. Press "Open its org chart". `/?organisation=<slug>` shows that organisation's tree, with the in-organisation band naming it.
+  3. From then on every screen works on that organisation — Credits, Hiring, People, Secrets, Autonomy, Notifications, the header's balance and bell — until the operator presses "Leave <Name>" or "Every organisation". The organisation is remembered for the tab, so a link without `?organisation=` keeps working.
+  4. Any call the operator makes inside that organisation is treated as Admin. Reads continue the visit. Coming back more than 10 minutes later logs a new entry.
+  5. As Admin the operator can do anything an Admin can: decide hires, change employees, set tighter limits, manage people and secrets, change caps through the API. Every change is one entry in the organisation's operator log, titled plainly ("As an Admin: Added a division"); a refused change is not.
+  6. The operator cannot set the own limit, read the operator log, grant Admin, ask for a top-up, or act as Owner.
 - **You know it worked when:** the "You entered … as an Admin" status and the entered organisation's org chart appear.
 - **Variations and refusals:**
   - "You did not enter <Name>: <reason>". A path that is not an organisation: 400 "Name an organisation by its slug."
-  - **Only the org chart reads the entered organisation.** Credits, Hiring, Hire, Employee, Autonomy, People, Secrets and App use the operator's own organisation's tree. Not verified at runtime, but very likely wrong in practice:
-    - Credits shows the operator's own balance;
-    - Hiring defaults to the operator's own organisation;
-    - employee and hire pages lose names and the Admin checks;
-    - the reassign list offers the wrong tree.
-  - **The band reverts to the generic text off the org chart.**
-  - Individual Admin actions taken inside the organisation (accepting a hire, changing a cap) are not written to the operator log. Only the visit is.
-- **Where:** `OperatorView.tsx`, `features/home/HomeView.tsx`. `POST /api/operator/organisations/{slug}/enter`, `GET /api/tree?organisation=`. `AccessService.OperatorEntryAsync`, `RecordEntryAsync` and `LogVisitAsync`.
-- **Reachable from:** UI (org chart only, in effect). Every other in-organisation action is API.
-- **Covered by tests:** `OperatorView.test.tsx` ("enters an organisation, saying plainly where the entry is logged"). `breadth.spec.ts`. `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry`.
+  - Screens read the entered organisation through one hook, `useActiveOrganisation` (and `useActiveTree`). Home, the header, People, Autonomy, Notifications and the operator log use it; the Credits, Hiring, Hire, Employee, Secrets, Suggestions, App and Start screens do not use it yet and still read the operator's own organisation.
+- **Where:** `OperatorView.tsx`, `features/home/HomeView.tsx`, `shell/GodModeBand.tsx`, `lib/useActiveOrganisation.ts`. `POST /api/operator/organisations/{slug}/enter`, `GET /api/tree?organisation=`. `AccessService.OperatorEntryAsync`, `RecordEntryAsync`, `LogVisitAsync` and `LogActionAsync`; `Endpoints/OperatorActionLog.cs`.
+- **Reachable from:** UI.
+- **Covered by tests:** `OperatorView.test.tsx` ("enters an organisation, saying plainly where the entry is logged"). `GodModeBand.test.tsx`. `breadth.spec.ts` ("…enters one and says it is logged", which follows it to the notifications and leaves). `FinalDefectsTests.Entering_an_organisation_and_then_reading_it_is_one_logged_entry`. `ScreensAndRolesTests.Every_change_an_operator_makes_inside_an_entered_organisation_is_one_entry_in_its_log`.
 
 ### OP-05 Top up an organisation
 - **Who:** operator.
@@ -840,10 +842,11 @@ Shared vocabulary used below:
 - **Variations and refusals:**
   - Empty: "No request is waiting" with "When an Owner asks for credits, it appears here to answer."
   - Decline failure: "The request is still open: <reason>". Already closed: 409 "This request is already <status>."
-  - A decline is logged as `topup_request.declined`, which the Owner sees as "Acted on the organisation". A fulfilment through a top-up writes only the top-up to the log, with no closing note.
+  - A decline is logged as "Declined a top-up request for <n> credits: <why>". A fulfilment through a top-up closes the request with the top-up's note and is logged as "Answered a top-up request with <n> credits", beside "Added <n> credits".
+  - Operators are also told of a new request in their notification feed: "<Org> asks for <n> credits", labelled "Top-up request", leading here (NOTE).
 - **Where:** `OperatorView.tsx` (Requests, RequestRow). `GET /api/operator/top-up-requests`, `POST /api/operator/top-up-requests/{id}/close`, `POST /api/credits/top-ups { requestId }`.
 - **Reachable from:** UI.
-- **Covered by tests:** `OperatorView.test.tsx` ("fulfils a top-up request…", "declines a request…"). `breadth.spec.ts`. `BreadthTests`.
+- **Covered by tests:** `OperatorView.test.tsx` ("fulfils a top-up request…", "declines a request…"). `breadth.spec.ts`. `BreadthTests`. `ScreensAndRolesTests.An_owners_top_up_request_reaches_the_operators_and_its_answer_is_on_the_record`.
 
 ### OP-07 Set an organisation's deepest overdraft
 - **Who:** operator.
@@ -855,7 +858,7 @@ Shared vocabulary used below:
 - **Steps:**
   1. Fill in "The most it may go below zero", with the hint "No interest and no fees, ever. At the limit its employees stop and its apps pause; nothing is deleted."
   2. Press "Save". The card updates at once and reads "<Name> may now go <n> below zero at most. Its own limit can only be tighter."
-  3. Routing is recalculated, and the Owner's log gets an entry ("Acted on the organisation").
+  3. Routing is recalculated, and the Owner's log gets "Changed the deepest overdraft to <n> credits below zero".
 - **You know it worked when:** "Overdraft allowed" on the card shows the new figure.
 - **Variations and refusals:**
   - "Type a number of credits." Failure: "The overdraft was not changed: <reason> It is back to <n>."
@@ -892,6 +895,7 @@ Shared vocabulary used below:
   3. Press "Save the prices" (enabled only when something changed). The confirmation asks "Change the prices for every organisation?" and says "Work already estimated keeps its estimate; new work is priced with these figures. The change is recorded with your name."
   4. Press "Change the prices". The message reads "The new prices hold from now on, for every organisation." "Keep them as they are" cancels.
   5. "Changes" lists "<date> · <email>" with each figure "<label>: <before> → <after>".
+  6. Every organisation's operator log gets "Changed the prices for every organisation".
 - **You know it worked when:** the success message appears and a new entry heads "Changes".
 - **Variations and refusals:**
   - Local checks: "At least 1.0: a margin below one would sell at a loss." · "A number, zero or more."
@@ -911,7 +915,7 @@ Shared vocabulary used below:
 - **Needs:** Owner.
 - **Steps:**
   1. The heading reads "Operator access", with "Every time someone from FrostAura entered <Org> or acted on it, newest first. It is never silent, and only the Owner can read it."
-  2. Entries read "Entered the organisation", "Set up the organisation", "Added <n> credits" or "Acted on the organisation", each with the date and time and "<operator name> · <email>". Technical mode adds the raw action and its detail.
+  2. Entries read, for example, "Entered the organisation", "Screened against the red lines: it crosses none (by a model)", "Set up the organisation", "Added <n> credits", "Changed the deepest overdraft to <n> credits below zero", "Answered a top-up request with <n> credits", "Declined a top-up request for <n> credits: <why>", "Changed the prices for every organisation" and "As an Admin: <what they changed>", each with the date and time and "<operator name> · <email>". Technical mode adds the raw action and its detail.
 - **You know it worked when:** the log, or its empty state, is shown.
 - **Variations and refusals:**
   - Empty: "No one from FrostAura has entered <Org>" with "If anyone does, it is written here first."
@@ -940,25 +944,25 @@ Shared vocabulary used below:
 
 ## Gaps and oddities found
 1. **No screen sets, changes or removes a monthly cap at any level** (CRED-03). It is API or MCP only.
-2. **God mode works only on the org chart.** Other screens read the operator's own organisation, and the band loses the organisation's name off the chart (OP-04).
-3. **Provisioning does not screen the organisation against the red lines.** It only checks reserved names, though the form says otherwise and CLAUDE.md rule 4 requires it.
-4. **Actions an operator takes inside an organisation as Admin are not logged one by one.** Only the visit is. The log shows `overdraft.set` and `topup_request.*` only as "Acted on the organisation".
-5. **Pause does not stop work.** Runs can still start for a paused employee; only released employees are refused.
+2. **Partly fixed:** the band names the entered organisation on every screen, and home, the header, People, Autonomy, Notifications and the operator log work on it (OP-04). Credits, Hiring, Hire, Employee, Secrets, Suggestions, App and Start still read the operator's own organisation.
+3. **Fixed:** provisioning screens what the organisation does against the red lines, as a platform cost, and logs how (OP-03).
+4. **Fixed:** every change an operator makes inside an organisation as Admin is one titled entry in its log, and every operator action has a plain title (OP-04, OP-10).
+5. **Fixed:** pausing an employee pauses their work and keeps new work waiting; resuming releases it (EMP-04).
 6. **Reassigning from the screen silently clears the manager** (EMP-02).
 7. **On the proposal edit form, emptying the budget does not remove it, and emptying "Why this hire" keeps the old reason.** Tools, services, thinking power and manager are not editable on screen.
 8. **An employee's name, role, mandate, tools, services, thinking power and manager cannot be changed on screen** (API only). Rehiring into a new place is API only.
 9. **There is no screen to raise an owner hire.** "You asked for this hire" exists only through the API and MCP.
 10. **"Propose as a permanent hire" shows for Viewers and Builders**, who then get a 403. Its need key (`promotion:<path>:<Role>`) differs from the system's (`promotion:<nodeId>:<role>`), so two proposals for one need are possible.
 11. **The memory change log is never listed** on a screen. Memory has no MCP tools.
-12. **Corrections and removals through the API are not blocked for a released employee's archived memory**, which contradicts UC-113 A1 ("cannot be written").
+12. **Fixed:** corrections and removals of a released employee's archived memory are refused (409), as UC-113 A1 says (MEM-03, MEM-04).
 13. **There is no screen to remove the organisation's own overdraft limit or a tighter limit.**
 14. **"Nothing is left to spend. A top-up starts the work again." at exactly 0 contradicts the overdraft.** "No overdraft is set…" and "No spending or caps anywhere…" look unreachable.
 15. **An employee's budget row on Credits counts only its own spend**, while its cap includes its contractors.
 16. **Released employees are not listed on any screen** (`includeReleased` is unused). "Contractors working now" rows are not links. A person cannot stop or cap a contractor.
 17. **`GET /api/employees/{id}/track-record` and `GET /api/operator/top-ups?organisation=` are not called by any screen.**
-18. **The Credits page and the operator log use the person's first organisation** (`me.organisation`). A member whose only role is at a division probably cannot load Credits (not verified).
-19. **A fulfilled top-up request gets no closing note**, and no `topup_request.fulfilled` row is written to the operator log.
+18. **Partly fixed:** the operator log uses the organisation being shown (in God mode, the one entered). The Credits page still uses the person's first organisation (`me.organisation`); a member whose only role is at a division probably cannot load Credits (not verified).
+19. **Fixed:** a fulfilled top-up request is closed with the top-up's note and logged as `topup_request.fulfilled` (OP-06).
 20. **Docs versus code:**
     - UC-103 says caps are set by an Admin, but with no screen.
     - UC-111 and UC-112 match the API.
-    - CLAUDE.md rule 4 is not met at provisioning.
+    - CLAUDE.md rule 4 is met at an operator's provisioning; the first organisation of a fresh install is not screened.

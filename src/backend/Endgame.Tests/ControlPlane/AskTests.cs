@@ -131,8 +131,10 @@ public sealed class AskTests(PostgresServer postgres) : IAsyncLifetime
         bookings = await owner.AppAsync("frostaura/products/squash", "bookings");
         other = await owner.AppAsync("frostaura/products/squash", "ladder");
         await owner.TopUpAsync("frostaura", 100m);
-        var acme = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "owner@frostaura.net" }));
+        var acme = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "owner@frostaura.net", description = Provisioning.Description, screening = Provisioning.Manual }));
         foreignOrg = Guid.Parse(acme["id"]!.GetValue<string>());
+        // Provisioning asked a model to screen Acme; these tests read only the calls asking about apps.
+        openRouter.Requests.Clear();
         await owner.DivisionAsync("acme", "web");
         await owner.ProjectAsync("acme/web", "shop");
         foreignApp = await owner.AppAsync("acme/web/shop", "store");

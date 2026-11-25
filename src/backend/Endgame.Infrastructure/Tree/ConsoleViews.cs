@@ -15,9 +15,16 @@ public sealed record SpendView(decimal MonthCredits);
 /// <param name="BriefedBy">A contractor's briefing employee.</param>
 public sealed record WorkerView(Guid Id, string Name, string Role, string Kind, string? Activity, string Status, bool Idle, string? Standing, Guid? BriefedBy);
 
-public sealed record OrganisationNodeView(Guid Id, string Slug, string Name, string? Summary, SpendView Spend, IReadOnlyList<WorkerView> Workers);
+// Every node carries the viewer's effective role there (Role: owner, admin, builder or viewer; null where
+// the node is shown only as the path down to something they hold), resolved exactly as the server checks
+// it (RoleResolver: the deepest grant on the chain, the organisation's Owner everywhere), so the console
+// never works it out itself. Archived marks a division, project or app that is archived: kept, not served.
 
-public sealed record DivisionNodeView(Guid Id, string Slug, string Name, SpendView Spend, IReadOnlyList<WorkerView> Workers, IReadOnlyList<ProjectNodeView> Projects);
+/// <param name="Role">The viewer's effective role at the organisation itself; null when their grants all sit lower.</param>
+public sealed record OrganisationNodeView(Guid Id, string Slug, string Name, string? Summary, SpendView Spend, IReadOnlyList<WorkerView> Workers, string? Role = null);
+
+public sealed record DivisionNodeView(Guid Id, string Slug, string Name, SpendView Spend, IReadOnlyList<WorkerView> Workers, IReadOnlyList<ProjectNodeView> Projects,
+    string? Role = null, bool Archived = false);
 
 public sealed record ProgressView(Guid RunId, string Label, int Step, int Of, decimal SpentCredits, decimal? EstimatedCredits);
 
@@ -31,7 +38,9 @@ public sealed record ProjectNodeView(
     ProgressView? Progress,
     SpendView Spend,
     IReadOnlyList<WorkerView> Workers,
-    IReadOnlyList<AppNodeView> Apps);
+    IReadOnlyList<AppNodeView> Apps,
+    string? Role = null,
+    bool Archived = false);
 
 /// <param name="Access">private, shared or public, resolved down the cascade.</param>
 /// <param name="SharedWith">How many addresses the app is shared with.</param>
@@ -47,7 +56,9 @@ public sealed record AppNodeView(
     int? VisitsToday,
     DateTimeOffset? LastVisitAt,
     SpendView Spend,
-    IReadOnlyList<WorkerView> Workers);
+    IReadOnlyList<WorkerView> Workers,
+    string? Role = null,
+    bool Archived = false);
 
 public sealed record VerdictNeed(string Kind, Guid Id, Guid IdeaId, string Title, string Verdict, string? Detail);
 
@@ -59,8 +70,10 @@ public sealed record HireNeed(string Kind, Guid Id, Guid HireId, string Title, s
 /// <summary>An employee with nothing to do: release it (its memory is kept) or give it work.</summary>
 public sealed record IdleNeed(string Kind, Guid Id, Guid EmployeeId, string Title, string? Detail);
 
-/// <summary><c>GET /api/tree</c>. <c>organisation</c> is null on first run.</summary>
-public sealed record TreeView(DateTimeOffset GeneratedAt, string ViewerRole, OrganisationNodeView? Organisation, IReadOnlyList<DivisionNodeView> Divisions, IReadOnlyList<object> NeedsYou);
+/// <summary><c>GET /api/tree</c>. <c>organisation</c> is null on first run, and for someone given no role yet.</summary>
+/// <param name="FirstRun">With no organisation: true only while none exists anywhere, so the signed-in person may name the first. False for someone who must be invited.</param>
+public sealed record TreeView(DateTimeOffset GeneratedAt, string ViewerRole, OrganisationNodeView? Organisation, IReadOnlyList<DivisionNodeView> Divisions, IReadOnlyList<object> NeedsYou,
+    bool FirstRun = false);
 
 /// <summary>A run as the console reads it. Status words: queued, running, waiting, paused, finished, failed, cancelled.</summary>
 public sealed record PublicRunView(

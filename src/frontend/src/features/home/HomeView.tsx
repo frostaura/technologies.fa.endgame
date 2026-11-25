@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { RISE, stagger } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
-import { paths, useLocation } from "@/lib/router";
+import { covers, roleInTree } from "@/lib/roles";
+import { paths } from "@/lib/router";
+import { useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { useGetMeQuery, useGetTreeQuery } from "@/store/api";
+import { useGetMeQuery } from "@/store/api";
 import type { NeedsYou, Tree } from "@/store/types";
 import { selected, type Selection } from "@/store/uiSlice";
 import { AppShell, type Crumb } from "../shell/AppShell";
@@ -24,29 +26,54 @@ import { countTree, orgFigures, organisationSelection, workerLabel } from "./tre
 /** How often the org chart refreshes. Status, spend and who is working are live, not a snapshot. */
 export const TREE_POLL_MS = 15_000;
 
+/**
+ * Where home starts: the organisation, or — for someone granted only part of the tree — the highest
+ * level they hold a role at (ORG-19), so the conversation and the graphs ask where they may.
+ */
+function homeSelection(tree: Tree): Selection | null {
+  const org = tree.organisation;
+  if (!org) return null;
+  const root = organisationSelection(tree);
+  // An older control plane sends no roles: the organisation, as before.
+  if (org.role !== null) return root;
+  for (const d of tree.divisions) if (d.role) return { scope: `${org.slug}/${d.slug}`, kind: "division", trail: [org.name, d.name] };
+  for (const d of tree.divisions)
+    for (const p of d.projects) if (p.role) return { scope: `${org.slug}/${d.slug}/${p.slug}`, kind: "project", trail: [org.name, d.name, p.name] };
+  for (const d of tree.divisions)
+    for (const p of d.projects)
+      for (const a of p.apps) if (a.role) return { scope: `${org.slug}/${d.slug}/${p.slug}/${a.slug}`, kind: "app", trail: [org.name, d.name, p.name, a.name] };
+  return root;
+}
+
+/** A level the viewer may be scoped to: one they hold a role at, not only the path down to one. */
+function selectable(tree: Tree, scope: string): boolean {
+  return roleInTree(tree, scope) !== null;
+}
+
 export function HomeView() {
-  // An operator in God mode reads the organisation they entered; anyone else reads their own.
-  const { search } = useLocation();
+  // An operator in God mode reads the organisation they entered (OP-04); anyone else reads their own.
   const me = useGetMeQuery(undefined);
-  const entered = me.data?.isOperator ? search.get("organisation") || undefined : undefined;
-  const query = useGetTreeQuery(entered, { pollingInterval: TREE_POLL_MS, skipPollingIfUnfocused: true });
+  const query = useActiveTree({ pollingInterval: TREE_POLL_MS, skipPollingIfUnfocused: true });
   const view = viewOf(query);
   const dispatch = useAppDispatch();
   const selection = useAppSelector((s) => s.ui.selection);
   const tree = view.kind === "loaded" ? view.data : null;
+  const home = tree ? homeSelection(tree) : null;
 
-  // Start scoped to the whole organisation; drop a selection that no longer exists in the tree.
+  // Start at home; drop a selection that no longer exists in the tree, or that this person may not be scoped to.
   useEffect(() => {
-    if (!tree) return;
-    const root = organisationSelection(tree);
-    if (!root) return;
-    if (!selection || !selection.scope.startsWith(root.scope)) dispatch(selected(root));
-  }, [tree, selection, dispatch]);
+    if (!tree || !home || !tree.organisation) return;
+    if (!selection || !covers(tree.organisation.slug, selection.scope) || !selectable(tree, selection.scope)) dispatch(selected(home));
+  }, [tree, home, selection, dispatch]);
 
-  const select = (s: Selection) => dispatch(selected(s));
+  // A level shown only as the path down to someone's grant is not one they can be scoped to.
+  const select = (s: Selection) => {
+    if (tree && !selectable(tree, s.scope)) return;
+    dispatch(selected(s));
+  };
   const crumbs: Crumb[] = crumbsFor(tree, selection, select);
   const hasOrg = !!tree?.organisation;
-  const activeSelection = tree && hasOrg ? (selection ?? organisationSelection(tree)) : null;
+  const activeSelection = tree && hasOrg ? (selection ?? home) : null;
 
   return (
     <AppShell crumbs={crumbs} aside={
@@ -64,11 +91,13 @@ export function HomeView() {
           {view.stale && <Stale reason={view.stale.reason} />}
           <ErrorBoundary name="The org chart">
             {view.data.organisation ? (
-              <Organisation tree={view.data} org={view.data.organisation} selection={activeSelection} onSelect={select} />
+              <Organisation tree={view.data} org={view.data.organisation} home={home ?? { scope: view.data.organisation.slug, kind: "organisation", trail: [view.data.organisation.name] }} selection={activeSelection} onSelect={select} />
             ) : me.data?.isOperator ? (
               <OperatorHome />
-            ) : (
+            ) : view.data.firstRun !== false ? (
               <FirstRun />
+            ) : (
+              <NotInvited email={me.data?.user.email ?? null} />
             )}
           </ErrorBoundary>
         </>
@@ -87,14 +116,29 @@ function crumbsFor(tree: Tree | null, selection: Selection | null, select: (s: S
     if (isEmployee || i === selection.trail.length - 1) return { label };
     const scope = parts.slice(0, i + 1).join("/");
     const kind = (["organisation", "division", "project", "app"] as const)[i] ?? "project";
+    // A level above someone's grant is a name on the way down, not a place to go.
+    if (!selectable(tree, scope)) return { label };
     return { label, onSelect: () => select({ scope, kind, trail: selection.trail.slice(0, i + 1) }) };
   });
 }
 
-function Organisation({ tree, org, selection, onSelect }: { tree: Tree; org: NonNullable<Tree["organisation"]>; selection: Selection | null; onSelect: (s: Selection) => void }) {
+function Organisation({
+  tree,
+  org,
+  home,
+  selection,
+  onSelect,
+}: {
+  tree: Tree;
+  org: NonNullable<Tree["organisation"]>;
+  home: Selection;
+  selection: Selection | null;
+  onSelect: (s: Selection) => void;
+}) {
   const counts = countTree(tree);
-  const root: Selection = { scope: org.slug, kind: "organisation", trail: [org.name] };
-  const isRootSelected = selection?.kind === "organisation";
+  // The organisation's name takes the person home: the whole organisation, or the highest level they hold.
+  const root = home;
+  const isRootSelected = selection?.scope === home.scope && selection.kind === home.kind;
   return (
     <>
       <section
@@ -151,7 +195,7 @@ function Organisation({ tree, org, selection, onSelect }: { tree: Tree; org: Non
           Describe an idea and Endgame researches it, suggests a division and a name for it, and builds it once you agree.
         </Empty>
       ) : (
-        <ChartViews tree={tree} selection={selection} onSelect={onSelect} />
+        <ChartViews tree={tree} selection={selection ?? root} onSelect={onSelect} />
       )}
     </>
   );
@@ -162,11 +206,13 @@ function Organisation({ tree, org, selection, onSelect }: { tree: Tree; org: Non
  * log of every time FrostAura entered. Both follow the selection, as the conversation does.
  */
 function ManageLinks({ tree, selection }: { tree: Tree; selection: Selection }) {
-  const me = useGetMeQuery(undefined);
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
-  const role = tree.viewerRole;
-  const admin = role === "admin" || role === "owner" || me.data?.isOperator === true;
   const node = selection.kind === "employee" ? { scope: selection.scope, name: selection.trail[selection.trail.length - 2] ?? "" } : { scope: selection.scope, name: selection.trail[selection.trail.length - 1] ?? "" };
+  // The role at the level selected, exactly as the server resolves it (PPL-01); an older control plane gives one role for the tree.
+  const at = roleInTree(tree, node.scope);
+  const role = at === undefined ? tree.viewerRole : at;
+  const admin = role === "admin" || role === "owner";
+  const ownerOfOrganisation = (tree.organisation ? roleInTree(tree, tree.organisation.slug) : undefined) ?? tree.viewerRole;
   return (
     <nav aria-label="Manage" className={cn("flex flex-wrap gap-2", RISE, stagger(1))}>
       {selection.kind === "employee" && selection.employeeId && (
@@ -205,7 +251,7 @@ function ManageLinks({ tree, selection }: { tree: Tree; selection: Selection }) 
           Secrets for {node.name}
         </Link>
       )}
-      {role === "owner" && (
+      {ownerOfOrganisation === "owner" && (
         <Link href={paths.operatorAccess()} className={buttonVariants({ variant: "soft" })}>
           <Icon name="god-mode" tinted className="size-4" />
           Operator access
@@ -240,7 +286,7 @@ function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
     return (
       <p data-state="empty" className={cn("flex items-center gap-2 text-success-text", RISE, stagger(1))}>
         <Icon name="health" />
-        Nothing needs you right now. Everything is running inside its budget.
+        Nothing needs you right now: no verdict, approval or hire is waiting, and no one is idle.
       </p>
     );
   }
@@ -276,9 +322,10 @@ const VIEWS: { value: ChartView; label: string }[] = [
 ];
 
 /** The living org chart, and the same organisation read as a graph: responsibility, and data. */
-function ChartViews({ tree, selection, onSelect }: { tree: Tree; selection: Selection | null; onSelect: (s: Selection) => void }) {
+function ChartViews({ tree, selection, onSelect }: { tree: Tree; selection: Selection; onSelect: (s: Selection) => void }) {
   const [view, setView] = useState<ChartView>("chart");
-  const scope = tree.organisation?.slug ?? "";
+  // The graphs ask at the level selected, which is always one the person holds a role at (ORG-19).
+  const scope = selection.scope;
   return (
     <div className="flex flex-col gap-4">
       <div role="tablist" aria-label="View" className="flex flex-wrap gap-1 self-start rounded-xs bg-quiet p-1">
@@ -319,6 +366,20 @@ function OperatorHome() {
       <Link href={paths.operator()} className={buttonVariants({ size: "lg" })}>
         Every organisation
       </Link>
+    </section>
+  );
+}
+
+/** Signed in, with no role anywhere, after the first organisation exists: organisations are FrostAura's to set up (ORG-03). */
+function NotInvited({ email }: { email: string | null }) {
+  return (
+    <section aria-label="No organisation yet" className={cn("flex flex-col items-start gap-4 rounded-lg border bg-surface px-6 py-8 shadow-card sm:px-10", RISE)}>
+      <Icon name="organisation" tinted className="size-8" />
+      <h1 className="max-w-prose font-display text-3xl font-bold sm:text-4xl">Organisations are set up by FrostAura</h1>
+      <p className="max-w-prose text-ink-body">
+        {email ? `You are signed in as ${email}, ` : "You are signed in, "}but you hold no role in any organisation yet, and an organisation cannot be started here. FrostAura sets one up for each
+        person it invites. If you were invited, sign in with the invitation code you were sent; if someone already works here, ask them to give you a role.
+      </p>
     </section>
   );
 }
