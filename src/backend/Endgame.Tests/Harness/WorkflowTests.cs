@@ -272,7 +272,7 @@ public sealed class WorkflowTests
                     var items = new List<object> { new { id = "recipes-api", text = "Families can keep their recipes in one place.", detail = "A recipes API (Recipe entity, GET/POST api/recipes)", check = "make test passes RecipesApiTests; GET api/recipes signed in lists them", covers = new[] { "r1" } } };
                     if (!missing && !LeaveOneOut)
                     {
-                        items.Add(new { id = "recipes-page", text = "Households can share their recipes with each other.", detail = "A recipes page with four states and a share action", check = "make test passes RecipesPage.test.tsx", covers = new[] { "r2" } });
+                        items.Add(new { id = "recipes-page", text = "Households can share their recipes with each other.", detail = "A recipes page with four states and a share action", check = "make test passes RecipesPage.test.tsx", covers = new[] { "r2" }, testIds = new[] { "page-home", "recipe-list", "recipe-item", "set-shared-true" } });
                     }
 
                     if (Plan is { } own)
@@ -333,10 +333,21 @@ public sealed class WorkflowTests
         }
     }
 
-    private static (FakeControlPlane Cp, FakeWorkspace Ws, FakeDock Dock) BuildRun(string idea = "Recipe box for families\nShare recipes between households.")
+    /// <summary>The recipes screen as a builder writes it, carrying the test ids the scripted plan promises.</summary>
+    private const string RecipesScreen = """
+        <section data-testid="page-home"><ul data-testid="recipe-list">{recipes.map((r) => <li data-testid="recipe-item" data-id={r.id}>{r.title}
+        <Button data-testid="set-shared-true">Share</Button></li>)}</ul></section>
+        """;
+
+    private static (FakeControlPlane Cp, FakeWorkspace Ws, FakeDock Dock) BuildRun(string idea = "Recipe box for families\nShare recipes between households.", bool screens = true)
     {
         var cp = new FakeControlPlane("frostaura/technologies", "build", idea) { Headroom = 1000m };
         var ws = new FakeWorkspace().With("api/Program.cs", "var api = app.UseEndgameApp();\napi.MapNotes();\napp.Run();\n").With("AGENTS.md", "# AGENTS\n");
+        if (screens)
+        {
+            ws.With("web/src/recipes/RecipesPage.tsx", RecipesScreen);
+        }
+
         return (cp, ws, new FakeDock());
     }
 
@@ -465,7 +476,7 @@ public sealed class WorkflowTests
     {
         var cp = new FakeControlPlane("frostaura", "build", "Recipe box for families\nShare recipes between households.") { Headroom = 1000m, HiresWait = true };
         cp.Schedules.Add("nightly-digest");
-        var ws = new FakeWorkspace().With("api/Program.cs", "var api = app.UseEndgameApp();\napi.MapNotes();\napp.Run();\n").With("AGENTS.md", "# AGENTS\n");
+        var ws = new FakeWorkspace().With("api/Program.cs", "var api = app.UseEndgameApp();\napi.MapNotes();\napp.Run();\n").With("AGENTS.md", "# AGENTS\n").With("web/src/recipes/RecipesPage.tsx", RecipesScreen);
         await RunBuildAsync(cp, new Factory().Model(), ws, new FakeDock());
         Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
         Assert.Equal("division", cp.Hires["division:frostaura/labs"]["trigger"]!.GetValue<string>());
@@ -697,7 +708,7 @@ public sealed class WorkflowTests
     private static (object[] Items, object[] Requirements, string Summary) ReadingList(bool emailOnFinish = false) => (
         [
             new { id = "books-api", text = "The club's books are kept, with who added each and what they are reading.", detail = "Book entity with status, a fresh migration, GET/POST/PATCH api/books and tests", check = "make test passes BooksApiTests", covers = new[] { "r1", "r2", "r3" } },
-            new { id = "reading-list", text = "Members see the reading list and what everyone is reading now.", detail = "The reading-list page and the reading-now view, with four states each", check = "make test passes ReadingList.test.tsx", covers = new[] { "r1", "r4" } },
+            new { id = "reading-list", text = "Members see the reading list and what everyone is reading now.", detail = "The reading-list page and the reading-now view, with four states each", check = "make test passes ReadingList.test.tsx", covers = new[] { "r1", "r4" }, testIds = new[] { "page-home", "nav-reading-now", "page-reading-now", "book-list", "book-item" } },
             new
             {
                 id = "book-page",
@@ -705,6 +716,7 @@ public sealed class WorkflowTests
                 detail = "The add-a-book form and a book's page with a status selector and its note" + (emailOnFinish ? "; an e-mail to the club through the platform when one is finished" : ""),
                 check = "make test passes BookPage.test.tsx",
                 covers = new[] { "r2", "r3", "r5" },
+                testIds = new[] { "new-book", "book-title", "book-author", "save-book", "page-book", "set-status-finished" },
             },
         ],
         [
@@ -723,8 +735,8 @@ public sealed class WorkflowTests
         [
             new { id = "bookings-api", text = "Courts and bookings are kept, each booking costing its playing minutes.", detail = "Court and Booking entities, a migration, api/bookings endpoints and tests", check = "make test passes BookingsApiTests", covers = new[] { "r1", "r3", "r4" } },
             new { id = "minutes-api", text = "Members hold playing minutes bought in packages, and an admin can add to them.", detail = "MinutePackage and MinuteLedger entities, api/minutes endpoints, the admin's add-minutes endpoint", check = "make test passes MinutesApiTests", covers = new[] { "r2", "r7" } },
-            new { id = "booking-screen", text = "Members book a court and see their bookings and balance.", detail = "The booking page with a court-and-slot form, and my bookings with the balance", check = "make test passes Booking.test.tsx", covers = new[] { "r3", "r6" } },
-            new { id = "admin-screen", text = "An admin adds minutes to a member.", detail = "The admin page with a member picker and an add-minutes form", check = "make test passes Admin.test.tsx", covers = new[] { "r7" } },
+            new { id = "booking-screen", text = "Members book a court and see their bookings and balance.", detail = "The booking page with a court-and-slot form, and my bookings with the balance", check = "make test passes Booking.test.tsx", covers = new[] { "r3", "r6" }, testIds = new[] { "page-book-a-court", "booking-court", "booking-starts-at", "save-booking", "booking-list", "booking-item" } },
+            new { id = "admin-screen", text = "An admin adds minutes to a member.", detail = "The admin page with a member picker and an add-minutes form", check = "make test passes Admin.test.tsx", covers = new[] { "r7" }, testIds = new[] { "page-admin", "minutes-member", "minutes-amount", "save-minutes" } },
             new { id = "hooks-and-mail", text = "The court's hardware can ask whether it is booked now, and members get a confirmation e-mail.", detail = "A signed webhook endpoint hooks/court-status, and a confirmation e-mail through the platform on every booking", check = "the evaluator calls the webhook signed and reads the sent e-mail", covers = new[] { "r5", "r8" } },
         ],
         [
@@ -742,6 +754,9 @@ public sealed class WorkflowTests
     private static async Task<JsonObject> PlanEstimateAsync(string idea, (object[] Items, object[] Requirements, string Summary)? plan)
     {
         var (cp, ws, dock) = BuildRun(idea);
+        // The screens as built carry every test id the plan promises, so the estimate is all these runs are about.
+        var ids = plan is { } p ? global::System.Text.Json.JsonSerializer.SerializeToNode(p.Items)!.AsArray().SelectMany(i => i!["testIds"]?.AsArray() ?? []).Select(t => t!.GetValue<string>()) : [];
+        ws.With("web/src/Screens.tsx", string.Concat(ids.Select(id => $"<div data-testid=\"{id}\" />\n")));
         await RunBuildAsync(cp, new Factory { Plan = plan }.Model(), ws, dock);
         Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
         return cp.Events.Single(e => e.Type == "estimate.made" && e.Payload["stage"]?.GetValue<string>() == "plan").Payload;
@@ -941,6 +956,54 @@ public sealed class WorkflowTests
         var failed = cp.Payload("evaluation.failed")!;
         Assert.True(global::System.Text.Encoding.UTF8.GetByteCount(failed.ToJsonString()) <= 64 * 1024);
         Assert.True(failed["truncated"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void A_plan_item_with_a_screen_names_its_test_ids_in_the_kits_form()
+    {
+        // The browser proof never passed: every build laid its controls out differently and named them differently.
+        const string idea = "A reading list: add books and see what everyone is reading now.";
+        PlanContract Plan(string testIds) => PlanContract.FromJson(Json($$"""
+            {"summary":"A reading list for a club.","requirements":[{"id":"r1","text":"add books"},{"id":"r2","text":"see what everyone is reading now"}],
+             "items":[{"id":"api","text":"Books are kept.","detail":"Book entity, GET/POST api/books","check":"tests","covers":["r1"]},
+                      {"id":"screens","text":"People add books and see what is being read.","detail":"A books page and a reading-now page in web/src","check":"tests","covers":["r2"],"testIds":{{testIds}}}]}
+            """).AsObject())!;
+        Assert.Contains(Plan("[]").Faults(idea), f => f.Contains("Item 'screens' builds something on screen but names no test ids", StringComparison.Ordinal));
+        Assert.Contains(Plan("""["page-home","Save_Book"]""").Faults(idea), f => f.Contains("'Save_Book', which is not in the kit's form", StringComparison.Ordinal));
+        var good = Plan("""["page-home","nav-reading-now","book-list","book-item","new-book","book-title","save-book","set-status-finished"]""");
+        Assert.Empty(good.Faults(idea));
+        // The ids travel with the plan: in the accepted event, back from the journal, and into the builder's and evaluator's view of it.
+        Assert.Equal(good.Items[1].TestIds, PlanContract.FromEvent(good.ToEvent())!.Items[1].TestIds);
+        Assert.Equal(good.Items[1].TestIds, PlanContract.FromJson(good.ToJson())!.Items[1].TestIds);
+        Assert.Contains("(test ids: page-home, nav-reading-now, book-list", good.Render(), StringComparison.Ordinal);
+        Assert.Empty(good.Items[0].TestIds); // an item with nothing on screen names none
+    }
+
+    [Fact]
+    public async Task Screens_that_lack_a_promised_test_id_fail_the_gate_and_are_repaired_unbilled()
+    {
+        // The first build of the screen carries none of the ids the plan promised; code's gate sends it back whatever the
+        // evaluator says, and the repair, which adds them, passes.
+        var (cp, ws, dock) = BuildRun(screens: false);
+        var factory = new Factory();
+        factory.OnBuilder = call =>
+        {
+            if (call.Repair && call.Messages[1]!["content"]!.GetValue<string>().Contains("test ids", StringComparison.Ordinal))
+            {
+                ws.With("web/src/recipes/RecipesPage.tsx", RecipesScreen);
+            }
+        };
+        var model = factory.Model();
+        await RunBuildAsync(cp, model, ws, dock);
+
+        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+        var failed = Assert.Single(cp.Events, e => e.Type == "evaluation.failed").Payload;
+        Assert.Equal("recipes-page", failed["item"]!.GetValue<string>());
+        Assert.Contains("do not carry the test ids the plan promised: page-home, recipe-list, recipe-item, set-shared-true", failed["faults"]!.ToJsonString(), StringComparison.Ordinal);
+        var builder = model.Calls.First(c => c.Messages[1]!["content"]!.GetValue<string>().Contains("The feature: [recipes-page]", StringComparison.Ordinal));
+        Assert.Contains("data-testid", builder.Messages[1]!["content"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains(model.Calls, c => c.Repair && c.TaskType == "build-t1");
+        Assert.Equal(2, cp.Types.Count(t => t == "evaluation.passed"));
     }
 
     [Fact]

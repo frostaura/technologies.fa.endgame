@@ -55,7 +55,7 @@ public sealed class AgentFactory(RunnerOptions options)
         SystemPrompt = RunnerResources.Prompt("evaluator", new Dictionary<string, string>
         {
             ["root"] = root,
-            ["item"] = $"[{item.Id}] {item.Deliverable}\nChecked by: {item.Check}",
+            ["item"] = $"[{item.Id}] {item.Deliverable}\nChecked by: {item.Check}" + (item.TestIds.Count == 0 ? "" : $"\nTest ids its screens must carry: {string.Join(", ", item.TestIds)}"),
             ["requirements"] = requirements.Count == 0 ? "(none listed: judge the item as written)" : string.Join("\n", requirements.Select(r => $"- {r.Id}: {r.Text}")),
         }),
         Tools = new ToolRegistry(new ITool?[]

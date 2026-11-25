@@ -19,6 +19,44 @@ public sealed record PlanItem(string Id, string Text, string Detail, string Chec
 
     /// <summary>What a builder or evaluator is told the item is: the plain text, then the technical detail.</summary>
     public string Deliverable => string.IsNullOrWhiteSpace(Detail) || Detail == Text ? Text : $"{Text} — {Detail}";
+
+    /// <summary>
+    /// The stable test ids (<c>data-testid</c>) the item's screens carry, by the app kit's convention (<see cref="TestIdConvention"/>):
+    /// the evaluator checks them, code's gate refuses an item whose screens lack one, and the browser proof drives the app by them.
+    /// </summary>
+    public IReadOnlyList<string> TestIds { get; init; } = [];
+}
+
+/// <summary>
+/// The app kit's test-id convention (the template's AGENTS.md, the write-a-screen skill): <c>page-&lt;view&gt;</c>,
+/// <c>nav-&lt;view&gt;</c>, <c>&lt;entity&gt;-list</c>, <c>&lt;entity&gt;-item</c>, <c>new-&lt;entity&gt;</c>, <c>open-&lt;entity&gt;</c>,
+/// <c>&lt;entity&gt;-&lt;field&gt;</c>, <c>save-&lt;entity&gt;</c>, <c>set-&lt;field&gt;-&lt;value&gt;</c>, all lowercase kebab-case.
+/// </summary>
+public static partial class TestIdConvention
+{
+
+    public static bool IsValid(string id) => Shape().IsMatch(id);
+
+    /// <summary>Whether an item builds something on screen, from its detail: such an item names its test ids.</summary>
+    public static bool HasScreen(PlanItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return ScreenWords().IsMatch(item.Detail);
+    }
+
+    /// <summary>Every <c>data-testid="…"</c> written in the text (source files, or a search's output).</summary>
+    public static IReadOnlySet<string> Found(string text) =>
+        Written().Matches(text ?? "").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>The words in an item's detail that say it builds something a person sees ("platform" is not a form).</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(screens?|pages?|forms?|views?|buttons?|tabs?)\b|web/src|\.tsx\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ScreenWords();
+
+    [System.Text.RegularExpressions.GeneratedRegex("^[a-z][a-z0-9]*(-[a-z0-9]+)+$")]
+    private static partial System.Text.RegularExpressions.Regex Shape();
+
+    [System.Text.RegularExpressions.GeneratedRegex("data-testid=[\"']([a-z0-9-]+)[\"']")]
+    private static partial System.Text.RegularExpressions.Regex Written();
 }
 
 /// <summary>One thing the idea asks for, in the idea's own words, as the planner extracted it.</summary>
@@ -57,6 +95,7 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
             ["detail"] = i.Detail,
             ["check"] = i.Check,
             ["covers"] = Strings(i.Covers),
+            ["testIds"] = Strings(i.TestIds),
         }).ToArray()),
         ["leftOut"] = new JsonArray(LeftOut.Select(l => (JsonNode)new JsonObject { ["requirement"] = l.Requirement, ["reason"] = l.Reason }).ToArray()),
     };
@@ -77,6 +116,7 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
             ["detail"] = i.Detail,
             ["check"] = i.Check,
             ["covers"] = Strings(i.Covers),
+            ["testIds"] = Strings(i.TestIds),
         }).ToArray()),
         ["leftOut"] = new JsonArray(LeftOut.Select(l => (JsonNode)new JsonObject
         {
@@ -110,7 +150,10 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
             {
                 var text = Json.Str(i, "text") ?? Json.Str(i, "deliverable") ?? "";
                 var detail = Json.Str(i, "detail") ?? Json.Str(i, "deliverable") ?? text;
-                return new PlanItem(Json.Str(i, "id") is { Length: > 0 } id ? id : $"item-{n + 1}", text, detail, Json.Str(i, "check") ?? "", Json.Strings(i, "covers"));
+                return new PlanItem(Json.Str(i, "id") is { Length: > 0 } id ? id : $"item-{n + 1}", text, detail, Json.Str(i, "check") ?? "", Json.Strings(i, "covers"))
+                {
+                    TestIds = Json.Strings(i, "testIds").Select(t => t.Trim()).Where(t => t.Length > 0).Distinct(StringComparer.Ordinal).ToList(),
+                };
             })
             .ToList();
         var requirements = (o["requirements"] as JsonArray ?? []).OfType<JsonObject>()
@@ -223,6 +266,15 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
                 faults.Add($"Item '{item.Id}' covers '{unknown}', which is not one of the requirements ({string.Join(", ", known)}).");
             }
 
+            if (item.TestIds.FirstOrDefault(t => !TestIdConvention.IsValid(t)) is { } badId)
+            {
+                faults.Add($"Item '{item.Id}' names the test id '{badId}', which is not in the kit's form: lowercase kebab-case such as page-home, book-list, book-item, new-book, book-title, save-book, set-status-finished.");
+            }
+            else if (item.TestIds.Count == 0 && TestIdConvention.HasScreen(item))
+            {
+                faults.Add($"Item '{item.Id}' builds something on screen but names no test ids: list in testIds every data-testid its screens carry, by the kit's convention (page-<view>, nav-<view>, <entity>-list, <entity>-item, new-<entity>, open-<entity>, <entity>-<field>, save-<entity>, set-<field>-<value>).");
+            }
+
             if (OwnerText.Technical(item.Text) is { Count: > 0 } technical)
             {
                 faults.Add($"Item '{item.Id}' text names technical detail ({string.Join(", ", technical.Take(4))}): say in plain words what the owner gets, and put files, endpoints and entities in detail.");
@@ -263,7 +315,7 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
 
     public string Render()
     {
-        var lines = Items.Select(i => $"- [{i.Id}] {i.Deliverable} — checked by: {i.Check}{(i.Covers.Count > 0 ? $" (delivers {string.Join(", ", i.Covers)})" : "")}");
+        var lines = Items.Select(i => $"- [{i.Id}] {i.Deliverable} — checked by: {i.Check}{(i.Covers.Count > 0 ? $" (delivers {string.Join(", ", i.Covers)})" : "")}{(i.TestIds.Count > 0 ? $" (test ids: {string.Join(", ", i.TestIds)})" : "")}");
         var requirements = Requirements.Count == 0 ? "" : "\nRequirements:\n" + string.Join('\n', Requirements.Select(r => $"- {r.Id}: {r.Text}")) + "\n";
         var left = LeftOut.Count == 0 ? "" : "\nLeft out:\n" + string.Join('\n', LeftOut.Select(l => $"- {l.Requirement}: {l.Reason}"));
         return $"{Summary}\n{requirements}{string.Join('\n', lines)}{left}";
@@ -358,6 +410,7 @@ public sealed class ProposePlanTool(string? idea = null) : ITool
             item["detail"] = Schema.Str("How it is built, for the builder and technical mode: entities, endpoints, screens, files.");
             item["check"] = Schema.Str("How it will be checked: the test that will pass, and the call to the running app (signed in) and its expected answer.");
             item["covers"] = Schema.Strings("The ids of the requirements this item delivers (at least one).");
+            item["testIds"] = Schema.Strings("Every data-testid this item's screens carry, by the app kit's convention: page-<view>, nav-<view>, <entity>-list, <entity>-item, new-<entity>, open-<entity>, <entity>-<field>, save-<entity>, set-<field>-<value> (lowercase kebab-case; e.g. page-home, book-list, book-item, new-book, book-title, save-book, set-status-finished). Empty for an item with nothing on screen.");
             return Schema.Object(new JsonObject
             {
                 ["summary"] = Schema.Str("What will be built, in two or three plain sentences for the owner."),

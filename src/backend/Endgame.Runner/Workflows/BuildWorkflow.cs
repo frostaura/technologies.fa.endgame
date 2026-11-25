@@ -220,11 +220,11 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
                 {
                     ["round"] = round.ToString(CultureInfo.InvariantCulture),
                     ["rounds"] = run.Options.MaxRepairRounds.ToString(CultureInfo.InvariantCulture),
-                    ["item"] = $"[{item.Id}] {item.Deliverable} — checked by: {item.Check}\n{Requirements(plan, item)}",
+                    ["item"] = $"[{item.Id}] {item.Deliverable} — checked by: {item.Check}\n{TestIdsLine(item)}{Requirements(plan, item)}",
                     ["evidence"] = Json.Str(lastEvaluation, "evidence") ?? "",
                     ["faults"] = string.Join("\n", Json.Strings(lastEvaluation, "faults").Select(f => $"- {f}")),
                 })
-                : $"Build this one feature of the plan, completely, then commit it.\n\nThe feature: [{item.Id}] {item.Deliverable}\nIt will be checked by: {item.Check}\n{Requirements(plan, item)}\nThe whole plan, for context (build only this item now):\n{plan.Render()}"
+                : $"Build this one feature of the plan, completely, then commit it.\n\nThe feature: [{item.Id}] {item.Deliverable}\nIt will be checked by: {item.Check}\n{TestIdsLine(item)}{Requirements(plan, item)}\nThe whole plan, for context (build only this item now):\n{plan.Render()}"
                     + (recreated && round == 0 ? "\n\nThe workspace was recreated from the last commit; anything uncommitted from before was lost." : "");
             var result = await WorkflowSupport.RunAgentAsync(run, builder, workspace, task, cancellationToken);
             if (WorkflowOutcome.FromAgent(result) is { } stopped)
@@ -435,9 +435,25 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             answer = new JsonObject { ["passed"] = false, ["evidence"] = OutputText.Truncate(result.FinalText ?? "", 2000), ["faults"] = Json.Array(["The evaluator gave no verdict; treat the item as unchecked and check it again."]) };
         }
 
-        // Code's gate: every requirement the item delivers is shown working in the running app, signed in, or the item fails.
+        // Code's gate: every requirement the item delivers is shown working in the running app, signed in, and every test id the
+        // plan promised is on the app's screens, or the item fails.
         var calls = CallAppTool.CallsIn(await run.LogReader.ReadAllAsync(cancellationToken), evaluatorId);
-        return EvaluationGate.Apply(plan, item, answer, calls);
+        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken));
+    }
+
+    /// <summary>The item's promised test ids that no file under <c>web/src</c> writes as <c>data-testid="…"</c>.</summary>
+    public static async Task<IReadOnlyList<string>> MissingTestIdsAsync(IWorkspace workspace, PlanItem item, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        ArgumentNullException.ThrowIfNull(item);
+        if (item.TestIds.Count == 0)
+        {
+            return [];
+        }
+
+        var search = await workspace.ExecAsync(new WorkspaceCommand(["rg", "--no-messages", "--glob", "!*.test.*", "-e", "data-testid=", $"{workspace.Root}/web/src"], null, TimeoutSeconds: 60, MaxOutputBytes: 512 * 1024), cancellationToken);
+        var found = TestIdConvention.Found(search.Stdout);
+        return item.TestIds.Where(t => !found.Contains(t)).ToList();
     }
 
     private static async Task RecordProgressAsync(RunContext run, PlanItem item, JsonObject evaluation, IWorkspace workspace, CancellationToken cancellationToken)
@@ -599,6 +615,12 @@ public sealed class BuildWorkflow(Estimator estimator, IPreviewProbe? preview = 
             : "Left out: " + string.Join(" ", plan.LeftOut.Select(l => $"{plan.Requirements.FirstOrDefault(r => r.Id == l.Requirement)?.Text.TrimEnd('.') ?? l.Requirement}, because {l.Reason.TrimEnd('.')}."));
         return Sentences.Join([plan.Summary, built, left]);
     }
+
+    /// <summary>The test ids an item's screens must carry, for the builder's task.</summary>
+    private static string TestIdsLine(PlanItem item) =>
+        item.TestIds.Count == 0
+            ? ""
+            : $"Its screens carry these test ids, exactly, as data-testid on the elements the kit's convention names (AGENTS.md), and its tests select by them: {string.Join(", ", item.TestIds)}. Code checks each one is there.\n";
 
     /// <summary>The owner's requirements an item delivers, for the builder's task.</summary>
     private static string Requirements(PlanContract plan, PlanItem item) =>

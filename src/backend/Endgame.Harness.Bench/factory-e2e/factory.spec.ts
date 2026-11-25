@@ -273,25 +273,26 @@ test("3. placement, hires, plan, builders, evaluator, security review and a priv
   await note(`app ${story.appPath} (${story.appId}), access ${JSON.stringify(story.report.app)}`);
 });
 
-/** Sets a book's status the way the built app offers it: a "Mark …" button on its card, or a status control on its own page. */
+/**
+ * The app kit's test ids (template AGENTS.md, the write-a-screen skill): every built app names its controls the same way,
+ * so the driver needs no knowledge of how a particular build laid them out. `<entity>` is "book" for this idea.
+ */
+function bookItem(page: Page, title: string) {
+  return page.getByTestId("book-item").filter({ hasText: title }).first();
+}
+
+/** Sets a book's status with its `set-<field>-<value>` button: on its item when the list offers it, otherwise on its own page. */
 async function setStatus(page: Page, title: string, status: "reading" | "finished") {
-  const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: title }) }).first();
-  const button = card.getByRole("button", { name: new RegExp(`^(mark )?(as )?${status}`, "i") });
+  const setter = (scope: Page | ReturnType<Page["getByTestId"]>) => scope.locator(`[data-testid^="set-"][data-testid$="-${status}"]`).first();
   const saved = page.waitForResponse((r) => ["PATCH", "PUT", "POST"].includes(r.request().method()) && /books/.test(r.url()));
-  if (await button.count()) {
-    await button.first().click();
+  const item = bookItem(page, title);
+  await expect(item).toBeVisible({ timeout: 20_000 });
+  if (await setter(item).count()) {
+    await setter(item).click();
   } else {
-    await page.getByText(title).first().click();
-    const own = page.getByRole("main").getByRole("button", { name: new RegExp(`^(mark )?(as )?${status}`, "i") });
-    if (await own.first().isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await own.first().click();
-      expect((await saved).status()).toBeLessThan(300);
-      return;
-    }
-    const control = page.getByLabel(/status/i).first();
-    await expect(control).toBeVisible({ timeout: 20_000 });
-    if ((await control.evaluate((e) => e.tagName)) === "SELECT") await control.selectOption({ label: status === "reading" ? "Reading" : "Finished" });
-    else await page.getByRole("button", { name: new RegExp(status, "i") }).or(page.getByRole("radio", { name: new RegExp(status, "i") })).first().click();
+    await item.getByTestId("open-book").first().click();
+    await expect(setter(page)).toBeVisible({ timeout: 20_000 });
+    await setter(page).click();
   }
   expect((await saved).status()).toBeLessThan(300);
 }
@@ -322,16 +323,17 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
     { title: `The Left Hand of Darkness (${run})`, author: "Ursula K. Le Guin", note: "Our pick for December." },
     { title: `Piranesi (${run})`, author: "Susanna Clarke", note: "Short and strange; everyone loved it." },
   ];
+  await expect(page.getByTestId("page-home")).toBeVisible({ timeout: 30_000 });
   for (const book of books) {
-    await page.getByRole("link", { name: /add a book|new book|add book/i }).or(page.getByRole("button", { name: /add a book|new book|add book/i })).first().click();
-    await page.getByLabel(/title/i).first().fill(book.title);
-    await page.getByLabel(/author/i).first().fill(book.author);
-    await page.getByLabel(/note/i).first().fill(book.note);
-    await page.getByRole("button", { name: /add|save|create/i }).first().click();
-    await expect(page.getByText(book.title).first()).toBeVisible({ timeout: 20_000 });
+    await page.getByTestId("new-book").first().click();
+    await page.getByTestId("book-title").fill(book.title);
+    await page.getByTestId("book-author").fill(book.author);
+    if (await page.getByTestId("book-note").count()) await page.getByTestId("book-note").fill(book.note);
+    await page.getByTestId("save-book").click();
+    await expect(bookItem(page, book.title).or(page.getByText(book.title).first())).toBeVisible({ timeout: 20_000 });
     await openApp(page);
   }
-  for (const book of books) await expect(page.getByText(book.title).first()).toBeVisible();
+  for (const book of books) await expect(bookItem(page, book.title)).toBeVisible({ timeout: 20_000 });
   await page.screenshot({ path: path.join(STATE, "2-two-books.png"), fullPage: true });
 
   // Mark the second one finished, wherever the app puts the control: a button on its card, or the book's own page.
@@ -342,9 +344,8 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   await openApp(page);
   await page.reload();
   await page.waitForLoadState("networkidle");
-  for (const book of books) await expect(page.getByText(book.title).first()).toBeVisible();
-  const card = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: books[1].title }) }).first();
-  await expect(card).toContainText(/finished/i);
+  for (const book of books) await expect(bookItem(page, book.title)).toBeVisible({ timeout: 20_000 });
+  await expect(bookItem(page, books[1].title)).toContainText(/finished/i);
   await page.screenshot({ path: path.join(STATE, "4-after-reload.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: path.join(STATE, "5-phone.png"), fullPage: true });
@@ -356,14 +357,14 @@ test("4. private: a signed-out visitor is refused; the owner opens it, adds two 
   await setStatus(page, books[0].title, "reading");
   await openApp(page);
   await page.waitForLoadState("networkidle");
-  // The app's own way to it: a link or tab when it has one, otherwise a section of the home page.
-  const link = page.getByRole("link", { name: /reading now|currently reading|everyone/i }).or(page.getByRole("tab", { name: /reading now|currently reading|everyone/i }));
-  if (await link.count()) await link.first().click();
+  // The app's own way to it: its `nav-<view>` link when it has one, otherwise a `page-<view>` section of the home page.
+  const nav = page.locator('[data-testid^="nav-"]').filter({ hasText: /reading now|currently reading|everyone/i });
+  if (await nav.count()) await nav.first().click();
   await page.waitForLoadState("networkidle");
-  const region = page.getByRole("main").filter({ hasText: /reading now|currently reading|everyone is reading/i });
+  const region = page.locator('[data-testid^="page-"], section').filter({ hasText: /reading now|currently reading|everyone is reading/i }).last();
   await expect(region).toBeVisible({ timeout: 20_000 });
-  await expect(region).toContainText(books[0].title);
-  await expect(region).not.toContainText(books[1].title); // finished, so not being read now
+  await expect(region.getByTestId("book-item").filter({ hasText: books[0].title })).toBeVisible({ timeout: 20_000 });
+  await expect(region.getByTestId("book-item").filter({ hasText: books[1].title })).toHaveCount(0); // finished, so not being read now
   await page.screenshot({ path: path.join(STATE, "6-reading-now.png"), fullPage: true });
   await note("what everyone is reading now: the book marked reading is shown there");
 });

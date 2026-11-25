@@ -24,6 +24,12 @@ idea asked for has failed, however good the rest is.
      - check: the test that will pass, and the call to the running app (signed in as a test member) with
        the answer expected;
      - covers: the requirement ids the item delivers;
+     - testIds: for an item with anything on screen, every data-testid its screens will carry, by the
+       kit's convention (AGENTS.md, write-a-screen): page-<view> on each page (page-home first),
+       nav-<view> on each navigation link, <entity>-list and <entity>-item, new-<entity>, open-<entity>,
+       <entity>-<field> on each form input, save-<entity>, and set-<field>-<value> on a button that
+       sets a field (set-status-finished). Lowercase kebab-case; the entity is the singular noun (book).
+       Code checks every one is in the built screens, and the owner's browser checks drive the app by them;
    - leftOut: only a requirement you deliberately will not build, with the reason the owner will read
      (for example one that needs a payment provider, which apps cannot use). Leaving something out is the
      exception; never leave one out because it is hard.

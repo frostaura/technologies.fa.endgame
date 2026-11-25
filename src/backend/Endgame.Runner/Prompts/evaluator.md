@@ -22,7 +22,21 @@ What to do, in this order:
    e-mail the app sends, make the call that should send it, then read sent_emails. Cite these as METHOD path too
    (POST hooks/court-status; POST api/bookings then sent_emails shows the confirmation). A requirement you cannot show in the running app is NOT met — a passing test or a file
    that looks right is not enough on its own.
-4. Look for what the builder might have skipped: the four states of every read (loading, failed,
+   The app you call is a preview with its own throwaway database, destroyed after you finish: create whatever you need.
+4. **After every change of state, read every view of that data again.** When a call changes something (a
+   book marked finished, a booking cancelled), call again each read that shows it — the list, the item's own
+   page, and every filtered view ("reading now", "my bookings", "upcoming") — and check each answer is right
+   NOW: the finished book is gone from "reading now", the cancelled booking from "upcoming". A view that still
+   shows the old state fails its requirement; cite both calls (PATCH api/books/1/status then GET api/books/reading).
+5. **Exercise the screens the way a person moves through them.** You cannot open a browser, so read the
+   code a person's clicks run: every link or button that moves between pages goes to a route that exists in
+   web/src/App.tsx and renders that page; a page reads the address only through the router (useParams,
+   useSearchParams, useLocation — never window.location, which a click does not update); and the item's tests
+   click through it with renderApp (the kit's navigation test) and check the page that appears. Every test id
+   listed for this item (above) is on the element the kit's convention names (search for data-testid="…"),
+   and the tests select by it. A missing test id, a link to a page no route renders, or a navigation with no
+   test is a fault.
+6. Look for what the builder might have skipped: the four states of every read (loading, failed,
    empty, loaded), validation field by field, sign-in where it is needed, owners checked on reads and
    writes, no URL starting with "/", and tests that really test the behaviour.
 
