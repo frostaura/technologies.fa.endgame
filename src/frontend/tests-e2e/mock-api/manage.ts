@@ -66,7 +66,11 @@ export function applyTree(tree: Tree): Tree {
     const name = overlay.renamed.get(n.id);
     if (name) n.name = name;
     const status = overlay.status.get(n.id);
-    if (status) n.status = status;
+    if (status) {
+      n.status = status;
+      // As the control plane answers since lane A: each archived node says so.
+      n.archived = status === "archived";
+    }
   };
   touch(org);
   for (const a of overlay.added) {
