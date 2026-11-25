@@ -31,6 +31,8 @@ slowdown; each holds 40 to 55 MB idle. A stopped app holds no memory.
 | **Disk quotas, AppArmor and gVisor do not work here.** | Accepted silently or absent. Disk use must be watched, not capped. |
 | Budget memory by real use, not by the limit. | Forty 256 MB limits exceed the machine. |
 | Sleep is stop-and-keep, never remove. | The wake figure depends on it. |
+| The evaluator's preview is a second container, `app-<id:N>-pv`, on the app's network with a throwaway database (`p_…`, the app's role), labelled `app-preview` so nothing samples, reports or charges it as the app; destroyed with its database after evaluation. | Evaluation data must never reach the published app. The suffix is short: a host-name label is at most 63 characters. |
+| The egress proxy drops a stale pid file at start, and Dock waits for it to accept connections after each reconfigure. | A container killed with Docker left squid unable to restart ("already running"); a reconfigure briefly closes the port. |
 
 ## Waking
 

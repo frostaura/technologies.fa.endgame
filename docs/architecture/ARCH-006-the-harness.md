@@ -110,9 +110,23 @@ webhook called as its device would, signed by the control plane with the vault's
 holds; counted by the gate like a `call_app` call) and `sent_emails` (what the app asked the platform to send). The
 evaluator has 50 steps and is told to answer by its 40th: a live evaluator of a five-requirement item ran out at 30.
 
-**Known gap:** the evaluator's test members write into the app's own database — the preview is the app — so their
-test records stay in the published app (seen in the live builds: the reading list and the bakery's specials show
-"Test member (member-a)" entries). A separate preview database, or cleaning up after evaluation, is not built.
+**The evaluator works on a preview, never on the app.** The live builds' published apps carried the evaluator's test
+records ("Added by Test member (member-a)") because the preview was the app. Now every evaluation round starts a
+preview — the evaluated image as `app-<id:N>-pv` beside the app on its network, with a database made afresh for it,
+exporting no telemetry, never published, sampled or charged as the app — and destroys it with its database when the
+round ends (even when the run is cancelled). The evaluator's `call_app`, `check_preview` and `call_webhook` always name the
+preview (`X-Endgame-Preview: 1` on Edge's control listener). The app itself is built and started once, to publish it, with
+its own clean database. What still reaches the platform from a preview: e-mail it asks to send (to the test members'
+`.invalid` addresses) and custom events it records through the platform API — both under the app's id.
+
+**Screens are predictable.** A plan item with anything on screen lists the `testIds` its screens carry, by the app kit's
+convention (`page-<view>`, `nav-<view>`, `<entity>-list`, `<entity>-item`, `new-<entity>`, `open-<entity>`,
+`<entity>-<field>`, `save-<entity>`, `set-<field>-<value>`); `propose_plan` refuses a screen item with none or one not in
+that form. Code's gate reads `web/src` (`rg data-testid=`) after the evaluator answers and fails the item for every
+promised id that is not there (`missingTestIds`), whatever the evaluator wrote. The evaluator is told to re-read every
+view of the data after each change of state (a finished book must leave "reading now") and to check navigation the way a
+person moves: each link reaches a route that renders its page, pages read the address through the router only, and the
+item's tests click through it with the kit's `renderApp`. The factory's browser proof drives built apps by these ids.
 
 ## Not verified
 
