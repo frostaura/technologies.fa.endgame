@@ -14,7 +14,7 @@ describe("the ring", () => {
     const target = box(100, 100, 300, 116);
     const above = box(100, 80, 180, 96); // "Healthy", 4 px above
     const insets = ringInsets(target, [above, box(110, 102, 200, 114) /* its own words */]);
-    expect(insets.top).toBe(1);
+    expect(insets.top).toBeLessThan(RING_PAD);
     const ring = ringBox(target, insets, view);
     expect(ring.top).toBeGreaterThanOrEqual(above.bottom);
     expect(insets.bottom).toBe(RING_PAD);

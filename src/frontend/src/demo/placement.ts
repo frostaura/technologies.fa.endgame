@@ -23,8 +23,8 @@ export interface Insets {
   left: number;
 }
 
-/** The ring's line, in pixels. */
-export const RING_LINE = 2;
+/** The ring's line, in pixels: two of the accent and one light one outside it, so it shows on any ground (a blue band too). */
+export const RING_LINE = 3;
 /** How far the ring stands off its control when nothing is close by. */
 export const RING_PAD = 6;
 /** The space between the ring and the note. */

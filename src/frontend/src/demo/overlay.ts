@@ -86,12 +86,20 @@ function contentBoxes(): Box[] {
 
 let refind: (() => HTMLElement | null) | null = null;
 let lostSince = 0;
+/** Still drawn: in the page, or in an Edge page's frame that is itself still in the page (a removed frame's nodes stay "connected" to its own document). */
+function onPage(el: Element): boolean {
+  if (!el.isConnected) return false;
+  const win = el.ownerDocument.defaultView;
+  if (!win) return false;
+  return win === window || (win.frameElement !== null && onPage(win.frameElement));
+}
+
 let placed: { key: string; at: number; left: number; top: number; score: number; ring: Box } | null = null;
 
 function place() {
   frame = 0;
   if (!tracked || !ring) return;
-  if (!tracked.isConnected) {
+  if (!onPage(tracked)) {
     // The screen drew it again (a refresh, a retry): the ring follows the new one, and waits a while for it.
     const again = refind?.();
     if (again) {
@@ -135,7 +143,8 @@ function place() {
     placed = { key, at: now, left, top, score, ring: box };
   }
   const box = placed.ring;
-  Object.assign(ring.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.right - box.left}px`, height: `${box.bottom - box.top}px` });
+  // The light outline is drawn outside the element's own box: the box is set one pixel inside the ring's.
+  Object.assign(ring.style, { left: `${box.left + 1}px`, top: `${box.top + 1}px`, width: `${box.right - box.left - 2}px`, height: `${box.bottom - box.top - 2}px` });
   if (note) Object.assign(note.style, { left: `${placed.left}px`, top: `${placed.top}px` });
   frame = requestAnimationFrame(place);
 }
@@ -147,7 +156,7 @@ export function showSpotlight(el: HTMLElement, text: string | null, again?: () =
   el.setAttribute("data-demo-ringed", "");
   refind = again ?? null;
   // A line, not a band: it stands off the control into the gap around it and never paints over a neighbour's words.
-  ring = layer("pointer-events-none fixed z-50 rounded-sm border-2 border-primary transition-all duration-200 motion-reduce:transition-none");
+  ring = layer("pointer-events-none fixed z-50 rounded-sm border-2 border-primary outline outline-1 outline-surface transition-all duration-200 motion-reduce:transition-none");
   ring.setAttribute("data-demo-spotlight", "");
   if (text) {
     note = layer("pointer-events-none fixed z-50 max-w-xs rounded-sm bg-ink px-3 py-2 text-sm text-surface shadow-raised");
