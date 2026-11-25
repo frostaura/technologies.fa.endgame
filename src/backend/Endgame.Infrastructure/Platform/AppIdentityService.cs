@@ -40,7 +40,7 @@ public sealed record ResolvedAppSession(AppUserView User, DateTimeOffset Expires
 
 public sealed record AppShareView(string Email, DateTimeOffset InvitedAt, bool Registered);
 
-public sealed record AppShareCreated(string Email, string InvitationCode, DateTimeOffset ExpiresAt);
+public sealed record AppShareCreated(string Email, string InvitationCode, DateTimeOffset ExpiresAt, bool Emailed = false);
 
 /// <summary>What the platform's identity pages show for an app before anyone signs in.</summary>
 public sealed record AppAuthInfo(Guid AppId, string AppName, string OrganisationName, string Access, bool SignUp, bool InvitationRequired, bool Passkey, bool DevelopmentSignIn, string Address);

@@ -77,10 +77,11 @@ internal static class PlatformConsoleEndpoints
         shares.MapGet("", async (Guid id, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, AppIdentityService identity, CancellationToken ct) =>
             Results.Ok(await identity.SharesAsync(await AppAsAdminAsync(id, principal, access, scopes, ct), ct)))
             .WithName("ListShares").WithSummary("The addresses an app is shared with, and whether each has registered.").Produces<IReadOnlyList<AppShareView>>();
-        shares.MapPost("", async (Guid id, ShareRequest request, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, AppIdentityService identity, CancellationToken ct) =>
+        shares.MapPost("", async (Guid id, ShareRequest request, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, AppIdentityService identity, InvitationMailer mailer, CancellationToken ct) =>
         {
             var app = await AppAsAdminAsync(id, principal, access, scopes, ct);
-            return Results.Created($"/api/apps/{id}/shares", await identity.ShareAsync(app, request.Email ?? "", principal.Id(), ct));
+            var share = await identity.ShareAsync(app, request.Email ?? "", principal.Id(), ct);
+            return Results.Created($"/api/apps/{id}/shares", share with { Emailed = await mailer.SendShareAsync(app, share.Email, share.InvitationCode, share.ExpiresAt, ct) });
         })
         .WithName("ShareApp").WithSummary("Shares an app with an address (Admin and above). Returns a one-time invitation code, once; the person registers with it at the app's sign-up page.").Produces<AppShareCreated>(201);
         shares.MapDelete("", async (Guid id, string? email, ClaimsPrincipal principal, AccessService access, ScopeResolver scopes, AppIdentityService identity, CancellationToken ct) =>

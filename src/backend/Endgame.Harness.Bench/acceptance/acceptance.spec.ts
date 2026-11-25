@@ -28,6 +28,9 @@ const PROJECT = need("ACC_PROJECT");
 const STOP_USD = Number(process.env.ACC_SPEND_STOP_USD ?? "5");
 const CREDITS_PER_USD = 100; // CreditOptions.CreditsPerUsd, margin 1.0 in development
 const REUSE = process.env.ACC_CLUB_APP ?? "";
+/** Replays the sharing and isolation of step 4 against an invited organisation's app already built: <org>/<division>/<project>/<app>. */
+const BAKERY = process.env.ACC_BAKERY_APP ?? "";
+const BAKERY_OWNER = process.env.ACC_BAKERY_OWNER ?? "";
 
 const CLUB_IDEA =
   "A court booking app for a squash club. Members sign in and book a court for a time slot; a booking costs playing minutes from the member's balance; an admin adds minute packages to a member; a member sees their upcoming bookings and their balance; the court hardware calls an incoming endpoint to ask whether a court is booked right now and by whom; a confirmation e-mail is sent when a booking is made.";
@@ -40,7 +43,6 @@ const harbour = `harbour-${run}`;
 const ownerEmail = "dev@frostaura.net";
 const operatorEmail = "operator@endgame.localhost";
 const inviteeEmail = `owner-${run}@harbour.example`;
-const friendEmail = `friend-${run}@harbour.example`;
 const started = Date.now();
 
 const story = {
@@ -524,12 +526,29 @@ async function clubFlow(page: Page, appTools: Client) {
 
 test("4. an invited organisation builds an app of its own, shares it, and is kept apart from the first", async ({ browser }) => {
   test.skip(!!REUSE, "replaying against a club app already built");
+  if (BAKERY) {
+    // Replay: the organisation and its app exist; its owner signs in for development, and the sharing and the isolation run again.
+    const [slug] = BAKERY.split("/");
+    invitee = await signedIn(browser, BAKERY_OWNER, "Harbour owner");
+    const tree = await ok<{ organisation: { id: string } }>(await invitee.request.get(`/api/tree?organisation=${slug}`));
+    story.harbourId = tree.organisation.id;
+    const app = await appOf(invitee, slug);
+    const runs = await ok<{ id: string; kind: string; ideaId: string | null }[]>(await invitee.request.get(`/api/runs?scope=${slug}&limit=20`));
+    await shareAndIsolate(browser, slug, app, runs.find((r) => r.kind === "research")?.ideaId ?? "", runs.find((r) => r.kind === "build")?.id ?? "");
+    return;
+  }
+
   // God mode provisions it for an invited owner and tops it up by hand.
   const provisioned = await ok<{ id: string; ownerInvitationCode: string; invitationEmailed: boolean }>(
     await operator.request.post("/api/organisations", { data: { name: "Harbour Bakery", slug: harbour, ownerEmail: inviteeEmail, ownerDisplayName: "Harbour owner" } }), 201);
   story.harbourId = provisioned.id;
   await ok(await operator.request.post("/api/credits/top-ups", { data: { organisation: harbour, credits: 600, note: "acceptance: invited organisation" } }));
-  const invitation = await mailTo(inviteeEmail);
+  let invitation: { subject: string; text: string }[] = [];
+  for (let i = 0; i < 30 && invitation.length === 0; i++) {
+    await new Promise((r) => setTimeout(r, 2_000));
+    invitation = await mailTo(inviteeEmail);
+  }
+  expect(/Invitation code:\s*([0-9a-f]+)/i.exec(invitation[0]?.text ?? "")?.[1], "the invitation e-mail carries the owner's code").toBe(provisioned.ownerInvitationCode);
   await note(`Harbour Bakery provisioned for ${inviteeEmail}; invitation e-mailed: ${provisioned.invitationEmailed} (${invitation.length} message(s))`);
 
   // The owner signs in with the invitation: a real passkey ceremony in a real browser.
@@ -553,19 +572,32 @@ test("4. an invited organisation builds an app of its own, shares it, and is kep
   story.bakery.appPath = app.path;
   await note(`bakery app ${app.path} (${app.id})`);
 
+  await shareAndIsolate(browser, harbour, app, result.ideaId, result.buildRunId);
+});
+
+async function shareAndIsolate(browser: Browser, harbour: string, app: { id: string; path: string }, ideaId: string, buildRunId: string) {
+  const friendEmail = `friend-${run}@harbour.example`;
   // Shared by e-mail with one person, who registers at the app and opens it.
   await ok(await invitee.request.post(`/api/apps/${app.id}/settings`, { data: { access: "shared" } }));
-  const share = await ok<{ invitationCode: string }>(await invitee.request.post(`/api/apps/${app.id}/shares`, { data: { email: friendEmail } }));
-  const mails = await mailTo(friendEmail);
+  const share = await ok<{ invitationCode: string }>(await invitee.request.post(`/api/apps/${app.id}/shares`, { data: { email: friendEmail } }), 201);
+  // The person learns of it by e-mail, and registers with the code the e-mail carries.
+  let mails: { subject: string; text: string }[] = [];
+  for (let i = 0; i < 30 && mails.length === 0; i++) {
+    await new Promise((r) => setTimeout(r, 2_000));
+    mails = await mailTo(friendEmail);
+  }
+  expect(mails.length, "the share reached the person by e-mail").toBeGreaterThan(0);
+  const mailedCode = /Invitation code:\s*([0-9a-f]+)/i.exec(mails[0].text)?.[1];
+  expect(mailedCode).toBe(share.invitationCode);
   story.report.shareMail = mails.map((m) => m.subject);
-  await note(`shared with ${friendEmail}: ${mails.length} e-mail(s) ${JSON.stringify(mails.map((m) => m.subject))}`);
+  await note(`shared with ${friendEmail}: "${mails[0].subject}", carrying the code`);
   const friend = await browser.newContext();
   const door = await friend.newPage();
   await door.goto(`${EDGE}/${app.path}/`);
   await expect(door).toHaveURL(/_endgame\/auth\/sign-in/);
   await authenticator(door);
-  const signedUp = await passkey(door, `${EDGE}/api/app-auth/${app.id}/sign-up/options`, { email: friendEmail, displayName: "Friend of the bakery", invitationCode: share.invitationCode, returnTo: `/${app.path}/` },
-    `${EDGE}/api/app-auth/${app.id}/sign-up/complete`, { invitationCode: share.invitationCode });
+  const signedUp = await passkey(door, `${EDGE}/api/app-auth/${app.id}/sign-up/options`, { email: friendEmail, displayName: "Friend of the bakery", invitationCode: mailedCode, returnTo: `/${app.path}/` },
+    `${EDGE}/api/app-auth/${app.id}/sign-up/complete`, { invitationCode: mailedCode });
   expect(signedUp.status, signedUp.body).toBe(200);
   const opened = await door.goto(`${EDGE}/${app.path}/`);
   expect(opened?.status()).toBe(200);
@@ -576,7 +608,7 @@ test("4. an invited organisation builds an app of its own, shares it, and is kep
   await friend.close();
 
   // The first organisation sees nothing of the second: through the API ...
-  const theirs = [`/api/tree?organisation=${harbour}`, `/api/apps/${app.id}`, `/api/ideas/${result.ideaId}`, `/api/runs/${result.buildRunId}`, `/api/credits?scope=${harbour}`, `/api/employees?scope=${harbour}`];
+  const theirs = [`/api/tree?organisation=${harbour}`, `/api/apps/${app.id}`, `/api/ideas/${ideaId}`, `/api/runs/${buildRunId}`, `/api/credits?scope=${harbour}`, `/api/employees?scope=${harbour}`];
   const answers: Record<string, number> = {};
   for (const url of theirs) answers[url] = (await owner.request.get(url)).status();
   story.report.isolationApi = answers;
@@ -584,12 +616,13 @@ test("4. an invited organisation builds an app of its own, shares it, and is kep
   expect([403, 404]).toContain((await invitee.request.get(`/api/tree?organisation=${frostaura}`)).status());
   // ... and in the database, where row-level security pins every query to one organisation.
   const frostauraId = story.frostauraId || (await ok<{ organisation: { id: string } }>(await owner.request.get(`/api/tree?organisation=${frostaura}`))).organisation.id;
-  const seenByFrostaura = asTenant(frostauraId, `SELECT count(*) FROM apps WHERE organisation_id = '${provisioned.id}'`);
-  const ideasSeen = asTenant(frostauraId, `SELECT count(*) FROM ideas WHERE organisation_id = '${provisioned.id}'`);
-  const runsSeen = asTenant(frostauraId, `SELECT count(*) FROM runs WHERE organisation_id = '${provisioned.id}'`);
-  const ownApps = asTenant(provisioned.id, `SELECT count(*) FROM apps WHERE organisation_id = '${provisioned.id}'`);
+  const harbourId = story.harbourId;
+  const seenByFrostaura = asTenant(frostauraId, `SELECT count(*) FROM apps WHERE organisation_id = '${harbourId}'`);
+  const ideasSeen = asTenant(frostauraId, `SELECT count(*) FROM ideas WHERE organisation_id = '${harbourId}'`);
+  const runsSeen = asTenant(frostauraId, `SELECT count(*) FROM runs WHERE organisation_id = '${harbourId}'`);
+  const ownApps = asTenant(harbourId, `SELECT count(*) FROM apps WHERE organisation_id = '${harbourId}'`);
   story.report.isolationDb = { appsSeenByFrostaura: seenByFrostaura, ideasSeenByFrostaura: ideasSeen, runsSeenByFrostaura: runsSeen, harbourSeesItsOwnApps: ownApps };
   expect([seenByFrostaura, ideasSeen, runsSeen]).toEqual(["0", "0", "0"]);
   expect(Number(ownApps)).toBeGreaterThan(0);
   await note(`isolation: API ${JSON.stringify(answers)}; database ${JSON.stringify(story.report.isolationDb)}`);
-});
+}

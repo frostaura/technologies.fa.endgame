@@ -180,6 +180,28 @@ public sealed class PlatformApiTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Sharing_an_app_e_mails_the_person_their_one_time_code_and_the_apps_address()
+    {
+        // The spec shares an app "by e-mail address"; the acceptance run found the code returned but never sent.
+        await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/apps/{appId}/settings", new { access = "shared" }));
+        var share = await ControlPlaneApp.Created(owner.PostAsJsonAsync($"/api/apps/{appId}/shares", new { email = "friend@example.com" }));
+        Assert.True(share["emailed"]!.GetValue<bool>());
+        await app.Services.GetRequiredService<EmailDispatcher>().DispatchOnceAsync(CancellationToken.None);
+        var received = smtp.Messages.Last();
+        Assert.Equal(["friend@example.com"], received.To);
+        string text;
+        await using (var db = new NpgsqlConnection(app.ConnectionString))
+        {
+            await db.OpenAsync();
+            await using var command = new NpgsqlCommand("SELECT text_body FROM email_messages WHERE 'friend@example.com' = ANY(recipients) AND status = 'sent'", db);
+            text = (string)(await command.ExecuteScalarAsync())!;
+        }
+
+        Assert.Contains(share["invitationCode"]!.GetValue<string>(), text, StringComparison.Ordinal);
+        Assert.Contains("/frostaura/technologies/squash/bookings/", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Identity_resolves_a_member_and_an_end_user_from_the_session_edge_hands_the_app()
     {
         // A member: the console's own session cookie, sent by Edge in the access check.
