@@ -1,27 +1,23 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { Link } from "@/components/Link";
-import { Skeleton } from "@/components/states";
+import { Failed, Loading, Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/field";
 import { formatCredits, isValidSlug, slugify } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
-import { describeError } from "@/lib/queryState";
-import { navigate, paths } from "@/lib/router";
+import { describeError, viewOf } from "@/lib/queryState";
+import { ROLE_NAME, roleAt, roleRank } from "@/lib/roles";
+import { navigate, paths, useLocation } from "@/lib/router";
+import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
-import { useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetMeQuery } from "@/store/api";
-import type { IdeaEstimate } from "@/store/types";
+import { useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetMeQuery, useGetTreeQuery } from "@/store/api";
+import type { Autonomy, IdeaEstimate, MemberRole } from "@/store/types";
+import { isArchived } from "../tree/treeManage";
+import { nextSteps, researchPromise } from "./startModel";
 import { AppShell } from "../shell/AppShell";
 
 /** Things an idea commonly has to respect, offered as one-tap constraints. They are the owner's words, sent as text. */
 const CONSTRAINT_OPTIONS = ["Members sign in", "Works on a phone", "Sends email", "Uses AI inside the app", "Receives data from a device"] as const;
-
-const NEXT_STEPS: [string, string][] = [
-  ["Research", "Who already does this, what gap is left, who would want it."],
-  ["Verdict", "Build, change, or do not build. You can overrule it."],
-  ["A home for it", "Endgame suggests a division and a name."],
-  ["Hiring", "The people this needs are proposed, each with a cost."],
-  ["Design, build, test, review", "On its own, inside your budget. Step in whenever you like."],
-  ["Running, privately", "Live at its own address, visible only to you until you share it."],
-];
 
 const MIN_IDEA = 12;
 
@@ -32,7 +28,23 @@ type EstimateResult = { key: string } & ({ ok: true; estimate: IdeaEstimate } | 
 
 export function StartView() {
   const me = useGetMeQuery(undefined);
-  const firstRun = me.data ? me.data.organisation === null : false;
+  const active = useActiveOrganisation();
+  const org = active.organisation;
+  const firstRun = me.data ? me.data.organisation === null && !active.entered : false;
+  const { search } = useLocation();
+  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !org || firstRun });
+  const roleOf = (scope: string): MemberRole | null => (active.entered ? "admin" : roleAt(me.data, scope));
+  // Where it may go: the whole organisation and each active division, wherever the person may start work.
+  const places = org
+    ? [
+        { scope: org.slug, label: `The whole of ${org.name}` },
+        ...(tree.data?.divisions ?? []).filter((d) => !isArchived(d)).map((d) => ({ scope: `${org.slug}/${d.slug}`, label: d.name })),
+      ].filter((p) => roleRank(roleOf(p.scope)) >= roleRank("builder"))
+    : [];
+  const [picked, setPicked] = useState<string | null>(search.get("scope"));
+  const place = places.find((p) => p.scope === picked) ?? places[0] ?? null;
+  const scope = firstRun ? undefined : place?.scope;
+  const blocked = !firstRun && !!me.data && !!org && places.length === 0 && (tree.isSuccess || tree.isError || roleRank(roleOf(org.slug)) < roleRank("builder"));
   const [orgName, setOrgName] = useState("");
   const [idea, setIdea] = useState("");
   const [chosen, setChosen] = useState<string[]>([]);
@@ -42,11 +54,11 @@ export function StartView() {
   const [estimateIdea] = useEstimateIdeaMutation();
   const [createOrganisation, orgState] = useCreateOrganisationMutation();
   const [createIdea, ideaState] = useCreateIdeaMutation();
-  const ids = { org: useId(), idea: useId(), other: useId(), orgHint: useId() };
+  const ids = { org: useId(), idea: useId(), other: useId(), orgHint: useId(), place: useId(), placeHint: useId() };
 
   const constraints = [...chosen, ...(other.trim() ? [other.trim()] : [])];
   const text = idea.trim();
-  const key = JSON.stringify([text, constraints]);
+  const key = JSON.stringify([text, constraints, scope ?? null]);
   const slug = slugify(orgName);
   const host = typeof window === "undefined" ? "" : window.location.host;
 
@@ -56,7 +68,9 @@ export function StartView() {
     if (text.length < MIN_IDEA) return;
     let current = true;
     const timer = setTimeout(() => {
-      estimateIdea({ text, constraints: JSON.parse(key)[1] as string[] })
+      const [, asked, where] = JSON.parse(key) as [string, string[], string | null];
+      // The estimate names the same place the idea will, so the figure shown is the figure recorded.
+      estimateIdea({ text, constraints: asked, ...(where ? { scope: where } : {}) })
         .unwrap()
         .then((e) => current && setResult({ key, ok: true, estimate: e }))
         .catch((err: unknown) => current && setResult({ key, ok: false, reason: describeError(err as never) }));
@@ -75,7 +89,7 @@ export function StartView() {
         : result.ok
           ? { kind: "loaded", estimate: result.estimate }
           : { kind: "failed", reason: result.reason };
-  const ready = estimate.kind === "loaded" && (!firstRun || isValidSlug(slug));
+  const ready = estimate.kind === "loaded" && (firstRun ? isValidSlug(slug) : !!scope);
   const submitting = orgState.isLoading || ideaState.isLoading;
 
   const submit = async (event: FormEvent) => {
@@ -84,7 +98,7 @@ export function StartView() {
     setSubmitError(null);
     try {
       if (firstRun) await createOrganisation({ name: orgName.trim(), slug }).unwrap();
-      const created = await createIdea({ text, constraints }).unwrap();
+      const created = await createIdea({ text, constraints, ...(scope ? { scope } : {}) }).unwrap();
       navigate(paths.run(created.runId));
     } catch (err) {
       setSubmitError(describeError(err as never));
@@ -95,9 +109,20 @@ export function StartView() {
 
   return (
     <AppShell
-      crumbs={me.data?.organisation ? [{ label: me.data.organisation.name, href: paths.home() }, { label: "New idea" }] : [{ label: "Start" }]}
-      aside={<NextSteps />}
+      crumbs={org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }, { label: "New idea" }] : [{ label: "Start" }]}
+      aside={<NextSteps scope={firstRun ? null : (scope ?? null)} division={place && place.scope !== org?.slug ? place.label : null} />}
     >
+      {blocked && org ? (
+        <section data-state="refused" className="mx-auto flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
+          <h1 className="text-4xl font-semibold leading-tight">Only a Builder or above starts an idea</h1>
+          <p className="text-base text-ink-body">
+            {active.role ? `You are ${article(active.role)} ${ROLE_NAME[active.role]} in ${org.name}` : `You hold no role over the whole of ${org.name}`}, and no division gives you more. An Admin or the Owner can make you a Builder; until then, you can follow everything that is being built.
+          </p>
+          <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className="rounded-xs text-primary-link hover:text-primary-hover">
+            Back to the org chart
+          </Link>
+        </section>
+      ) : (
       <form onSubmit={(e) => void submit(e)} className="mx-auto flex w-full max-w-form flex-col gap-9 py-4 lg:py-8" aria-describedby={submitError ? "start-error" : undefined}>
         <div className={cn("flex flex-col gap-2.5", RISE)}>
           <h1 className="text-4xl font-semibold leading-tight">What do you want to build?</h1>
@@ -123,6 +148,32 @@ export function StartView() {
               {orgName.length > 0 && !isValidSlug(slug)
                 ? "Use at least two letters or digits."
                 : `Everything you make lives under this name. Its apps appear at ${host}/${slug || "your-name"}.`}
+            </span>
+          </div>
+        )}
+
+        {!firstRun && org && (
+          <div className={cn("flex flex-col gap-2", RISE, stagger(1))}>
+            <label htmlFor={ids.place} className="font-medium">
+              Where it goes
+            </label>
+            {tree.isLoading ? (
+              <Skeleton className="h-11" />
+            ) : (
+              <Select id={ids.place} value={place?.scope ?? ""} onChange={(e) => setPicked(e.target.value)} aria-describedby={ids.placeHint}>
+                {places.map((p) => (
+                  <option key={p.scope} value={p.scope}>
+                    {p.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+            <span id={ids.placeHint} className="text-xs text-ink-muted">
+              {tree.isError
+                ? "The divisions could not be loaded, so for now it can only go to the whole organisation."
+                : place && place.scope !== org.slug
+                  ? `It is researched for ${place.label}, and built there if it is built.`
+                  : "Endgame suggests a division for it once it is researched."}
             </span>
           </div>
         )}
@@ -167,7 +218,7 @@ export function StartView() {
           <input id={ids.other} value={other} onChange={(e) => setOther(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3.5" />
         </fieldset>
 
-        <EstimatePanel state={estimate} />
+        <EstimatePanel state={estimate} scope={scope ?? null} />
 
         {submitError && (
           <p id="start-error" role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
@@ -181,17 +232,21 @@ export function StartView() {
           </Button>
           <span className="text-ink-muted">Takes a few minutes. You can leave and come back.</span>
         </div>
-        {me.data?.organisation && (
-          <Link href={paths.home()} className="self-start rounded-xs text-primary-link hover:text-primary-hover">
+        {org && (
+          <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className="self-start rounded-xs text-primary-link hover:text-primary-hover">
             Back to the org chart
           </Link>
         )}
       </form>
+      )}
     </AppShell>
   );
 }
 
-function EstimatePanel({ state }: { state: EstimateState }) {
+const article = (role: MemberRole) => (role === "admin" || role === "owner" ? "an" : "a");
+
+function EstimatePanel({ state, scope }: { state: EstimateState; scope: string | null }) {
+  const autonomy = useGetAutonomyQuery(scope ?? "", { skip: !scope });
   return (
     <section aria-label="Research estimate" aria-live="polite" className={cn("flex flex-col gap-2.5 rounded-md border border-primary-line bg-primary-tint px-5 py-4", RISE, stagger(4))}>
       <div className="flex flex-wrap justify-between gap-2">
@@ -212,35 +267,49 @@ function EstimatePanel({ state }: { state: EstimateState }) {
         <span className="text-ink-body">
           {state.kind === "idle"
             ? "Describe the idea and the research estimate appears here before anything is charged."
-            : `You are charged for research only. Nothing is built until you have seen the verdict. If the estimate turns out wrong, you see by how much.${state.kind === "loaded" && state.estimate.basis ? ` ${state.estimate.basis}` : ""}`}
+            : `${researchPromise(scope ? (autonomy.data ?? null) : null)} If the estimate turns out wrong, you see by how much.${state.kind === "loaded" && state.estimate.basis ? ` ${state.estimate.basis}` : ""}`}
         </span>
       )}
     </section>
   );
 }
 
-function NextSteps() {
+/** What happens next, as the autonomy at the chosen place will actually do it. */
+function NextSteps({ scope, division }: { scope: string | null; division: string | null }) {
+  const query = useGetAutonomyQuery(scope ?? "", { skip: !scope });
+  const view = viewOf(query);
+  const autonomy: Autonomy | null = scope ? (view.kind === "loaded" ? view.data : null) : null;
   return (
     <>
       <h2 className="text-lg font-semibold">What happens next</h2>
-      <ol className="flex flex-col gap-5">
-        {NEXT_STEPS.map(([title, text], i) => (
-          <li key={title} className={cn("flex gap-3.5", RISE, stagger(i))}>
-            <span
-              className={cn(
-                "flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-                i === 0 ? "animate-ring bg-primary text-primary-ink motion-reduce:animate-none" : "border border-ink-muted",
-              )}
-            >
-              {i + 1}
-            </span>
-            <div className="flex flex-col gap-0.5">
-              <span className="font-semibold">{title}</span>
-              <span className="text-ink-body">{text}</span>
-            </div>
-          </li>
-        ))}
-      </ol>
+      {scope && view.kind === "loading" && (
+        <Loading label="Loading how much happens on its own here" className="flex flex-col gap-4">
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+        </Loading>
+      )}
+      {scope && view.kind === "failed" && <Failed title="What happens next could not be worked out" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {(!scope || view.kind === "loaded") && (
+        <ol className="flex flex-col gap-5">
+          {nextSteps(autonomy, division).map(([title, text], i) => (
+            <li key={title} className={cn("flex gap-3.5", RISE, stagger(i))}>
+              <span
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+                  i === 0 ? "animate-ring bg-primary text-primary-ink motion-reduce:animate-none" : "border border-ink-muted",
+                )}
+              >
+                {i + 1}
+              </span>
+              <div className="flex flex-col gap-0.5">
+                <span className="font-semibold">{title}</span>
+                <span className="text-ink-body">{text}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
     </>
   );
 }

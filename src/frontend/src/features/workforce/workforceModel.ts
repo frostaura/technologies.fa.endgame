@@ -1,6 +1,6 @@
 import type { BadgeTone } from "@/components/ui/badge";
 import type { Mode } from "@/features/runs/runModel";
-import type { EmployeeStatus, HireTrigger, MemoryChange, MemoryEntry, MemoryKind, Tree } from "@/store/types";
+import type { EmployeePatch, EmployeeStatus, HireEdit, HireTrigger, JobDescription, MemoryChange, MemoryEntry, MemoryKind, PersonRef, Tree } from "@/store/types";
 
 /**
  * The workforce in plain words. Normal mode never names a model, a tool's internal name or the
@@ -149,4 +149,118 @@ export function entryOrigin(entry: MemoryEntry, changes: MemoryChange[]): string
 export function acceptedLine(work: { accepted: number; sentBack: number }): string {
   const total = work.accepted + work.sentBack;
   return total === 0 ? "No work judged yet" : `${work.accepted} of ${total}`;
+}
+
+/** The services an employee may be given, for choosing from. */
+export const KNOWN_SERVICES = Object.keys(SERVICES);
+
+/**
+ * Thinking power to choose from: a routing-table task type, from the lightest to the strongest. An
+ * empty choice keeps the standard one for the work it does.
+ */
+export const THINKING_POWERS: readonly string[] = ["chat", "research", "build", "build-t2", "build-t3"];
+
+/** Every employee on the payroll who could be someone's manager: not itself, not a contractor, not let go. */
+export function possibleManagers<T extends { id: string; kind: string; status: string; name: string }>(people: T[], self: string | null): T[] {
+  return people.filter((p) => p.id !== self && p.kind === "employee" && p.status !== "released").sort((a, b) => a.name.localeCompare(b.name));
+}
+
+const MEMORY_ACTION: Record<MemoryChange["action"], string> = {
+  added: "Added",
+  corrected: "Corrected",
+  merged: "Merged",
+  removed: "Removed",
+  archived: "Archived",
+  restored: "Restored",
+  reviewed: "Reviewed",
+};
+
+const MEMORY_BY: Record<string, string> = { employee: "by the employee", person: "by a person", review: "at a review", platform: "by Endgame" };
+
+/** One change to an employee's memory, in plain words: "Corrected by a person". */
+export function memoryChangeLine(change: MemoryChange): string {
+  return `${MEMORY_ACTION[change.action]} ${MEMORY_BY[change.by] ?? `by ${change.by}`}`;
+}
+
+/** The title an entry had when it changed, read defensively from the change's detail. */
+export function memoryChangeTitle(change: MemoryChange, entries: MemoryEntry[]): string | null {
+  const detail = change.detail as { title?: unknown; why?: unknown } | null;
+  const title = typeof detail?.title === "string" ? detail.title : (entries.find((e) => e.id === change.memoryId)?.title ?? null);
+  return title;
+}
+
+/** Why an entry was removed, when the person said. */
+export function memoryChangeWhy(change: MemoryChange): string | null {
+  const detail = change.detail as { why?: unknown } | null;
+  return typeof detail?.why === "string" && detail.why.trim() ? detail.why.trim() : null;
+}
+
+/** A job as the editor holds it: every field as text, the lists as chosen. */
+export interface JobDraftShape {
+  name: string;
+  role: string;
+  mandate: string;
+  tools: string[];
+  services: string[];
+  modelTier: string;
+  reportsTo: string;
+  budget: string;
+}
+
+export function draftOf(who: { name: string; role: string; reportsTo: PersonRef | null }, job: JobDescription): JobDraftShape {
+  return {
+    name: who.name,
+    role: who.role,
+    mandate: job.mandate,
+    tools: [...job.tools],
+    services: [...job.services],
+    modelTier: job.modelTier ?? "",
+    reportsTo: who.reportsTo?.id ?? "",
+    budget: job.monthlyCreditLimit !== null ? String(job.monthlyCreditLimit) : "",
+  };
+}
+
+/** What is wrong with a draft, said plainly, or null. */
+export function draftProblem(draft: JobDraftShape): string | null {
+  if (!draft.name.trim() || !draft.role.trim()) return "It needs a name and a role.";
+  const budget = draft.budget.trim();
+  if (budget !== "" && !(Number.isFinite(Number(budget)) && Number(budget) >= 0)) return "A budget is a number of credits a month, or empty for none of its own.";
+  return null;
+}
+
+const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+
+/** The fields a draft changes, as the employee endpoint takes them; emptied budget and manager are cleared, not kept. */
+export function employeePatchFrom(before: JobDraftShape, after: JobDraftShape): EmployeePatch {
+  const patch: EmployeePatch = {};
+  const job: NonNullable<EmployeePatch["jobDescription"]> = {};
+  if (after.name.trim() !== before.name) patch.name = after.name.trim();
+  if (after.role.trim() !== before.role) patch.role = after.role.trim();
+  if (after.mandate.trim() !== before.mandate) job.mandate = after.mandate.trim();
+  if (!same(after.tools, before.tools)) job.tools = after.tools;
+  if (!same(after.services, before.services)) job.services = after.services;
+  if (after.modelTier !== before.modelTier && after.modelTier) job.modelTier = after.modelTier;
+  if (after.budget.trim() !== before.budget) {
+    if (after.budget.trim() === "") patch.clearMonthlyCreditLimit = true;
+    else job.monthlyCreditLimit = Number(after.budget.trim());
+  }
+  if (after.reportsTo !== before.reportsTo) {
+    if (after.reportsTo) patch.reportsTo = after.reportsTo;
+    else patch.clearReportsTo = true;
+  }
+  if (Object.keys(job).length > 0) patch.jobDescription = job;
+  return patch;
+}
+
+/** The same for a hire proposal, which also carries its reason and expected monthly cost. */
+export function hireEditFrom(before: JobDraftShape, after: JobDraftShape, extra: { reason: string; expectedMonthlyCredits: number }): HireEdit {
+  const p = employeePatchFrom(before, after);
+  const edit: HireEdit = { reason: extra.reason, expectedMonthlyCredits: extra.expectedMonthlyCredits };
+  if (p.name !== undefined) edit.name = p.name;
+  if (p.role !== undefined) edit.role = p.role;
+  if (p.jobDescription) edit.jobDescription = p.jobDescription;
+  if (p.clearMonthlyCreditLimit) edit.clearMonthlyCreditLimit = true;
+  if (p.reportsTo !== undefined) edit.reportsTo = p.reportsTo;
+  if (p.clearReportsTo) edit.clearReportsTo = true;
+  return edit;
 }

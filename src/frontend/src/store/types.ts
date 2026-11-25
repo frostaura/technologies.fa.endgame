@@ -158,6 +158,8 @@ export interface IdeaEstimate {
 export interface CreateIdeaRequest {
   text: string;
   constraints: string[];
+  /** Where the idea goes: the organisation, or one division. The estimate and the idea name the same one. */
+  scope?: string;
 }
 
 /** A product research found that already does this, with what it does and where that was read. */

@@ -1083,6 +1083,18 @@ export const manageApi = withCascade.injectEndpoints({
       extraOptions: guarded(g.restoreGuard, "the restart"),
       invalidatesTags: (_r, _e, appId) => [{ type: "Versions", id: appId }, { type: "App", id: appId }, "Tree"],
     }),
+    /** Moves an employee, keeping or setting who it reports to (left out, it reports to nobody). */
+    reassignEmployee: build.mutation<Employee, { id: string; scope: string; reportsTo: string | null }>({
+      query: ({ id, scope, reportsTo }) => ({ url: `employees/${encodeURIComponent(id)}/reassign`, method: "POST", body: { scope, ...(reportsTo ? { reportsTo } : {}) } }),
+      extraOptions: guarded(g.employeeGuard, "the employee"),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Employee", id }, "Employee", "Tree", "Ontology", "Memory"],
+    }),
+    /** Brings a released employee back, where it was or somewhere else, with its memory. */
+    rehireEmployee: build.mutation<Employee, { id: string; scope?: string }>({
+      query: ({ id, scope }) => ({ url: `employees/${encodeURIComponent(id)}/rehire`, method: "POST", body: scope ? { scope } : {} }),
+      extraOptions: guarded(g.employeeGuard, "the employee"),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Employee", id }, "Employee", "Tree", "Ontology", "Memory"],
+    }),
     /** An employee's whole record, released ones included, to list who was let go. */
     getEmployeesWithReleased: build.query<Employee[], string>({
       query: (scope) => `employees?scope=${encodeURIComponent(scope)}&includeReleased=true`,
@@ -1102,4 +1114,6 @@ export const {
   useDeleteNodeMutation,
   useRepublishAppMutation,
   useGetEmployeesWithReleasedQuery,
+  useReassignEmployeeMutation,
+  useRehireEmployeeMutation,
 } = manageApi;

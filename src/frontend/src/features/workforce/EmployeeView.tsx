@@ -12,7 +12,13 @@ import { describeError, viewOf, type ViewState } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
+import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import {
+  api,
+  useGetEmployeesQuery,
+  useGetMeQuery,
+  useReassignEmployeeMutation,
+  useRehireEmployeeMutation,
   useAddMemoryMutation,
   useCorrectMemoryMutation,
   useEmployeeActionMutation,
@@ -29,17 +35,40 @@ import type { Employee, EmployeeDetail, MemoryChange, MemoryEntry, MemoryKind, T
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { ConversationDock } from "../home/ConversationDock";
 import { namesFor } from "../home/treeModel";
-import { MEMORY_KIND, MEMORY_KINDS, STATUS, acceptedLine, entryOrigin, lastReview, placements, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
+import { useAppDispatch } from "@/store";
+import { JobFields } from "./JobFields";
+import {
+  MEMORY_KIND,
+  MEMORY_KINDS,
+  STATUS,
+  acceptedLine,
+  draftOf,
+  draftProblem,
+  employeePatchFrom,
+  entryOrigin,
+  lastReview,
+  memoryChangeLine,
+  memoryChangeTitle,
+  memoryChangeWhy,
+  placements,
+  possibleManagers,
+  scopeName,
+  serviceLabel,
+  tierLabel,
+  toolLabel,
+} from "./workforceModel";
 
 /** One employee: who it is, what it may do, how well it has done, what it remembers. */
 export function EmployeeView({ employeeId }: { employeeId: string }) {
   const query = useGetEmployeeQuery(employeeId);
   const view = viewOf(query);
-  const tree = useGetTreeQuery(undefined);
+  const active = useActiveOrganisation();
+  const me = useGetMeQuery(undefined);
+  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !active.organisation });
   const detail = view.kind === "loaded" ? view.data : null;
 
   const crumbs: Crumb[] = [];
-  if (tree.data?.organisation) crumbs.push({ label: tree.data.organisation.name, href: paths.home() });
+  if (tree.data?.organisation) crumbs.push({ label: tree.data.organisation.name, href: active.entered ? paths.homeOf(tree.data.organisation.slug) : paths.home() });
   if (detail) for (const name of namesFor(tree.data, detail.employee.scope).slice(1)) crumbs.push({ label: name });
   crumbs.push({ label: detail?.employee.name ?? "Employee" });
 
@@ -204,17 +233,24 @@ function JobRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-type Panel = "reassign" | "budget" | "release" | null;
+type Panel = "edit" | "reassign" | "budget" | "release" | null;
 
 function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | undefined }) {
   const [update, updating] = useUpdateEmployeeMutation();
   const [act, acting] = useEmployeeActionMutation();
+  const [reassign, reassigning] = useReassignEmployeeMutation();
+  const [rehire, rehiring] = useRehireEmployeeMutation();
   const [open, setOpen] = useState<Panel>(null);
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState(employee.scope);
+  const [manager, setManager] = useState(employee.reportsTo?.id ?? "");
+  const [rehireTo, setRehireTo] = useState(employee.scope);
   const [budget, setBudget] = useState(employee.jobDescription.monthlyCreditLimit?.toString() ?? "");
-  const busy = updating.isLoading || acting.isLoading;
+  const busy = updating.isLoading || acting.isLoading || reassigning.isLoading || rehiring.isLoading;
   const released = employee.status === "released";
+  const org = tree?.organisation?.slug ?? employee.scope.split("/")[0] ?? "";
+  const people = useGetEmployeesQuery({ scope: org }, { skip: !org });
+  const managers = possibleManagers(people.data ?? [], employee.id);
 
   const run = async (work: () => Promise<unknown>, what: string) => {
     setError(null);
@@ -242,13 +278,30 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
 
   if (released) {
     return (
-      <div className="flex flex-col items-start gap-2">
-        <Button onClick={() => void run(() => act({ id: employee.id, action: "rehire" }).unwrap(), "rehire")} disabled={busy}>
+      <form
+        aria-label={`Rehire ${employee.name}`}
+        className="flex w-full flex-col gap-2 rounded-md border bg-surface p-4 sm:w-dock"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(() => rehire({ id: employee.id, ...(rehireTo !== employee.scope ? { scope: rehireTo } : {}) }).unwrap(), "rehire");
+        }}
+      >
+        <label htmlFor="rehire-to" className="font-medium">
+          Where {employee.name} works again
+        </label>
+        <select id="rehire-to" value={rehireTo} onChange={(e) => setRehireTo(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3">
+          {placements(tree).map((p) => (
+            <option key={p.scope} value={p.scope}>
+              {`${"— ".repeat(p.depth)}${p.label}${p.scope === employee.scope ? " (where it was)" : ""}`}
+            </option>
+          ))}
+        </select>
+        <Button type="submit" className="self-start" disabled={busy}>
           Rehire {employee.name}
         </Button>
         <span className="text-sm text-ink-muted">Its memory comes back with it, so it does not start cold.</span>
         {error && <ActionError text={error} />}
-      </div>
+      </form>
     );
   }
 
@@ -256,6 +309,9 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
   return (
     <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
       <div className="flex flex-wrap gap-2.5">
+        <Button variant="outline" aria-expanded={open === "edit"} onClick={() => toggle("edit")} disabled={busy}>
+          Edit the job
+        </Button>
         <Button variant="outline" aria-expanded={open === "reassign"} onClick={() => toggle("reassign")} disabled={busy}>
           Reassign
         </Button>
@@ -277,13 +333,15 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
       </div>
       {employee.standing !== null && <span className="text-sm text-ink-muted">A standing hire is never let go: every organisation keeps one.</span>}
 
+      {open === "edit" && <EditJob employee={employee} managers={managers} onDone={() => setOpen(null)} onError={setError} />}
+
       {open === "reassign" && (
         <form
           aria-label="Reassign"
           className="flex w-full flex-col gap-2 rounded-md border bg-surface p-4 sm:w-dock"
           onSubmit={(e) => {
             e.preventDefault();
-            void run(() => act({ id: employee.id, action: "reassign", scope }).unwrap(), "reassign");
+            void run(() => reassign({ id: employee.id, scope, reportsTo: manager || null }).unwrap(), "reassign");
           }}
         >
           <label htmlFor="reassign-to" className="font-medium">
@@ -297,7 +355,19 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
             ))}
           </select>
           <span className="text-sm text-ink-muted">Its memory travels with it.</span>
-          <Button type="submit" className="self-start" disabled={busy || scope === employee.scope}>
+          <label htmlFor="reassign-manager" className="font-medium">
+            Reports to
+          </label>
+          <select id="reassign-manager" value={manager} onChange={(e) => setManager(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3">
+            <option value="">Nobody: it answers to you</option>
+            {managers.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} · {m.role}
+                {m.id === employee.reportsTo?.id ? " (as now)" : ""}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" className="self-start" disabled={busy || (scope === employee.scope && manager === (employee.reportsTo?.id ?? ""))}>
             Move
           </Button>
         </form>
@@ -333,6 +403,68 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
 
       {error && <ActionError text={error} />}
     </div>
+  );
+}
+
+/**
+ * The whole job, editable (EMP-10): name, role, mandate, what it may use, services, thinking power and
+ * manager. The record shows the change at once and puts it back, with the reason, if it is refused.
+ */
+function EditJob({ employee, managers, onDone, onError }: { employee: Employee; managers: Employee[]; onDone: () => void; onError: (reason: string | null) => void }) {
+  const [update, state] = useUpdateEmployeeMutation();
+  const dispatch = useAppDispatch();
+  const before = draftOf(employee, employee.jobDescription);
+  const [draft, setDraft] = useState(before);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const wrong = draftProblem(draft);
+    if (wrong) return setProblem(wrong);
+    const patch = employeePatchFrom(before, draft);
+    if (Object.keys(patch).length === 0) return onDone();
+    setProblem(null);
+    onError(null);
+    const boss = managers.find((m) => m.id === draft.reportsTo);
+    const undo = dispatch(
+      api.util.updateQueryData("getEmployee", employee.id, (d) => {
+        d.employee.name = draft.name.trim();
+        d.employee.role = draft.role.trim();
+        d.employee.jobDescription.mandate = draft.mandate.trim();
+        d.employee.jobDescription.tools = draft.tools;
+        d.employee.jobDescription.services = draft.services;
+        if (draft.modelTier) d.employee.jobDescription.modelTier = draft.modelTier;
+        d.employee.jobDescription.monthlyCreditLimit = draft.budget.trim() === "" ? null : Number(draft.budget.trim());
+        d.employee.reportsTo = boss ? { id: boss.id, name: boss.name } : null;
+      }),
+    );
+    onDone();
+    try {
+      await update({ id: employee.id, patch }).unwrap();
+    } catch (e) {
+      undo.undo();
+      onError(`Could not change the job: ${describeError(e as never)}`);
+    }
+  };
+
+  return (
+    <form onSubmit={(e) => void submit(e)} aria-label={`Edit ${employee.name}'s job`} className="flex w-full flex-col gap-4 rounded-md border bg-surface p-5 shadow-card" noValidate>
+      <h2 className="text-lg font-semibold">{employee.name}&rsquo;s job</h2>
+      <JobFields draft={draft} onChange={setDraft} managers={managers} allowStandard={!employee.jobDescription.modelTier} budgetLabel="Its own monthly budget" />
+      <span className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={state.isLoading}>
+          Save the job
+        </Button>
+        <Button variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+      </span>
+      {problem && (
+        <p role="alert" className="text-sm text-attention-text">
+          {problem}
+        </p>
+      )}
+    </form>
   );
 }
 
@@ -447,12 +579,14 @@ function ContractorsBriefed({ detail }: { detail: EmployeeDetail }) {
       {detail.contractors.length > 0 && (
         <ul aria-label="Contractors working now" className="flex flex-col gap-2">
           {detail.contractors.map((x) => (
-            <li key={x.id} className="flex flex-col gap-1 rounded-sm border border-dashed border-violet-dash bg-surface px-4 py-3">
-              <span className="flex items-center gap-2 font-medium">
-                <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-violet-line border-t-violet motion-reduce:animate-none" />
-                {x.role}
-              </span>
-              {x.brief && <span className="text-ink-body">{x.brief}</span>}
+            <li key={x.id}>
+              <Link href={paths.employee(x.id)} className="flex flex-col gap-1 rounded-sm border border-dashed border-violet-dash bg-surface px-4 py-3 text-ink transition-colors hover:bg-violet-tint">
+                <span className="flex items-center gap-2 font-medium">
+                  <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-violet-line border-t-violet motion-reduce:animate-none" />
+                  {x.role}
+                </span>
+                {x.brief && <span className="text-ink-body">{x.brief}</span>}
+              </Link>
             </li>
           ))}
         </ul>
@@ -523,6 +657,8 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
         ))}
 
       {employee.kind === "employee" && <ReviewPanel employee={employee} changes={changeView} onRetry={() => void changes.refetch()} editable={editable} />}
+
+      {employee.kind === "employee" && <MemoryHistory changes={changeView} entries={view.kind === "loaded" ? view.data : []} onRetry={() => void changes.refetch()} />}
 
       {editable &&
         (adding ? (
@@ -669,6 +805,62 @@ function MemoryForm({ employee, entry, includeArchived, onDone }: { employee: Em
         </p>
       )}
     </form>
+  );
+}
+
+/** Every change to the memory, newest first: what changed, who changed it, and when (MEM-01). */
+function MemoryHistory({ changes, entries, onRetry }: { changes: ViewState<MemoryChange[]>; entries: MemoryEntry[]; onRetry: () => void }) {
+  const [all, setAll] = useState(false);
+  return (
+    <section aria-labelledby="memory-history-title" className="flex flex-col gap-2">
+      <h3 id="memory-history-title" className="font-display text-base font-semibold">
+        What changed in it
+      </h3>
+      {changes.kind === "loading" && (
+        <Loading label="Loading what changed" className="flex flex-col gap-2">
+          <Skeleton className="h-10 rounded-xs" />
+          <Skeleton className="h-10 rounded-xs" />
+        </Loading>
+      )}
+      {changes.kind === "failed" && <Failed title="What changed in the memory could not be loaded" reason={changes.reason} onRetry={onRetry} />}
+      {changes.kind === "loaded" &&
+        (changes.data.length === 0 ? (
+          <p data-state="empty" className="text-sm text-ink-muted">
+            Nothing has changed in it yet.
+          </p>
+        ) : (
+          <>
+            <ol aria-label="Changes to the memory" className="flex flex-col divide-y rounded-xs border border-border-strong">
+              {(all ? changes.data : changes.data.slice(0, 8)).map((c) => {
+                const title = memoryChangeTitle(c, entries);
+                const why = memoryChangeWhy(c);
+                return (
+                  <li key={c.id} className="flex flex-col gap-0.5 px-3 py-2">
+                    <span className="text-sm">
+                      <span className="font-medium">{memoryChangeLine(c)}</span>
+                      {title ? `: ${title}` : ""}
+                    </span>
+                    {why && <span className="text-xs text-ink-body">“{why}”</span>}
+                    <span className="flex flex-wrap gap-2 text-xs text-ink-muted">
+                      <time dateTime={c.at}>{timeAgo(c.at)}</time>
+                      {c.runId && (
+                        <Link href={paths.run(c.runId)} className="rounded-xs text-primary-link hover:text-primary-hover">
+                          the work it came from
+                        </Link>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            {changes.data.length > 8 && (
+              <Button size="sm" variant="ghost" className="self-start" onClick={() => setAll((x) => !x)}>
+                {all ? "Show the latest only" : `Show all ${formatNumber(changes.data.length)}`}
+              </Button>
+            )}
+          </>
+        ))}
+    </section>
   );
 }
 

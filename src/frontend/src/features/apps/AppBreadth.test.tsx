@@ -47,6 +47,7 @@ function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {})
     "GET /api/ontology": json(ONTOLOGY_APP),
     "GET /api/apps/a1/dashboard": json([]),
     "GET /api/apps/a1/versions": json(VERSIONS),
+    "GET /api/cascade": json([]),
     ...extra,
   });
 }

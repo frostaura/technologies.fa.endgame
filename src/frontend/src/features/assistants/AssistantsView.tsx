@@ -1,3 +1,4 @@
+import { organisationsOf, treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { useId, useState, type FormEvent } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
@@ -35,15 +36,18 @@ function origin(): string {
  */
 export function AssistantsView() {
   const me = useGetMeQuery(undefined);
-  const tree = useGetTreeQuery(undefined);
+  const active = useActiveOrganisation();
+  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !active.organisation });
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
-  const org = me.data?.organisation ?? null;
+  const org = active.organisation;
+  // A key belongs to one organisation; the list holds keys for every one the person is in, each named.
+  const orgName = (slug: string) => organisationsOf(me.data).find((o) => o.slug === slug)?.name ?? slug;
   const query = useGetTokensQuery(undefined, { skip: !org });
   const view = viewOf(query);
   const title = technical ? "MCP access tokens" : "Let an AI assistant work with your organisation";
 
   return (
-    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: technical ? "MCP" : "AI assistants" }]} aside={org ? <Addresses tree={tree.data} technical={technical} /> : undefined}>
+    <AppShell crumbs={[...(org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }] : []), { label: technical ? "MCP" : "AI assistants" }]} aside={org ? <Addresses tree={tree.data} technical={technical} /> : undefined}>
       <header className={cn("flex flex-col gap-1.5", RISE)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold">
           <Icon name="assistants" tinted className="size-7" />
@@ -79,7 +83,7 @@ export function AssistantsView() {
                 ) : (
                   <ul aria-label="Keys" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
                     {view.data.map((t) => (
-                      <TokenRow key={t.id} token={t} technical={technical} />
+                      <TokenRow key={t.id} token={t} technical={technical} organisation={orgName(t.organisation)} />
                     ))}
                   </ul>
                 )}
@@ -101,7 +105,7 @@ function status(t: AccessToken): { label: string; tone: "success" | "quiet" | "a
   return { label: "Active", tone: "success" };
 }
 
-function TokenRow({ token, technical }: { token: AccessToken; technical: boolean }) {
+function TokenRow({ token, technical, organisation }: { token: AccessToken; technical: boolean; organisation: string }) {
   const [revoke, revoking] = useRevokeTokenMutation();
   const [confirm, setConfirm] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -121,7 +125,7 @@ function TokenRow({ token, technical }: { token: AccessToken; technical: boolean
         <div className="flex min-w-0 flex-col">
           <span className="break-words font-semibold">{token.name}</span>
           <span className="text-sm text-ink-body">
-            {ROLE_NAME[token.role]} · made {formatDate(token.createdAt)}
+            {ROLE_NAME[token.role]} in {organisation} · made {formatDate(token.createdAt)}
             {token.expiresAt ? ` · ${token.active ? "ends" : "ended"} ${formatDate(token.expiresAt)}` : " · never ends"}
           </span>
           {technical && <code className="font-mono text-xs text-ink-muted">{token.prefix}… · {token.id}</code>}

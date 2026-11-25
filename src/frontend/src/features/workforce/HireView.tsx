@@ -10,17 +10,21 @@ import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
-import { useAppSelector } from "@/store";
-import { useDecideHireMutation, useEditHireMutation, useGetHireQuery, useGetTreeQuery } from "@/store/api";
-import type { Hire, HireEdit, Tree } from "@/store/types";
+import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { useAppDispatch, useAppSelector } from "@/store";
+import { api, useDecideHireMutation, useEditHireMutation, useGetEmployeesQuery, useGetHireQuery, useGetMeQuery, useGetTreeQuery } from "@/store/api";
+import type { Hire, Tree } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
-import { TRIGGER, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
+import { JobFields } from "./JobFields";
+import { TRIGGER, draftOf, draftProblem, hireEditFrom, possibleManagers, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
 
 /** One hire proposal: the drafted job, what it costs a month, and the owner's call. */
 export function HireView({ hireId }: { hireId: string }) {
   const query = useGetHireQuery(hireId);
   const view = viewOf(query);
-  const tree = useGetTreeQuery(undefined);
+  const active = useActiveOrganisation();
+  const me = useGetMeQuery(undefined);
+  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !active.organisation });
   const hire = view.kind === "loaded" ? view.data : null;
   const org = tree.data?.organisation;
   const crumbs: Crumb[] = [
@@ -201,45 +205,54 @@ function Decided({ hire }: { hire: Hire }) {
 
 function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; onError: (reason: string | null) => void }) {
   const [edit, state] = useEditHireMutation();
-  const [name, setName] = useState(hire.name);
-  const [role, setRole] = useState(hire.role);
+  const dispatch = useAppDispatch();
+  const org = hire.scope.split("/")[0] ?? "";
+  const people = useGetEmployeesQuery({ scope: org }, { skip: !org });
+  const managers = possibleManagers(people.data ?? [], null);
+  const before = draftOf(hire, hire.jobDescription);
+  const [draft, setDraft] = useState(before);
   const [reason, setReason] = useState(hire.reason);
-  const [mandate, setMandate] = useState(hire.jobDescription.mandate);
   const [cost, setCost] = useState(String(hire.expectedMonthlyCredits));
-  const [limit, setLimit] = useState(hire.jobDescription.monthlyCreditLimit?.toString() ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const expected = Number(cost);
-    const cap = limit.trim() === "" ? undefined : Number(limit);
-    if (!name.trim() || !role.trim()) return setError("A hire needs a name and a role.");
+    const wrong = draftProblem(draft);
+    if (wrong) return setError(wrong);
     if (!Number.isFinite(expected) || expected < 0) return setError("The monthly cost is a number of credits.");
-    if (cap !== undefined && (!Number.isFinite(cap) || cap < 0)) return setError("The budget is a number of credits, or empty.");
-    const change: HireEdit = { name: name.trim(), role: role.trim(), reason: reason.trim(), expectedMonthlyCredits: expected, jobDescription: { mandate: mandate.trim(), ...(cap !== undefined ? { monthlyCreditLimit: cap } : {}) } };
+    // A proposal always says why it is needed: emptying the reason is refused here rather than silently kept.
+    if (!reason.trim()) return setError("Say why this hire is needed; a proposal always gives its reason.");
+    const change = hireEditFrom(before, draft, { reason: reason.trim(), expectedMonthlyCredits: expected });
     setError(null);
     onError(null);
-    onDone(); // Optimistic: the page shows the edit at once and puts it back if it is refused.
+    const boss = managers.find((m) => m.id === draft.reportsTo);
+    // Optimistic beyond what the edit itself patches: what it may use, its thinking power, budget and manager.
+    const undo = dispatch(
+      api.util.updateQueryData("getHire", hire.id, (h) => {
+        h.jobDescription.tools = draft.tools;
+        h.jobDescription.services = draft.services;
+        if (draft.modelTier) h.jobDescription.modelTier = draft.modelTier;
+        h.jobDescription.monthlyCreditLimit = draft.budget.trim() === "" ? null : Number(draft.budget.trim());
+        h.reportsTo = boss ? { id: boss.id, name: boss.name } : null;
+      }),
+    );
+    onDone(); // The page shows the edit at once and puts it back if it is refused.
     try {
       await edit({ id: hire.id, edit: change }).unwrap();
     } catch (e) {
+      undo.undo();
       onError(`The edit was not saved: ${describeError(e as never)}`);
     }
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label="Edit the proposal" className="flex flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
+    <form onSubmit={(e) => void submit(e)} aria-label="Edit the proposal" className="flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card" noValidate>
       <h2 className="text-lg font-semibold">Edit the proposal</h2>
+      <JobFields draft={draft} onChange={setDraft} managers={managers} allowStandard={!hire.jobDescription.modelTier} />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Field id="hire-name" label="Name" value={name} onChange={setName} />
-        <Field id="hire-role" label="Role" value={role} onChange={setRole} />
         <Field id="hire-cost" label="Expected credits a month" value={cost} onChange={setCost} numeric />
-        <Field id="hire-limit" label="Its own monthly budget (optional)" value={limit} onChange={setLimit} numeric />
       </div>
-      <label htmlFor="hire-mandate" className="text-sm font-medium">
-        Mandate
-      </label>
-      <textarea id="hire-mandate" value={mandate} onChange={(e) => setMandate(e.target.value)} rows={3} className="rounded-xs border border-border-strong bg-surface px-3 py-2" />
       <label htmlFor="hire-reason" className="text-sm font-medium">
         Why this hire
       </label>
