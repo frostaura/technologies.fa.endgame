@@ -148,6 +148,26 @@ internal static class TreeEndpoints
             return Results.Ok(await values.ResolveAsync(resolved, parsed, ct));
         })
         .WithName("ResolveCascade").WithSummary("The effective values of one kind at a scope, each with the level that set it.").Produces<IReadOnlyList<EffectiveValue>>();
+        cascade.MapGet("/below", async (string? scope, string? kind, ClaimsPrincipal principal, AccessService access, CascadeService values, ScopeResolver scopes, CancellationToken ct) =>
+        {
+            var parsed = Kind(kind);
+            if (parsed == CascadeKind.Permission)
+            {
+                throw EndgameProblem.Invalid("Roles granted beneath a level are listed by /api/members.");
+            }
+
+            var (resolved, _) = await access.RequireAsync(principal.Id(), scope, parsed is CascadeKind.Secret ? MemberRole.Admin : MemberRole.Viewer, ct);
+            var views = new List<EffectiveValue>();
+            foreach (var row in await values.BelowAsync(resolved, parsed, ct))
+            {
+                var node = await scopes.ForRowAsync(row.OrganisationId, row.DivisionId, row.ProjectId, row.AppId, ct);
+                // A secret's value is never shown, here or anywhere: only that it is set, and where.
+                views.Add(new EffectiveValue(row.Kind, row.Key, parsed == CascadeKind.Secret ? null : JsonNode.Parse(row.ValueJson), node.Level.ToWire(), node.Path.ToString(), row.SetAt, []));
+            }
+
+            return Results.Ok(views.OrderBy(v => v.SetAtPath, StringComparer.Ordinal).ThenBy(v => v.Key, StringComparer.Ordinal).ToList());
+        })
+        .WithName("CascadeBelow").WithSummary("The values of one kind set at levels beneath a scope, each with where it was set: what a lower level replaces or adds.").Produces<IReadOnlyList<EffectiveValue>>();
         cascade.MapPut("", async (CascadeSetRequest request, ClaimsPrincipal principal, UserManager<EndgameUser> users, AccessService access, CascadeService values, EdgeNotifier edge, CancellationToken ct) =>
         {
             var parsed = Kind(request.Kind);

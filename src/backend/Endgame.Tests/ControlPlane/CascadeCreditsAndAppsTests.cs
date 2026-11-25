@@ -101,6 +101,25 @@ public sealed class CascadeCreditsAndAppsTests(PostgresServer postgres) : IAsync
     }
 
     [Fact]
+    public async Task What_a_lower_level_sets_is_listed_with_where_it_was_set_and_a_secret_value_never()
+    {
+        await owner.SetAsync("frostaura", "context", "house-style", "Plain English.");
+        await owner.SetAsync("frostaura/technologies/squash", "context", "house-style", "Squash words.");
+        await owner.SetAsync("frostaura/technologies/squash/bookings", "context", "audience", "Club members.");
+        await ControlPlaneApp.Ok(owner.PutAsJsonAsync("/api/secrets", new { scope = "frostaura/technologies", name = "API_KEY", value = "do-not-show" }));
+
+        var below = (await ControlPlaneApp.Ok(owner.GetAsync("/api/cascade/below?scope=frostaura/technologies&kind=context"))).AsArray();
+        Assert.Equal(["frostaura/technologies/squash", "frostaura/technologies/squash/bookings"], below.Select(v => v!["setAtPath"]!.GetValue<string>()));
+        Assert.Equal("Squash words.", below[0]!["value"]!.GetValue<string>());
+        Assert.Equal("app", below[1]!["setAtLevel"]!.GetValue<string>());
+
+        var secrets = await ControlPlaneApp.Ok(owner.GetAsync("/api/cascade/below?scope=frostaura&kind=secret"));
+        Assert.DoesNotContain("do-not-show", secrets.ToJsonString(), StringComparison.Ordinal);
+        Assert.Null(secrets[0]!["value"]);
+        await ControlPlaneApp.Expect(await owner.GetAsync("/api/cascade/below?scope=frostaura&kind=permission"), HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task An_employee_budget_row_names_the_employee_and_counts_what_its_contractors_spent()
     {
         await owner.TopUpAsync("frostaura", 50m);
