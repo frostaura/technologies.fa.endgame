@@ -444,13 +444,16 @@ async function perform(action: Action) {
     } else if (key === "Tab") tabFrom(el);
     el.dispatchEvent(new win.KeyboardEvent("keyup", { key, bubbles: true }));
   } else if ("wait" in action) {
-    // A step that waits is the person approving on their device, if it asks, and whatever the step
-    // started (a sign-in, a send) finishing: played or caught up, the step ends at the same moment.
+    // A step that waits is the person approving on their device, if it asks. A wait for a time is
+    // also whatever the step started (a sign-in, a send) finishing, so played or caught up the step
+    // ends at the same moment; a wait for something on screen ends when it shows, even a passing
+    // state ("Working on it").
     approveWhileWaiting(true, instantNow || reduced() ? 0 : 400);
     try {
-      if (typeof action.wait === "number") await sleep(instantNow ? Math.min(action.wait, 50) : action.wait);
-      else await waitFor(action.wait);
-      await quiet();
+      if (typeof action.wait === "number") {
+        await sleep(instantNow ? Math.min(action.wait, 50) : action.wait);
+        await quiet();
+      } else await waitFor(action.wait);
     } finally {
       approveWhileWaiting(false);
     }
