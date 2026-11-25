@@ -34,8 +34,10 @@ document.addEventListener(
     if (/^#[^/]/.test(href)) {
       e.preventDefault();
       const target = document.getElementById(href.slice(1));
-      target?.focus();
-      target?.scrollIntoView({ block: "start" });
+      if (!target) return;
+      // Scroll this page only: the academy's page around an embedded demo stays where it is.
+      target.focus({ preventScroll: true });
+      window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY });
       return;
     }
     if (!/^https?:\/\//.test(href)) return;

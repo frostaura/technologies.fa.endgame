@@ -151,9 +151,10 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
   const showBranch = (index: number) => {
     setBranch({ index, step: 1 });
     setInteractive(false);
-    // The stage sits beside the steps: bring it back into view.
+    // The stage sits beside the steps: bring its top, where the branch is named, back into view.
     scrolling.current = true;
-    scrollToStep(total, !reduced);
+    const grid = stageRef.current?.parentElement;
+    if (grid) window.scrollTo({ top: Math.max(0, grid.getBoundingClientRect().top + window.scrollY - 88), behavior: reduced ? "auto" : "smooth" });
     window.setTimeout(() => (scrolling.current = false), reduced ? 50 : 700);
   };
 

@@ -41,6 +41,13 @@ export interface ClockArgs {
 type Envelope = { source: string; id: string; op: string; args?: Record<string, unknown> };
 
 let instantNow = false;
+/** Inside the academy's frame: the learner's keyboard (← → to walk the steps) stays with the academy. */
+let embeddedNow = false;
+
+/** A control the demo acts on takes the focus, as a click would — except embedded, where focus inside the frame would take the academy's keys. */
+function focusUnlessEmbedded(el: HTMLElement) {
+  if (!embeddedNow) el.focus({ preventScroll: true });
+}
 
 function post(message: Omit<Envelope, "source">) {
   const target = window.parent !== window ? window.parent : null;
@@ -154,8 +161,30 @@ function sleep(ms: number) {
 
 const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/**
+ * Brings an element to the middle of the demo's own page — and of an Edge page's frame, for a
+ * control inside one — and never further out. `scrollIntoView` would also scroll the academy's
+ * page around the embedded demo (they share an origin), which moves the learner off the step.
+ */
+function reveal(el: Element, smooth: boolean) {
+  const behavior: ScrollBehavior = smooth ? "smooth" : "auto";
+  for (let box = el.parentElement; box && box !== el.ownerDocument.documentElement && box !== el.ownerDocument.body; box = box.parentElement) {
+    const style = windowOf(box).getComputedStyle(box);
+    if (box.scrollHeight > box.clientHeight && /(auto|scroll)/.test(style.overflowY)) {
+      const r = el.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      box.scrollBy({ top: r.top - b.top - (b.height - r.height) / 2, behavior });
+    }
+  }
+  const win = windowOf(el);
+  const r = el.getBoundingClientRect();
+  win.scrollBy({ top: r.top - (win.innerHeight - r.height) / 2, behavior });
+  const frame = win.frameElement;
+  if (frame && win !== window) reveal(frame, smooth);
+}
+
 async function approach(el: HTMLElement) {
-  el.scrollIntoView({ block: "center", behavior: instantNow || reduced() ? "auto" : "smooth" });
+  reveal(el, !(instantNow || reduced()));
   if (instantNow) return;
   await sleep(250);
   const r = pageRect(el);
@@ -198,12 +227,12 @@ async function perform(action: Action) {
   if ("click" in action) {
     const el = await waitFor(action.click);
     await approach(el);
-    el.focus({ preventScroll: true });
+    focusUnlessEmbedded(el);
     el.click();
   } else if ("type" in action) {
     const el = await waitFor(action.type.into, true);
     await approach(el);
-    el.focus({ preventScroll: true });
+    focusUnlessEmbedded(el);
     if (instantNow || reduced()) setValue(el, action.type.text);
     else {
       let typed = "";
@@ -273,7 +302,7 @@ export const endgameDemo = {
       clearSpotlight();
       return false;
     }
-    el.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" });
+    reveal(el, !reduced());
     showSpotlight(el, args.note ?? null);
     return true;
   },
@@ -299,6 +328,7 @@ declare global {
 }
 
 export function installBridge(embedded: boolean) {
+  embeddedNow = embedded;
   window.endgameDemo = endgameDemo;
   window.addEventListener("message", (e: MessageEvent) => {
     const m = e.data as Envelope | null;

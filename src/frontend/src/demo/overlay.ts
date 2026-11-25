@@ -27,12 +27,14 @@ export function pageRect(el: Element): { left: number; top: number; width: numbe
   const r = el.getBoundingClientRect();
   let left = r.left;
   let top = r.top;
-  let frame = el.ownerDocument.defaultView?.frameElement ?? null;
-  while (frame) {
+  // Out to the demo's own page, and no further: embedded, the demo is itself in the academy's frame.
+  let win = el.ownerDocument.defaultView;
+  while (win && win !== window && win.frameElement) {
+    const frame = win.frameElement;
     const f = frame.getBoundingClientRect();
     left += f.left + frame.clientLeft;
     top += f.top + frame.clientTop;
-    frame = frame.ownerDocument.defaultView?.frameElement ?? null;
+    win = frame.ownerDocument.defaultView;
   }
   return { left, top, width: r.width, height: r.height, bottom: top + r.height };
 }
