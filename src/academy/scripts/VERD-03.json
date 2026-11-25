@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "VERD-03",
   "persona": "owner",
-  "scenario": "verdict-build",
+  "scenario": "verdict-change",
   "start": "/ideas/{idea}",
   "steps": [
     {

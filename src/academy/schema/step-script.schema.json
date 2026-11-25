@@ -41,6 +41,7 @@
         "established",
         "researching",
         "verdict-build",
+        "verdict-change",
         "building",
         "app-live",
         "low-credits",

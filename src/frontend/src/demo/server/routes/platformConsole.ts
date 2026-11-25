@@ -94,7 +94,7 @@ area("PlatformConsoleEndpoints", {
     return ok(world.operatorLog.filter((x) => x.organisation === org).slice(0, 500).map((x) => omit(x, "organisation")));
   },
 
-  "GET system/status": () => {
+  "GET system/status": (_req, { world }) => {
     const at = new Date().toISOString();
     const services = [
       ["edge", "Edge", 3],
@@ -106,6 +106,8 @@ area("PlatformConsoleEndpoints", {
       ["tunnel", "Tunnel", 18],
       ["backup", "Backup", 7],
     ] as const;
+    // Signed out, only whether the whole is healthy and when it was checked (SYS-05).
+    if (!world.sessionUserId) return ok({ overall: "healthy", checkedAt: at });
     return ok({ overall: "healthy", checkedAt: at, services: services.map(([key, name, latencyMs]) => ({ key, name, state: "healthy", latencyMs, detail: key === "backup" ? "Last backup 3 hours ago." : null })) });
   },
 });

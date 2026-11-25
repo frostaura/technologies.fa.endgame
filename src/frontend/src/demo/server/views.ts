@@ -53,7 +53,12 @@ function activityOf(world: World, runId: string, kind: "employee" | "contractor"
   return r.run.kind === "research" ? "researching an idea" : r.run.kind === "build" ? "building" : r.run.kind === "conversation" ? "answering you" : "working";
 }
 
-function treeApp(world: World, a: DemoApp): TreeApp {
+/** The viewer's effective role at a node, as the server resolves it; null where they hold none. */
+function roleOf(world: World, userId: string, path: string) {
+  return roleAt(world, userId, path)?.role ?? null;
+}
+
+function treeApp(world: World, a: DemoApp, userId: string): TreeApp {
   const n = node(world, a.path);
   return {
     id: a.id,
@@ -67,6 +72,8 @@ function treeApp(world: World, a: DemoApp): TreeApp {
     lastVisitAt: a.telemetry?.lastVisitAt ?? null,
     spend: { monthCredits: total(world, a.path) },
     workers: workersAt(world, a.path),
+    role: roleOf(world, userId, a.path),
+    archived: false,
   };
 }
 
@@ -99,7 +106,7 @@ export function treeView(world: World, userId: string, org: string): Tree {
   const o = organisation(world, org);
   const held = roleAt(world, userId, org);
   const now = new Date().toISOString();
-  if (!o) return { generatedAt: now, viewerRole: "none", organisation: null, divisions: [], needsYou: [] };
+  if (!o) return { generatedAt: now, viewerRole: "none", organisation: null, divisions: [], needsYou: [], firstRun: world.organisations.length === 0 };
   const visible = (path: string) => {
     if (held) return true;
     return world.memberships.some((m) => m.userId === userId && (within(path, m.path) || within(m.path, path)));
@@ -112,6 +119,8 @@ export function treeView(world: World, userId: string, org: string): Tree {
       name: d.name,
       spend: { monthCredits: total(world, d.path) },
       workers: workersAt(world, d.path),
+      role: roleOf(world, userId, d.path),
+      archived: false,
       projects: world.nodes
         .filter((p) => p.level === "project" && p.path.startsWith(`${d.path}/`) && visible(p.path))
         .map((p) => ({
@@ -124,7 +133,9 @@ export function treeView(world: World, userId: string, org: string): Tree {
           progress: progressOf(world, p.path),
           spend: { monthCredits: total(world, p.path) },
           workers: workersAt(world, p.path),
-          apps: world.apps.filter((a) => a.path.startsWith(`${p.path}/`)).map((a) => treeApp(world, a)),
+          apps: world.apps.filter((a) => a.path.startsWith(`${p.path}/`)).map((a) => treeApp(world, a, userId)),
+          role: roleOf(world, userId, p.path),
+          archived: p.stage === "dropped",
         })),
     }));
   const projects = divisions.reduce((n, d) => n + d.projects.length, 0);
@@ -135,9 +146,10 @@ export function treeView(world: World, userId: string, org: string): Tree {
   return {
     generatedAt: now,
     viewerRole,
-    organisation: { id: o.id, slug: o.slug, name: o.name, summary, spend: { monthCredits: total(world, org) }, workers: workersAt(world, org) },
+    organisation: { id: o.id, slug: o.slug, name: o.name, summary, spend: { monthCredits: total(world, org) }, workers: workersAt(world, org), role: roleOf(world, userId, org) },
     divisions,
     needsYou: needsYou(world, org),
+    firstRun: false,
   };
 }
 

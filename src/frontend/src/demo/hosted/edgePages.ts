@@ -137,7 +137,7 @@ export const UNAVAILABLE_COPY: Record<Unavailable, { title: string; message: str
   Slow: { title: "This app is taking longer than usual", message: "It is still starting. Please try again in a few seconds." },
   Forbidden: {
     title: "You don't have access to this app",
-    message: "You are signed in, but this app has not been shared with you. Ask its owner for access.",
+    message: "You are signed in, but your account has no access to this app. Ask its owner for access.",
   },
   Temporary: { title: "This app is temporarily unavailable", message: "Endgame could not reach it just now. Please try again in a moment." },
 };

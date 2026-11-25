@@ -239,7 +239,9 @@ area("WorkEndpoints", {
     const message = str(req.body, "message") ?? "";
     if (!message.trim() || message.length > 20000) throw invalid("A message is 1 to 20000 characters.");
     const employeeId = str(req.body, "employeeId") ?? null;
-    if (employeeId && !world.employees.some((e) => e.id === employeeId && e.status !== "released")) throw notFound("The employee");
+    const worker = employeeId ? world.employees.find((e) => e.id === employeeId && e.status !== "released") : undefined;
+    if (employeeId && !worker) throw notFound("The employee");
+    if (worker?.status === "paused") throw conflict(`${worker.name} is paused, so they are given no new work. Resume them first.`);
     const given = str(req.body, "conversationId");
     let conversation = given ? world.conversations.find((c) => c.id === given) : world.conversations.find((c) => c.scope === scope && c.employeeId === employeeId);
     if (given && !conversation) throw notFound("The conversation");

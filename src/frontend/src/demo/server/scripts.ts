@@ -59,7 +59,7 @@ function cycle(
 
 function working(world: World, employeeId: string | null, run: DemoRun) {
   const e = employeeId ? world.employees.find((x) => x.id === employeeId) : undefined;
-  if (!e) return;
+  if (!e || e.status === "paused") return;
   e.status = "working";
   e.currentRun = { id: run.run.id, title: run.run.title };
   e.lastActiveAt = new Date().toISOString();

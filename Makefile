@@ -9,7 +9,7 @@
         stack-up stack-down e2e-stack e2e-stack-run fac-up fac-down e2e-factory e2e-factory-run acc-up acc-down e2e-acceptance e2e-acceptance-run \
         demo-build demo-test demo-e2e demo-check \
         backup restore ops-backups ops-verify ops-health ops-reserved-hosts ops-cloudflare-plan ops-cloudflare-apply ops-test ops-test-worker \
-        academy-install academy-content academy-dev academy-lint academy-test academy-build academy-assemble academy-pdf academy-e2e site
+        academy-install academy-deps academy-content academy-dev academy-lint academy-test academy-build academy-assemble academy-pdf academy-e2e site
 
 DOTNET ?= dotnet
 DOTNET_ENV = MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
@@ -352,8 +352,13 @@ SITE_URL ?= https://frostaura.github.io/technologies.fa.endgame/
 ACADEMY_PW_PORT ?= 5647
 
 academy-install:
-	@test -d src/frontend/node_modules || $(FRONTEND) npm ci --no-audit --no-fund
+	@test -d src/frontend/node_modules || ($(FRONTEND) npm ci --no-audit --no-fund)
 	$(ACADEMY) npm ci --no-audit --no-fund
+
+# A fresh clone has no packages: install each only when it is missing (never in another directory).
+academy-deps:
+	@test -d src/frontend/node_modules || ($(FRONTEND) npm ci --no-audit --no-fund)
+	@test -d src/academy/node_modules || ($(ACADEMY) npm ci --no-audit --no-fund)
 
 # docs/flows -> typed content, validated step scripts, the search index and the QR code.
 academy-content:
@@ -362,14 +367,14 @@ academy-content:
 academy-dev:
 	$(ACADEMY) npm run dev
 
-academy-lint:
+academy-lint: academy-deps academy-content
 	$(ACADEMY) npm run lint
 	$(ACADEMY) npm run typecheck
 
-academy-test:
+academy-test: academy-deps academy-content
 	$(ACADEMY) npm run test -- --run
 
-academy-build:
+academy-build: academy-deps
 	$(ACADEMY) SITE_URL=$(SITE_URL) VITE_PDFS=1 npm run build
 
 academy-assemble:
@@ -385,5 +390,5 @@ academy-pdf:
 academy-e2e:
 	$(ACADEMY) CI=1 PW_PORT=$(ACADEMY_PW_PORT) npm run test:e2e
 
-site: academy-build academy-assemble academy-pdf
+site: academy-deps academy-build academy-assemble academy-pdf
 	@echo "site: ./site/ is ready for GitHub Pages ($(SITE_URL))."

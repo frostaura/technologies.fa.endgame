@@ -69,6 +69,24 @@ function hireNow(world: World, h: Hire, via: string, by: string, note: string | 
   world.notifications = world.notifications.map((n) => (n.subject?.id === h.id ? { ...n, read: true } : n));
 }
 
+/** `RunService.PauseForEmployeeAsync`: every run under way that is theirs, or that they hold a task in, pauses. */
+function pauseWorkOf(world: World, e: Employee) {
+  const live = world.runs.filter((r) => ["queued", "running", "waiting"].includes(r.run.status) && (r.run.employeeId === e.id || e.currentRun?.id === r.run.id));
+  for (const r of live) {
+    append(world, r, "message", { text: `Waiting for ${e.name}, who is paused. This work carries on when they are resumed.`, code: "employee_paused" });
+    append(world, r, "run.paused", { by: "workforce", reason: "employee_paused", employeeId: e.id });
+  }
+}
+
+/** `RunService.ResumeForEmployeeAsync`: the runs that paused because of them go on. */
+function resumeWorkOf(world: World, e: Employee) {
+  for (const r of world.runs) {
+    if (r.run.status !== "paused") continue;
+    const last = [...r.events].reverse().find((x) => x.type === "run.paused");
+    if (last?.payload.reason === "employee_paused" && last.payload.employeeId === e.id) append(world, r, "run.resumed", { by: "workforce", reason: "employee_resumed", employeeId: e.id });
+  }
+}
+
 area("WorkforceEndpoints", {
   "GET employees": (req, { world }) => {
     const scope = scopeOf(world, req.query.get("scope"));
@@ -119,6 +137,8 @@ area("WorkforceEndpoints", {
     if (str(req.body, "role")) e.role = str(req.body, "role") ?? e.role;
     applyJob(e, job);
     if (req.body.clearMonthlyCreditLimit === true) e.jobDescription.monthlyCreditLimit = null;
+    if (status === "paused" && e.status !== "paused") pauseWorkOf(world, e);
+    if (status === "idle" && e.status === "paused") resumeWorkOf(world, e);
     if (status) e.status = status as "paused" | "idle";
     world.changed.push("Employee", "Tree");
     return ok(e);
@@ -130,6 +150,7 @@ area("WorkforceEndpoints", {
     if (action === "reviews") {
       requireRole(world, e.scope, "builder");
       if (e.status === "released" || e.kind !== "employee") throw conflict("Only an employee on the payroll has a memory to review.");
+      if (e.status === "paused") throw conflict(`${e.name} is paused, so they are given no new work. Resume them first.`);
       const r = startRun(world, { id: newId(world, "run"), kind: "review", title: `Memory review: ${e.name}`, scope: e.scope, ideaId: null, estimateCredits: 2, employeeId: e.id, conversationId: null }, "review", { employeeId: e.id });
       append(world, r, "message", { from: "owner", kind: "memory.review", employeeId: e.id, text: `Review ${e.name}'s memory: merge what repeats, remove what is stale, correct what is wrong, then report it.` });
       return created(r.run);

@@ -71,6 +71,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     organisations: [
       { id: uuidFor("org:northwind"), slug: ORG, name: "Northwind", status: "active", createdAt: a(62 * day), balance: 1840.25, frostauraLimit: 1000, ownLimit: 800, lastActivityAt: a(1) },
       { id: uuidFor("org:quayside"), slug: "quayside", name: "Quayside Bakery", status: "active", createdAt: a(30 * day), balance: -212.4, frostauraLimit: 500, ownLimit: null, lastActivityAt: a(3 * 60) },
+      { id: uuidFor("org:frostaura"), slug: "frostaura", name: "FrostAura", status: "active", createdAt: a(90 * day), balance: 0, frostauraLimit: 0, ownLimit: null, lastActivityAt: a(30) },
       { id: uuidFor("org:northfield"), slug: "northfield", name: "Northfield Tutors", status: "active", createdAt: a(21 * day), balance: -300, frostauraLimit: 300, ownLimit: null, lastActivityAt: a(26 * 60) },
     ],
     nodes: [],
@@ -83,6 +84,8 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
       { id: uuidFor("m:tobi"), userId: PEOPLE.invited.id, path: `${ORG}/learning`, role: "builder", grantedAt: a(2 * 60) },
       { id: uuidFor("m:hal"), userId: PEOPLE.quaysideOwner.id, path: "quayside", role: "owner", grantedAt: a(30 * day) },
       { id: uuidFor("m:rhea"), userId: PEOPLE.northfieldOwner.id, path: "northfield", role: "owner", grantedAt: a(21 * day) },
+      // FrostAura's own organisation: the operator's home, where top-up requests reach them.
+      { id: uuidFor("m:nell"), userId: PEOPLE.operator.id, path: "frostaura", role: "owner", grantedAt: a(90 * day) },
     ],
     apps: [],
     ideas: [],
@@ -148,6 +151,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     ["quayside/shop", "Shop"],
     ["quayside/shop/orders", "Pre-orders"],
     ["quayside/shop/orders/web", "Pre-orders"],
+    ["frostaura", "FrostAura"],
     ["northfield", "Northfield Tutors"],
     ["northfield/tuition", "Tuition"],
     ["northfield/tuition/homework", "Homework Planner"],
@@ -417,6 +421,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   note("credits.zero:old", "credits.zero", "urgent", "Credits have run out", "The balance is -3.2 credits. Work goes on into the overdraft of up to 800 credits; ask FrostAura for a top-up.", ORG, null, 19 * day, true);
   note("overdraft.half:old", "overdraft.half", "urgent", "Halfway to the overdraft limit", "The balance is -402 credits, of an overdraft limit of 800. At the limit, work stops and apps pause until a top-up.", ORG, null, 18.5 * day, true);
   note("approval:old", "approval", "info", "Approval needed: Agree the plan for Shift Rota?", "3 parts, about 90 credits.", `${ORG}/operations/shift-rota`, null, 20 * day, true);
+  w.notifications.unshift({ id: uuidFor("notification:topup.requested:north"), kind: "topup.requested", severity: "info", title: "Northfield Tutors asks for 1,500 credits", detail: "Term starts Monday; the homework planner must be back up.", scope: "frostaura", subject: { kind: "topup_request", id: uuidFor("tur:1") }, createdAt: a(5 * 60), read: false, emailedAt: null, organisation: "frostaura" });
   note("overdraft.limit:north", "overdraft.limit", "urgent", "The overdraft limit is reached: work has stopped and apps are paused", "The balance is -300 credits. Nothing is deleted; a top-up restores everything at once.", "northfield", null, 26 * 60, false);
 
   // Operator log ------------------------------------------------------------------------------

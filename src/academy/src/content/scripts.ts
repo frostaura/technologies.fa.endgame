@@ -13,7 +13,7 @@ export type Persona = (typeof PERSONAS)[number];
  * script may name its records as `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}`, which the
  * demo resolves inside the scenario.
  */
-export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "building", "app-live", "low-credits", "god-mode"] as const;
+export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode"] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 /** Where a spotlight lands: a CSS selector, a `data-testid`, or the visible text of a control. */

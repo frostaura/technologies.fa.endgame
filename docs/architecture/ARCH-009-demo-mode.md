@@ -43,7 +43,7 @@ app's address opens its pages inside the demo; anything else shows a small notic
 | `npm run build:demo` (in `src/frontend`) | `VITE_DEMO=1 vite build`: one self-contained `dist-demo/index.html` (script, styles, fonts and the icon sprite inlined, IIFE so `file://` runs it) plus `brand/`. About 1.4 MB, 0.56 MB gzipped. |
 | `make demo-build` | The above, copied to `src/demo/dist/` (where the academy's `make site` looks); prints that path last. |
 | `make demo-test` | Vitest for `src/demo`: the rules and refusals, live work, and endpoint coverage. |
-| `make demo-e2e` | Playwright against the built demo from a static server under `/technologies.fa.endgame/demo/` and from `file://`, asserting no request leaves the page and no console error. `PW_PORT` stays in 5500–5599. |
+| `make demo-e2e` | Playwright against the built demo from a static server under `/technologies.fa.endgame/demo/` and from `file://`, asserting no request leaves the page and no console error; the bridge driven from a parent frame; and every academy step script (`src/academy/scripts/*.json`) played against the demo (below). `PW_PORT` stays in 5500–5599. |
 | `make demo-check` | Builds the product and fails if any demo string reached `dist/`. |
 
 ### Address
@@ -64,7 +64,7 @@ app's address opens its pages inside the demo; anything else shows a small notic
 | `builder` | Lena Fischer, Builder | |
 | `viewer` | Priya Shah, Viewer | |
 | `division-admin` | Ines Duarte, Admin of Technologies only | |
-| `operator` | Nell Avery, FrostAura operator (God mode) | |
+| `operator` | Nell Avery, FrostAura operator (God mode), Owner of the organisation FrostAura, where top-up requests reach her | |
 | `invited` | Tobi Adeyemi, invited with code `LARK-7Q4M-2PXD`, not yet registered (signed out) | |
 | `end-user` | Signed out of the console; a registered end user of a shared app | |
 | `signed-out` | Nobody | |
@@ -93,6 +93,7 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `employee-memory`, `hire-pending` | An employee with history; a hire waiting | |
 | `low-credits`, `at-overdraft-limit`, `budget-spent` | Credits nearly gone; the overdraft limit reached; a division's budget spent | |
 | `god-mode` | Every organisation, as an operator | |
+| `screening-offline` | God mode with no model to screen a new organisation (it needs the operator's own decision) | |
 
 ### Named moments (`clock { seek }`)
 
@@ -121,6 +122,13 @@ clock | reset` for tests.
 | `act` | `{ actions: Action[], instant? }` | Performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. |
 | `clock` | `{ play?, pause?, speed?, seek? }` | Plays, pauses, sets the speed, or jumps (a moment's name or milliseconds). |
 | `reset` | `{}` | Rebuilds the scenario's world from scratch and opens its route. |
+
+A highlight that finds nothing replies `{ op: "highlight", args: { found: false } }` and draws
+nothing, so a lesson never breaks in front of a learner; an action whose target is missing is an
+`error`. Drift is caught at build instead: `tests-demo/academy-scripts.spec.ts` plays every academy
+step script against the built demo and fails, naming flow and step, on any action that errors or
+any highlight that finds nothing, unless `tests-demo/academy-allowlist.json` lists that step with
+its reason; an allow-listed step that passes again fails too, so the list stays true.
 
 A target is a CSS `selector`, a `testId`, or visible `text` / accessible `label`, matched in that
 order of preference: buttons, links and other controls by accessible name (exact, then prefix,
@@ -192,6 +200,11 @@ in the page. Add it to the route file named after its control-plane endpoint fil
 
 Copy refusal words from the control plane; `notFound`, `forbidden`, `conflict`, `invalid` and
 `problem(status, code, title, detail)` write its ProblemDetails bodies.
+
+A handler that changes something also gets its plain title in `server/operatorLog.ts`: an operator's
+change inside an entered organisation is written to that organisation's operator log as
+`admin.<METHOD-path>` with that title (`OperatorActionLog.cs`), and an untitled one reads "Changed
+something as an Admin".
 
 ### Adding a scenario
 
