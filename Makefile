@@ -5,7 +5,7 @@
 # Every raw dotnet command carries MSBuildEnableWorkloadResolver=false: this Mac's SDK workload
 # set is broken and fails restore without it. Harmless everywhere else, so CI uses it too.
 .PHONY: up down lint lint-backend lint-frontend build build-backend build-frontend test test-backend test-frontend \
-        e2e smoke docker-build docker-down prod-config appkit-build appkit-lint appkit-test appkit-proof appkit-vendor \
+        e2e smoke docker-build docker-down docker-wipe prod-config appkit-build appkit-lint appkit-test appkit-proof appkit-vendor \
         stack-up stack-down e2e-stack e2e-stack-run fac-up fac-down e2e-factory e2e-factory-run acc-up acc-down e2e-acceptance e2e-acceptance-run \
         demo-build demo-test demo-e2e demo-check \
         backup restore ops-backups ops-verify ops-health ops-reserved-hosts ops-cloudflare-plan ops-cloudflare-apply ops-test ops-test-worker \
@@ -29,9 +29,24 @@ up: .env appkit-vendor
 down: .env
 	docker compose down
 
-# Also removes the database volume. Local only.
+# Stops the stack and deletes its data: the database and the app repositories. Local only. The
+# local backup archives (the `backup` volume) are kept, so a wipe can always be undone with
+# `make restore`; docker-wipe deletes them too. OPS_COMPOSE names the stack (below).
 docker-down: .env
-	docker compose down -v --remove-orphans
+	$(OPS_COMPOSE) down --remove-orphans
+	@project=$$($(OPS_COMPOSE) config | sed -n 's/^name: //p' | head -n 1); \
+	test -n "$$project" || { echo "docker-down: could not read the stack's project name; no volume was removed." >&2; exit 1; }; \
+	for volume in $$(docker volume ls -q --filter label=com.docker.compose.project=$$project); do \
+		if [ "$$(docker volume inspect -f '{{index .Labels "com.docker.compose.volume"}}' $$volume)" = backup ]; then \
+			echo "docker-down: kept $$volume, the local backup archives (make docker-wipe CONFIRM=yes deletes them too)."; \
+		else docker volume rm $$volume > /dev/null && echo "docker-down: removed $$volume"; fi; \
+	done
+
+# Everything docker-down deletes, and the local backup archives as well: nothing of the stack is
+# left on this machine. An archive in a bucket is not touched. Only with CONFIRM=yes.
+docker-wipe: .env
+	@test "$(CONFIRM)" = yes || { echo "docker-wipe deletes every volume of the stack: the database, the app repositories and the local backup archives (an archive in a bucket is not touched). Run make docker-wipe CONFIRM=yes." >&2; exit 2; }
+	$(OPS_COMPOSE) down -v --remove-orphans
 
 docker-build: .env appkit-vendor
 	docker compose build
@@ -201,21 +216,33 @@ e2e-stack-run:
 OPS_COMPOSE ?= docker compose
 OPS = $(OPS_COMPOSE) exec -T ops /app/Endgame.Ops
 
+# PostgreSQL healthy, then the ops container started but not waited on: its health check fails on
+# a missing or malformed backup key, and the ops command line is what says why.
+OPS_START = $(OPS_COMPOSE) up -d --wait postgres && $(OPS_COMPOSE) up -d ops
+
 # An encrypted archive of every database and the repositories volume, now, to the configured
 # bucket (or this machine's `backup` volume when there is none). Prints BACKUP_ID=<id>.
 backup:
-	$(OPS_COMPOSE) up -d --wait postgres ops
+	$(OPS_START)
 	$(OPS) backup
 
 # Restores BACKUP=<id> onto an EMPTY stack: the archive is verified end to end before anything is
 # touched, and a database or volume that already holds data is refused unless OVERWRITE=1. The
-# services that write to the database and the volumes are stopped first and started again after.
+# services that write to the database and the volumes are stopped first and the whole stack is
+# started after. A restore that does not go ahead (refused, wrong key, damaged archive, busy) puts
+# back exactly what was running before; one that failed part-way (exit 4) leaves them stopped.
 restore:
 	@test -n "$(BACKUP)" || { echo "restore: name the archive: make restore BACKUP=<id> (make ops-backups lists them)" >&2; exit 2; }
-	-$(OPS_COMPOSE) stop edge console runner dock control-plane
-	$(OPS_COMPOSE) up -d --wait postgres ops
-	$(OPS) restore $(BACKUP) $(if $(filter 1 yes true,$(OVERWRITE)),--overwrite)
-	$(OPS_COMPOSE) up -d --wait
+	@running=$$($(OPS_COMPOSE) ps --services --status running 2> /dev/null | tr '\n' ' '); \
+	$(OPS_COMPOSE) stop edge console runner dock control-plane || true; \
+	$(OPS_START) && $(OPS) restore $(BACKUP) $(if $(filter 1 yes true,$(OVERWRITE)),--overwrite); status=$$?; \
+	if [ $$status -eq 0 ]; then $(OPS_COMPOSE) up -d --wait; exit $$?; fi; \
+	if [ $$status -eq 4 ]; then echo "restore: it failed part-way, so the stack stays stopped. Fix the cause, then run make restore BACKUP=$(BACKUP) OVERWRITE=1 again." >&2; exit 4; fi; \
+	echo "restore: nothing was restored; starting again what was running before." >&2; \
+	for service in postgres ops; do case " $$running " in *" $$service "*) ;; *) $(OPS_COMPOSE) stop $$service;; esac; done; \
+	if [ -n "$$(echo $$running | tr -d ' ')" ]; then $(OPS_COMPOSE) up -d --wait $$running \
+		|| echo "restore: the services that were running are started again, but not every one reported healthy in time." >&2; fi; \
+	exit $$status
 
 ops-backups:
 	$(OPS) backups

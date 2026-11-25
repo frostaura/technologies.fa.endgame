@@ -18,6 +18,7 @@ internal sealed partial class EndgameExceptionHandler(IProblemDetailsService pro
         var (status, title) = platform switch
         {
             EndgameBudgetExhaustedException => (StatusCodes.Status402PaymentRequired, "The credit budget is spent"),
+            EndgameOverdraftLimitException => (StatusCodes.Status402PaymentRequired, PlatformClient.OverdraftTitle),
             EndgamePlatformUnavailableException => (StatusCodes.Status503ServiceUnavailable, "A platform service is unavailable"),
             _ => (StatusCodes.Status502BadGateway, "A platform service failed"),
         };
@@ -30,7 +31,7 @@ internal sealed partial class EndgameExceptionHandler(IProblemDetailsService pro
             {
                 Status = status,
                 Title = title,
-                Detail = platform is EndgameBudgetExhaustedException ? "This feature is paused until the organisation tops up its credits." : null,
+                Detail = platform is EndgameBudgetExhaustedException or EndgameOverdraftLimitException ? "This feature is paused until the organisation tops up its credits." : null,
                 Extensions = { ["code"] = platform.Code },
             },
         });

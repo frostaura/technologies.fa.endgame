@@ -46,6 +46,13 @@ public static class DevPlatformEndpoints
                 return Problem(402, "budget_exhausted", "The app's credit budget is spent (dev platform).");
             }
 
+            if (state.OverdraftLimitReached)
+            {
+                return Problem(402, "overdraft_limit",
+                    "The organisation has 0 credits available including its overdraft (dev platform). Work stops until the organisation is topped up; do not retry it.",
+                    "The overdraft limit is reached");
+            }
+
             var messages = body["messages"]?.AsArray() ?? [];
             if (messages.Count == 0)
             {
@@ -129,6 +136,11 @@ public static class DevPlatformEndpoints
             state.BudgetExhausted = body.Exhausted;
             return Results.NoContent();
         });
+        dev.MapPost("overdraft", (OverdraftBody body) =>
+        {
+            state.OverdraftLimitReached = body.Reached;
+            return Results.NoContent();
+        });
         dev.MapPost("schedules/{name}/run", async (string name) =>
         {
             var status = await RunScheduleAsync(state, appClient(), name);
@@ -151,8 +163,8 @@ public static class DevPlatformEndpoints
 
     private static int Tokens(string text) => Math.Max(1, text.Length / 4);
 
-    private static IResult Problem(int status, string code, string detail) =>
-        Results.Problem(statusCode: status, title: code.Replace('_', ' '), detail: detail, extensions: new Dictionary<string, object?> { ["code"] = code });
+    private static IResult Problem(int status, string code, string detail, string? title = null) =>
+        Results.Problem(statusCode: status, title: title ?? code.Replace('_', ' '), detail: detail, extensions: new Dictionary<string, object?> { ["code"] = code });
 
     private sealed record SessionBody(string? Session);
 
@@ -161,4 +173,6 @@ public static class DevPlatformEndpoints
     private sealed record SecretBody(string Value);
 
     private sealed record BudgetBody(bool Exhausted);
+
+    private sealed record OverdraftBody(bool Reached);
 }

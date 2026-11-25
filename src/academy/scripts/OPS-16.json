@@ -10,7 +10,6 @@
       "kind": "terminal",
       "command": "make restore BACKUP=20261125T010312Z",
       "output": [
-        "docker compose stop edge console runner dock control-plane",
         "[+] Stopping 5/5",
         " ✔ Container endgame-edge-1           Stopped",
         " ✔ Container endgame-console-1        Stopped",
@@ -18,26 +17,25 @@
         " ✔ Container endgame-dock-1           Stopped",
         " ✔ Container endgame-control-plane-1  Stopped"
       ],
-      "note": "Everything that writes to the database or the volumes is stopped first. The Makefile ignores a failure here (the services may already be stopped, or the stack may be new)."
+      "note": "The services that are running are noted, then everything that writes to the database or the volumes is stopped. A failure here is ignored (the services may already be stopped, or the stack may be new). The Makefile runs this target's commands without echoing them."
     },
     {
       "step": 2,
       "kind": "terminal",
       "command": "make restore BACKUP=20261125T010312Z",
       "output": [
-        "docker compose up -d --wait postgres ops",
-        "[+] Running 2/2",
+        "[+] Running 1/1",
         " ✔ Container endgame-postgres-1  Healthy",
-        " ✔ Container endgame-ops-1       Healthy"
+        "[+] Running 1/1",
+        " ✔ Container endgame-ops-1       Running"
       ],
-      "note": "Only the database and the ops service run during the restore."
+      "note": "Only the database and the ops service run during the restore. The ops service is not waited on, so a key it cannot use is reported by the restore itself."
     },
     {
       "step": 3,
       "kind": "terminal",
       "command": "make restore BACKUP=20261125T010312Z",
       "output": [
-        "docker compose exec -T ops /app/Endgame.Ops restore 20261125T010312Z",
         "Verifying endgame-20261125T010312Z.egbk from a directory on this machine (/backups), not offsite: no bucket is configured...",
         "Verified: 2 database(s), 1312 file(s), every chunk authenticated (3.1 s)."
       ],
@@ -55,7 +53,6 @@
         "Restored endgame-20261125T010312Z.egbk in 9.8 s.",
         "RESTORE_VERIFY_SECONDS=3.08",
         "RESTORE_SECONDS=9.84",
-        "docker compose up -d --wait",
         " ✔ Container endgame-egress-1         Started",
         " ✔ Container endgame-postgres-1       Healthy",
         " ✔ Container endgame-mailcatcher-1    Healthy",
@@ -99,13 +96,22 @@
           "kind": "terminal",
           "command": "make restore BACKUP=20261125T010312Z",
           "output": [
-            "docker compose exec -T ops /app/Endgame.Ops restore 20261125T010312Z",
             "Verifying endgame-20261125T010312Z.egbk from a directory on this machine (/backups), not offsite: no bucket is configured...",
             "Verified: 2 database(s), 1312 file(s), every chunk authenticated (3.1 s).",
             "Refusing to restore over data that is already here: database d_4c1e9a7b02f3d58e6a91c0b7, database endgame, volume repositories (/data/dock). Restore onto an empty stack, or pass OVERWRITE=1 to replace it.",
+            "restore: nothing was restored; starting again what was running before.",
+            " ✔ Container endgame-egress-1         Running",
+            " ✔ Container endgame-postgres-1       Healthy",
+            " ✔ Container endgame-mailcatcher-1    Healthy",
+            " ✔ Container endgame-ops-1            Healthy",
+            " ✔ Container endgame-control-plane-1  Healthy",
+            " ✔ Container endgame-runner-1         Healthy",
+            " ✔ Container endgame-dock-1           Healthy",
+            " ✔ Container endgame-console-1        Healthy",
+            " ✔ Container endgame-edge-1           Healthy",
             "make: *** [restore] Error 1"
           ],
-          "note": "Nothing is changed. make stops here, so the services stopped in step 1 stay stopped: run make up (or docker compose up -d --wait) to bring them back. The stop and start lines before it are left out."
+          "note": "Nothing is changed, and every service that was running before is started again, so the stack is as it was. Exit code 1. The stop and start lines before it are left out."
         }
       ]
     },
@@ -120,7 +126,6 @@
           "kind": "terminal",
           "command": "make restore BACKUP=20261125T010312Z OVERWRITE=1",
           "output": [
-            "docker compose exec -T ops /app/Endgame.Ops restore 20261125T010312Z --overwrite",
             "Verifying endgame-20261125T010312Z.egbk from a directory on this machine (/backups), not offsite: no bucket is configured...",
             "Verified: 2 database(s), 1312 file(s), every chunk authenticated (3.1 s).",
             "Replacing what is already here (OVERWRITE): database d_4c1e9a7b02f3d58e6a91c0b7, database endgame, volume repositories (/data/dock).",
@@ -131,7 +136,7 @@
       ]
     },
     {
-      "title": "Backups are not configured, or another is running",
+      "title": "Backups are not configured, the archive is missing, or another is running",
       "persona": "host-admin",
       "scenario": "established",
       "start": "/",
@@ -141,11 +146,33 @@
           "kind": "terminal",
           "command": "make restore BACKUP=20261125T010312Z",
           "output": [
-            "docker compose exec -T ops /app/Endgame.Ops restore 20261125T010312Z",
             "Another backup or restore is running; try again when it has finished.",
+            "restore: nothing was restored; starting again what was running before.",
             "make: *** [restore] Error 1"
           ],
-          "note": "With no key or no database connection the refusal is the reason instead (for example \"ENDGAME_BACKUP_KEY is not set, so nothing can be encrypted and no backup runs.\"). Either way the stopped services stay stopped."
+          "note": "With no key the reason is \"ENDGAME_BACKUP_KEY is not set, …\" (OPS-12); with an id not in the store, \"There is no backup endgame-<id>.egbk in /backups.\". After any refusal what was running is started again, and the database and ops are stopped if they were not."
+        }
+      ]
+    },
+    {
+      "title": "The restore fails part-way",
+      "persona": "host-admin",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make restore BACKUP=20261125T010312Z",
+          "output": [
+            "Verified: 2 database(s), 1312 file(s), every chunk authenticated (3.1 s).",
+            "Restoring roles...",
+            "Restoring database d_4c1e9a7b02f3d58e6a91c0b7...",
+            "The restore of endgame-20261125T010312Z.egbk failed part-way, so the databases and volumes may hold part of it: pg_restore failed (1): pg_restore: error: could not execute query: ERROR:  could not extend file: No space left on device. Run it again with OVERWRITE=1 once the cause is fixed.",
+            "restore: it failed part-way, so the stack stays stopped. Fix the cause, then run make restore BACKUP=20261125T010312Z OVERWRITE=1 again.",
+            "make: *** [restore] Error 4"
+          ],
+          "note": "Only a failure after the restore began writing leaves the services stopped, so nothing starts on half-restored data. The ops command exits 4 for it; every refusal before it exits 1. The reason is what pg_restore or the file system said; a full disk here."
         }
       ]
     }

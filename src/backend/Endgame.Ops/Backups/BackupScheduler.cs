@@ -3,11 +3,31 @@ namespace Endgame.Ops.Backups;
 /// <summary>The latest attempt, as <c>/health</c> and <c>GET /internal/ops/backups</c> show it. In memory: the store is the durable record.</summary>
 public sealed class BackupStatus
 {
+    /// <summary>The trigger named for an archive this process did not make (a <c>make backup</c>, or another host).</summary>
+    public const string StoreTrigger = "found in the store (made outside this service, e.g. make backup)";
+
     private readonly Lock gate = new();
 
     public BackupAttempt? Last { get; private set; }
 
     public BackupAttempt? Running { get; private set; }
+
+    /// <summary>
+    /// The latest attempt, counting every archive in the store however it was made. A <c>make backup</c>
+    /// runs in a process of its own, so this service never saw it: when the store's newest archive is
+    /// newer than the last attempt this process made, that archive is the latest success.
+    /// </summary>
+    public BackupAttempt? LastIncluding(IReadOnlyList<StoredBackup> stored)
+    {
+        var last = Last;
+        var newest = stored.Count == 0 ? null : stored.MaxBy(b => b.CreatedAt);
+        if (newest is null || newest.Id == last?.Id || (last is not null && newest.CreatedAt <= last.StartedAt))
+        {
+            return last;
+        }
+
+        return new BackupAttempt(StoreTrigger, newest.CreatedAt, null, "succeeded", newest.Id, newest.Bytes, null);
+    }
 
     public void Started(DateTimeOffset at, string trigger)
     {

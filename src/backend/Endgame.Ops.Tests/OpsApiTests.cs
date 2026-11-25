@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Endgame.Ops.Backups;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Endgame.Ops.Tests;
@@ -76,6 +77,47 @@ public sealed class OpsApiTests : IAsyncLifetime
         var health = await response.Content.ReadFromJsonAsync<JsonObject>();
         Assert.Equal("refused", (string)health!["backups"]!["state"]!);
         Assert.Contains("ENDGAME_BACKUP_KEY is not set", (string)health["backups"]!["message"]!);
+    }
+
+    [Fact]
+    public async Task Health_counts_an_archive_this_service_did_not_make_as_the_latest_backup()
+    {
+        await using var app = Ops(cloudflare: false);
+        var before = await Client(app, token: false).GetFromJsonAsync<JsonObject>("/health");
+        Assert.Null(before!["backups"]!["last"]);
+        Assert.Equal(0, (int)before["backups"]!["count"]!);
+
+        // What a `make backup` leaves behind: an archive in the store, written by another process.
+        Directory.CreateDirectory(backups);
+        var id = BackupNames.IdFor(DateTimeOffset.UtcNow.AddMinutes(-1));
+        await File.WriteAllBytesAsync(Path.Combine(backups, BackupNames.FileName(id)), new byte[1234]);
+
+        var health = await Client(app, token: false).GetFromJsonAsync<JsonObject>("/health");
+        var last = health!["backups"]!["last"]!;
+        Assert.Equal(1, (int)health["backups"]!["count"]!);
+        Assert.Equal(id, (string)health["backups"]!["newest"]!["id"]!);
+        Assert.Equal(id, (string)last["id"]!);
+        Assert.Equal("succeeded", (string)last["outcome"]!);
+        Assert.Equal(1234, (long)last["archiveBytes"]!);
+        Assert.Equal(BackupStatus.StoreTrigger, (string)last["trigger"]!);
+
+        var listed = await Client(app).GetFromJsonAsync<JsonObject>("/internal/ops/backups");
+        Assert.Equal(id, (string)listed!["last"]!["id"]!);
+    }
+
+    [Fact]
+    public void The_last_attempt_this_service_made_wins_over_an_older_archive_and_loses_to_a_newer_one()
+    {
+        var status = new BackupStatus();
+        var at = new DateTimeOffset(2026, 11, 25, 1, 0, 0, TimeSpan.Zero);
+        var older = new StoredBackup(BackupNames.IdFor(at.AddHours(-1)), "older", 10, at.AddHours(-1));
+        status.Started(at, "nightly");
+        status.Failed(at.AddMinutes(1), "the bucket did not answer");
+
+        Assert.Equal("failed", status.LastIncluding([older])!.Outcome);
+        var newer = new StoredBackup(BackupNames.IdFor(at.AddHours(1)), "newer", 20, at.AddHours(1));
+        Assert.Equal(newer.Id, status.LastIncluding([older, newer])!.Id);
+        Assert.Null(new BackupStatus().LastIncluding([]));
     }
 
     [Fact]

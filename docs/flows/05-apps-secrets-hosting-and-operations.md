@@ -880,12 +880,12 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Variations and refusals:**
   - An invalid session: 401 `session_invalid` "The session is unknown, has expired, or is not a session for this app."; the kit treats the person as signed out.
   - An API call to a `.RequireUser()` endpoint with nobody signed in: 401 "Sign in required" with a `signInUrl`; the web kit throws `NotSignedInError`.
-  - A missing or wrong app token: 401 `app_token_invalid` "The platform API needs the app's token (ENDGAME_APP_TOKEN) as a bearer token; this one is missing, unknown or superseded."
+  - A missing or wrong app token: 401 `app_token_invalid` "The platform API needs the app's token (ENDGAME_APP_TOKEN) as a bearer token; this one is missing, unknown or superseded."; the kit throws `EndgamePlatformException` "The platform refused this app's token (ENDGAME_APP_TOKEN) on <method> <path>: <the platform's detail, as one sentence> The token is injected when the app starts; a restarted app gets a fresh one."
   - A call that came through Edge's public side: 404 `not_found` "There is nothing at this address."
   - A handler that takes a non-nullable `EndgameUser` without `.RequireUser()` stops the app at start.
 - **Where:** `appkit/sdk-dotnet/Endgame.AppKit/Identity/*`; `sdk-web/src/hooks.ts`, `router.ts`; `PlatformEndpoints.cs`; `AppTokenFilter`
 - **Reachable from:** inside the app (API only)
-- **Covered by tests:** `PlatformApiTests.Identity_resolves_a_member_and_an_end_user…`; `IdentityTests` (kit); `PlatformApiTests.The_app_token_is_required…`; `ApiContractTests.A_required_user_without_RequireUser_stops_start_up`
+- **Covered by tests:** `PlatformApiTests.Identity_resolves_a_member_and_an_end_user…`; `IdentityTests` (kit); `PlatformApiTests.The_app_token_is_required…`; `ApiContractTests.A_required_user_without_RequireUser_stops_start_up`; `PlatformServiceTests.A_superseded_app_token_is_named_in_one_sentence` (kit)
 
 ### KIT-11 An app keeps its own data
 - **Who:** the app, and its developer
@@ -941,14 +941,14 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   3. The call is made and settled at its real cost.
 - **Variations and refusals:**
   - The budget is spent: 402 `budget_exhausted` "The monthly budget at <scope> has <n> credits left; this call needs up to <m>. This is terminal for the run: do not retry it."; the kit throws `EndgameBudgetExhaustedException` and never retries, and an unhandled one reaches the app's caller as 402 "The credit budget is spent".
-  - The overdraft limit is reached: 402 `overdraft_limit` "The organisation has <n> credits available including its overdraft of <o>; this call needs up to <m>. Work stops until the organisation is topped up; do not retry it." The kit throws a plain `EndgamePlatformException` with that code, which reaches the app's caller as 502 "A platform service failed".
+  - The overdraft limit is reached: 402 `overdraft_limit` "The organisation has <n> credits available including its overdraft of <o>; this call needs up to <m>. Work stops until the organisation is topped up; do not retry it." The kit throws `EndgameOverdraftLimitException` (code `overdraft_limit`), whose message is the platform's own title and detail, "The overdraft limit is reached: …", and never retries it. An unhandled one reaches the app's caller as 402 "The overdraft limit is reached" / "This feature is paused until the organisation tops up its credits." with code `overdraft_limit`, and the web kit throws `BudgetExhaustedError`.
   - The allowance is exceeded: 402 `budget_exhausted` with `bindingScope` "app models": "The app's own model calls have <n> credits left of their <cap> this month; this call needs up to <m>. This is terminal for the run: do not retry it."
   - No model fits the price ceiling: 422 `ceiling_unreachable` "At the route's price ceiling this call could cost US$<x>, above the US$<y> allowed for one '<task type>' call. Send a shorter prompt or a lower max_tokens."
   - No model provider key on the control plane: 503 `model_provider_unconfigured`.
   - Bad input: 400 `invalid_request` "taskType is one of chat, classify, summarise, extract.", "messages is a list of 1 to 100 messages.", "Each message has a role (system, user or assistant) and non-empty content.", "maxTokens is a positive number."; the kit itself refuses an empty message list with "A chat request needs at least one message."
 - **Where:** `PlatformServices.cs`; `AppModelService`; `ModelGateway`; `CreditLedger`
 - **Reachable from:** API only
-- **Covered by tests:** `PlatformApiTests.Models_go_through_the_same_gateway…held_to_its_cap`; `PlatformServiceTests.Models_answer_through_the_platform_and_a_spent_budget_is_terminal` (kit)
+- **Covered by tests:** `PlatformApiTests.Models_go_through_the_same_gateway…held_to_its_cap`; `PlatformServiceTests.Models_answer_through_the_platform_and_a_spent_budget_is_terminal`, `At_the_overdraft_limit_a_model_call_is_a_typed_terminal_refusal_in_the_platforms_words` (kit)
 
 ### KIT-14 An app reads a secret by name
 - **Who:** the app
@@ -1309,17 +1309,21 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 
 ### OPS-02 Stop the local stack, keeping or wiping its data
 - **Who:** host administrator / developer
-- **Starts at:** `make down` (keeps the data), or `make docker-down` (also removes every volume: the database, the app repositories and the local backup archives; local only)
+- **Starts at:** `make down` (keeps the data); `make docker-down` (deletes the database and the app repositories, keeps the local backup archives; local only); or `make docker-wipe CONFIRM=yes` (deletes every volume, the local backup archives too)
 - **Needs:** OPS-01
 - **Level:** Operator
 - **Learn first:** OPS-01
-- **What you learn:** `down` keeps the data and `docker-down` wipes it.
-- **You know it worked when:** `docker compose ps` lists nothing.
+- **What you learn:** `down` keeps the data, `docker-down` wipes it but keeps the local backups so a restore can bring it back, and only `docker-wipe` deletes the backups as well.
+- **You know it worked when:** `docker compose ps` lists nothing; after `docker-down`, it ends with "docker-down: kept endgame_backup, the local backup archives (make docker-wipe CONFIRM=yes deletes them too)." and one "docker-down: removed <volume>" line for each other volume.
 - **Steps:** run the target.
-- **Variations and refusals:** `make docker-down` runs `docker compose down -v --remove-orphans`, which also removes the `backup` volume, so local archives go with it. An archive in a bucket is not touched.
+- **Variations and refusals:**
+  - `make docker-down` runs `docker compose down --remove-orphans`, then removes every volume of the stack's compose project except the `backup` volume. An archive in a bucket is not touched.
+  - `make docker-wipe` without `CONFIRM=yes`: "docker-wipe deletes every volume of the stack: the database, the app repositories and the local backup archives (an archive in a bucket is not touched). Run make docker-wipe CONFIRM=yes." (exit 2); nothing is stopped or deleted.
+  - `make docker-wipe CONFIRM=yes` runs `docker compose down -v --remove-orphans`: the `backup` volume goes too.
+  - Both take `OPS_COMPOSE` to name another stack, as the backup targets do.
 - **Where:** Makefile
 - **Reachable from:** command line only
-- **Covered by tests:** none found
+- **Covered by tests:** `Endgame.Ops.Tests/Rehearsal/RehearsalTests.cs` (destroys the stack with `make docker-down`, checks only the backup volume is left, then `make docker-wipe`)
 
 ### OPS-03 Build the images without starting them
 - **Who:** developer
@@ -1459,16 +1463,16 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** one sealed archive holds every database and the app repositories.
 - **You know it worked when:** it prints "BACKUP_ID=<id>".
 - **Steps:**
-  1. PostgreSQL and the ops service are started if needed.
+  1. PostgreSQL is started and waited on; the ops service is started without waiting for its health check.
   2. It prints "Backing up to <store>...", then "Backup <id>: <n> bytes sealed (<m> before encryption) in <s> s.", the databases, each volume, any pruned archives, `BACKUP_ID=<id>`, and a storage usage line.
 - **Variations and refusals:**
   - Another backup or restore is running: "Another backup or restore is running; try again when it has finished." (exit 1).
-  - A key that is not 32 bytes: "ENDGAME_BACKUP_KEY is not 32 bytes written as hex or base64, so no backup runs." (exit 1).
+  - A key that is set but is not a key: "ENDGAME_BACKUP_KEY is set but is not a backup key, so no backup runs. It must be 32 random bytes written as 64 hex characters (or as 44 characters of base64); make one with `openssl rand -hex 32`. An archive opens only with the key that sealed it, so keep the one you have used before." (exit 1). No key: "ENDGAME_BACKUP_KEY is not set, so nothing can be encrypted and no backup runs. It must be 32 random bytes written as 64 hex characters (or as 44 characters of base64); make one with `openssl rand -hex 32`." Either is said before anything else runs; the value is never printed.
   - Usage near or over the free allowance prefixes the usage line with "WARNING: ".
   - With no S3 bucket configured, the archive goes to a local volume and is reported as not offsite.
 - **Where:** Makefile; `Endgame.Ops/Program.cs` (OpsCli backup); `BackupService`
 - **Reachable from:** command line; also `POST /internal/ops/backups` with the service token
-- **Covered by tests:** `Endgame.Ops.Tests/Rehearsal`; `BackupPolicyTests`
+- **Covered by tests:** `Endgame.Ops.Tests/Rehearsal` (including `make backup` with a malformed key); `BackupPolicyTests.A_bad_backup_key_names_the_variable_and_the_shape_it_needs_never_the_value`
 
 ### OPS-13 Nightly backups (automatic)
 - **Who:** the system
@@ -1528,21 +1532,24 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** a restore verifies the whole archive first and never overwrites data unless told to.
 - **You know it worked when:** it prints `RESTORE_VERIFY_SECONDS=` and `RESTORE_SECONDS=`, and the stack comes back up.
 - **Steps:**
-  1. Edge, the console, the Runner, Dock and the control plane are stopped.
-  2. PostgreSQL and the ops service are started.
+  1. The services that are running are noted; then Edge, the console, the Runner, Dock and the control plane are stopped.
+  2. PostgreSQL is started and waited on, and the ops service is started.
   3. It prints "Verifying <name> from <store>...", then "Verified: …".
   4. It restores, then starts the whole stack again.
 - **Variations and refusals:**
   - No id given: "restore: name the archive: make restore BACKUP=<id> (make ops-backups lists them)" (exit 2).
   - Data is already present: "Refusing to restore over data that is already here: … Restore onto an empty stack, or pass OVERWRITE=1 to replace it."
   - With `OVERWRITE=1`: "Replacing what is already here (OVERWRITE): …".
-  - Not configured: "Backups are not configured." or the specific reason.
+  - Not configured: "Backups are not configured." or the specific reason, such as a missing key (as OPS-12).
+  - No archive with that id: "There is no backup endgame-<id>.egbk in /backups." from the local store.
   - Busy: as OPS-12.
-  - After any refusal or failure from the ops command, make stops there, so the services stopped in step 1 stay stopped until `make up` (or `docker compose up -d --wait`) brings them back.
+  - After any refusal (data present, wrong or missing key, damaged or missing archive, busy) it prints "restore: nothing was restored; starting again what was running before.", starts again every service that was running before step 1, stops the database and ops service again if they were not running, and exits 1. The stack is as it was.
+  - A failure after the restore began writing: "The restore of <name> failed part-way, so the databases and volumes may hold part of it: <reason>. Run it again with OVERWRITE=1 once the cause is fixed.", then "restore: it failed part-way, so the stack stays stopped. Fix the cause, then run make restore BACKUP=<id> OVERWRITE=1 again." (exit 4). Only this case leaves the services stopped, so nothing starts on half-restored data.
+  - There is no confirmation question: `BACKUP=` and `OVERWRITE=1` are the whole of the operator's say.
   - Restore exists only on the command line; it is never on the HTTP API.
 - **Where:** Makefile; OpsCli restore; `BackupService.RestoreAsync`
 - **Reachable from:** command line only
-- **Covered by tests:** `Endgame.Ops.Tests/Rehearsal/RehearsalTests.cs` (TEST-301)
+- **Covered by tests:** `Endgame.Ops.Tests/Rehearsal/RehearsalTests.cs` (TEST-301: the restore, then a refused `make restore` over the live data after which every service is running again); `BackupPolicyTests.A_restore_that_failed_part_way_says_so_in_one_sentence_and_how_to_finish_it`
 
 ### OPS-17 Rehearse a restore
 - **Who:** host administrator
@@ -1573,10 +1580,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - With no Cloudflare token, the report says Cloudflare is idle; with a token but not every key, misconfigured.
   - With no S3 bucket, it says backups are local.
   - Unhealthy, the answer is 503 but `make ops-health` still exits 0 (curl prints the body); the container's own health check fails.
-  - `last` records only the service's own runs (nightly, or `POST /internal/ops/backups`), not a `make backup`, which runs in its own process.
+  - `last` counts every archive in the store however it was made: when the newest archive is newer than this service's own last attempt (a `make backup`, which runs in its own process), `last` is that archive, with the trigger "found in the store (made outside this service, e.g. make backup)" and no finish time. A failed attempt of the service's own that is newer than every archive stays `last`. `GET /internal/ops/backups` reports the same `last`.
+  - `running` is only the service's own run in progress; a `make backup` in progress shows once its archive is in the store.
 - **Where:** `Api/OpsEndpoints.cs` `/health`
 - **Reachable from:** command line / HTTP
-- **Covered by tests:** `OpsApiTests.With_no_token_health_says…`, `Without_a_backup_key_health_is_unhealthy_and_says_why`
+- **Covered by tests:** `OpsApiTests.With_no_token_health_says…`, `Without_a_backup_key_health_is_unhealthy_and_says_why`, `Health_counts_an_archive_this_service_did_not_make_as_the_latest_backup`, `The_last_attempt_this_service_made_wins_over_an_older_archive_and_loses_to_a_newer_one`; the rehearsal reads `/health` after its `make backup`
 
 ### OPS-19 List the reserved host names
 - **Who:** host administrator; the control plane uses the same list
@@ -1749,10 +1757,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 15. **No local run target for a hand-built app** against the kit's dev platform. The dev platform host is used only by the tests and `make proof`.
 16. **Backup failures and outages notify no one inside Endgame** (stated in ARCH-007). Only the log and `/health` carry them.
 17. **The doc comment on Edge's `Unavailable.Paused` says "overdraft"** while the shared paused copy talks about credits. They are consistent in substance, but the overdraft and budget cases depend on `PausedReason` being set correctly. Not verified beyond the Edge tests.
-18. **A refused or failed `make restore` leaves the stack stopped** (`Makefile`, the `restore` recipe): it stops the Edge, console, Runner, Dock and control plane first, and its final `up -d --wait` never runs when the ops command refuses (data present, busy, wrong key, damaged archive). See OPS-16.
-19. **`/health` never sees a command-line backup** (`Backups/BackupScheduler.cs`, `Api/OpsEndpoints.cs`): `last` and `running` live in the ops service's memory, and `make backup` runs in a process of its own. See OPS-18.
-20. **A bad backup key fails `make backup` before it can say why**: the ops container's health check is `curl --fail /health`, which answers 503 for that key, so `up --wait` fails first. See OPS-12.
-21. **`make docker-down` also removes the local backup archives** (its `-v` removes the `backup` volume with the database). See OPS-02.
-22. **The kit turns `overdraft_limit` into 502** (`src/appkit/sdk-dotnet/Endgame.AppKit/Platform/PlatformClient.cs`, `ToException`): it has no exception for that code, so the app's caller gets "A platform service failed" rather than 402, and the web kit's `BudgetExhaustedError` never fires. `PLATFORM-API.md` §3.2 does not list `overdraft_limit` either. See KIT-13.
-23. **A doubled full stop in the kit's 401 message** (`PlatformClient.cs`, the 401 branch): the template appends "." after a detail that already ends in one. See KIT-10.
+18. Fixed: a refused `make restore` puts back what was running (OPS-16); only a restore that failed part-way leaves the stack stopped, on purpose.
+19. Fixed: `/health` counts a command-line backup as the latest (OPS-18). `running` still shows only the service's own run.
+20. Fixed: a bad or missing backup key is named, with the shape it needs, before anything else (OPS-12).
+21. Fixed: `make docker-down` keeps the local backup archives; `make docker-wipe CONFIRM=yes` deletes everything (OPS-02).
+22. Fixed: the kit has `EndgameOverdraftLimitException`, a 402 for the app's caller (KIT-13), and `PLATFORM-API.md` §3.2 lists `overdraft_limit`.
+23. Fixed: the kit's 401 message ends its sentence once (KIT-10).
 24. **An app's outbound calls may be blocked by default**: Dock accepts an egress allow-list (`AllowedHosts`, `Endgame.Hosting.Contracts/DockApi.cs`), but nothing in the control plane was found to send one. Not traced end to end.

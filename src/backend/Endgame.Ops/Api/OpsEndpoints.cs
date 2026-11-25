@@ -91,7 +91,7 @@ public static class OpsEndpoints
                     describe = store.Describe,
                     backups = stored.OrderByDescending(b => b.CreatedAt),
                     usage = StorageUsage.From(stored, options, store.Offsite),
-                    last = status.Last,
+                    last = status.LastIncluding(stored),
                     running = status.Running,
                 });
             }
@@ -166,7 +166,7 @@ public sealed class OpsHealth(CloudflareOptions cloudflare, BackupOptions backup
                 newest,
                 count = stored.Count,
                 usage,
-                last = status.Last,
+                last = status.LastIncluding(stored),
                 running = status.Running,
             };
         }

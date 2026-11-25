@@ -135,10 +135,39 @@ public sealed class BackupPolicyTests
     public void Backups_refuse_plainly_when_misconfigured()
     {
         Assert.Contains("ENDGAME_BACKUP_KEY is not set", new BackupOptions { Postgres = "Host=x" }.WhyRefused());
-        Assert.Contains("not 32 bytes", new BackupOptions { Key = "abc", Postgres = "Host=x" }.WhyRefused());
+        Assert.Contains("is set but is not a backup key", new BackupOptions { Key = "abc", Postgres = "Host=x" }.WhyRefused());
         var key = Convert.ToHexString(new byte[32]);
         Assert.Contains("half configured", new BackupOptions { Key = key, Postgres = "Host=x", S3Endpoint = "https://r2" }.WhyRefused());
         Assert.Null(new BackupOptions { Key = key, Postgres = "Host=x" }.WhyRefused());
         Assert.False(new BackupOptions { Key = key, Postgres = "Host=x" }.Offsite);
+    }
+
+    [Fact]
+    public void A_restore_that_failed_part_way_says_so_in_one_sentence_and_how_to_finish_it()
+    {
+        var failed = new RestoreIncompleteException("endgame-20261125T010312Z.egbk", new InvalidOperationException("pg_restore failed (1): disk full."));
+        Assert.Equal(
+            "The restore of endgame-20261125T010312Z.egbk failed part-way, so the databases and volumes may hold part of it: pg_restore failed (1): disk full. Run it again with OVERWRITE=1 once the cause is fixed.",
+            failed.Message);
+        Assert.Equal(4, OpsCli.RestoreIncompleteExit);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-key-but-a-secret-value-0001")]
+    [InlineData("656e6467616d652d6465762d6261636b75702d6b65792d6e6f742d73656372")] // 62 hex characters: one byte short
+    public void A_bad_backup_key_names_the_variable_and_the_shape_it_needs_never_the_value(string value)
+    {
+        var why = new BackupOptions { Key = value, Postgres = "Host=x" }.WhyRefused();
+        Assert.NotNull(why);
+        Assert.StartsWith("ENDGAME_BACKUP_KEY ", why);
+        Assert.Contains("64 hex characters", why);
+        Assert.Contains("44 characters of base64", why);
+        Assert.Contains("openssl rand -hex 32", why);
+        if (value.Length > 0)
+        {
+            Assert.DoesNotContain(value, why, StringComparison.Ordinal);
+            Assert.DoesNotContain(value[..8], why, StringComparison.Ordinal);
+        }
     }
 }
