@@ -461,6 +461,20 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     }
 
     [DockerFact]
+    public async Task A_recreated_edge_reaches_an_app_again_on_its_next_wake()
+    {
+        // A redeployed edge is a new container on none of the app networks: every app answered 503 until restarted.
+        var network = $"{DockerCli.Prefix}appnet-{env.LedgerApp:D}";
+        await DockerCli.CheckedAsync("network", "disconnect", "--force", network, HostingEnvironment.Container("edge"));
+        await env.EdgeControlAsync(HttpMethod.Post, $"/internal/apps/{env.LedgerApp:D}/state", new AppStateReport(env.LedgerApp, AppRuntimeState.Sleeping, 0, false, DateTimeOffset.UtcNow));
+        using var client = env.EdgeClient();
+        using var response = await client.GetAsync("/acme/apps/ledger/web/api/notes");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var attached = await DockerCli.CheckedAsync("network", "inspect", "--format", "{{range .Containers}}{{.Name}} {{end}}", network);
+        Assert.Contains(HostingEnvironment.Container("edge"), attached, StringComparison.Ordinal);
+    }
+
+    [DockerFact]
     public async Task An_app_cannot_reach_the_edges_control_listener_or_dock()
     {
         using var client = env.EdgeClient();
