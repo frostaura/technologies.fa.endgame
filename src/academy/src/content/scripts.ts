@@ -5,7 +5,7 @@
  */
 
 /** Who the embedded console is signed in as. */
-export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin"] as const;
+export const PERSONAS = ["owner", "admin", "builder", "viewer", "operator", "signed-out", "end-user", "assistant", "host-admin", "division-admin", "invited", "first-run", "two-organisations"] as const;
 export type Persona = (typeof PERSONAS)[number];
 
 /**
@@ -13,7 +13,13 @@ export type Persona = (typeof PERSONAS)[number];
  * script may name its records as `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}`, which the
  * demo resolves inside the scenario.
  */
-export const SCENARIOS = ["fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode"] as const;
+export const SCENARIOS = [
+  "fresh-install", "first-idea", "established", "researching", "verdict-build", "verdict-change", "building", "app-live", "low-credits", "god-mode",
+  "default", "quiet", "empty-organisation", "research-running", "research-verdict", "verdict-do-not-build", "verdict-red-line", "build-running", "build-plan",
+  "build-sent-back", "build-security-finding", "build-published", "build-waiting-on-plan", "build-failed", "app-busy", "app-asleep", "app-paused", "app-crashed",
+  "app-never-measured", "employee-memory", "hire-pending", "at-overdraft-limit", "budget-spent", "manage-tree", "account", "employee-released", "two-organisations",
+  "screening-offline",
+] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 /** Where a spotlight lands: a CSS selector, a `data-testid`, or the visible text of a control. */
@@ -31,7 +37,8 @@ export type Action =
   | { wait: number }
   | { clock: ClockOp };
 
-export type ClockOp = { play: true } | { pause: true } | { seek: number };
+/** `seek` is script milliseconds, or a named moment such as `build:published` (ARCH-009). */
+export type ClockOp = { play: true } | { pause: true } | { seek: number | string };
 
 export interface DemoStep {
   step: number;
@@ -92,7 +99,18 @@ export interface ImageStep {
   note?: string;
 }
 
-export type ScriptStep = DemoStep | TerminalStep | RequestStep | EmailStep | ImageStep;
+/** Code the step is about ("the app calls X"), shown like the terminal, with what it prints or returns. */
+export interface CodeStep {
+  step: number;
+  kind: "code";
+  language: "csharp" | "typescript" | "tsx" | "javascript" | "json" | "http" | "bash" | "sql" | "yaml" | "text";
+  code: string;
+  /** What running it prints or returns, line for line. */
+  output?: string[];
+  note?: string;
+}
+
+export type ScriptStep = DemoStep | TerminalStep | RequestStep | EmailStep | ImageStep | CodeStep;
 export type ScriptKind = ScriptStep["kind"];
 
 export interface StepScript {
@@ -101,6 +119,20 @@ export interface StepScript {
   persona: Persona;
   scenario: Scenario;
   /** The console address the frame opens at before step 1. */
+  start: string;
+  steps: ScriptStep[];
+  /** What else can happen: refusals and other branches, each played from its own start. */
+  variations?: Variation[];
+}
+
+/**
+ * One branch of "What else can happen", played from its own start in its own world. Its steps are
+ * numbered from 1, and each one's note says what it shows.
+ */
+export interface Variation {
+  title: string;
+  persona: Persona;
+  scenario: Scenario;
   start: string;
   steps: ScriptStep[];
 }

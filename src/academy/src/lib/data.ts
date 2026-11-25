@@ -2,6 +2,7 @@ import contentJson from "../generated/content.json";
 import scriptsJson from "../generated/scripts.json";
 import siteJson from "../generated/site.json";
 import indexJson from "../generated/search-index.json";
+import shotsJson from "../generated/shots.json";
 import type { Content, Flow, Level, Reach, Role } from "../content/types.ts";
 import type { StepScript } from "../content/scripts.ts";
 import { loadIndex, search as runSearch, type Hit } from "../content/search.ts";
@@ -13,10 +14,18 @@ import { loadIndex, search as runSearch, type Hit } from "../content/search.ts";
 
 export const content = contentJson as unknown as Content;
 export const scripts = scriptsJson as unknown as Record<string, StepScript>;
+
+/** Captured images (`make academy-shots`): "<FLOW-ID>/<step>" or "<FLOW-ID>/v<n>" → a file under ./shots/. */
+export const shots = shotsJson as Record<string, string>;
+
+/** The image of a step: the script's own `shot`, or the one captured for it. */
+export function shotFor(flowId: string, key: number | string): string | undefined {
+  return shots[`${flowId}/${key}`];
+}
 export const site = siteJson as {
   siteUrl: string;
   qr: { size: number; path: string };
-  coverage: { flows: number; flowsWithScript: number; steps: number; stepsWithMedia: number; byKind: Record<string, number>; scripted: string[] };
+  coverage: { flows: number; flowsWithScript: number; steps: number; stepsWithMedia: number; byKind: Record<string, number>; scripted: string[]; variations: number };
   builtFrom: string[];
 };
 

@@ -13,6 +13,7 @@ import { sentence } from "../content/text.ts";
 import { Stage } from "../stage/Stage.tsx";
 import { mediaOf, type Media } from "../stage/media.ts";
 import { NotFound } from "./NotFound.tsx";
+import { VariationPlayer } from "./VariationPlayer.tsx";
 
 const MEDIA_LABEL: Record<Media, string> = {
   demo: "Live",
@@ -20,6 +21,7 @@ const MEDIA_LABEL: Record<Media, string> = {
   request: "Request",
   email: "E-mail",
   image: "Screenshot",
+  code: "Code",
   facts: "",
 };
 
@@ -325,6 +327,7 @@ function Variations({ flow: f }: { flow: Flow }) {
         </summary>
         <div className="border-t px-6 pb-6 pt-2">
           <Blocks blocks={f.variations} self={f.id} />
+          {scripts[f.id]?.variations && <VariationPlayer flow={f} variations={scripts[f.id]?.variations ?? []} />}
           {f.extras.map((x) => (
             <div key={x.label} className="mt-4 rounded-md bg-attention-wash p-4">
               <p className="text-eyebrow font-semibold uppercase text-attention-text">{x.label}</p>

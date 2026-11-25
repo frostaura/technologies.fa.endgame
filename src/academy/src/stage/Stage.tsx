@@ -8,8 +8,10 @@ import { DemoFrame, type FrameRequest } from "./DemoFrame.tsx";
 import { Terminal } from "./Terminal.tsx";
 import { RequestPanel } from "./RequestPanel.tsx";
 import { EmailCard } from "./EmailCard.tsx";
+import { CodePanel } from "./CodePanel.tsx";
 import { Facts } from "./Facts.tsx";
 import { Inline } from "../components/Inline.tsx";
+import { shotFor } from "../lib/data.ts";
 
 /** Said once a visit, the first time the live console cannot be reached. */
 let toldUnavailable = false;
@@ -18,7 +20,7 @@ let toldUnavailable = false;
  * The sticky panel beside a flow's steps: the live console, or whatever truly shows the step — a
  * terminal, a request, an e-mail, a captured image — or, with nothing to show, the flow's facts.
  */
-export function Stage({ flow, script, active, run, interactive, onTry, onReplay }: {
+export function Stage({ flow, script, active, run, interactive, onTry, onReplay, captured = (n) => shotFor(flow.id, n) }: {
   flow: Flow;
   script: StepScript | undefined;
   active: number;
@@ -27,6 +29,8 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay 
   interactive: boolean;
   onTry: () => void;
   onReplay: () => void;
+  /** The image captured for a step (`make academy-shots`), shown when the live console cannot load. */
+  captured?: (n: number) => string | undefined;
 }) {
   const [frameState, setFrameState] = useState<BridgeState>("loading");
   const [notice] = useState(() => !toldUnavailable);
@@ -51,7 +55,8 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay 
     if (unavailable) toldUnavailable = true;
   }, [unavailable]);
   const caption = step?.note ?? (step?.kind === "demo" ? step.highlight?.note : undefined);
-  const shot = step?.kind === "image" ? { file: step.file, alt: step.alt } : step?.kind === "demo" ? step.shot : undefined;
+  const capturedFile = captured(active);
+  const shot = step?.kind === "image" ? { file: step.file, alt: step.alt } : step?.kind === "demo" ? (step.shot ?? (capturedFile ? { file: capturedFile, alt: caption ?? flow.title } : undefined)) : undefined;
   const showFrame = usesFrame && media === "demo" && !unavailable;
 
   return (
@@ -65,6 +70,7 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay 
         {step?.kind === "terminal" && <Terminal key={`${active}-${run}`} step={step} />}
         {step?.kind === "request" && <RequestPanel step={step} />}
         {step?.kind === "email" && <EmailCard step={step} />}
+        {step?.kind === "code" && <CodePanel key={`${active}-${run}`} step={step} />}
         {shot && (media === "image" || (media === "demo" && unavailable)) && (
           <figure className="flex h-full flex-col overflow-hidden rounded-lg border bg-ground shadow-raised">
             <img src={`./shots/${shot.file}`} alt={shot.alt} className="min-h-0 flex-1 object-contain object-top" />
@@ -92,7 +98,7 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay 
             )}
           </span>
         )}
-        {(media === "terminal" || media === "request" || media === "email") && (
+        {(media === "terminal" || media === "request" || media === "email" || media === "code") && (
           <button type="button" onClick={onReplay} className="min-h-touch rounded-full border px-4 text-sm font-semibold text-ink hover:bg-ground">Play again</button>
         )}
       </div>

@@ -30,7 +30,7 @@ export function About() {
           <dd className="mt-1 font-mono text-xs text-ink-muted">{pct(c.stepsWithMedia, c.steps)}</dd>
         </div>
       </dl>
-      <p className="mt-4 text-sm text-ink-muted">By kind: {Object.entries(c.byKind).map(([k, n]) => `${k} ${n}`).join(" · ")}. Scripted: {c.scripted.map((id, i) => <span key={id}>{i ? ", " : ""}<a className="font-mono text-xs text-primary-link underline" href={href(`/flow/${id}`)}>{id}</a></span>)}.</p>
+      <p className="mt-4 text-sm text-ink-muted">By kind: {Object.entries(c.byKind).map(([k, n]) => `${k} ${n}`).join(" · ")}. Branches of "What else can happen" played live: {c.variations}. Scripted: {c.scripted.map((id, i) => <span key={id}>{i ? ", " : ""}<a className="font-mono text-xs text-primary-link underline" href={href(`/flow/${id}`)}>{id}</a></span>)}.</p>
       <p className="mt-2 text-sm text-ink-muted">Flows without a script still show every step, and a screen flow opens the live console on the screen it starts at.</p>
 
       <h2 className="mt-12 font-display text-2xl font-semibold text-ink">What the reading could not settle</h2>

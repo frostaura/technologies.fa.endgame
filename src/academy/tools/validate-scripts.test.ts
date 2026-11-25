@@ -54,6 +54,27 @@ describe("the step-script validator", () => {
     expect(sandbox({ "ID-02.json": "{ not json" }).problems[0]).toMatch(/not valid JSON/);
   });
 
+  it("accepts a code step and refuses one with no code", () => {
+    const code = { ...ok, steps: [{ step: 1, kind: "code", language: "csharp", code: "var me = identity.CurrentUser;", output: ["{ \"user\": null }"] }] };
+    expect(sandbox({ "ID-02.json": code }).problems).toEqual([]);
+    expect(sandbox({ "ID-02.json": { ...ok, steps: [{ step: 1, kind: "code", language: "csharp" }] } }).problems.length).toBeGreaterThan(0);
+    expect(sandbox({ "ID-02.json": { ...ok, steps: [{ step: 1, kind: "code", language: "cobol", code: "x" }] } }).problems.length).toBeGreaterThan(0);
+  });
+
+  it("accepts variations played from their own start, numbered from 1, each saying what it shows", () => {
+    const variation = { title: "The passkey prompt is closed", persona: "signed-out", scenario: "established", start: "/sign-in", steps: [{ step: 1, kind: "demo", highlight: { text: "Sign in", note: "Closing the prompt changes nothing." } }] };
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [variation] } }).problems).toEqual([]);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...variation, steps: [{ ...variation.steps[0], step: 2 }] }] } }).problems.join()).toMatch(/numbered 1, 2, 3/);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...variation, steps: [{ step: 1, kind: "demo", highlight: { text: "Sign in" } }] }] } }).problems.join()).toMatch(/needs a note/);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ ...variation, persona: "nobody" }] } }).problems.length).toBeGreaterThan(0);
+    expect(sandbox({ "ID-02.json": { ...ok, variations: [{ title: "x", persona: "owner", scenario: "established", start: "/", steps: [], extra: 1 }] } }).problems.length).toBeGreaterThan(0);
+  });
+
+  it("accepts a named moment for the clock", () => {
+    expect(sandbox({ "ID-02.json": { ...ok, steps: [{ step: 1, kind: "demo", clock: { seek: "build:published" } }] } }).problems).toEqual([]);
+    expect(sandbox({ "ID-02.json": { ...ok, steps: [{ step: 1, kind: "demo", clock: { seek: "Build Published" } }] } }).problems.length).toBeGreaterThan(0);
+  });
+
   it("requires a named image to be on disk", () => {
     const image = { ...ok, steps: [{ step: 1, kind: "image", file: "id-02-1.png", alt: "The sign-in screen" }] };
     expect(sandbox({ "ID-02.json": image }).problems[0]).toMatch(/does not exist/);

@@ -7,7 +7,8 @@ import type { StepScript } from "../src/content/scripts.ts";
 /**
  * Validates every `scripts/<FLOW-ID>.json` against the JSON Schema and against the parsed flows:
  * the flow exists, each step number is one of its steps, no step is scripted twice, and every
- * image named is on disk under `public/shots/`.
+ * image named is on disk under `public/shots/`. A variation's steps are its own, numbered 1, 2, 3…
+ * with none missing, and each carries the note that says what it shows.
  */
 
 export interface Coverage {
@@ -17,6 +18,8 @@ export interface Coverage {
   stepsWithMedia: number;
   byKind: Record<string, number>;
   scripted: string[];
+  /** Branches of "What else can happen" that are played, across every script. */
+  variations: number;
 }
 
 export interface ScriptReport {
@@ -60,14 +63,25 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
     }
     if (script.flow !== id) problems.push(`${file}: "flow" says ${script.flow} but the file is ${id}`);
     const seen = new Set<number>();
+    const checkStep = (where: string, step: StepScript["steps"][number]) => {
+      if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${where} names public/shots/${step.shot.file}, which does not exist`);
+      if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${where} names public/shots/${step.file}, which does not exist`);
+      if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${where} is a demo step that sends the console nothing`);
+    };
     for (const step of script.steps) {
       if (step.step > flow.steps.length) problems.push(`${file}: step ${step.step} does not exist; ${id} has ${flow.steps.length} steps`);
       if (seen.has(step.step)) problems.push(`${file}: step ${step.step} is scripted twice`);
       seen.add(step.step);
-      if (step.kind === "demo" && step.shot && !existsSync(path.join(shotsDir, step.shot.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.shot.file}, which does not exist`);
-      if (step.kind === "image" && !existsSync(path.join(shotsDir, step.file))) problems.push(`${file}: step ${step.step} names public/shots/${step.file}, which does not exist`);
-      if (step.kind === "demo" && !step.goto && !step.highlight && !step.act && !step.clock) problems.push(`${file}: step ${step.step} is a demo step that sends the console nothing`);
+      checkStep(`${file}: step ${step.step}`, step);
     }
+    (script.variations ?? []).forEach((v, i) => {
+      const where = `${file}: variation ${i + 1} ("${v.title}")`;
+      v.steps.forEach((step, j) => {
+        if (step.step !== j + 1) problems.push(`${where}: its steps are numbered 1, 2, 3… in order, but step ${j + 1} says ${step.step}`);
+        if (!step.note && !(step.kind === "demo" && step.highlight?.note)) problems.push(`${where}: step ${step.step} needs a note saying what it shows`);
+        checkStep(`${where}: step ${step.step}`, step);
+      });
+    });
     scripts[id] = script;
   }
   const byKind: Record<string, number> = {};
@@ -87,6 +101,7 @@ export function validateScripts(flows: Flow[], scriptsDir = path.join(root, "scr
       stepsWithMedia,
       byKind,
       scripted: Object.keys(scripts),
+      variations: Object.values(scripts).reduce((n, s) => n + (s.variations?.length ?? 0), 0),
     },
   };
 }
