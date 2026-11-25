@@ -78,6 +78,8 @@ public sealed class WorkflowTests
         var researcher = Guid.Parse(cp.Hires["stage:research:frostaura/technologies"]["employeeId"]!.GetValue<string>());
         Assert.Equal(3, cp.Contractors.Count);
         Assert.All(cp.Contractors, c => Assert.Equal(researcher.ToString(), c["briefedBy"]!.GetValue<string>()));
+        // One role per strand, so one burst never reads as a recurring job (the first live run promoted it).
+        Assert.Equal(new[] { "Demand researcher", "Gap researcher", "Product researcher" }, cp.Contractors.Select(c => c["role"]!.GetValue<string>()).Order());
         Assert.Equal(3, cp.ContractorsFinished.Count);
         var strandCalls = model.Calls.Where(c => System(c).Contains("market researcher", StringComparison.Ordinal)).ToList();
         Assert.Equal(cp.Contractors.Select(c => c["id"]!.GetValue<string>()).Order(), strandCalls.Select(c => c.EmployeeId!.Value.ToString()).Order());

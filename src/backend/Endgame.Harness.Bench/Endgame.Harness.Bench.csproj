@@ -16,5 +16,9 @@
     <Compile Remove="Fixtures/**" />
     <None Remove="Fixtures/**" />
     <Content Remove="Fixtures/**" />
+    <!-- The factory proof's browser driver (make e2e-factory) is a Node project of its own. -->
+    <Compile Remove="factory-e2e/**" />
+    <None Remove="factory-e2e/**" />
+    <Content Remove="factory-e2e/**" />
   </ItemGroup>
 </Project>

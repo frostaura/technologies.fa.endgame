@@ -26,7 +26,7 @@ public sealed class AgentFactory(RunnerOptions options)
         SystemPrompt = prompt ?? RunnerResources.Prompt("builder", new Dictionary<string, string> { ["root"] = root, ["skills"] = SkillLibrary.Index(run.Skills, BuilderSkills) }),
         Tools = new ToolRegistry([
             new ReadFileTool(), new EditFileTool(), new WriteFileTool(), new ListFilesTool(), new SearchTool(), new RunTool(), new GitDiffTool(), new CommitTool(),
-            new NotesTool(), new LoadSkillTool(), new MarkItemTool(), new TasksTool(), new SpawnTool(),
+            new NotesTool(), new LoadSkillTool(), new TasksTool(), new SpawnTool(),
         ]),
         Permissions = Policy(run, "build", ["edit_file", "write_file", "run", "commit", "tasks"]),
         Repair = repair,

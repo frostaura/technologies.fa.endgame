@@ -6,7 +6,7 @@
 # set is broken and fails restore without it. Harmless everywhere else, so CI uses it too.
 .PHONY: up down lint lint-backend lint-frontend build build-backend build-frontend test test-backend test-frontend \
         e2e smoke docker-build docker-down prod-config appkit-build appkit-lint appkit-test appkit-proof appkit-vendor \
-        stack-up stack-down e2e-stack e2e-stack-run
+        stack-up stack-down e2e-stack e2e-stack-run fac-up fac-down e2e-factory e2e-factory-run
 
 DOTNET ?= dotnet
 DOTNET_ENV = MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
@@ -160,3 +160,51 @@ e2e-stack-run:
 		STACK_DOCK=http://127.0.0.1:$(STACK_DOCK_PORT) STACK_STATE=$(STACK_STATE) STACK_PROJECT=$(STACK_PROJECT) STACK_SERVICE_TOKEN=$(STACK_SERVICE_TOKEN) \
 		npx playwright test -c playwright.stack.config.ts
 	. $(STACK_STATE)/proof.env && PW_PATH_URL=$$PW_PATH_URL PW_HOST_URL=$$PW_HOST_URL PW_MEMBER_EMAIL=$$PW_MEMBER_EMAIL src/appkit/proof/edge.sh
+
+# ---------------------------------------------------------------------------------------------
+# The factory's proof (`make e2e-factory`, TEST-201): an idea taken all the way to a running private
+# app, for real, with LIVE models — research with web search, placement, hires, the plan, builders,
+# the evaluator calling the running preview, the security review, a private publish — then the owner
+# opens the app in a real browser. OPT-IN: it spends real money on OpenRouter, and stops itself once
+# the credit ledger shows FAC_SPEND_STOP_USD spent. Its own stack (project endgame-fac, its own ports,
+# subnet pool and fresh volumes); the only value taken from .env is OPENROUTER_API_KEY.
+# `make e2e-factory` always tears the stack down; `make fac-up` + `make e2e-factory-run` leave it up.
+FAC_PROJECT ?= endgame-fac
+FAC_EDGE_PORT ?= 18195
+FAC_POSTGRES_PORT ?= 15546
+FAC_MAIL_PORT ?= 18126
+FAC_DOCK_PORT ?= 18196
+FAC_SUBNET_POOL ?= 10.217.0.0/16
+FAC_SPEND_STOP_USD ?= 8.50
+FAC_STATE = $(CURDIR)/.tmp/e2e-factory
+FAC_SERVICE_TOKEN ?= endgame_fac_stack_service_token_0001
+FAC_ENV = ENDGAME_SERVICE_TOKEN=$(FAC_SERVICE_TOKEN) ENDGAME_VAULT_MASTER_KEY= DOCK_SECRET_KEY= POSTGRES_PASSWORD= \
+	COMPOSE_PROJECT_NAME=$(FAC_PROJECT) EDGE_HOST_PORT=$(FAC_EDGE_PORT) POSTGRES_HOST_PORT=$(FAC_POSTGRES_PORT) \
+	MAIL_UI_HOST_PORT=$(FAC_MAIL_PORT) DOCK_HOST_PORT=$(FAC_DOCK_PORT) DOCK_SUBNET_POOL=$(FAC_SUBNET_POOL) \
+	ENDGAME_CONTROL_PLANE_ENVIRONMENT=Development ENDGAME_DEV_LOGIN=true ENDGAME_OPERATORS=operator@endgame.localhost \
+	SECONDS_PER_IDLE_MINUTE=60 ENDGAME_USAGE_REPORT_SECONDS=60
+FAC_COMPOSE = $(FAC_ENV) docker compose -f docker-compose.yml -f docker-compose.e2e.yml
+FAC_DRIVER = src/backend/Endgame.Harness.Bench/factory-e2e
+
+fac-up: .env appkit-vendor
+	@grep -q '^OPENROUTER_API_KEY=..*' .env || { echo "fac-up: set OPENROUTER_API_KEY in .env (the factory calls live models)" >&2; exit 1; }
+	$(FAC_COMPOSE) up -d --build --wait
+
+fac-down: .env
+	-$(FAC_COMPOSE) down -v --remove-orphans --rmi local
+	-docker ps -aq --filter label=endgame.dock=$(FAC_PROJECT) | xargs docker rm -f -v
+	-docker network ls -q --filter label=endgame.dock=$(FAC_PROJECT) | xargs docker network rm
+	-docker images -q --filter label=endgame.dock=$(FAC_PROJECT) | xargs docker image rm -f
+	-test -f $(FAC_STATE)/apps && for app in $$(cat $(FAC_STATE)/apps); do \
+		docker images --format '{{.Repository}}:{{.Tag}}' | grep "^app-$$app:" | xargs docker image rm -f; done
+	-rm -f $(FAC_STATE)/apps $(FAC_STATE)/report.json
+
+e2e-factory: .env
+	$(MAKE) fac-up
+	$(MAKE) e2e-factory-run; status=$$?; $(MAKE) fac-down; exit $$status
+
+e2e-factory-run:
+	mkdir -p $(FAC_STATE)
+	cd $(FAC_DRIVER) && npm ci --no-audit --no-fund && npx playwright install chromium
+	cd $(FAC_DRIVER) && CI=1 FAC_EDGE=http://localhost:$(FAC_EDGE_PORT) FAC_STATE=$(FAC_STATE) \
+		FAC_SPEND_STOP_USD=$(FAC_SPEND_STOP_USD) npx playwright test

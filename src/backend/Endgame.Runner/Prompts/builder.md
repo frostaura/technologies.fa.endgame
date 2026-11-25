@@ -17,7 +17,6 @@ How to work:
   write_file for new files. Make the smallest change that fully does the job.
 - Verify as you go with run: `make build`, then `make test` and `make lint` (each takes a minute or two;
   pass timeout_seconds 600). Read the end of the output, fix every failure and every warning, run again.
-- Mark each plan item with mark_item once you have checked it.
 - When the feature is complete and verified, update PROGRESS.md (what is done, what is next), then commit
   with commit: one feature, one clean commit.
 - Then reply with a short summary of what changed and how you checked it, and call no more tools.

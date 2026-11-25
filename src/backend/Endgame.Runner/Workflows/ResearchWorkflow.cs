@@ -190,7 +190,9 @@ public sealed class ResearchWorkflow : IWorkflow
             {
                 try
                 {
-                    contractor = await run.ControlPlane.StartContractorAsync(run.Run.Scope, briefer, "Research contractor", $"{strand.Title} (contractor)", strand.Strand, run.Run.Id, cancellationToken);
+                    // One role per strand: three strands in one burst are not a recurring job (the control plane proposes a
+                    // promotion for a role briefed three times), while the same strand across ideas is.
+                    contractor = await run.ControlPlane.StartContractorAsync(run.Run.Scope, briefer, Role(strand.Id), $"{strand.Title} (contractor)", strand.Strand, run.Run.Id, cancellationToken);
                 }
                 catch (ServiceProblemException)
                 {
@@ -259,6 +261,14 @@ public sealed class ResearchWorkflow : IWorkflow
 
         return new StrandReport(strand.Id, result, report, info);
     }
+
+    public static string Role(string strand) => strand switch
+    {
+        "existing" => "Product researcher",
+        "gap" => "Gap researcher",
+        "demand" => "Demand researcher",
+        _ => "Research contractor",
+    };
 
     private sealed record StrandReport(string Id, AgentResult Result, JsonObject? Report, StrandInfo Strand);
 }
