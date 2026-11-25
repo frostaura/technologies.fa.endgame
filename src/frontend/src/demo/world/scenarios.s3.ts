@@ -110,12 +110,28 @@ defineScenario({
 });
 
 defineScenario({
+  name: "s3-checkpoints-waiting-for-budget",
+  title: "Learning in checkpoints mode, with 5 credits left: research still waits for budget",
+  apply: (w) => {
+    only(w, IDS.runResearchTides);
+    set(w, LEARNING, "autonomy", "checkpoints");
+    capLearning(w, 5);
+  },
+  route: "/runs/{run}",
+  featured: TIDES,
+});
+
+defineScenario({
   name: "s3-budget-runs-out",
   title: "A build whose budget runs out part-way",
   apply: (w) => {
     only(w, IDS.runBuildReadingList);
-    // In checkpoints mode an over-budget estimate does not pause: the work starts, and the gateway stops it when the credits run out.
-    set(w, LEARNING, "autonomy", "checkpoints");
+    // The estimates fit what is left, so the work starts; it costs more than they said, and the gateway stops it when the credits run out.
+    const r = run(w, IDS.runBuildReadingList);
+    if (r?.playback) {
+      r.playback.params = { ...r.playback.params, startEstimate: 1.2, planEstimate: 1.1 };
+      r.run.estimateCredits = 1.2;
+    }
     capLearning(w, 1.4);
   },
   route: "/runs/{run}",

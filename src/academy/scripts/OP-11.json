@@ -14,46 +14,6 @@
         "status": "suspended"
       },
       "response": {
-        "status": 403,
-        "body": {
-          "type": "https://endgame.frostaura.net/problems/forbidden",
-          "title": "Forbidden",
-          "status": 403,
-          "detail": "This needs the owner role at 'northwind'; you are a admin there (set at northwind).",
-          "code": "forbidden"
-        }
-      },
-      "note": "An operator in God mode acts as an Admin, and changing an organisation needs its Owner: refused."
-    },
-    {
-      "step": 2,
-      "kind": "request",
-      "method": "PATCH",
-      "path": "/api/organisations/8c817256-b6e0-42c2-a5b3-601576450a79",
-      "body": {
-        "status": "suspended"
-      },
-      "response": {
-        "status": 403,
-        "body": {
-          "type": "https://endgame.frostaura.net/problems/forbidden",
-          "title": "Forbidden",
-          "status": 403,
-          "detail": "An organisation is suspended or reinstated by FrostAura.",
-          "code": "forbidden"
-        }
-      },
-      "note": "Its Owner, who passes the role check, is refused because only FrostAura changes an organisation's status."
-    },
-    {
-      "step": 3,
-      "kind": "request",
-      "method": "PATCH",
-      "path": "/api/organisations/8c817256-b6e0-42c2-a5b3-601576450a79",
-      "body": {
-        "status": "suspended"
-      },
-      "response": {
         "status": 200,
         "body": {
           "id": "8c817256-b6e0-42c2-a5b3-601576450a79",
@@ -65,7 +25,57 @@
           "createdAt": "2026-09-24T09:00:00+00:00"
         }
       },
-      "note": "Only an operator who is also the organisation's Owner gets through; its apps then leave the routing table."
+      "note": "An operator in God mode acts as an Admin there, which is enough for FrostAura to suspend it; its apps leave the routing table."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "GET",
+      "path": "/api/audit/operator-access?organisation=northwind",
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "id": "5d1f2a8e-0c4b-4f7e-9a61-3b2c8d7e9f10",
+            "at": "2026-11-25T10:04:00+00:00",
+            "action": "admin.UpdateOrganisation",
+            "operator": {
+              "id": "e3b7c1d2-4a5f-4e6b-8c9d-0f1a2b3c4d5e",
+              "email": "nell@frostaura.example",
+              "displayName": "Nell Avery"
+            },
+            "detail": {
+              "title": "Renamed, suspended or reinstated the organisation",
+              "scope": "northwind",
+              "method": "PATCH",
+              "path": "/api/organisations/8c817256-b6e0-42c2-a5b3-601576450a79"
+            }
+          }
+        ]
+      },
+      "note": "Its Owner reads the change in the operator log, under the operator's name: God mode is never silent."
+    },
+    {
+      "step": 3,
+      "kind": "request",
+      "method": "PATCH",
+      "path": "/api/organisations/8c817256-b6e0-42c2-a5b3-601576450a79",
+      "body": {
+        "status": "active"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "8c817256-b6e0-42c2-a5b3-601576450a79",
+          "level": "organisation",
+          "slug": "northwind",
+          "name": "Northwind",
+          "path": "northwind",
+          "status": "active",
+          "createdAt": "2026-09-24T09:00:00+00:00"
+        }
+      },
+      "note": "The operator reinstates it; its apps are routed again. The Owner or an Admin who is not an operator is refused: only FrostAura changes this."
     }
   ]
 }

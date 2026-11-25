@@ -107,8 +107,8 @@
           "step": 1,
           "kind": "demo",
           "highlight": {
-            "text": "Credits could not be loaded",
-            "note": "Ines is an Admin of Technologies only. Credits are read at organisation level, where she holds no role, so they are not hers to see."
+            "text": "Your role is in Technologies, so this shows its spending and caps.",
+            "note": "Ines is an Admin of Technologies only: the page reads credits at her division, its spending and caps, as home does for her."
           }
         }
       ]

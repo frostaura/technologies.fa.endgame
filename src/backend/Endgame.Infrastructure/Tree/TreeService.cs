@@ -141,7 +141,7 @@ public sealed class TreeService(
         ArgumentNullException.ThrowIfNull(parent);
         if (parent.Level != level - 1)
         {
-            throw EndgameProblem.Invalid($"A {level.ToWire()} is created under a {(level - 1).ToWire()}; '{parent.Path}' is a {parent.Level.ToWire()}.");
+            throw EndgameProblem.Invalid($"{NodeLevels.Capitalised(level.WithArticle())} is created under {(level - 1).WithArticle()}; '{parent.Path}' is {parent.Level.WithArticle()}.");
         }
 
         var wanted = (slug ?? "").Trim().ToLowerInvariant();

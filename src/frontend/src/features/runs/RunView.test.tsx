@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { modeSet } from "@/store/uiSlice";
 import { FakeEventSource, ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { RunView } from "./RunView";
+import { flushRunStreams } from "./useRunStream";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const RUN = { id: "r1", kind: "research", title: "Researching Pager", scope: "acme", status: "running", startedAt: "2026-11-24T10:00:00Z", finishedAt: null, lastSeq: 0, ideaId: "i1", estimateCredits: 60, spentCredits: 0 };
@@ -25,6 +26,7 @@ function feed(events: [string, Record<string, unknown>?][]) {
     const es = FakeEventSource.latest();
     es.open();
     events.forEach(([type, payload], i) => es.emit(i + 1, type, payload ?? {}));
+    flushRunStreams();
   });
 }
 
@@ -164,6 +166,33 @@ describe("RunView", () => {
     expect(await screen.findByText(/Could not pause: Cannot pause now/)).toBeTruthy();
     expect(screen.getByText("Working")).toBeTruthy();
     expect(api.calls.some((c) => c.path === "/api/runs/r1/pause")).toBe(true);
+  });
+
+  it("draws a long build promptly, folding its earlier steps, and says one cost the log and the run agree on", async () => {
+    // About 2,300 events, as a real build writes them: model calls, tools and messages, with free repairs among them.
+    const events: [string, Record<string, unknown>?][] = [["run.started"], ["estimate.made", { credits: 40 }]];
+    for (let i = 0; i < 460; i += 1) {
+      const repair = i % 10 === 9;
+      events.push(["model.requested", { callId: `k${i}`, model: "vendor/small", taskType: "build", reservedCredits: 0.2 }]);
+      events.push(["model.replied", { callId: `k${i}`, model: "vendor/small", settledCredits: 0.07, billable: !repair }]);
+      events.push(["tool.requested", { tool: "edit_file", callId: `t${i}` }]);
+      events.push(["tool.result", { tool: "edit_file", callId: `t${i}`, content: "Edited." }]);
+      events.push(["message", { from: "builder", title: `Part ${i + 1}`, text: `Built part ${i + 1} of the reading list.` }]);
+    }
+    base({ "GET /api/runs/r1": json({ ...RUN, kind: "build", spentCredits: 28.98 }) });
+    renderWithStore(<RunView runId="r1" />);
+    await screen.findByRole("heading", { name: "Researching Pager" });
+    const started = performance.now();
+    feed(events);
+    expect(performance.now() - started).toBeLessThan(3000);
+
+    const cost = screen.getByRole("region", { name: "Cost" });
+    expect(within(cost).getByText("Spent so far").nextSibling?.textContent).toBe("29 credits"); // 32 with the free repairs counted
+    const steps = screen.getByRole("list", { name: "Steps" });
+    expect(within(steps).getAllByRole("listitem").length).toBeLessThanOrEqual(200);
+    expect(screen.getByText(/earlier steps folded away; the latest 200 are below\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Show 200 earlier steps$/ }));
+    expect(within(screen.getByRole("list", { name: "Steps" })).getAllByRole("listitem").length).toBe(400);
   });
 
   it("asks before cancelling", async () => {

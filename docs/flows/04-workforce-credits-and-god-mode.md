@@ -353,7 +353,7 @@ Shared vocabulary used below:
   3. "Reports to it:" links to each report's record.
   4. A contractor's own page shows the badge, "<Role> · Contractor", the section "Its brief", the link "Briefed by <name>", and the memory note "A contractor keeps no memory: what it learns goes to the employee who briefed it."
 - **You know it worked when:** the contractor count and the list match the chart.
-- **Variations and refusals:** a contractor page shows no actions, no conversation and no memory editing. **A person cannot stop, cap or brief a contractor from any screen or public endpoint.** Contractors are created and finished only by the Runner (`/internal/contractors`).
+- **Variations and refusals:** a contractor page shows no conversation and no memory editing; an Admin can cap it or stop it there (EMP-11). A person cannot brief a contractor: contractors are created and finished by the Runner (`/internal/contractors`).
 - **Where:** `EmployeeView.tsx` (ContractorsBriefed). `EmployeeService.StartContractorAsync` and `FinishContractorAsync`.
 - **Reachable from:** UI to read. Creating and finishing is system only.
 - **Covered by tests:** `EmployeeView.test.tsx`; `WorkforceEdits.test.tsx` ("links each contractor working now…"). `WorkforceTests` (contractors).
@@ -409,6 +409,30 @@ Shared vocabulary used below:
 - **Reachable from:** UI (screen); also API, and MCP `employee_update` for the name, role and mandate.
 - **Covered by tests:** `WorkforceEdits.test.tsx`; `tests-e2e/manage.spec.ts` ("an Admin edits the job…"); `WorkforceTests`.
 
+### EMP-11 Stop or cap a contractor
+- **Who:** Admin or Owner.
+- **Level:** Core
+- **Learn first:** EMP-07.
+- **What you learn:** a contractor can be held to a cap of its own, or stopped at once, without touching the work that briefed it.
+- **Starts at:** a working contractor's own page, `/employees/<contractorId>` (from "Contractors working now", EMP-07), **"Cap its spending"** and **"Stop this contractor"**. Also `PATCH /api/employees/{id}` (`jobDescription.monthlyCreditLimit`, or `clearMonthlyCreditLimit`), `POST /api/employees/{id}/stop`, and MCP `contractor_stop`.
+- **Needs:** Admin where the contractor works. The contractor is still working.
+- **Steps:**
+  1. "Budget" under "Job description" reads "No cap of its own; <Briefer>’s budget holds", or "<n> credits a month of its own, inside <Briefer>’s budget".
+  2. Press "Cap its spending". The form asks "Credits a month, at most" and says "Held before each of its calls, so it is never passed; <Briefer>’s own budget still holds too. Leave it empty for no cap of its own." Press "Save the cap"; the "Budget" line shows it.
+  3. Press "Stop this contractor". The confirmation reads "Stop <Name>?" and "It makes no more calls from its next step. What it has done is kept, and the work that briefed it carries on without it. A stopped contractor cannot be started again."
+  4. Press "Yes, stop it" ("Keep it working" cancels). The badge reads "Finished" and the line "<Role> · Contractor · Finished just now"; the actions are gone. On its briefer's page it leaves "Contractors working now".
+- **You know it worked when:** the badge reads "Finished", and the contractor no longer appears among those working now.
+- **Variations and refusals:**
+  - Below Admin, neither action is shown; the API answers 403 "This needs the admin role at '<scope>'; you are a builder there (set at <scope>)."
+  - A cap that is not a number: "A cap is a number of credits a month, or empty for none of its own."
+  - Stopping one that has finished: 409 "<Name> has already finished.", shown as "Could not stop it: … Nothing was changed."
+  - An employee is not stopped: 400 "Only a contractor is stopped; <Name> is an employee, who is paused or let go." (EMP-04, EMP-05).
+  - Its next model call is refused by the gateway, so it stops at its next step; the briefing work carries on, and what the contractor learned is not handed to its briefer.
+  - In God mode the stop is logged for the Owner as "Stopped a contractor" (OP-10).
+- **Where:** `EmployeeView.tsx` (`ContractorActions`). `EmployeeService.StopContractorAsync`; `WorkforceEndpoints` (`StopContractor`); `CreditLedger` (a contractor's own cap); `GatewayContext` (a finished contractor makes no calls).
+- **Reachable from:** UI; API; MCP `contractor_stop` (stop only).
+- **Covered by tests:** `WorkforceEdits.test.tsx` ("stops a contractor after confirming, and caps what it may spend"); `SweepXTests.A_person_stops_a_contractor_and_caps_one_and_an_employee_is_not_stopped`; `AuthorizationMatrixTests` (`POST /api/employees/{id}/stop`, `contractor_stop`).
+
 ## Employee memory (MEM)
 
 ### MEM-01 Read what an employee remembers
@@ -432,7 +456,7 @@ Shared vocabulary used below:
   - The list is capped at 200 entries.
   - **"What changed in it"** lists the change log, newest first: "<Added|Corrected|Merged|Removed|Archived|Restored|Reviewed> <by the employee|by a person|at a review|by Endgame>: <title>", the reason given for a removal in quotes, when, and "the work it came from" when a run made it. Eight show; "Show all <n>" shows the rest. Empty: "Nothing has changed in it yet." Failed: "What changed in the memory could not be loaded".
 - **Where:** `EmployeeView.tsx` (MemoryPanel, MemoryRow). `GET /api/employees/{id}/memory?includeArchived=`, `GET …/memory/changes?limit=100`.
-- **Reachable from:** UI. **No MCP memory tools exist.**
+- **Reachable from:** UI; MCP `memory_read` (AST-12).
 - **Covered by tests:** `EmployeeView.test.tsx` ("shows an empty memory and a memory that failed to load, distinctly"); `WorkforceEdits.test.tsx` ("…lists what changed in the memory", "records a failed read of the memory's history…"). `workforce.spec.ts`.
 
 ### MEM-02 Add something an employee should know
@@ -452,7 +476,7 @@ Shared vocabulary used below:
   - Server refusal: "It was not saved: <reason>" and the entry is removed. Title or body over the limits: 400. Released: 409.
   - The place an entry is about defaults to the employee's own level. Choosing another place (`scope`) is API only.
 - **Where:** `EmployeeView.tsx` (MemoryForm). `POST /api/employees/{id}/memory { title, body, kind, scope? }`. `MemoryService.AddAsync`.
-- **Reachable from:** UI.
+- **Reachable from:** UI; MCP `memory_add`, which also takes `scope` (AST-12).
 - **Covered by tests:** `EmployeeView.test.tsx` ("adds to the memory at once, and takes it back with the reason when refused"). `workforce.spec.ts` ("memory is added, corrected and removed…"). `WorkforceTests.Memory_is_written_after_a_task_read_for_a_run_reviewed_and_curated_by_the_owner`.
 
 ### MEM-03 Correct a memory entry
@@ -469,7 +493,7 @@ Shared vocabulary used below:
 - **You know it worked when:** the origin line reads "Corrected by a person".
 - **Variations and refusals:** "The correction was not saved: <reason>" rolls the entry back. "Cancel" closes the form. A released employee's archived memory is refused over the API too: 409 "<Name> has been released; their memory is archived until a rehire."
 - **Where:** `PATCH /api/employees/{id}/memory/{entryId}`. `MemoryService.CorrectAsync`.
-- **Reachable from:** UI.
+- **Reachable from:** UI; MCP `memory_correct` (AST-12).
 - **Covered by tests:** `EmployeeView.test.tsx` ("corrects and removes an entry, with why"). `workforce.spec.ts`.
 
 ### MEM-04 Remove a memory entry
@@ -485,7 +509,7 @@ Shared vocabulary used below:
 - **You know it worked when:** the entry is no longer listed.
 - **Variations and refusals:** "It was not removed: <reason>" puts it back. An empty reason is logged as "Removed by a person". A released employee's archived memory is refused over the API too (409, as MEM-03).
 - **Where:** `DELETE /api/employees/{id}/memory/{entryId}?why=`. `MemoryService.RemoveAsync`.
-- **Reachable from:** UI.
+- **Reachable from:** UI; MCP `memory_forget` (AST-12).
 - **Covered by tests:** `EmployeeView.test.tsx`. `workforce.spec.ts`.
 
 ### MEM-05 Start a memory review
@@ -548,10 +572,11 @@ Shared vocabulary used below:
 - **Variations and refusals:**
   - No organisation: "There are no credits to show until your organisation is named." with a "Start" link.
   - Failed: "Credits could not be loaded". Header pill failure: "Balance unavailable".
-  - The page reads the active organisation: the one an operator entered in God mode, or the one a person in several chose (ID-02). A person whose only role is at a division gets "Credits could not be loaded": the page asks at organisation level, and `GET /api/credits` needs a Viewer there (404 otherwise; `TreeEndpoints.cs`).
-- **Where:** `features/credits/CreditsView.tsx`, `creditsModel.ts`, `shell/AppShell.tsx` (CreditsPill). `GET /api/credits?scope=<org>`. `ReadModels.CreditsAsync`.
+  - The page reads the active organisation: the one an operator entered in God mode, or the one a person in several chose (ID-02).
+  - A person whose roles all sit below the organisation reads credits at the highest level they hold one — their division, else their project, else their app — as home does for them (ORG-19): "Your role is in {name}, so this shows its spending and caps. The balance is the whole organisation’s, which its work draws on." The three figures and the budgets are that level's; an Admin there sets its caps (CRED-03). The header pill still reads "Balance unavailable".
+- **Where:** `features/credits/CreditsView.tsx` (`highestGrant`), `creditsModel.ts`, `shell/AppShell.tsx` (CreditsPill). `GET /api/credits?scope=<org, or the person's own level>`. `ReadModels.CreditsAsync`.
 - **Reachable from:** UI. Also MCP `credits_get`.
-- **Covered by tests:** `CreditsView.test.tsx`, `creditsModel.test.ts`. `CascadeCreditsAndAppsTests.Credits_show_balance_budgets_in_tree_order_and_top_ups`.
+- **Covered by tests:** `CreditsView.test.tsx` (including "reads credits at the division of someone granted only that division…"), `creditsModel.test.ts`. `CascadeCreditsAndAppsTests.Credits_show_balance_budgets_in_tree_order_and_top_ups`.
 
 ### CRED-02 Read spending and caps by level
 - **Who:** Viewer and above.
@@ -935,19 +960,22 @@ Shared vocabulary used below:
 - **Who:** operator.
 - **Level:** Operator / Developer
 - **Learn first:** OP-02.
-- **What you learn:** only FrostAura changes an organisation's status — and today the check lets through only an operator who is also that organisation's Owner.
+- **What you learn:** only FrostAura changes an organisation's status; God mode is enough, and the change is written to the operator log its Owner reads.
 - **Starts at:** `PATCH /api/organisations/{id} { status }`.
-- **Needs:** an operator who holds the Owner role in that organisation. God mode gives an operator Admin, never Owner, and changing an organisation needs Owner, so an operator who has only entered it is refused.
+- **Needs:** a FrostAura operator. Entering the organisation in God mode makes the operator an Admin there, which is the role the status change asks for; the request itself counts as entering it, and is logged.
 - **Steps:**
-  1. An operator in God mode sends `{ "status": "suspended" }`: 403 "This needs the owner role at '<slug>'; you are a admin there (set at <slug>)."
-  2. The organisation's Owner sends it: they pass the role check, then get 403 "An organisation is suspended or reinstated by FrostAura."
-  3. An operator who is also its Owner gets 200 with the organisation (`id`, `level`, `slug`, `name`, `path`, `status`, `createdAt`). A suspended organisation's apps leave the routing table (it routes only active organisations).
-- **You know it worked when:** the operator card shows " · <status>".
-- **Variations and refusals:** as the steps: in practice no operator can suspend an organisation they do not own.
-- **Where:** `TreeEndpoints.MapNodeChanges` (organisations: change role Owner), `AccessService.OperatorEntryAsync` (an operator is an Admin).
+  1. An operator in God mode sends `{ "status": "suspended" }`: 200 with the organisation (`id`, `level`, `slug`, `name`, `path`, `status`, `createdAt`). A suspended organisation's apps leave the routing table (it routes only active organisations).
+  2. Its operator log gains "Renamed, suspended or reinstated the organisation", under the operator's name.
+  3. The operator sends `{ "status": "active" }` to reinstate it: 200, and its apps are routed again.
+- **You know it worked when:** the operator card shows " · suspended", and loses it once reinstated.
+- **Variations and refusals:**
+  - The organisation's own Owner or an Admin, who are not operators: 403 "An organisation is suspended or reinstated by FrostAura."
+  - Someone with no role there who is not an operator: 404, as for any scope they cannot see.
+  - A status an organisation cannot have: 400 "'archived' is not a status an organisation can have: use active, suspended."
+  - Renaming in the same request still needs the Owner: an operator who is not its Owner gets 403 "This needs the owner role at '<slug>'; you are an admin there (set at <slug>)."
+- **Where:** `TreeEndpoints.MapNodeChanges` (an organisation's status: Admin, then operators only), `AccessService.OperatorEntryAsync` (an operator is an Admin), `OperatorActionLog` (the log entry).
 - **Reachable from:** API only. **No screen.**
-- **Covered by tests:** none found.
-- **Finding:** the role an organisation change needs (Owner) and the role God mode gives (Admin) do not meet, so FrostAura cannot suspend an organisation it does not also own. Read from `TreeEndpoints.cs` and `AccessService.cs`.
+- **Covered by tests:** `SweepXTests.An_operator_in_god_mode_suspends_and_reinstates_an_organisation_and_an_admin_cannot`; `src/demo/server/sweepx.test.ts` ("lets an operator suspend and reinstate an organisation").
 
 ---
 
@@ -962,16 +990,16 @@ Shared vocabulary used below:
 8. ~~An employee's job cannot be changed on screen; rehiring into a new place is API only~~ — fixed (EMP-10, EMP-09).
 9. ~~There is no screen to raise an owner hire~~ — fixed (HIRE-09).
 10. ~~"Propose as a permanent hire" shows for Viewers and Builders, and its need key differs from the system's~~ — fixed (HIRE-07).
-11. ~~The memory change log is never listed on a screen~~ — fixed (MEM-01). Memory still has no MCP tools.
+11. ~~The memory change log is never listed on a screen~~ — fixed (MEM-01). ~~Memory has no MCP tools~~ — fixed: `memory_read`, `memory_add`, `memory_correct`, `memory_forget` (MEM-01 to MEM-04).
 12. **Fixed:** corrections and removals of a released employee's archived memory are refused (409), as UC-113 A1 says (MEM-03, MEM-04).
 13. ~~There is no screen to remove the organisation's own overdraft limit or a tighter limit~~ — fixed (CRED-05, CRED-06).
 14. ~~The zero-balance line contradicts the overdraft~~ — fixed (CRED-01). "No overdraft is set…" and "No spending or caps anywhere…" still look unreachable.
 15. ~~An employee's budget row counts only its own spend~~ — fixed: it counts its contractors, as its cap does (CRED-02).
-16. ~~Released employees are not listed; contractor rows are not links~~ — fixed (EMP-09, EMP-07). A person still cannot stop or cap a contractor.
+16. ~~Released employees are not listed; contractor rows are not links~~ — fixed (EMP-09, EMP-07). ~~A person cannot stop or cap a contractor~~ — fixed (EMP-11).
 17. **`GET /api/employees/{id}/track-record` and `GET /api/operator/top-ups?organisation=` are not called by any screen.**
-18. **Fixed:** the operator log and the Credits page use the organisation being shown (in God mode, the one entered). Still open: a member whose only role is at a division cannot load Credits at all, because the page asks at organisation level (CRED-01).
+18. **Fixed:** the operator log and the Credits page use the organisation being shown (in God mode, the one entered). ~~A member whose only role is at a division cannot load Credits~~ — fixed: the page asks at their own level (CRED-01).
 19. **Fixed:** a fulfilled top-up request is closed with the top-up's note and logged as `topup_request.fulfilled` (OP-06).
-20. **Open:** no operator can suspend or reinstate an organisation they do not also own: the change needs Owner, and God mode gives Admin (OP-11).
+20. ~~No operator can suspend or reinstate an organisation they do not also own~~ — fixed: God mode's Admin is enough for an operator, and no one else may (OP-11).
 21. **Docs versus code:**
     - UC-103 says caps are set by an Admin, but with no screen.
     - UC-111 and UC-112 match the API.

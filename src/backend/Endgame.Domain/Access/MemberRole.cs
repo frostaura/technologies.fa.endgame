@@ -25,6 +25,10 @@ public static class MemberRoles
         _ => throw new DomainException($"Unknown role {role}."),
     };
 
+    /// <summary>The role with its article, as a sentence says it: "an admin", "an owner", "a builder", "a viewer".</summary>
+    public static string WithArticle(this MemberRole role) =>
+        role is MemberRole.Admin or MemberRole.Owner ? $"an {role.ToWire()}" : $"a {role.ToWire()}";
+
     public static MemberRole FromWire(string? value) => value switch
     {
         "owner" => MemberRole.Owner,

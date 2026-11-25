@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeStore } from "@/store";
 import { FakeEventSource } from "@/test/harness";
-import { followRun, parseEvent } from "./useRunStream";
+import { BATCH_MS, followRun, parseEvent } from "./useRunStream";
 
 beforeEach(() => {
   FakeEventSource.instances = [];
@@ -33,6 +33,10 @@ describe("followRun", () => {
     first.emit(1, "run.started");
     first.emit(2, "task.created", { taskId: "t" });
     expect(store.getState().runs.r1?.stream).toBe("open");
+    // Stored together, once the batch is due: a long run's replay is one redraw, not thousands.
+    expect(store.getState().runs.r1?.events ?? []).toHaveLength(0);
+    vi.advanceTimersByTime(BATCH_MS);
+    expect(store.getState().runs.r1?.events.map((e) => e.seq)).toEqual([1, 2]);
 
     first.fail();
     expect(first.closed).toBe(true);
@@ -45,6 +49,7 @@ describe("followRun", () => {
     // A repeat across the reconnect is dropped; the log stays gapless and single.
     second.emit(2, "task.created", { taskId: "t" });
     second.emit(3, "message", { text: "hello" });
+    vi.advanceTimersByTime(BATCH_MS);
     expect(store.getState().runs.r1?.events.map((e) => e.seq)).toEqual([1, 2, 3]);
     stop();
     expect(second.closed).toBe(true);
@@ -57,6 +62,8 @@ describe("followRun", () => {
     es.open();
     es.emit(1, "run.finished", { outcome: "succeeded" });
     expect(es.closed).toBe(true);
+    // Closing stores what was still waiting for its batch.
+    expect(store.getState().runs.r2?.events.map((e) => e.type)).toEqual(["run.finished"]);
     expect(store.getState().runs.r2?.stream).toBe("ended");
     vi.advanceTimersByTime(60_000);
     expect(FakeEventSource.instances).toHaveLength(1);

@@ -230,6 +230,13 @@ area("WorkforceEndpoints", {
       Object.assign(e, { status: "idle", releasedAt: null });
       for (const m of world.memory) if (m.employeeId === e.id) m.archived = false;
       world.memoryChanges.unshift({ id: newId(world, "change"), memoryId: null, action: "restored", by: "platform", userId: null, runId: null, detail: { reason: "rehired" }, at });
+    } else if (action === "stop") {
+      // `EmployeeService.StopContractorAsync`: finished at once, so it makes no more calls; the briefing work carries on without it.
+      if (e.kind !== "contractor") throw invalid(`Only a contractor is stopped; ${e.name} is an employee, who is paused or let go.`);
+      if (e.status === "released") throw conflict(`${e.name} has already finished.`);
+      Object.assign(e, { status: "released", releasedAt: at, lastRunId: e.currentRun?.id ?? e.lastRunId, currentRun: null });
+      const briefer = world.trackRecords.find((t) => t.employeeId === e.briefedBy?.id);
+      if (briefer && briefer.contractors.working > 0) briefer.contractors.working -= 1;
     } else if (action === "reassign") {
       const scope = str(req.body, "scope");
       if (!scope) throw invalid("A scope is required, written as org, org/division, org/division/project or org/division/project/app.");

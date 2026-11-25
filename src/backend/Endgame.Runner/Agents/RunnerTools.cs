@@ -204,7 +204,7 @@ public sealed class SentEmailsTool(ControlPlaneClient controlPlane, Guid appId) 
 {
     public string Name => "sent_emails";
 
-    public string Description => "List the e-mail the running app has asked the platform to send, newest first: recipients, subject, text and delivery status. Use it after the call_app call that should send one.";
+    public string Description => "List the e-mail the running app has asked the platform to send, newest first: recipients, subject, text and delivery status. Mail the preview sends is held, never delivered, and still counts as sent by the app. Use it after the call_app call that should send one.";
 
     public JsonObject Parameters => Schema.Object(new JsonObject { ["limit"] = Schema.Int("At most this many (1-20).") });
 
@@ -220,13 +220,16 @@ public sealed class SentEmailsTool(ControlPlaneClient controlPlane, Guid appId) 
             var mails = await controlPlane.SentEmailsAsync(appId, Math.Clamp(Json.Int(call.Arguments, "limit") ?? 10, 1, 20), cancellationToken);
             return new ToolOutcome(mails.Count == 0
                 ? "The app has sent no e-mail."
-                : string.Join("\n\n", mails.OfType<JsonObject>().Select(m => $"To: {string.Join(", ", Json.Strings(m, "to"))}\nSubject: {Json.Str(m, "subject")}\nStatus: {Json.Str(m, "status")} at {Json.Str(m, "createdAt")}\n{OutputText.Truncate(Json.Str(m, "text") ?? "", 1500)}")));
+                : string.Join("\n\n", mails.OfType<JsonObject>().Select(m => $"To: {string.Join(", ", Json.Strings(m, "to"))}\nSubject: {Json.Str(m, "subject")}\nStatus: {StatusLine(Json.Str(m, "status"))} at {Json.Str(m, "createdAt")}\n{OutputText.Truncate(Json.Str(m, "text") ?? "", 1500)}")));
         }
         catch (ServiceProblemException e)
         {
             return ToolOutcome.Error($"The sent e-mail could not be read: {e.Detail}. Count an e-mail requirement as not shown.", "unavailable");
         }
     }
+
+    /// <summary>A preview's mail is held: the app sent it, and nobody received it.</summary>
+    public static string StatusLine(string? status) => status == "held" ? "held (sent by the preview, kept here and never delivered)" : status ?? "unknown";
 }
 
 /// <summary><c>check_preview</c>: the evaluator's view of the running app.</summary>

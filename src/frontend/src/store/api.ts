@@ -394,7 +394,7 @@ export const api = createApi({
         }
       },
     }),
-    employeeAction: build.mutation<Employee, { id: string; action: "release" | "rehire" | "reassign"; scope?: string }>({
+    employeeAction: build.mutation<Employee, { id: string; action: "release" | "rehire" | "reassign" | "stop"; scope?: string }>({
       query: ({ id, action, scope }) => ({ url: `employees/${encodeURIComponent(id)}/${action}`, method: "POST", body: scope ? { scope } : {} }),
       extraOptions: guarded(g.employeeGuard, "the employee"),
       invalidatesTags: (_r, _e, { id }) => [{ type: "Employee", id }, "Employee", "Tree", "Ontology", "Memory"],

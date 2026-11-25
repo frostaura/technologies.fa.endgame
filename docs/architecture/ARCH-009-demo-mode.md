@@ -136,7 +136,7 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `no-secrets` | No secret set anywhere in Northwind | |
 | `s3-research-failed`, `s3-research-cancelled` | The tide board's research ends with no verdict, or was cancelled: "Try again" on the idea and the run (`scenarios.s3.ts`) | |
 | `s3-checkpoints`, `s3-start-checkpoint` | Northwind in checkpoints mode, so a verdict waits for you; Learning asking "Start this work?" before research begins | |
-| `s3-waiting-for-budget`, `s3-budget-runs-out` | Learning with 5 credits left, so research waits for budget; in checkpoints mode with 1.4 left, so the reading list's build stops part-way for budget | |
+| `s3-waiting-for-budget`, `s3-checkpoints-waiting-for-budget`, `s3-budget-runs-out` | Learning with 5 credits left, so research waits for budget; the same in checkpoints mode, which waits too; 1.4 left with the reading list's build estimated within it, so it starts and stops part-way for budget | |
 | `s3-change-running`, `s3-change-failed` | A change to Court booking playing from its estimate; one whose check of what worked before still fails after its repairs | |
 | `s3-stage-rules` | Learning's build stage asks before `docs/app.md` changes and refuses `docs/decisions.md` | |
 | `s3-suggestions`, `s3-employee-paused` | Two open ideas from the portfolio, one taken, one set aside; Kasper paused, so Court booking takes no new work | |

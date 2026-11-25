@@ -82,18 +82,19 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Starts at:** `/start`.
 - **Needs:** a balance or budget headroom below the estimate.
 - **Level:** Core. **Learn first:** IDEA-02; credits and overdraft (another reader's area).
-- **What you learn:** in auto-mode, work whose estimate would break the budget does not begin. It waits, and nothing is lost.
+- **What you learn:** in every autonomy mode, work whose estimate would break the budget does not begin. It waits, and nothing is lost.
 - **Steps:**
   1. Nothing on the start screen checks the balance. "Research this idea" works and the run opens.
-  2. In auto-mode, before any work, the Runner compares the estimate with the headroom: the tightest monthly cap on the chain, or the balance down to the overdraft limit. If the estimate is larger, the run shows the badge **"Paused"** and the message **"Endgame · Waiting for budget"**: "This work is estimated at {x} credits, more than the {y} left in its budget, so it has not started. Raise the budget or top up, then resume it."
+  2. Before any work, in auto-mode and checkpoints mode alike, the Runner compares the estimate with the headroom: the tightest monthly cap on the chain, or the balance down to the overdraft limit. If the estimate is larger, the run shows the badge **"Paused"** and the message **"Endgame · Waiting for budget"**: "This work is estimated at {x} credits, more than the {y} left in its budget, so it has not started. Raise the budget or top up, then resume it."
   3. After a top-up or a budget raise, press **"Resume"** (RUN-05). The check runs again, and the run starts or pauses again.
 - **You know it worked when:** after resuming, the badge changes to "Working" and the step "Work started" appears.
 - **Variations and refusals:**
-  - **In checkpoints mode an over-budget estimate does not pause** (`RunExecutor.GateAsync` pauses only when autonomy is `auto`). With the start checkpoint on, the approval card says how much budget is left (RUN-08). With it off, work starts anyway and the model gateway's per-call hold stops it when headroom runs out (RUN-10).
+  - **In checkpoints mode the budget waits too**: the run pauses with the same message. With the start checkpoint on, "Start this work?" is asked only once the estimate fits, and its card says how much budget is left (RUN-08).
+  - An estimate that fits, for work that then costs more, starts; the model gateway's per-call hold stops it when the headroom runs out (RUN-10).
   - Because of the overdraft, a zero balance still leaves headroom down to the limit.
 - **Where:** `Endgame.Runner/Execution/RunExecutor.cs` (`GateAsync`); `GET /internal/credits/headroom`.
 - **Reachable from:** UI, as the result of any start.
-- **Covered by tests:** `EstimateTests.In_auto_mode_work_whose_estimate_would_break_the_budget_does_not_begin`, `…A_resumed_run_does_not_gate_twice`.
+- **Covered by tests:** `EstimateTests.In_every_autonomy_mode_work_whose_estimate_would_break_the_budget_does_not_begin`, `…A_resumed_run_does_not_gate_twice`; `scenarios.s3.test.ts` ("waits for budget in checkpoints mode too").
 
 ### IDEA-05 Start an idea by asking the docked conversation
 - **Who:** Builder at the selected scope.
@@ -457,8 +458,9 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Steps:**
   1. The page loads (skeleton, "Loading the work").
   2. The header shows the status badge ("Waiting to start", "Working", "Waiting for you", "Paused", "Finished", "Did not succeed", "Cancelled"), the stream state ("Connecting…", "Live" with a pulsing dot, "Reconnecting…"), the title and "Started {time}".
-  3. Steps arrive under "Step by step". Before the first one: "Waiting for the first step".
-  4. The stream closes when the run finishes.
+  3. Steps arrive under "Step by step". Before the first one: "Waiting for the first step". Events are taken in together, a batch at a time, so a long build's thousands of events draw at once rather than one by one.
+  4. A run with more than 200 steps shows the latest 200, under "{n} earlier steps folded away; the latest 200 are below." with **"Show 200 earlier steps"** (or as many as are left), which unfolds them 200 at a time.
+  5. The stream closes when the run finishes.
 - **You know it worked when:** "Live" shows and new steps appear without reloading.
 - **Variations and refusals:**
   - Six failed reconnects: "The live connection to this work could not be kept open. What is shown is everything received so far." with **"Reconnect"**.
@@ -466,7 +468,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - A finished run with no steps: "This work recorded no steps."
 - **Where:** `RunView.tsx`, `useRunStream.ts`; `GET /api/runs/{id}`, `GET /api/runs/{id}/events?after=`.
 - **Reachable from:** UI; MCP `run_get`, `run_events`.
-- **Covered by tests:** `RunView.test.tsx`; `useRunStream.test.ts`; `RunsAndTasksTests.The_event_stream_is_server_sent_events_resumable…`.
+- **Covered by tests:** `RunView.test.tsx` (including "draws a long build promptly, folding its earlier steps…"); `useRunStream.test.ts`; `RunsAndTasksTests.The_event_stream_is_server_sent_events_resumable…`.
 
 ### RUN-02 Read a run in normal mode
 - **Who:** Viewer or above.
@@ -477,7 +479,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Steps:**
   1. The count line reads "{n} actions taken" (", {n} refused by your rules" when any were refused).
   2. Messages appear as "{speaker} · {title}".
-  3. Contractor and agent groups fold away, for example "Built: {part}", "Checked: {part}", "Drew up the plan".
+  3. Contractor and agent groups fold away once done, for example "Built: {part}", "Checked: {part}", "Drew up the plan"; "Show its {n} steps" unfolds one.
   4. The mechanics are summarised, for example "Read 4 files · Changed 2 files · Ran the tests — 12 passed".
   5. Refused actions read "An action was refused by your rules" / "It was not carried out. The work continues without it."
   6. **"Outcome"** shows the closing plain message.
@@ -590,7 +592,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 ### RUN-09 See a run waiting for budget, and get it moving
 - **Who:** Viewer reads; Builder resumes; Admin or Owner raises budgets.
 - **Starts at:** a run with the badge "Paused".
-- **Needs:** auto-mode, and an estimate larger than the headroom. This is checked at the start, and again for a build once the plan has been estimated.
+- **Needs:** an estimate larger than the headroom, in any autonomy mode. This is checked at the start, and again for a build once the plan has been estimated.
 - **Level:** Core. **Learn first:** IDEA-04.
 - **What you learn:** the credit budget is the limit that is always on.
 - **Steps:**
@@ -601,7 +603,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Variations and refusals:** as IDEA-04.
 - **Where:** `RunExecutor.GateAsync`; `BuildWorkflow` (estimate.plan).
 - **Reachable from:** UI.
-- **Covered by tests:** `EstimateTests.In_auto_mode_work_whose_estimate_would_break_the_budget_does_not_begin`.
+- **Covered by tests:** `EstimateTests.In_every_autonomy_mode_work_whose_estimate_would_break_the_budget_does_not_begin`; `WorkflowTests.A_plan_whose_estimate_would_break_the_budget_waits_for_budget_in_every_autonomy_mode`.
 
 ### RUN-10 See a run stop because the budget ran out mid-way, and try it again
 - **Who:** Viewer reads; Builder tries again.
@@ -665,7 +667,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** an estimate is shown first and scored against what the work really cost.
 - **Steps:**
   1. **"Estimate"** shows "Not yet made" or the figure, with "Shown before the work began".
-  2. **"Spent so far"** shows a bar and "{p}% of the estimate". The bar turns to the attention colour above 100%.
+  2. **"Spent so far"** shows what the work was charged, a bar and "{p}% of the estimate". It is the run's own cost: the billable settlements in its log, counted as the ledger counts them, so a free repair is not in it and the figure matches "cost {y}" once scored. The bar turns to the attention colour above 100%.
   3. While running, **"Held for calls in flight"** shows "Reserved before each call, released when it settles".
   4. When finished, **"Estimate against actual"** shows "on the estimate", "{n}% over" or "{n}% under", with "Estimated {x}, cost {y}", and **"Not charged"** shows the credits the work used repairing its own mistakes, "Repairs of the work’s own mistakes, never billed".
   5. The aside **"Where the credits go"** says "Credits are held before each step and settled from what it really cost. Repairing a mistake of its own is never billed." with **"See credits"**.
@@ -674,7 +676,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Variations and refusals:** "Not charged" appears once the run has finished (from `estimate.scored.nonBillableCredits`); while it runs, each free repair is named in the steps.
 - **Where:** `RunView.tsx` `CostPanel`, `RunAside`; `Estimator.Score`.
 - **Reachable from:** UI; MCP `credits_get`.
-- **Covered by tests:** `runModel.test.ts`; `TryAgainAndChanges.test.tsx` ("…shows what was not charged…"); `EstimateTests.An_estimate_is_made_before_work_and_scored…`.
+- **Covered by tests:** `runModel.test.ts` (a free repair is not in what was spent); `RunView.test.tsx` ("…says one cost the log and the run agree on"); `TryAgainAndChanges.test.tsx` ("…shows what was not charged…"); `EstimateTests.An_estimate_is_made_before_work_and_scored…`.
 
 ### RUN-14 Follow the tasks of a run
 - **Who:** Viewer or above.
@@ -725,7 +727,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Level:** Core. **Learn first:** BLD-01; hiring and the workforce (another reader's area).
 - **What you learn:** the workforce is hired as needs appear: at once within budget, or waiting for you.
 - **Steps:**
-  1. Within budget, with no hire checkpoint: "Endgame · Hired {Name}": "{Name} joins as a {role}, at up to {n} credits a month: {reason}".
+  1. Within budget, with no hire checkpoint: "Endgame · Hired {Name}": "{Name} joins as a {role}, at up to {n} credits a month: {reason}" ("an" before a role that starts with a vowel: "joins as an operations engineer").
   2. Otherwise: "Endgame · {Name} is proposed": "…It waits for you; the work goes ahead meanwhile." The home page shows **"Hire proposed"**, which leads to `/hires/{id}` (another reader's area).
 - **You know it worked when:** the employee appears on the org chart, or the proposal waits under Hiring.
 - **Variations and refusals:**
@@ -782,12 +784,12 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **What you learn:** the estimate is refined once the plan's size is known.
 - **Steps:**
   1. The step "Estimated the cost again, from the plan" appears with its credits.
-  2. In auto-mode, over budget, the run pauses (RUN-09).
+  2. Over budget, the run pauses (RUN-09), in auto-mode and checkpoints mode alike.
 - **You know it worked when:** the "Estimate" figure updates.
-- **Variations and refusals:** in checkpoints mode an over-budget plan still proceeds.
+- **Variations and refusals:** none: the budget holds in every mode.
 - **Where:** `BuildWorkflow`, `Estimator.EstimateAsync`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.Before_any_history_a_build_is_estimated…`, `…A_plans_estimate_grows…`.
+- **Covered by tests:** `WorkflowTests.Before_any_history_a_build_is_estimated…`, `…A_plans_estimate_grows…`, `…A_plan_whose_estimate_would_break_the_budget_waits_for_budget_in_every_autonomy_mode`.
 
 ### BLD-06 Follow the build, one part at a time
 - **Who:** Viewer or above.
@@ -813,7 +815,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **What you learn:** a separate checker proves each requirement in a private preview with its own data.
 - **Steps:**
   1. The step "Checked and passed: {part}" reads "Checked and working: {part} ({x} of {y} of your requirements shown working in the running app).", or the step "Checked and failed: {part}" reads "Sent back for repair, at no charge: …".
-  2. The preview and its test data are destroyed afterwards.
+  2. The preview and its test data are destroyed afterwards. Any e-mail the preview sent was held, never delivered (KIT-12): a check never reaches a real inbox.
 - **You know it worked when:** "Checked and passed".
 - **Variations and refusals:**
   - An image that does not build is a failed check.
@@ -923,7 +925,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   2. It changes at once.
 - **You know it worked when:** the choice is outlined and "Set here" shows.
 - **What it changes:**
-  - **Checkpoints mode:** no auto-build after a verdict (VERD-11); no budget pause at the start or the plan (IDEA-04, BLD-05); the three checkpoints take effect.
+  - **Checkpoints mode:** no auto-build after a verdict (VERD-11); the three checkpoints take effect. The budget pause at the start and the plan holds in both modes (IDEA-04, BLD-05).
   - **Auto-mode:** auto-build on build and change verdicts.
 - **Variations and refusals:** refused: "Not changed: {reason}" and the change is rolled back.
 - **Where:** `PUT /api/autonomy`.
@@ -1112,7 +1114,7 @@ This is another reader's area (app settings, sharing, going public): `POST /api/
 
 ## Gaps and oddities found
 1. **Fixed on 2026-11-25 (lane C):** changing a built app (CHG-01, CHG-02); trying again (CHG-03, VERD-12, RUN-10, RUN-11); the second verdict's buttons and the agreed change reaching the build (VERD-06, VERD-07, VERD-11); "Asks you first" asking (AUTO-05); "The work carries on from here." after a decline (RUN-07); the run page's not-charged amount and budget stop (RUN-10, RUN-13); MCP suggestion dismiss and estimate.
-2. **The checkpoints mode skips the budget pause** at the start and at the plan (IDEA-04, BLD-05). Only auto-mode pauses.
+2. ~~The checkpoints mode skips the budget pause~~ — fixed: the budget pause at the start and at the plan holds in every mode (IDEA-04, BLD-05).
 3. ~~The console cannot target a division~~ — fixed (IDEA-02): the start screen chooses the organisation or a division.
 4. ~~The estimate shown can differ from the one recorded~~ — fixed: both name the same place (IDEA-02).
 5. ~~Some start-screen copy is untrue in auto-mode~~ — fixed: the steps follow the autonomy at the place chosen (IDEA-02).

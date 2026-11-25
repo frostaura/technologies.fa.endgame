@@ -369,6 +369,24 @@ public sealed partial class WorkflowTests
             .ExecuteAsync(cp.Info(), "runner-test", () => false, cancellationToken);
     }
 
+    [Theory]
+    [InlineData("auto")]
+    [InlineData("checkpoints")]
+    public async Task A_plan_whose_estimate_would_break_the_budget_waits_for_budget_in_every_autonomy_mode(string autonomy)
+    {
+        var (cp, ws, dock) = BuildRun();
+        cp.Setting("autonomy", JsonValue.Create(autonomy)!);
+        // The start gate finds room; by the plan, almost nothing is left.
+        cp.HeadroomReads = new Queue<decimal>([1000m, 0.5m]);
+        await RunBuildAsync(cp, new Factory().Model(), ws, dock);
+
+        Assert.Equal("paused", cp.Run["status"]!.GetValue<string>());
+        var waiting = cp.Events.Last(e => e.Type == "message" && e.Payload["code"]?.GetValue<string>() == "estimate_over_budget").Payload;
+        Assert.Equal("Waiting for budget", waiting["title"]!.GetValue<string>());
+        Assert.StartsWith("The plan is estimated at", waiting["text"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.DoesNotContain(cp.Types, t => t is "evaluation.passed" or "evaluation.failed");
+    }
+
     [Fact]
     public async Task The_evaluator_works_on_a_preview_with_its_own_data_and_the_app_is_published_clean()
     {

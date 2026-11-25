@@ -47,16 +47,32 @@ public sealed class EstimateTests
         Assert.Contains(cp.Addresses, a => a.StartsWith("GET /internal/estimates/history?taskType=task&scope=" + Uri.EscapeDataString(Scope), StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task In_auto_mode_work_whose_estimate_would_break_the_budget_does_not_begin()
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("auto", false)]
+    [InlineData("checkpoints", false)]
+    [InlineData("checkpoints", true)]
+    public async Task In_every_autonomy_mode_work_whose_estimate_would_break_the_budget_does_not_begin(string? autonomy, bool startCheckpoint)
     {
-        var cp = new FakeControlPlane(Scope, "task", "x") { Headroom = 1m };
+        var cp = new FakeControlPlane(Scope, "task", "x") { Headroom = 1m, AnswerApproval = _ => true };
+        if (autonomy is not null)
+        {
+            cp.Setting("autonomy", JsonValue.Create(autonomy)!);
+        }
+
+        if (startCheckpoint)
+        {
+            cp.Setting("checkpoint.start", JsonValue.Create(true)!);
+        }
+
         var model = new ScriptedModel();
         await Executor(cp, model).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
         Assert.Empty(model.Calls);
         Assert.Equal("paused", cp.Run["status"]!.GetValue<string>());
         Assert.Equal("estimate_over_budget", cp.Payload("message")!["code"]!.GetValue<string>());
         Assert.DoesNotContain("run.finished", cp.Types);
+        // The budget waits before anything is asked: no "Start this work?" for work that cannot be paid for.
+        Assert.Empty(cp.Approvals);
     }
 
     [Fact]

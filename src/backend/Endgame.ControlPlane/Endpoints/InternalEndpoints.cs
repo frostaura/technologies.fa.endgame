@@ -206,12 +206,12 @@ internal static class InternalEndpoints
         })
         .WithName("AppState").WithSummary("Dock or the edge report that an app is building, running, sleeping, stopped or failed.").Produces<NodeView>();
 
-        group.MapPost("/apps/{id:guid}/token", async (Guid id, ScopeResolver scopes, AppTokenService tokens, CancellationToken ct) =>
+        group.MapPost("/apps/{id:guid}/token", async (Guid id, bool? preview, ScopeResolver scopes, AppTokenService tokens, CancellationToken ct) =>
         {
             var scope = await scopes.FindNodeAsync(NodeLevel.App, id, ct) ?? throw EndgameProblem.NotFound("The app");
-            return Results.Ok(new AppTokenResult(await tokens.IssueAsync(scope, ct)));
+            return Results.Ok(new AppTokenResult(await tokens.IssueAsync(scope, ct, preview == true)));
         })
-        .WithName("IssueAppToken").WithSummary("Dock, before it starts an app: a fresh platform token for it (stored only as a hash). The previous one keeps working for a short grace period.").Produces<AppTokenResult>();
+        .WithName("IssueAppToken").WithSummary("Dock, before it starts an app: a fresh platform token for it (stored only as a hash). The previous one keeps working for a short grace period. With preview=true, the token of the app's preview, whose e-mail is held and never sent; it never replaces the app's own.").Produces<AppTokenResult>();
 
         group.MapPost("/apps/{id:guid}/test-session", async (Guid id, TestSessionRequest request, ScopeResolver scopes, AppIdentityService identity, CancellationToken ct) =>
         {

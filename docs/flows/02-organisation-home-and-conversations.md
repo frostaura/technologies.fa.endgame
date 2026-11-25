@@ -337,7 +337,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **You know it worked when:** the answer's `status` reads "suspended". (No console view shows this; not verified on God-mode screens.)
 - **Variations and refusals:**
   - A non-operator, the Owner included: 403 "An organisation is suspended or reinstated by FrostAura."
-  - Any other status: "'x' is not a status a organisation can have: use active, suspended."
+  - Any other status: "'x' is not a status an organisation can have: use active, suspended."
 - **Where:** `TreeEndpoints.MapNodeChanges`, `NodeStatuses`, `TreeService.RoutesAsync`.
 - **Reachable from:** API only.
 - **Covered by tests:** none found for suspension specifically.
@@ -567,19 +567,20 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 
 ### TREE-09 Delete a division, project or app
 - **Who:** Admin.
-- **Starts at:** "Manage" (`/tree?scope={path}`) or the app's page, **"Delete {name}"**. API `DELETE /api/{divisions|projects|apps}/{id}`.
+- **Starts at:** "Manage" (`/tree?scope={path}`) or the app's page, **"Delete {name}"**. API `DELETE /api/{divisions|projects|apps}/{id}`; MCP `node_delete` (by scope path).
 - **Needs:** Admin; nothing attached to the node.
 - **Level:** Advanced · **Learn first:** TREE-07 · **What you learn:** only an untouched node can be deleted; everything else is archived.
 - **Steps:**
-  1. Press **"Delete {name}"**. The confirmation reads "This cannot be undone. Only a {level} with nothing in it, no work and no spending can be deleted; the settings and roles set on it go with it."
+  1. Press **"Delete {name}"**. The confirmation "Delete {name}?" reads, for a division, "This cannot be undone. Only a division with nothing in it, no work and no spending can be deleted; the settings and roles set on it go with it." — "Only a project …" for a project, and "Only an app …" for an app.
   2. Press **"Yes, delete {name}"** ("Keep it" cancels). The node leaves the outline and its parent is chosen.
 - **You know it worked when:** the node is gone from the outline and the chart.
 - **Variations and refusals:**
   - Children, runs or credit entries: the server's 409 is shown as it came — "{name} was not deleted: '{path}' still has children, work or credit history attached. Archive it instead (status: archived). (409)" — with the button **"Archive it instead"**, which archives it: "{name} is archived instead. Nothing in it was deleted."
-  - Below Admin: "An Admin or above deletes a {level} with nothing in it." MCP has no delete tool.
+  - Below Admin, no button: "An Admin or above deletes a division with nothing in it." (or "a project", "an app"). The API answers 403 "This needs the admin role at '{path}'; you are a builder there (set at {path})."
+  - MCP `node_delete` is held to the same Admin check and gives the same 409 for a node with history; an organisation is refused (400 "An organisation is not deleted; delete a division, project or app.").
 - **Where:** `NodeControls.tsx` (`DeleteNode`); `TreeService.DeleteAsync`.
-- **Reachable from:** UI; API.
-- **Covered by tests:** `ManageView.test.tsx` ("shows the refusal to delete what has history, and archives it instead"); `tests-e2e/manage.spec.ts`; `CascadeCreditsAndAppsTests`.
+- **Reachable from:** UI; API; MCP `node_delete`.
+- **Covered by tests:** `ManageView.test.tsx` ("shows the refusal to delete what has history, and archives it instead"); `tests-e2e/manage.spec.ts`; `CascadeCreditsAndAppsTests`; `SweepXTests.An_assistant_reads_adds_corrects_and_forgets_memory_and_deletes_an_empty_node`; `AuthorizationMatrixTests` (`node_delete`).
 
 ### TREE-10 Move a division, project or app
 - **Who:** —

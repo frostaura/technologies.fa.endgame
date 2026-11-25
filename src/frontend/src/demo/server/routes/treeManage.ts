@@ -24,6 +24,9 @@ const STATUSES: Record<Level | "organisation", string[]> = {
   project: ["active", "archived"],
   app: ["draft", "building", "running", "sleeping", "stopped", "failed", "archived"],
 };
+/** `NodeLevels.WithArticle`: "an organisation", "a division", "a project", "an app". */
+const levelWithArticle = (level: string): string => (level === "organisation" || level === "app" ? `an ${level}` : `a ${level}`);
+const capitalised = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function nodeView(world: World, n: DemoNode): TreeNode {
@@ -111,7 +114,7 @@ const nodeRoutes = Object.fromEntries(
           const parent = scopeOf(world, str(req.body, "parent"));
           requireRole(world, parent, CREATE[level]);
           const parentLevel = levelOf(parent);
-          if (parentLevel !== PARENT[level]) throw invalid(`A ${level} is created under a ${PARENT[level]}; '${parent}' is a ${parentLevel}.`);
+          if (parentLevel !== PARENT[level]) throw invalid(`${capitalised(levelWithArticle(level))} is created under ${levelWithArticle(PARENT[level])}; '${parent}' is ${levelWithArticle(parentLevel)}.`);
           const name = str(req.body, "name") ?? "";
           checkName(name);
           const slug = str(req.body, "slug") ?? "";
@@ -140,12 +143,16 @@ const changeRoutes = Object.fromEntries(
         `PATCH ${plural}/{id}`,
         (req, { world }) => {
           const n = findNode(world, level, req.params.id ?? "");
-          requireRole(world, n.path, CHANGE[level]);
           const name = str(req.body, "name");
           const status = str(req.body, "status");
-          if (level === "organisation" && status !== undefined && !me(world).isOperator) throw forbidden("An organisation is suspended or reinstated by FrostAura.");
+          if (level === "organisation" && status !== undefined) {
+            // Only FrostAura changes an organisation's status: God mode's Admin is enough, then everyone else is refused (OP-11).
+            requireRole(world, n.path, "admin");
+            if (!me(world).isOperator) throw forbidden("An organisation is suspended or reinstated by FrostAura.");
+            if (name !== undefined) requireRole(world, n.path, CHANGE[level]);
+          } else requireRole(world, n.path, CHANGE[level]);
           if (name !== undefined) checkName(name);
-          if (status !== undefined && !STATUSES[level].includes(status)) throw invalid(`'${status}' is not a status a ${level} can have: use ${STATUSES[level].join(", ")}.`);
+          if (status !== undefined && !STATUSES[level].includes(status)) throw invalid(`'${status}' is not a status ${levelWithArticle(level)} can have: use ${STATUSES[level].join(", ")}.`);
           if (name !== undefined) {
             n.name = name.trim();
             const o = level === "organisation" ? organisation(world, n.path) : undefined;

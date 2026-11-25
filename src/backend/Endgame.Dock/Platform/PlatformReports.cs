@@ -17,11 +17,11 @@ public sealed class PlatformReports(IHttpClientFactory http, IOptions<DockOption
     /// The app's platform token from the control plane (<c>POST /internal/apps/{id}/token</c>), or
     /// null when it could not be had — the caller then keeps the token the container already holds.
     /// </summary>
-    public async Task<string?> AppTokenAsync(Guid appId, CancellationToken cancellationToken)
+    public async Task<string?> AppTokenAsync(Guid appId, CancellationToken cancellationToken, bool preview = false)
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(options.Value.ControlPlaneUrl), $"/internal/apps/{appId:D}/token"));
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(options.Value.ControlPlaneUrl), $"/internal/apps/{appId:D}/token{(preview ? "?preview=true" : "")}"));
             request.Headers.Authorization = new AuthenticationHeaderValue(HostingConventions.ServiceTokenScheme, configuration[HostingConventions.ServiceTokenVariable]);
             using var response = await http.CreateClient(ClientName).SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)

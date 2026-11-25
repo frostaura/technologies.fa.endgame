@@ -1,0 +1,97 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "EMP-11",
+  "persona": "owner",
+  "scenario": "s4-contractor-working",
+  "start": "/employees/f844ad47-51af-4b59-a15a-535703f4b405",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Data contractor"
+          }
+        },
+        {
+          "wait": {
+            "text": "Its brief"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "No cap of its own; Odile’s budget holds",
+        "note": "A contractor spends inside the budget of the employee who briefed it, unless it has a cap of its own."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Cap its spending"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Credits a month, at most"
+            },
+            "text": "10"
+          }
+        },
+        {
+          "click": {
+            "text": "Save the cap"
+          }
+        },
+        {
+          "wait": {
+            "text": "10 credits a month of its own, inside Odile’s budget"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "10 credits a month of its own, inside Odile’s budget",
+        "note": "Held before each of its calls, so the cap is never passed."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Stop this contractor"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Stop Contractor?",
+        "note": "Stopping is at once and for good; what it did is kept, and Odile's work carries on."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Yes, stop it"
+          }
+        },
+        {
+          "wait": {
+            "text": "Finished"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Finished",
+        "note": "It makes no more calls, and it is gone from the contractors working now."
+      }
+    }
+  ]
+}
