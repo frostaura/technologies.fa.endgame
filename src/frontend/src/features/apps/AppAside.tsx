@@ -38,10 +38,11 @@ function Chip({ icon, children }: { icon: IconName; children: ReactNode }) {
  * have signed up to it, the secrets it can read by name, who it is shared with, and that AI assistants can
  * work with it.
  */
-export function WhatItUses({ app }: { app: AppDetail }) {
+export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecrets: boolean }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const graph = useGetOntologyQuery({ scope: app.scope, view: "all" });
-  const secrets = useGetSecretsQuery(app.scope);
+  // Which secrets it is given is an Admin's to see; anyone else is told so rather than shown a refusal.
+  const secrets = useGetSecretsQuery(app.scope, { skip: !canSeeSecrets });
   const graphView = viewOf(graph);
   const secretsView = viewOf(secrets);
   const services =
@@ -82,7 +83,7 @@ export function WhatItUses({ app }: { app: AppDetail }) {
           </Link>
         </p>
       )}
-      {secretsView.kind === "failed" && <p className="text-sm text-attention-text">Its secrets could not be read: {secretsView.reason}</p>}
+      {canSeeSecrets && secretsView.kind === "failed" && <p className="text-sm text-attention-text">Its secrets could not be read: {secretsView.reason}</p>}
       <p className="text-sm text-ink-body">
         An AI assistant you let in can use this app the way a person does.{" "}
         <Link href={paths.assistants()} className="rounded-xs text-primary-link hover:text-primary-hover">

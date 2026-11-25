@@ -5,11 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { formatCredits, formatDate, formatNumber } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
-import { useAppSelector } from "@/store";
-import { useGetTopUpRequestsQuery, useGetTreeQuery, useRequestTopUpMutation, useSetOverdraftMutation } from "@/store/api";
-import type { Credits, TopUpRequest } from "@/store/types";
+import { treeArgFor, useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { useAppDispatch, useAppSelector } from "@/store";
+import {
+  api,
+  useGetMeQuery,
+  useGetTopUpRequestsQuery,
+  useGetTreeQuery,
+  useRemoveCascadeMutation,
+  useRequestTopUpMutation,
+  useSetCascadeMutation,
+  useSetOverdraftMutation,
+  useUpdateEmployeeMutation,
+} from "@/store/api";
+import type { BudgetLine, Credits, TopUpRequest } from "@/store/types";
 import { placements } from "../workforce/workforceModel";
-import { parseCredits } from "./creditsModel";
+import { capAbove, parseCredits } from "./creditsModel";
 
 /**
  * The Owner's own overdraft limit: how far below zero the organisation may go. Never deeper than
@@ -17,10 +28,30 @@ import { parseCredits } from "./creditsModel";
  */
 export function OwnLimit({ organisation, credits, isOwner }: { organisation: string; credits: Credits; isOwner: boolean }) {
   const [setOverdraft, saving] = useSetOverdraftMutation();
+  const [removeCascade, removing] = useRemoveCascadeMutation();
+  const dispatch = useAppDispatch();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(String(credits.overdraft?.ownLimit ?? credits.overdraft?.frostauraLimit ?? 0));
   const [problem, setProblem] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  // Optimistic: "Not set" shows at once, and the limit comes back if the control plane refuses.
+  const removeOwn = async () => {
+    setProblem(null);
+    setSaved(null);
+    const undo = dispatch(
+      api.util.updateQueryData("getCredits", organisation, (c) => {
+        if (c.overdraft) c.overdraft.ownLimit = null;
+      }),
+    );
+    try {
+      await removeCascade({ scope: organisation, kind: "setting", key: "overdraft_own_limit" }).unwrap();
+      setSaved(`Your own limit is removed. The most FrostAura allows, ${formatNumber(credits.overdraft?.frostauraLimit ?? 0)} below zero, applies now.`);
+    } catch (e) {
+      undo.undo();
+      setProblem(`Your limit was not removed: ${describeError(e as never)} It is back to what it was.`);
+    }
+  };
   const id = useId();
   const deepest = credits.overdraft?.frostauraLimit ?? 0;
   const n = parseCredits(value);
@@ -30,10 +61,10 @@ export function OwnLimit({ organisation, credits, isOwner }: { organisation: str
     event.preventDefault();
     if (n === null || tooDeep) return;
     setProblem(null);
-    setSaved(false);
+    setSaved(null);
     try {
       await setOverdraft({ organisation, scope: organisation, credits: n }).unwrap();
-      setSaved(true);
+      setSaved("Your own limit is saved.");
       setOpen(false);
     } catch (e) {
       setProblem(`Your limit was not changed: ${describeError(e as never)} It is back to what it was.`);
@@ -45,7 +76,7 @@ export function OwnLimit({ organisation, credits, isOwner }: { organisation: str
     <div className="flex flex-col gap-2">
       {saved && (
         <p role="status" className="text-success-text">
-          Your own limit is saved.
+          {saved}
         </p>
       )}
       {problem && (
@@ -73,18 +104,51 @@ export function OwnLimit({ organisation, credits, isOwner }: { organisation: str
           </div>
         </form>
       ) : (
-        <Button variant="outline" className="self-start" onClick={() => setOpen(true)}>
-          Change your limit
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setOpen(true)}>
+            Change your limit
+          </Button>
+          {credits.overdraft?.ownLimit !== null && credits.overdraft?.ownLimit !== undefined && (
+            <Button variant="ghost" disabled={removing.isLoading} onClick={() => void removeOwn()}>
+              Remove your own limit
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
 /** The narrower limits already set (Admin): each division, project or app held to less, with who set it. */
-export function NarrowerLimits({ credits }: { credits: Credits }) {
+export function NarrowerLimits({ credits, organisation }: { credits: Credits; organisation: string }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const limits = credits.overdraft?.limits ?? [];
+  const [removeCascade, removing] = useRemoveCascadeMutation();
+  const dispatch = useAppDispatch();
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const organisationLimit = Math.min(credits.overdraft?.frostauraLimit ?? 0, credits.overdraft?.ownLimit ?? Number.POSITIVE_INFINITY);
+
+  const remove = async (scope: string, name: string) => {
+    setResult(null);
+    const undo = dispatch(
+      api.util.updateQueryData("getCredits", organisation, (c) => {
+        if (c.overdraft) c.overdraft.limits = c.overdraft.limits.filter((l) => l.scope !== scope);
+      }),
+    );
+    try {
+      await removeCascade({ scope, kind: "setting", key: "overdraft_limit" }).unwrap();
+      const above = limits.filter((l) => l.scope !== scope && scope.startsWith(`${l.scope}/`)).sort((a, b) => b.scope.length - a.scope.length)[0];
+      setResult({
+        ok: true,
+        text: above
+          ? `${name} is no longer held to less on its own; ${above.name}'s ${formatNumber(above.credits)} below zero applies.`
+          : `${name} is no longer held to less; the organisation's ${formatNumber(organisationLimit)} below zero applies.`,
+      });
+    } catch (e) {
+      undo.undo();
+      setResult({ ok: false, text: `${name}'s limit was not removed: ${describeError(e as never)} It still stops at its own limit.` });
+    }
+  };
   return (
     <div className="flex flex-col gap-2">
       <h3 className="font-display text-base font-semibold">Tighter limits already set</h3>
@@ -102,13 +166,21 @@ export function NarrowerLimits({ credits }: { credits: Credits }) {
                 </span>
                 <span className="font-semibold">{formatNumber(l.credits)} below zero</span>
               </span>
-              <span className="text-xs text-ink-muted">
+              <span className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
                 {l.setByName ? `Set by ${l.setByName}, ${formatDate(l.setAt)}` : `Set ${formatDate(l.setAt)}`}
+                <Button size="sm" variant="ghost" disabled={removing.isLoading} onClick={() => void remove(l.scope, l.name)} aria-label={`Remove ${l.name}'s tighter limit`}>
+                  Remove
+                </Button>
               </span>
               {technical && <code className="break-all font-mono text-xs text-ink-muted">{l.scope}</code>}
             </li>
           ))}
         </ul>
+      )}
+      {result && (
+        <p role={result.ok ? "status" : "alert"} className={result.ok ? "text-sm text-success-text" : "rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text"}>
+          {result.text}
+        </p>
       )}
     </div>
   );
@@ -116,7 +188,9 @@ export function NarrowerLimits({ credits }: { credits: Credits }) {
 
 /** A narrower overdraft for one division, project or app (Admin): it may stop sooner, never go deeper. */
 export function NarrowerLimit({ organisation, credits }: { organisation: string; credits: Credits }) {
-  const tree = useGetTreeQuery(undefined);
+  const active = useActiveOrganisation();
+  const me = useGetMeQuery(undefined);
+  const tree = useGetTreeQuery(treeArgFor(active, me.data), { skip: !active.organisation });
   const nodes = placements(tree.data).filter((p) => p.depth > 0);
   const [setOverdraft, saving] = useSetOverdraftMutation();
   const ids = { node: useId(), value: useId() };
@@ -279,6 +353,109 @@ export function TopUpRequests({ organisation, isOwner, isAdmin }: { organisation
             </>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A row's monthly cap (CRED-03, EMP-03), for an Admin: set, change or remove it. A node's cap is a
+ * budget on the cascade; an employee's is on its own record and covers the contractors it briefs.
+ * The bar moves at once and goes back if the control plane refuses; a removal says what holds instead.
+ */
+export function CapControl({ line, lines, organisation }: { line: BudgetLine; lines: BudgetLine[]; organisation: string }) {
+  const [setCascade, setting] = useSetCascadeMutation();
+  const [removeCascade, removing] = useRemoveCascadeMutation();
+  const [updateEmployee, updating] = useUpdateEmployeeMutation();
+  const dispatch = useAppDispatch();
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(line.capCredits !== null ? String(line.capCredits) : "");
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const n = parseCredits(value);
+  const busy = setting.isLoading || removing.isLoading || updating.isLoading;
+  const same = (l: BudgetLine) => l.scope === line.scope && l.level === line.level && l.name === line.name;
+
+  const patch = (cap: number | null) =>
+    dispatch(
+      api.util.updateQueryData("getCredits", organisation, (c) => {
+        const row = c.budgets.find(same);
+        if (row) row.capCredits = cap;
+      }),
+    );
+
+  const write = async (cap: number | null) => {
+    if (line.level === "employee") {
+      if (!line.employeeId) throw new Error("This employee's record could not be found.");
+      await updateEmployee({ id: line.employeeId, patch: cap === null ? { clearMonthlyCreditLimit: true } : { jobDescription: { monthlyCreditLimit: cap } } }).unwrap();
+      dispatch(api.util.invalidateTags(["Credits"]));
+    } else if (cap === null) await removeCascade({ scope: line.scope, kind: "budget", key: "monthly_credits" }).unwrap();
+    else await setCascade({ scope: line.scope, kind: "budget", key: "monthly_credits", value: cap }).unwrap();
+  };
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (n === null) return;
+    setResult(null);
+    setOpen(false);
+    const undo = patch(n);
+    try {
+      await write(n);
+      setResult({ ok: true, text: `${line.name} may spend ${formatCredits(n)} a month${line.level === "employee" ? ", with the contractors it briefs" : ""}.` });
+    } catch (e) {
+      undo.undo();
+      setResult({ ok: false, text: `The cap was not ${line.capCredits === null ? "set" : "changed"}: ${describeError(e as never)} It is as it was.` });
+    }
+  };
+
+  const remove = async () => {
+    setResult(null);
+    const undo = patch(null);
+    try {
+      await write(null);
+      const above = capAbove(lines, { ...line, capCredits: null });
+      setResult({
+        ok: true,
+        text: above
+          ? `${line.name} has no cap of its own now; the cap on ${above.name}, ${formatCredits(above.capCredits ?? 0)} a month, holds it.`
+          : `${line.name} has no cap of its own now, and nothing above it has one: only the balance and the overdraft limit hold it.`,
+      });
+    } catch (e) {
+      undo.undo();
+      setResult({ ok: false, text: `The cap was not removed: ${describeError(e as never)} It is as it was.` });
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 sm:col-span-5">
+      {open ? (
+        <form onSubmit={(e) => void save(e)} aria-label={`Cap for ${line.name}`} className="flex flex-wrap items-end gap-2" noValidate>
+          <Field id={id} label="Credits a month" problem={value.trim() && n === null ? "Type a number of credits." : null} className="min-w-0 flex-1 sm:flex-none">
+            <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-invalid={!!value.trim() && n === null} />
+          </Field>
+          <Button type="submit" size="sm" disabled={n === null || busy}>
+            Save the cap
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            Not now
+          </Button>
+        </form>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          <Button size="sm" variant="ghost" className="text-primary-link" disabled={busy} onClick={() => setOpen(true)} aria-label={`${line.capCredits === null ? "Set a cap on" : "Change the cap on"} ${line.name}`}>
+            {line.capCredits === null ? "Set a cap" : "Change the cap"}
+          </Button>
+          {line.capCredits !== null && (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void remove()} aria-label={`Remove the cap on ${line.name}`}>
+              Remove it
+            </Button>
+          )}
+        </div>
+      )}
+      {result && (
+        <p role={result.ok ? "status" : "alert"} className={result.ok ? "text-sm text-success-text" : "rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text"}>
+          {result.text}
+        </p>
       )}
     </div>
   );

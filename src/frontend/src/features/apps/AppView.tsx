@@ -12,15 +12,18 @@ import { paths } from "@/lib/router";
 import { plainOrNull } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store";
-import { useGetAppQuery, useGetMeQuery, useGetSecretsQuery, useGetSharesQuery, useGetTreeQuery, useRemoveShareMutation, useUpdateAppSettingsMutation } from "@/store/api";
+import { useGetAppQuery, useGetCascadeQuery, useGetMeQuery, useGetSecretsQuery, useGetSharesQuery, useGetTreeQuery, useRemoveShareMutation, useUpdateAppSettingsMutation } from "@/store/api";
 import { shareApp } from "@/store/sensitive";
 import type { AppAccess, AppDetail, AppShareCreated } from "@/store/types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { roleAt, roleRank } from "@/lib/roles";
+import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { useAppSelector } from "@/store";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { healthChip, namesFor } from "../home/treeModel";
 import { ItIsYours, TechnicalDetails, WhatItUses } from "./AppAside";
+import { AppItself, AppSpending, IdleMinutes, RebuildAndRestart } from "./AppManage";
+import { capNote } from "./appModel";
 import { AskPanel, Dashboard } from "./AskPanel";
 import { History } from "./History";
 
@@ -73,21 +76,42 @@ const NOT_MEASURED = "Not measured yet";
 /** What the person may do here, as the cascade resolves their grants. An operator in God mode acts as an Admin. */
 function useAppRole(app: AppDetail) {
   const me = useGetMeQuery(undefined);
+  const active = useActiveOrganisation();
   const role = roleAt(me.data, app.scope);
-  const operator = me.data?.isOperator === true;
-  return { builder: roleRank(role) >= roleRank("builder") || operator, owner: role === "owner" };
+  const operator = me.data?.isOperator === true && (active.entered || role === null);
+  return {
+    builder: roleRank(role) >= roleRank("builder") || operator,
+    admin: roleRank(role) >= roleRank("admin") || operator,
+    owner: role === "owner",
+  };
+}
+
+/** A path's name from the tree, or its last part. */
+function useNameOf() {
+  const tree = useGetTreeQuery(undefined);
+  return (path: string) => {
+    const names = namesFor(tree.data, path);
+    return names[names.length - 1] ?? path;
+  };
 }
 
 function AppAsideColumn({ app, orgName }: { app: AppDetail; orgName: string }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
-  const { owner } = useAppRole(app);
+  const { owner, builder, admin } = useAppRole(app);
+  const nameOf = useNameOf();
   return (
     <>
       <ErrorBoundary name="The app's settings">
-        <Settings app={app} orgName={orgName} />
+        <Settings app={app} orgName={orgName} canRun={builder} canChooseWho={admin} />
+      </ErrorBoundary>
+      <ErrorBoundary name="What it may spend">
+        <AppSpending app={app} isAdmin={admin} nameOf={nameOf} />
       </ErrorBoundary>
       <ErrorBoundary name="What it uses">
-        <WhatItUses app={app} />
+        <WhatItUses app={app} canSeeSecrets={admin} />
+      </ErrorBoundary>
+      <ErrorBoundary name="The app itself">
+        <AppItself app={app} canChange={builder} isAdmin={admin} />
       </ErrorBoundary>
       <ErrorBoundary name="The download">
         <ItIsYours app={app} isOwner={owner} />
@@ -99,7 +123,10 @@ function AppAsideColumn({ app, orgName }: { app: AppDetail; orgName: string }) {
 
 function AppBody({ app }: { app: AppDetail }) {
   const health = healthChip(app.health.state);
-  const { builder } = useAppRole(app);
+  const { builder, admin } = useAppRole(app);
+  const budgets = useGetCascadeQuery({ scope: app.scope, kind: "budget" });
+  const nameOf = useNameOf();
+  const stopped = app.status === "failed" || app.status === "stopped";
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const t = app.telemetry;
   const healthText = { success: "text-success-text", attention: "text-attention-text", "attention-strong": "text-attention-text" } as Record<string, string>;
@@ -146,8 +173,16 @@ function AppBody({ app }: { app: AppDetail }) {
             <Tile index={3} label="Typical response" value={NOT_MEASURED} valueClass="text-ink-muted" note="Measured once it has visitors." />
           </>
         )}
-        <Tile index={4} label="Cost this month" value={formatNumber(app.cost.monthCredits)} note={app.cost.capCredits !== null ? `Cap ${formatCredits(app.cost.capCredits)}` : "No cap of its own; the one above applies"} />
+        <Tile index={4} label="Cost this month" value={formatNumber(app.cost.monthCredits)} note={capNote(app, budgets.data, nameOf)} />
       </section>
+
+      {stopped && builder && (
+        <section aria-label="It is not running" className="flex flex-col gap-2 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
+          <p className="font-semibold text-attention-text">{app.status === "failed" ? `${app.name} stopped working.` : `${app.name} is stopped.`}</p>
+          <p className="text-ink">Rebuilding builds its newest version again and starts it. Nothing in its history changes.</p>
+          <RebuildAndRestart app={app} />
+        </section>
+      )}
 
       <ErrorBoundary name="Asking about this app">
         <AskPanel appId={app.id} canAsk={builder} />
@@ -161,9 +196,9 @@ function AppBody({ app }: { app: AppDetail }) {
           <History app={app} canRestore={builder} />
         </ErrorBoundary>
         <div className="flex flex-col gap-6">
-          <ErrorBoundary name="Sharing">{app.settings.access === "shared" ? <Sharing app={app} /> : <SharingOff app={app} />}</ErrorBoundary>
+          <ErrorBoundary name="Sharing">{app.settings.access === "shared" ? admin ? <Sharing app={app} /> : <SharingForOthers app={app} /> : <SharingOff app={app} />}</ErrorBoundary>
           <ErrorBoundary name="The secrets">
-            <AppSecrets scope={app.scope} />
+            <AppSecrets scope={app.scope} canSee={admin} />
           </ErrorBoundary>
         </div>
       </div>
@@ -191,6 +226,20 @@ function SharingOff({ app }: { app: AppDetail }) {
           ? `${app.name} is public, so anyone with the address can open it. To choose who can, set it to Shared.`
           : `${app.name} is private to your organisation. Set it to Shared to invite people by e-mail.`}
       </p>
+    </section>
+  );
+}
+
+/** A shared app, seen by someone below Admin: how many it is shared with, and who manages the list. */
+function SharingForOthers({ app }: { app: AppDetail }) {
+  return (
+    <section aria-label="Sharing" className={cn("flex flex-col gap-2 rounded-md border bg-surface px-5 py-4 shadow-card", RISE, stagger(2))}>
+      <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+        <Icon name="employee" tinted />
+        Shared with
+      </h2>
+      <p className="text-ink-body">{app.sharedWith === 0 ? `${app.name} is shared, with nobody yet.` : `${app.name} is shared with ${plural(app.sharedWith, "person", "people")}.`}</p>
+      <p className="text-sm text-ink-muted">An Admin or the Owner sees who, invites people and stops sharing.</p>
     </section>
   );
 }
@@ -338,7 +387,9 @@ function InvitationCode({ created, appName, onDone }: { created: AppShareCreated
   return (
     <div role="status" aria-label="Invitation code" className="flex flex-col gap-3 rounded-sm border border-success-text bg-success-tint px-4 py-3">
       <p className="text-ink">
-        {created.email} is invited. Give them this code; they register with it at {appName}&rsquo;s sign-up page before {formatDate(created.expiresAt)}.
+        {created.emailed
+          ? `${created.email} is invited, and the code was e-mailed to them. If it does not arrive, give them this code; they register with it at ${appName}’s sign-up page before ${formatDate(created.expiresAt)}.`
+          : `${created.email} is invited. No e-mail was sent, so give them this code; they register with it at ${appName}’s sign-up page before ${formatDate(created.expiresAt)}.`}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <code className="min-w-0 break-all rounded-xs bg-surface px-3 py-2 font-mono text-base">{created.invitationCode}</code>
@@ -356,9 +407,20 @@ function InvitationCode({ created, appName, onDone }: { created: AppShareCreated
 }
 
 /** The names of the secrets the app is given, and where each was set — never a value. */
-function AppSecrets({ scope }: { scope: string }) {
-  const query = useGetSecretsQuery(scope);
+function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
+  const query = useGetSecretsQuery(scope, { skip: !canSee });
   const view = viewOf(query);
+  if (!canSee) {
+    return (
+      <section aria-label="Secrets" className={cn("flex flex-col gap-2 rounded-md border bg-surface px-5 py-4 shadow-card", RISE, stagger(3))}>
+        <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+          <Icon name="secrets" tinted />
+          Secrets
+        </h2>
+        <p className="text-sm text-ink-muted">An Admin or the Owner sees which secrets it is given, and adds or changes them.</p>
+      </section>
+    );
+  }
   return (
     <section aria-label="Secrets" className={cn("flex flex-col gap-3 rounded-md border bg-surface px-5 py-4 shadow-card", RISE, stagger(3))}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -409,7 +471,7 @@ function Tile({ index, label, value, note, valueClass, pulse = false }: { index:
   );
 }
 
-function Settings({ app, orgName }: { app: AppDetail; orgName: string }) {
+function Settings({ app, orgName, canRun, canChooseWho }: { app: AppDetail; orgName: string; canRun: boolean; canChooseWho: boolean }) {
   const [update] = useUpdateAppSettingsMutation();
   const [error, setError] = useState<string | null>(null);
   const [confirmPublic, setConfirmPublic] = useState(false);
@@ -469,11 +531,12 @@ function Settings({ app, orgName }: { app: AppDetail; orgName: string }) {
           <label
             key={o.value}
             className={cn(
-              "flex cursor-pointer gap-3 rounded-xs border bg-surface px-4 py-3.5 transition hover:-translate-y-px hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+              "flex gap-3 rounded-xs border bg-surface px-4 py-3.5 transition motion-reduce:transition-none",
+              canRun ? "cursor-pointer hover:-translate-y-px hover:shadow-raised motion-reduce:hover:translate-y-0" : "cursor-default",
               shown.running === o.value ? "border-ink" : "border-border-strong",
             )}
           >
-            <input type="radio" name={runName} value={o.value} checked={shown.running === o.value} onChange={() => void save({ running: o.value })} className="mt-1 size-4 accent-primary" />
+            <input type="radio" name={runName} value={o.value} checked={shown.running === o.value} disabled={!canRun} onChange={() => void save({ running: o.value })} className="mt-1 size-4 accent-primary" />
             <span className="flex flex-col gap-0.5">
               <span className="font-semibold">{o.title}</span>
               <span className="text-ink-body">{o.text}</span>
@@ -484,6 +547,8 @@ function Settings({ app, orgName }: { app: AppDetail; orgName: string }) {
         <p data-state={cost.state} className="text-sm text-ink-muted">
           {cost.state === "estimated" ? cost.basis : `Not enough history yet. ${cost.basis}`} {cost.prices}
         </p>
+        {shown.running === "sleep" && <IdleMinutes app={app} canChange={canRun} />}
+        {!canRun && <p className="text-sm text-ink-muted">A Builder or above changes how it runs.</p>}
       </fieldset>
 
       <fieldset className={cn("flex flex-col gap-2.5", RISE, stagger(1))}>
@@ -495,14 +560,16 @@ function Settings({ app, orgName }: { app: AppDetail; orgName: string }) {
           <label
             key={o.value}
             className={cn(
-              "flex cursor-pointer gap-3 rounded-xs border bg-surface px-4 py-3 transition hover:-translate-y-px hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+              "flex gap-3 rounded-xs border bg-surface px-4 py-3 transition motion-reduce:transition-none",
+              canChooseWho ? "cursor-pointer hover:-translate-y-px hover:shadow-raised motion-reduce:hover:translate-y-0" : "cursor-default",
               shown.access === o.value ? "border-ink" : "border-border-strong",
             )}
           >
-            <input type="radio" name={whoName} value={o.value} checked={shown.access === o.value} onChange={() => chooseAccess(o.value)} className="mt-1 size-4 accent-primary" />
+            <input type="radio" name={whoName} value={o.value} checked={shown.access === o.value} disabled={!canChooseWho} onChange={() => chooseAccess(o.value)} className="mt-1 size-4 accent-primary" />
             <span>{o.text}</span>
           </label>
         ))}
+        {!canChooseWho && <p className="text-sm text-ink-muted">An Admin or the Owner chooses who can open it.</p>}
         {confirmPublic && <ConfirmPublic appName={app.name} onConfirm={() => { setConfirmPublic(false); void save({ access: "public" }); }} onCancel={() => setConfirmPublic(false)} />}
       </fieldset>
     </>

@@ -7,21 +7,25 @@ import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useGetCreditsQuery, useGetMeQuery } from "@/store/api";
-import type { BudgetLine, Credits } from "@/store/types";
+import type { BudgetLine, Credits, MemberRole } from "@/store/types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { roleAt, roleRank } from "@/lib/roles";
+import { roleRank } from "@/lib/roles";
+import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { AppShell } from "../shell/AppShell";
-import { NarrowerLimit, NarrowerLimits, OwnLimit, TopUpRequests } from "./CreditsActions";
-import { paceLine } from "./creditsModel";
+import { CapControl, NarrowerLimit, NarrowerLimits, OwnLimit, TopUpRequests } from "./CreditsActions";
+import { noCapLine, paceLine } from "./creditsModel";
 
 export function CreditsView() {
   const me = useGetMeQuery(undefined);
-  const org = me.data?.organisation;
+  const active = useActiveOrganisation();
+  const org = active.organisation;
   const query = useGetCreditsQuery(org?.slug ?? "", { skip: !org });
   const view = org ? viewOf(query) : me.isError ? { kind: "failed" as const, reason: "Your session could not be read.", status: null } : { kind: "loading" as const };
+  const isAdmin = roleRank(active.role) >= roleRank("admin");
+  const home = active.entered && org ? paths.homeOf(org.slug) : paths.home();
 
   return (
-    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Credits" }]} aside={view.kind === "loaded" && org ? <OverdraftAside credits={view.data} organisation={org.slug} /> : undefined}>
+    <AppShell crumbs={[...(org ? [{ label: org.name, href: home }] : []), { label: "Credits" }]} aside={view.kind === "loaded" && org ? <OverdraftAside credits={view.data} organisation={org.slug} role={active.role} /> : undefined}>
       {me.data && !org && (
         <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-6 text-ink-body">
           There are no credits to show until your organisation is named. <Link href={paths.start()} className="font-semibold text-primary-link">Start</Link>
@@ -37,14 +41,14 @@ export function CreditsView() {
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
-          <CreditsBody credits={view.data} />
+          <CreditsBody credits={view.data} organisation={org?.slug ?? ""} isAdmin={isAdmin} />
         </>
       )}
     </AppShell>
   );
 }
 
-function CreditsBody({ credits }: { credits: Credits }) {
+function CreditsBody({ credits, organisation, isAdmin }: { credits: Credits; organisation: string; isAdmin: boolean }) {
   const negative = credits.balance < 0;
   return (
     <>
@@ -73,7 +77,9 @@ function CreditsBody({ credits }: { credits: Credits }) {
       <section className={cn("flex flex-col gap-3.5", RISE, stagger(1))}>
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">Budgets</h2>
-          <span className="text-ink-body">A cap set higher up holds for everything beneath it. Work that would break a cap does not start.</span>
+          <span className="text-ink-body">
+            A cap set higher up holds for everything beneath it. Work that would break a cap does not start.{isAdmin ? "" : " An Admin or the Owner sets the caps."}
+          </span>
         </div>
         {credits.budgets.length === 0 ? (
           <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
@@ -82,7 +88,7 @@ function CreditsBody({ credits }: { credits: Credits }) {
         ) : (
           <ul aria-label="Budgets" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
             {credits.budgets.map((line) => (
-              <BudgetRow key={`${line.scope}#${line.level}#${line.name}`} line={line} />
+              <BudgetRow key={`${line.scope}#${line.level}#${line.name}`} line={line} lines={credits.budgets} organisation={organisation} isAdmin={isAdmin} />
             ))}
           </ul>
         )}
@@ -120,7 +126,7 @@ function CreditsBody({ credits }: { credits: Credits }) {
 
 const INDENT: Record<number, string> = { 0: "pl-0", 1: "pl-6", 2: "pl-12", 3: "pl-16", 4: "pl-20" };
 
-function BudgetRow({ line }: { line: BudgetLine }) {
+function BudgetRow({ line, lines, organisation, isAdmin }: { line: BudgetLine; lines: BudgetLine[]; organisation: string; isAdmin: boolean }) {
   const used = percent(line.spentCredits, line.capCredits);
   const tone = line.depth === 0 ? "ink" : line.depth === 1 ? "primary" : "soft";
   const label = line.capCredits !== null ? `${formatNumber(line.spentCredits)} of ${formatNumber(line.capCredits)} used` : `${formatNumber(line.spentCredits)} used, no cap here`;
@@ -137,19 +143,27 @@ function BudgetRow({ line }: { line: BudgetLine }) {
           <Link href={paths.app(line.appId)} className="rounded-xs text-primary-link hover:text-primary-hover">
             {line.name}
           </Link>
+        ) : line.employeeId ? (
+          <Link href={paths.employee(line.employeeId)} className="rounded-xs text-primary-link hover:text-primary-hover">
+            {line.name}
+          </Link>
         ) : (
           line.name
         )}
+        {line.level === "employee" && <span className="block text-xs font-normal text-ink-muted">With the contractors it briefs</span>}
       </span>
-      {line.capCredits !== null ? <Bar value={used} label={label} tone={used >= 100 ? "attention" : tone} className="sm:col-span-2" /> : <span className="text-sm text-ink-muted sm:col-span-2">No cap here; the one above holds</span>}
+      {line.capCredits !== null ? <Bar value={used} label={label} tone={used >= 100 ? "attention" : tone} className="sm:col-span-2" /> : <span className="text-sm text-ink-muted sm:col-span-2">{noCapLine(lines, line)}</span>}
       <span className="text-ink-body sm:text-right">{line.capCredits !== null ? `${formatNumber(line.spentCredits)} of ${formatNumber(line.capCredits)}` : formatNumber(line.spentCredits)}</span>
+      {isAdmin && (
+        <ErrorBoundary name={`The cap on ${line.name}`}>
+          <CapControl line={line} lines={lines} organisation={organisation} />
+        </ErrorBoundary>
+      )}
     </li>
   );
 }
 
-function OverdraftAside({ credits, organisation }: { credits: Credits; organisation: string }) {
-  const me = useGetMeQuery(undefined);
-  const role = roleAt(me.data, organisation);
+function OverdraftAside({ credits, organisation, role }: { credits: Credits; organisation: string; role: MemberRole | null }) {
   const isOwner = role === "owner";
   const isAdmin = roleRank(role) >= roleRank("admin");
   return (
@@ -176,7 +190,7 @@ function OverdraftAside({ credits, organisation }: { credits: Credits; organisat
         )}
         {credits.overdraft && isAdmin && (
           <ErrorBoundary name="The tighter limits">
-            <NarrowerLimits credits={credits} />
+            <NarrowerLimits credits={credits} organisation={organisation} />
           </ErrorBoundary>
         )}
         {credits.overdraft && isAdmin && (

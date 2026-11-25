@@ -3,13 +3,17 @@ import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Bar } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { formatCredits, formatNumber, percent, timeAgo } from "@/lib/format";
+import { roleRank } from "@/lib/roles";
+import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { RISE, stagger } from "@/lib/motion";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import type { Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import type { Selection } from "@/store/uiSlice";
 import { TypingDots } from "./ConversationDock";
+import { isArchived } from "../tree/treeManage";
 import { accessChip, contractorsLabel, healthChip, runningChip, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
 
 /** Each division takes the next hue in turn, as the design draws Technologies blue and Labs violet. */
@@ -25,11 +29,20 @@ interface Props {
   onSelect: (selection: Selection) => void;
 }
 
+/** Where "Manage" goes for a node: the management screen, scoped to it, in the organisation being shown. */
+function useManageHref(): (scope: string) => string {
+  const active = useActiveOrganisation();
+  const entered = active.entered ? active.organisation?.slug : undefined;
+  return (scope) => paths.manage(scope, entered);
+}
+
 export function OrgChart({ tree, selection, onSelect }: Props) {
   const org = tree.organisation;
+  const manage = useManageHref();
   if (!org) return null;
   // A lone division takes the whole width, its projects side by side, rather than leaving half the page empty.
   const lone = tree.divisions.length === 1;
+  const mayAddDivision = roleRank(tree.viewerRole === "none" ? null : tree.viewerRole) >= roleRank("admin");
   return (
     <section aria-label="Organisation chart" className={cn("grid grid-cols-1 items-start gap-6", !lone && "md:grid-cols-2 2xl:grid-cols-3")}>
       {tree.divisions.map((division, i) => (
@@ -43,8 +56,15 @@ export function OrgChart({ tree, selection, onSelect }: Props) {
           wide={lone}
           selection={selection}
           onSelect={onSelect}
+          manage={manage}
         />
       ))}
+      {mayAddDivision && (
+        <Link href={`${manage(org.slug)}&add=1`} className={cn(buttonVariants({ variant: "soft" }), "min-h-16 justify-start gap-3 rounded-md border-dashed px-5", RISE)}>
+          <Icon name="division" tinted />
+          Add a division
+        </Link>
+      )}
     </section>
   );
 }
@@ -63,7 +83,9 @@ function DivisionColumn({
   wide,
   selection,
   onSelect,
+  manage,
 }: {
+  manage: (scope: string) => string;
   wide: boolean;
   division: TreeDivision;
   orgSlug: string;
@@ -76,11 +98,14 @@ function DivisionColumn({
   const scope = `${orgSlug}/${division.slug}`;
   const trail = [orgName, division.name];
   const selected = selection?.scope === scope && !selection.employeeId;
+  const archived = isArchived(division);
   return (
     <div className={cn("flex min-w-0 flex-col", RISE, stagger(index + 2))}>
       <div
+        data-archived={archived || undefined}
         className={cn(
           "relative flex items-center justify-between gap-3 rounded-md border bg-surface px-5 py-4 shadow-card",
+          archived && "border-dashed bg-ground shadow-none",
           selected && "ring-2 ring-primary",
         )}
       >
@@ -98,9 +123,15 @@ function DivisionColumn({
             <span className="truncate font-display text-lg font-semibold">{division.name}</span>
           </span>
         </button>
-        <Badge tone={tone.chip} className="relative px-3 py-1 text-sm">
-          {formatCredits(division.spend.monthCredits)}
-        </Badge>
+        <div className="relative z-10 flex flex-wrap items-center justify-end gap-2">
+          {archived && <Badge tone="quiet">Archived</Badge>}
+          <Badge tone={archived ? "quiet" : tone.chip} className="px-3 py-1 text-sm">
+            {formatCredits(division.spend.monthCredits)}
+          </Badge>
+          <Link href={manage(scope)} aria-label={`Manage ${division.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
+            Manage
+          </Link>
+        </div>
       </div>
       {division.workers.length > 0 && (
         <div className="ml-wire border-l-2 border-transparent pl-6 pt-3">
@@ -115,7 +146,7 @@ function DivisionColumn({
           <p className="rounded-md border border-dashed border-border-strong bg-surface px-5 py-4 text-ink-muted lg:col-span-2">No projects in {division.name} yet.</p>
         ) : (
           division.projects.map((project) => (
-            <ProjectCard key={project.id} project={project} scope={`${scope}/${project.slug}`} trail={[...trail, project.name]} selection={selection} onSelect={onSelect} />
+            <ProjectCard key={project.id} project={project} scope={`${scope}/${project.slug}`} trail={[...trail, project.name]} selection={selection} onSelect={onSelect} manage={manage} />
           ))
         )}
       </div>
@@ -135,8 +166,9 @@ function ChipRow({ chips }: { chips: Chip[] }) {
   );
 }
 
-function ProjectCard({ project, scope, trail, selection, onSelect }: { project: TreeProject; scope: string; trail: string[]; selection: Selection | null; onSelect: (s: Selection) => void }) {
+function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { project: TreeProject; scope: string; trail: string[]; selection: Selection | null; onSelect: (s: Selection) => void; manage: (scope: string) => string }) {
   const selected = selection?.scope === scope && !selection.employeeId;
+  const archived = isArchived(project);
   const atVerdict = project.stage === "verdict";
   const workers = [...project.workers, ...project.apps.flatMap((a) => a.workers)];
   const unique = [...new Map(workers.map((w) => [w.id, w])).values()];
@@ -148,7 +180,11 @@ function ProjectCard({ project, scope, trail, selection, onSelect }: { project: 
       aria-label={project.name}
       className={cn(
         "relative flex flex-col gap-3 rounded-md px-5 py-4 transition duration-200 motion-reduce:transition-none",
-        atVerdict ? "border-2 border-dashed border-attention-dash bg-attention-wash" : "border bg-surface shadow-card hover:-translate-y-0.5 hover:shadow-raised motion-reduce:hover:translate-y-0",
+        atVerdict
+          ? "border-2 border-dashed border-attention-dash bg-attention-wash"
+          : archived
+            ? "border border-dashed bg-ground"
+            : "border bg-surface shadow-card hover:-translate-y-0.5 hover:shadow-raised motion-reduce:hover:translate-y-0",
         selected && "ring-2 ring-primary",
       )}
     >
@@ -161,9 +197,12 @@ function ProjectCard({ project, scope, trail, selection, onSelect }: { project: 
         >
           {project.name}
         </button>
-        <div className="relative flex flex-wrap items-center gap-1.5">
-          {showStage && <ChipRow chips={[stageChip(project.stage)]} />}
+        <div className="relative z-10 flex flex-wrap items-center gap-1.5">
+          {archived ? <Badge tone="quiet">Archived</Badge> : showStage && <ChipRow chips={[stageChip(project.stage)]} />}
           <span className="text-sm text-ink-muted">{formatCredits(project.spend.monthCredits)} this month</span>
+          <Link href={manage(scope)} aria-label={`Manage ${project.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
+            Manage
+          </Link>
         </div>
       </div>
 
@@ -213,7 +252,8 @@ function ProjectCard({ project, scope, trail, selection, onSelect }: { project: 
 }
 
 function AppRow({ app }: { app: TreeApp }) {
-  const chips = [healthChip(app.health), runningChip(app.running), accessChip(app.access, app.sharedWith)];
+  const archived = isArchived(app);
+  const chips: Chip[] = archived ? [{ label: "Archived", tone: "quiet" }] : [healthChip(app.health), runningChip(app.running), accessChip(app.access, app.sharedWith)];
   return (
     <li className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
