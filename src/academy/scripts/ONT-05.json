@@ -21,7 +21,7 @@
         }
       ],
       "highlight": {
-        "selector": "main",
+        "selector": "main h1",
         "note": "An employee or contractor in a graph opens their page."
       }
     },
@@ -42,7 +42,7 @@
         }
       ],
       "highlight": {
-        "selector": "main",
+        "selector": "main h1",
         "note": "An app opens the app's page. Nothing else in the graph is a link."
       }
     }

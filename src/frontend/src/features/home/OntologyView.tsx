@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent } from "react";
+import { useRef, useState, type PointerEvent } from "react";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { formatTime } from "@/lib/format";
@@ -71,6 +71,20 @@ function Graph({ graph, view }: { graph: Ontology; view: "org-chart" | "data-flo
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const types = [...new Set(graph.edges.map((e) => e.type))];
   const names = new Map(graph.nodes.map((n) => [n.id, nodeName(n, mode)]));
+  // The line the pointer rests on, named on the drawing ("Kasper works on Court booking").
+  const [hovered, setHovered] = useState<number | null>(null);
+  const plain = new Map(graph.nodes.map((n) => [n.id, n.type === "service" ? nodeName(n, mode) : n.name]));
+  const title = (e: (typeof layout.edges)[number]) => {
+    const label = edgeLabel(e.edge);
+    return `${names.get(e.edge.from) ?? ""} ${edgeWords(e.edge.type)} ${names.get(e.edge.to) ?? ""}${label ? ` (${label})` : ""}`;
+  };
+  /** Said as a person would say it: who, what, to whom — and what is under way, when something is. */
+  const sentence = (e: (typeof layout.edges)[number]) => {
+    const label = edgeLabel(e.edge);
+    const tell = label && (view === "data-flow" || label.startsWith("now on "));
+    return `${plain.get(e.edge.from) ?? ""} ${edgeWords(e.edge.type)} ${plain.get(e.edge.to) ?? ""}${tell ? ` (${label})` : ""}`;
+  };
+  const named = hovered === null ? undefined : layout.edges[hovered];
 
   const down = (e: PointerEvent<HTMLDivElement>) => {
     const el = scroller.current;
@@ -134,8 +148,10 @@ function Graph({ graph, view }: { graph: Ontology; view: "org-chart" | "data-flo
             const label = edgeLabel(e.edge);
             const live = e.edge.type === "data-flows-to" || (e.edge.label?.startsWith("now:") ?? false);
             return (
-              <g key={`${e.edge.from}-${e.edge.to}-${e.edge.type}-${i}`}>
-                <title>{`${names.get(e.edge.from) ?? ""} ${edgeWords(e.edge.type)} ${names.get(e.edge.to) ?? ""}${label ? ` (${label})` : ""}`}</title>
+              <g key={`${e.edge.from}-${e.edge.to}-${e.edge.type}-${i}`} data-edge={sentence(e)} onPointerEnter={() => setHovered(i)} onPointerLeave={() => setHovered((h) => (h === i ? null : h))}>
+                <title>{title(e)}</title>
+                {/* A wider, unseen line, so the pointer need not find the two-pixel one exactly. */}
+                <path d={e.d} fill="none" strokeWidth="14" className="stroke-transparent" style={{ pointerEvents: "stroke" }} />
                 <path d={e.d} fill="none" strokeWidth="2" className={cn(style?.stroke ?? "stroke-ink-muted", "opacity-70")} strokeDasharray={style?.dashed ? "6 4" : undefined} markerEnd={`url(#arrow-${e.edge.type})`} />
                 {live && <path d={e.d} fill="none" strokeWidth="3" strokeLinecap="round" strokeDasharray="2 22" className={cn(style?.stroke ?? "stroke-primary", "animate-flow")} />}
                 {label && view === "data-flow" && (
@@ -162,6 +178,7 @@ function Graph({ graph, view }: { graph: Ontology; view: "org-chart" | "data-flo
               </g>
             );
           })}
+          {named && <EdgeName x={named.mid.x} y={named.mid.y} width={layout.width} text={sentence(named)} />}
         </svg>
       </div>
 
@@ -215,4 +232,18 @@ function hrefFor(node: OntologyNode): string | null {
 
 function clip(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/** A line's name, drawn on the line while the pointer rests on it; kept inside the drawing. */
+function EdgeName({ x, y, width, text }: { x: number; y: number; width: number; text: string }) {
+  const w = Math.round(text.length * 6.8 + 20);
+  const cx = Math.min(Math.max(x, w / 2 + 4), width - w / 2 - 4);
+  return (
+    <g data-edge-name="" transform={`translate(${cx} ${Math.max(y - 18, 16)})`} style={{ pointerEvents: "none" }}>
+      <rect x={-w / 2} y={-13} width={w} height={26} rx="8" className="fill-ink" />
+      <text y="4" textAnchor="middle" className="fill-surface text-xs font-semibold">
+        {text}
+      </text>
+    </g>
+  );
 }

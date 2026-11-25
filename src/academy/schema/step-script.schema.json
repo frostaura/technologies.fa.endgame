@@ -131,6 +131,7 @@
         "outage",
         "no-secrets",
         "dashboard-full",
+        "dashboard-question-broken",
         "app-long-history",
         "wake-failures",
         "s3-research-failed",
@@ -269,6 +270,18 @@
           ],
           "properties": {
             "click": {
+              "$ref": "#/definitions/target"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "hover"
+          ],
+          "properties": {
+            "hover": {
               "$ref": "#/definitions/target"
             }
           }

@@ -8,13 +8,6 @@
     {
       "step": 1,
       "kind": "demo",
-      "act": [
-        {
-          "click": {
-            "text": "Set it aside"
-          }
-        }
-      ],
       "highlight": {
         "text": "Set it aside",
         "note": "No confirmation: it leaves the list at once."
@@ -25,12 +18,14 @@
       "kind": "demo",
       "act": [
         {
-          "wait": 500
+          "click": {
+            "text": "Set it aside"
+          }
         }
       ],
       "highlight": {
-        "text": "A course waiting list",
-        "note": "Gone from the open list…"
+        "selector": "ul[aria-label='Suggested ideas']",
+        "note": "Gone from the open list at once…"
       }
     },
     {
@@ -38,7 +33,7 @@
       "kind": "demo",
       "act": [
         {
-          "wait": {
+          "click": {
             "text": "Taken or set aside (3)"
           }
         }

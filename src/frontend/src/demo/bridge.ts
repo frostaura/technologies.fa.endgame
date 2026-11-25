@@ -24,6 +24,7 @@ export interface Target {
 
 export type Action =
   | { click: Target | string }
+  | { hover: Target | string }
   | { type: { into: Target | string; text: string } }
   | { select: { into: Target | string; value: string } }
   | { press: string | { key: string } }
@@ -73,10 +74,15 @@ function norm(s: string | null | undefined): string {
   return (s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+/** The words as the page lays them out: a card's title and its line beneath are two runs of words, not one ("unusedcheapest"). */
+function shown(el: Element): string {
+  return (el as HTMLElement).innerText ?? el.textContent ?? "";
+}
+
 function nameOf(el: Element): string {
   const labelled = el.getAttribute("aria-labelledby");
   const byId = labelled ? labelled.split(" ").map((id) => el.ownerDocument.getElementById(id)?.textContent ?? "").join(" ") : "";
-  return norm(el.getAttribute("aria-label") || byId || (el as HTMLInputElement).value || el.textContent);
+  return norm(el.getAttribute("aria-label") || byId || (el as HTMLInputElement).value || shown(el));
 }
 
 function controlFor(label: Element): HTMLElement | null {
@@ -98,17 +104,43 @@ function documents(): Document[] {
   return docs;
 }
 
-/** The element a target names, or null; `field` prefers form controls (for typing and selecting). */
-export function find(target: Target | string, field = false, strict = false): HTMLElement | null {
+/** The element a target names, or null; `field` prefers form controls (for typing and selecting), `show` is a spotlight's search. */
+export function find(target: Target | string, field = false, strict = false, show = false): HTMLElement | null {
   for (const doc of documents()) {
-    const el = findIn(doc, target, field, strict);
+    const el = findIn(doc, target, field, strict, show);
     if (el) return el;
   }
   return null;
 }
 
+/** A control whose words undo or end something: a spotlight lands on one only when a step names it outright. */
+const DESTRUCTIVE = /^(delete|remove|release|let .+ go|revoke|discard|erase|stop|cancel|forget|archive|leave|sign out)\b/;
+
+function isDestructive(el: Element): boolean {
+  return el.matches(CONTROLS) && DESTRUCTIVE.test(nameOf(el));
+}
+
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** The words appear whole in the text, not as part of a longer word ("Mon" is not in "month"). */
+export function holdsWhole(text: string, want: string): boolean {
+  if (!want) return false;
+  // A boundary is asked for only where the words begin or end in a letter or digit ("last event #" ends in neither).
+  const before = /^[\p{L}\p{N}]/u.test(want) ? "(^|[^\\p{L}\\p{N}])" : "";
+  const after = /[\p{L}\p{N}]$/u.test(want) ? "($|[^\\p{L}\\p{N}])" : "";
+  return new RegExp(`${before}${escapeRegExp(want)}${after}`, "u").test(text);
+}
+
+/** Headings and labels: what a page calls a thing, before a button that merely mentions it. */
+const TITLES = "h1, h2, h3, h4, h5, h6, legend, label, dt, th, caption, figcaption, summary, [role=heading]";
+const TEXTS = "h1, h2, h3, h4, h5, h6, p, span, li, dt, dd, th, td, div, strong, em, code, legend, figcaption, label, summary, caption";
+
+const byLength = (name: (el: HTMLElement) => string) => (a: HTMLElement, b: HTMLElement) => Number(isDestructive(a)) - Number(isDestructive(b)) || name(a).length - name(b).length;
+
 /** `strict`: only a control or field that the words name — never a region or a run of text that merely holds them. */
-function findIn(document: Document, target: Target | string, field: boolean, strict = false): HTMLElement | null {
+function findIn(document: Document, target: Target | string, field: boolean, strict = false, show = false): HTMLElement | null {
   const t: Target = typeof target === "string" ? { text: target } : target;
   if (t.selector) return [...document.querySelectorAll<HTMLElement>(t.selector)].find(visible) ?? null;
   if (t.testId) return [...document.querySelectorAll<HTMLElement>(`[data-testid="${CSS.escape(t.testId)}"]`)].find(visible) ?? null;
@@ -133,27 +165,66 @@ function findIn(document: Document, target: Target | string, field: boolean, str
   // A control that shows the words as its own heading or label (a card named by its title).
   const titled = controls.find((c) => [...c.querySelectorAll("h1, h2, h3, h4, strong, span, p")].some((d) => norm(d.textContent) === want));
   if (titled) return titled;
-  const starts = controls.find((c) => nameOf(c).startsWith(want));
+  const textOf = (el: HTMLElement) => norm(shown(el));
+  const smallest = (els: HTMLElement[]) => els.sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0))[0] ?? null;
+  if (show) {
+    // A spotlight shows a thing by what the page calls it: its heading or label, then any words that are exactly it.
+    const heading = [...document.querySelectorAll<HTMLElement>(TITLES)].find((el) => textOf(el) === want && visible(el));
+    if (heading) return heading;
+    const words = smallest([...document.body.querySelectorAll<HTMLElement>(TEXTS)].filter((el) => textOf(el) === want && visible(el)));
+    if (words) return words;
+  }
+  // Controls the words start, or are part of — whole words first, and a control that deletes or ends something last.
+  const starts = controls.filter((c) => nameOf(c).startsWith(want) && holdsWhole(nameOf(c), want)).sort(byLength(nameOf))[0];
   if (starts) return starts;
-  const contains = controls.filter((c) => nameOf(c).includes(want)).sort((a, b) => nameOf(a).length - nameOf(b).length)[0];
-  if (contains) return contains;
+  const contains = controls.filter((c) => holdsWhole(nameOf(c), want)).sort(byLength(nameOf));
+  if (contains[0] && !(show && isDestructive(contains[0]))) return contains[0];
+  if (!show) {
+    const prefix = controls.filter((c) => nameOf(c).startsWith(want)).sort(byLength(nameOf))[0];
+    if (prefix) return prefix;
+    const inside = controls.filter((c) => nameOf(c).includes(want)).sort(byLength(nameOf))[0];
+    if (inside) return inside;
+  }
   if (strict) return null;
   // A region or list named for it (aria-label), such as "Parts of the plan".
   const named = [...document.querySelectorAll<HTMLElement>("[aria-label]")].find((el) => norm(el.getAttribute("aria-label")) === want && visible(el));
   if (named) return named;
-  // Any visible element whose own text holds it: the smallest such element.
-  const all = [...document.body.querySelectorAll<HTMLElement>("h1, h2, h3, h4, p, span, li, dt, dd, th, td, div, strong, em, code, legend, figcaption")].filter((el) => norm(el.textContent).includes(want) && visible(el));
-  all.sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0));
-  return all[0] ?? null;
+  // Any visible element whose own text holds it: the smallest such element, whole words first.
+  const all = [...document.body.querySelectorAll<HTMLElement>(TEXTS)].filter((el) => !el.closest("[data-demo-chrome]") && textOf(el).includes(want) && visible(el));
+  const whole = smallest(all.filter((el) => holdsWhole(textOf(el), want)));
+  if (whole) return whole;
+  if (contains[0]) return contains[0];
+  return smallest(all);
 }
 
-async function waitFor(target: Target | string, field = false, ms = 6000, preferControls = false): Promise<HTMLElement> {
+/**
+ * What a spotlight would land on, and whether that is what its words name: for the build-time check
+ * of the academy's scripts, which refuses a spotlight that took a control deleting or ending
+ * something the step did not name, or that matched only part of a word.
+ */
+export function inspect(target: Target | string): { found: boolean; tag?: string; text?: string; exact?: boolean; wholeWords?: boolean; destructive?: boolean } {
+  const t: Target = typeof target === "string" ? { text: target } : target;
+  const el = find(t, false, false, true);
+  if (!el) return { found: false };
+  const want = norm(t.text ?? t.label);
+  const names = [nameOf(el), norm(shown(el)), norm(el.getAttribute("aria-label"))];
+  return {
+    found: true,
+    tag: el.tagName.toLowerCase(),
+    text: names[0]?.slice(0, 120),
+    exact: !want || names.includes(want),
+    wholeWords: !want || names.some((n) => holdsWhole(n, want)),
+    destructive: isDestructive(el),
+  };
+}
+
+async function waitFor(target: Target | string, field = false, ms = 6000, preferControls = false, show = false): Promise<HTMLElement> {
   const until = performance.now() + ms;
   // What a step acts on is a control: while one may still be loading, plain text that happens to
   // hold the same words ("…replace it.", "Ask it again…") is not taken for it.
   const patient = preferControls ? performance.now() + Math.min(ms, 4000) : 0;
   for (;;) {
-    const el = find(target, field, performance.now() < patient);
+    const el = find(target, field, performance.now() < patient, show);
     if (el) return el;
     if (performance.now() > until) throw new Error(`Nothing on the screen matches ${JSON.stringify(target)}.`);
     await sleep(100);
@@ -166,10 +237,15 @@ function sleep(ms: number) {
 
 const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/** How much of the page above a tall control stays in view: the page's heading, or the section's. */
+const CONTEXT = 96;
+
 /**
- * Brings an element to the middle of the demo's own page — and of an Edge page's frame, for a
- * control inside one — and never further out. `scrollIntoView` would also scroll the academy's
- * page around the embedded demo (they share an origin), which moves the learner off the step.
+ * Brings an element into view in the demo's own page — and in an Edge page's frame, for a control
+ * inside one — and never further out. `scrollIntoView` would also scroll the academy's page around
+ * the embedded demo (they share an origin), which moves the learner off the step. A control that
+ * fits is set in the middle; one taller than the view is set at its top, with what heads it kept in
+ * view (the page's own top when the control starts near it), so it is read from its beginning.
  */
 function reveal(el: Element, smooth: boolean) {
   const behavior: ScrollBehavior = smooth ? "smooth" : "auto";
@@ -178,14 +254,48 @@ function reveal(el: Element, smooth: boolean) {
     if (box.scrollHeight > box.clientHeight && /(auto|scroll)/.test(style.overflowY)) {
       const r = el.getBoundingClientRect();
       const b = box.getBoundingClientRect();
-      box.scrollBy({ top: r.top - b.top - (b.height - r.height) / 2, behavior });
+      const by = r.height > b.height * 0.8 ? r.top - b.top : r.top - b.top - (b.height - r.height) / 2;
+      box.scrollBy({ top: by, behavior });
+    }
+    // A drawing wider than its frame (the organisation graph) is moved sideways to it, inside the frame only.
+    if (box.scrollWidth > box.clientWidth && /(auto|scroll)/.test(style.overflowX)) {
+      const r = el.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      if (r.left < b.left || r.right > b.right) box.scrollBy({ left: r.left - b.left - Math.max(0, (b.width - r.width) / 2), behavior });
     }
   }
   const win = windowOf(el);
   const r = el.getBoundingClientRect();
-  win.scrollBy({ top: r.top - (win.innerHeight - r.height) / 2, behavior });
+  let by = r.top - (win.innerHeight - r.height) / 2;
+  if (r.height > win.innerHeight * 0.8) {
+    const fromTop = win.scrollY + r.top;
+    by = fromTop < win.innerHeight / 2 ? -win.scrollY : r.top - CONTEXT;
+  }
+  win.scrollBy({ top: by, behavior });
   const frame = win.frameElement;
   if (frame && win !== window) reveal(frame, smooth);
+}
+
+/** A region still loading: a skeleton's shimmer, or a region marked busy. */
+const LOADING = '.animate-shimmer, [aria-busy="true"]';
+
+/** `subject`: what a step shows; a busy region that is it, or holds it (a wake in progress), is the lesson, not loading. */
+function loading(subject: Element | null = null): boolean {
+  return documents().some((doc) => [...doc.querySelectorAll(LOADING)].some((el) => !el.closest("[data-demo-chrome]") && visible(el) && !(subject && (el === subject || el.contains(subject)))));
+}
+
+/** Waits, up to `ms`, until nothing on the screen is still loading, so a step is shown as it settles, never half-drawn. */
+export async function settled(ms = 4000, subject: () => Element | null = () => null) {
+  const until = performance.now() + ms;
+  let quietSince = 0;
+  for (;;) {
+    const now = performance.now();
+    if (loading(subject())) quietSince = 0;
+    else if (!quietSince) quietSince = now;
+    else if (now - quietSince >= 150) return;
+    if (now > until) return;
+    await sleep(50);
+  }
 }
 
 async function approach(el: HTMLElement) {
@@ -234,6 +344,17 @@ async function perform(action: Action) {
     await approach(el);
     focusUnlessEmbedded(el);
     el.click();
+  } else if ("hover" in action) {
+    // The pointer comes to rest on it, as a mouse would: what the page shows on hover (a line's name) appears.
+    const el = await waitFor(action.hover, false, 6000);
+    await approach(el);
+    const win = windowOf(el);
+    const r = el.getBoundingClientRect();
+    const at = { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+    el.dispatchEvent(new win.PointerEvent("pointerover", { ...at, pointerType: "mouse" }));
+    el.dispatchEvent(new win.PointerEvent("pointerenter", { ...at, bubbles: false, pointerType: "mouse" }));
+    el.dispatchEvent(new win.MouseEvent("mouseover", at));
+    el.dispatchEvent(new win.MouseEvent("mouseenter", { ...at, bubbles: false }));
   } else if ("type" in action) {
     const el = await waitFor(action.type.into, true, 6000, true);
     await approach(el);
@@ -305,13 +426,14 @@ export const endgameDemo = {
       return;
     }
     // A spotlight is guidance, not an action: when nothing matches, the step still goes on, unlit.
-    const el = await waitFor(args, false, 5000).catch(() => null);
+    await settled(4000, () => find(args, false, false, true));
+    const el = await waitFor(args, false, 5000, false, true).catch(() => null);
     if (!el) {
       clearSpotlight();
       return false;
     }
     reveal(el, !reduced());
-    showSpotlight(el, args.note ?? null);
+    showSpotlight(el, args.note ?? null, () => find(args, false, false, true));
     return true;
   },
   async act(actions: Action[], instant = false) {
@@ -326,6 +448,9 @@ export const endgameDemo = {
     }
   },
   clock: runClock,
+  inspect,
+  /** Resolves once nothing on the screen is still loading (at most `ms`). */
+  settled,
   reset() {
     clearSpotlight();
     reset();

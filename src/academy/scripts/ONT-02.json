@@ -48,9 +48,16 @@
       "step": 5,
       "kind": "demo",
       "highlight": {
-        "selector": "#chart-panel",
+        "selector": "[data-edge-name]",
         "note": "On a wide screen, hovering a line names it: “Kasper works on Court booking”."
-      }
+      },
+      "act": [
+        {
+          "hover": {
+            "selector": "g[data-edge^=\"Kasper works on Court booking\"]"
+          }
+        }
+      ]
     },
     {
       "step": 6,

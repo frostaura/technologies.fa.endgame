@@ -88,9 +88,15 @@ async function encode(encoder: Page, png: Buffer, type: "image/webp" | "image/jp
   return Buffer.from(b64, "base64");
 }
 
-/** Waits until the console has stopped loading: no skeleton, no busy region, and a short quiet spell. */
+/**
+ * Waits until the console has stopped loading — no skeleton shimmering, no busy region — and has
+ * been quiet for a moment, so a picture never shows a half-drawn screen. A busy region the step
+ * itself rings (a wake in progress) is what the picture is of, and is not waited out.
+ */
 async function settle(page: Page) {
-  await page.waitForFunction(() => !document.querySelector('[aria-busy="true"], [role="status"][aria-label^="Loading"]'), null, { timeout: 4000 }).catch(() => undefined);
+  await page
+    .waitForFunction(() => ![...document.querySelectorAll('.animate-shimmer, [aria-busy="true"], [role="status"][aria-label^="Loading"]')].some((el) => !el.closest("[data-demo-chrome]") && el.getClientRects().length > 0 && !el.matches("[data-demo-ringed]") && !el.querySelector("[data-demo-ringed]")), null, { timeout: 8000, polling: 100 })
+    .catch(() => undefined);
   await page.waitForTimeout(450);
 }
 
@@ -121,7 +127,8 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
       }
       const key = play.shoot(step, i === demo.length - 1);
       if (!key) continue;
-      await page.waitForTimeout(250);
+      // Whatever the step started (a send, a sign-in, a refresh) has drawn its result, then the picture.
+      await settle(page);
       const png = await page.screenshot({ type: "png", animations: "disabled", caret: "hide" });
       const hash = sha(png);
       if (previous && previous.hash === hash) {
