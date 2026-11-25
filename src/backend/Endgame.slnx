@@ -10,8 +10,10 @@
     <Project Path="Endgame.Hosting.Contracts/Endgame.Hosting.Contracts.csproj" />
     <Project Path="Endgame.Harness/Endgame.Harness.csproj" />
     <Project Path="Endgame.Harness.Bench/Endgame.Harness.Bench.csproj" />
+    <Project Path="Endgame.Ops/Endgame.Ops.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="Endgame.Tests/Endgame.Tests.csproj" />
+    <Project Path="Endgame.Ops.Tests/Endgame.Ops.Tests.csproj" />
   </Folder>
 </Solution>
