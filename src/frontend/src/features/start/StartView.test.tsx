@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ideaFixture } from "@/test/fixtures";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { StartView } from "./StartView";
 
@@ -50,7 +51,7 @@ describe("StartView", () => {
       "GET /api/me": json({ ...ME, organisation: null }),
       "POST /api/ideas/estimate": json({ credits: 50, basis: "" }),
       "POST /api/organisations": json({ id: "o9", slug: "north-star", name: "North Star" }, 201),
-      "POST /api/ideas": json({ id: "i9", runId: "run-9" }, 201),
+      "POST /api/ideas": json(ideaFixture({ id: "i9", runId: "run-9", status: "researching", verdict: null }), 201),
     });
     renderWithStore(<StartView />);
     fireEvent.change(await screen.findByLabelText("Your organisation"), { target: { value: "North Star" } });

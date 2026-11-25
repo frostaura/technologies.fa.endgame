@@ -62,6 +62,14 @@ export interface Worker {
   kind: "employee" | "contractor";
   /** What it is doing right now, in plain language, or null when idle. */
   activity: string | null;
+  /** `idle`, `working` or `paused`. */
+  status: "idle" | "working" | "paused";
+  /** True when it has had no work for longer than the organisation's idle setting. */
+  idle: boolean;
+  /** A standing hire's role (`security-reviewer`), never released. */
+  standing: string | null;
+  /** A contractor's briefing employee. */
+  briefedBy: string | null;
 }
 
 export interface Spend {
@@ -120,7 +128,9 @@ export interface TreeDivision {
 
 export type NeedsYou =
   | { kind: "verdict"; id: string; ideaId: string; title: string; verdict: VerdictOutcome; detail: string | null }
-  | { kind: "approval"; id: string; runId: string; approvalId: string; title: string; detail: string | null };
+  | { kind: "approval"; id: string; runId: string; approvalId: string; title: string; detail: string | null }
+  | { kind: "hire"; id: string; hireId: string; title: string; detail: string | null; scope: string; expectedMonthlyCredits: number }
+  | { kind: "idle"; id: string; employeeId: string; title: string; detail: string | null };
 
 export interface Tree {
   generatedAt: string;
@@ -150,16 +160,53 @@ export interface CreateIdeaRequest {
   constraints: string[];
 }
 
+/** A product research found that already does this, with what it does and where that was read. */
+export interface ExistingProduct {
+  name: string;
+  /** What it does, in the research's words. */
+  does: string | null;
+  sources: string[];
+}
+
+/** One strand of the research: what it looked into, how hard, and how sure it is. */
+export interface Strand {
+  id: string;
+  title: string;
+  searches: number | null;
+  sources: number | null;
+  confidence: string | null;
+}
+
+/** One piece of evidence that people want this (or do not), with where it was read. */
+export interface Signal {
+  text: string;
+  source: string | null;
+}
+
+/**
+ * The verdict document as the console reads it, normalised by `normaliseVerdict` from whatever
+ * research wrote (ARCH-004, the verdict schema). Every list is a list, every text is text.
+ */
 export interface Verdict {
   outcome: VerdictOutcome;
   headline: string;
   summary: string;
-  existing: { name: string; description: string; url: string | null }[];
-  gap: string[];
-  demand: { paragraphs: string[]; evidenceFound: boolean };
-  /** What would change the verdict, or null when nothing would. */
+  /** The case against the idea, argued first, as separate points. */
+  against: string[];
+  existing: { evidence: string[]; products: ExistingProduct[] };
+  gap: { paragraphs: string[] };
+  demand: { paragraphs: string[]; signals: Signal[]; evidenceFound: boolean };
+  /** What to change: set exactly when the outcome is "change" (ARCH-004, the verdict document). */
+  suggestedChange: string | null;
+  /** What evidence would change the verdict, or null when nothing would. */
   wouldChange: { text: string; changeLabel: string | null; estimateCredits: number | null } | null;
-  method: string | null;
+  /** Where research suggests the idea lives once built. */
+  placement: { division: string | null; project: string | null; app: string | null; name: string | null } | null;
+  /** The red-line screen. Null when research did not record one. */
+  redLines: { breached: boolean; line: string | null; reasoning: string | null } | null;
+  method: { summary: string | null; argued: string | null; strands: Strand[]; sources: string[]; searches: string[]; searchCount: number | null; confidence: string | null; contractors: number | null };
+  /** Rules code applied over the judge's word (e.g. no demand found, so do not build). */
+  rulesApplied: string[];
 }
 
 export interface VerdictRecord {
@@ -181,8 +228,10 @@ export interface Idea {
   scope: string | null;
   research: { estimatedCredits: number; spentCredits: number; by: string | null };
   verdict: Verdict | null;
-  decision: { choice: DecisionChoice; at: string; by: string; overruled: boolean; runId: string | null } | null;
+  decision: { choice: DecisionChoice; at: string; by: string; overruled: boolean; runId: string | null; via: "person" | "auto-mode" } | null;
   record: VerdictRecord;
+  /** The red line the verdict found breached; nothing can be built over it. */
+  redLine: string | null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -193,7 +242,7 @@ export type RunStatus = "queued" | "running" | "waiting" | "paused" | "finished"
 
 export interface Run {
   id: string;
-  kind: "research" | "conversation" | "build" | "factory";
+  kind: "research" | "conversation" | "build" | "factory" | "task" | "review";
   title: string;
   scope: string;
   status: RunStatus;
@@ -359,7 +408,7 @@ export interface Credits {
   month: { spent: number; ai: number; hosting: number };
   monthsLeftAtPace: number | null;
   budgets: BudgetLine[];
-  estimates: { pieces: number; withinPercent: number; under: number; over: number; largestMissPercent: number } | null;
+  estimates: Estimates | null;
   notCharged: { credits: number; repairs: number };
   overdraft: { frostauraLimit: number; ownLimit: number | null } | null;
   topUps: { at: string; credits: number; note: string }[];
@@ -387,4 +436,272 @@ export interface SystemStatus {
   overall: HealthState;
   checkedAt: string;
   services: ServiceHealth[];
+}
+
+// ---------------------------------------------------------------------------------------------
+// The workforce (ARCH-004, Workforce) — `GET /api/employees*`, `/api/hires*`
+// ---------------------------------------------------------------------------------------------
+
+export type PlatformService = "identity" | "models" | "secrets" | "email" | "schedules" | "webhooks" | "telemetry";
+
+export interface PersonRef {
+  id: string;
+  name: string;
+}
+
+export interface JobDescription {
+  mandate: string;
+  /** Path of slugs to where in the cascade it works. */
+  scope: string;
+  tools: string[];
+  services: string[];
+  monthlyCreditLimit: number | null;
+  /** A routing-table task type; shown in plain words in normal mode. */
+  modelTier: string | null;
+}
+
+export type EmployeeStatus = "idle" | "working" | "paused" | "released";
+
+export interface Employee {
+  id: string;
+  kind: "employee" | "contractor";
+  name: string;
+  role: string;
+  status: EmployeeStatus;
+  standing: string | null;
+  scope: string;
+  reportsTo: PersonRef | null;
+  briefedBy: PersonRef | null;
+  jobDescription: JobDescription;
+  idle: { flagged: boolean; since: string | null; afterDays: number };
+  currentRun: { id: string; title: string } | null;
+  lastRunId: string | null;
+  lastActiveAt: string | null;
+  createdAt: string;
+  releasedAt: string | null;
+  memoryEntries: number;
+  /** A contractor's brief. */
+  brief: string | null;
+}
+
+export interface Estimates {
+  pieces: number;
+  withinPercent: number;
+  under: number;
+  over: number;
+  largestMissPercent: number;
+}
+
+export interface TrackRecord {
+  employeeId: string;
+  work: { accepted: number; sentBack: number; acceptedPercent: number | null };
+  runs: { finished: number; succeeded: number; failed: number; cancelled: number };
+  repairsNotCharged: { credits: number; calls: number };
+  cost: { toDateCredits: number; monthCredits: number };
+  contractors: { engaged: number; working: number; toDateCredits: number; monthCredits: number };
+  estimates: Estimates | null;
+}
+
+/** `GET /api/employees/{id}` */
+export interface EmployeeDetail {
+  employee: Employee;
+  trackRecord: TrackRecord;
+  /** Contractors it has briefed that are working now. */
+  contractors: Employee[];
+  reports: Employee[];
+}
+
+export interface JobDescriptionInput {
+  mandate?: string;
+  tools?: string[];
+  services?: string[];
+  monthlyCreditLimit?: number;
+  modelTier?: string;
+}
+
+export interface EmployeePatch {
+  name?: string;
+  role?: string;
+  jobDescription?: JobDescriptionInput;
+  reportsTo?: string;
+  clearReportsTo?: boolean;
+  clearMonthlyCreditLimit?: boolean;
+  status?: "paused" | "idle";
+}
+
+export type MemoryKind = "fact" | "practice" | "preference" | "lesson";
+
+export interface MemoryEntry {
+  id: string;
+  employeeId: string;
+  scope: string;
+  title: string;
+  body: string;
+  kind: MemoryKind;
+  sourceRunId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastReviewedAt: string | null;
+  archived: boolean;
+}
+
+export type MemoryAction = "added" | "corrected" | "merged" | "removed" | "archived" | "restored" | "reviewed";
+
+export interface MemoryChange {
+  id: string;
+  memoryId: string | null;
+  action: MemoryAction;
+  /** `employee`, `person`, `review` or `platform`. */
+  by: string;
+  userId: string | null;
+  runId: string | null;
+  detail: unknown;
+  at: string;
+}
+
+export type HireStatus = "proposed" | "accepted" | "declined";
+export type HireTrigger = "division" | "stage" | "recurring" | "promotion" | "owner";
+
+export interface Hire {
+  id: string;
+  status: HireStatus;
+  trigger: HireTrigger;
+  needKey: string | null;
+  scope: string;
+  reason: string;
+  name: string;
+  role: string;
+  jobDescription: JobDescription;
+  reportsTo: PersonRef | null;
+  expectedMonthlyCredits: number;
+  withinBudget: boolean;
+  headroomCredits: number;
+  contractorRole: string | null;
+  raisedBy: "person" | "runner";
+  raisedByRunId: string | null;
+  decision: { via: string; by: string; at: string; note: string | null } | null;
+  employeeId: string | null;
+  createdAt: string;
+}
+
+export interface HireEdit {
+  reason?: string;
+  name?: string;
+  role?: string;
+  jobDescription?: JobDescriptionInput;
+  expectedMonthlyCredits?: number;
+}
+
+export interface HireProposalRequest {
+  scope: string;
+  name: string;
+  role: string;
+  reason: string;
+  jobDescription: JobDescriptionInput;
+  expectedMonthlyCredits: number;
+  trigger?: HireTrigger;
+  needKey?: string;
+}
+
+/** `GET /api/employees/recurring-roles?scope=`: a contractor role that keeps coming back. */
+export interface RecurringRole {
+  scope: string;
+  role: string;
+  contractors: number;
+  windowDays: number;
+  costCredits: number;
+  lastBriefedBy: string;
+  lastBrief: string;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Autonomy, checkpoints and stage rule sets — `GET/PUT/DELETE /api/autonomy*`
+// ---------------------------------------------------------------------------------------------
+
+export interface CheckpointSetting {
+  on: boolean;
+  /** Where it was set; null when nowhere, so off. */
+  setAtPath: string | null;
+}
+
+export interface RuleSet {
+  stage: string;
+  deny: string[];
+  ask: string[];
+  allow: string[];
+  checkpoints: string[];
+  setAtPath: string;
+  /** Higher levels whose rule set for this stage this one replaces. */
+  overrides: string[];
+}
+
+export interface Autonomy {
+  scope: string;
+  autonomy: "auto" | "checkpoints";
+  autonomySetAtPath: string | null;
+  checkpoints: Record<string, CheckpointSetting>;
+  ruleSets: RuleSet[];
+  stages: string[];
+}
+
+export interface RuleSetRequest {
+  scope: string;
+  stage: string;
+  deny: string[];
+  ask: string[];
+  allow: string[];
+  checkpoints: string[];
+}
+
+// ---------------------------------------------------------------------------------------------
+// The ontology — `GET /api/ontology?scope=&view=`
+// ---------------------------------------------------------------------------------------------
+
+export type OntologyEdgeType = "owns" | "works-on" | "reports-to" | "depends-on" | "data-flows-to";
+
+export interface OntologyNode {
+  id: string;
+  /** organisation, division, project, app, employee, contractor, person, secret, service, webhook, schedule */
+  type: string;
+  name: string;
+  scope: string | null;
+  status: string | null;
+  attributes: Record<string, unknown> | null;
+}
+
+export interface OntologyEdge {
+  from: string;
+  to: string;
+  type: string;
+  label: string | null;
+}
+
+export interface Ontology {
+  scope: string;
+  generatedAt: string;
+  nodes: OntologyNode[];
+  edges: OntologyEdge[];
+  views: Record<string, string[]>;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tasks — `GET /api/tasks?scope=&status=&limit=`
+// ---------------------------------------------------------------------------------------------
+
+export interface TaskItem {
+  id: string;
+  scope: string;
+  runId: string | null;
+  parentTaskId: string | null;
+  title: string;
+  description: string;
+  status: "todo" | "in_progress" | "blocked" | "done" | "failed" | "cancelled";
+  holderRunId: string | null;
+  holderEmployeeId: string | null;
+  claimedAt: string | null;
+  estimateCredits: number | null;
+  actualCredits: number | null;
+  dependsOn: string[];
+  createdAt: string;
+  updatedAt: string;
 }
