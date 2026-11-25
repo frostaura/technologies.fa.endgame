@@ -1,0 +1,244 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-10",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/platform/v1/identity/resolve",
+      "headers": {
+        "Authorization": "Bearer egt_…",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "session": "egs_…"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "user": {
+            "id": "usr_6f1c2a9e4b7d4c0e9a3b5d8f1e2c7a40",
+            "email": "maya@northwind.example",
+            "displayName": "Maya Patel",
+            "kind": "member",
+            "role": "builder"
+          },
+          "expiresAt": "2026-11-25T11:00:00+00:00"
+        }
+      },
+      "note": "The kit sends the X-Endgame-Session value Edge forwarded, with the app's own token. Both tokens are illustrative. The answer is cached for 30 seconds, never past expiresAt."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "GET",
+      "path": "/acme/labs/demo/notes/api/me",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "user": {
+            "id": "usr_6f1c2a9e4b7d4c0e9a3b5d8f1e2c7a40",
+            "email": "maya@northwind.example",
+            "displayName": "Maya Patel",
+            "kind": "member",
+            "role": "builder"
+          }
+        }
+      },
+      "note": "The kit's own endpoint (operation getCurrentUser). An end user of the app has kind \"endUser\" and role null. The address is illustrative."
+    },
+    {
+      "step": 3,
+      "kind": "code",
+      "language": "csharp",
+      "code": "// Only signed-in people reach it; the person arrives as a parameter.\nnotes.MapPost(\"\", CreateAsync).RequireUser()\n    .WithName(\"createNote\")\n    .WithDescription(\"Saves a new note by the signed-in person and returns it.\");\n\n// Where signing in is optional, take EndgameUser? instead.\napi.MapGet(\"greeting\", (EndgameUser? user) =>\n        user is null ? \"Hello, visitor\" : $\"Hello, {user.DisplayName} ({user.Role ?? \"end user\"})\")\n    .WithName(\"getGreeting\")\n    .WithDescription(\"A greeting for whoever is using the app.\");\n\n// Anywhere else: IEndgameIdentity.\nvar canManage = identity.CurrentUser is { Kind: EndgameUserKind.Member, Role: \"owner\" or \"admin\" };",
+      "output": [
+        "Hello, Maya Patel (builder)"
+      ],
+      "note": "In the front end the same person comes from useCurrentUser(), and signInUrl() / signUpUrl() send someone to the platform's pages. Store user.Id as an owner, never the e-mail."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The session is not valid",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/identity/resolve",
+          "headers": {
+            "Authorization": "Bearer egt_…"
+          },
+          "body": {
+            "session": "egs_…"
+          },
+          "response": {
+            "status": 401,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/session_invalid",
+              "title": "The session is not valid",
+              "status": 401,
+              "detail": "The session is unknown, has expired, or is not a session for this app.",
+              "code": "session_invalid"
+            }
+          },
+          "note": "Expired, unknown, or a session for another app."
+        },
+        {
+          "step": 2,
+          "kind": "request",
+          "method": "GET",
+          "path": "/acme/labs/demo/notes/api/me",
+          "response": {
+            "status": 200,
+            "body": {
+              "user": null
+            }
+          },
+          "note": "The kit treats session_invalid as nobody signed in: CurrentUser is null, not an error."
+        }
+      ]
+    },
+    {
+      "title": "Nobody is signed in at an endpoint that needs a user",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/acme/labs/demo/notes/api/notes",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "title": "Court 3 lights"
+          },
+          "response": {
+            "status": 401,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/sign-in-required",
+              "title": "Sign in required",
+              "status": 401,
+              "detail": "This needs a signed-in user. Send the person to signInUrl.",
+              "signInUrl": "/acme/labs/demo/notes/_endgame/auth/sign-in?returnTo=%2Facme%2Flabs%2Fdemo%2Fnotes%2F"
+            }
+          },
+          "note": "An API call gets a problem with signInUrl. A browser navigating (GET, Accept text/html) is redirected to sign in instead."
+        },
+        {
+          "step": 2,
+          "kind": "code",
+          "language": "tsx",
+          "code": "import { api, NotSignedInError, signInUrl } from \"@endgame/appkit\";\n\ntry {\n  await api(\"notes\", { method: \"POST\", body: { title } });\n} catch (e) {\n  if (e instanceof NotSignedInError) location.assign(e.signInUrl ?? signInUrl());\n  else throw e;\n}",
+          "note": "The web kit turns the 401 into NotSignedInError, carrying the signInUrl the server sent."
+        }
+      ]
+    },
+    {
+      "title": "The app's token is refused",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/identity/resolve",
+          "headers": {
+            "Authorization": "Bearer egt_…"
+          },
+          "body": {
+            "session": "egs_…"
+          },
+          "response": {
+            "status": 401,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/app_token_invalid",
+              "title": "App token required",
+              "status": 401,
+              "detail": "The platform API needs the app's token (ENDGAME_APP_TOKEN) as a bearer token; this one is missing, unknown or superseded.",
+              "code": "app_token_invalid"
+            }
+          },
+          "note": "Any /platform/v1 call with a missing, unknown or superseded token. A restart gives the app a fresh one."
+        },
+        {
+          "step": 2,
+          "kind": "code",
+          "language": "text",
+          "code": "EndgamePlatformException (Code = \"app_token_invalid\")",
+          "output": [
+            "The platform refused this app's token (ENDGAME_APP_TOKEN) on POST platform/v1/identity/resolve: The platform API needs the app's token (ENDGAME_APP_TOKEN) as a bearer token; this one is missing, unknown or superseded.. The token is injected when the app starts; a restarted app gets a fresh one."
+          ],
+          "note": "What the kit throws. The doubled full stop is in the kit's message as written: its template adds one after the platform's detail."
+        }
+      ]
+    },
+    {
+      "title": "The platform API is called through Edge's public side",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/identity/resolve",
+          "headers": {
+            "Authorization": "Bearer egt_…",
+            "X-Forwarded-Host": "acme.endgame.example"
+          },
+          "body": {
+            "session": "egs_…"
+          },
+          "response": {
+            "status": 404,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/not_found",
+              "title": "Not found",
+              "status": 404,
+              "detail": "There is nothing at this address.",
+              "code": "not_found"
+            }
+          },
+          "note": "Any request carrying X-Forwarded-Host or X-Original-Host came through Edge, and is answered as if nothing were here, before the token is even read."
+        }
+      ]
+    },
+    {
+      "title": "A handler needs a user but is not marked .RequireUser()",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "csharp",
+          "code": "api.MapGet(\"greeting\", (EndgameUser user) => $\"Hello, {user.DisplayName}\")\n    .WithName(\"getGreeting\")\n    .WithDescription(\"A greeting for the signed-in person.\");",
+          "output": [
+            "Unhandled exception. System.InvalidOperationException: Endgame app kit: 1 endpoint breaks the API contract (the platform builds the app's MCP tools from it):",
+            "  - GET api/greeting: takes a non-nullable EndgameUser but is not marked .RequireUser(). Add .RequireUser(), or take EndgameUser? if signing in is optional."
+          ],
+          "note": "The app refuses to start. \"Unhandled exception. System.InvalidOperationException:\" is .NET's own prefix; the rest is the kit's message."
+        }
+      ]
+    }
+  ]
+}

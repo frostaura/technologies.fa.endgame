@@ -1,0 +1,89 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-22",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make -C src/appkit build",
+      "output": [
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet build Endgame.AppKit.slnx --nologo",
+        "Build succeeded in 14.2s",
+        "cd sdk-web && npm ci --no-audit --no-fund && npm run build",
+        "rm -rf template/vendor/nuget",
+        "rm -rf template/vendor/npm && mkdir -p template/vendor/npm",
+        "make -C template build"
+      ],
+      "note": "The SDKs (warnings are errors), then vendor packs them into template/vendor/, then the template builds against what was just packed. Abridged; the time is illustrative. The root make appkit-build runs the same."
+    },
+    {
+      "step": 2,
+      "kind": "terminal",
+      "command": "make -C src/appkit lint",
+      "output": [
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet format Endgame.AppKit.slnx --verify-no-changes --verbosity minimal",
+        "cd sdk-web && npm run lint && npm run typecheck",
+        "make -C template lint"
+      ],
+      "note": "dotnet format, ESLint and tsc for the SDKs, then the template's own lint after a fresh vendor. Abridged. Root: make appkit-lint."
+    },
+    {
+      "step": 3,
+      "kind": "terminal",
+      "command": "make -C src/appkit test",
+      "output": [
+        "docker run -d --name test-appkit-pg -e POSTGRES_PASSWORD=appkit-test -p 127.0.0.1:55471:5432 \\",
+        "\t--tmpfs /var/lib/postgresql/data postgres:16.16-alpine > /dev/null",
+        "make test-sdk test-template; status=$?; make test-db-down; exit $status"
+      ],
+      "note": "A throwaway PostgreSQL on loopback port 55471, data in tmpfs, with the test-only password written in the Makefile. The SDK and template tests run, and the container is removed whatever they return. Root: make appkit-test."
+    },
+    {
+      "step": 4,
+      "kind": "terminal",
+      "command": "make -C src/appkit proof",
+      "output": [
+        "proof: building the template image (front end built in, ReadyToRun, chiseled)…",
+        "proof: building the dev platform image (test double)…",
+        "proof: waiting for the app to report healthy through the edge…",
+        "proof: path form on :52011, organisation subdomain on :52012, platform on :52013",
+        "  10 passed (48.6s)"
+      ],
+      "note": "proof/run.sh runs the template as a container under a path base and at a host root, then Playwright on desktop and phone. The ports are picked by the script and the time varies; both are illustrative."
+    },
+    {
+      "step": 5,
+      "kind": "terminal",
+      "command": "make -C src/appkit vendor",
+      "output": [
+        "rm -rf template/vendor/nuget",
+        "rm -rf ~/.nuget/packages/endgame.appkit/0.1.0 ~/.nuget/packages/endgame.appkit.testing/0.1.0 ~/.nuget/packages/endgame.appkit.devplatform/0.1.0",
+        "rm -rf template/vendor/npm && mkdir -p template/vendor/npm"
+      ],
+      "note": "The cached copies of 0.1.0 are dropped first, since the same version is re-packed during development; otherwise restore keeps the stale one. make prints your home directory where ~ is shown. Abridged."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The test database never becomes ready",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make -C src/appkit test",
+          "output": [
+            "test database did not become ready",
+            "make: *** [test-db] Error 1"
+          ],
+          "note": "pg_isready is tried for 30 seconds. The first line is the Makefile's; the second is make's own and its wording depends on the make version. Is Docker running?"
+        }
+      ]
+    }
+  ]
+}

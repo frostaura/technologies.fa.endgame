@@ -1,0 +1,98 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-11",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "terminal",
+      "command": "make migration name=AddTagsToNotes",
+      "output": [
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet tool restore",
+        "Tool 'dotnet-ef' (version '10.0.15') was restored. Available commands: dotnet-ef",
+        "",
+        "Restore was successful.",
+        "MSBuildEnableWorkloadResolver=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 dotnet ef migrations add AddTagsToNotes --project api --output-dir Migrations",
+        "Build started...",
+        "Build succeeded.",
+        "Done. To undo this action, use 'ef migrations remove'"
+      ],
+      "note": "Run in the app's repository after adding the entity and its DbSet to api/Data/AppDb.cs. The two long lines are make echoing its recipe; the rest is dotnet's own output. The migration lands in api/Migrations/."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "GET",
+      "path": "/acme/labs/demo/notes/health",
+      "response": {
+        "status": 200,
+        "body": {
+          "status": "healthy",
+          "database": "reachable"
+        }
+      },
+      "note": "Migrations ran before the first request, and the app logged \"Database for AppDb is migrated (<n> ms).\" The database and its role are the app's own, from ENDGAME_DATABASE. The address is illustrative."
+    }
+  ],
+  "variations": [
+    {
+      "title": "make migration without a name",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "make migration",
+          "output": [
+            "usage: make migration name=AddSomething",
+            "make: *** [migration] Error 1"
+          ],
+          "note": "The first line is the template's; the second is make's own, and its exact wording depends on the make version."
+        }
+      ]
+    },
+    {
+      "title": "The injected environment is missing",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "terminal",
+          "command": "dotnet run --project api",
+          "output": [
+            "Unhandled exception. Microsoft.Extensions.Options.OptionsValidationException: Endgame app kit: missing environment variable(s) ENDGAME_DATABASE, ENDGAME_PLATFORM_URL, ENDGAME_APP_TOKEN. The platform injects these when it starts the app. Tests get them from EndgameAppFactory (Endgame.AppKit.Testing); never hard-code them in appsettings.json."
+          ],
+          "note": "Every missing variable is named in one message. The exception prefix is .NET's; the sentence after it is the kit's."
+        }
+      ]
+    },
+    {
+      "title": "The database cannot be reached",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "GET",
+          "path": "/acme/labs/demo/notes/health",
+          "response": {
+            "status": 503,
+            "body": {
+              "status": "unhealthy",
+              "database": "unreachable"
+            }
+          },
+          "note": "Edge and Dock poll health. At start, a database that cannot be migrated stops the app instead: \"Endgame app kit: could not migrate the database at Host=…;Port=…;Database=…;Username=… (ENDGAME_DATABASE): …\", never with the password."
+        }
+      ]
+    }
+  ]
+}

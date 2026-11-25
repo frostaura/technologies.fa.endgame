@@ -1,0 +1,50 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-18",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "POST",
+      "path": "/acme/labs/demo/notes/hooks/door",
+      "headers": {
+        "X-Token": "…"
+      },
+      "response": {
+        "status": 204
+      },
+      "note": "The app maps app.MapWebhook(\"door\", WebhookVerification.SharedToken(\"X-Token\", \"DOOR_TOKEN\"), …). The device sends the vault secret DOOR_TOKEN itself (not shown), compared in constant time. Declared as in KIT-17."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The token does not match",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/acme/labs/demo/notes/hooks/door",
+          "headers": {
+            "X-Token": "…"
+          },
+          "response": {
+            "status": 401,
+            "body": {
+              "title": "Webhook verification failed",
+              "status": 401,
+              "detail": "The X-Token header did not verify."
+            }
+          },
+          "note": "A wrong or missing token. The handler never runs. The problem also carries a traceId."
+        }
+      ]
+    }
+  ]
+}

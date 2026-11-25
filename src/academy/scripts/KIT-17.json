@@ -1,0 +1,155 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-17",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "request",
+      "method": "PUT",
+      "path": "/platform/v1/webhooks",
+      "headers": {
+        "Authorization": "Bearer egt_…",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "webhooks": [
+          { "name": "court-sensor", "path": "hooks/court-sensor" }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "webhooks": [
+            { "name": "court-sensor", "path": "hooks/court-sensor" }
+          ]
+        }
+      },
+      "note": "Sent by the kit once the app has started, from every MapWebhook. The platform tells Edge at once, so the hook is open without waiting for Edge's next poll."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/acme/labs/demo/notes/hooks/court-sensor",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Signature": "sha256=5d1f…"
+      },
+      "body": {
+        "court": "3",
+        "occupied": true
+      },
+      "response": {
+        "status": 202
+      },
+      "note": "The device sends no session and no cookie. Edge admits a POST to a declared hook even on a private app; anything else still needs sign-in. Address and signature illustrative."
+    },
+    {
+      "step": 3,
+      "kind": "code",
+      "language": "bash",
+      "code": "# On the device: sign the exact bytes it sends, with the shared secret.\nBODY='{\"court\":\"3\",\"occupied\":true}'\nprintf '%s' \"$BODY\" | openssl dgst -sha256 -hmac \"$SENSOR_SECRET\"",
+      "output": [
+        "SHA2-256(stdin)= 5d1f…"
+      ],
+      "note": "The kit reads SENSOR_SECRET from the vault, computes HMAC-SHA256 of the raw body, strips the optional sha256= prefix from the header and compares in constant time. The output format is OpenSSL's."
+    },
+    {
+      "step": 4,
+      "kind": "code",
+      "language": "csharp",
+      "code": "app.MapWebhook(\"court-sensor\",\n    WebhookVerification.HmacSha256(\"X-Signature\", \"SENSOR_SECRET\"),\n    async hook =>\n    {\n        var reading = hook.ReadJson<CourtReading>();\n        var db = hook.Services.GetRequiredService<AppDb>();\n        // … record the reading …\n        return Results.Accepted();\n    });\n\npublic sealed record CourtReading(string Court, bool Occupied);",
+      "note": "The handler runs only after the call verified. ReadJson<T>() reads camelCase JSON; ReadText() gives the body as text; Body is the raw bytes exactly as signed."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The signature does not verify",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/acme/labs/demo/notes/hooks/court-sensor",
+          "headers": {
+            "Content-Type": "application/json",
+            "X-Signature": "sha256=0000…"
+          },
+          "body": { "court": "3", "occupied": true },
+          "response": {
+            "status": 401,
+            "body": {
+              "title": "Webhook verification failed",
+              "status": 401,
+              "detail": "The X-Signature header did not verify."
+            }
+          },
+          "note": "A missing header, a wrong prefix, bad hex or a wrong MAC all end here, and the handler never runs. The problem also carries a traceId."
+        }
+      ]
+    },
+    {
+      "title": "The secret is not set",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/acme/labs/demo/notes/hooks/court-sensor",
+          "headers": {
+            "Content-Type": "application/json",
+            "X-Signature": "sha256=5d1f…"
+          },
+          "body": { "court": "3", "occupied": true },
+          "response": {
+            "status": 502,
+            "body": {
+              "title": "A platform service failed",
+              "status": 502,
+              "code": "secret_not_found"
+            }
+          },
+          "note": "Verification asks the vault for SENSOR_SECRET; EndgameSecretNotFoundException reaches the kit's error handler. Set the secret with SEC-03. Plus a traceId."
+        }
+      ]
+    },
+    {
+      "title": "A declaration the platform refuses",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "PUT",
+          "path": "/platform/v1/webhooks",
+          "headers": { "Authorization": "Bearer egt_…" },
+          "body": {
+            "webhooks": [{ "name": "court-sensor", "path": "sensors/court" }]
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/invalid_request",
+              "title": "The request is not valid",
+              "status": 400,
+              "detail": "A webhook's path is hooks/court-sensor.",
+              "code": "invalid_request"
+            }
+          },
+          "note": "Only a hand-made call can send another path; MapWebhook always uses hooks/<name>. Also refused: \"An app declares at most 50 webhooks.\" and \"Two webhooks have the same name.\""
+        }
+      ]
+    }
+  ]
+}

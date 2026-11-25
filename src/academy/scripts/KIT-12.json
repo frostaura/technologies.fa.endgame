@@ -1,0 +1,134 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "KIT-12",
+  "persona": "builder",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "code",
+      "language": "csharp",
+      "code": "// IEndgameEmail email, injected like any other service.\nvar id = await email.SendAsync(new EmailMessage(\n    To: [\"maya@northwind.example\"],\n    Subject: \"Your court is booked\",\n    Text: \"Court 3, Thursday at 18:00.\",\n    Html: \"<p>Court 3, <strong>Thursday at 18:00</strong>.</p>\"), ct);",
+      "output": [
+        "eml_8c41d2f07a9b4e65b3c1f0a2d7e95b18"
+      ],
+      "note": "The kit checks the message first: at least one recipient, each one an address, a subject and a plain-text body. HTML and reply-to are optional. The id is illustrative."
+    },
+    {
+      "step": 2,
+      "kind": "request",
+      "method": "POST",
+      "path": "/platform/v1/email",
+      "headers": {
+        "Authorization": "Bearer egt_…",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "to": ["maya@northwind.example"],
+        "subject": "Your court is booked",
+        "text": "Court 3, Thursday at 18:00.",
+        "html": "<p>Court 3, <strong>Thursday at 18:00</strong>.</p>"
+      },
+      "response": {
+        "status": 202,
+        "body": {
+          "id": "eml_8c41d2f07a9b4e65b3c1f0a2d7e95b18"
+        }
+      },
+      "note": "What the kit sends. Unset fields (here replyTo) are left out. 202 means queued in the outbox, not yet delivered. The token is illustrative."
+    },
+    {
+      "step": 3,
+      "kind": "email",
+      "from": "Notes <bookings@northwind.example>",
+      "to": "maya@northwind.example",
+      "subject": "Your court is booked",
+      "body": [
+        "Court 3, Thursday at 18:00."
+      ],
+      "note": "The dispatcher sends it through SMTP, from the address in Smtp__From under the app's name; the address here is illustrative. The HTML body goes as an alternative view."
+    }
+  ],
+  "variations": [
+    {
+      "title": "The kit refuses a message before sending it",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "csharp",
+          "code": "await email.SendAsync(new EmailMessage([\"maya at northwind\"], \"Your court is booked\", \"Court 3.\"), ct);",
+          "output": [
+            "System.ArgumentException: An email needs at least one recipient, and every recipient must be an address. (Parameter 'message')"
+          ],
+          "note": "No recipient, or one without an @, is refused in the app. A blank subject or text gets \"An email needs a subject and a plain-text body. (Parameter 'message')\"."
+        }
+      ]
+    },
+    {
+      "title": "The platform refuses the message",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "request",
+          "method": "POST",
+          "path": "/platform/v1/email",
+          "headers": {
+            "Authorization": "Bearer egt_…"
+          },
+          "body": {
+            "to": ["maya@northwind.example"],
+            "subject": "Your court is booked\nand paid",
+            "text": "Court 3, Thursday at 18:00."
+          },
+          "response": {
+            "status": 400,
+            "body": {
+              "type": "https://endgame.frostaura.net/problems/invalid_request",
+              "title": "The request is not valid",
+              "status": 400,
+              "detail": "subject is one line of 1 to 300 characters.",
+              "code": "invalid_request"
+            }
+          },
+          "note": "The other refusals: \"to is a list of 1 to 50 addresses.\", \"text is required, at most 256 KB.\" and \"html is at most 512 KB.\""
+        },
+        {
+          "step": 2,
+          "kind": "code",
+          "language": "text",
+          "code": "EndgamePlatformException (Code = \"invalid_request\")",
+          "output": [
+            "The platform answered POST platform/v1/email with 400: subject is one line of 1 to 300 characters."
+          ],
+          "note": "What SendAsync throws."
+        }
+      ]
+    },
+    {
+      "title": "No SMTP server is configured",
+      "persona": "builder",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "code",
+          "language": "text",
+          "code": "control plane log, at start",
+          "output": [
+            "SMTP is not configured (Smtp__Host, Smtp__From); app e-mail stays queued and nothing is sent."
+          ],
+          "note": "SendAsync still returns an id and the platform still answers 202; the message waits in the outbox."
+        }
+      ]
+    }
+  ]
+}
