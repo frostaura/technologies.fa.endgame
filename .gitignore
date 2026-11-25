@@ -30,3 +30,6 @@ test-results/
 # Browser-session artefacts (Playwright MCP walkthroughs)
 .playwright-mcp/
 !.env.production.example
+
+# The static demo build (ARCH-009)
+dist-demo/

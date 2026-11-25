@@ -7,23 +7,43 @@ import { useSyncExternalStore } from "react";
 
 const listeners = new Set<() => void>();
 
+/**
+ * Where the console's address lives. `path` (the product): the History API, real addresses.
+ * `hash` (the static demo, ARCH-009): after the `#`, so a static host needs no rewrites and the
+ * page works from a sub-path or from a file.
+ */
+let mode: "path" | "hash" = "path";
+
+/** Switch the router to hash addresses. The demo build calls it once, before the first render. */
+export function routeByHash() {
+  mode = "hash";
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   window.addEventListener("popstate", listener);
+  if (mode === "hash") window.addEventListener("hashchange", listener);
   return () => {
     listeners.delete(listener);
     window.removeEventListener("popstate", listener);
+    window.removeEventListener("hashchange", listener);
   };
 }
 
 function snapshot() {
+  if (mode === "hash") return window.location.hash.replace(/^#/, "") || "/";
   return window.location.pathname + window.location.search;
+}
+
+/** The address written to the location bar for a console address. */
+function written(to: string) {
+  return mode === "hash" ? `${window.location.pathname}${window.location.search}#${to}` : to;
 }
 
 export function navigate(to: string, options: { replace?: boolean } = {}) {
   if (to === snapshot()) return;
-  if (options.replace) window.history.replaceState(null, "", to);
-  else window.history.pushState(null, "", to);
+  if (options.replace) window.history.replaceState(null, "", written(to));
+  else window.history.pushState(null, "", written(to));
   window.scrollTo({ top: 0 });
   for (const listener of listeners) listener();
 }

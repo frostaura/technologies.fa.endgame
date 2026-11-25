@@ -7,6 +7,7 @@
 .PHONY: up down lint lint-backend lint-frontend build build-backend build-frontend test test-backend test-frontend \
         e2e smoke docker-build docker-down prod-config appkit-build appkit-lint appkit-test appkit-proof appkit-vendor \
         stack-up stack-down e2e-stack e2e-stack-run fac-up fac-down e2e-factory e2e-factory-run acc-up acc-down e2e-acceptance e2e-acceptance-run \
+        demo-build demo-test demo-e2e demo-check \
         backup restore ops-backups ops-verify ops-health ops-reserved-hosts ops-cloudflare-plan ops-cloudflare-apply ops-test ops-test-worker
 
 DOTNET ?= dotnet
@@ -58,6 +59,31 @@ test-backend:
 
 test-frontend:
 	$(FRONTEND) npm run test -- --run
+
+# The static demo of the console (ARCH-009): the same console on an in-browser control plane, as
+# one self-contained page. demo-build writes src/frontend/dist-demo/ and copies it to src/demo/dist/,
+# where the academy's `make site` looks for it (both ignored by git); its last line is the path.
+DEMO_PW_PORT ?= 5571
+DEMO_DIST = src/demo/dist
+
+demo-build:
+	$(FRONTEND) npm run build:demo
+	rm -rf $(DEMO_DIST) && mkdir -p $(DEMO_DIST) && cp -R src/frontend/dist-demo/. $(DEMO_DIST)/
+	@echo "$(CURDIR)/$(DEMO_DIST)"
+
+# The fake control plane's rules and its endpoint coverage (a console endpoint with no handler fails).
+demo-test:
+	$(FRONTEND) npx vitest run src/demo
+
+# The built demo walked in a browser, from a sub-path and from the file. PW_PORT stays in 5500–5599.
+demo-e2e: demo-build
+	$(FRONTEND) CI=1 PW_PORT=$(DEMO_PW_PORT) npm run test:demo
+
+# Proves the product build carries none of the demo: no fixture string reaches dist/.
+demo-check:
+	$(FRONTEND) npm run build
+	@if grep -rlE "Northwind|endgame\.demo\.invalid|Demo — mock data" src/frontend/dist >/dev/null; then echo "demo-check: the product bundle contains demo code"; exit 1; fi
+	@echo "demo-check: the product bundle contains no demo code."
 
 # The app kit (src/appkit/Makefile): its SDKs and template, their tests against a throwaway
 # PostgreSQL, and the both-addresses browser proof against the kit's dev platform.

@@ -1,0 +1,376 @@
+import type { Employee, Hire, MemoryKind, Ontology, OntologyEdge, OntologyNode } from "@/store/types";
+import { append } from "../engine";
+import { me, requireRole, scopeOf } from "../access";
+import { area, conflict, created, invalid, noContent, notFound, num, ok, problem, Refusal, str, strings } from "../http";
+import { blankTrackRecord, startRun } from "../mutations";
+import { newId, orgOf, uuidFor, within, type World } from "../world";
+
+/** `WorkforceEndpoints.cs`: employees, contractors, memory, hires, recurring roles, the ontology. */
+
+function employee(world: World, id: string): Employee {
+  const e = world.employees.find((x) => x.id === id);
+  if (!e) throw notFound("The employee");
+  return e;
+}
+
+const KINDS: MemoryKind[] = ["fact", "practice", "preference", "lesson"];
+const TIERS = ["build", "evaluate", "plan", "research", "conversation", "review"];
+
+function validateJob(job: Record<string, unknown> | undefined) {
+  if (!job) return;
+  if (typeof job.mandate === "string" && job.mandate.length > 8000) throw invalid("A mandate is at most 8000 characters.");
+  if (Array.isArray(job.tools) && (job.tools.length > 40 || job.tools.some((t) => typeof t !== "string" || !/^[a-z][a-z0-9_]*$/.test(t)))) throw invalid("tools is a list of up to 40 names: lower-case tool names such as read_file or edit_file.");
+  const services = ["identity", "models", "secrets", "email", "schedules", "webhooks", "telemetry"];
+  if (Array.isArray(job.services) && (job.services.length > 40 || job.services.some((t) => !services.includes(String(t))))) throw invalid("services is a list of up to 40 names: identity, models, secrets, email, schedules, webhooks, telemetry.");
+  if (typeof job.monthlyCreditLimit === "number" && job.monthlyCreditLimit < 0) throw invalid("A credit limit cannot be negative.");
+  if (typeof job.modelTier === "string" && !TIERS.includes(job.modelTier)) throw invalid(`'${job.modelTier}' is not a model tier: use a routing-table task type such as ${[...TIERS].sort().join(", ")}.`);
+}
+
+function applyJob(e: { jobDescription: Employee["jobDescription"] }, job: Record<string, unknown> | undefined) {
+  if (!job) return;
+  const jd = e.jobDescription;
+  if (typeof job.mandate === "string") jd.mandate = job.mandate;
+  if (Array.isArray(job.tools)) jd.tools = job.tools.map(String);
+  if (Array.isArray(job.services)) jd.services = job.services.map(String);
+  if (typeof job.monthlyCreditLimit === "number") jd.monthlyCreditLimit = job.monthlyCreditLimit;
+  if (typeof job.modelTier === "string") jd.modelTier = job.modelTier;
+}
+
+function headroom(world: World, scope: string): number {
+  const org = world.organisations.find((o) => o.slug === orgOf(scope));
+  return Math.max(0, Math.round(((org?.balance ?? 0) / 18) * 100) / 100);
+}
+
+function hireNow(world: World, h: Hire, via: string, by: string, note: string | null) {
+  const id = uuidFor(`employee:hire:${h.id}`);
+  const at = new Date().toISOString();
+  world.employees.push({
+    id,
+    kind: "employee",
+    name: h.name,
+    role: h.role,
+    status: "idle",
+    standing: null,
+    scope: h.scope,
+    reportsTo: h.reportsTo,
+    briefedBy: null,
+    jobDescription: { ...h.jobDescription },
+    idle: { flagged: false, since: null, afterDays: 14 },
+    currentRun: null,
+    lastRunId: null,
+    lastActiveAt: null,
+    createdAt: at,
+    releasedAt: null,
+    memoryEntries: 0,
+    brief: null,
+  });
+  world.trackRecords.push(blankTrackRecord(id));
+  Object.assign(h, { status: "accepted", employeeId: id, decision: { via, by, at, note } });
+  world.notifications = world.notifications.map((n) => (n.subject?.id === h.id ? { ...n, read: true } : n));
+}
+
+area("WorkforceEndpoints", {
+  "GET employees": (req, { world }) => {
+    const scope = scopeOf(world, req.query.get("scope"));
+    requireRole(world, scope, "viewer");
+    const released = req.query.get("includeReleased") === "true";
+    return ok(world.employees.filter((e) => within(e.scope, scope) && (released || e.status !== "released") && !(e.kind === "contractor" && e.status === "released")));
+  },
+
+  "GET employees/recurring-roles": (req, { world }) => {
+    const scope = scopeOf(world, req.query.get("scope"));
+    requireRole(world, scope, "viewer");
+    return ok(world.recurringRoles.filter((r) => within(r.scope, scope)));
+  },
+
+  "GET employees/{id}": (req, { world }) => {
+    const e = employee(world, req.params.id ?? "");
+    requireRole(world, e.scope, "viewer");
+    const trackRecord = world.trackRecords.find((t) => t.employeeId === e.id) ?? blankTrackRecord(e.id);
+    return ok({
+      employee: e,
+      trackRecord,
+      contractors: world.employees.filter((c) => c.kind === "contractor" && c.briefedBy?.id === e.id && c.status === "working"),
+      reports: world.employees.filter((r) => r.reportsTo?.id === e.id && r.status !== "released"),
+    });
+  },
+
+  "PATCH employees/{id}": (req, { world }) => {
+    const e = employee(world, req.params.id ?? "");
+    requireRole(world, e.scope, "admin");
+    if (e.status === "released") throw conflict(`${e.name} has been released; rehire them first.`);
+    for (const k of ["name", "role"] as const) {
+      const v = str(req.body, k);
+      if (v !== undefined && (v.trim().length === 0 || v.length > 200)) throw invalid(`An employee's ${k} is 1 to 200 characters.`);
+    }
+    const job = req.body.jobDescription as Record<string, unknown> | undefined;
+    validateJob(job);
+    const status = str(req.body, "status");
+    if (status !== undefined && status !== "paused" && status !== "idle") throw invalid("status is 'paused' (stop giving it work) or 'idle' (resume). Release and rehire have their own actions.");
+    const reportsTo = str(req.body, "reportsTo");
+    if (reportsTo) {
+      const m = world.employees.find((x) => x.id === reportsTo && orgOf(x.scope) === orgOf(e.scope) && x.status !== "released" && x.kind === "employee");
+      if (!m) throw invalid("reportsTo names an employee of this organisation who is on the payroll.");
+      if (m.id === e.id || m.reportsTo?.id === e.id) throw invalid("That would make a reporting loop: the manager already reports, directly or not, to this employee.");
+      e.reportsTo = { id: m.id, name: m.name };
+    }
+    if (req.body.clearReportsTo === true) e.reportsTo = null;
+    if (str(req.body, "name")) e.name = str(req.body, "name") ?? e.name;
+    if (str(req.body, "role")) e.role = str(req.body, "role") ?? e.role;
+    applyJob(e, job);
+    if (req.body.clearMonthlyCreditLimit === true) e.jobDescription.monthlyCreditLimit = null;
+    if (status) e.status = status as "paused" | "idle";
+    world.changed.push("Employee", "Tree");
+    return ok(e);
+  },
+
+  "POST employees/{id}/{action}": (req, { world }) => {
+    const e = employee(world, req.params.id ?? "");
+    const action = req.params.action;
+    if (action === "reviews") {
+      requireRole(world, e.scope, "builder");
+      if (e.status === "released" || e.kind !== "employee") throw conflict("Only an employee on the payroll has a memory to review.");
+      const r = startRun(world, { id: newId(world, "run"), kind: "review", title: `Memory review: ${e.name}`, scope: e.scope, ideaId: null, estimateCredits: 2, employeeId: e.id, conversationId: null }, "review", { employeeId: e.id });
+      append(world, r, "message", { from: "owner", kind: "memory.review", employeeId: e.id, text: `Review ${e.name}'s memory: merge what repeats, remove what is stale, correct what is wrong, then report it.` });
+      return created(r.run);
+    }
+    if (action === "memory") {
+      requireRole(world, e.scope, "builder");
+      const title = (str(req.body, "title") ?? "").trim();
+      const body = (str(req.body, "body") ?? "").trim();
+      const kind = (str(req.body, "kind") ?? "fact") as MemoryKind;
+      if (!title || title.length > 200 || !body || body.length > 4000) throw invalid("A memory entry has a title of 1 to 200 characters and a body of 1 to 4000.");
+      if (!KINDS.includes(kind)) throw invalid("A memory entry's kind is one of fact, practice, preference, lesson.");
+      if (e.status === "released") throw conflict(`${e.name} has been released; their memory is archived until a rehire.`);
+      if (e.kind === "contractor") throw invalid("A contractor keeps no memory: what it learned goes to the employee who briefed it, when it finishes.");
+      const at = new Date().toISOString();
+      const entry = { id: newId(world, "memory"), employeeId: e.id, scope: e.scope, title, body, kind, sourceRunId: null, createdAt: at, updatedAt: at, lastReviewedAt: null, archived: false };
+      world.memory.unshift(entry);
+      world.memoryChanges.unshift({ id: newId(world, "change"), memoryId: entry.id, action: "added", by: "person", userId: me(world).id, runId: null, detail: { title }, at });
+      e.memoryEntries += 1;
+      world.changed.push("Memory", "Employee");
+      return created(entry);
+    }
+    requireRole(world, e.scope, "admin");
+    const at = new Date().toISOString();
+    if (action === "release") {
+      if (e.standing) throw new Refusal(problem(409, "standing_hire", "A standing hire is never released", `${e.name} is a standing hire every organisation keeps.`));
+      if (e.status === "released") throw conflict(`${e.name} has already been released.`);
+      if (e.status === "working") throw conflict(`${e.name} is working on a run; let it finish or cancel it first.`);
+      Object.assign(e, { status: "released", releasedAt: at });
+      for (const m of world.memory) if (m.employeeId === e.id) m.archived = true;
+      world.memoryChanges.unshift({ id: newId(world, "change"), memoryId: null, action: "archived", by: "platform", userId: null, runId: null, detail: { reason: "released" }, at });
+    } else if (action === "rehire") {
+      if (e.status !== "released") throw conflict(`Only a released employee is rehired; ${e.name} is ${e.status}.`);
+      const scope = str(req.body, "scope");
+      if (scope) {
+        scopeOf(world, scope);
+        if (orgOf(scope) !== orgOf(e.scope)) throw invalid("An employee is rehired into its own organisation.");
+        requireRole(world, scope, "admin");
+        e.scope = scope;
+        e.jobDescription.scope = scope;
+      }
+      Object.assign(e, { status: "idle", releasedAt: null });
+      for (const m of world.memory) if (m.employeeId === e.id) m.archived = false;
+      world.memoryChanges.unshift({ id: newId(world, "change"), memoryId: null, action: "restored", by: "platform", userId: null, runId: null, detail: { reason: "rehired" }, at });
+    } else if (action === "reassign") {
+      const scope = str(req.body, "scope");
+      if (!scope) throw invalid("A scope is required, written as org, org/division, org/division/project or org/division/project/app.");
+      scopeOf(world, scope);
+      if (orgOf(scope) !== orgOf(e.scope)) throw invalid("An employee moves within its own organisation.");
+      if (e.kind === "contractor") throw conflict("A contractor works on its brief; it is not reassigned.");
+      if (e.status === "released") throw conflict(`${e.name} has been released; rehire them first.`);
+      requireRole(world, scope, "admin");
+      e.scope = scope;
+      e.jobDescription.scope = scope;
+    } else {
+      throw new Refusal(problem(404, "not_found", "Not found", "There is nothing at this address."));
+    }
+    e.memoryEntries = world.memory.filter((m) => m.employeeId === e.id && !m.archived).length;
+    world.changed.push("Employee", "Tree", "Ontology", "Memory");
+    return ok(e);
+  },
+
+  "GET employees/{id}/memory": (req, { world }) => {
+    const e = employee(world, req.params.id ?? "");
+    requireRole(world, e.scope, "viewer");
+    const archived = req.query.get("includeArchived") === "true";
+    return ok(world.memory.filter((m) => m.employeeId === e.id && (archived || !m.archived)));
+  },
+
+  "GET employees/{id}/memory/changes": (req, { world }) => {
+    const e = employee(world, req.params.id ?? "");
+    requireRole(world, e.scope, "viewer");
+    const mine = new Set(world.memory.filter((m) => m.employeeId === e.id).map((m) => m.id));
+    return ok(world.memoryChanges.filter((c) => (c.memoryId && mine.has(c.memoryId)) || (!c.memoryId && c.by !== "employee")).slice(0, Number(req.query.get("limit") ?? 100)));
+  },
+
+  "PATCH employees/{id}/memory/{entryId}": (req, { world }) => {
+    const e = employee(world, req.params.id ?? "");
+    requireRole(world, e.scope, "builder");
+    const m = world.memory.find((x) => x.id === req.params.entryId && x.employeeId === e.id);
+    if (!m) throw notFound("The memory entry");
+    const title = str(req.body, "title");
+    const body = str(req.body, "body");
+    const kind = str(req.body, "kind") as MemoryKind | undefined;
+    if (title === undefined && body === undefined && kind === undefined) throw invalid("Send a new title, body or kind.");
+    if ((title !== undefined && (!title.trim() || title.length > 200)) || (body !== undefined && (!body.trim() || body.length > 4000))) throw invalid("A memory entry has a title of 1 to 200 characters and a body of 1 to 4000.");
+    if (kind !== undefined && !KINDS.includes(kind)) throw invalid("A memory entry's kind is one of fact, practice, preference, lesson.");
+    const before = { title: m.title, body: m.body, kind: m.kind };
+    Object.assign(m, { ...(title !== undefined ? { title } : {}), ...(body !== undefined ? { body } : {}), ...(kind ? { kind } : {}), updatedAt: new Date().toISOString() });
+    world.memoryChanges.unshift({ id: newId(world, "change"), memoryId: m.id, action: "corrected", by: "person", userId: me(world).id, runId: null, detail: { before, after: { title: m.title, body: m.body, kind: m.kind } }, at: m.updatedAt });
+    world.changed.push("Memory");
+    return ok(m);
+  },
+
+  "DELETE employees/{id}/memory/{entryId}": (req, { world }) => {
+    const e = employee(world, req.params.id ?? "");
+    requireRole(world, e.scope, "builder");
+    const m = world.memory.find((x) => x.id === req.params.entryId && x.employeeId === e.id);
+    if (!m) throw notFound("The memory entry");
+    world.memory = world.memory.filter((x) => x.id !== m.id);
+    world.memoryChanges.unshift({ id: newId(world, "change"), memoryId: m.id, action: "removed", by: "person", userId: me(world).id, runId: null, detail: { title: m.title, body: m.body, why: req.query.get("why") ?? "" }, at: new Date().toISOString() });
+    e.memoryEntries = Math.max(0, e.memoryEntries - 1);
+    world.changed.push("Memory", "Employee");
+    return noContent();
+  },
+
+  "GET hires": (req, { world }) => {
+    const scope = scopeOf(world, req.query.get("scope"));
+    requireRole(world, scope, "viewer");
+    const status = req.query.get("status");
+    if (status && !["proposed", "accepted", "declined"].includes(status)) throw invalid("status is one of proposed, accepted, declined.");
+    return ok(world.hires.filter((h) => within(h.scope, scope) && (!status || h.status === status)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  },
+
+  "GET hires/{id}": (req, { world }) => {
+    const h = world.hires.find((x) => x.id === req.params.id);
+    if (!h) throw notFound("The hire proposal");
+    requireRole(world, h.scope, "viewer");
+    return ok(h);
+  },
+
+  "PATCH hires/{id}": (req, { world }) => {
+    const h = world.hires.find((x) => x.id === req.params.id);
+    if (!h) throw notFound("The hire proposal");
+    requireRole(world, h.scope, "admin");
+    if (h.status !== "proposed") throw conflict(`The proposal was ${h.status}; only an open proposal is edited.`);
+    const expected = num(req.body, "expectedMonthlyCredits");
+    if (expected !== undefined && expected < 0) throw invalid("expectedMonthlyCredits is 0 or more.");
+    validateJob(req.body.jobDescription as Record<string, unknown> | undefined);
+    for (const k of ["name", "role", "reason"] as const) {
+      const v = str(req.body, k);
+      if (v !== undefined) h[k] = v;
+    }
+    if (expected !== undefined) {
+      h.expectedMonthlyCredits = expected;
+      h.withinBudget = expected <= h.headroomCredits;
+    }
+    applyJob(h, req.body.jobDescription as Record<string, unknown> | undefined);
+    world.changed.push("Hire", "Tree");
+    return ok(h);
+  },
+
+  "POST hires/{id}/{decision}": (req, { world }) => {
+    const h = world.hires.find((x) => x.id === req.params.id);
+    if (!h) throw notFound("The hire proposal");
+    requireRole(world, h.scope, "admin");
+    if (h.status !== "proposed") throw conflict(`The proposal was already ${h.status}.`);
+    const note = str(req.body, "note") ?? null;
+    const by = me(world).displayName;
+    if (req.params.decision === "accept") hireNow(world, h, "person", by, note);
+    else if (req.params.decision === "decline") Object.assign(h, { status: "declined", decision: { via: "person", by, at: new Date().toISOString(), note } });
+    else throw new Refusal(problem(404, "not_found", "Not found", "There is nothing at this address."));
+    world.changed.push("Hire", "Tree", "Employee", "Ontology", "Notifications");
+    return ok(h);
+  },
+
+  "POST hires": (req, { world }) => {
+    const scope = scopeOf(world, str(req.body, "scope"));
+    requireRole(world, scope, "admin");
+    const trigger = (str(req.body, "trigger") ?? "owner") as Hire["trigger"];
+    if (!["division", "stage", "recurring", "promotion", "owner"].includes(trigger)) throw invalid("trigger is one of division, stage, recurring, promotion, owner.");
+    const needKey = str(req.body, "needKey");
+    if (needKey !== undefined && (needKey.length < 1 || needKey.length > 200)) throw invalid("needKey is 1 to 200 characters, the same each time the same need is raised.");
+    const same = needKey ? world.hires.find((x) => x.needKey === needKey && x.status !== "declined") : undefined;
+    if (same) return ok(same);
+    const expected = num(req.body, "expectedMonthlyCredits");
+    if (expected === undefined || expected < 0) throw invalid("expectedMonthlyCredits is what the employee should cost a month, in credits (0 or more): shown before anyone accepts it.");
+    for (const k of ["name", "role"] as const) {
+      const v = (str(req.body, k) ?? "").trim();
+      if (!v || v.length > 200) throw invalid(`An employee's ${k} is 1 to 200 characters.`);
+    }
+    const job = (req.body.jobDescription ?? {}) as Record<string, unknown>;
+    validateJob(job);
+    const reason = (str(req.body, "reason") ?? "").trim();
+    if (!reason || reason.length > 4000) throw invalid("A hire proposal says why it is needed, in 1 to 4000 characters.");
+    const room = headroom(world, scope);
+    const h: Hire = {
+      id: newId(world, "hire"),
+      status: "proposed",
+      trigger,
+      needKey: needKey ?? null,
+      scope,
+      reason,
+      name: (str(req.body, "name") ?? "").trim(),
+      role: (str(req.body, "role") ?? "").trim(),
+      jobDescription: { mandate: String(job.mandate ?? ""), scope, tools: strings(job, "tools"), services: strings(job, "services"), monthlyCreditLimit: typeof job.monthlyCreditLimit === "number" ? job.monthlyCreditLimit : null, modelTier: typeof job.modelTier === "string" ? job.modelTier : null },
+      reportsTo: null,
+      expectedMonthlyCredits: expected,
+      withinBudget: expected <= room,
+      headroomCredits: room,
+      contractorRole: null,
+      raisedBy: "person",
+      raisedByRunId: null,
+      decision: null,
+      employeeId: null,
+      createdAt: new Date().toISOString(),
+    };
+    world.hires.unshift(h);
+    const checkpoints = world.settings.filter((s) => within(scope, s.path));
+    const hireCheckpoint = checkpoints.some((s) => s.key === "checkpoint.hire" && s.value === "true") && checkpoints.some((s) => s.key === "autonomy" && s.value === "checkpoints");
+    if (!hireCheckpoint && h.withinBudget) hireNow(world, h, "auto-mode", "auto-mode", "Within budget, so auto-mode hired.");
+    world.changed.push("Hire", "Tree", "Employee");
+    return created(h);
+  },
+
+  "GET ontology": (req, { world }) => {
+    const scope = scopeOf(world, req.query.get("scope"));
+    requireRole(world, scope, "viewer");
+    const view = req.query.get("view") ?? "all";
+    if (!["all", "org-chart", "data-flow"].includes(view)) throw invalid("view is all, org-chart, data-flow.");
+    return ok(ontology(world, scope));
+  },
+});
+
+function ontology(world: World, scope: string): Ontology {
+  const nodes: OntologyNode[] = [];
+  const edges: OntologyEdge[] = [];
+  for (const n of world.nodes.filter((x) => within(x.path, scope))) {
+    const app = world.apps.find((a) => a.path === n.path);
+    if (n.level === "app" && !app) continue;
+    nodes.push({ id: app?.id ?? n.id, type: n.level, name: n.name, scope: n.path, status: app ? app.status : n.stage, attributes: app ? { access: app.access, running: app.running } : null });
+    const parent = world.nodes.find((p) => n.path.startsWith(`${p.path}/`) && p.path.split("/").length === n.path.split("/").length - 1);
+    if (parent) edges.push({ from: parent.id, to: app?.id ?? n.id, type: "owns", label: null });
+  }
+  for (const e of world.employees.filter((x) => within(x.scope, scope) && x.status !== "released" && x.kind === "employee")) {
+    nodes.push({ id: e.id, type: "employee", name: e.name, scope: e.scope, status: e.status, attributes: { role: e.role } });
+    const at = world.nodes.find((n) => n.path === e.scope);
+    if (at) edges.push({ from: e.id, to: world.apps.find((a) => a.path === at.path)?.id ?? at.id, type: "works-on", label: null });
+    if (e.reportsTo) edges.push({ from: e.id, to: e.reportsTo.id, type: "reports-to", label: null });
+  }
+  const services = ["identity", "models", "secrets", "email", "telemetry"];
+  for (const s of services) nodes.push({ id: `service:${s}`, type: "service", name: s, scope: null, status: null, attributes: null });
+  for (const a of world.apps.filter((x) => within(x.path, scope))) {
+    edges.push({ from: a.id, to: "service:identity", type: "depends-on", label: "sign-in" });
+    edges.push({ from: a.id, to: "service:telemetry", type: "data-flows-to", label: "visits and events" });
+    for (const sec of world.secrets.filter((x) => within(a.path, x.path))) {
+      const id = `secret:${sec.path}:${sec.name}`;
+      if (!nodes.some((n) => n.id === id)) nodes.push({ id, type: "secret", name: sec.name, scope: sec.path, status: null, attributes: null });
+      edges.push({ from: a.id, to: id, type: "depends-on", label: null });
+    }
+  }
+  const orgChart = nodes.filter((n) => ["organisation", "division", "project", "app", "employee"].includes(n.type)).map((n) => n.id);
+  const dataFlow = nodes.filter((n) => ["app", "service", "secret"].includes(n.type)).map((n) => n.id);
+  return { scope, generatedAt: new Date().toISOString(), nodes, edges, views: { "org-chart": orgChart, "data-flow": dataFlow, all: nodes.map((n) => n.id) } };
+}
