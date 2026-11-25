@@ -465,7 +465,7 @@ function RecordAside({ idea }: { idea: Idea }) {
           )}
           {idea.verdict?.placement && (
             <p className="text-ink-body">
-              Suggested home: {[idea.verdict.placement.name, idea.verdict.placement.division && `in ${idea.verdict.placement.division}`].filter(Boolean).join(" ")}
+              Suggested home: {idea.verdict.placement.name ?? idea.verdict.placement.project}
             </p>
           )}
           {technical && method.searches.length > 0 && (

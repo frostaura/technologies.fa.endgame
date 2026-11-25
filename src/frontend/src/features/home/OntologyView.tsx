@@ -46,8 +46,8 @@ export function OntologyView({ scope, view }: { scope: string; view: "org-chart"
   const graph = state.data;
   const shown = view === "org-chart" ? graph.edges.filter((e) => e.type !== "depends-on" && e.type !== "data-flows-to") : graph.edges.filter((e) => e.type === "depends-on" || e.type === "data-flows-to");
   const linked = new Set(shown.flatMap((e) => [e.from, e.to]));
-  // The data-flow view draws only what takes part in a flow; the org chart draws every node.
-  const nodes = view === "data-flow" ? graph.nodes.filter((n) => linked.has(n.id)) : graph.nodes;
+  // Each view draws only what its edges touch: no services on the org chart, no secrets in the flow.
+  const nodes = graph.nodes.filter((n) => linked.has(n.id));
   return (
     <div className="flex flex-col gap-3">
       {state.stale && <Stale reason={state.stale.reason} />}
@@ -104,7 +104,9 @@ function Graph({ graph, view }: { graph: Ontology; view: "org-chart" | "data-flo
             {EDGE_STYLE[t]?.label ?? edgeWords(t)}
           </li>
         ))}
-        <li className="text-ink-muted">Drag to move around. Generated {formatTime(graph.generatedAt)}.</li>
+        <li className="text-ink-muted">
+          <span className="hidden md:inline">Drag to move around. </span>Generated {formatTime(graph.generatedAt)}.
+        </li>
       </ul>
 
       {/* The drawing: wide screens. It scrolls inside its own frame; the page never scrolls sideways. */}

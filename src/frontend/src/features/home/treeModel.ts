@@ -153,14 +153,14 @@ export function organisationSelection(tree: Tree): Selection | null {
 }
 
 /** Who is working anywhere in the tree right now, for the typing line under the conversation. */
-export function activeWork(tree: Tree): { name: string; activity: string }[] {
-  const out: { name: string; activity: string }[] = [];
+export function activeWork(tree: Tree): { id: string; name: string; activity: string }[] {
+  const out: { id: string; name: string; activity: string }[] = [];
   const seen = new Set<string>();
   const visit = (workers: Worker[]) => {
     for (const w of workers) {
       if (w.kind === "employee" && w.activity && !seen.has(w.id)) {
         seen.add(w.id);
-        out.push({ name: w.name, activity: w.activity });
+        out.push({ id: w.id, name: w.name, activity: w.activity });
       }
     }
   };

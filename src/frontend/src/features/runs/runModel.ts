@@ -332,22 +332,22 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     }
     case "tool.requested":
       if (!technical) return null;
-      return { ...base, tone: "structure", icon: "build", title: `Tool: ${str(p, "tool") ?? "tool"}`, detail: p.arguments === undefined ? null : JSON.stringify(p.arguments) };
+      return { ...base, tone: "structure", icon: "build", title: `Tool: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: p.arguments === undefined ? null : JSON.stringify(p.arguments) };
     case "tool.permitted":
       if (!technical) return null;
-      return { ...base, tone: "money", icon: "secrets", title: `Allowed: ${str(p, "tool") ?? "tool"}`, detail: str(p, "rule") ? `Rule: ${str(p, "rule")}` : null };
+      return { ...base, tone: "money", icon: "secrets", title: `Allowed: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: str(p, "rule") ? `Rule: ${str(p, "rule")}` : null };
     case "tool.denied":
       if (!technical) {
         return { ...base, tone: "attention", icon: "secrets", title: "An action was refused by your rules", detail: "It was not carried out. The work continues without it." };
       }
-      return { ...base, tone: "attention", icon: "secrets", title: `Denied: ${str(p, "tool") ?? "tool"}`, detail: [str(p, "rule") && `Rule: ${str(p, "rule")}`, str(p, "reason")].filter(Boolean).join(" · ") || null };
+      return { ...base, tone: "attention", icon: "secrets", title: `Denied: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: [str(p, "rule") && `Rule: ${str(p, "rule")}`, str(p, "reason")].filter(Boolean).join(" · ") || null };
     case "tool.result":
       if (!technical) return null;
-      return { ...base, tone: "quiet", icon: "build", title: `Result: ${str(p, "tool") ?? "tool"}`, detail: str(p, "result") };
+      return { ...base, tone: "quiet", icon: "build", title: `Result: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: str(p, "content") ?? str(p, "result") };
     case "subagent.started":
-      return { ...base, tone: "people", icon: "contractors", title: "A contractor was briefed", detail: str(p, "brief") };
+      return { ...base, tone: "people", icon: "contractors", title: str(p, "title") ? `Briefed: ${str(p, "title")}` : "A contractor was briefed", detail: str(p, "brief") };
     case "subagent.finished":
-      return { ...base, tone: "people", icon: "contractors", title: "A contractor reported back", detail: str(p, "summary") };
+      return { ...base, tone: "people", icon: "contractors", title: str(p, "title") ? `Reported back: ${str(p, "title")}` : "A contractor reported back", detail: str(p, "summary") };
     case "approval.requested":
       return { ...base, tone: "attention", icon: "verdict", title: "Asked for your approval", detail: str(p, "question") };
     case "approval.answered":
@@ -385,8 +385,8 @@ export function readScored(p: Record<string, unknown>): { estimated: number; act
 
 function itemName(p: Record<string, unknown>, planItem: (id: string) => string | null): string {
   const item = str(p, "item");
-  if (!item) return "a check";
-  return planItem(item) ?? item;
+  if (!item) return str(p, "text") ?? "a check";
+  return planItem(item) ?? str(p, "text") ?? item;
 }
 
 export function accuracy(estimated: number, actual: number): string {

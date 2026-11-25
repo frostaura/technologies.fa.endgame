@@ -33,7 +33,8 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
   const inputId = useId();
   const name = selection.trail[selection.trail.length - 1] ?? "";
   const narrowable = selection.kind === "organisation";
-  const busy = activeWork(tree);
+  // Who is working: everyone, or only the employee the conversation is with.
+  const busy = activeWork(tree).filter((w) => !selection.employeeId || w.id === selection.employeeId);
   const logRef = useRef<HTMLDivElement>(null);
   const onEmployeePage = useLocation().pathname.startsWith("/employees/");
 
@@ -68,7 +69,7 @@ export function ConversationDock({ tree, selection }: { tree: Tree; selection: S
         <div className="flex min-w-0 flex-col">
           <h2 className="truncate font-sans text-base font-semibold tracking-normal">Talking to {name}</h2>
           <span className="text-xs text-ink-muted">
-            {narrowable ? "Select a division, project or employee to narrow this." : "Select the organisation band to talk to everything again."}
+            {narrowable ? "Select a division, project or employee to narrow this." : onEmployeePage ? `Only ${name} hears this, and answers from what it knows.` : "Select the organisation band to talk to everything again."}
           </span>
           {selection.kind === "employee" && selection.employeeId && !onEmployeePage && (
             <Link href={paths.employee(selection.employeeId)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">

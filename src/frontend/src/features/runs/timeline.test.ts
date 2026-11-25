@@ -110,7 +110,7 @@ describe("buildTimeline — normal mode", () => {
     const lines = flat(t.items);
     expect(lines).toEqual([
       "Work started",
-      "Read 2 files · Ran the tests — 12 passed · Ran a command · Thought it through",
+      "Read 2 files · Ran the tests — 12 passed · Thought it through",
       "An action was refused by your rules: It was not carried out. The work continues without it.",
       "Changed 1 file",
     ]);

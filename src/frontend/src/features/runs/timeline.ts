@@ -419,9 +419,14 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
       case "tool.result":
         if (containerOf(owner).activity) noteResult(activity(owner, e), p);
         continue;
-      case "tool.denied":
+      case "tool.denied": {
+        // A refused action was never carried out: it is not counted as done.
+        const open = containerOf(owner).activity;
+        const name = str(p, "name") ?? str(p, "tool") ?? open?.names.get(str(p, "callId") ?? "") ?? "";
+        if (open && (name === "run" || name === "shell.exec") && open.commands > 0) open.commands -= 1;
         push(owner, { seq: e.seq, at: e.at, tone: "attention", icon: "secrets", title: "An action was refused by your rules", detail: "It was not carried out. The work continues without it.", credits: null, raw: null });
         continue;
+      }
       case "run.started":
         if (milestones.has("run.started")) continue;
         milestones.add("run.started");
@@ -456,7 +461,8 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
     }
     const step = describeEvent(e, "normal", planItem);
     if (!step) continue;
-    if (e.type === "run.finished" && step.detail && said.has(step.detail)) step.detail = null;
+    // The outcome is shown once, above the steps.
+    if (e.type === "run.finished") step.detail = null;
     if (step.detail) said.add(step.detail);
     push(owner, step);
   }

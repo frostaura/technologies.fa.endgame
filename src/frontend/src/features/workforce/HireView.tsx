@@ -54,6 +54,7 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
   const mode = useAppSelector((s) => s.ui.mode);
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const job = hire.jobDescription;
   const admin = tree?.viewerRole === undefined || tree.viewerRole === "admin" || tree.viewerRole === "owner";
   return (
@@ -97,9 +98,14 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
         </section>
       )}
 
+      {decisionError && (
+        <p role="alert" className="rounded-xs bg-attention-tint px-4 py-3 text-attention-text">
+          {decisionError} The proposal is still waiting for you.
+        </p>
+      )}
       {hire.status === "proposed" ? (
         admin ? (
-          !editing && <Decide hire={hire} onEdit={() => setEditing(true)} />
+          !editing && <Decide hire={hire} onEdit={() => setEditing(true)} onError={setDecisionError} />
         ) : (
           <p className="text-ink-muted">An Admin or the Owner decides on hires.</p>
         )
@@ -119,21 +125,20 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Decide({ hire, onEdit }: { hire: Hire; onEdit: () => void }) {
+function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onError: (reason: string | null) => void }) {
   const [decide, state] = useDecideHireMutation();
   const [confirming, setConfirming] = useState<"accept" | "decline" | null>(null);
   const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!confirming) return;
-    setError(null);
+    onError(null);
+    // Optimistic: the page shows the decision at once; a refusal puts the proposal back, with the reason.
     try {
       await decide({ id: hire.id, decision: confirming, ...(note.trim() ? { note: note.trim() } : {}) }).unwrap();
-      setConfirming(null);
     } catch (e) {
-      setError(`Your decision was not recorded: ${describeError(e as never)}`);
+      onError(`Your decision was not recorded: ${describeError(e as never)}`);
     }
   };
 
@@ -171,11 +176,6 @@ function Decide({ hire, onEdit }: { hire: Hire; onEdit: () => void }) {
             </Button>
           </span>
         </form>
-      )}
-      {error && (
-        <p role="alert" className="rounded-xs bg-attention-tint px-4 py-3 text-attention-text">
-          {error}
-        </p>
       )}
     </section>
   );
