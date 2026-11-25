@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "./api.js";
+import { api, onApiWrite } from "./api.js";
 import { ApiError, NetworkError } from "./errors.js";
 
 /**
@@ -17,12 +17,22 @@ export type ApiQuery<T> = ApiState<T> & { reload: () => void };
 /**
  * Reads `path` from the app's API (see `api()`), re-reading when `path` changes. Pass `null` to
  * wait — e.g. until an id is known.
+ *
+ * It also re-reads after **every successful write through `api()`** anywhere in the app (POST,
+ * PUT, PATCH, DELETE), so a change made on one part of the screen shows in every other read on it
+ * — a book marked finished leaves "Reading now" without that list's code doing anything. While it
+ * re-reads after a write it keeps its current data (`loaded`, no flash to loading); if the re-read
+ * fails, it is `failed`. `reload()` starts over from `loading`, as a "Try again" should.
  */
 export function useApiQuery<T>(path: string | null): ApiQuery<T> {
   const [attempt, setAttempt] = useState(0);
+  // Bumped by a write anywhere in the app: re-read, but keep showing what was read last.
+  const [refresh, setRefresh] = useState(0);
   // Each settled read remembers which request it answers; anything else is still loading.
   const [settled, setSettled] = useState<{ key: string; state: ApiState<T> } | null>(null);
   const key = path === null ? null : `${attempt} ${path}`;
+
+  useEffect(() => (path === null ? undefined : onApiWrite(() => setRefresh((n) => n + 1))), [path]);
 
   useEffect(() => {
     if (path === null || key === null) return;
@@ -35,7 +45,7 @@ export function useApiQuery<T>(path: string | null): ApiQuery<T> {
       },
     );
     return () => controller.abort();
-  }, [path, key]);
+  }, [path, key, refresh]);
 
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
   const state: ApiState<T> = settled !== null && settled.key === key ? settled.state : { status: "loading" };

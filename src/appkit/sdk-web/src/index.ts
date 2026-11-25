@@ -1,4 +1,4 @@
-export { api, apiUrl, type ApiOptions } from "./api.js";
+export { api, apiUrl, onApiWrite, type ApiOptions } from "./api.js";
 export {
   ApiError,
   BudgetExhaustedError,
