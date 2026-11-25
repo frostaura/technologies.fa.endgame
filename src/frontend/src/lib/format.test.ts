@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCredits, formatNumber } from "./format";
+import { formatCredits, formatNumber, possessive } from "./format";
 
 describe("formatNumber", () => {
   it("never shows a signed zero: a debt smaller than a tenth of a credit reads 0", () => {
@@ -14,5 +14,12 @@ describe("formatNumber", () => {
     expect(formatNumber(2.46)).toBe("2.5");
     expect(formatNumber(-12.4)).toBe("-12");
     expect(formatNumber(9548)).toBe("9,548");
+  });
+});
+
+describe("possessive", () => {
+  it("adds an apostrophe and s, or only the apostrophe after an s", () => {
+    expect(possessive("Northwind")).toBe("Northwind’s");
+    expect(possessive("Northfield Tutors")).toBe("Northfield Tutors’");
   });
 });

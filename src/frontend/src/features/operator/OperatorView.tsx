@@ -7,7 +7,7 @@ import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { formatCredits, formatDate, formatNumber, isValidSlug, slugify, timeAgo } from "@/lib/format";
+import { formatCredits, formatDate, formatNumber, isValidSlug, possessive, slugify, timeAgo } from "@/lib/format";
 import { RISE } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -164,7 +164,7 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
           </Link>
         </div>
       ) : (
-        <p className="text-sm text-ink-muted">Entering is logged where {org.name}&rsquo;s Owner can read it.</p>
+        <p className="text-sm text-ink-muted">Entering is logged where {possessive(org.name)} Owner can read it.</p>
       )}
       <div className="flex flex-wrap gap-2">
         {!entry && (

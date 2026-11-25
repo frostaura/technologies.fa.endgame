@@ -250,6 +250,10 @@ export interface World {
   context?: { path: string; key: string; value: unknown; setAt: string }[];
   /** No model answers (the screening of a new organisation then needs an operator's own decision). */
   modelsOffline?: boolean;
+  /** Whose memory each removed entry was (entry id → employee id), so its removal stays in that employee's change log. */
+  removedMemory?: Record<string, string>;
+  /** When each operator was last seen inside each organisation (`${userId}:${org}`), for the visit window. */
+  operatorSeen?: Record<string, string>;
   /** Organisations an operator acted in as an Admin during the request being answered; never saved. */
   actedAsOperator?: string[];
   /** RTK Query tags changed since the page last refreshed; drained by the host, never saved. */
