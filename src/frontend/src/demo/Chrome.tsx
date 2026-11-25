@@ -27,8 +27,8 @@ export function DemoStrip() {
     <div data-demo-chrome="" role="region" aria-label="Demo controls" className="sticky top-0 z-40 flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-ink px-4 py-2 text-sm text-surface">
       <strong className="font-semibold">Demo — mock data</strong>
       <label className="flex items-center gap-2">
-        <span className="text-surface/70">Signed in as</span>
-        <select value={session.persona} onChange={(e) => goto({ persona: e.target.value })} className="min-h-touch rounded-xs bg-surface px-2 text-ink">
+        <span className="sr-only text-surface/70 sm:not-sr-only">Signed in as</span>
+        <select value={session.persona} onChange={(e) => goto({ persona: e.target.value })} className="min-h-touch w-40 rounded-xs bg-surface px-2 text-ink sm:w-auto">
           {[...PERSONAS.values()].map((p) => (
             <option key={p.name} value={p.name}>
               {p.title}
@@ -37,8 +37,8 @@ export function DemoStrip() {
         </select>
       </label>
       <label className="flex items-center gap-2">
-        <span className="text-surface/70">Scenario</span>
-        <select value={session.scenario} onChange={(e) => goto({ scenario: e.target.value })} className="min-h-touch max-w-full rounded-xs bg-surface px-2 text-ink">
+        <span className="sr-only text-surface/70 sm:not-sr-only">Scenario</span>
+        <select value={session.scenario} onChange={(e) => goto({ scenario: e.target.value })} className="min-h-touch w-40 rounded-xs bg-surface px-2 text-ink sm:w-auto">
           {[...SCENARIOS.values()].map((s) => (
             <option key={s.name} value={s.name}>
               {s.title}

@@ -130,6 +130,14 @@ describe("the control plane's rules", () => {
     expect(detail(bad)).toBe("That invitation code is not valid for this e-mail address, or it has expired.");
   });
 
+  it("lets the first person name the first organisation, and nobody self-serve after", async () => {
+    const w = buildWorld("default", "first-run").world;
+    const r = await call(w, "POST", "organisations", { name: "Harbour Club", slug: "harbour-club" });
+    expect(r.status).toBe(201);
+    expect(w.memberships.some((m) => m.path === "harbour-club" && m.role === "owner" && m.userId === w.sessionUserId)).toBe(true);
+    expect(detail(await call(w, "POST", "organisations", { name: "Another", slug: "another" }))).toBe("Organisations are provisioned by FrostAura; there is no self-serve sign-up.");
+  });
+
   it("refuses a release of the standing security reviewer", async () => {
     const w = as("owner");
     const reviewer = w.employees.find((e) => e.standing === "security-reviewer" && e.scope === ORG);
