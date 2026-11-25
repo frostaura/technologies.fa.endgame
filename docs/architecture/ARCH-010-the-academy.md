@@ -63,6 +63,17 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   classic deferred script (iife) so it runs from `file://`. Content, scripts and the prebuilt search
   index are bundled. Progress (not started / seen / done, and where the learner left off) lives in
   `localStorage`, every access guarded.
+- **The step is the address.** `#/flow/<ID>/step/<n>` is the one source of truth for the step being
+  read: the highlighted card, "Step n of m", the console and its caption all follow it. Choosing a
+  step and the arrow keys push an address (so Back and Forward walk the steps); scrolling replaces
+  it with the step crossing the reading line; an address changed by hand moves the step.
+- **Placeholders** in the flow text (`{Org}`, `{credits}`, `{reason}`) are set as a small variable
+  token of what they stand for ("your organisation's name", "number of credits"; otherwise the word
+  in the braces, de-camel-cased — `src/content/placeholders.ts`), on the site and in the PDFs. The
+  flow files keep their braces; code spans are left as written.
+- **Inline styles on a dark panel** (`Inline tone="dark"`, the "You know it worked when" panel) have
+  their own colours; `components/inlineStyle.test.ts` holds every inline style to WCAG AA on the
+  ground it is drawn on.
 - **The stage** beside a flow's steps shows, per step: the live console (`demo`), a terminal that
   types the command and prints its output (`terminal`), a request and its response (`request`), the
   e-mail as it arrives (`email`), code a hosted app runs, set like the terminal with what it returns

@@ -23,16 +23,17 @@ export function App() {
 
   // A new page starts at its top, unless the address names a step to land on, and keyboard focus
   // moves to its content so the next Tab or arrow key acts on the page that was opened.
-  const deep = b === "step";
+  // A step within the page that is open (scrolling, Back, a link to another step) is not a new page;
+  // a new page opened at a step lands on it, not at the top.
   const first = useRef(true);
   useEffect(() => {
-    if (!deep) window.scrollTo({ top: 0 });
+    if (!/\/step\/\d/.test(window.location.hash)) window.scrollTo({ top: 0 });
     if (first.current) {
       first.current = false;
       return;
     }
     document.getElementById("main")?.focus({ preventScroll: true });
-  }, [head, a, deep]);
+  }, [head, a]);
 
   if (head === "print") return <PrintPage operator={a === "operator"} />;
   if (head === "demo") return <DemoPage back={query.get("back") ? href(query.get("back") ?? "/") : href("/")} />;

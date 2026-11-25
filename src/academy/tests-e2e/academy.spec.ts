@@ -103,10 +103,9 @@ test("stepping through a scripted flow sends the live console each op in order",
   expect((await received(page))[6]).toContain('"text":"A court-booking waiting list');
   // "Show me again" resets the console and replays up to this step.
   await page.getByRole("button", { name: "Show me again" }).click();
-  await expect.poll(async () => (await received(page)).length).toBeGreaterThan(9);
+  await expect.poll(async () => (await received(page)).slice(9).map((l) => l.split(" ")[0]).at(-1)).toBe("highlight");
   const replay = (await received(page)).slice(9).map((l) => l.split(" ")[0]);
   expect(replay[0]).toBe("reset");
-  expect(replay.at(-1)).toBe("highlight");
 });
 
 test("a terminal step types its command and prints its output", async ({ page }) => {
@@ -190,4 +189,70 @@ test("client navigation never mixes in the operator handbook", async ({ page }) 
   await page.goto("./#/search?q=backup");
   await expect(page.getByRole("status")).toBeVisible();
   expect(await page.getByRole("link", { name: /OPS-12/ }).count()).toBe(0);
+});
+
+test("the address is the step: keys, Back and Forward, an edited address and scrolling all move it, and everything agrees", async ({ page }) => {
+  await withDemo(page);
+  await page.goto("./#/flow/IDEA-02/step/1");
+  const card = page.locator("[aria-current=step]");
+  await expect(card).toContainText("New idea");
+  const agrees = async (n: number, words: string) => {
+    await expect(page).toHaveURL(new RegExp(`#/flow/IDEA-02/step/${n}$`));
+    await expect(card).toContainText(words);
+    await expect(page.getByText(new RegExp(`^Step ${n} of \\d+$`))).toBeVisible();
+    // The console was last asked for this step's own spotlight.
+    await expect.poll(async () => (await received(page)).filter((l) => l.startsWith("highlight")).length).toBeGreaterThan(0);
+  };
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await agrees(3, "Type the idea");
+  await page.goBack();
+  await agrees(2, "Where it goes");
+  await page.goForward();
+  await agrees(3, "Type the idea");
+  // A link to another step of the same flow, pasted into the address bar.
+  await page.evaluate(() => (window.location.hash = "#/flow/IDEA-02/step/5"));
+  await agrees(5, "");
+  // Scrolling the page, once it has come to rest on step 5: the step crossing the reading line becomes the step in the address.
+  await page.waitForTimeout(1600);
+  await page.evaluate(() => {
+    const el = document.getElementById("step-2");
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.42 + 8 });
+  });
+  await agrees(2, "Where it goes");
+});
+
+test("the step being read has one outline, its chip inside it, also under the keyboard's focus", async ({ page }) => {
+  await withDemo(page);
+  await page.goto("./#/flow/IDEA-02/step/2");
+  await page.keyboard.press("ArrowRight");
+  const button = page.locator("[aria-current=step]");
+  await expect(button).toBeFocused();
+  // The focused button draws no ring of its own: the card's border is the one outline.
+  const ring = await button.evaluate((b) => getComputedStyle(b).boxShadow);
+  expect(ring === "none" || (ring.match(/-?\d+(\.\d+)?px/g) ?? []).every((v) => parseFloat(v) === 0), ring).toBe(true);
+  const card = page.locator("[data-testid=step-card]", { has: button });
+  const [c, chip] = [await card.boundingBox(), await card.getByText("Live", { exact: true }).boundingBox()];
+  expect(c && chip && chip.y + chip.height <= c.y + c.height && chip.y >= c.y).toBe(true);
+});
+
+test("a step's placeholders read as what they stand for, and quoted words on the dark panel stay legible", async ({ page }) => {
+  await withDemo(page);
+  await page.goto("./#/flow/IDEA-02/step/2");
+  const steps = page.getByRole("list", { name: "Steps" });
+  await expect(steps.locator("var", { hasText: "your organisation’s name" }).first()).toBeVisible();
+  await expect(steps).not.toContainText("{Org}");
+  await page.goto("./#/flow/ID-02");
+  const quoted = page.locator("#worked strong").first();
+  await expect(quoted).toHaveText("“Sign out”");
+  const [ink, ground] = await quoted.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el.closest("section") as Element).backgroundColor]);
+  const lum = (rgb: string) => {
+    const [r, g, b] = (rgb.match(/\d+/g) ?? []).slice(0, 3).map((v) => {
+      const c = Number(v) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    }) as [number, number, number];
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [hi, lo] = [lum(ink), lum(ground)].sort((a, b) => b - a) as [number, number];
+  expect((hi + 0.05) / (lo + 0.05)).toBeGreaterThanOrEqual(4.5);
 });

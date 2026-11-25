@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Flow, Step } from "../content/types.ts";
 import { flow as flowById, isOperator, nextInPath, scripts, shotFor, track } from "../lib/data.ts";
 import { ROLE_LABEL } from "../lib/labels.ts";
-import { href } from "../lib/router.ts";
+import { go, href } from "../lib/router.ts";
 import { markDone, markSeen, useProgress } from "../lib/progress.ts";
 import { useReducedMotion } from "../lib/motion.ts";
 import { Blocks } from "../components/Blocks.tsx";
@@ -35,25 +35,37 @@ export function FlowPage({ id, step }: { id: string; step: number | null }) {
 function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | null }) {
   const script = scripts[f.id];
   const total = f.steps.length;
-  const [active, setActive] = useState(() => Math.min(Math.max(initialStep ?? 1, 1), Math.max(total, 1)));
+  // The address is the one source of truth for the step: the highlighted card, "Step n of m", the
+  // console and its caption all read it. Choosing a step, the arrow keys, scrolling, Back and
+  // Forward, and a pasted link all move the step by moving the address.
+  const active = Math.min(Math.max(initialStep ?? 1, 1), Math.max(total, 1));
   const [run, setRun] = useState(0);
-  const [interactive, setInteractive] = useState(false);
+  // "Try it yourself" hands the console over on one step; any other step takes it back.
+  const [interactiveAt, setInteractiveAt] = useState<number | null>(null);
+  const interactive = interactiveAt === active;
   // A branch from "What else can happen" playing in the stage: which one, and its step.
   const [branch, setBranch] = useState<{ index: number; step: number } | null>(null);
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const stageRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
   const progress = useProgress();
+  /** Set while the page scrolls itself (to a chosen step): the reading line then moves nothing. */
   const scrolling = useRef(false);
+  /** The step the reader scrolled to: already in place, so the page does not scroll to it again. */
+  const scrolledTo = useRef<number | null>(null);
+  const landed = useRef(false);
   const next = nextInPath(f);
   const operator = isOperator(f);
 
-  // The address names the step, so any step can be linked to.
+  const stepAddress = useCallback((n: number) => `/flow/${f.id}/step/${n}`, [f.id]);
+
+  // An address with no step names the first; it is written out, so the step can be linked to.
   useEffect(() => {
-    if (!total) return;
-    const target = href(`/flow/${f.id}/step/${active}`);
-    if (window.location.hash !== target) window.history.replaceState(null, "", target);
-    markSeen(f.id, active);
+    if (total && initialStep !== active) go(stepAddress(active), { replace: true });
+  }, [active, initialStep, stepAddress, total]);
+
+  useEffect(() => {
+    if (total) markSeen(f.id, active);
   }, [active, f.id, total]);
 
   /**
@@ -76,32 +88,55 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     [readingLine],
   );
 
-  // Land on the linked step.
+  // The step the address names is the one in view: unless the reader scrolled it there, the page
+  // brings it to the reading line — at once when the page opens on it, smoothly after.
   useEffect(() => {
-    if (!initialStep || initialStep <= 1) return;
+    if (!total) return;
+    if (scrolledTo.current === active) {
+      scrolledTo.current = null;
+      return;
+    }
+    scrolledTo.current = null;
+    const first = !landed.current;
+    landed.current = true;
+    if (first && active <= 1) return;
     scrolling.current = true;
-    scrollToStep(initialStep, false);
+    scrollToStep(active, !first && !reduced);
     // Web fonts can reflow the steps after the first scroll; land again once they are in.
-    void document.fonts?.ready.then(() => scrollToStep(initialStep, false));
-    const t = window.setTimeout(() => (scrolling.current = false), 900);
-    return () => window.clearTimeout(t);
-  }, [initialStep, scrollToStep]);
+    if (first) void document.fonts?.ready.then(() => scrollToStep(active, false));
+    // The reading line moves nothing until the page has come to rest on the step.
+    const release = () => (scrolling.current = false);
+    const t = window.setTimeout(release, first ? 900 : reduced ? 50 : 1500);
+    const ended = () => !first && window.setTimeout(release, 60);
+    window.addEventListener("scrollend", ended, { once: true });
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("scrollend", ended);
+      scrolling.current = false;
+    };
+  }, [active, total, reduced, scrollToStep]);
 
-  // Scrolling moves the stage: the step crossing the reading line is the active one.
+  // Scrolling moves the step: the first step crossing the reading line is the one in the address.
   useEffect(() => {
     if (!total || typeof IntersectionObserver === "undefined") return;
     let io: IntersectionObserver | null = null;
+    const crossing = new Set<number>();
     const observe = () => {
       io?.disconnect();
+      crossing.clear();
       const line = Math.round(readingLine());
       io = new IntersectionObserver(
         (entries) => {
-          if (scrolling.current) return;
-          const visible = entries.filter((e) => e.isIntersecting).map((e) => Number((e.target as HTMLElement).dataset.step));
-          if (visible.length) {
-            setActive(Math.min(...visible));
-            setInteractive(false);
+          for (const e of entries) {
+            const n = Number((e.target as HTMLElement).dataset.step);
+            if (e.isIntersecting) crossing.add(n);
+            else crossing.delete(n);
           }
+          if (scrolling.current || !crossing.size) return;
+          const n = Math.min(...crossing);
+          if (window.location.hash === href(stepAddress(n))) return;
+          scrolledTo.current = n;
+          go(stepAddress(n), { replace: true });
         },
         { rootMargin: `-${line}px 0px -${Math.max(0, window.innerHeight - line - 48)}px 0px` },
       );
@@ -113,20 +148,28 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
       window.removeEventListener("resize", observe);
       io?.disconnect();
     };
-  }, [total, readingLine]);
+  }, [total, readingLine, stepAddress]);
+
+  // The step asked for last: the address changes a moment after it is set, and a second key
+  // press in that moment moves on from the step asked for, not the one still showing.
+  const asked = useRef(active);
+  useEffect(() => {
+    asked.current = active;
+  }, [active]);
 
   const goTo = useCallback(
     (n: number) => {
       const target = Math.min(Math.max(n, 1), total);
-      setActive(target);
       setBranch(null);
-      setInteractive(false);
-      scrolling.current = true;
-      scrollToStep(target, !reduced);
+      if (target === asked.current) {
+        scrollToStep(target, !reduced);
+      } else {
+        asked.current = target;
+        go(stepAddress(target));
+      }
       refs.current[target - 1]?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
-      window.setTimeout(() => (scrolling.current = false), reduced ? 50 : 700);
     },
-    [total, reduced, scrollToStep],
+    [total, reduced, scrollToStep, stepAddress],
   );
 
   // Arrow keys (and j / k) walk the steps.
@@ -137,21 +180,21 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "ArrowRight" || e.key === "j") {
         e.preventDefault();
-        goTo(active + 1);
+        goTo(asked.current + 1);
       } else if (e.key === "ArrowLeft" || e.key === "k") {
         e.preventDefault();
-        goTo(active - 1);
+        goTo(asked.current - 1);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, goTo]);
+  }, [goTo]);
 
   const variation = branch && script ? script.variations?.[branch.index] : undefined;
   const branchScript = branch && script ? variationScript(script, branch.index) : undefined;
   const showBranch = (index: number) => {
     setBranch({ index, step: 1 });
-    setInteractive(false);
+    setInteractiveAt(null);
     // The stage sits beside the steps: bring its top, where the branch is named, back into view.
     scrolling.current = true;
     const grid = stageRef.current?.parentElement;
@@ -237,9 +280,9 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
               captured={(n) => (branch && variation ? (n === variation.steps.length ? shotFor(f.id, `v${branch.index + 1}`) : undefined) : shotFor(f.id, n))}
               run={run}
               interactive={interactive}
-              onTry={() => setInteractive(true)}
+              onTry={() => setInteractiveAt(active)}
               onReplay={() => {
-                setInteractive(false);
+                setInteractiveAt(null);
                 setRun((r) => r + 1);
               }}
             />
@@ -294,8 +337,9 @@ function StepCard({ step, flow, media, scripted, active, showSection, onSelect, 
   return (
     <li ref={refCb} data-step={step.n} id={`step-${step.n}`} className="scroll-mt-24">
       {showSection && <p className="mb-3 mt-6 text-eyebrow font-semibold uppercase text-ink-muted">{step.section}</p>}
-      <div className={`rounded-md border-2 bg-surface transition-colors ${active ? "border-primary shadow-card" : "border-transparent hover:border-border"}`}>
-        <button type="button" onClick={onSelect} aria-current={active ? "step" : undefined} className="flex w-full items-start gap-4 rounded-md px-4 pt-4 text-left sm:px-5">
+      {/* One card, one outline: the card's own border marks the step being read, and the keyboard's focus on its button (whose ring would end above the chip). */}
+      <div data-testid="step-card" className={`rounded-md border-2 bg-surface transition-colors ${active ? "border-primary shadow-card" : "border-transparent hover:border-border focus-within:border-primary"}`}>
+        <button type="button" onClick={onSelect} aria-current={active ? "step" : undefined} className="flex w-full items-start gap-4 rounded-md px-4 pt-4 text-left focus-visible:ring-0 focus-visible:ring-offset-0 sm:px-5">
           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-display text-sm font-semibold transition-colors ${active ? "bg-primary text-primary-ink" : "bg-quiet text-quiet-text"}`}>{step.n}</span>
           <span className="min-w-0 flex-1 pt-1 text-step text-ink">
             <Inline text={step.text} self={flow.id} />
@@ -319,7 +363,7 @@ function Finish({ flow: f, done, next }: { flow: Flow; done: boolean; next: Flow
   return (
     <section aria-labelledby="worked" className="mt-10 rounded-lg bg-night p-6 text-primary-ink sm:p-8">
       <p className="text-eyebrow font-semibold uppercase text-live">You know it worked when</p>
-      <p id="worked" className="mt-3 text-lead">{f.workedWhen ? <Inline text={f.workedWhen} self={f.id} plainIds /> : "The last step above is what you see."}</p>
+      <p id="worked" className="mt-3 text-lead">{f.workedWhen ? <Inline text={f.workedWhen} self={f.id} plainIds tone="dark" /> : "The last step above is what you see."}</p>
       <div className="mt-6 flex flex-wrap gap-3" data-print="hide">
         <button type="button" onClick={() => markDone(f.id, !done)} className={`min-h-touch rounded-full px-5 text-sm font-semibold ${done ? "bg-success text-primary-ink" : "bg-surface text-ink hover:bg-primary-tint"}`} aria-pressed={done}>
           {done ? "Done ✓" : "Mark as done"}
