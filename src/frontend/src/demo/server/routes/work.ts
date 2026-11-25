@@ -60,6 +60,8 @@ export function createIdea(world: World, text: string, constraints: string[], sc
     decision: null,
     record: { total: 0, build: 0, change: 0, doNotBuild: 0, overruled: [] },
     redLine: null,
+    history: [],
+    tryAgain: null,
   };
   world.ideas.push(idea);
   // Nothing is placed in the tree yet: as BuildWorkflow.PlaceAsync, placement is the build's first step (TREE-01).
@@ -223,6 +225,46 @@ area("WorkEndpoints", {
     if (access) a.access = access as "private" | "shared" | "public";
     world.changed.push("App", "Tree");
     return ok(appView(world, a));
+  },
+
+  // Lane C's estimates (FactoryEstimates): free, before anything starts; the starting figures until 3 runs have finished.
+  "POST conversations/estimate": (req, { world }) => {
+    const scope = scopeOf(world, str(req.body, "scope"));
+    requireRole(world, scope, "viewer");
+    return ok({ credits: 0.4, ceiling: 1.2, basis: "The measured starting figure for conversation runs, used until 3 have finished here to learn from. It can never cost more than 1.2 credits: up to 12 steps, each priced at the most it could cost, and it is charged at what it actually costs." });
+  },
+
+  "POST runs/{id}/retry/estimate": (req, { world }) => {
+    const r = runRecord(world, req.params.id ?? "");
+    if (!r) throw notFound("The run");
+    requireRole(world, r.run.scope, "builder");
+    const what = r.run.kind === "research" ? "research" : r.run.kind === "build" ? "build" : "change";
+    const credits = what === "research" ? 12 : what === "build" ? 120 : 40;
+    return ok({ runId: r.run.id, what, credits, basis: `The measured starting figure for ${what} runs, used until 3 have finished here to learn from.`, partsDone: null, parts: null });
+  },
+
+  "POST apps/{id}/changes/estimate": (req, { world }) => {
+    const a = world.apps.find((x) => x.id === req.params.id);
+    if (!a) throw notFound("The app");
+    requireRole(world, a.path, "builder");
+    return ok({ credits: 40, basis: "The measured starting figure for change runs, used until 3 have finished here to learn from." });
+  },
+
+  "POST apps/{id}/changes": (req, { world }) => {
+    const a = world.apps.find((x) => x.id === req.params.id);
+    if (!a) throw notFound("The app");
+    requireRole(world, a.path, "builder");
+    const request = (str(req.body, "request") ?? "").trim();
+    // ChangeService.CreateAsync's own refusals.
+    if (!request || request.length > 20000) throw invalid("Describe the change in 1 to 20000 characters.");
+    if (a.publishedAt === null) throw new Refusal(problem(409, "app_not_built", "This app has not been built yet", "An app is changed once it has been built and published. Finish or try again its build first."));
+    if (world.runs.some((x) => x.run.scope === a.path && (x.run.kind === "build" || x.run.kind === "task") && !["finished", "failed", "cancelled"].includes(x.run.status)))
+      throw new Refusal(problem(409, "app_busy", "This app is already being worked on", "Another build or change of this app is under way. Wait for it to finish, or cancel it, then ask for this change."));
+    // The change workflow itself is not played in the demo yet: the run is recorded, queued, with the request as its first event.
+    const r = startRun(world, { id: newId(world, "run"), kind: "task", title: `Change ${a.name}: ${titleOf(request)}`, scope: a.path, ideaId: null, estimateCredits: 40, employeeId: null, conversationId: null }, null);
+    append(world, r, "message", { from: "owner", kind: "change", text: request });
+    world.changed.push("Run", "App");
+    return created(r.run);
   },
 
   "POST conversations": (req, { world }) => {

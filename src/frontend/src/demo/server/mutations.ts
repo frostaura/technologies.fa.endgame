@@ -181,10 +181,10 @@ export function notEnoughHistory(hours: number) {
 }
 
 /** A new run record, queued, with its first events written by the handler. */
-export function startRun(world: World, r: Omit<Run, "status" | "startedAt" | "finishedAt" | "lastSeq" | "spentCredits" | "budgetExhausted" | "outcome" | "summary" | "createdAt">, script: string | null, params: Record<string, string | number | boolean | null> = {}): DemoRun {
+export function startRun(world: World, r: Omit<Run, "status" | "startedAt" | "finishedAt" | "lastSeq" | "spentCredits" | "budgetExhausted" | "outcome" | "summary" | "createdAt" | "canTryAgain">, script: string | null, params: Record<string, string | number | boolean | null> = {}): DemoRun {
   const at = new Date().toISOString();
   const record: DemoRun = {
-    run: { ...r, status: "queued", startedAt: at, finishedAt: null, lastSeq: 0, spentCredits: 0, budgetExhausted: false, outcome: null, summary: null, createdAt: at },
+    run: { ...r, status: "queued", startedAt: at, finishedAt: null, lastSeq: 0, spentCredits: 0, budgetExhausted: false, outcome: null, summary: null, createdAt: at, canTryAgain: false },
     events: [],
     playback: script ? { script, params, elapsed: 0, cursor: 0 } : null,
   };
