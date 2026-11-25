@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!--
+    Operations: Cloudflare (DNS, tunnel ingress, the outage Worker) and backups. No Docker client
+    and no project reference: it talks to PostgreSQL, a directory or an S3-compatible bucket, and
+    Cloudflare's API — nothing else (ARCH-007).
+  -->
+  <ItemGroup>
+    <!-- Database listing, emptiness checks and the backup lease. The dumps themselves are pg_dump's. -->
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The outage Worker's source is deployed as written: plain JavaScript, no build step. -->
+    <EmbeddedResource Include="../../ops/outage-worker/worker.js" LogicalName="outage-worker.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Endgame.Ops.Tests" />
+  </ItemGroup>
+</Project>

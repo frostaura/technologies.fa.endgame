@@ -1,0 +1,16 @@
+# The restore rehearsal's overlay (RehearsalTests), on top of docker-compose.yml and
+# docker-compose.e2e.yml. Test only, never deployed: the ops service joins the network the
+# test-only S3-compatible server runs on, its internal API is on loopback, and the nightly
+# schedule is off so the only backups are the ones the test asks for.
+services:
+  ops:
+    ports:
+      - "127.0.0.1:${OPS_HOST_PORT:?OPS_HOST_PORT is required}:8080"
+    networks: [default, s3]
+    environment:
+      Ops__Backup__ScheduleEnabled: "false"
+
+networks:
+  s3:
+    external: true
+    name: ${OPS_S3_NETWORK:?OPS_S3_NETWORK is required}
