@@ -545,7 +545,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **What you learn:** every app answers MCP from its own API description, and the app sees the assistant as you.
 - **Steps:**
   1. The assistant lists tools: one per operation in the app's OpenAPI document, for its current published version. GET operations are marked read-only.
-  2. It calls one. The control plane makes a short-lived member session for the key's person and calls the app through Edge.
+  2. It calls one. The control plane makes a short-lived member session for the key's person and calls the app through Edge. The session carries the key's role: the app sees the person at that role at most, never above their own (a key capped at Admin is seen as `admin`, even for the Owner).
   3. The result is `{ status, body, truncated }`.
 - **You know it worked when:** the tool list shows the app's own operations.
 - **Variations and refusals:**
@@ -555,7 +555,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
   - App end users cannot use this; it is for members only.
 - **Where:** `Mcp/AppTools.cs`, `AppIdentityService.MemberTokenAsync`.
 - **Reachable from:** MCP only
-- **Covered by tests:** `McpTests.An_apps_own_api_is_derived_from_its_openapi_and_called_through_edge_with_a_member_session`.
+- **Covered by tests:** `McpTests.An_apps_own_api_is_derived_from_its_openapi_and_called_through_edge_with_a_member_session`; `WalkTwoServerTests.An_app_token_minted_for_a_capped_caller_is_seen_at_that_role…`.
 
 ### AST-07 to AST-16 What the assistant can do, by capability
 All need AST-05. All are MCP only, Level Advanced. Covered by `McpTests` and `AuthorizationMatrixTests.Every_mcp_tool_is_held_to_the_same_roles…`. "You know it worked when": the call returns a result that is not an error and matches what the console then shows.
@@ -910,7 +910,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Variations and refusals** (each a 503 page):
   - Timed out: **"This app is taking longer than usual"**, "It is still starting. Please try again in a few seconds." (Retry-After 3).
   - No room on the host: **"This app could not start just now"**, "Endgame is very busy at the moment. Please try again in a minute."
-  - Crashed: **"This app has stopped for a moment"**, "Something went wrong inside it. It will be started again shortly — please try again in a moment."
+  - Crashed: **"This app has stopped for a moment"**, "Something went wrong inside it, and its owner has been told. Please try again in a minute: the next visit starts it again."
   - The app fails mid-request: the crashed page, or **"This app is temporarily unavailable"**.
 - **Where:** `AppGate.cs`, `Runtime/AppRuntime.cs`, `UnavailablePage.cs`.
 - **Reachable from:** UI
@@ -924,7 +924,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Learn first:** ACC-01
 - **What you learn:** an address can exist before the app's first version does.
 - **Steps:**
-  - Not published: **"This app isn't ready yet"**, "It has an address, but its first version has not been published. Please check back soon."
+  - Not published: **"This app isn't ready yet"**, "It has an address, but its first version has not been published. Please check back soon." — to whoever may open it. A visitor who may not is sent to sign in or refused first, exactly as for a published app. An app has its address from the moment it is created or placed: Edge is told at once.
   - Unknown to Edge, or the access check unavailable: **"This app is temporarily unavailable"**, "Endgame could not reach it just now. Please try again in a moment."
   - Paths under `_platform` from the public side: 404.
   - Declared webhooks (`POST hooks/{name}`) reach even a private app without a session.
@@ -932,7 +932,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Variations and refusals:** none further.
 - **Where:** `AppGate.cs`.
 - **Reachable from:** UI
-- **Covered by tests:** `EdgePipelineTests.Platform_callbacks_are_never_routed…`, `Declared_webhooks_and_only_those_reach_a_private_app…`; `EdgeRoutingTests.Availability_follows_the_version_and_the_pause`.
+- **Covered by tests:** `EdgePipelineTests.Platform_callbacks_are_never_routed…`, `Declared_webhooks_and_only_those_reach_a_private_app…`; `EdgeRoutingTests.Availability_follows_the_version_and_the_pause`; `EdgePipelineTests.A_private_unpublished_app_asks_a_stranger_to_sign_in_and_tells_a_member_it_is_not_ready`; `WalkTwoServerTests.A_new_app_is_in_the_routing_table_unpublished_and_Edge_is_told_at_once`.
 
 ---
 

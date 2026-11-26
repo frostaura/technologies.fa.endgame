@@ -160,7 +160,19 @@ public sealed class TaskService(EndgameDbContext db, TenantSession session, Scop
                 .ExecuteUpdateAsync(x => x.SetProperty(e => e.LastActiveAt, now).SetProperty(e => e.LastRunId, runId), cancellationToken);
         }
 
-        await runs.AppendAsync(org, runId, [new NewEvent(RunEventTypes.TaskClaimed, new JsonObject { ["taskId"] = taskId.ToString(), ["employeeId"] = employeeId?.ToString(), ["previousHolder"] = expectedHolderRunId?.ToString() })], null, null, cancellationToken);
+        // Who took it on and what it is, so "Someone took on a task" names both.
+        var holder = employeeId is { } named
+            ? await db.Employees.AsNoTracking().Where(e => e.OrganisationId == org && e.Id == named).Select(e => e.Name).SingleOrDefaultAsync(cancellationToken)
+            : null;
+        var title = await db.Tasks.AsNoTracking().Where(t => t.OrganisationId == org && t.Id == taskId).Select(t => t.Title).SingleAsync(cancellationToken);
+        await runs.AppendAsync(org, runId, [new NewEvent(RunEventTypes.TaskClaimed, new JsonObject
+        {
+            ["taskId"] = taskId.ToString(),
+            ["employeeId"] = employeeId?.ToString(),
+            ["holder"] = holder,
+            ["summary"] = title,
+            ["previousHolder"] = expectedHolderRunId?.ToString(),
+        })], null, null, cancellationToken);
         return await GetAsync(org, taskId, cancellationToken);
     }
 

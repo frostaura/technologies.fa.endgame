@@ -256,7 +256,7 @@ public sealed class MemoryService(EndgameDbContext db, TenantSession session, Sc
         {
             var row = Take(removal.Id);
             db.EmployeeMemories.Remove(row);
-            db.EmployeeMemoryChanges.Add(Change(row, MemoryActions.Removed, MemoryActors.Review, null, runId, new JsonObject { ["title"] = row.Title, ["body"] = row.Body, ["why"] = Why(removal.Why) }, now));
+            db.EmployeeMemoryChanges.Add(Change(row, MemoryActions.Removed, MemoryActors.Review, null, runId, WithWhy(new JsonObject { ["title"] = row.Title, ["body"] = row.Body }, removal.Why), now));
             removedIds.Add(row.Id);
         }
 
@@ -265,7 +265,7 @@ public sealed class MemoryService(EndgameDbContext db, TenantSession session, Sc
         {
             var row = Take(correction.Id);
             var detail = Apply(row, correction.Title, correction.Body, correction.Kind, now);
-            detail["why"] = Why(correction.Why);
+            WithWhy(detail, correction.Why);
             row.LastReviewedAt = now;
             db.EmployeeMemoryChanges.Add(Change(row, MemoryActions.Corrected, MemoryActors.Review, null, runId, detail, now));
             correctedRows.Add(row);
@@ -387,7 +387,16 @@ public sealed class MemoryService(EndgameDbContext db, TenantSession session, Sc
         return (t, b, kind);
     }
 
-    private static string Why(string? why) => string.IsNullOrWhiteSpace(why) ? "No reason given." : why.Trim();
+    /// <summary>Adds the reason a review gave; none is stored when it gave none, so the log never quotes a reason nobody said.</summary>
+    private static JsonObject WithWhy(JsonObject detail, string? why)
+    {
+        if (!string.IsNullOrWhiteSpace(why))
+        {
+            detail["why"] = why.Trim();
+        }
+
+        return detail;
+    }
 
     private static EmployeeMemoryChangeRecord Change(EmployeeMemoryRecord row, string action, string by, Guid? userId, Guid? runId, JsonObject detail, DateTimeOffset at) => new()
     {

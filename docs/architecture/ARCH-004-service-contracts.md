@@ -61,7 +61,7 @@ the control plane owns the database schema and migrations.
 | --- | --- | --- |
 | Organisation | `active`, `suspended` | — |
 | Division, project | `active`, `archived` | Project stage: `idea`, `researching`, `verdict`, `planning`, `building`, `evaluating`, `reviewing`, `publishing`, `live`, `paused`, `dropped` |
-| App | `draft`, `building`, `running`, `sleeping`, `stopped`, `failed`, `archived` | `running`: `asleep`, `awake`, `always-on`, `starting`, `paused`; `health`: `healthy`, `degraded`, `down`, `unknown` |
+| App | `draft`, `building`, `running`, `sleeping`, `stopped`, `failed`, `archived` | `running`: `asleep`, `awake`, `always-on`, `starting`, `paused`; `health`: `healthy`, `degraded`, `down`, `unknown`, `paused` |
 | Run | `queued`, `running`, `paused`, `waiting_approval`, `succeeded`, `failed`, `cancelled`; kind `research`, `conversation`, `build`, `task`, `review`, `suggest` | `queued`, `running`, `waiting`, `paused`, `finished`, `failed`, `cancelled` |
 | Suggestion | `open`, `taken`, `dismissed` | same |
 | Top-up request | `open`, `fulfilled`, `declined` | same |
@@ -75,9 +75,18 @@ the control plane owns the database schema and migrations.
 | App access | `private`, `shared`, `public` (setting `access`) | same |
 | E-mail | `queued`, `sending`, `sent`, `failed` | — |
 
-An app's `running` is `paused` and its `health.summary` says why whenever the routing table pauses
-it. Health is `down` for a failed app, otherwise what its own telemetry measured over fifteen
-minutes (`degraded` when more than one response in twenty failed).
+An app's `running` and `health` (`health.state` on its page) are `paused`, `paused` is
+`{ reason: budget_exhausted|overdraft_limit, note }` and `health.summary` says why, whenever the routing table pauses
+it — on the app page and the chart alike, never "healthy" while Edge serves the holding page. Otherwise health is `down`
+for a failed app, or what its own telemetry measured over fifteen minutes (`degraded` when more than one response in twenty
+failed). The chart's app row carries the app's `status`. An app (and the project holding it) whose latest build ended
+`failed` or `cancelled` with nothing ever published carries `notBuilt { reason: cancelled|failed|budget|plan-declined, note,
+runId, ideaId }`; its project's `stage` is `not-built`. A build run moves to the app it was placed in when its `placement`
+step is logged, and the gateway charges a run's calls at the run's own scope when that is narrower than the call's.
+`GET /api/credits` and the chart's organisation carry `neverToppedUp`; `POST /api/organisations` answers `balance` (0) and
+`creditsNote`. `PublicRun` adds `detail` and `reason` from its `run.finished`; an idea's `tryAgain.why` adds `start-declined`.
+An approval (and its needs-you item and notification) carries `technical` beside the plain `detail`; `task.claimed` carries
+`holder` and `summary`. The data-flow graph has `app → service:data` for an app that has run or stores data.
 
 ## Control plane — public API (`/api`, member cookie)
 
@@ -117,14 +126,17 @@ The workforce's shapes, field for field:
   currentRun: { id, title } | null, lastRunId, lastActiveAt, createdAt, releasedAt, memoryEntries, brief }`. `services` are
   `identity`, `models`, `secrets`, `email`, `schedules`, `webhooks`, `telemetry`; `modelTier` is a routing-table task type.
 - **TrackRecord** `{ employeeId, work: { accepted, sentBack, acceptedPercent, judged }, runs: { finished, succeeded, failed, cancelled },
-  repairsNotCharged: { credits, calls }, cost: { toDateCredits, monthCredits }, contractors: { engaged, working, toDateCredits, monthCredits },
+  repairsNotCharged: { credits, calls }, cost: { toDateCredits, monthCredits, ownToDateCredits, ownMonthCredits }, contractors: { engaged, working, toDateCredits, monthCredits },
   estimates: Estimates | null }` — derived on read, the work being the employee's wherever the run belongs: `accepted` is
   judgements of its work that passed (`evaluation.passed` whose `employeeId` is the employee; one without `employeeId`
   judges the run's owner), plus tasks it claimed and finished that no judgement names (`taskId`), plus succeeded runs of its
   own with neither; `sentBack` is judgements of its work that failed; `judged` the judgements it made (`judgedBy`); `runs`
   counts the runs it worked in (as `GET /api/runs?employeeId=`); cost is billable settlements and hosting with the
-  employee's id; `estimates` are those of runs it owns, or — for a run nobody owns, such as a factory build — the employee
-  its billable model calls were mostly charged to.
+  employee's id **plus the contractors it briefs** (as its cap counts them; `own…` is its share alone); `estimates` are those
+  of runs it owns, or — for a run nobody owns, such as a factory build or research — the employee its billable model calls
+  were mostly charged to, a contractor's calls counting as its briefer's. `GET /api/employees/{id}` adds `recentRuns`
+  `[{ id, title, kind, status, startedAt, finishedAt }]`: the runs it led, newest first (up to 12). A contractor is
+  released, its activity cleared, when the run that briefed it ends in any way; the sweep closes one left open.
 - **Estimates** (here and in `CreditsView`) `{ pieces, withinPercent, under, over, largestMissPercent, typicalGapPercent, typically }`
   from `estimate.scored`: `withinPercent` the share of pieces within 10% of their estimate, `under`/`over` the pieces more than
   10% below/above it, `largestMissPercent` the largest |cost − estimate| / estimate; `typicalGapPercent` the **median of
@@ -132,7 +144,10 @@ The workforce's shapes, field for field:
   cost 84% less than estimated), null when there is none; `typically` `under`, `over`, or `within` when that median is within
   10% either way. The console says it as "Usually 84% under the estimate" / "Usually 20% over the estimate" / "Usually within 5%".
 - **Hire** `{ id, status, trigger, needKey, scope, reason, name, role, jobDescription, reportsTo, expectedMonthlyCredits, withinBudget,
-  headroomCredits, contractorRole, raisedBy: person|runner, raisedByRunId, decision: { via, by, at, note } | null, employeeId, createdAt }`.
+  headroomCredits, contractorRole, raisedBy: person|runner, raisedByRunId, decision: { via, by, at, note } | null, employeeId, createdAt, withdrawn }`.
+  `expectedMonthlyCredits` is never above `jobDescription.monthlyCreditLimit` when that is set. `withdrawn` is a decline made by the
+  platform (no person): a build that ended without publishing anything withdraws the open proposals it raised, and a need someone
+  above now covers withdraws its open proposal; `decision.note` says why and `decision.by` is "Endgame".
 - **MemoryEntry** `{ id, employeeId, scope, title, body, kind, sourceRunId, createdAt, updatedAt, lastReviewedAt, archived }`;
   **MemoryChange** `{ id, memoryId, action, by, userId, runId, detail, at }`.
 - `GET /api/tree` workers are `{ id, name, role, kind, activity, status, idle, standing, briefedBy }` — employees and contractors
@@ -180,7 +195,7 @@ form; anything else is 400 `invalid_return_to`. When it points at the subdomain 
 | `POST /internal/runs/{id}/retry { scope }` | The conversation at `scope` tries stopped work in its own part of the tree again, on the person's word → `201` the new run; a run outside `scope` is `404`. |
 | `POST /internal/ideas/{id}/verdict` | Research's verdict document, exactly as *The verdict document* below. Anything else is `400 verdict_invalid` with `errors[]`, one precise line per fault (`existing.products[0].name: required, a string of 1 to 120 characters`), and nothing is recorded. `409` when the idea is not being researched. |
 | `POST /internal/employees { scope, name, role, mandate?, tools?, services?, monthlyCreditLimit?, modelTier?, reportsTo? }`, `GET /internal/employees?scope=&includeReleased=&kind=`, `GET /internal/employees/{id}` | The factory's direct hire; the workforce at and beneath a scope; one employee's detail (as the public shapes). |
-| `POST /internal/hires { scope, trigger, needKey, reason, name, role, jobDescription, reportsTo?, expectedMonthlyCredits, contractorRole?, runId? }` | A need from the ontology → `201 { hire, created: true }`, or `200` with the live proposal for the same `needKey`. Accepted at once when within budget and the hire checkpoint is off. |
+| `POST /internal/hires { scope, trigger, needKey, reason, name, role, jobDescription, reportsTo?, expectedMonthlyCredits, contractorRole?, runId? }` | A need from the ontology → `201 { hire, created: true }`, or `200` with the accepted or live proposal for the same `needKey`. Accepted at once when within budget and the hire checkpoint is off. For a `stage`, `division` or `recurring` need, an employee with that role who works at the need's level or above it covers it: `200 { hire: { status: "covered", id, employeeId: <theirs> }, created: false, coveredBy: Employee }`, and nobody is proposed. |
 | `GET /internal/employees/{id}/memory?scope=`, `POST …/memory { runId?, entries: [{ title, body, kind, scope? }] }`, `POST …/memory/review { runId?, merged: [{ from[], title, body, kind? }], removed: [{ id, why }], corrected: [{ id, title?, body?, kind?, why }] }` | Memory for a run (at, above or beneath the scope; at most 200); written after a task; a review's result. |
 | `POST /internal/contractors { scope, briefedBy, role, name?, brief, runId?, monthlyCreditLimit? }`, `POST /internal/contractors/{id}/finish { runId?, learned[] }` | A contractor while it works; done → `{ contractor, learned, promotion }` (a hire raised when the role recurred). |
 | `GET /internal/ontology?scope=&view=`, `GET /internal/employees/recurring-roles?scope=` | The graph, and recurring contractor roles, for the Runner's hiring triggers. |
@@ -383,8 +398,9 @@ signed-out visitor (forwarded prefix and host set, no session, no platform cooki
 (anything else described, not returned); `400` for a method outside GET/POST/PUT/PATCH/DELETE or a path that is
 absolute, climbs out, or enters `_platform`/`_endgame`; `404` unknown app; `409` paused; `503` not woken;
 `GET /internal/apps`,
-`GET /internal/routes`. The control plane calls `routes/refresh` when access, settings, budgets,
-webhooks or the balance change, best effort.
+`GET /internal/routes`. The control plane calls `routes/refresh` when access, settings, budgets (set or
+removed), the overdraft or the balance change, and when an app is created or placed; for a person's change it
+waits for Edge's answer (at most 5 s) before answering, so the change is served at once. A failure never fails the change.
 
 ## Edge — the identity pages (`<app address>/_endgame/auth/*`, public side)
 

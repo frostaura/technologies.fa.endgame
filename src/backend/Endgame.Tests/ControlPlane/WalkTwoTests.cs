@@ -168,7 +168,7 @@ public sealed class WalkTwoTests(PostgresServer postgres) : IAsyncLifetime
     [InlineData(0, "0")]
     [InlineData(-35.255, "-35.26")]
     public void A_credit_amount_in_a_sentence_has_at_most_two_decimals(double credits, string shown) =>
-        Assert.Equal(shown, Endgame.Application.Common.CreditText.Format((decimal)credits));
+        Assert.Equal(shown, Endgame.Domain.Credits.CreditText.Format((decimal)credits));
 
     [Fact]
     public async Task A_refusal_names_credit_amounts_rounded()

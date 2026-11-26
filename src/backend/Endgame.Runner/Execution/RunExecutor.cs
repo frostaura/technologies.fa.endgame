@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json.Nodes;
+using Endgame.Domain.Credits;
 using Endgame.Domain.Runs;
 using Endgame.Harness;
 using Endgame.Harness.Events;

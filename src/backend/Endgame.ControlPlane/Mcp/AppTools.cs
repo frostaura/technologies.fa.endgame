@@ -26,10 +26,12 @@ internal static class AppTools
         var db = services.GetRequiredService<EndgameDbContext>();
         var version = await db.Apps.AsNoTracking().Where(a => a.OrganisationId == app.OrganisationId && a.Id == appId).Select(a => a.CurrentVersion).SingleOrDefaultAsync(cancellationToken);
         var gateway = services.GetRequiredService<AppGateway>();
+        // An access token's role is the most the app may see this person as, however high their own role (D61).
+        var ceiling = services.GetRequiredService<CallerCeiling>().Role;
         var operations = await gateway.OperationsAsync(appId, version, cancellationToken);
         return operations.Select(op => new McpTool(op.Tool, op.Description, op.InputSchema, op.Method == "get", async call =>
         {
-            var token = await call.S<AppIdentityService>().MemberTokenAsync(app, call.UserId, call.Ct);
+            var token = await call.S<AppIdentityService>().MemberTokenAsync(app, call.UserId, call.Ct, ceiling);
             var result = await gateway.CallAsync(appId, op, call.Args, token, call.Ct);
             if (result.Status >= 400)
             {

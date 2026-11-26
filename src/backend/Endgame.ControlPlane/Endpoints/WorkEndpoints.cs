@@ -256,7 +256,7 @@ internal static class WorkEndpoints
                 await cascade.SetAsync(scope, CascadeKind.Setting, CascadeKeys.Access, JsonValue.Create(accessSetting), me.Id, actor, ct);
             }
 
-            edge.RoutesChanged();
+            await edge.RoutesChangedAsync(ct);
             return Results.Ok(await reads.AppAsync(scope, ct));
         })
         .WithName("UpdateAppSettings").WithSummary("Changes how the app runs (sleeps when idle, or always on) and who may open it (private, shared, public) on the app itself; both otherwise inherit down the cascade.").Produces<PublicAppView>();

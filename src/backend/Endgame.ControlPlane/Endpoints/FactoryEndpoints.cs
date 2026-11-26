@@ -81,7 +81,7 @@ internal static class FactoryEndpoints
 {
     public static void MapFactoryInternal(this RouteGroupBuilder group)
     {
-        group.MapPost("/tree/nodes", async (EnsureNodeRequest request, ScopeResolver scopes, TreeService tree, CancellationToken ct) =>
+        group.MapPost("/tree/nodes", async (EnsureNodeRequest request, ScopeResolver scopes, TreeService tree, EdgeNotifier edge, CancellationToken ct) =>
         {
             var level = request.Level switch
             {
@@ -92,6 +92,12 @@ internal static class FactoryEndpoints
             };
             var parent = await scopes.RequireAsync(request.Parent, ct);
             var (node, created) = await tree.EnsureChildAsync(parent, level, request.Name ?? "", request.Slug ?? "", ct);
+            if (created && level == NodeLevel.App)
+            {
+                // A placed app has an address from the moment it is placed (D68).
+                await edge.RoutesChangedAsync(ct);
+            }
+
             return created ? Results.Created($"/internal/tree/nodes/{node.Id}", node) : Results.Ok(node);
         })
         .WithName("EnsureTreeNode")
@@ -183,7 +189,7 @@ internal static class FactoryEndpoints
             var result = await cascade.SetAsync(resolved, CascadeKind.Setting, key, request.Value, null, Actor.Agent, ct);
             if (key.StartsWith("sleep.", StringComparison.Ordinal))
             {
-                edge.RoutesChanged();
+                await edge.RoutesChangedAsync(ct);
             }
 
             return Results.Ok(result);

@@ -294,7 +294,7 @@ internal static class BreadthEndpoints
                 await access.RequireAsync(principal.Id(), scope, scope.Level == NodeLevel.Organisation ? MemberRole.Owner : MemberRole.Admin, ct);
                 var me = await users.GetUserAsync(principal) ?? throw EndgameProblem.Unauthenticated();
                 await cascade.SetAsync(scope, CascadeKind.Setting, key, JsonValue.Create(request.Credits), me.Id, access.IsOperator(me) ? Actor.Operator : Actor.Member, ct);
-                edge.RoutesChanged();
+                await edge.RoutesChangedAsync(ct);
                 return Results.Ok(await reads.CreditsAsync(scope, ct));
             })
             .WithTags("Credits").WithName("SetOverdraftLimit")

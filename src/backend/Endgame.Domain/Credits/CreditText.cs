@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Endgame.Application.Common;
+namespace Endgame.Domain.Credits;
 
 /// <summary>
 /// A credit amount as a sentence shows it: at most two decimals with trailing zeros trimmed ("277.32", "12", "0.5"),

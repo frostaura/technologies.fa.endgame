@@ -232,8 +232,10 @@ public sealed class WorkforceTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal(1, track["runs"]!["failed"]!.GetValue<int>());
         Assert.Equal(0.03m, track["repairsNotCharged"]!["credits"]!.GetValue<decimal>());
         Assert.Equal(1, track["repairsNotCharged"]!["calls"]!.GetValue<int>());
-        Assert.Equal(0.03m, track["cost"]!["toDateCredits"]!.GetValue<decimal>());
-        Assert.Equal(0.03m, track["cost"]!["monthCredits"]!.GetValue<decimal>());
+        // Its cost counts the contractor it briefed, as its budget does (D74); its own share is kept apart.
+        Assert.Equal(0.06m, track["cost"]!["toDateCredits"]!.GetValue<decimal>());
+        Assert.Equal(0.06m, track["cost"]!["monthCredits"]!.GetValue<decimal>());
+        Assert.Equal(0.03m, track["cost"]!["ownToDateCredits"]!.GetValue<decimal>());
         Assert.Equal(1, track["contractors"]!["engaged"]!.GetValue<int>());
         Assert.Equal(1, track["contractors"]!["working"]!.GetValue<int>());
         Assert.Equal(0.03m, track["contractors"]!["toDateCredits"]!.GetValue<decimal>());

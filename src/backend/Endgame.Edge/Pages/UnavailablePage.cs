@@ -5,7 +5,7 @@ namespace Endgame.Edge.Pages;
 /// <summary>Why the edge is answering instead of the app.</summary>
 public enum Unavailable
 {
-    /// <summary>The app stopped working and is being kept down for a moment.</summary>
+    /// <summary>The app stopped working: kept down for a short pause, then started again by the next visit; its owner is told.</summary>
     Crashed,
 
     /// <summary>The organisation's credits reached the overdraft limit.</summary>
@@ -47,7 +47,7 @@ public static class UnavailablePage
     public static (string Title, string Message) Copy(Unavailable reason) => reason switch
     {
         Unavailable.Crashed => ("This app has stopped for a moment",
-            "Something went wrong inside it. It will be started again shortly — please try again in a moment."),
+            "Something went wrong inside it, and its owner has been told. Please try again in a minute: the next visit starts it again."),
         Unavailable.Paused => ("This app is paused",
             "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up."),
         Unavailable.BudgetSpent => ("This app is paused",

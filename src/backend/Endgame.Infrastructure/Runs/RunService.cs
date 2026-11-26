@@ -584,11 +584,127 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
                 }
 
                 await ledger.ReleaseOpenForRunAsync(org, run, $"run {outcome}", cancellationToken);
+                await CloseContractorsAsync(org, run, now, cancellationToken);
+                if (outcome is RunStatuses.Failed or RunStatuses.Cancelled)
+                {
+                    await WithdrawUnbuiltHiresAsync(org, run, outcome, now, cancellationToken);
+                }
+
                 _ = actor;
                 return outcome;
+            case RunEventTypes.Message when PlacedApp(e.Payload) is { } placed:
+                await MoveToPlacementAsync(org, run, placed, cancellationToken);
+                return status;
             default:
                 return status;
         }
+    }
+
+    /// <summary>
+    /// Every contractor the run briefed that is still open finishes with the run, whatever ended it — finished, failed,
+    /// cancelled, stopped by a budget (D73): released, its activity cleared, gone from the chart and the bill. The model
+    /// gateway then refuses any call still made in its name.
+    /// </summary>
+    private async Task CloseContractorsAsync(Guid org, Guid run, DateTimeOffset now, CancellationToken cancellationToken) =>
+        await db.Employees
+            .Where(x => x.OrganisationId == org && x.Kind == Domain.Workforce.EmployeeKinds.Contractor && x.Status != EmployeeStatuses.Released
+                && (x.BriefRunId == run || x.CurrentRunId == run))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.Status, EmployeeStatuses.Released)
+                .SetProperty(x => x.ReleasedAt, now)
+                .SetProperty(x => x.LastRunId, run)
+                .SetProperty(x => x.CurrentRunId, (Guid?)null)
+                .SetProperty(x => x.LastActiveAt, now), cancellationToken);
+
+    /// <summary>
+    /// Repairs contractors left open by a run that already ended (rows from before <see cref="CloseContractorsAsync"/>, or a
+    /// run ended behind the platform's back): the sweep closes them. Runs as the platform, across organisations. Returns how many.
+    /// </summary>
+    public async Task<int> CloseStrandedContractorsAsync(CancellationToken cancellationToken)
+    {
+        session.UseSystem();
+        await using var command = await db.CommandAsync("""
+            UPDATE employees e SET status = 'released', released_at = @now, last_run_id = r.id, current_run_id = NULL, last_active_at = @now
+            FROM runs r
+            WHERE e.kind = 'contractor' AND e.status <> 'released'
+              AND r.organisation_id = e.organisation_id AND r.id = COALESCE(e.current_run_id, e.brief_run_id)
+              AND r.status IN ('succeeded', 'failed', 'cancelled')
+            """, cancellationToken, P("now", clock.GetUtcNow()));
+        var closed = await command.ExecuteNonQueryAsync(cancellationToken);
+        session.Clear();
+        return closed;
+    }
+
+    /// <summary>The reason a withdrawn hire proposal gives, when the build that raised it stopped before anything was built (D81).</summary>
+    public static string WithdrawnReason(string outcome, string? appName) =>
+        $"Withdrawn: the build{(appName is null ? "" : $" of {appName}")} {(outcome == RunStatuses.Cancelled ? "was cancelled" : "stopped")} before anything was built. Trying the build again proposes this hire again.";
+
+    /// <summary>
+    /// A build that ends without ever publishing withdraws the hires it proposed that nobody has answered (D81): they were
+    /// for work that did not happen. Its project and app stay, marked not built, so "Try again" still works — and raises the
+    /// hires again. Withdrawn is declined by the platform: no person decided, and the reason says why.
+    /// </summary>
+    private async Task WithdrawUnbuiltHiresAsync(Guid org, Guid run, string outcome, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var build = await db.Runs.AsNoTracking().Where(r => r.OrganisationId == org && r.Id == run).Select(r => new { r.Kind, r.AppId }).SingleAsync(cancellationToken);
+        if (build.Kind != RunKinds.Build)
+        {
+            return;
+        }
+
+        var app = build.AppId is { } placed
+            ? await db.Apps.AsNoTracking().Where(a => a.OrganisationId == org && a.Id == placed).Select(a => new { a.Name, a.PublishedAt }).SingleOrDefaultAsync(cancellationToken)
+            : null;
+        if (app?.PublishedAt is not null)
+        {
+            return;
+        }
+
+        var reason = WithdrawnReason(outcome, app?.Name);
+        await db.HireProposals
+            .Where(h => h.OrganisationId == org && h.RaisedByRunId == run && h.Status == Domain.Workforce.HireStatuses.Proposed)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(h => h.Status, Domain.Workforce.HireStatuses.Declined)
+                .SetProperty(h => h.DecidedVia, IdeaDecisions.ByAutoMode)
+                .SetProperty(h => h.DecidedBy, (Guid?)null)
+                .SetProperty(h => h.DecidedAt, now)
+                .SetProperty(h => h.DecisionNote, reason)
+                .SetProperty(h => h.UpdatedAt, now), cancellationToken);
+    }
+
+    /// <summary>The app a build's <c>placement</c> journal step placed it in (<c>workflow.step</c>, step <c>placement</c>, <c>data.appId</c>); null for any other event.</summary>
+    public static Guid? PlacedApp(JsonObject? payload) =>
+        payload is not null && payload["kind"] is JsonValue k && k.GetValueKind() == JsonValueKind.String && k.GetValue<string>() == "workflow.step"
+        && payload["step"] is JsonValue st && st.GetValueKind() == JsonValueKind.String && st.GetValue<string>() == "placement"
+        && payload["data"] is JsonObject data && data["appId"] is JsonValue id && id.GetValueKind() == JsonValueKind.String && Guid.TryParse(id.GetValue<string>(), out var app)
+            ? app
+            : null;
+
+    /// <summary>
+    /// A build is placed: from that moment it is the work of the app it builds, so the run moves to that app's scope (D80) — the
+    /// project's card shows it under way, and its spend lands on the app, the project and the division (the model gateway
+    /// attributes a run's calls to the run's own scope when it is narrower). Only a build moves, and only down its own branch.
+    /// </summary>
+    private async Task MoveToPlacementAsync(Guid org, Guid run, Guid appId, CancellationToken cancellationToken)
+    {
+        var place = await (from a in db.Apps.AsNoTracking()
+                           join p in db.Projects.AsNoTracking() on new { a.OrganisationId, Id = a.ProjectId } equals new { p.OrganisationId, p.Id }
+                           where a.OrganisationId == org && a.Id == appId
+                           select new { AppId = a.Id, ProjectId = p.Id, p.DivisionId }).SingleOrDefaultAsync(cancellationToken);
+        if (place is null)
+        {
+            return;
+        }
+
+        await db.Runs
+            .Where(r => r.OrganisationId == org && r.Id == run && r.Kind == RunKinds.Build
+                && (r.DivisionId == null || r.DivisionId == place.DivisionId)
+                && (r.ProjectId == null || r.ProjectId == place.ProjectId)
+                && (r.AppId == null || r.AppId == place.AppId))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.DivisionId, place.DivisionId)
+                .SetProperty(r => r.ProjectId, place.ProjectId)
+                .SetProperty(r => r.AppId, place.AppId), cancellationToken);
     }
 
     private async Task SetStatusAsync(Guid org, Guid run, string status, DateTimeOffset now, CancellationToken cancellationToken) =>
