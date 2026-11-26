@@ -98,9 +98,11 @@ public sealed class SuggestWorkflow : IWorkflow
         {
             return WorkflowOutcome.Failure($"No usable suggestion was made: {why}")
                 with
-            { ForOwner = cutOff
+            {
+                ForOwner = cutOff
                 ? "The suggestions were too long to finish, so nothing was added. Asking again usually gives a shorter answer."
-                : "No new idea worth suggesting came out of what the organisation holds this time, so nothing was added. Asking again later, once there is more to build on, may find one." };
+                : "No new idea worth suggesting came out of what the organisation holds this time, so nothing was added. Asking again later, once there is more to build on, may find one."
+            };
         }
 
         try

@@ -217,8 +217,15 @@ public sealed class WalkTwoServerTests(PostgresServer postgres) : IAsyncLifetime
         // a build raised that ended without the rule ever running (its run marked cancelled behind the platform's back).
         object Hire(string scope, string key, string name, string role, Guid? run) => new
         {
-            scope, trigger = "stage", needKey = key, reason = "The work reached this level.", name, role,
-            jobDescription = new { mandate = "Do it.", modelTier = "build" }, expectedMonthlyCredits = 400m, runId = run,
+            scope,
+            trigger = "stage",
+            needKey = key,
+            reason = "The work reached this level.",
+            name,
+            role,
+            jobDescription = new { mandate = "Do it.", modelTier = "build" },
+            expectedMonthlyCredits = 400m,
+            runId = run,
         };
         var research = (await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/hires", Hire(Division, $"stage:research:{Division}", "Iris", "Market researcher", null))))["hire"]!["id"]!.GetValue<string>();
         var build = await RunAsync(Division, "build", "Build Squash");

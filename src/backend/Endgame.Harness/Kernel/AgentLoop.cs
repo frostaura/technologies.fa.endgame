@@ -720,9 +720,24 @@ public static class WebSearch
 
     private static readonly Dictionary<string, string> Irregular = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["drew"] = "drawing", ["wrote"] = "writing", ["built"] = "building", ["found"] = "finding", ["made"] = "making", ["read"] = "reading",
-        ["ran"] = "running", ["took"] = "taking", ["gave"] = "giving", ["chose"] = "choosing", ["set"] = "setting", ["put"] = "putting",
-        ["planned"] = "planning", ["shipped"] = "shipping", ["stopped"] = "stopping", ["priced"] = "pricing", ["placed"] = "placing", ["used"] = "using",
+        ["drew"] = "drawing",
+        ["wrote"] = "writing",
+        ["built"] = "building",
+        ["found"] = "finding",
+        ["made"] = "making",
+        ["read"] = "reading",
+        ["ran"] = "running",
+        ["took"] = "taking",
+        ["gave"] = "giving",
+        ["chose"] = "choosing",
+        ["set"] = "setting",
+        ["put"] = "putting",
+        ["planned"] = "planning",
+        ["shipped"] = "shipping",
+        ["stopped"] = "stopping",
+        ["priced"] = "pricing",
+        ["placed"] = "placing",
+        ["used"] = "using",
     };
 
     /// <summary>A step's past-tense heading as what it is doing: "Looked for existing products" → "looking for existing products".</summary>

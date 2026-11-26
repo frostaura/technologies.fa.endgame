@@ -56,7 +56,8 @@ public sealed class EdgeSignOutTests(PostgresServer postgres) : IAsyncLifetime
         routes = await FakeControlPlane.StartAsync(ControlPlaneApp.ServiceToken);
         (echo, var echoAddress) = await StartEchoAsync();
         routes.SetRoutes(Routes.View(bookings, org: "frostaura", division: "technologies", project: "squash", app: "bookings",
-            target: echoAddress.ToString().TrimEnd('/'), access: AppAccess.Private) with { Host = Subdomain });
+            target: echoAddress.ToString().TrimEnd('/'), access: AppAccess.Private) with
+        { Host = Subdomain });
 
         edge = EdgeHost.Create([], builder =>
         {

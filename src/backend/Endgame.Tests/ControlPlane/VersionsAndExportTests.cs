@@ -10,10 +10,10 @@ using Endgame.Infrastructure.Persistence;
 using Endgame.Infrastructure.Persistence.Records;
 using Endgame.Infrastructure.Tenancy;
 using Endgame.Tests.Fixtures;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Endgame.Tests.ControlPlane;
 
@@ -121,7 +121,11 @@ public sealed class VersionsAndExportTests(PostgresServer postgres) : IAsyncLife
 
             db.RunEvents.Add(new RunEventRecord
             {
-                OrganisationId = org, RunId = legacy, Seq = 1, Type = "message", At = DateTimeOffset.UtcNow,
+                OrganisationId = org,
+                RunId = legacy,
+                Seq = 1,
+                Type = "message",
+                At = DateTimeOffset.UtcNow,
                 PayloadJson = new JsonObject { ["kind"] = "workflow.step", ["step"] = "publish", ["agent"] = "workflow", ["data"] = new JsonObject { ["started"] = true, ["commit"] = "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5" } }.ToJsonString(),
             });
             await db.SaveChangesAsync();

@@ -46,7 +46,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var (detail, reason) = RunStatuses.IsTerminal(run.Status) ? await FinishedAsync(run, cancellationToken) : (null, null);
         var (first, plan) = await EstimatesAsync(run, cancellationToken);
         return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId), await CanTryAgainAsync(run, cancellationToken))
-            with { Detail = detail, Reason = reason, FirstEstimateCredits = first, PlanEstimateCredits = plan };
+            with
+        { Detail = detail, Reason = reason, FirstEstimateCredits = first, PlanEstimateCredits = plan };
     }
 
     /// <summary>
