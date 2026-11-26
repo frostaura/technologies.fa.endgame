@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Flow } from "../content/types.ts";
 import type { ScriptStep, StepScript } from "../content/scripts.ts";
 import type { BridgeState } from "../bridge/bridge.ts";
@@ -29,7 +29,14 @@ export interface Branch {
   onClose: () => void;
 }
 
-export function Stage({ flow, script, active, run, interactive, onTry, onReplay, branch, captured = (n) => shotFor(flow.id, n) }: {
+/** A control under the stage: an icon on a phone, its words beside the icon from `sm` up; its name is the words either way. */
+const control = "inline-flex min-h-touch min-w-touch items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors sm:px-4";
+
+const Icon = ({ d }: { d: string }) => (
+  <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" aria-hidden="true"><path d={d} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+
+export function Stage({ flow, script, active, run, interactive, onTry, onReplay, branch, pager, expand, captured = (n) => shotFor(flow.id, n) }: {
   flow: Flow;
   script: StepScript | undefined;
   active: number;
@@ -39,6 +46,10 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay,
   onTry: () => void;
   onReplay: () => void;
   branch?: Branch;
+  /** Previous and Next, set under the stage when the steps sit beside it. */
+  pager?: ReactNode;
+  /** On a phone: the console enlarged over the steps, or back to sharing the screen with them. */
+  expand?: { on: boolean; toggle: () => void };
   /** The image captured for a step (`make academy-shots`), shown when the live console cannot load. */
   captured?: (n: number) => string | undefined;
 }) {
@@ -109,29 +120,45 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay,
         )}
         {(media === "facts" || (media === "demo" && unavailable && !shot)) && <Facts flow={flow} />}
       </div>
-      <div className="flex min-h-touch flex-wrap items-center gap-3" data-print="hide">
-        <p className="min-w-0 flex-1 text-sm text-ink-muted" aria-live="polite">
+      <div className="short:flex short:items-center short:gap-3">
+      <div className="flex min-h-touch items-center gap-2 sm:gap-3 short:shrink-0" data-print="hide">
+        <p className="line-clamp-3 min-w-0 flex-1 text-sm text-ink-muted split:line-clamp-none short:sr-only" aria-live="polite">
           {unavailable && notice && media === "demo" ? (
             "The live console could not be loaded here, so this flow shows its steps and facts instead."
           ) : caption ? (
             <Inline text={caption} self={flow.id} />
           ) : showFrame ? (
-            interactive ? "The console is yours: click around. “Show me again” puts it back on this step." : !script ? "This is the screen the flow starts on. Click into it to explore." : ""
+            interactive ? "The console is yours: tap around. “Show me again” puts it back on this step." : !script ? "This is the screen the flow starts on. Tap into it to explore." : ""
           ) : null}
         </p>
-        {showFrame && (
-          <span className="flex gap-2">
-            {!interactive ? (
-              <button type="button" onClick={onTry} className="min-h-touch rounded-full border-2 border-ink px-4 text-sm font-semibold text-ink hover:bg-ink hover:text-primary-ink">Try it yourself</button>
-            ) : null}
-            {script && (
-              <button type="button" onClick={onReplay} className="min-h-touch rounded-full bg-primary px-4 text-sm font-semibold text-primary-ink hover:bg-primary-hover">Show me again</button>
-            )}
-          </span>
-        )}
-        {(media === "terminal" || media === "request" || media === "email" || media === "code") && (
-          <button type="button" onClick={onReplay} className="min-h-touch rounded-full border px-4 text-sm font-semibold text-ink hover:bg-ground">Play again</button>
-        )}
+        <span className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {showFrame && !interactive && (
+            <button type="button" onClick={onTry} className={`${control} border-2 border-ink text-ink hover:bg-ink hover:text-primary-ink`}>
+              <Icon d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10m0-1.5a1.5 1.5 0 0 1 3 0V11m0-1a1.5 1.5 0 0 1 3 0v4.5a6 6 0 0 1-6 6h-.6a6 6 0 0 1-4.7-2.3L4 15.5a1.6 1.6 0 0 1 2.4-2.1L9 15" />
+              <span className="sr-only sm:not-sr-only short:sr-only">Try it yourself</span>
+            </button>
+          )}
+          {showFrame && script && (
+            <button type="button" onClick={onReplay} className={`${control} bg-primary text-primary-ink hover:bg-primary-hover`}>
+              <Icon d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" />
+              <span className="sr-only sm:not-sr-only short:sr-only">Show me again</span>
+            </button>
+          )}
+          {(media === "terminal" || media === "request" || media === "email" || media === "code") && (
+            <button type="button" onClick={onReplay} className={`${control} border text-ink hover:bg-ground`}>
+              <Icon d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" />
+              <span className="sr-only sm:not-sr-only short:sr-only">Play again</span>
+            </button>
+          )}
+          {expand && (
+            <button type="button" onClick={expand.toggle} aria-pressed={expand.on} className={`${control} border text-ink hover:bg-ground`}>
+              <Icon d={expand.on ? "M9 4v5H4m11-5v5h5M9 20v-5H4m11 5v-5h5" : "M4 9V4h5m6 0h5v5M4 15v5h5m6 0h5v-5"} />
+              <span className="sr-only">{expand.on ? "Smaller console" : "Larger console"}</span>
+            </button>
+          )}
+        </span>
+      </div>
+      {pager && <div className="short:min-w-0 short:flex-1">{pager}</div>}
       </div>
     </div>
   );

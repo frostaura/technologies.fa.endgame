@@ -157,26 +157,14 @@ test("progress is remembered, and the cover offers to resume", async ({ page }) 
   await withDemo(page);
   await page.goto("./#/flow/ID-01/step/3");
   await expect(page.locator("[aria-current=step]")).toContainText("They fill in");
+  // A step counts as seen once it has been on screen for a moment.
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("endgame-academy:progress:v2") ?? "")).toContain('"ID-01"');
   await page.goto("./#/");
-  await expect(page.getByRole("region", { name: "Resume" })).toContainText("ID-01");
-});
-
-test("on a phone, the cover and a flow fit the screen and the stage sits above the steps", async ({ browser }) => {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  page.on("pageerror", (e) => errors.push(e.message));
-  await withDemo(page);
-  await page.goto("./");
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.goto("./#/flow/ID-01/step/3");
-  const frame = page.getByTestId("demo-frame");
-  await expect(frame).toBeVisible();
-  const step = page.locator("[aria-current=step]");
-  await expect(step).toContainText("They fill in");
-  const [f, s] = [await frame.boundingBox(), await step.boundingBox()];
-  expect(f && s && f.y + f.height <= s.y).toBe(true);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.close();
+  const card = page.getByRole("region", { name: "Pick up where you left off" });
+  await expect(card).toContainText("ID-01");
+  await expect(card).toContainText(/Step 3 of \d+/);
+  await card.getByRole("link").click();
+  await expect(page).toHaveURL(/#\/flow\/ID-01\/step\/3$/);
 });
 
 test("client navigation never mixes in the operator handbook", async ({ page }) => {
@@ -268,4 +256,236 @@ test("a flow opened from the end of another starts at its top, on its first step
   await page.waitForTimeout(1200);
   await expect(page).toHaveURL(/\/step\/1$/);
   await expect(page.getByText(/^Step 1 of \d+$/)).toBeVisible();
+});
+
+/* ------------------------------------------------------------------ on a phone */
+
+const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } as const;
+const KEY = "endgame-academy:progress:v2";
+
+async function phone(browser: import("@playwright/test").Browser, progress?: unknown) {
+  const context = await browser.newContext(PHONE);
+  if (progress) await context.addInitScript(([k, v]) => localStorage.setItem(k, v), [KEY, JSON.stringify(progress)] as const);
+  const page = await context.newPage();
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  await withDemo(page);
+  return { page, context };
+}
+
+const fitsWidth = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+
+/** A sideways swipe, as touch events on the element under the point. */
+async function swipe(page: Page, x0: number, x1: number, y: number) {
+  await page.evaluate(
+    ([a, b, yy]) => {
+      const el = document.elementFromPoint(a, yy) as Element;
+      const t = (x: number) => new Touch({ identifier: 1, target: el, clientX: x, clientY: yy });
+      el.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, touches: [t(a)], changedTouches: [t(a)] }));
+      el.dispatchEvent(new TouchEvent("touchend", { bubbles: true, touches: [], changedTouches: [t(b)] }));
+    },
+    [x0, x1, y] as const,
+  );
+}
+
+const started = (flows: Record<string, [number, number, boolean]>, last: [string, number]) => {
+  const now = Date.now();
+  return {
+    v: 2,
+    flows: Object.fromEntries(Object.entries(flows).map(([id, [step, furthest, done]]) => [id, { step, furthest, done, started: now - 1e6, seen: now - 1e5, doneAt: done ? now - 1e5 : 0 }])),
+    last: { flow: last[0], step: last[1], at: now - 1e5 },
+    days: [],
+  };
+};
+
+test("on a phone, every kind of page fits the width, with nothing to scroll sideways", async ({ browser }) => {
+  const { page, context } = await phone(browser, started({ "ID-01": [3, 3, false] }, ["ID-01", 3]));
+  for (const address of ["./", "./#/learn", "./#/path/Foundation", "./#/browse", "./#/area/01", "./#/search?q=invite", "./#/flow/IDEA-02/step/2", "./#/flow/OPS-12/step/2", "./#/progress", "./#/about", "./#/finish", "./#/operator", "./#/nowhere"]) {
+    await page.goto(address);
+    await expect(page.locator("#main")).toBeVisible();
+    await page.waitForTimeout(300);
+    expect(await fitsWidth(page), address).toBe(true);
+  }
+  await context.close();
+});
+
+test("on a phone, the cover and the header offer to pick up exactly where the learner left off", async ({ browser }) => {
+  const { page, context } = await phone(browser, started({ "IDEA-02": [3, 4, false] }, ["IDEA-02", 3]));
+  await page.goto("./");
+  const card = page.getByRole("region", { name: "Pick up where you left off" });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("IDEA-02");
+  await expect(card).toContainText("Step 3 of 5");
+  // The resume card is on the first screen, above the fold.
+  const box = await card.boundingBox();
+  expect(box && box.y + box.height <= 844 + 200).toBe(true);
+  await expect(page.getByTestId("header-resume")).toBeVisible();
+  await page.getByTestId("header-resume").click();
+  await expect(page).toHaveURL(/#\/flow\/IDEA-02\/step\/3$/);
+  await context.close();
+});
+
+test("on a phone, a path shows its progress and what is next, and a done flow is ticked in words too", async ({ browser }) => {
+  const { page, context } = await phone(browser, started({ "ID-01": [7, 7, true] }, ["ID-01", 7]));
+  await page.goto("./#/path/Foundation");
+  await expect(page.getByTestId("path-progress")).toContainText(/1 of \d+/);
+  await expect(page.getByRole("img", { name: /1 of \d+ flows done/ })).toBeVisible();
+  const row = page.locator("#main ol").getByRole("link", { name: /ID-01/ }).first();
+  await expect(row).toContainText("Done");
+  await expect(page.locator("#main ol").getByText("Next up", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Continue with / })).toBeVisible();
+  expect(await fitsWidth(page)).toBe(true);
+  await context.close();
+});
+
+test("on a phone, the player keeps the step and its controls in reach: buttons, swipes, the stage on top, nothing off screen", async ({ browser }) => {
+  const { page, context } = await phone(browser);
+  await page.goto("./#/flow/IDEA-02/step/1");
+  const frame = page.getByTestId("demo-frame");
+  await expect(frame).toBeVisible();
+  const controls = page.getByRole("group", { name: "Step controls" });
+  const next = controls.getByRole("button", { name: "Next step" });
+  const prev = controls.getByRole("button", { name: "Previous step" });
+  // The pager sits on the bottom edge, inside the screen, and its targets are at least 44 px.
+  for (const b of [next, prev]) {
+    const r = await b.boundingBox();
+    expect(r && r.height >= 44 && r.width >= 44 && r.y + r.height <= 844 && r.x >= 0 && r.x + r.width <= 390).toBe(true);
+  }
+  await expect(prev).toBeDisabled();
+  await next.click();
+  await expect(page).toHaveURL(/\/step\/2$/);
+  await expect(controls.getByText("Step 2 of 5")).toBeVisible();
+  // The step being read sits under the stage, on screen, not under the pager.
+  await expect
+    .poll(async () => {
+      const [f, s, p] = [await frame.boundingBox(), await page.locator("[aria-current=step]").boundingBox(), await controls.boundingBox()];
+      return !!(f && s && p && f.y + f.height <= s.y && s.y < p.y);
+    })
+    .toBe(true);
+  // A swipe left over the stage moves on; a swipe right goes back.
+  await page.waitForTimeout(1200);
+  await swipe(page, 320, 80, 300);
+  await expect(page).toHaveURL(/\/step\/3$/);
+  await page.waitForTimeout(1200);
+  await swipe(page, 80, 320, 300);
+  await expect(page).toHaveURL(/\/step\/2$/);
+  // The console's spotlight and caption are drawn inside its frame, so they stay on screen with it.
+  const fb = await frame.boundingBox();
+  expect(fb && fb.x >= 0 && fb.x + fb.width <= 390).toBe(true);
+  // The larger console keeps the pager, which then carries the step's words.
+  await page.getByRole("button", { name: "Larger console" }).click();
+  await expect(page.getByRole("button", { name: "Smaller console" })).toHaveAttribute("aria-pressed", "true");
+  const big = await frame.boundingBox();
+  expect(big && fb && big.height > fb.height).toBe(true);
+  await expect(controls).toContainText("Where it goes");
+  const pb = await controls.boundingBox();
+  expect(pb && big && big.y + big.height <= pb.y + 1).toBe(true);
+  expect(await fitsWidth(page)).toBe(true);
+  await context.close();
+});
+
+test("on a phone, finishing a flow says so and makes the next one a single tap", async ({ browser }) => {
+  const { page, context } = await phone(browser);
+  await page.goto("./#/flow/ID-02/step/4");
+  const controls = page.getByRole("group", { name: "Step controls" });
+  await controls.getByRole("button", { name: "Finish" }).click();
+  const done = page.getByTestId("flow-done");
+  await expect(done).toBeVisible({ timeout: 5000 });
+  await expect(done).toContainText(/Done — next: [A-Z]+-\d+/);
+  await expect(page.getByRole("status").filter({ hasText: "Flow done." })).toHaveCount(1);
+  const go = controls.getByRole("link", { name: /^Next flow: / });
+  await expect(go).toBeVisible();
+  const to = (await go.getAttribute("href")) ?? "";
+  await go.click();
+  await expect(page).toHaveURL(new RegExp(`${to.replace(/[#/]/g, ".")}/step/1$`));
+  // The flow just finished is ticked, and the milestone stands.
+  await page.goto("./#/progress");
+  await expect(page.getByTestId("milestones")).toContainText("First flow");
+  await expect(page.getByRole("img", { name: "First flow: earned" })).toBeVisible();
+  await context.close();
+});
+
+test("opening a flow begun earlier resumes at its step, and it can start from the beginning", async ({ browser }) => {
+  const { page, context } = await phone(browser, started({ "IDEA-02": [3, 3, false] }, ["IDEA-02", 3]));
+  await page.goto("./#/flow/IDEA-02");
+  await expect(page).toHaveURL(/#\/flow\/IDEA-02\/step\/3$/);
+  await expect(page.getByText("Picked up where you left off, at step 3.")).toBeVisible();
+  await page.getByRole("button", { name: "Start from the beginning" }).click();
+  await expect(page).toHaveURL(/\/step\/1$/);
+  await expect(page.getByText("Picked up where you left off")).toHaveCount(0);
+  await context.close();
+});
+
+test("the progress page counts the paths, moves progress by code, and resets only after asking", async ({ browser }) => {
+  const { page, context } = await phone(browser, started({ "ID-01": [7, 7, true], "OPS-12": [2, 2, false] }, ["ID-01", 7]));
+  await page.goto("./#/progress");
+  await expect(page.getByTestId("privacy")).toContainText("nothing leaves it");
+  await expect(page.getByTestId("overall")).toContainText(/1 of \d+/);
+  // The operator handbook is counted on its own, not in the client total.
+  await expect(page.getByRole("region", { name: "The operator handbook" })).toContainText(/0 of \d+ done/);
+  // Export as a code, reset, and bring it back.
+  await page.getByRole("button", { name: "Copy a code" }).click();
+  const code = await page.locator("textarea[readonly]").inputValue();
+  expect(code).toMatch(/^EGA2\./);
+  await page.getByRole("button", { name: "Reset progress…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Reset your progress?" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Keep it" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId("overall")).toContainText(/1 of \d+/);
+  await page.getByRole("button", { name: "Reset progress…" }).click();
+  await dialog.getByRole("button", { name: "Reset progress" }).click();
+  await expect(page.getByTestId("overall")).toContainText(/0 of \d+/);
+  expect(JSON.parse((await page.evaluate((k) => localStorage.getItem(k), KEY)) ?? "{}").flows).toEqual({});
+  await page.getByLabel("Paste a progress code, or choose a file.").fill(code);
+  await page.getByRole("button", { name: "Bring it in" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Brought in 2 flows" })).toBeVisible();
+  await expect(page.getByTestId("overall")).toContainText(/1 of \d+/);
+  expect(await fitsWidth(page)).toBe(true);
+  await context.close();
+});
+
+test("on a phone, the menu opens as a sheet with search and every way in, and closes on Escape", async ({ browser }) => {
+  const { page, context } = await phone(browser);
+  await page.goto("./");
+  await page.getByRole("button", { name: "Menu" }).click();
+  const sheet = page.getByRole("dialog", { name: "The Endgame Academy" });
+  await expect(sheet).toBeVisible();
+  for (const name of ["Learn", "Browse", "Your progress", "Live demo"]) await expect(sheet.getByRole("link", { name, exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  await page.getByRole("button", { name: "Search the academy" }).click();
+  await expect(page.getByRole("combobox", { name: "Search the academy" })).toBeFocused();
+  await page.keyboard.type("passkey");
+  await page.getByRole("option").first().click();
+  await expect(page).toHaveURL(/#\/flow\//);
+  await expect(sheet).toBeHidden();
+  await context.close();
+});
+
+test("without storage (a private window), progress still works for the visit and says so quietly", async ({ browser }) => {
+  const context = await browser.newContext(PHONE);
+  await context.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", { get: () => { throw new DOMException("denied", "SecurityError"); } });
+  });
+  const page = await context.newPage();
+  page.on("pageerror", (e) => errors.push(e.message));
+  await withDemo(page);
+  await page.goto("./#/flow/ID-01/step/2");
+  await page.waitForTimeout(1200);
+  // Within the visit (no reload), the step just read is remembered.
+  await page.evaluate(() => (window.location.hash = "#/progress"));
+  await expect(page.getByRole("note")).toContainText("only for this visit");
+  await expect(page.getByTestId("header-resume")).toBeVisible();
+  await context.close();
+});
+
+test("the print version carries no device-local progress", async ({ page }) => {
+  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [KEY, JSON.stringify(started({ "ID-01": [7, 7, true] }, ["ID-01", 7]))] as const);
+  await page.goto("./#/print");
+  await expect(page.locator("body")).not.toContainText("Pick up where you left off");
+  await expect(page.locator("body")).not.toContainText("Your progress");
+  await expect(page.getByTestId("header-resume")).toHaveCount(0);
 });

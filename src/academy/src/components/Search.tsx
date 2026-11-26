@@ -2,13 +2,17 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { searchFlows } from "../lib/data.ts";
 import { go, href } from "../lib/router.ts";
 import { snippet } from "../lib/snippet.ts";
-import { LevelBadge } from "./Chips.tsx";
+import { useProgress, stateOf } from "../lib/progress.ts";
+import { LevelBadge, ProgressDot } from "./Chips.tsx";
 
 /**
  * Instant search over titles, steps, on-screen labels, refusal messages and flow ids. `/` focuses
- * it from anywhere; arrows move through the results; Enter opens one; Escape closes.
+ * it from anywhere; arrows move through the results; Enter opens one; Escape closes. `inline` sets the
+ * results in the page's flow rather than over it (the phone's menu sheet, where there is no room to
+ * drop a list over anything); `onChoose` is told when a result is opened.
  */
-export function Search({ scope = "client", autoFocus = false, wide = false }: { scope?: "client" | "operator"; autoFocus?: boolean; wide?: boolean }) {
+export function Search({ scope = "client", autoFocus = false, wide = false, inline = false, onChoose }: { scope?: "client" | "operator"; autoFocus?: boolean; wide?: boolean; inline?: boolean; onChoose?: () => void }) {
+  const progress = useProgress();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -17,6 +21,8 @@ export function Search({ scope = "client", autoFocus = false, wide = false }: { 
   const hits = useMemo(() => (q.trim().length >= 2 ? searchFlows(q, scope, 8) : []), [q, scope]);
 
   useEffect(() => {
+    // In the sheet, the header's own box already answers "/".
+    if (inline) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
@@ -28,12 +34,13 @@ export function Search({ scope = "client", autoFocus = false, wide = false }: { 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [inline]);
 
   const choose = (i: number) => {
     const h = hits[i];
     setOpen(false);
     input.current?.blur();
+    onChoose?.();
     if (h) {
       setQ("");
       go(`/flow/${h.flow.id}`);
@@ -49,6 +56,7 @@ export function Search({ scope = "client", autoFocus = false, wide = false }: { 
           id={`${listId}-input`}
           ref={input}
           autoFocus={autoFocus}
+          data-autofocus={autoFocus || undefined}
           type="search"
           role="combobox"
           aria-expanded={open && hits.length > 0}
@@ -63,7 +71,9 @@ export function Search({ scope = "client", autoFocus = false, wide = false }: { 
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          onBlur={() => {
+            if (!inline) window.setTimeout(() => setOpen(false), 150);
+          }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();
@@ -83,8 +93,8 @@ export function Search({ scope = "client", autoFocus = false, wide = false }: { 
         />
         <kbd className="hidden rounded-xxs border px-1.5 font-mono text-xs text-ink-muted sm:block" aria-hidden="true">/</kbd>
       </div>
-      {open && q.trim().length >= 2 && (
-        <div className="absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-md border bg-surface shadow-raised">
+      {(open || inline) && q.trim().length >= 2 && (
+        <div className={inline ? "mt-3 overflow-hidden rounded-md border bg-surface" : "absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-md border bg-surface shadow-raised"}>
           {hits.length ? (
             <ul id={listId} role="listbox" aria-label="Matching flows" className="max-h-96 overflow-y-auto py-1">
               {hits.map((h, i) => (
@@ -93,10 +103,14 @@ export function Search({ scope = "client", autoFocus = false, wide = false }: { 
                     href={href(`/flow/${h.flow.id}`)}
                     tabIndex={-1}
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setOpen(false)}
+                    onClick={() => {
+                      setOpen(false);
+                      onChoose?.();
+                    }}
                     onMouseEnter={() => setActive(i)}
-                    className={`flex items-start gap-3 px-4 py-2.5 ${i === active ? "bg-primary-tint" : ""}`}
+                    className={`flex min-h-touch items-start gap-3 px-4 py-2.5 ${i === active ? "bg-primary-tint" : ""}`}
                   >
+                    <ProgressDot state={stateOf(progress, h.flow.id)} size="sm" className="mt-0.5" />
                     <span className="mt-0.5 w-16 shrink-0 font-mono text-xs font-semibold text-primary-link">{h.flow.id}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-ink">{h.flow.title}</span>
@@ -107,7 +121,7 @@ export function Search({ scope = "client", autoFocus = false, wide = false }: { 
                 </li>
               ))}
               <li role="presentation" className="border-t px-4 py-2 text-xs">
-                <a href={href(`/search?q=${encodeURIComponent(q.trim())}${scope === "operator" ? "&scope=operator" : ""}`)} onMouseDown={(e) => e.preventDefault()} className="font-medium text-primary-link">
+                <a href={href(`/search?q=${encodeURIComponent(q.trim())}${scope === "operator" ? "&scope=operator" : ""}`)} onMouseDown={(e) => e.preventDefault()} onClick={() => onChoose?.()} className="inline-flex min-h-touch items-center font-medium text-primary-link">
                   See every result for “{q.trim()}”
                 </a>
               </li>

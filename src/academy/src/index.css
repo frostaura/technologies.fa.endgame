@@ -15,6 +15,11 @@
 
   body {
     @apply min-h-screen bg-surface font-sans text-sm text-ink;
+    /* The page draws under a notch held sideways (viewport-fit=cover); its content stays clear of it. */
+    padding-left: theme("padding.safe-l");
+    padding-right: theme("padding.safe-r");
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   h1,

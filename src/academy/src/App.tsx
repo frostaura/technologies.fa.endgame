@@ -11,6 +11,7 @@ import { FlowPage } from "./pages/FlowPage.tsx";
 import { DemoPage } from "./pages/DemoPage.tsx";
 import { OperatorHome } from "./pages/OperatorHome.tsx";
 import { About } from "./pages/About.tsx";
+import { ProgressPage } from "./pages/ProgressPage.tsx";
 import { Finish } from "./pages/Finish.tsx";
 import { PrintPage } from "./pages/PrintPage.tsx";
 import { NotFound } from "./pages/NotFound.tsx";
@@ -64,6 +65,10 @@ export function App() {
     else if (a === "reach") page = <ReachPage reach={b} operator />;
     else if (a === "browse") page = <Browse operator />;
   } else if (head === "about") page = <About />;
+  else if (head === "progress") {
+    page = <ProgressPage />;
+    title = `Your progress · ${TITLE}`;
+  }
   else if (head === "finish") page = <Finish />;
 
   return (

@@ -1,5 +1,4 @@
 import { content, site } from "../lib/data.ts";
-import { resetProgress } from "../lib/progress.ts";
 import { href } from "../lib/router.ts";
 import { Eyebrow, Page } from "../components/Shell.tsx";
 
@@ -43,8 +42,7 @@ export function About() {
       )}
 
       <h2 className="mt-12 font-display text-2xl font-semibold text-ink">Your progress</h2>
-      <p className="mt-2 text-sm text-ink-muted">Progress is kept in this browser only. Nothing leaves it.</p>
-      <button type="button" onClick={() => resetProgress()} className="mt-4 min-h-touch rounded-full border px-5 text-sm font-semibold text-ink hover:bg-ground">Forget my progress</button>
+      <p className="mt-2 text-sm text-ink-muted">Progress is kept on this device only; nothing leaves it. See it, move it to another device, or reset it on <a className="font-medium text-primary-link underline" href={href("/progress")}>your progress</a>.</p>
 
       <h2 className="mt-12 font-display text-2xl font-semibold text-ink">Sources</h2>
       <ul className="mt-3 space-y-1 font-mono text-xs text-ink-muted">{site.builtFrom.map((f) => <li key={f}>{f}</li>)}</ul>

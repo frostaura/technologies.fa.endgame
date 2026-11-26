@@ -82,11 +82,11 @@ export function DemoFrame({
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-lg border bg-ground shadow-raised">
-      <div className="flex items-center gap-2 border-b bg-surface px-3 py-2" aria-hidden="true">
-        <span className="h-2.5 w-2.5 rounded-full bg-attention-line" />
-        <span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
-        <span className="h-2.5 w-2.5 rounded-full bg-success/40" />
-        <span className="ml-2 min-w-0 flex-1 truncate rounded-full bg-ground px-3 py-1 font-mono text-xs text-ink-muted">endgame{route && !route.startsWith("/__app/") ? route : ""}</span>
+      <div className="flex items-center gap-2 border-b bg-surface px-2 py-1.5 sm:px-3 sm:py-2" aria-hidden="true">
+        <span className="hidden h-2.5 w-2.5 rounded-full bg-attention-line sm:block" />
+        <span className="hidden h-2.5 w-2.5 rounded-full bg-border-strong sm:block" />
+        <span className="hidden h-2.5 w-2.5 rounded-full bg-success/40 sm:block" />
+        <span className="min-w-0 sm:ml-2 flex-1 truncate rounded-full bg-ground px-3 py-1 font-mono text-xs text-ink-muted">endgame{route && !route.startsWith("/__app/") ? route : ""}</span>
         <span className={`h-2 w-2 rounded-full ${state === "ready" ? (busy ? "animate-pulse bg-success" : "bg-success") : "bg-border-strong"}`} />
       </div>
       <iframe
@@ -101,14 +101,14 @@ export function DemoFrame({
         <button
           type="button"
           onClick={onTry}
-          className="group absolute inset-x-0 bottom-0 top-10 flex cursor-pointer items-end justify-end bg-transparent p-4"
+          className="group absolute inset-x-0 bottom-0 top-9 flex cursor-pointer items-end justify-end bg-transparent p-4"
           aria-label="Try it yourself: hand the live console to me"
         >
-          <span className="rounded-full bg-ink/80 px-3 py-1.5 text-xs font-medium text-primary-ink opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Click to try it yourself</span>
+          <span className="rounded-full bg-ink/80 px-3 py-1.5 text-xs font-medium text-primary-ink opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Tap to try it yourself</span>
         </button>
       )}
       {state === "loading" && (
-        <div className="absolute inset-x-0 bottom-0 top-10 flex items-center justify-center bg-ground/90" role="status">
+        <div className="absolute inset-x-0 bottom-0 top-9 flex items-center justify-center bg-ground/90" role="status">
           <span className="h-24 w-64 animate-shimmer rounded-md bg-shimmer bg-shimmer" />
           <span className="sr-only">Opening the live console</span>
         </div>
