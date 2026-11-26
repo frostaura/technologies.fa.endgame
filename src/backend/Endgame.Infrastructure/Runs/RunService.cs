@@ -612,6 +612,7 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
 
                 await ledger.ReleaseOpenForRunAsync(org, run, $"run {outcome}", cancellationToken);
                 await CloseContractorsAsync(org, run, now, cancellationToken);
+                await ExpireOpenApprovalsAsync(org, run, now, cancellationToken);
                 if (outcome is RunStatuses.Failed or RunStatuses.Cancelled)
                 {
                     await WithdrawUnbuiltHiresAsync(org, run, outcome, now, cancellationToken);
@@ -642,6 +643,38 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
                 .SetProperty(x => x.LastRunId, run)
                 .SetProperty(x => x.CurrentRunId, (Guid?)null)
                 .SetProperty(x => x.LastActiveAt, now), cancellationToken);
+
+    /// <summary>
+    /// Every approval the run still waits on closes with it, whatever ended it (R3-2): expired, with no one as its answerer and
+    /// the plain note <see cref="ApprovalStatuses.ExpiredNote"/>. A question about work that no longer happens is not left on
+    /// anyone's "needs you" strip or in their notifications.
+    /// </summary>
+    private async Task ExpireOpenApprovalsAsync(Guid org, Guid run, DateTimeOffset now, CancellationToken cancellationToken) =>
+        await db.Approvals
+            .Where(a => a.OrganisationId == org && a.RunId == run && a.Status == ApprovalStatuses.Pending)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.Status, ApprovalStatuses.Expired)
+                .SetProperty(a => a.AnsweredAt, now)
+                .SetProperty(a => a.AnsweredBy, (Guid?)null)
+                .SetProperty(a => a.Comment, ApprovalStatuses.ExpiredNote), cancellationToken);
+
+    /// <summary>
+    /// Repairs approvals left waiting by a run that already ended (rows from before <see cref="ExpireOpenApprovalsAsync"/>):
+    /// the sweep expires them. Runs as the platform, across organisations. Returns how many.
+    /// </summary>
+    public async Task<int> ExpireStrandedApprovalsAsync(CancellationToken cancellationToken)
+    {
+        session.UseSystem();
+        await using var command = await db.CommandAsync("""
+            UPDATE approvals a SET status = 'expired', answered_at = @now, answered_by = NULL, comment = @note
+            FROM runs r
+            WHERE a.status = 'pending' AND r.organisation_id = a.organisation_id AND r.id = a.run_id
+              AND r.status IN ('succeeded', 'failed', 'cancelled')
+            """, cancellationToken, P("now", clock.GetUtcNow()), P("note", ApprovalStatuses.ExpiredNote));
+        var expired = await command.ExecuteNonQueryAsync(cancellationToken);
+        session.Clear();
+        return expired;
+    }
 
     /// <summary>
     /// Repairs contractors left open by a run that already ended (rows from before <see cref="CloseContractorsAsync"/>, or a

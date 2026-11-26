@@ -88,7 +88,9 @@ public sealed class ApprovalService(EndgameDbContext db, TenantSession session, 
             ?? throw EndgameProblem.NotFound("The approval");
         if (changed == 0)
         {
-            throw EndgameProblem.Conflict($"This approval was already {approval.Status}.");
+            throw EndgameProblem.Conflict(approval.Status == ApprovalStatuses.Expired
+                ? "The work ended before this was answered, so there is nothing left to approve."
+                : $"This approval was already {approval.Status}.");
         }
 
         await runs.AppendAsync(organisationId, runId, [new NewEvent(RunEventTypes.ApprovalAnswered, new JsonObject

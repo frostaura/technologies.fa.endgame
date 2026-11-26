@@ -26,7 +26,7 @@ public sealed class SweepOptions
 /// <param name="EmployeesReleased">Idle employees released where autonomy is auto (an idle workforce is never paid for).</param>
 /// <param name="ContractorsClosed">Contractors still open although the run that briefed them has ended (D73): closed.</param>
 /// <param name="HiresWithdrawn">Open hire proposals the live rules would have withdrawn (R2-3): covered up the chain, or raised by a build that ended unbuilt.</param>
-public sealed record SweepResult(int ReservationsReleased, int RunsRequeued, int TasksReleased, int TelemetryPruned, int EmployeesReleased = 0, int ContractorsClosed = 0, int HiresWithdrawn = 0);
+public sealed record SweepResult(int ReservationsReleased, int RunsRequeued, int TasksReleased, int TelemetryPruned, int EmployeesReleased = 0, int ContractorsClosed = 0, int HiresWithdrawn = 0, int ApprovalsExpired = 0);
 
 /// <summary>
 /// The platform's housekeeping, every <see cref="SweepOptions.IntervalSeconds"/> (ARCH-002: leaked
@@ -54,10 +54,10 @@ public sealed class LeaseSweep(IServiceScopeFactory scopes, IOptions<SweepOption
             try
             {
                 var result = await SweepOnceAsync(stoppingToken);
-                if (result.ReservationsReleased + result.RunsRequeued + result.TasksReleased + result.EmployeesReleased + result.ContractorsClosed + result.HiresWithdrawn > 0)
+                if (result.ReservationsReleased + result.RunsRequeued + result.TasksReleased + result.EmployeesReleased + result.ContractorsClosed + result.HiresWithdrawn + result.ApprovalsExpired > 0)
                 {
-                    logger.LogInformation("Sweep: released {Reservations} lapsed reservation(s), requeued {Runs} run(s), released {Tasks} task(s) whose lease lapsed and {Employees} idle employee(s), closed {Contractors} contractor(s) of ended runs, withdrew {Hires} hire proposal(s) no longer needed.",
-                        result.ReservationsReleased, result.RunsRequeued, result.TasksReleased, result.EmployeesReleased, result.ContractorsClosed, result.HiresWithdrawn);
+                    logger.LogInformation("Sweep: released {Reservations} lapsed reservation(s), requeued {Runs} run(s), released {Tasks} task(s) whose lease lapsed and {Employees} idle employee(s), closed {Contractors} contractor(s) of ended runs, withdrew {Hires} hire proposal(s) no longer needed, expired {Approvals} approval(s) of ended runs.",
+                        result.ReservationsReleased, result.RunsRequeued, result.TasksReleased, result.EmployeesReleased, result.ContractorsClosed, result.HiresWithdrawn, result.ApprovalsExpired);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -78,7 +78,8 @@ public sealed class LeaseSweep(IServiceScopeFactory scopes, IOptions<SweepOption
         var idle = await services.GetRequiredService<Work.EmployeeService>().ReleaseIdleAsync(cancellationToken);
         var contractors = await services.GetRequiredService<Runs.RunService>().CloseStrandedContractorsAsync(cancellationToken);
         var hires = await services.GetRequiredService<Work.HireService>().TidyOpenProposalsAsync(cancellationToken);
-        return new SweepResult(released, runs, tasks, pruned, idle, contractors, hires);
+        var approvals = await services.GetRequiredService<Runs.RunService>().ExpireStrandedApprovalsAsync(cancellationToken);
+        return new SweepResult(released, runs, tasks, pruned, idle, contractors, hires, approvals);
     }
 
     private async Task<(int Runs, int Tasks)> RequeueLapsedRunsAsync(IServiceProvider services, TimeSpan grace, CancellationToken cancellationToken)

@@ -314,7 +314,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
         {
             var limit = CascadeService.NumberOf(JsonNode.Parse(entry.ValueJson)) ?? 0m;
             var heldHere = held.Where(h => OnNode(entry.Level, scope, h.Division, h.Project, h.App)).Sum(h => h.Amount);
-            budgets.Add(new BudgetLine(entry.Path, entry.Level.ToWire(), limit, spend[(int)entry.Level], heldHere));
+            budgets.Add(new BudgetLine(entry.Path, entry.Level.ToWire(), limit, spend[(int)entry.Level], heldHere) { Name = scope.Nodes[(int)entry.Level].Name });
         }
 
         if (employeeId is { } employee
@@ -337,7 +337,8 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
             {
                 var team = await db.Employees.AsNoTracking().Where(e => e.OrganisationId == scope.OrganisationId && (e.Id == id || e.BriefedById == id)).Select(e => e.Id).ToListAsync(cancellationToken);
                 budgets.Add(new BudgetLine($"employee:{name}", "employee", limit, await EmployeeMonthSpendAsync(scope.OrganisationId, team, now, cancellationToken),
-                    held.Where(h => h.Employee is { } e && team.Contains(e)).Sum(h => h.Amount)));
+                    held.Where(h => h.Employee is { } e && team.Contains(e)).Sum(h => h.Amount))
+                { Name = name });
             }
         }
 
@@ -387,6 +388,14 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
     {
         public decimal Headroom => Limit - SpentThisMonth - Held;
 
+        /// <summary>The level's (or the employee's) name, for the sentence people read; <see cref="Scope"/> stays the path.</summary>
+        public string Name { get; init; } = "";
+
+        /// <summary>Whose cap this is, in a person's words: "the monthly budget for Dive Trip Ready", "Theo's monthly limit".</summary>
+        public string Said => Level == "employee"
+            ? $"{(Name.Length > 0 ? Name : "This employee")}'s monthly limit"
+            : $"The monthly budget for {(Name.Length > 0 ? Name : "this level")}";
+
     }
 
     public sealed record Position(decimal TopUps, decimal Balance, decimal HeldOrganisation, decimal OverdraftLimit, IReadOnlyList<BudgetLine> Budgets)
@@ -412,7 +421,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
                 if (budget.Headroom < needed)
                 {
                     return new Refused(
-                        $"The monthly budget at {budget.Scope} has {CreditText.Format(budget.Headroom)} credits left; this call needs up to {CreditText.Format(needed)}.",
+                        $"{budget.Said} has {CreditText.Format(budget.Headroom)} credits left; this call needs up to {CreditText.Format(needed)}.",
                         budget.Scope, budget.Headroom, needed);
                 }
             }

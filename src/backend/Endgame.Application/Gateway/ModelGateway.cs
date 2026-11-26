@@ -377,14 +377,19 @@ public sealed class ModelGateway(
         return new AdmittedCall(prepared.Body, attribution, admitted.ReservationId, admitted.Credits, billable, request.TaskType);
     }
 
+    /// <summary>What an agent or a client is told to do with a refused budget; never part of the sentence people read.</summary>
+    public const string ForAgent = "This is terminal for the run: do not retry it.";
+
     public static EndgameProblem BudgetExhausted(Refused refused)
     {
         ArgumentNullException.ThrowIfNull(refused);
+        // The detail is what people read, in normal mode too; what an agent is told to do with it is kept apart (forAgent).
         var problem = refused.Code == Refusals.OverdraftLimit
             ? new EndgameProblem(402, Refusals.OverdraftLimit, "The overdraft limit is reached",
-                $"{refused.Reason} Work stops until the organisation is topped up; do not retry it.")
+                $"{refused.Reason} Work stops until the organisation is topped up.")
             : new EndgameProblem(402, Refusals.BudgetExhausted, "The budget is exhausted",
-                $"{refused.Reason} This is terminal for the run: do not retry it.");
+                $"{refused.Reason} Work stops until the budget is raised or a new month begins.");
+        problem.Extensions["forAgent"] = ForAgent;
         problem.Extensions["terminal"] = true;
         problem.Extensions["bindingScope"] = refused.BindingScope;
         problem.Extensions["headroomCredits"] = refused.Headroom;

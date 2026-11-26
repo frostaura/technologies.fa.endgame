@@ -876,7 +876,7 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_approvals_answered", "(status = 'pending') = (answered_at IS NULL)");
 
-                            t.HasCheckConstraint("ck_approvals_status", "status IN ('pending', 'approved', 'rejected')");
+                            t.HasCheckConstraint("ck_approvals_status", "status IN ('pending', 'approved', 'rejected', 'expired')");
                         });
                 });
 

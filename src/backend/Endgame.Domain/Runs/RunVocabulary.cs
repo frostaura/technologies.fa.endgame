@@ -83,7 +83,13 @@ public static class ApprovalStatuses
     public const string Approved = "approved";
     public const string Rejected = "rejected";
 
-    public static readonly IReadOnlyList<string> All = [Pending, Approved, Rejected];
+    /// <summary>Closed by the platform because the work ended before anyone answered (R3-2): nobody approved or declined it.</summary>
+    public const string Expired = "expired";
+
+    /// <summary>The note an expired approval carries, in the words people read.</summary>
+    public const string ExpiredNote = "The work ended before this was answered.";
+
+    public static readonly IReadOnlyList<string> All = [Pending, Approved, Rejected, Expired];
 }
 
 public static class EmployeeStatuses

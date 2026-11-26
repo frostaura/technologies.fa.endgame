@@ -88,6 +88,24 @@ the spike found, each now a rule:
   names; cap each app's connections.
 - **The egress allow-list is per app**, keyed by the app's subnet.
 
+## Apps built before run branches
+
+Before R2-4 a run committed straight onto the app's line (`main`), so a change that failed left its commits there. Those
+commits are not versions — History, which lists only what was published (a commit with an `Endgame-Run` trailer, a
+restore, or one a run recorded publishing), hides them — but they are still `main`'s tip, and a new run's workspace
+starts from `main` (ARCH-004, *A run's work stays on its own branch*), so a new change builds on them.
+
+**This is a known limitation, deliberately not repaired in code (round three).** The repair would be to start such an
+app's next run from its newest *published* commit instead of `main`'s tip. But publishing (`…/runs/{runId}/publish`)
+refuses, with `409`, a run whose work does not build on `main` — the guard that stops a run overwriting a version
+published, or restored, while it worked — and it cannot tell "unpublished commits from before run branches" from "the line
+moved": Dock does not know which commits are versions; the control plane does. Making publish accept an older base would
+weaken that guard for every app to repair a state only apps built on this Mac before 2026-11-26 are in (nothing is
+deployed, and every app built since commits to its run's branch). The remedy for such an app is a restore of its live
+version (VER-02's `POST /api/apps/{id}/versions/{commit}/restore`, or MCP `app_restore` — the console offers "Bring back"
+only on a version that is not live): a new commit on top whose tree is the live version's, after which `main`'s tip is
+that version and the next change builds on it alone.
+
 ## Not verified
 
 Waking after the host or Docker restarts with a cold disk cache; a first build on a machine with

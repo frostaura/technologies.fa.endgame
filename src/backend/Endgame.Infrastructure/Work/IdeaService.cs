@@ -194,8 +194,11 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
 
         if (await cascade.AutonomyAsync(scope, cancellationToken) != Domain.Cascade.Autonomy.Auto)
         {
-            throw new EndgameProblem(409, "owner_decision_required", "Checkpoints are on here",
-                $"Autonomy at {scope.Path} is 'checkpoints', so the owner decides on the verdict.");
+            // People read this sentence: the level by its name; the scope's path is kept for technical mode.
+            var refusal = new EndgameProblem(409, "owner_decision_required", "Checkpoints are on here",
+                $"Checkpoints are on for {scope.Node.Name}, so the owner decides on the verdict.");
+            refusal.Extensions["scope"] = scope.Path.ToString();
+            throw refusal;
         }
 
         // On a "change" verdict auto-mode builds with research's change applied, and the build says so (VERD-11).
