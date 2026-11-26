@@ -164,9 +164,9 @@ function TalkHere({ label }: { label: string }) {
     anchor.querySelector<HTMLInputElement>("form input")?.focus({ preventScroll: true });
   };
   return (
-    <button type="button" onClick={go} aria-label={label} className="flex min-h-touch items-center gap-2 rounded-xs px-2 text-sm font-semibold text-primary-link hover:bg-ground">
+    // An icon, as the bell beside it is: the bar has no room for another word on a tablet.
+    <button type="button" onClick={go} aria-label={label} title={label} className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-primary-link hover:bg-ground">
       <MessageCircle aria-hidden className="size-5" />
-      Talk
     </button>
   );
 }
