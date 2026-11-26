@@ -14,7 +14,7 @@ import { ROLE_MAY, ROLE_NAME, highestIn, roleRank } from "@/lib/roles";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { useGetMeQuery, useGetTokensQuery, useRevokeTokenMutation } from "@/store/api";
+import { platformOrigin, useGetMeQuery, useGetTokensQuery, useRevokeTokenMutation } from "@/store/api";
 import { createToken } from "@/store/sensitive";
 import type { AccessToken, AccessTokenCreated, TokenRole, Tree } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
@@ -26,9 +26,7 @@ const EXPIRY: { days: number | null; label: string }[] = [
   { days: null, label: "Never" },
 ];
 
-function origin(): string {
-  return typeof window === "undefined" ? "" : window.location.origin;
-}
+const origin = platformOrigin;
 
 /**
  * AI assistant access (UC-116): let an assistant work with the organisation as a person does, held

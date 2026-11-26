@@ -204,3 +204,36 @@ test("managing the tree, your account, choosing where an idea goes, and switchin
   await expect(page.locator("main").getByRole("heading", { name: "Quayside Bakery" }).first()).toBeVisible();
   expect(problems).toEqual([]);
 });
+
+test("every address the console prints is the story world's host, never the page's own origin", async ({ page, baseURL }) => {
+  const problems = watch(page, baseURL ?? null);
+  const pageOrigin = new URL(baseURL ?? "http://127.0.0.1").host;
+  await page.goto(`${SUB}?persona=owner&scenario=established#/assistants`);
+  await expect(page.getByText("https://endgame.example/mcp", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/https:\/\/endgame\.example\/mcp\/apps\//).first()).toBeVisible();
+  await demo(page, "goto", { route: "/apps/{app}", scenario: "app-busy" });
+  await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" }).click();
+  await expect(page.getByText(/MCP: https:\/\/endgame\.example\/mcp\/apps\//).first()).toBeVisible();
+  await demo(page, "goto", { route: "/start", persona: "first-run", scenario: "fresh-install" });
+  await expect(page.getByText(/Its apps appear at endgame\.example\//).first()).toBeVisible();
+  expect(await page.locator("body").innerText()).not.toContain(pageOrigin);
+  expect(problems).toEqual([]);
+});
+
+test("a reset puts the console back as a first visit has it: Normal mode, nothing chosen or entered", async ({ page, baseURL }) => {
+  const problems = watch(page, baseURL ?? null);
+  await page.goto(`${SUB}?embed=1&persona=two-organisations&scenario=two-organisations`);
+  await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" }).click();
+  await page.locator("header select").selectOption({ label: "Quayside Bakery" });
+  await expect(page.locator("main").getByRole("heading", { name: "Quayside Bakery" }).first()).toBeVisible();
+  await demo(page, "reset");
+  await demo(page, "goto", { route: "/", persona: "two-organisations", scenario: "two-organisations" });
+  await expect(page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Normal" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("main").getByRole("heading", { name: "Northwind" }).first()).toBeVisible();
+  expect(await page.evaluate(() => [...Object.keys(localStorage), ...Object.keys(sessionStorage)].filter((k) => k.startsWith("endgame.")))).toEqual([]);
+  // A switch to another world is a first visit to it, too.
+  await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" }).click();
+  await demo(page, "goto", { route: "/", persona: "owner", scenario: "quiet" });
+  await expect(page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Normal" })).toHaveAttribute("aria-pressed", "true");
+  expect(problems).toEqual([]);
+});

@@ -26,7 +26,12 @@ describe("the step player", () => {
 
   it("moving on by one plays only that step, in the order goto, clock, act, highlight", () => {
     expect(ops(plan(script, 1, 2))).toEqual(["act", "highlight"]);
-    expect(ops(plan(script, 3, 4))).toEqual(["goto", "clock"]);
+    expect(ops(plan(script, 3, 4))).toEqual(["goto", "clock", "highlight"]);
+  });
+
+  it("a step with no spotlight of its own clears the one before, ring and note", () => {
+    const p = plan(script, 3, 4);
+    expect(p.at(-1)).toEqual({ op: "highlight", args: {}, catchUp: false });
   });
 
   it("a step with no demo media sends the console nothing when moving on by one", () => {
@@ -35,9 +40,9 @@ describe("the step player", () => {
 
   it("jumping resets and replays earlier steps instantly, without their spotlights", () => {
     const p = plan(script, 0, 4);
-    expect(ops(p)).toEqual(["reset", "goto", "act", "goto", "clock"]);
+    expect(ops(p)).toEqual(["reset", "goto", "act", "goto", "clock", "highlight"]);
     expect(p.find((o) => o.op === "act")?.args).toMatchObject({ instant: true });
-    expect(p.filter((o) => !o.catchUp).map((o) => o.op)).toEqual(["goto", "clock"]);
+    expect(p.filter((o) => !o.catchUp).map((o) => o.op)).toEqual(["goto", "clock", "highlight"]);
   });
 
   it("show me again replays even when moving on by one", () => {

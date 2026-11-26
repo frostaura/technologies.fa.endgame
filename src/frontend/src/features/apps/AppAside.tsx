@@ -9,7 +9,7 @@ import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { useGetOntologyQuery, useGetSecretsQuery } from "@/store/api";
+import { platformOrigin, useGetOntologyQuery, useGetSecretsQuery } from "@/store/api";
 import { downloadExport } from "@/store/sensitive";
 import type { AppDetail } from "@/store/types";
 
@@ -49,7 +49,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
     graphView.kind === "loaded"
       ? [...new Set(graphView.data.edges.filter((e) => e.type === "depends-on" && e.from === `app:${app.id}`).map((e) => graphView.data.nodes.find((n) => n.id === e.to)).filter((n) => n?.type === "service").map((n) => n?.name ?? ""))]
       : [];
-  const mcp = `${typeof window === "undefined" ? "" : window.location.origin}/mcp/apps/${app.id}`;
+  const mcp = `${platformOrigin()}/mcp/apps/${app.id}`;
   return (
     <section aria-labelledby="uses-title" className="flex flex-col gap-2.5">
       <h2 id="uses-title" className="text-lg font-semibold">

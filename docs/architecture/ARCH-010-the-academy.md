@@ -63,6 +63,17 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   classic deferred script (iife) so it runs from `file://`. Content, scripts and the prebuilt search
   index are bundled. Progress (not started / seen / done, and where the learner left off) lives in
   `localStorage`, every access guarded.
+- **The step is the address.** `#/flow/<ID>/step/<n>` is the one source of truth for the step being
+  read: the highlighted card, "Step n of m", the console and its caption all follow it. Choosing a
+  step and the arrow keys push an address (so Back and Forward walk the steps); scrolling replaces
+  it with the step crossing the reading line; an address changed by hand moves the step.
+- **Placeholders** in the flow text (`{Org}`, `{credits}`, `{reason}`) are set as a small variable
+  token of what they stand for ("your organisation's name", "number of credits"; otherwise the word
+  in the braces, de-camel-cased — `src/content/placeholders.ts`), on the site and in the PDFs. The
+  flow files keep their braces; code spans are left as written.
+- **Inline styles on a dark panel** (`Inline tone="dark"`, the "You know it worked when" panel) have
+  their own colours; `components/inlineStyle.test.ts` holds every inline style to WCAG AA on the
+  ground it is drawn on.
 - **The stage** beside a flow's steps shows, per step: the live console (`demo`), a terminal that
   types the command and prints its output (`terminal`), a request and its response (`request`), the
   e-mail as it arrives (`email`), code a hosted app runs, set like the terminal with what it returns
@@ -114,7 +125,15 @@ Moving on by one step plays only that step. Jumping, going back, or "Show me aga
 `goto` the script's start, replays every earlier step's `goto`/`clock`/`act` with `instant: true`
 and no spotlight, then plays the target step in full. Requests play strictly in order; one
 superseded by a newer step still plays, instantly and without its spotlight, so the console never
-skips a state.
+skips a state. A step with no spotlight of its own sends `highlight {}`, and the demo clears the
+ring and note as a step's actions start, so the step before's caption never stands over the new
+state.
+
+**One moment per step.** A step's live play, a link straight to it, and its captured picture show
+the same moment: the end of that step's actions and spotlight. Nothing in the demo moves on a timer
+of its own that a step relies on — the device sheet waits for a step to choose on it or to `wait`
+(ARCH-009) — and `make academy-shots` plays each step's actions as the learner's console does (not
+instantly), so a busy moment a step teaches ("Inviting…") is what its picture shows.
 
 ### Personas and scenarios
 
@@ -138,7 +157,7 @@ project **Court booking**, and the Admin **Ada Lovelace**.
 | `make academy-assemble` | runs `make demo-build` when that target exists, then assembles `site/` |
 | `make academy-pdf` | `site/academy.pdf` and `site/operator-handbook.pdf`, headless Chromium |
 | `make academy-e2e` | Playwright against `site/` served under `/technologies.fa.endgame/` |
-| `make academy-shots` | plays every step script against the built demo (fixed clock and viewport, reduced motion, each act awaited) and saves one WebP per demo step and per variation's last step under `public/shots/<FLOW-ID>/`, with `index.json`; a picture identical to the step before is named, not saved again, and unchanged files are not rewritten. `ACADEMY_FLOWS` limits it; `SHOTS_PORT` (default 5691) moves its server |
+| `make academy-shots` | plays every step script against the built demo (fixed clock and viewport, reduced motion, each act played as the academy plays the step and awaited) and saves one WebP per demo step and per variation's last step under `public/shots/<FLOW-ID>/`, with `index.json`; a picture identical to the step before is named, not saved again, and unchanged files are not rewritten. `ACADEMY_FLOWS` limits it; `SHOTS_PORT` (default 5691) moves its server |
 | `make site` | shots, build, assemble, PDFs — the print version sets each step's picture beside its text |
 | `npm run script:new -- <FLOW-ID>` | scaffolds `scripts/<FLOW-ID>.json` from the parsed flow |
 

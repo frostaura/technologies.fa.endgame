@@ -1,5 +1,7 @@
 import { clock } from "./server/engine";
-import { goto, reset, seekTo } from "./host";
+import { answering, getSession, getWorld, goto, reset, seekTo } from "./host";
+import { approveWhileWaiting, deviceAsking } from "./device";
+import { currentAddress } from "@/lib/router";
 import { clearSpotlight, moveCursor, pageRect, showSpotlight } from "./overlay";
 
 /**
@@ -321,6 +323,32 @@ export async function settled(ms = 4000, subject: () => Element | null = () => n
   }
 }
 
+/** Waits, up to `ms`, until no device sheet is open and the control plane has answered everything, for a moment. */
+async function quiet(ms = 6000) {
+  const until = performance.now() + ms;
+  let since = 0;
+  for (;;) {
+    const now = performance.now();
+    if (deviceAsking() || answering()) since = 0;
+    else if (!since) since = now;
+    else if (now - since >= 150) return;
+    if (now > until) return;
+    await sleep(25);
+  }
+}
+
+/**
+ * Where the demo is, in the terms a lesson teaches: the console's address, who is signed in, whether
+ * the device is asking, and the page's heading. The script check compares it between a step played
+ * after the one before it and the same step reached by catching up, as a link or a picture reaches it.
+ */
+export function state() {
+  const world = getWorld();
+  const sheet = document.querySelector("[data-demo-device] h2")?.textContent ?? null;
+  const heading = [...document.querySelectorAll<HTMLElement>("h1")].find((el) => visible(el))?.innerText?.trim() ?? null;
+  return { route: currentAddress(), persona: getSession().persona, signedIn: world.sessionUserId, device: sheet, heading, answering: answering() };
+}
+
 async function approach(el: HTMLElement) {
   reveal(el, !(instantNow || reduced()));
   if (instantNow) return;
@@ -416,8 +444,19 @@ async function perform(action: Action) {
     } else if (key === "Tab") tabFrom(el);
     el.dispatchEvent(new win.KeyboardEvent("keyup", { key, bubbles: true }));
   } else if ("wait" in action) {
-    if (typeof action.wait === "number") await sleep(instantNow ? Math.min(action.wait, 50) : action.wait);
-    else await waitFor(action.wait);
+    // A step that waits is the person approving on their device, if it asks. A wait for a time is
+    // also whatever the step started (a sign-in, a send) finishing, so played or caught up the step
+    // ends at the same moment; a wait for something on screen ends when it shows, even a passing
+    // state ("Working on it").
+    approveWhileWaiting(true, instantNow || reduced() ? 0 : 400);
+    try {
+      if (typeof action.wait === "number") {
+        await sleep(instantNow ? Math.min(action.wait, 50) : action.wait);
+        await quiet();
+      } else await waitFor(action.wait);
+    } finally {
+      approveWhileWaiting(false);
+    }
   } else if ("clock" in action) {
     runClock(action.clock);
   }
@@ -444,10 +483,9 @@ export const endgameDemo = {
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   },
   async highlight(args: Target & { note?: string }) {
-    if (!args.selector && !args.testId && !args.text && !args.label) {
-      clearSpotlight();
-      return;
-    }
+    // The ring and note of the step before name what that step showed; they go while this one is found.
+    clearSpotlight();
+    if (!args.selector && !args.testId && !args.text && !args.label) return;
     // A spotlight is guidance, not an action: when nothing matches, the step still goes on, unlit.
     await settled(4000, () => find(args, false, false, true));
     const el = await waitFor(args, false, 5000, false, true).catch(() => null);
@@ -460,6 +498,8 @@ export const endgameDemo = {
     return true;
   },
   async act(actions: Action[], instant = false) {
+    // A step's actions change the screen: the step before's ring and note never stand over the new state.
+    clearSpotlight();
     instantNow = instant;
     keepFocusOut(Infinity);
     try {
@@ -472,6 +512,7 @@ export const endgameDemo = {
   },
   clock: runClock,
   inspect,
+  state,
   /** Resolves once nothing on the screen is still loading (at most `ms`). */
   settled,
   reset() {

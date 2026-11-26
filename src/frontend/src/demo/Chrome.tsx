@@ -86,7 +86,8 @@ export function DeviceSheet() {
   if (!req) return null;
   const registering = req.action === "register";
   return (
-    <div data-demo-chrome="" className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center">
+    // Not demo chrome: "your device" is part of every passkey lesson, so a step can point at it and choose on it.
+    <div data-demo-device="" className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center">
       <div role="dialog" aria-modal="true" aria-labelledby="demo-device-title" className="flex w-full max-w-form flex-col gap-4 rounded-md bg-surface p-6 text-ink shadow-raised">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Your device</p>
         <h2 id="demo-device-title" className="text-xl font-semibold">

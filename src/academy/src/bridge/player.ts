@@ -38,7 +38,8 @@ function opsFor(script: StepScript, s: DemoStep, catchUp: boolean): PlannedOp[] 
   if (s.goto) ops.push({ op: "goto", args: { route: s.goto, ...who }, catchUp });
   if (s.clock) ops.push({ op: "clock", args: { ...s.clock }, catchUp });
   if (s.act) ops.push({ op: "act", args: { actions: s.act, ...(catchUp ? { instant: true } : {}) }, catchUp });
-  if (!catchUp && s.highlight) ops.push({ op: "highlight", args: { ...s.highlight }, catchUp });
+  // A step with no spotlight of its own clears the one before: its ring and note name another step.
+  if (!catchUp) ops.push({ op: "highlight", args: s.highlight ? { ...s.highlight } : {}, catchUp });
   return ops;
 }
 

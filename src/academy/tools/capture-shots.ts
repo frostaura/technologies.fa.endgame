@@ -13,8 +13,8 @@ import type { DemoStep, ScriptStep, StepScript } from "../src/content/scripts.ts
  * naming each. The print version (academy.pdf, operator-handbook.pdf) sets each image beside its
  * step, and the stage falls back to it when the live console cannot load.
  *
- * Deterministic: a fixed clock for dates, a fixed viewport, reduced motion, each act awaited to its
- * end, the page settled before the picture. A step whose picture is the same as the one before it
+ * Deterministic: a fixed clock for dates, a fixed viewport, reduced motion, each act played as the
+ * academy plays the step being shown and awaited to its end, the page settled before the picture. A step whose picture is the same as the one before it
  * names that image rather than saving another, and a file whose bytes have not changed is not
  * written again.
  *
@@ -119,7 +119,10 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
         // A step may hand the same world to someone else (the operator acts, the Owner reads), as the flow page plays it.
         if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}) });
         if (step.clock) await call("clock", step.clock);
-        if (step.act) await call("act", step.act, true);
+        // Played as the learner's console plays it, not caught up: the picture is the step's own
+        // moment ("Inviting…" while the server works, the device sheet waiting), the same moment
+        // a link straight to the step shows (ARCH-010).
+        if (step.act) await call("act", step.act, false);
         await settle(page);
         if (step.highlight) await call("highlight", step.highlight);
       } catch (e) {

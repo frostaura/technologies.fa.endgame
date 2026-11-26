@@ -37,6 +37,9 @@
           "click": {
             "text": "Sign in with a passkey"
           }
+        },
+        {
+          "wait": 1200
         }
       ],
       "highlight": {
