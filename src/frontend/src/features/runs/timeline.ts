@@ -1,4 +1,4 @@
-import { plural } from "@/lib/format";
+import { formatNumber, plural } from "@/lib/format";
 import { isPlain, plainOrNull } from "@/lib/plain";
 import type { RunEvent } from "@/store/types";
 import { describeEvent, formatCredits, num, str, type Mode, type StepTone, type TraceStep } from "./runModel";
@@ -59,6 +59,7 @@ const STRAND_TITLES: Record<string, string> = {
 
 const AGENT_TITLES: Record<string, string> = {
   judge: "Weighed the evidence and wrote the verdict",
+  "judge-corrected": "Wrote the verdict again, in full",
   reviewer: "Reviewed the work",
   "security-reviewer": "Checked the work for misuse",
   planner: "Drew up the plan",
@@ -152,6 +153,32 @@ export function factoryAgentTitle(agent: string, planItem: (id: string) => strin
     return named(part[3] === "0" ? "Built" : "Rebuilt after a check", label);
   }
   return null;
+}
+
+/** Past-tense openings and how the same work reads while it is still under way (D15). */
+const UNDER_WAY: [RegExp, string][] = [
+  [/^Looked for /, "Looking for "],
+  [/^Looked /, "Looking "],
+  [/^Rebuilt after a check/, "Rebuilding after a check"],
+  [/^Built:/, "Building:"],
+  [/^Built /, "Building "],
+  [/^Checked:/, "Checking:"],
+  [/^Checked /, "Checking "],
+  [/^Reviewed /, "Reviewing "],
+  [/^Weighed the evidence and wrote /, "Weighing the evidence and writing "],
+  [/^Wrote /, "Writing "],
+  [/^Drew up /, "Drawing up "],
+  [/^Fixed /, "Fixing "],
+  [/^Found /, "Finding "],
+  [/^Searched /, "Searching "],
+  [/^Read /, "Reading "],
+  [/^Estimated /, "Estimating "],
+];
+
+/** A title in the present tense, for work still under way: "Looking for existing products", "Building: …". */
+export function underWay(title: string): string {
+  for (const [past, present] of UNDER_WAY) if (past.test(title)) return title.replace(past, present);
+  return title;
 }
 
 const MILESTONES: Record<string, string> = {
@@ -398,9 +425,10 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
     return entry;
   }
 
-  const push = (owner: string, step: TraceStep, key = `e-${step.seq}`) => {
+  const push = (owner: string, step: TraceStep, key = `e-${step.seq}`, asWritten = false) => {
     // Normal mode never prints a raw key, an id, a model or a file: a line that would is left to technical mode.
-    if (!technical) {
+    // The owner's own words are theirs and are printed as they wrote them.
+    if (!technical && !asWritten) {
       if (!isPlain(step.title)) return;
       if (!isPlain(step.detail)) step = { ...step, detail: null };
     }
@@ -535,6 +563,14 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
           continue;
         }
         if (kind) continue; // agent.start, nudges, notes, compaction: bookkeeping, not news.
+        if (str(p, "from") === "owner") {
+          // What the person asked: on a re-run, the change they asked for (D15). An owner row with nothing to say is left out.
+          const asked = str(p, "change") ?? str(p, "text");
+          if (!asked || said.has(asked)) continue;
+          said.add(asked);
+          push(owner, { seq: e.seq, at: e.at, tone: "structure", icon: "employee", title: str(p, "change") ? "You · asked for a change" : "You", detail: asked, credits: null, raw: null }, `e-${e.seq}`, true);
+          continue;
+        }
         const text = str(p, "text");
         if (!text || said.has(text)) continue;
         // A milestone (verdict, placed, published) is said once per run.
@@ -560,10 +596,18 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
 
   // Activities are summarised once the whole log is read, so a line reads "Read 4 files", not "Read 1 file" four times.
   for (const a of opened) a.step.title = activitySummary(a);
+  // Once the run has ended nothing in it is still working: a piece that never reported back stopped with it (D59).
+  const finished = [...events].reverse().find((e) => e.type === "run.finished");
+  if (finished) {
+    const outcome = str(finished.payload ?? {}, "outcome");
+    const ok = outcome !== "failed" && outcome !== "cancelled";
+    for (const { group } of groups.values()) if (group.status === "working") group.status = ok ? "done" : "stopped";
+  }
   if (!technical) {
     for (const { group } of groups.values()) {
       group.title = factoryAgentTitle(group.agent, planItem) ?? group.title;
       if (!isPlain(group.title)) group.title = "A contractor's piece of the work";
+      if (group.status === "working") group.title = underWay(group.title);
       group.outcome = plainOrNull(group.outcome);
     }
   }
@@ -571,6 +615,12 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
   // Older research runs wrote their strands as workflow agents, never as `subagent.started`: each counts as one.
   const briefed = subagents > 0 ? subagents : [...groups.values()].length;
   return { items: top.items, actions: toolCalls + briefed, modelCalls: modelCalls > 0 ? modelCalls : replies, toolCalls, denials };
+}
+
+/** The actions a run took, when it took any: a conversation that only talked has steps but no actions (D15). */
+export function actionCount(actions: number, denials: number): string {
+  if (actions === 0 && denials === 0) return "";
+  return `${plural(actions, "action")} taken${denials > 0 ? `, ${formatNumber(denials)} refused by your rules` : ""}`;
 }
 
 /** Credits spent by a group, as a label. */

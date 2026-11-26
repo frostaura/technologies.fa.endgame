@@ -13,8 +13,8 @@ const COLON_KEY = /(?<![\w/])(?!https?:)[a-z][\w.-]*:[a-z0-9][\w./-]*/i;
 const MODEL_ID = /\b[a-z0-9][\w-]*\/[\w.-]*(claude|gpt|gemini|llama|mistral|qwen|deepseek|grok|sonnet|haiku|opus|o\d)[\w.-]*/i;
 /** A file: `api/Books/Book.cs`, `BooksEndpoints.cs`, `web/src/notes/`. An app's address is not one. */
 const FILE = /(\b[\w-]+\.(cs|csproj|slnx?|tsx?|jsx?|mjs|json|md|sql|ya?ml|py|toml|lock|css|html|sh|env)\b)|((?<![\w/])(src|web|api|lib|tests?|docs|scripts|migrations)\/[\w./-]+)/i;
-/** Commands and infrastructure words normal mode never uses. */
-const MACHINERY = /(`[^`]+`)|\b(make (test|lint|build|up)|npm |dotnet|docker|git |pg_dump|container|repository|repo\b|commit\b|migration|endpoint|frontend|backend|openapi|mcp\b|http (get|post|put|patch|delete))/i;
+/** Commands and infrastructure words normal mode never uses; "JSON" is a prompt's word, never the owner's (D64). */
+const MACHINERY = /(`[^`]+`)|\b(make (test|lint|build|up)|npm |dotnet|docker|git |pg_dump|container|repository|repo\b|commit\b|migration|endpoint|frontend|backend|openapi|mcp\b|json\b|http (get|post|put|patch|delete))/i;
 
 export type TechnicalMark = "key" | "id" | "model" | "file" | "machinery";
 

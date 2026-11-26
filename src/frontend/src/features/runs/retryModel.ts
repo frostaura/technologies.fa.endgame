@@ -8,6 +8,7 @@ export const STOPPED: Record<StopReason, string> = {
   budget: "The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged.",
   cancelled: "This work was cancelled. What was finished is kept.",
   "plan-declined": "The plan was declined, so nothing was built.",
+  "start-declined": "You declined to start this at its estimate, so nothing was done and nothing was charged.",
   failed: "This work stopped before it finished. What was finished is kept.",
 };
 

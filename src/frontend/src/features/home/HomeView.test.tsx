@@ -215,7 +215,8 @@ describe("HomeView", () => {
     const log = await screen.findByRole("log", { name: "Conversation with Acme" });
     expect(await within(log).findByText("Is anything over budget?")).toBeTruthy();
     // One run's consecutive replies read as one bubble.
-    expect(within(log).getByText("Nothing is.").parentElement).toBe(within(log).getByText("Ledger web is at 70 credits.").parentElement);
+    const bubble = (text: string) => within(log).getByText(text).closest("[data-markdown]")?.parentElement;
+    expect(bubble("Nothing is.")).toBe(bubble("Ledger web is at 70 credits."));
     expect(within(log).queryByText(/Ask what needs you/)).toBeNull();
     expect(api.calls.find((c) => c.path.startsWith("/api/conversations"))?.path).toBe("/api/conversations?scope=acme");
   });

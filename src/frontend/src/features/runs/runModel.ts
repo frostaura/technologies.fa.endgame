@@ -150,7 +150,7 @@ export interface DerivedRun {
   plan: DerivedPlan | null;
   tasks: DerivedTask[];
   approvals: DerivedApproval[];
-  messages: { seq: number; text: string; from: string | null; at: string }[];
+  messages: { seq: number; text: string; from: string | null; at: string; code: string | null; title: string | null }[];
   estimateCredits: number | null;
   scored: { estimated: number; actual: number } | null;
   /** Credits the work used that were not charged: an agent repairing its own failed work. */
@@ -319,7 +319,7 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         }
         // A message as written, for a person: harness bookkeeping (`kind`: agent.start, nudge…) is not one.
         const text = str(p, "text");
-        if (text && !str(p, "kind")) run.messages.push({ seq: e.seq, text, from: str(p, "from"), at: e.at });
+        if (text && !str(p, "kind")) run.messages.push({ seq: e.seq, text, from: str(p, "from"), at: e.at, code: str(p, "code"), title: str(p, "title") });
         break;
       }
       default:
@@ -381,14 +381,15 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     case "run.started":
       return { ...base, tone: "structure", icon: "plan", title: "Work started", detail: str(p, "reason") };
     case "run.paused":
-      return { ...base, tone: "quiet", icon: "plan", title: "Paused", detail: str(p, "reason") };
+      return { ...base, tone: "quiet", icon: "plan", title: "Paused", detail: technical ? str(p, "reason") : pauseReason(p) };
     case "run.resumed":
       return { ...base, tone: "structure", icon: "plan", title: "Resumed" };
     case "run.finished": {
       const outcome = str(p, "outcome");
       const totals = obj(p, "totals");
-      const title = outcome === "failed" ? "Stopped: it did not succeed" : outcome === "cancelled" ? "Cancelled" : "Finished";
-      return { ...base, tone: outcome === "failed" ? "attention" : "money", icon: "health", title, detail: str(p, "summary"), credits: totals ? credits(num(totals, "credits")) : null };
+      const declined = outcome === "failed" && isStartDeclined(str(p, "summary"));
+      const title = declined ? "Not started: you declined it" : outcome === "failed" ? "Stopped: it did not succeed" : outcome === "cancelled" ? "Cancelled" : "Finished";
+      return { ...base, tone: declined ? "quiet" : outcome === "failed" ? "attention" : "money", icon: "health", title, detail: str(p, "summary"), credits: totals ? credits(num(totals, "credits")) : null };
     }
     case "plan.proposed":
       return { ...base, tone: "factory", icon: "plan", title: "Proposed the plan", detail: str(p, "summary") };
@@ -438,7 +439,7 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     case "approval.requested":
       return { ...base, tone: "attention", icon: "verdict", title: "Asked for your approval", detail: str(p, "title") ?? str(p, "question") };
     case "approval.answered":
-      return { ...base, tone: "attention", icon: "verdict", title: `You answered: ${str(p, "answer") ?? "answered"}` };
+      return { ...base, tone: "attention", icon: "verdict", title: `You answered: ${answerWord(str(p, "answer"))}`, detail: str(p, "comment") ?? str(p, "note") };
     case "evaluation.passed":
       return { ...base, tone: "money", icon: "evaluate", title: `Checked and passed: ${itemName(p, planItem, mode)}`, detail: technical ? str(p, "evidence") : plainOrNull(str(p, "summary")) };
     case "evaluation.failed":
@@ -461,6 +462,32 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
       if (!technical) return null;
       return { ...base, tone: "quiet", icon: "plan", title: e.type };
   }
+}
+
+/** The owner's answer as they would say it: a rejection is a decline (D19). */
+export function answerWord(answer: string | null): string {
+  if (answer === "rejected" || answer === "reject" || answer === "declined") return "declined";
+  if (answer === "approved" || answer === "approve") return "approved";
+  return answer ?? "answered";
+}
+
+/** Work the owner declined at its start checkpoint: it never began, so it neither failed nor has an estimate to score. */
+export function isStartDeclined(summary: string | null | undefined): boolean {
+  return !!summary && /^(The owner declined to start|You declined to start)/.test(summary);
+}
+
+/** Why a run paused, in plain words; a reason code the owner has no words for is left to technical mode. */
+const PAUSE_REASONS: Record<string, string> = {
+  estimate_over_budget: "Its estimate is more than the budget has left, so it waits for more credits.",
+  budget_exhausted: "The credit budget ran out, so it waits for more credits.",
+  owner: "You paused it.",
+};
+
+function pauseReason(p: Record<string, unknown>): string | null {
+  const reason = str(p, "reason");
+  if (reason && PAUSE_REASONS[reason]) return PAUSE_REASONS[reason];
+  if (str(p, "by") === "owner" || str(p, "by") === "person") return PAUSE_REASONS.owner ?? null;
+  return reason && !/^[a-z0-9]+(_[a-z0-9]+)+$/.test(reason) ? reason : null;
 }
 
 /** `estimate.scored` is `{ expectedCredits, actualCredits, nonBillableCredits, modelCalls }`; older runs wrote `{ estimated, actual }`. */

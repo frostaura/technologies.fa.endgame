@@ -41,6 +41,7 @@ export function canTryAgain(world: World, r: DemoRun): boolean {
 function why(r: DemoRun): TryAgainOffer["why"] {
   if (r.run.status === "cancelled") return "cancelled";
   if (r.run.budgetExhausted) return "budget";
+  if (r.run.summary?.startsWith("The owner declined to start")) return "start-declined";
   return r.run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
 }
 

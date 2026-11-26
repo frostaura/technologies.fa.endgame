@@ -26,6 +26,8 @@ describe("the plain-language detector", () => {
     ["api/Books/Book.cs gets a status", "file"],
     ["Changed BooksEndpoints.cs", "file"],
     ["make test passed", "machinery"],
+    // D64: a prompt's instruction to the model is not an outcome the owner reads.
+    ["The reply was not one JSON object. Reply with only the JSON object, every key present.", "machinery"],
   ])("finds the machinery in %s", (text, mark) => {
     expect(technicalMark(text)).toBe(mark);
   });

@@ -1,4 +1,4 @@
-import { cleanup, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Tree } from "@/store/types";
 import { FakeEventSource, ME, json, renderWithStore, stubApi } from "@/test/harness";
@@ -34,5 +34,80 @@ describe("ConversationDock", () => {
   it("takes only the height of what it holds when placed inline", async () => {
     renderWithStore(<ConversationDock tree={TREE} selection={{ scope: "acme", kind: "organisation", trail: ["Acme"] }} fill={false} />);
     expect((await screen.findByRole("region", { name: "Conversation" })).className).not.toContain("min-h-full");
+  });
+
+  async function sendAndStream(emit: (es: FakeEventSource) => void) {
+    stubApi({
+      "GET /api/me": json(ME),
+      "GET /api/tree": json(TREE),
+      "GET /api/conversations": json({ scope: "acme", conversationId: null, employeeId: null, messages: [] }),
+      "GET /api/conversations/estimate": json({ credits: 0.05, ceiling: 1, basis: "" }),
+      "POST /api/conversations": json({ id: "r1", kind: "conversation", title: "", scope: "acme", status: "running", startedAt: "", finishedAt: null, lastSeq: 0, ideaId: null, estimateCredits: null, spentCredits: 0 }, 201),
+    });
+    renderWithStore(<ConversationDock tree={TREE} selection={{ scope: "acme", kind: "organisation", trail: ["Acme"] }} />);
+    fireEvent.change(await screen.findByLabelText("Message Acme"), { target: { value: "What do I run?" } });
+    await waitFor(() => expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));
+    act(() => {
+      const es = FakeEventSource.latest();
+      es.open();
+      es.emit(1, "message", { from: "owner", text: "What do I run?" });
+      emit(es);
+    });
+  }
+
+  // D9 + D10: the reply's markdown is drawn, and the runner's closing word is not printed beside it as a failure.
+  it("draws a reply's markdown and leaves out the closing word once it has replied", async () => {
+    await sendAndStream((es) => {
+      es.emit(2, "message", { from: "assistant", text: "You run **1 app**: the **Club Reading List**." });
+      es.emit(3, "message", { from: "runner", title: "Finished", milestone: "finished", text: "The work is finished; technical mode has the details." });
+      es.emit(4, "run.finished", { outcome: "succeeded" });
+    });
+    expect(screen.getByText("1 app").tagName).toBe("STRONG");
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+    expect(screen.queryByText(/technical mode has the details/)).toBeNull();
+    expect(document.querySelector('[data-tone="attention"]')).toBeNull();
+  });
+
+  // D49 + D13 (failed answer): the same words are said once, not as a reply and again as a notice.
+  it("says a decline or a failed answer once", async () => {
+    await sendAndStream((es) => {
+      es.emit(2, "message", { from: "assistant", text: "I could not finish answering that. Please ask again." });
+      es.emit(3, "message", { from: "runner", title: "Stopped", milestone: "finished", text: "I could not finish answering that. Please ask again." });
+      es.emit(4, "run.finished", { outcome: "failed" });
+    });
+    expect(screen.getAllByText("I could not finish answering that. Please ask again.")).toHaveLength(1);
+  });
+
+  it("keeps a budget notice, styled as the stop it is", async () => {
+    await sendAndStream((es) => {
+      es.emit(2, "message", { from: "runner", code: "budget_exhausted", title: "No reply", text: "The credit budget ran out." });
+      es.emit(3, "run.finished", { outcome: "failed" });
+    });
+    const notice = screen.getByText(/The credit budget ran out\./).closest("[data-tone]");
+    expect(notice?.getAttribute("data-tone")).toBe("attention");
+    expect(screen.getByRole("link", { name: "See credits" })).toBeTruthy();
+  });
+
+  it("leaves the closing word out of what was said before when the run replied", async () => {
+    stubApi({
+      "GET /api/me": json(ME),
+      "GET /api/tree": json(TREE),
+      "GET /api/conversations/estimate": json({ credits: 0.05, ceiling: 1, basis: "" }),
+      "GET /api/conversations": json({
+        scope: "acme",
+        conversationId: "c1",
+        employeeId: null,
+        messages: [
+          { runId: "r0", seq: 1, at: "", from: "owner", text: "Hello", by: null, code: null },
+          { runId: "r0", seq: 2, at: "", from: "assistant", text: "Understood. It *was not* done.", by: null, code: null },
+          { runId: "r0", seq: 3, at: "", from: "runner", text: "Understood. It *was not* done.", by: null, code: null },
+        ],
+      }),
+    });
+    renderWithStore(<ConversationDock tree={TREE} selection={{ scope: "acme", kind: "organisation", trail: ["Acme"] }} />);
+    expect(await screen.findByText("was not")).toBeTruthy();
+    expect(screen.getAllByText(/Understood\./)).toHaveLength(1);
   });
 });
