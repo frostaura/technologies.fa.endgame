@@ -372,15 +372,13 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   for (const x of w.apps) w.runs.push(historicBuild(x, a(Number(new Date(T).getTime() - new Date(x.publishedAt ?? a(0)).getTime()) / 60000 + 25), x.publishedAt ?? a(0)));
 
   // Versions for Court booking and Shift Rota -----------------------------------------------
-  // As the control plane lists them (R2-4): each published version with its plain title; the factory's own saved steps
-  // (a null title) beside them, folded in normal mode. The newest titled version is the live one.
-  const versions = (appId: string, list: [string, number, "employee" | "person" | "factory", string, (string | null)?][]) => {
-    const live = list.findIndex((x) => x[4] !== null);
-    w.versions[appId] = list.map(([message, mins, kind, name, title], i) => ({ commit: uuidFor(`commit:${appId}:${i}`).replace(/-/g, "").slice(0, 40), message, at: a(mins), author: { kind, id: kind === "employee" ? kasper.id : kind === "person" ? PEOPLE.owner.id : null, name }, live: i === live, title: title === undefined ? message : title, published: title !== null }));
+  // As the control plane lists them (`AppVersionService.ListAsync`, R2-4): only versions that were live, each with its
+  // plain title (what was asked for) and the raw commit message beside it; the newest is live and current.
+  const versions = (appId: string, list: [string, number, "employee" | "person" | "factory", string, string?][]) => {
+    w.versions[appId] = list.map(([title, mins, kind, name, message], i) => ({ commit: uuidFor(`commit:${appId}:${i}`).replace(/-/g, "").slice(0, 40), message: message ?? title, at: a(mins), author: { kind, id: kind === "employee" ? kasper.id : kind === "person" ? PEOPLE.owner.id : null, name }, live: i === 0, current: i === 0, title, runId: null }));
   };
   versions(IDS.tableBookings, [
-    ["Record progress: league-blocks is built and checked", 2 * day - 5, "factory", "The factory", null],
-    ["League block bookings", 2 * day, "employee", "Kasper"],
+    ["League block bookings", 2 * day, "employee", "Kasper", "league-blocks: book a court for a league night every week"],
     ["Reminder texts in the club's local time", 9 * day, "employee", "Kasper"],
     ["Shorter booking confirmations", 19 * day, "employee", "Kasper"],
     ["Waiting list when every court is taken", 27 * day, "employee", "Kasper"],
@@ -388,7 +386,6 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     ["Court booking: first version", 41 * day, "factory", "The factory"],
   ]);
   versions(IDS.shiftRota, [
-    ["Record progress: swap-requests is built and checked", 12 * day - 5, "factory", "The factory", null],
     ["Swap requests between staff", 12 * day, "employee", "Sana"],
     ["Shift Rota: first version", 20 * day, "factory", "The factory"],
   ]);

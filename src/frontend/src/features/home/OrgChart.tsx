@@ -230,7 +230,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
                 : `${formatCredits(project.progress.spentCredits)} so far`}
             </span>
           </div>
-          {project.progress.of > 0 && <Bar live className="h-2.5" value={percent(project.progress.step, project.progress.of)} label={progressLine(project.progress)} />}
+          {project.progress.of > 0 && <Bar live className="h-2.5" value={percent(project.progress.done ?? project.progress.step, project.progress.of)} label={progressLine(project.progress)} />}
           <Link href={paths.run(project.progress.runId)} className="relative z-10 self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
             Watch the work
           </Link>

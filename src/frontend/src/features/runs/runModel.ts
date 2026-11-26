@@ -171,6 +171,11 @@ export interface DerivedRun {
   /** Parts an earlier attempt built and checked, kept by this one (a try again). */
   carried: string[];
   /**
+   * The plan's word that something is for people who do not sign in, so it works for them once the owner makes the app
+   * public (R2-11): the sentence from the builder's "The plan" message, or null.
+   */
+  publicOnlyNote: string | null;
+  /**
    * Credits charged for finished model calls: the billable settlements, counted as the ledger counts
    * them, so it is the same figure as the run's own cost (`spentCredits`). A repair of the work's own
    * mistake settles too, but is never billed, so it is not in it.
@@ -202,6 +207,7 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
     scored: null,
     notCharged: 0,
     carried: [],
+    publicOnlyNote: null,
     settledCredits: 0,
     reservedCredits: 0,
     modelCalls: 0,
@@ -363,6 +369,7 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         }
         // A message as written, for a person: harness bookkeeping (`kind`: agent.start, nudge…) is not one.
         const text = str(p, "text");
+        if (text && str(p, "milestone") === "planned") run.publicOnlyNote = PUBLIC_ONLY.exec(text)?.[0].trim() ?? run.publicOnlyNote;
         if (text && !str(p, "kind")) run.messages.push({ seq: e.seq, text, from: str(p, "from"), at: e.at, code: str(p, "code"), title: str(p, "title") });
         break;
       }
@@ -574,6 +581,9 @@ export function estimateName(figure: number, first: number | null, planned: numb
   if (near(first)) return planned !== null ? `the ${formatNumber(figure)} shown before the work began` : "the estimate shown before the work began";
   return `an estimate of ${formatNumber(figure)}`;
 }
+
+/** `PlanRequirement.PublicOnlyNote`'s sentence inside the plan message. */
+const PUBLIC_ONLY = /[^.!?]*\bonce you make the app public\b[^.!?]*[.!?]/i;
 
 export function accuracy(estimated: number, actual: number): string {
   if (estimated <= 0) return "no estimate";

@@ -479,8 +479,14 @@ function planAnnouncement(o: Pick<Pipeline, "summary" | "items" | "requirements"
   const count = o.items.length;
   const built = `${count} part${count === 1 ? "" : "s"}, each built, then checked in the running app against what you asked for.`;
   const left = o.leftOut.length === 0 ? `All ${o.requirements.length} things the idea asks for are covered.` : `Left out: ${o.leftOut.map((l) => `${l.text.replace(/\.$/, "")}, because ${l.reason.replace(/\.$/, "")}.`).join(" ")}`;
-  return `${o.summary.replace(/\.$/, "")}. ${built} ${left}`;
+  // `PlanRequirement.PublicOnlyNote` (R2-11): a part for people who do not sign in works once the owner makes the app public.
+  const publicOnly = o.requirements.some((r) => NO_SIGN_IN.test(r.text) && !o.leftOut.some((l) => l.requirement === r.id)) ? ` ${PUBLIC_ONLY_NOTE}` : "";
+  return `${o.summary.replace(/\.$/, "")}. ${built} ${left}${publicOnly}`;
 }
+
+const PUBLIC_ONLY_NOTE = "People can use it without signing in only once you make the app public, which only you can do on its page.";
+/** `PlanRequirement.NeedsNoSignIn`, the same words. */
+const NO_SIGN_IN = /\b(without (signing|logging) (in|on|up)|without (an? |any )?(account|login|sign[- ]?in|registering|registration)|with no (account|login|sign[- ]?in)|no (account|login|sign[- ]?in) (needed|required)|(don't|do not|doesn't|does not|never) (need to |have to )?(sign|log) in|not signed in|signed[- ]out|anonymous(ly)?)\b/i;
 
 function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
   const { prefix, projectPath, appPath, eng, qa } = o;
@@ -722,17 +728,14 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
     const a = appAt(w, appPath);
     if (a) Object.assign(a, { status: "running", running: a.runningSetting === "always-on" ? "always-on" : "awake", health: "healthy", healthSummary: prefix === "change" ? a.healthSummary : "Running; nothing measured yet.", version: commit, publishedAt: new Date().toISOString() });
     const versions = (w.versions[a?.id ?? appId] ??= []);
-    for (const v of versions) v.live = false;
+    for (const v of versions) Object.assign(v, { live: false, current: false });
     const at = new Date().toISOString();
     const author = { kind: "employee" as const, id: eng.id, name: eng.name };
     if (prefix === "change") {
-      const repaired = o.sentBack ? o.items.find((i) => i.id === o.sentBack?.item) : undefined;
-      // The control plane's versions (R2-4): a plain title on each published version, none on a saved step of the work.
-      if (repaired) versions.unshift({ commit: uuidFor(`commit:${run.run.id}:repair`).replace(/-/g, "").slice(0, 40), message: `Repair [${repaired.id}] evidence: ${repaired.text.replace(/\.$/, "")} (r2)`, at, author, live: false, title: null, published: false });
-      versions.unshift({ commit, message: o.versionMessage ?? o.summary, at, author, live: true, title: o.versionMessage ?? o.summary, published: true });
+      // The control plane lists only what was live (R2-4): the change's own steps and repairs stay on its run's branch.
+      versions.unshift({ commit, message: o.versionMessage ?? o.summary, at, author, live: true, current: true, title: o.versionMessage ?? o.summary, runId: run.run.id });
     } else {
-      versions.unshift({ commit, message: "Security fix: a member changes only their own books", at, author, live: true, title: "Security fix: a member changes only their own books", published: true });
-      for (const i of o.items.slice().reverse()) versions.push({ commit: uuidFor(`commit:${i.id}`).replace(/-/g, "").slice(0, 40), message: i.text, at, author, live: false, title: null, published: false });
+      versions.unshift({ commit, message: "Security fix: a member changes only their own books", at, author, live: true, current: true, title: run.run.title.replace(/^Build:\s*/, ""), runId: run.run.id });
     }
     return ["App", "Versions", "Tree"];
   });

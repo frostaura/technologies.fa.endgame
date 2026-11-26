@@ -102,6 +102,14 @@ describe("changing a built app", () => {
     );
     const list = ((await call(w, "GET", `apps/${IDS.tableBookings}/versions`)).body as { versions: { message: string; live: boolean; author: { name: string } }[] }).versions;
     expect(list[0]).toMatchObject({ message: "Let members cancel a booking up to an hour before it starts", live: true, author: { name: "Kasper" } });
+    // R2-4: only what was live, each with its plain title and the run that published it; no repair step of the change.
+    expect(list[0]).toMatchObject({ title: "Let members cancel a booking up to an hour before it starts", current: true, runId: run.id });
+    expect(list.filter((v) => v.live)).toHaveLength(1);
+    expect(list.every((v) => typeof (v as { title?: unknown }).title === "string" && !/^Repair/.test(v.message))).toBe(true);
+    // R2-8: the run reads its first estimate and the plan's apart.
+    const read = (await call(w, "GET", `runs/${run.id}`)).body as { firstEstimateCredits: number | null; planEstimateCredits: number | null; estimateCredits: number | null };
+    expect(read.firstEstimateCredits).not.toBeNull();
+    expect(read.planEstimateCredits).toBe(read.estimateCredits);
   });
 
   it("refuses a change over a red line, an app never built, and an empty request", async () => {

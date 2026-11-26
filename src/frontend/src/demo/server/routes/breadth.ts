@@ -38,7 +38,7 @@ function declined(reason: string): Refusal {
  * The model's work is played by keywords, so every outcome the console can show has a question that
  * brings it: a single number, bars, a line, a table (with rows cut short, or none), a question the
  * app does not record (declined, in the model's own words), one that still fails after the free
- * repair, and one that takes too long.
+ * repair, one that takes too long, and one whose answer is too long to finish.
  */
 function answerFor(a: DemoApp, q: string): Omit<AskAnswer, "credits"> {
   const t = a.telemetry;
@@ -51,6 +51,10 @@ function answerFor(a: DemoApp, q: string): Omit<AskAnswer, "credits"> {
   if (/cancel|why/.test(lower)) {
     const sql = "select reason, count(*) as cancellations from events where name = 'booking.cancelled' group by reason";
     throw new Refusal(problem(422, "ask_unanswerable", "That question could not be answered", "It could not be worked out from what this app records. Try asking it another way, or about its visits, requests, errors, events or measurements.", { technical: { sql, error: 'column "reason" does not exist' } }));
+  }
+  // `AskService`: an answer cut off at its limit twice, asked again with twice the room (R2-6).
+  if (/\beverything (it|the app|this app) (records|has recorded|recorded)\b/.test(lower)) {
+    throw new Refusal(problem(422, "ask_too_long", "The answer was too long to finish", "Working out the answer took more room than one answer has, even when asked again with twice as much. Ask a narrower question, such as one thing or a shorter period.", { credits: 0.04 }));
   }
   if (/\bever\b|all time|since (it|the) (started|start|began)/.test(lower)) {
     throw new Refusal(problem(422, "query_timeout", "That question took too long to answer", "Try a narrower one, such as a shorter period or one thing at a time.", { technical: { sql: "select visitor, count(*) as visits from visits group by visitor order by 2 desc", error: "canceling statement due to statement timeout" } }));
@@ -296,9 +300,9 @@ area("BreadthEndpoints", {
     const list = (world.versions[a.id] ??= []);
     const from = list.find((v) => v.commit === commit);
     if (!from) throw notFound("The version");
-    for (const v of list) v.live = false;
+    for (const v of list) Object.assign(v, { live: false, current: false });
     const u = me(world);
-    const version = { commit: uuidFor(`restore:${commit}:${world.counter++}`).replace(/-/g, "").slice(0, 40), message: `Restore the version ${commit.slice(0, 12)}`, at: new Date().toISOString(), author: { kind: "person" as const, id: u.id, name: u.displayName }, live: true, title: "An earlier version, brought back", published: true };
+    const version = { commit: uuidFor(`restore:${commit}:${world.counter++}`).replace(/-/g, "").slice(0, 40), message: `Restore the version ${commit.slice(0, 12)}`, at: new Date().toISOString(), author: { kind: "person" as const, id: u.id, name: u.displayName }, live: true, current: true, title: "Brought back an earlier version", runId: null };
     list.unshift(version);
     const madePrivate = a.access === "public";
     if (madePrivate) a.access = "private";

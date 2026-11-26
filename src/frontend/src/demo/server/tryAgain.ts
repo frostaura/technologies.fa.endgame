@@ -51,7 +51,18 @@ export function runView(world: World, r: DemoRun): Run {
   // `PublicRun`: `reason` and `detail` come from its `run.finished`.
   const finished = [...r.events].reverse().find((e) => e.type === "run.finished")?.payload ?? {};
   const text = (v: unknown) => (typeof v === "string" ? v : null);
-  return { ...r.run, canTryAgain: canTryAgain(world, r), reason: text(finished.reason), detail: text(finished.detail) };
+  // `ReadModels`: the first estimate.made, and the plan's re-estimate (stage "plan") apart (R2-8).
+  const made = r.events.filter((e) => e.type === "estimate.made" && typeof e.payload.credits === "number");
+  const first = made[0];
+  const plan = made.slice(1).filter((e) => e.payload.stage === "plan").at(-1);
+  return {
+    ...r.run,
+    canTryAgain: canTryAgain(world, r),
+    reason: text(finished.reason),
+    detail: text(finished.detail),
+    firstEstimateCredits: first ? (first.payload.credits as number) : null,
+    planEstimateCredits: plan ? (plan.payload.credits as number) : null,
+  };
 }
 
 /** The idea as `ReadModels.IdeaAsync` reads it: research that stopped reads "failed", with the offer to try again. */
@@ -98,7 +109,7 @@ export function learned(world: World, org: string, kind: "build" | "change", rem
   const whole = expected(world, org, kind, kind);
   if (items <= 0 || remaining >= items) return whole;
   const left = Math.ceil(whole.credits * (Math.max(1, remaining) / items) * 100) / 100;
-  return { credits: left, basis: `${whole.basis} Only ${remaining} of its ${items} parts ${remaining === 1 ? "is" : "are"} left to build, so it is priced for ${remaining === 1 ? "that one" : "those"}; the parts already built and checked are not built or charged again.` };
+  return { credits: left, basis: `${whole.basis} Only ${remaining} of its ${items} parts ${remaining === 1 ? "is" : "are"} left to build, so it is priced for those; the parts already built and checked are not built or charged again.` };
 }
 
 /** `FactoryEstimates.ConversationAsync`: what one message costs at most, priced on the thinking power that answers it. */

@@ -91,6 +91,16 @@ describe("a project card's work under way (R2-9)", () => {
     expect(container.textContent).toContain("0 credits this month");
     expect(screen.getByText("credits this month").previousSibling?.textContent).toBe("0");
   });
+
+  it("fills the bar with the finished steps and names the one under way", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const tools = TREE.divisions[0] as Tree["divisions"][number];
+    const project = { ...tools.projects[0], stage: "building", progress: { runId: "r1", label: "Build: Ledger", step: 2, of: 4, done: 1, spentCredits: 3, estimatedCredits: 12 }, workers: [] };
+    const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
+    const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    expect(container.textContent).toContain("Build: Ledger, step 2 of 4");
+    expect((screen.getByRole("img", { name: "Build: Ledger, step 2 of 4" }).firstChild as HTMLElement).style.width).toBe("25%");
+  });
 });
 
 describe("the chart after the real-stack walk", () => {

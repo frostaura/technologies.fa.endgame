@@ -770,7 +770,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Variations and refusals:**
   - A plan that never validates fails the run (RUN-11).
   - **The plan cannot be edited by a person.** There is only approve or reject, and only with the checkpoint on (BLD-04).
-  - Something people do without signing in ("open a trip link with no account") is planned and built, and the plan message ends: "People can use it without signing in only once you make the app public, which only you can do on its page." A private app admits only signed-in members until then (ARCH-005).
+  - Something people do without signing in ("open a trip link with no account") is planned and built, and the plan message ends: "People can use it without signing in only once you make the app public, which only you can do on its page." The plan panel repeats that sentence beneath the plan's summary. A private app admits only signed-in members until then (ARCH-005).
 - **Where:** `RunView.tsx` `PlanPanel`; `BuildWorkflow` (planner, `plan.accepted`).
 - **Reachable from:** UI.
 - **Covered by tests:** `RunView.test.tsx` ("shows each plan item in plain words…"); `WorkflowTests.Build_places_plans_builds…`.
@@ -1086,7 +1086,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Level:** Core. **Learn first:** RUN-11.
 - **What you learn:** trying again carries on from where the work stopped: what was placed, agreed and finished is kept, not rebuilt or charged again.
 - **Steps:**
-  1. The panel says why it stopped: "This work stopped before it finished. What was finished is kept.", "This work was cancelled. What was finished is kept.", "The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged." (with **"See credits"**) or "The plan was declined, so nothing was built."
+  1. The panel says why it stopped: "This work stopped before it finished. What was finished is kept.", "This work was cancelled. What was finished is kept.", "The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged." (with **"See credits"**) or "The plan was declined, so nothing was built." or, for a run that stopped with `answer_cut_off`, "An answer the work needed was too long to finish, even when asked again with twice the room, so the work stopped. What was finished is kept."
   2. Press **"Try again"** ("Working it out…"). It reads, for example, "1 of its 2 parts is already built and checked; it is kept, not built or charged again." (with "are … they are" for more than one part; or "The plan agreed before is kept, and all {n} of its parts are built." / "It is planned afresh, then built part by part."), **"Estimated {credits}"** — priced for what is left — and the basis.
   3. Press **"Start it again"** ("Starting…") or **"Not now"**. You are taken to the new run.
   4. The new run says "Endgame · Carrying on": "This picks up where the earlier attempt stopped: {n} of {m} parts were already built and checked, so they are kept, not rebuilt or charged again." (with one part: "1 of {m} parts was already built and checked, so it is kept, …") The plan shows those parts as "Built and checked in the earlier attempt; kept, not built or charged again."

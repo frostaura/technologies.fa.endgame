@@ -103,6 +103,13 @@ describe("asking about an app", () => {
     return { ...rendered, alert: await within(askPanel()).findByRole("alert") };
   }
 
+  it("says an answer too long to finish plainly, with what to ask instead (R2-6)", async () => {
+    const { alert } = await askAndFail({ title: "The answer was too long to finish", detail: "Working out the answer took more room than one answer has, even when asked again with twice as much.", status: 422, code: "ask_too_long", credits: 0.04 });
+    expect(alert.textContent).toContain("The answer was too long to finish.");
+    expect(alert.textContent).toContain("Ask something shorter or narrower");
+    expect(alert.textContent).not.toMatch(/ask_too_long|422/);
+  });
+
   it("says a query that could not run in plain words in normal mode, never the database's message", async () => {
     const { alert } = await askAndFail({ title: "The query could not run", detail: 'column "id" does not exist', status: 422, code: "query_failed" });
     expect(alert.textContent).toContain("could not be answered from what the app records");
@@ -279,7 +286,7 @@ describe("history", () => {
 
   it("names a restore for what it is, not by its commit id", () => {
     const restore = { commit: "c".repeat(40), message: "Restore the version 8433c60166e2", at: "t", author: { kind: "person", id: "u1", name: "Ada Lovelace" }, live: true };
-    expect(versionTitle(restore as never, false)).toBe("An earlier version, brought back");
+    expect(versionTitle(restore as never, false)).toBe("Brought back an earlier version");
     expect(versionTitle(restore as never, true)).toBe("Restore the version 8433c60166e2");
   });
 });

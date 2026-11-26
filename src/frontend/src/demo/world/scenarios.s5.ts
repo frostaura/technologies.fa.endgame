@@ -124,7 +124,7 @@ defineScenario({
     const list = (w.versions[IDS.tableBookings] ??= []);
     const oldest = list[list.length - 1];
     const older = ["Court colours on the booking grid", "Members choose a favourite court", "Booking reminders the evening before", "Cancel a booking up to two hours before", "A month view for the league", "Guests booked by a member", "Club closing days block bookings", "Weekly summary for the committee", "Coaching sessions bookable by coaches", "Booking confirmations by e-mail"];
-    older.forEach((message, i) => list.push({ commit: uuidFor(`commit:long-history:${i}`).replace(/-/g, "").slice(0, 40), message, at: ago((45 + i * 6) * 24 * 60), author: { kind: "employee", id: oldest?.author.id ?? null, name: "Kasper" }, live: false, title: message, published: true }));
+    older.forEach((message, i) => list.push({ commit: uuidFor(`commit:long-history:${i}`).replace(/-/g, "").slice(0, 40), message, at: ago((45 + i * 6) * 24 * 60), author: { kind: "employee", id: oldest?.author.id ?? null, name: "Kasper" }, live: false, current: false, title: message, runId: null }));
   },
   route: "/apps/{app}",
   featured: COURT,

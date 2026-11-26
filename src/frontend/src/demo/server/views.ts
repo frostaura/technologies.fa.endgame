@@ -131,7 +131,8 @@ function progressOf(world: World, projectPath: string): TreeProject["progress"] 
   if (marks.some((m) => m.startsWith("security"))) step = 5;
   if (marks.some((m) => m === "publish")) step = 6;
   const labels = ["Placing it", "Planning", "Building", "Checking the work", "Security review", "Publishing"];
-  return { runId: r.run.id, label: labels[step - 1] ?? "Working", step, of: steps.length, spentCredits: round(r.run.spentCredits), estimatedCredits: r.run.estimateCredits };
+  // `ProgressView.Counting`: the step under way from 1, and the steps finished before it, which fill the bar.
+  return { runId: r.run.id, label: labels[step - 1] ?? "Working", step, of: steps.length, done: step - 1, spentCredits: round(r.run.spentCredits), estimatedCredits: r.run.estimateCredits };
 }
 
 function round(n: number) {

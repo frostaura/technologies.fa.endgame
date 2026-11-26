@@ -22,6 +22,7 @@ import { distinctReplies } from "../home/conversationModel";
 import { actionCount, buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
 import { useRunStream } from "./useRunStream";
 import { ApprovalCard } from "./ApprovalCard";
+import { ANSWER_CUT_OFF } from "./retryModel";
 import { TryAgain } from "./TryAgain";
 
 const STATUS: Record<RunStatus, { label: string; tone: BadgeTone }> = {
@@ -117,8 +118,9 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
   const badge = declined ? DECLINED : STATUS[status];
   // The figure shown before the work began, and the plan's re-estimate beside it (R2-8); a log with no estimate yet
   // leaves the run's own single figure standing in.
-  const estimate = derived.firstEstimateCredits ?? run.estimateCredits;
-  const planned = derived.plannedEstimateCredits;
+  // The server gives both (firstEstimateCredits, planEstimateCredits); an older one only the latest, so the log is read.
+  const estimate = run.firstEstimateCredits ?? derived.firstEstimateCredits ?? run.estimateCredits;
+  const planned = run.planEstimateCredits !== undefined ? run.planEstimateCredits : derived.plannedEstimateCredits;
   // One figure, from one source: the log's billable settlements, as the ledger counts them, so it is the run's own
   // cost (spentCredits); the run's figure stands in only until the log's first events arrive.
   const spent = log.events.length > 0 ? derived.settledCredits : run.spentCredits;
@@ -219,7 +221,7 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
 
       <Approvals runId={run.id} approvals={derived.approvals} />
 
-      {derived.plan && <PlanPanel plan={derived.plan} mode={mode} />}
+      {derived.plan && <PlanPanel plan={derived.plan} mode={mode} publicOnlyNote={derived.publicOnlyNote} />}
 
       {outcome && (
         <section className="rounded-md border bg-surface p-5 shadow-card">
@@ -252,7 +254,8 @@ function StreamBadge({ stream, terminal }: { stream: StreamStatus; terminal: boo
  * credits; stopped research, a build or a change offers "Try again", which carries on from where it stopped.
  */
 function StoppedPanel({ run, derived, declined }: { run: Run; derived: DerivedRun; declined: boolean }) {
-  const why = run.budgetExhausted ? "budget" : declined ? "start-declined" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
+  const cutOff = (derived.finishedReason ?? run.reason) === ANSWER_CUT_OFF;
+  const why = run.budgetExhausted ? "budget" : declined ? "start-declined" : cutOff ? "cut-off" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
   if (run.canTryAgain) return <TryAgain runId={run.id} ideaId={run.ideaId} why={why} showCredits={run.budgetExhausted} />;
   return (
     <section aria-label="Stopped for budget" className="flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
@@ -321,7 +324,7 @@ function Approvals({ runId, approvals }: { runId: string; approvals: DerivedAppr
  * The plan as a contract: each item in the owner's words, with whether it passed its check. The
  * files, endpoints and test commands behind each item are technical detail, shown in technical mode.
  */
-function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
+function PlanPanel({ plan, mode, publicOnlyNote }: { plan: DerivedPlan; mode: Mode; publicOnlyNote: string | null }) {
   const technical = mode === "technical";
   const passed = plan.items.filter((i) => i.result === "passed").length;
   // A change's last part re-checks what the app already did: those are not things the owner just asked for.
@@ -341,6 +344,12 @@ function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
         </span>
       </div>
       {(technical ? plan.summary : plainOrNull(plan.summary)) && <p className="text-ink-body">{plan.summary}</p>}
+      {publicOnlyNote && (
+        <p data-testid="plan-public-only" className="flex items-start gap-2 rounded-xs bg-primary-tint px-3 py-2 text-ink-body">
+          <Icon name="employee" className="mt-0.5 shrink-0 text-primary-link" />
+          {publicOnlyNote}
+        </p>
+      )}
       {asked.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <h3 className="font-display text-base font-semibold">What you asked for</h3>

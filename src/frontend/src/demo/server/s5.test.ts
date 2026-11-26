@@ -48,6 +48,13 @@ describe("asking about an app", () => {
     expect(failed.rows).toEqual([]);
   });
 
+  it("says an answer too long to finish as the control plane does (R2-6)", async () => {
+    const w = as("builder", "app-busy");
+    const r = await ask(w, "Summarise everything it records");
+    expect(r.status).toBe(422);
+    expect(body<{ code: string; title: string }>(r)).toMatchObject({ code: "ask_too_long", title: "The answer was too long to finish" });
+  });
+
   it("declines what the app does not record, in the model's own plain words", async () => {
     const r = await ask(as("builder", "app-busy"), "How much money did we take this month?");
     expect(r.status).toBe(422);

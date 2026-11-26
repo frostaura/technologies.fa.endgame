@@ -34,13 +34,6 @@
     {
       "step": 4,
       "kind": "demo",
-      "act": [
-        {
-          "click": {
-            "text": "Show every saved step"
-          }
-        }
-      ],
       "highlight": {
         "text": "Bring back",
         "note": "Its last good version can be brought back (VER-02), or it can be rebuilt (APP-15)."

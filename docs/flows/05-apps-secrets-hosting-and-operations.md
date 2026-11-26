@@ -331,7 +331,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   5. The credit balance is refreshed.
 - **Variations and refusals:**
   - The model declines, because the app does not record what is asked: the alert shows the model's own plain reason.
-  - An answer cut off at its length limit is asked for once more with twice the room, not charged; cut off again: 422 `ask_too_long`, "The answer was too long to finish" — "Working out the answer took more room than one answer has, even when asked again with twice as much. Ask a narrower question, such as one thing or a shorter period."
+  - An answer cut off at its length limit is asked for once more with twice the room, not charged; cut off again: 422 `ask_too_long`, "The answer was too long to finish" — "Working out the answer took more room than one answer has, even when asked again with twice as much. Ask a narrower question, such as one thing or a shorter period." The panel says "The answer was too long to finish. Ask something shorter or narrower, such as one thing or a shorter period."
   - It still fails after the repair: the control plane's own words, "It could not be worked out from what this app records. Try asking it another way, or about its visits, requests, errors, events or measurements." (The console says "That question could not be answered from what the app records. Try asking it another way." only when no reason comes back.)
   - It times out: "That question took too long to answer. Try a narrower one, such as a shorter period."
   - No route configured: "Questions about apps cannot be answered on this installation yet."
@@ -444,14 +444,13 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** a list of versions appears, one of them marked "Live now".
 - **Steps:**
   1. The section reads "Any version can be brought back." and shows a skeleton.
-  2. Up to 10 versions are loaded, newest first. Normal mode lists each published change by the plain title Endgame gives it, with the author (an employee's name links to their page; otherwise "The factory" or the person's name), the time ago, and "Live now" on the newest published change that is running — never on a saved step of the factory's own.
-  3. Every saved step without a plain title — the factory's progress records, its notes about checking or repairing its work ("Repair [item] evidence: …", "Verify … (r2)"), and the steps of a change that was never published — is folded away in normal mode: **"Show every saved step (<n> more)"** lists them too, titled "The factory recorded its progress" for the factory's own commits; **"Show only the changes"** folds them again. A restore is titled "An earlier version, brought back". From an older control plane with no plain titles, the first line is the title (without its plan-id prefix), a title that names files falls back to "A change by <name>", and bookkeeping is told by its wording.
+  2. Up to 10 versions are listed, newest first: only versions that were live — each build or change that published, each restore — never a failed or cancelled change's work, which stays on that run's own branch for "Try again". Each shows its plain title (what the person asked for; "Brought back an earlier version" for a restore), the author (an employee's name links to their page; otherwise "The factory" or the person's name), the time ago, and "Live now" on the one the server marks live.
+  3. The first version, made by the factory, is among them ("Court booking: first version"). Should the server ever send an entry with no plain title (an older control plane), normal mode folds it behind **"Show every saved step (<n> more)"** ("Show only the changes" folds it again), and "Live now" moves to the newest titled version beneath a folded one; an older control plane's titles are read from each first line, a title that names files falls back to "A change by <name>", and its bookkeeping is told by its wording.
   4. "Show earlier versions" loads 10 more. It reads "Loading…" while it waits.
 - **Variations and refusals:**
   - With no versions: "No versions yet" with "The first version appears here once it is built."
   - A failed read: "The history could not be loaded" with a retry.
-  - Technical mode lists every saved step with its raw message, "Live now" where the server marks it, the first 12 characters of the commit id and the rest of the message.
-  - Only versions that were live are listed — each build or change that published, each restore — never a failed or cancelled change's work, which stays on that run's own branch for "Try again". Each carries `title` (what the person asked for, or "Brought back an earlier version"), `message` (the raw commit message, for technical mode), `runId`, `live` and `current` (the newest).
+  - Technical mode shows each version's raw commit message (`message`) in place of its title, the first 12 characters of the commit id and the rest of the message. Each version carries `title`, `message`, `runId` (the build or change that published it), `live` and `current` (the newest).
 - **Where:** `History.tsx`, `appModel.ts`; `GET /api/apps/{id}/versions?limit` (Viewer); `AppVersionService.ListAsync`
 - **Reachable from:** UI; API; MCP `app_versions`
 - **Covered by tests:** `AppBreadth.test.tsx` ("lists versions with who made each…", "records a failed read and an empty history distinctly", "names a version by its first line…", "names a restore for what it is, not by its commit id"); `VersionsAndExportTests.The_history_names_…`, `VersionsAndExportTests.History_lists_only_what_was_live_…`; `tests-e2e/breadth.spec.ts` "history names who made each version…"
@@ -470,7 +469,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   3. The person presses "Bring it back". "Keep the live version" or the Escape key cancels instead.
   4. While it works, the page reads "Bringing it back: it becomes the newest version, then it is rebuilt and restarted."
   5. Dock makes a new commit by the person. A public app is set to private, then the app is rebuilt, given a fresh token and started.
-  6. The result reads "The earlier version is back and running.", plus "It was public, so it is private now. Make it public again once you have looked at it." when that applies. "Done" closes it. The restored version heads the history as "An earlier version, brought back", by the person, marked "Live now".
+  6. The result reads "The earlier version is back and running.", plus "It was public, so it is private now. Make it public again once you have looked at it." when that applies. "Done" closes it. The restored version heads the history as "Brought back an earlier version", by the person, marked "Live now".
 - **Variations and refusals:**
   - The rebuild fails: "The earlier version is back, but it is not running yet." with "It could not be rebuilt and started. Rebuild it again below, or ask the builder to look." (technical mode shows the build error) and **"Rebuild and restart"** (APP-15).
   - The restore is refused: "That version was not brought back: <reason> Nothing changed."
