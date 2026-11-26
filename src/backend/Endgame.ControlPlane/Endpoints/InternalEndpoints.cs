@@ -44,7 +44,10 @@ public sealed record HandoffRedeemRequest(Guid AppId, string? Code);
 
 public sealed record ScopeLevelView(string Level, Guid Id, string Slug, string Name, string Status, string Path);
 
-/// <summary><c>GET /internal/context</c>: the resolved cascade for a scope. Secrets are named, never valued.</summary>
+/// <summary>
+/// <c>GET /internal/context</c>: the resolved cascade for a scope. Secrets are named, never valued. <c>NeedsYou</c> is
+/// what waits on a person there and beneath it, as home shows it (verdicts, approvals, hire proposals, idle employees).
+/// </summary>
 public sealed record ContextView(
     string Scope,
     IReadOnlyList<ScopeLevelView> Levels,
@@ -53,7 +56,8 @@ public sealed record ContextView(
     IReadOnlyList<EffectiveValue> Budgets,
     IReadOnlyList<EffectiveValue> Settings,
     IReadOnlyList<EffectiveValue> Secrets,
-    IReadOnlyList<EffectiveValue> Permissions);
+    IReadOnlyList<EffectiveValue> Permissions,
+    IReadOnlyList<object> NeedsYou);
 
 /// <summary>The internal API (ARCH-004): for the Runner, Dock and the edge, behind the service token. Never routed by the edge.</summary>
 internal static class InternalEndpoints
@@ -161,7 +165,7 @@ internal static class InternalEndpoints
             Results.Ok(await tasks.UpdateAsync(id, patch, ct)))
         .WithName("UpdateTask").WithSummary("Changes a task; finishing one clears its holder and is logged on the holder's run. expectedStatus makes it conditional.").Produces<TaskView>();
 
-        group.MapGet("/context", async (string? scope, ScopeResolver scopes, CascadeService cascade, CancellationToken ct) =>
+        group.MapGet("/context", async (string? scope, ScopeResolver scopes, CascadeService cascade, ReadModels reads, CancellationToken ct) =>
         {
             var resolved = await scopes.RequireAsync(scope, ct);
             return Results.Ok(new ContextView(
@@ -172,9 +176,10 @@ internal static class InternalEndpoints
                 await cascade.ResolveAsync(resolved, CascadeKind.Budget, ct),
                 await cascade.ResolveAsync(resolved, CascadeKind.Setting, ct),
                 await cascade.ResolveAsync(resolved, CascadeKind.Secret, ct),
-                await cascade.ResolveAsync(resolved, CascadeKind.Permission, ct)));
+                await cascade.ResolveAsync(resolved, CascadeKind.Permission, ct),
+                await reads.NeedsYouAtAsync(resolved, ct)));
         })
-        .WithName("GetContext").WithSummary("The resolved cascade for a scope: context, rule sets, budgets, settings, secret names and roles, each with the level that set it.").Produces<ContextView>();
+        .WithName("GetContext").WithSummary("The resolved cascade for a scope: context, rule sets, budgets, settings, secret names and roles, each with the level that set it; and needsYou, what waits on a person there and beneath it (as home shows it).").Produces<ContextView>();
 
         group.MapPost("/approvals", async (RaiseApprovalRequest request, ApprovalService approvals, CancellationToken ct) =>
             Results.Created("/internal/approvals", await approvals.RaiseAsync(request.RunId, request.Title ?? "", request.Detail, ct, request.OnDecline)))

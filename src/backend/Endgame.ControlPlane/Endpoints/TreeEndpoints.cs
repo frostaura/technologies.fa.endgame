@@ -238,10 +238,10 @@ internal static class TreeEndpoints
             var (_, membership) = await accounts.MembershipAsync(membershipId, ct);
             var scope = await scopes.ForRowAsync(membership.OrganisationId, membership.DivisionId, membership.ProjectId, membership.AppId, ct);
             await access.RequireAsync(principal.Id(), scope, membership.Role == MemberRole.Admin.ToWire() ? MemberRole.Owner : MemberRole.Admin, ct);
-            await accounts.RevokeAsync(membership, ct);
-            return Results.NoContent();
+            return Results.Ok(await accounts.RevokeAsync(membership, ct));
         })
-        .WithName("RevokeRole").WithSummary("Revokes one role grant.");
+        .WithName("RevokeRole").WithSummary("Revokes one role grant. invitationCancelled is true when it was the person's last grant and their unused invitation code was cancelled with it.")
+        .Produces<RoleRevoked>();
 
         var credits = api.MapGroup("/credits").WithTags("Credits");
         credits.MapGet("", async (string? scope, ClaimsPrincipal principal, AccessService access, ReadModels reads, CancellationToken ct) =>

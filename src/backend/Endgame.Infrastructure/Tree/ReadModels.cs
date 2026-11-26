@@ -271,6 +271,27 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
     /// <summary>No organisation to show: <paramref name="canName"/> is true only on a first run, when the person may name the first one.</summary>
     public TreeView FirstRun(bool canName = true) => new(clock.GetUtcNow(), "none", null, [], [], canName);
 
+    /// <summary>
+    /// What waits on a person at <paramref name="scope"/> and beneath it — the same items home's "Needs you" shows to
+    /// someone whose role is set there: verdicts, approvals, hire proposals and idle employees. The organisation's
+    /// conversation reads it, so "is anything waiting on me?" is answered from what is true (D11).
+    /// </summary>
+    public async Task<IReadOnlyList<object>> NeedsYouAtAsync(ResolvedScope scope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var organisationId = scope.OrganisationId;
+        session.UseOrganisation(organisationId);
+        var everything = scope.Level == NodeLevel.Organisation;
+        var visible = new HashSet<Guid> { scope.Node.Id };
+        var employees = await db.Employees.AsNoTracking().Where(e => e.OrganisationId == organisationId && e.Status != EmployeeStatuses.Released).OrderBy(e => e.Name).ToListAsync(cancellationToken);
+        var idleDays = await db.CascadeEntries.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && e.Kind == "setting" && e.Key == AgentSettings.WorkforceIdleDays).ToListAsync(cancellationToken);
+        var now = clock.GetUtcNow();
+        var idle = employees.ToDictionary(e => e.Id, e => Work.WorkforceRules.Idle(e, idleDays, now));
+        var needs = await NeedsYouAsync(organisationId, everything, visible, cancellationToken);
+        return [.. needs, .. await WorkforceNeedsAsync(organisationId, everything, visible, employees.Where(e => idle[e.Id].Flagged).ToList(), idle, cancellationToken)];
+    }
+
     private async Task<IReadOnlyList<object>> NeedsYouAsync(Guid organisationId, bool everything, HashSet<Guid> visible, CancellationToken cancellationToken)
     {
         var ideas = await db.Ideas.AsNoTracking()

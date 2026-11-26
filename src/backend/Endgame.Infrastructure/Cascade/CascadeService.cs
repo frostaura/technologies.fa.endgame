@@ -230,7 +230,7 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
                 var operatorMax = OperatorOverdraft(chain);
                 if (number > operatorMax)
                 {
-                    throw EndgameProblem.Invalid($"The organisation's own overdraft may be tighter than the {operatorMax.ToString(CultureInfo.InvariantCulture)} credits FrostAura set, never deeper.");
+                    throw EndgameProblem.Invalid($"The organisation's own overdraft may be tighter than the {CreditText.Format(operatorMax)} credits FrostAura set, never deeper.");
                 }
             }
             else
@@ -238,7 +238,7 @@ public sealed class CascadeService(EndgameDbContext db, IDataProtectionProvider 
                 var inherited = EffectiveOverdraft(chain.Where(e => e.Level < scope.Level));
                 if (number > inherited)
                 {
-                    throw EndgameProblem.Invalid($"An overdraft here may be tighter than the {inherited.ToString(CultureInfo.InvariantCulture)} credits inherited, never deeper.");
+                    throw EndgameProblem.Invalid($"An overdraft here may be tighter than the {CreditText.Format(inherited)} credits inherited, never deeper.");
                 }
             }
         }

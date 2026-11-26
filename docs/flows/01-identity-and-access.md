@@ -400,7 +400,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Variations and refusals:**
   - Refused: the row returns and "{name} still has their role: {reason}" appears above the list.
   - The Owner's grant: "The Owner's role cannot be revoked."
-  - The person's account, passkey and any pending code stay. Not verified from code: whether a role-less account with a pending code can still register.
+  - The person's account and passkey stay. When it was the last grant of someone who has not made a passkey yet, their pending invitation code is cancelled with it (the answer says `invitationCancelled: true`): they can no longer register with it.
 - **Where:** `PeopleView.tsx`. `DELETE /api/members/{membershipId}`.
 - **Reachable from:** UI; MCP (`member_revoke`)
 - **Covered by tests:** `PeopleView.test.tsx` "asks before removing someone and removes them"; `breadth.spec.ts`.

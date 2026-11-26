@@ -214,7 +214,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
         var headroom = cap - used;
         return headroom < needed
             ? new Refused(
-                $"The app's own model calls have {headroom.ToString("0.######", CultureInfo.InvariantCulture)} credits left of their {cap.ToString("0.######", CultureInfo.InvariantCulture)} this month; this call needs up to {needed.ToString("0.######", CultureInfo.InvariantCulture)}.",
+                $"The app's own model calls have {CreditText.Format(headroom)} credits left of their {CreditText.Format(cap)} this month; this call needs up to {CreditText.Format(needed)}.",
                 "app models", headroom, needed)
             : null;
     }
@@ -413,7 +413,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
                 if (budget.Headroom < needed)
                 {
                     return new Refused(
-                        $"The monthly budget at {budget.Scope} has {budget.Headroom.ToString("0.######", CultureInfo.InvariantCulture)} credits left; this call needs up to {needed.ToString("0.######", CultureInfo.InvariantCulture)}.",
+                        $"The monthly budget at {budget.Scope} has {CreditText.Format(budget.Headroom)} credits left; this call needs up to {CreditText.Format(needed)}.",
                         budget.Scope, budget.Headroom, needed);
                 }
             }
@@ -421,7 +421,7 @@ public sealed class CreditLedger(EndgameDbContext db, TenantSession session, Sco
             var available = Balance + OverdraftLimit;
             return available < needed
                 ? new Refused(
-                    $"The organisation has {available.ToString("0.######", CultureInfo.InvariantCulture)} credits available including its overdraft of {OverdraftLimit.ToString("0.######", CultureInfo.InvariantCulture)}; this call needs up to {needed.ToString("0.######", CultureInfo.InvariantCulture)}.",
+                    $"The organisation has {CreditText.Format(available)} credits available including its overdraft of {CreditText.Format(OverdraftLimit)}; this call needs up to {CreditText.Format(needed)}.",
                     "organisation balance", available, needed, Refusals.OverdraftLimit)
                 : null;
         }
