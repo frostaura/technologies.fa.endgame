@@ -21,6 +21,26 @@ describe("a failure in normal mode (rule 12)", () => {
     );
   });
 
+  it("says a refused budget by its plain detail only: what an agent is told to do (forAgent) and the scope are never shown (R3)", () => {
+    const refused = {
+      status: 402,
+      data: {
+        title: "The budget is exhausted",
+        status: 402,
+        detail: "The monthly budget for Community has 0 credits left; this call needs up to 0.42. Work stops until the budget is raised or a new month begins.",
+        forAgent: "This is terminal for the run: do not retry it.",
+        bindingScope: "frostaura/community",
+        terminal: true,
+      },
+    };
+    const said = describeError(refused);
+    expect(said).toBe("The monthly budget for Community has 0 credits left; this call needs up to 0.42. Work stops until the budget is raised or a new month begins.");
+    expect(describeError(refused, "technical")).not.toContain("do not retry");
+    const checkpoints = { status: 409, data: { title: "Checkpoints are on here", status: 409, detail: "Checkpoints are on for Community, so the owner decides on the verdict.", scope: "frostaura/community" } };
+    expect(describeError(checkpoints)).toBe("Checkpoints are on for Community, so the owner decides on the verdict.");
+    expect(describeError(checkpoints, "technical")).toBe("Checkpoints are on for Community, so the owner decides on the verdict. (409, scope frostaura/community)");
+  });
+
   it("says what a status means when the server gave no words, or words that name the machinery", () => {
     expect(describeError(failed(502))).toBe("Endgame could not be reached just now.");
     expect(describeError(failed(404, "The scope 'acme/tools' was not found, or you cannot see it."))).toBe("This was not found, or you cannot see it.");

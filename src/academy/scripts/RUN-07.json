@@ -131,6 +131,64 @@
           }
         }
       ]
+    },
+    {
+      "title": "The work ends before anyone answers",
+      "persona": "owner",
+      "scenario": "build-waiting-on-plan",
+      "start": "/runs/{run}",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "Accept this plan?"
+              }
+            },
+            {
+              "click": {
+                "text": "Cancel"
+              }
+            },
+            {
+              "click": {
+                "text": "Yes, cancel it"
+              }
+            },
+            {
+              "wait": {
+                "text": "The work ended before this was answered."
+              }
+            }
+          ],
+          "highlight": {
+            "text": "The work ended before this was answered.",
+            "note": "Cancelled while it waited: the question closes with the work, and nothing is left to approve or decline."
+          }
+        },
+        {
+          "step": 2,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "selector": "button[aria-label^=\"Notifications\"]"
+              }
+            },
+            {
+              "wait": {
+                "text": "the work ended before it was answered"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "the work ended before it was answered",
+            "note": "Its notice says it is no longer waiting, marked Closed — never as answered."
+          }
+        }
+      ]
     }
   ]
 }

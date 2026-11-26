@@ -132,6 +132,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      | Kind | Badge | Headline | Line | Goes to |
      | --- | --- | --- | --- | --- |
      | Verdict | "Verdict waiting" | "Research says build \| change \| do not build “{title}”" | first meaningful sentence of the verdict summary, or else "Read it, then decide." (for do-not-build, "Read it, or overrule.") | `/ideas/{id}` |
+     | Verdict refused over a red line | "Refused" | "Research refused this idea: it crosses a red line" | "“{title}” — drop it, or change it." (nothing else can be decided: VERD-06) | `/ideas/{id}` |
      | Approval | "Approval needed" | the approval's title, for example "Start researching an idea: …?" | the detail, or "It waits until you answer." | `/runs/{runId}` |
      | Hire | "Hire proposed" | "Hire {Name} as {Role}?" | "About {credits} a month. {reason}" | `/hires/{id}` |
      | Idle employee | "Nothing to do" | "{Name} has had no work for {n} days" | "Keep them on, give them work, or release them; released employees keep their memory archived." | `/employees/{id}` |
@@ -141,10 +142,12 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Variations and refusals:**
   - With nothing waiting, the strip shows "Nothing needs you right now: no verdict, approval or hire is waiting, and no one is idle." — exactly the four kinds it checks. Budgets are told in notifications (NOTE).
   - Someone with a role on only part of the tree sees only items on the nodes they can see.
-- **Where:** `HomeView.tsx` (`NeedsYouStrip`, `needHref`), `needsYouModel.ts`; `GET /api/tree` (`needsYou`; `ReadModels.NeedsYouAsync`, `WorkforceNeedsAsync`).
+  - A do-not-build verdict reads its idea (`GET /api/ideas/{id}`) to learn whether research refused it over a red line; until that answers, it reads as any do-not-build verdict.
+  - An approval whose work ended before anyone answered it is not on the strip (RUN-07).
+- **Where:** `HomeView.tsx` (`NeedsYouStrip`, `RefusableVerdictCard`, `needHref`), `needsYouModel.ts` (`RED_LINE_HEADLINE`); `GET /api/tree` (`needsYou`; `ReadModels.NeedsYouAsync`, `WorkforceNeedsAsync`).
 - **Reachable from:** UI. MCP `tree_get` returns the same list.
 - **Covered by tests:**
-  - `HomeView.test.tsx`: "says a verdict waiting in a headline and one line…", "claims only what it checks when nothing needs you"
+  - `HomeView.test.tsx`: "says a verdict waiting in a headline and one line…", "claims only what it checks when nothing needs you", "words a red-line verdict as refused, not as a verdict waiting…"
   - `breadth.spec.ts`: "a needs-you card is a headline and one line"
   - `workforce.spec.ts`: "employees and contractors on their nodes, hires and idle employees in needs you…", "a proposal is read from needs you and accepted…"
 
@@ -1131,14 +1134,14 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
      - the title as a link;
      - one line of detail — a notice raised before details were written plainly, whose detail is a raw tool line ("adjust_setting: …", "try_again: …") with no technical line beside it, shows no detail in normal mode; technical mode shows that line;
      - "Mark read" when unread;
-     - "Answered" (green) in place of "New" and "Mark read" when what it asked is already answered; its badge is quiet and its title plain;
+     - "Answered" (green) in place of "New" and "Mark read" when what it asked is already answered — or "Closed" (grey) for an approval whose work ended before anyone answered it; its badge is quiet and its title plain;
      - "Also e-mailed" when it was;
      - in technical mode, the raw kind.
 
      Unread urgent rows are tinted amber; other unread rows are tinted blue.
   5. An aside "What you are told about" lists: "A verdict waiting for your call", "An approval the work is waiting on", "A hire proposed", "A budget at 80% and at its cap", "Credits at zero, halfway to the overdraft limit, and at it", "An app that stopped working", "A security review that found a problem", "For FrostAura’s operators: an Owner asking for a top-up". It adds: "Owners and Admins are told about what their grant covers; others see an empty feed."
 - **You know it worked when:** the page lists your notices, newest first.
-- **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …", "Auto-mode chose to build: …" (a verdict auto-mode acted on) — and it no longer counts as unread. An approval whose run ended before anyone answered it is closed with the run (expired, never "declined") and reads "No longer waiting: “{question}” — the work ended before it was answered"; it is not on the "Needs you" strip. Such a row reads "Answered", with no "New" and no "Mark read", here and in the bell's popover.
+- **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …", "Auto-mode chose to build: …" (a verdict auto-mode acted on) — and it no longer counts as unread. An approval whose run ended before anyone answered it is closed with the run (expired, never "declined") and reads "No longer waiting: “{question}” — the work ended before it was answered"; it is not on the "Needs you" strip, and its row reads "Closed" rather than "Answered". Such a row has no "New" and no "Mark read", here and in the bell's popover.
 - **Where:** `notifications/NotificationsView.tsx`, `NotificationFeed.tsx`, `notificationModel.ts`; `NotificationService.FeedAsync` (`resolved`).
 - **Reachable from:** UI.
 - **Covered by tests:** `Notifications.test.tsx`: "lists each with a short title, one line and where it leads…".

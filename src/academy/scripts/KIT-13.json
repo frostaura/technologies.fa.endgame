@@ -74,8 +74,9 @@
               "type": "https://endgame.frostaura.net/problems/budget_exhausted",
               "title": "The budget is exhausted",
               "status": 402,
-              "detail": "The monthly budget at acme/labs has 0.0004 credits left; this call needs up to 0.016. This is terminal for the run: do not retry it.",
+              "detail": "The monthly budget for Labs has 0.0004 credits left; this call needs up to 0.016. Work stops until the budget is raised or a new month begins.",
               "code": "budget_exhausted",
+              "forAgent": "This is terminal for the run: do not retry it.",
               "terminal": true,
               "bindingScope": "acme/labs",
               "headroomCredits": 0.0004,
@@ -90,7 +91,7 @@
           "language": "csharp",
           "code": "try { reply = await models.CompleteAsync(request, ct); }\ncatch (EndgameBudgetExhaustedException e) { logger.LogWarning(\"{Message}\", e.Message); }",
           "output": [
-            "The credit budget for this app is spent: The monthly budget at acme/labs has 0.0004 credits left; this call needs up to 0.016. This is terminal for the run: do not retry it."
+            "The credit budget for this app is spent: The monthly budget for Labs has 0.0004 credits left; this call needs up to 0.016. Work stops until the budget is raised or a new month begins."
           ],
           "note": "The kit never retries it."
         },
@@ -134,8 +135,9 @@
               "type": "https://endgame.frostaura.net/problems/budget_exhausted",
               "title": "The budget is exhausted",
               "status": 402,
-              "detail": "The app's own model calls have 0.003 credits left of their 500 this month; this call needs up to 0.016. This is terminal for the run: do not retry it.",
+              "detail": "The app's own model calls have 0.003 credits left of their 500 this month; this call needs up to 0.016. Work stops until the budget is raised or a new month begins.",
               "code": "budget_exhausted",
+              "forAgent": "This is terminal for the run: do not retry it.",
               "terminal": true,
               "bindingScope": "app models",
               "headroomCredits": 0.003,
@@ -168,8 +170,9 @@
               "type": "https://endgame.frostaura.net/problems/overdraft_limit",
               "title": "The overdraft limit is reached",
               "status": 402,
-              "detail": "The organisation has 0 credits available including its overdraft of 100; this call needs up to 0.016. Work stops until the organisation is topped up; do not retry it.",
+              "detail": "The organisation has 0 credits available including its overdraft of 100; this call needs up to 0.016. Work stops until the organisation is topped up.",
               "code": "overdraft_limit",
+              "forAgent": "This is terminal for the run: do not retry it.",
               "terminal": true,
               "bindingScope": "organisation balance",
               "headroomCredits": 0,
@@ -184,7 +187,7 @@
           "language": "csharp",
           "code": "try { reply = await models.CompleteAsync(request, ct); }\ncatch (EndgameOverdraftLimitException e) { logger.LogWarning(\"{Message}\", e.Message); }",
           "output": [
-            "The overdraft limit is reached: The organisation has 0 credits available including its overdraft of 100; this call needs up to 0.016. Work stops until the organisation is topped up; do not retry it."
+            "The overdraft limit is reached: The organisation has 0 credits available including its overdraft of 100; this call needs up to 0.016. Work stops until the organisation is topped up."
           ],
           "note": "The kit throws its own EndgameOverdraftLimitException (Code \"overdraft_limit\", Status 402) in the platform's own words, and never retries it."
         },

@@ -16,8 +16,8 @@
         }
       ],
       "highlight": {
-        "text": "Sent back for repair, at no charge",
-        "note": "A part failed its check: sent back, at no charge."
+        "text": "What the checker saw",
+        "note": "Sent back, at no charge — with the requirement that failed and what the checker saw, quoted."
       }
     },
     {

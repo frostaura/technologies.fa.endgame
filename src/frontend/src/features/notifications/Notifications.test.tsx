@@ -129,6 +129,26 @@ describe("an answered notice (D40)", () => {
     expect(within(hire).queryByRole("button", { name: "Mark read" })).toBeNull();
   });
 
+  it("reads an approval whose work ended unanswered as no longer waiting: closed, quietly, and never as answered (R3-2)", async () => {
+    const expired = { id: "x2", kind: "approval", severity: "info", title: "No longer waiting: “Let this step search the web for kit list 1?” — the work ended before it was answered", detail: "", scope: "acme", subject: { kind: "run", id: "r1" }, createdAt: "2026-11-25T02:10:00Z", read: true, emailedAt: null, resolved: true };
+    stub(json({ organisation: "acme", unread: 0, notifications: [expired] }));
+    renderWithStore(
+      <AppShell crumbs={[{ label: "Home" }]}>
+        <p>Page</p>
+      </AppShell>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Notifications" }));
+    const row = screen.getByRole("dialog", { name: "Notifications" }).querySelector('[data-notification="x2"]') as HTMLElement;
+    expect(within(row).getByRole("link").textContent).toBe("No longer waiting: “Let this step search the web for kit list 1?” — the work ended before it was answered");
+    expect(within(row).getByText("Closed")).toBeTruthy();
+    expect(within(row).queryByText("Answered")).toBeNull();
+    expect(within(row).queryByText("New")).toBeNull();
+    expect(within(row).queryByRole("button", { name: "Mark read" })).toBeNull();
+    // A long question is what is cut; why it stopped waiting is always said.
+    const long = notificationLines({ ...expired, title: `No longer waiting: “Let this step search the web for ${"every dive shop's kit list ".repeat(4)}?” — the work ended before it was answered` } as NotificationItem).title;
+    expect(long).toMatch(/…” — the work ended before it was answered$/);
+  });
+
   it("shows an approval's tool line in technical mode only", async () => {
     stub(json({ ...ANSWERED, notifications: [{ ...ANSWERED.notifications[1], technical: "change_app: acme/tools/ledger/web: Add star ratings." }] }));
     const { store } = renderWithStore(<NotificationsView />);

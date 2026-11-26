@@ -385,7 +385,7 @@
             }
           ],
           "highlight": {
-            "text": "The monthly budget here",
+            "text": "The monthly budget for",
             "note": "A budget above the app is spent: nothing is asked."
           }
         }

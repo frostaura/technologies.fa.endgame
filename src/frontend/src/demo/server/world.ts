@@ -142,6 +142,9 @@ export interface DemoRuleSet {
   checkpoints: string[];
 }
 
+/** What an expired approval says (`ApprovalStatuses.ExpiredNote`). */
+export const EXPIRED_NOTE = "The work ended before this was answered.";
+
 export interface DemoApproval {
   id: string;
   runId: string;
@@ -150,7 +153,10 @@ export interface DemoApproval {
   detail: string;
   /** The tool line behind it, for technical mode (`approval.requested`'s `technical`). */
   technical?: string;
-  answer: "approved" | "rejected" | null;
+  /** `expired`: closed because its run ended before anyone answered it (`ApprovalStatuses.Expired`, R3-2). */
+  answer: "approved" | "rejected" | "expired" | null;
+  /** Who answered it (display name); null while it waits, and for one that expired. */
+  answeredBy?: string | null;
   /** What approving it does, by name; read by the run engine. */
   onApprove:
     | { kind: "start-idea"; text: string; scope: string }
@@ -208,6 +214,8 @@ export interface DemoTopUp {
 export interface DemoNotification extends Omit<NotificationItem, "resolved"> {
   organisation: string;
   answered?: boolean;
+  /** The approval an approval notice asks about (the server's `approval:{id}` key), read for its answer as it is now. */
+  approvalId?: string;
 }
 
 export interface DemoOperatorAction extends OperatorAction {

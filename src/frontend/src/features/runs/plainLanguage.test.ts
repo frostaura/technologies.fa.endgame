@@ -134,7 +134,9 @@ describe("the newer run-log shapes (ARCH-004, the wiring lane)", () => {
     expect(derived.plan?.items[0]).toMatchObject({ plain: "Keep the club's books", detail: "api/Books/Book.cs and BooksEndpoints.cs", covers: ["r1"], result: "passed" });
     const normal = lines(buildTimeline(log, "normal", (id) => planItemLabel(derived.plan, id, "normal")).items);
     expect(normal).toContain("Checked and passed: Keep the club's books");
-    expect(normal.join("\n")).toContain("1 of 1 of your requirements shown working");
+    // The passing sentence is the plan card's line for the part: said there, once, and not repeated in the steps.
+    expect(derived.plan?.items[0]?.outcome).toContain("1 of 1 of your requirements shown working");
+    expect(normal.join("\n")).not.toContain("1 of 1 of your requirements shown working");
     expect(normal.join("\n")).not.toContain("GET /api/books");
     expect(derived.approvals[0]?.question).toBe("Accept this plan?");
   });

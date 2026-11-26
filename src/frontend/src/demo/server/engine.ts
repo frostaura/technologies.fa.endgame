@@ -1,4 +1,5 @@
 import type { RunEvent, RunStatus } from "@/store/types";
+import { notify } from "./mutations";
 import { charge, newId, runRecord, type DemoApproval, type DemoRun, type World } from "./world";
 
 /**
@@ -145,6 +146,13 @@ export function append(world: World, r: DemoRun, type: string, payload: Record<s
       r.ended = r.playback ?? r.ended ?? null;
       r.playback = null;
       for (const e of world.employees) if (e.currentRun?.id === r.run.id) settle(world, e.id, r.run.id);
+      // Every approval the run still waits on closes with it, whatever ended it (`RunService.ExpireOpenApprovalsAsync`).
+      for (const a of world.approvals) {
+        if (a.runId !== r.run.id || a.answer !== null) continue;
+        a.answer = "expired";
+        a.answeredBy = null;
+        world.changed.push("Notifications");
+      }
       break;
     }
     default:
@@ -193,6 +201,8 @@ function apply(world: World, r: DemoRun, step: Step): boolean {
     const id = newId(world, "approval");
     world.approvals.push({ id, runId: r.run.id, answer: null, ...approval });
     append(world, r, "approval.requested", { approvalId: id, title: approval.title, question: approval.title, detail: approval.detail, ...(approval.technical ? { technical: approval.technical } : {}), onDecline: approval.onDecline ?? "continues" });
+    // `NotificationSweep`: an approval the work waits on is a notice too, until it is answered or its work ends.
+    notify(world, { key: `approval:${id}`, approvalId: id, kind: "approval", severity: "info", title: `Approval needed: ${approval.title}`, detail: approval.detail || "Work is waiting for your sign-off.", scope: r.run.scope, subject: { kind: "run", id: r.run.id } });
     r.run.status = "waiting";
     world.changed.push("Tree", "Run", "Notifications");
     return false;

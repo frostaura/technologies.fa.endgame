@@ -92,6 +92,22 @@ describe("HomeView", () => {
     expect(card.children).toHaveLength(3);
   });
 
+  it("words a red-line verdict as refused, not as a verdict waiting, and leads to the idea (R3 walk)", async () => {
+    const title = "Track where staff go after their shift from their phones";
+    stub(json({ ...TREE, needsYou: [{ kind: "verdict", id: "n1", ideaId: "i9", title, verdict: "do-not-build", detail: "Following employees' phones after hours is surveillance." }] }), {
+      "GET /api/ideas/i9": json({ id: "i9", title, text: title, constraints: [], status: "verdict", runId: "r9", scope: null, research: { estimatedCredits: 60, spentCredits: 12, by: null }, verdict: null, decision: null, record: { total: 1, build: 0, change: 0, doNotBuild: 1, overruled: [] }, redLine: "surveillance", history: [], tryAgain: null }),
+    });
+    renderWithStore(<HomeView />);
+    const needs = await screen.findByRole("region", { name: "Needs you" });
+    const card = within(needs).getByRole("link");
+    await waitFor(() => expect(card.textContent).toContain("Research refused this idea: it crosses a red line"));
+    expect(card.textContent).toContain("Refused");
+    expect(card.textContent).toContain(`“${title}” — drop it, or change it.`);
+    expect(card.textContent).not.toContain("Verdict waiting");
+    expect(card.textContent).not.toContain("Research says do not build");
+    expect(card.getAttribute("href")).toBe("/ideas/i9");
+  });
+
   it("records a failed read on the page, never as an empty organisation", async () => {
     stub(problem(500, "The tree could not be read"));
     renderWithStore(<HomeView />);

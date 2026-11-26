@@ -24,10 +24,18 @@ export function meaningfulLine(detail: string | null, max = 150): string | null 
  * What a "needs you" card says: one headline and one line, never more. A verdict's whole summary
  * belongs on the verdict page; the card only says what research concluded and why, in a line.
  */
-export function needLines(item: NeedsYou): { headline: string; line: string; technical: string | null } {
+export function needLines(item: NeedsYou, redLine: string | null = null): { headline: string; line: string; technical: string | null } {
   // A card raised before the plain-detail fix may carry a raw tool line as its detail: technical mode only (R2-5).
   const { detail, technical } = plainDetail(item.detail, item.kind === "approval" ? item.technical : null);
+  if (item.kind === "verdict" && redLine) return { ...refusedLines(item), technical: null };
   return { ...cardLines({ ...item, detail } as NeedsYou), technical };
+}
+
+/** The headline of a verdict research refused over a red line: nothing waits to be decided but dropping or changing it. */
+export const RED_LINE_HEADLINE = "Research refused this idea: it crosses a red line";
+
+function refusedLines(item: Extract<NeedsYou, { kind: "verdict" }>): { headline: string; line: string } {
+  return { headline: RED_LINE_HEADLINE, line: `“${shortTitle(item.title.replace(/^a verdict is waiting:\s*/i, ""), 80)}” — drop it, or change it.` };
 }
 
 function cardLines(item: NeedsYou): { headline: string; line: string } {
