@@ -74,6 +74,7 @@
         "build-running",
         "s4-hiring",
         "s4-hires-all-decided",
+        "s4-recurring-unproposed",
         "s4-hire-manager-gone",
         "s4-contractor-working",
         "s4-contractor-finishes",

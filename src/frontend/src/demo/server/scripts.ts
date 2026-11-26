@@ -17,7 +17,7 @@ import { appAt, chain, newId, node, orgOf, organisation, setting, spentBelow, uu
  * Named moments (`clock { seek }`): research:started, research:strand-*, research:judging,
  * research:verdict, research:decided, research:finished, research:failed, research:budget-stopped;
  * build:placed, build:hired, build:plan, build:waiting-on-plan, build:waiting-for-budget,
- * build:carried, build:part-1…n, build:sent-back, build:repaired, build:budget-stopped,
+ * build:carried, build:part-1…n, build:part-1-built…n-built (its builder reported back), build:sent-back, build:repaired, build:budget-stopped,
  * build:security-review, build:security-finding, build:security-passed, build:published,
  * build:finished, build:failed; change:screened, change:red-line, change:plan,
  * change:waiting-on-plan, change:carried, change:part-1…n, change:sent-back, change:repaired,
@@ -596,7 +596,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       s.wait(500);
       cycle(s, run, { agent: builder, employeeId: eng.id, taskType: "build", credits: 0.036, tool: { name: "run", args: { command: "make test" }, result: "Vitest 17 passed · xUnit 14 passed\nexit code 0", command: "make test" }, scope: projectPath, stage: "build" });
       cycle(s, run, { agent: builder, employeeId: eng.id, taskType: "build", credits: 0.028, tool: { name: "git_commit", args: { message: `${item.id}: ${item.text.slice(0, 50)}` }, result: `Committed ${uuidFor(`${run.run.id}:${item.id}`).slice(0, 7)}.` }, scope: projectPath, stage: "build" });
-      s.event("message", { kind: "agent.reply", agent: builder, final: true, reply: `Done — the ${item.id} item is built, verified and committed.` });
+      s.event("message", { kind: "agent.reply", agent: builder, final: true, reply: `Done — the ${item.id} item is built, verified and committed.` }, `${prefix}:part-${index + 1}-built`);
     } else {
       s.wait(600).event("task.claimed", { taskId, holder: qa.name, summary: item.text }, `${prefix}:part-${index + 1}`);
       s.effect((w) => {
