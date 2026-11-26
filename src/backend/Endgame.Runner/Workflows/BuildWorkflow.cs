@@ -72,14 +72,22 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var screen = run.Journal.Get("screen");
         if (screen is null)
         {
-            var screener = await WorkflowSupport.RunAgentAsync(run, run.Agents.Researcher(run, "red-line-screen", RunnerResources.Prompt("change-screen", new Dictionary<string, string> { ["request"] = request })) with
+            var screener = await WorkflowSupport.RunAgentAsync(run, run.Agents.Answerer(run, "red-line-screen", RunnerResources.Prompt("change-screen", new Dictionary<string, string> { ["request"] = request })) with
             {
                 TaskType = run.Options.SummaryTaskType,
-                Limits = new AgentLimits { MaxSteps = 2, MaxOutputTokens = 1500, MaxSearchesPerCall = 0 },
+                // Room for a reasoning model to think and still answer (R2-6).
+                Limits = new AgentLimits { MaxSteps = 2, MaxOutputTokens = 4000, MaxSearchesPerCall = 0 },
             }, NoWorkspace.Instance, "Screen the change now and reply with the JSON object.", cancellationToken);
             if (WorkflowOutcome.FromAgent(screener) is { } stopped)
             {
                 return stopped;
+            }
+
+            if (screener.CutOff)
+            {
+                return WorkflowOutcome.Failure("The red-line screen's answer was too long to finish, so nothing was changed.")
+                    with
+                { ForOwner = "The check against FrostAura's red lines gave an answer too long to finish, so nothing was changed. “Try again” checks it again." };
             }
 
             // An unreadable screen has not cleared anything: the change is not made on a guess.
@@ -752,7 +760,12 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
 
         var answer = WorkflowSupport.JsonAnswer(result.FinalText);
-        if (answer is null || Json.Bool(answer, "passed") is null)
+        if (result.CutOff)
+        {
+            // Not a verdict in the wrong form: it did not fit (R2-6). Unchecked, and checked again.
+            answer = new JsonObject { ["passed"] = false, ["evidence"] = "The check's answer was too long to finish.", ["faults"] = Json.Array(["The evaluator's answer was too long to finish; treat the item as unchecked and check it again."]) };
+        }
+        else if (answer is null || Json.Bool(answer, "passed") is null)
         {
             // An evaluator that gives no verdict has not passed anything.
             answer = new JsonObject { ["passed"] = false, ["evidence"] = OutputText.Truncate(result.FinalText ?? "", 2000), ["faults"] = Json.Array(["The evaluator gave no verdict; treat the item as unchecked and check it again."]) };
@@ -814,8 +827,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                     return stopped;
                 }
 
-                findings = WorkflowSupport.JsonAnswer(reviewer.FinalText)
-                    ?? new JsonObject { ["passed"] = false, ["findings"] = new JsonArray(new JsonObject { ["problem"] = "The review gave no report, so the app is not cleared." }) };
+                findings = (reviewer.CutOff ? null : WorkflowSupport.JsonAnswer(reviewer.FinalText))
+                    ?? new JsonObject { ["passed"] = false, ["findings"] = new JsonArray(new JsonObject { ["problem"] = reviewer.CutOff ? "The review's report was too long to finish, so the app is not cleared." : "The review gave no report, so the app is not cleared." }) };
                 await run.Journal.RecordAsync(key, findings, cancellationToken);
                 await run.AppendAsync(HarnessEvents.Message, new JsonObject
                 {

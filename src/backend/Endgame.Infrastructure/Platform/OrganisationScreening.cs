@@ -72,9 +72,10 @@ public sealed class OrganisationScreening(PlatformModelCalls calls, TimeProvider
 
     /// <summary>
     /// Room for a reasoning model to think and still answer: at 400 tokens the route's models spent the budget
-    /// reasoning and the answer was cut mid-sentence (<c>finish_reason: length</c>, D54).
+    /// reasoning and the answer was cut mid-sentence (<c>finish_reason: length</c>, D54). An answer cut off even so is
+    /// asked for once more with twice the room (R2-6).
     /// </summary>
-    public const int MaxTokens = 2000;
+    public const int MaxTokens = 3000;
     public const string TaskType = "classify";
     public const int MinDescription = 10;
     public const int MaxDescription = 1000;
@@ -115,16 +116,26 @@ public sealed class OrganisationScreening(PlatformModelCalls calls, TimeProvider
 
         ScreeningResult? result = null;
         var why = "the model's answer could not be read";
+        var room = MaxTokens;
         // One retry: a reasoning model can spend its budget thinking, or wrap the answer in prose; a second ask
         // usually reads. Each call is a platform cost, recorded as it is made.
         for (var attempt = 1; attempt <= Attempts && result is null; attempt++)
         {
             try
             {
-                var reply = await calls.CompleteAsync(Request(name, slug, what), Purpose, by, new JsonObject { ["organisation"] = slug, ["name"] = name, ["attempt"] = attempt }, cancellationToken);
-                result = Read(reply.Content, reply, by);
-                if (result is null)
+                var reply = await calls.CompleteAsync(Request(name, slug, what, room), Purpose, by, new JsonObject { ["organisation"] = slug, ["name"] = name, ["attempt"] = attempt, ["maxTokens"] = room }, cancellationToken);
+                var cut = reply.FinishReason == StructuredReplies.CutOff;
+                // A cut-off answer is not read, even when its first braces happen to parse: it is incomplete.
+                result = cut ? null : Read(reply.Content, reply, by);
+                if (cut)
                 {
+                    why = "the model's answer was too long to finish";
+                    room = MaxTokens * 2;
+                    logger.LogInformation("Screening {Organisation}: attempt {Attempt} was cut off at {Tokens} tokens (model {Model}); asking with {Room}.", slug, attempt, MaxTokens, reply.Model, room);
+                }
+                else if (result is null)
+                {
+                    why = "the model's answer could not be read";
                     logger.LogWarning("Screening {Organisation}: attempt {Attempt} gave an answer that could not be read (model {Model}, finish {Finish}, {Length} characters).",
                         slug, attempt, reply.Model, reply.FinishReason, reply.Content.Length);
                 }
@@ -149,7 +160,7 @@ public sealed class OrganisationScreening(PlatformModelCalls calls, TimeProvider
         return result;
     }
 
-    private static ChatRequest Request(string name, string slug, string what) => new()
+    private static ChatRequest Request(string name, string slug, string what, int maxTokens) => new()
     {
         TaskType = TaskType,
         Scope = "",
@@ -158,7 +169,7 @@ public sealed class OrganisationScreening(PlatformModelCalls calls, TimeProvider
             new JsonObject { ["role"] = "system", ["content"] = Instructions },
             new JsonObject { ["role"] = "user", ["content"] = $"Name: {name}\nAddress name: {slug}\nWhat it does: {what}" },
         ],
-        Limits = new ChatLimits { MaxTokens = MaxTokens },
+        Limits = new ChatLimits { MaxTokens = maxTokens },
         Temperature = 0,
         // Both of the route's models take a response format: ask for a JSON object outright, not only in words.
         ResponseFormat = new JsonObject { ["type"] = "json_object" },

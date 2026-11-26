@@ -25,6 +25,13 @@ public sealed class ChatRequest
 
     public JsonNode? ResponseFormat { get; set; }
 
+    /// <summary>
+    /// The caller reads the answer as one JSON object (R2-6): with no <see cref="ResponseFormat"/> and no tools, the gateway
+    /// asks for <c>{"type": "json_object"}</c> when every model on the route takes a response format, and leaves the
+    /// prompt to ask for it otherwise — never a refusal.
+    /// </summary>
+    public bool PreferJson { get; set; }
+
     public ChatLimits? Limits { get; set; }
 
     public bool Stream { get; set; }

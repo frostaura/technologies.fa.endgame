@@ -187,26 +187,60 @@ public sealed class ReviewWorkflow : IWorkflow
             return WorkflowOutcome.Success(empty) with { Announced = true };
         }
 
-        var listing = string.Join("\n", entries.Select(e => $"- id {e.Id:D} ({e.Kind}, about {e.Scope}) {e.Title}: {e.Body.ReplaceLineEndings(" ")}"));
-        var prompt = RunnerResources.Prompt("memory-review", new Dictionary<string, string> { ["name"] = name, ["role"] = employee?.Role ?? "employee", ["entries"] = listing });
-        var agent = run.Agents.Researcher(run, "memory-reviewer", prompt) with
+        // A large memory is reviewed in batches (R2-6): one answer for all of it outgrew the room a reply has. Related entries
+        // sit together (by scope, then kind), so what can be merged is usually in the same batch; each batch's answer is kept
+        // in the journal, so a resumed review never asks twice.
+        var batches = MemoryReview.Batches(entries);
+        var merged = new JsonArray();
+        var removed = new JsonArray();
+        var corrected = new JsonArray();
+        var dropped = 0;
+        for (var i = 0; i < batches.Count; i++)
         {
-            TaskType = run.Options.SummaryTaskType,
-            EmployeeId = employeeId,
-            Limits = new AgentLimits { MaxSteps = 3, MaxOutputTokens = 6000, MaxSearchesPerCall = 0 },
-        };
-        var result = await WorkflowSupport.RunAgentAsync(run, agent, NoWorkspace.Instance, "Review the memory now and reply with the JSON object.", cancellationToken);
-        if (WorkflowOutcome.FromAgent(result) is { } stopped)
-        {
-            return stopped;
+            var key = $"memory.review.batch.{i}";
+            var answer = run.Journal.Get(key);
+            if (answer is null)
+            {
+                var listing = string.Join("\n", batches[i].Select(e => $"- id {e.Id:D} ({e.Kind}, about {e.Scope}) {e.Title}: {e.Body.ReplaceLineEndings(" ")}"));
+                var prompt = RunnerResources.Prompt("memory-review", new Dictionary<string, string> { ["name"] = name, ["role"] = employee?.Role ?? "employee", ["entries"] = listing });
+                var agent = run.Agents.Answerer(run, batches.Count == 1 ? "memory-reviewer" : $"memory-reviewer-{i + 1}", prompt) with
+                {
+                    TaskType = run.Options.SummaryTaskType,
+                    EmployeeId = employeeId,
+                    Title = batches.Count == 1 ? null : $"Reviewed part {i + 1} of {batches.Count} of the memory",
+                    Limits = new AgentLimits { MaxSteps = 3, MaxOutputTokens = MemoryReview.OutputTokens, MaxSearchesPerCall = 0 },
+                };
+                var result = await WorkflowSupport.RunAgentAsync(run, agent, NoWorkspace.Instance, "Review the memory now and reply with the JSON object.", cancellationToken);
+                if (WorkflowOutcome.FromAgent(result) is { } stopped)
+                {
+                    return stopped;
+                }
+
+                if (result.CutOff)
+                {
+                    return WorkflowOutcome.Failure("The review's answer was too long to finish, so the memory was left as it was.");
+                }
+
+                if (WorkflowSupport.JsonAnswer(result.FinalText) is not { } read)
+                {
+                    return WorkflowOutcome.Failure("The review gave no answer in the agreed form, so the memory was left as it was.");
+                }
+
+                answer = await run.Journal.RecordAsync(key, read, cancellationToken);
+            }
+
+            var cleaned = MemoryReview.Clean(answer, batches[i]);
+            foreach (var (to, from) in new[] { (merged, cleaned.Merged), (removed, cleaned.Removed), (corrected, cleaned.Corrected) })
+            {
+                foreach (var item in from)
+                {
+                    to.Add(item?.DeepClone());
+                }
+            }
+
+            dropped += cleaned.Dropped;
         }
 
-        if (WorkflowSupport.JsonAnswer(result.FinalText) is not { } answer)
-        {
-            return WorkflowOutcome.Failure("The review gave no answer in the agreed form, so the memory was left as it was.");
-        }
-
-        var (merged, removed, corrected, dropped) = MemoryReview.Clean(answer, entries);
         await run.ControlPlane.ApplyMemoryReviewAsync(employeeId, run.Run.Id, merged, removed, corrected, cancellationToken);
         var summary = Sentences.Join([
             $"Reviewed {entries.Count} entr{(entries.Count == 1 ? "y" : "ies")} of {name}'s memory: {merged.Count} merged, {removed.Count} removed, {corrected.Count} corrected, the rest kept",
@@ -233,10 +267,10 @@ public sealed class ReviewWorkflow : IWorkflow
             return stopped;
         }
 
-        var report = WorkflowSupport.JsonAnswer(result.FinalText);
+        var report = result.CutOff ? null : WorkflowSupport.JsonAnswer(result.FinalText);
         if (report is null)
         {
-            return WorkflowOutcome.Failure("The review gave no report, so the app is not cleared.");
+            return WorkflowOutcome.Failure(result.CutOff ? "The review's report was too long to finish, so the app is not cleared." : "The review gave no report, so the app is not cleared.");
         }
 
         var findings = report["findings"] as JsonArray ?? [];
@@ -251,6 +285,44 @@ public sealed class ReviewWorkflow : IWorkflow
 public static class MemoryReview
 {
     private static readonly string[] Kinds = ["fact", "practice", "preference", "lesson"];
+
+    /// <summary>Entries in one review call: few enough that the answer fits in <see cref="OutputTokens"/>, with a reasoning model's thinking.</summary>
+    public const int BatchEntries = 40;
+
+    /// <summary>Characters of entries in one review call.</summary>
+    public const int BatchCharacters = 16_000;
+
+    /// <summary>The room one review answer has; the one retry of a cut-off answer has twice this (R2-6).</summary>
+    public const int OutputTokens = 8000;
+
+    /// <summary>The memory in review batches: by scope, then kind, then title, each batch at most <see cref="BatchEntries"/> entries and <see cref="BatchCharacters"/> characters.</summary>
+    public static IReadOnlyList<IReadOnlyList<MemoryEntry>> Batches(IReadOnlyList<MemoryEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var batches = new List<IReadOnlyList<MemoryEntry>>();
+        var current = new List<MemoryEntry>();
+        var size = 0;
+        foreach (var entry in entries.OrderBy(e => e.Scope, StringComparer.Ordinal).ThenBy(e => e.Kind, StringComparer.Ordinal).ThenBy(e => e.Title, StringComparer.Ordinal).ThenBy(e => e.Id))
+        {
+            var length = entry.Title.Length + entry.Body.Length + 80;
+            if (current.Count > 0 && (current.Count >= BatchEntries || size + length > BatchCharacters))
+            {
+                batches.Add(current);
+                current = [];
+                size = 0;
+            }
+
+            current.Add(entry);
+            size += length;
+        }
+
+        if (current.Count > 0)
+        {
+            batches.Add(current);
+        }
+
+        return batches;
+    }
 
     public static (JsonArray Merged, JsonArray Removed, JsonArray Corrected, int Dropped) Clean(JsonObject answer, IReadOnlyList<MemoryEntry> entries)
     {

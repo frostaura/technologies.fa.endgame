@@ -83,8 +83,8 @@ public sealed class FakeOpenRouter : IAsyncDisposable
         ["cost"] = cost,
     };
 
-    /// <summary>A complete answer. <paramref name="toolCallId"/> adds a tool call with that exact id.</summary>
-    public static Func<JsonObject, HttpContext, Task> Completion(decimal? cost, string content = "Hello.", string? toolCallId = null, string id = "gen-fake-1") => async (request, http) =>
+    /// <summary>A complete answer. <paramref name="toolCallId"/> adds a tool call with that exact id; <paramref name="finish"/> <c>length</c> is an answer cut at its token limit.</summary>
+    public static Func<JsonObject, HttpContext, Task> Completion(decimal? cost, string content = "Hello.", string? toolCallId = null, string id = "gen-fake-1", string? finish = null) => async (request, http) =>
     {
         var message = new JsonObject { ["role"] = "assistant", ["content"] = content };
         if (toolCallId is not null)
@@ -113,8 +113,8 @@ public sealed class FakeOpenRouter : IAsyncDisposable
             ["choices"] = new JsonArray(new JsonObject
             {
                 ["index"] = 0,
-                ["finish_reason"] = toolCallId is null ? "stop" : "tool_calls",
-                ["native_finish_reason"] = toolCallId is null ? "STOP" : "TOOL_USE",
+                ["finish_reason"] = finish ?? (toolCallId is null ? "stop" : "tool_calls"),
+                ["native_finish_reason"] = finish is "length" ? "MAX_TOKENS" : toolCallId is null ? "STOP" : "TOOL_USE",
                 ["message"] = message,
             }),
             ["usage"] = usage,

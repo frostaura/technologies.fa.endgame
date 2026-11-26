@@ -530,11 +530,12 @@ Shared vocabulary used below:
 - **You know it worked when:** "Review started — watch it" appears. Later, "Last review, …" shows the new counts.
 - **Variations and refusals:**
   - "The review did not start: <reason>". Released or contractor: 409 "Only an employee on the payroll has a memory to review."
-  - The review's own result is applied with `POST /internal/employees/{id}/memory/review` (system).
+  - The review's own result is applied with `POST /internal/employees/{id}/memory/review` (system), once, after every part is reviewed: a large memory is reviewed in parts of at most 40 entries, related entries together, each shown as "Reviewed part <n> of <m> of the memory".
+  - An answer cut off at its length limit is asked for once more with twice the room, not charged; cut off again, the run fails with "The review's answer was too long to finish, so the memory was left as it was." An answer in the wrong shape fails with "The review gave no answer in the agreed form, so the memory was left as it was."
   - Failed log read: "The last review could not be loaded: …" with "Try again".
 - **Where:** `EmployeeView.tsx` (ReviewPanel). `POST /api/employees/{id}/reviews`. `MemoryService.ReviewAsync`.
 - **Reachable from:** UI.
-- **Covered by tests:** `EmployeeView.test.tsx` ("starts a review"). `workforce.spec.ts`. `WorkflowTests.A_memory_review_consolidates_prunes_and_corrects_and_drops_what_names_no_entry`; `WalkTwoServerTests.A_review_that_gives_no_reason_stores_none`.
+- **Covered by tests:** `EmployeeView.test.tsx` ("starts a review"). `workforce.spec.ts`. `WorkflowTests.A_memory_review_consolidates_prunes_and_corrects_and_drops_what_names_no_entry`; `WalkTwoServerTests.A_review_that_gives_no_reason_stores_none`; `WorkflowTests.A_large_memory_is_reviewed_in_batches_and_applied_once`, `Every_structured_call_site_reports_a_cut_off_answer_as_too_long_never_as_the_wrong_form`.
 
 ### MEM-06 The employee writes and reads its own memory
 - **Who:** the system (Runner, for the employee).
