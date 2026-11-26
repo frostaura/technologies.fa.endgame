@@ -10,10 +10,10 @@ import { ROLE_NAME, effectiveRole, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
-import { platformHost, useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetMeQuery } from "@/store/api";
+import { platformHost, useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetCreditsQuery, useGetMeQuery } from "@/store/api";
 import type { Autonomy, IdeaEstimate, MemberRole } from "@/store/types";
 import { isArchived } from "../tree/treeManage";
-import { nextSteps, researchPromise } from "./startModel";
+import { nextSteps, researchPromise, roomFor, shortfall } from "./startModel";
 import { AppShell } from "../shell/AppShell";
 
 /** Things an idea commonly has to respect, offered as one-tap constraints. They are the owner's words, sent as text. */
@@ -231,7 +231,7 @@ export function StartView() {
           <input id={ids.other} value={other} onChange={(e) => setOther(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3.5" />
         </fieldset>
 
-        <EstimatePanel state={estimate} scope={scope ?? null} />
+        <EstimatePanel state={estimate} scope={scope ?? null} firstRun={firstRun} />
 
         {submitError && (
           <p id="start-error" role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
@@ -258,8 +258,19 @@ export function StartView() {
 
 const article = (role: MemberRole) => (role === "admin" || role === "owner" ? "an" : "a");
 
-function EstimatePanel({ state, scope }: { state: EstimateState; scope: string | null }) {
+function EstimatePanel({ state, scope, firstRun }: { state: EstimateState; scope: string | null; firstRun: boolean }) {
   const autonomy = useGetAutonomyQuery(scope ?? "", { skip: !scope });
+  // What there is to spend, read at the organisation so every cap on the way down is seen. A read that fails says
+  // nothing here: the run itself still waits, and says why, if there is not enough (IDEA-04).
+  const credits = useGetCreditsQuery(scope?.split("/")[0] ?? "", { skip: !scope || state.kind !== "loaded" });
+  const short =
+    state.kind !== "loaded"
+      ? null
+      : firstRun
+        ? `A new organisation starts with no credits, and this needs about ${formatCredits(state.estimate.credits)}. Research starts, then waits for a top-up before it spends anything.`
+        : scope && credits.data
+          ? shortfall(roomFor(credits.data, scope), state.estimate.credits)
+          : null;
   return (
     <section aria-label="Research estimate" aria-live="polite" className={cn("flex flex-col gap-2.5 rounded-md border border-primary-line bg-primary-tint px-5 py-4", RISE, stagger(4))}>
       <div className="flex flex-wrap justify-between gap-2">
@@ -282,6 +293,16 @@ function EstimatePanel({ state, scope }: { state: EstimateState; scope: string |
             ? "Describe the idea and the research estimate appears here before anything is charged."
             : `${researchPromise(scope ? (autonomy.data ?? null) : null)} If the estimate turns out wrong, you see by how much.${state.kind === "loaded" && state.estimate.basis ? ` ${state.estimate.basis}` : ""}`}
         </span>
+      )}
+      {short && (
+        <p data-testid="estimate-shortfall" className="flex flex-col gap-1 rounded-xs border border-attention-line bg-surface px-3 py-2 text-ink">
+          {short}
+          {!firstRun && (
+            <Link href={paths.credits()} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+              See credits
+            </Link>
+          )}
+        </p>
       )}
     </section>
   );
