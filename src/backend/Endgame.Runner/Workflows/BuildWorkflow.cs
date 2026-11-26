@@ -488,6 +488,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var taskId = await ClaimTaskAsync(run, $"build:{item.Id}", crew.ProjectPath, item.Text, $"{item.Detail}\nChecked by: {item.Check}", checkFirst ? crew.Qa : crew.Engineer, cancellationToken);
         var tiers = run.Options.BuildTiers;
         JsonObject? lastEvaluation = null;
+        // How each failed round failed (EvaluationGate's "failing"), oldest first: the same failure three times stops the part.
+        var failures = new List<IReadOnlyList<string>>();
+        var stoppedEarly = false;
         for (var round = 0; round <= run.Options.MaxRepairRounds; round++)
         {
             var key = $"item:{item.Id}:round:{round}";
@@ -495,6 +498,13 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             {
                 lastEvaluation = recorded;
                 if (Json.Bool(recorded, "passed") == true)
+                {
+                    break;
+                }
+
+                failures.Add(Json.Strings(recorded, "failing"));
+                stoppedEarly = SameFailureThrice(failures) && round < run.Options.MaxRepairRounds;
+                if (stoppedEarly)
                 {
                     break;
                 }
@@ -509,7 +519,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             if (checkFirst && round == 0)
             {
                 // Nothing built yet: straight to the check of what worked before.
-                var firstCheck = await JudgeAsync(run, plan, item, round, tier, workspace, appId, crew, taskId, cancellationToken);
+                var firstCheck = await JudgeAsync(run, plan, item, round, tier, workspace, appId, crew, taskId, failures, lastEvaluation, cancellationToken);
                 if (firstCheck.Outcome is { } interrupted)
                 {
                     return interrupted;
@@ -521,18 +531,12 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                     break;
                 }
 
+                failures.Add(Json.Strings(lastEvaluation, "failing"));
                 continue;
             }
 
             var task = repair
-                ? RunnerResources.Prompt("repair", new Dictionary<string, string>
-                {
-                    ["round"] = round.ToString(CultureInfo.InvariantCulture),
-                    ["rounds"] = run.Options.MaxRepairRounds.ToString(CultureInfo.InvariantCulture),
-                    ["item"] = $"[{item.Id}] {item.Deliverable} — checked by: {item.Check}\n{TestIdsLine(item)}{Requirements(plan, item)}",
-                    ["evidence"] = Json.Str(lastEvaluation, "evidence") ?? "",
-                    ["faults"] = string.Join("\n", Json.Strings(lastEvaluation, "faults").Select(f => $"- {f}")),
-                })
+                ? await RepairTaskAsync(run, plan, item, round, lastEvaluation, failures, cancellationToken)
                 : $"Build this one feature of the plan, completely, then commit it.\n\nThe feature: [{item.Id}] {item.Deliverable}\nIt will be checked by: {item.Check}\n{TestIdsLine(item)}{Requirements(plan, item)}\nThe whole plan, for context (build only this item now):\n{plan.Render()}"
                     + (recreated && round == 0 ? "\n\nThe workspace was recreated from the last commit; anything uncommitted from before was lost." : "");
             var result = await WorkflowSupport.RunAgentAsync(run, builder, workspace, task, cancellationToken);
@@ -547,7 +551,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                 await workspace.CommitAsync($"{(repair ? "Repair" : "Build")} {item.Id}: {item.Deliverable}", builder.AuthorName, builder.AuthorEmail, cancellationToken);
             }
 
-            var judged = await JudgeAsync(run, plan, item, round, tier, workspace, appId, crew, taskId, cancellationToken);
+            var judged = await JudgeAsync(run, plan, item, round, tier, workspace, appId, crew, taskId, failures, lastEvaluation, cancellationToken);
             if (judged.Outcome is { } interrupted2)
             {
                 return interrupted2;
@@ -565,6 +569,24 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             {
                 await Workforce.RememberAsync(run, crew.Engineer, [new MemoryNote(OutputText.Truncate($"Sent back: {item.Deliverable}", 120), OutputText.Truncate(fault, 1000), "lesson", crew.ProjectPath)], cancellationToken);
             }
+
+            failures.Add(Json.Strings(evaluation, "failing"));
+            stoppedEarly = SameFailureThrice(failures) && round < run.Options.MaxRepairRounds;
+            if (stoppedEarly)
+            {
+                break;
+            }
+        }
+
+        if (Json.Bool(lastEvaluation, "passed") != true && stoppedEarly)
+        {
+            // The same requirement failed three rounds running for the same reason: a fourth round on a stronger model would
+            // spend more on what three could not change, so the part stops here with a plain outcome.
+            var what = StuckOn(plan, item, failures[^1]);
+            await FinishTaskAsync(run, taskId, "failed", $"Stopped after it failed its check three times in a row for the same reason ({what}); the repairs were not charged.", cancellationToken);
+            return WorkflowOutcome.Failure($"'{item.Deliverable}' failed its check three rounds running for the same reason ({string.Join(", ", failures[^1])}), so it was stopped before another repair round: {string.Join(" ", Json.Strings(lastEvaluation, "faults"))}")
+                with
+            { ForOwner = $"\"{item.Text.TrimEnd('.')}\" failed its check three times in a row for the same reason — {what} — so it was stopped rather than repaired again, and the app was not {(change ? "changed" : "published")}. Its work so far is saved and the repairs were not charged; “Try again” carries on from it." };
         }
 
         if (Json.Bool(lastEvaluation, "passed") != true)
@@ -587,12 +609,13 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     }
 
     /// <summary>One round's check by the QA engineer, as its own task, written to the log as a judgement on the engineer's work.</summary>
-    private async Task<(JsonObject? Evaluation, WorkflowOutcome? Outcome)> JudgeAsync(RunContext run, PlanContract plan, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, Guid? taskId, CancellationToken cancellationToken)
+    private async Task<(JsonObject? Evaluation, WorkflowOutcome? Outcome)> JudgeAsync(RunContext run, PlanContract plan, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, Guid? taskId,
+        IReadOnlyList<IReadOnlyList<string>> failures, JsonObject? previous, CancellationToken cancellationToken)
     {
         var key = $"item:{item.Id}:round:{round}";
         // The check is the QA engineer's own piece of work.
         var checkTaskId = await ClaimTaskAsync(run, $"check:{item.Id}:{round}", crew.ProjectPath, $"Check: {item.Text}", $"Round {round}, built on {tier}. Checked by: {item.Check}", crew.Qa, cancellationToken);
-        var evaluation = await EvaluateAsync(run, plan, item, round, tier, workspace, appId, crew, cancellationToken);
+        var evaluation = await EvaluateAsync(run, plan, item, round, tier, workspace, appId, crew, previous, cancellationToken);
         if (evaluation is null)
         {
             return (null, WorkflowOutcome.Suspend("evaluation interrupted"));
@@ -617,17 +640,29 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             ["evidence"] = OutputText.Truncate(Json.Str(evaluation, "evidence") ?? "", 4000),
             ["faults"] = evaluation["faults"]?.DeepClone(),
         };
-        if (!passedNow && round < run.Options.MaxRepairRounds)
+        // The same failure a third time stops the part: this judgement is its last, and no repair follows.
+        var stops = !passedNow && round < run.Options.MaxRepairRounds && SameFailureThrice([.. failures, Json.Strings(evaluation, "failing")]);
+        if (!passedNow && round < run.Options.MaxRepairRounds && !stops)
         {
             judgement["repairCharged"] = false;
         }
         else if (!passedNow)
         {
             judgement["final"] = true;
+            if (stops)
+            {
+                judgement["stoppedEarly"] = true;
+            }
+        }
+
+        if (Json.Bool(evaluation, "rechecked") == true)
+        {
+            judgement["rechecked"] = true;
         }
 
         await run.AppendAsync(passedNow ? HarnessEvents.EvaluationPassed : HarnessEvents.EvaluationFailed, judgement, cancellationToken);
-        await FinishTaskAsync(run, checkTaskId, "done", summary, cancellationToken);
+        // The judgement above already says how the part fared, in the owner's words; the check's own task says only that it is done.
+        await FinishTaskAsync(run, checkTaskId, "done", CheckDone(item, passedNow, round, run.Options.MaxRepairRounds, stops), cancellationToken);
         await run.Journal.RecordAsync(key, evaluation, cancellationToken);
         return (evaluation, null);
     }
@@ -690,11 +725,11 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     /// preview is the evaluated image with a throwaway database of its own, destroyed when the evaluation ends, so nothing the
     /// evaluator's test members do ever reaches the app that is published.
     /// </summary>
-    private async Task<JsonObject?> EvaluateAsync(RunContext run, PlanContract plan, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, CancellationToken cancellationToken)
+    private async Task<JsonObject?> EvaluateAsync(RunContext run, PlanContract plan, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, JsonObject? previous, CancellationToken cancellationToken)
     {
         try
         {
-            return await EvaluateOnPreviewAsync(run, plan, item, round, tier, workspace, appId, crew, cancellationToken);
+            return await EvaluateOnPreviewAsync(run, plan, item, round, tier, workspace, appId, crew, previous, cancellationToken);
         }
         finally
         {
@@ -721,7 +756,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
     }
 
-    private async Task<JsonObject?> EvaluateOnPreviewAsync(RunContext run, PlanContract plan, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, CancellationToken cancellationToken)
+    private async Task<JsonObject?> EvaluateOnPreviewAsync(RunContext run, PlanContract plan, PlanItem item, int round, string tier, IWorkspace workspace, Guid appId, Crew crew, JsonObject? previous, CancellationToken cancellationToken)
     {
         string? previewNote = null;
         ITool? probe = null;
@@ -752,31 +787,94 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var evaluatorId = $"evaluator-{item.Id}-{round}";
         // The check of what worked before says how a part on screen is shown: by the data it shows or changes (KeepCheck).
         var checkedItem = item.Id == KeepItem ? item with { Check = KeepCheck } : item;
-        var evaluator = AgentFactory.As(run, run.Agents.Evaluator(run, evaluatorId, checkedItem, plan.RequirementsOf(item), workspace.Root, probe, callApp, appId), crew.Qa, crew.QaMemory, canRemember: true, crew.ProjectPath);
-        var result = await WorkflowSupport.RunAgentAsync(run, evaluator, workspace,
-            $"Evaluate the item now (round {round}, built on {tier}).{(previewNote is null ? "" : "\n\n" + previewNote)}", cancellationToken);
+        AgentDefinition Evaluator(string id) =>
+            AgentFactory.As(run, run.Agents.Evaluator(run, id, checkedItem, plan.RequirementsOf(item), workspace.Root, probe, callApp, appId), crew.Qa, crew.QaMemory, canRemember: true, crew.ProjectPath);
+        var note = previewNote is null ? "" : "\n\n" + previewNote;
+        var result = await WorkflowSupport.RunAgentAsync(run, Evaluator(evaluatorId), workspace,
+            $"Evaluate the item now (round {round}, built on {tier}).{SentBackFor(previous)}{note}", cancellationToken);
         if (WorkflowOutcome.FromAgent(result) is not null)
         {
             return null;
         }
 
+        // Code's gate: every requirement the item delivers is shown working in the running app, signed in, and every test id the
+        // plan promised is on the app's screens, or the item fails.
+        var gated = await GateAsync(run, plan, item, Verdict(result), workspace, [evaluatorId], cancellationToken);
+        if (Json.Bool(gated, "recheck") != true)
+        {
+            return gated;
+        }
+
+        // The evaluator said it works (or gave no verdict), and code could not verify how it was shown: a builder cannot repair
+        // that, so the same build is checked again, once, told what code refused — not sent back (the real dive-club build
+        // spent three repair rounds adding a refresh button to answer a fault in the evaluator's own evidence). Not billed.
+        var recheckId = $"{evaluatorId}-recheck";
+        var again = await WorkflowSupport.RunAgentAsync(run, Evaluator(recheckId) with { Repair = true }, workspace, RecheckTask(round, tier, gated) + note, cancellationToken);
+        if (WorkflowOutcome.FromAgent(again) is not null)
+        {
+            return null;
+        }
+
+        var regated = await GateAsync(run, plan, item, Verdict(again), workspace, [evaluatorId, recheckId], cancellationToken);
+        regated["rechecked"] = true;
+        regated["firstFaults"] = gated["faults"]?.DeepClone();
+        return regated;
+    }
+
+    /// <summary>The evaluator's answer, or an unchecked one when it gave none or it did not fit (R2-6): never a pass.</summary>
+    private static JsonObject Verdict(AgentResult result)
+    {
         var answer = WorkflowSupport.JsonAnswer(result.FinalText);
         if (result.CutOff)
         {
             // Not a verdict in the wrong form: it did not fit (R2-6). Unchecked, and checked again.
-            answer = new JsonObject { ["passed"] = false, ["evidence"] = "The check's answer was too long to finish.", ["faults"] = Json.Array(["The evaluator's answer was too long to finish; treat the item as unchecked and check it again."]) };
-        }
-        else if (answer is null || Json.Bool(answer, "passed") is null)
-        {
-            // An evaluator that gives no verdict has not passed anything.
-            answer = new JsonObject { ["passed"] = false, ["evidence"] = OutputText.Truncate(result.FinalText ?? "", 2000), ["faults"] = Json.Array(["The evaluator gave no verdict; treat the item as unchecked and check it again."]) };
+            return new JsonObject { ["passed"] = false, ["unchecked"] = true, ["evidence"] = "The check's answer was too long to finish.", ["faults"] = Json.Array(["The evaluator's answer was too long to finish; treat the item as unchecked and check it again."]) };
         }
 
-        // Code's gate: every requirement the item delivers is shown working in the running app, signed in, and every test id the
-        // plan promised is on the app's screens, or the item fails.
+        if (answer is null || Json.Bool(answer, "passed") is null)
+        {
+            // An evaluator that gives no verdict has not passed anything.
+            return new JsonObject { ["passed"] = false, ["unchecked"] = true, ["evidence"] = OutputText.Truncate(result.FinalText ?? "", 2000), ["faults"] = Json.Array(["The evaluator gave no verdict; treat the item as unchecked and check it again."]) };
+        }
+
+        return answer;
+    }
+
+    /// <summary>
+    /// The gate over the calls the named evaluators made, the test ids on the screens, and — when a requirement about a screen
+    /// is marked met — the app's own front-end tests, run by code (<see cref="ScreenTests"/>).
+    /// </summary>
+    private static async Task<JsonObject> GateAsync(RunContext run, PlanContract plan, PlanItem item, JsonObject answer, IWorkspace workspace, IReadOnlyList<string> evaluators, CancellationToken cancellationToken)
+    {
         var log = await run.LogReader.ReadAllAsync(cancellationToken);
-        var calls = CallAppTool.CallsIn(log, evaluatorId);
-        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken), CheckPreviewTool.CallsIn(log, evaluatorId));
+        var calls = evaluators.SelectMany(e => CallAppTool.CallsIn(log, e)).Distinct(StringComparer.Ordinal).ToList();
+        var signedOut = evaluators.SelectMany(e => CheckPreviewTool.CallsIn(log, e)).Distinct(StringComparer.Ordinal).ToList();
+        var marks = (answer["requirements"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        var screenClaimed = plan.RequirementsOf(item).Any(r => PlanRequirement.IsAboutScreen(r.Text) && marks.Any(m => Json.Str(m, "id") == r.Id && Json.Bool(m, "met") == true));
+        var tests = screenClaimed ? await ScreenTests.RunAsync(workspace, cancellationToken) : ScreenTests.Outcome.NotRun;
+        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken), signedOut, tests.Tests, tests.Problem);
+    }
+
+    /// <summary>The second look at the same build: what code refused, word for word, and how each requirement is shown.</summary>
+    public static string RecheckTask(int round, string tier, JsonObject gated)
+    {
+        ArgumentNullException.ThrowIfNull(gated);
+        var refused = string.Join("\n", Json.Strings(gated, "faults").Select(f => $"- {f}"));
+        return $"Evaluate the item now (round {round}, built on {tier}). This is a second look at the same build: a first check said it works, but code could not verify how it was shown, so nothing was sent back to the builder. What code refused, word for word:\n{refused}\n\n"
+            + "Show each of those requirements again as your instructions say — for what the app does, a call to the running app cited as METHOD path; for how a screen presents something, the screen's own test named exactly as its title is written, in the requirement's tests list (code runs it) — then give your verdict. If one does not work, say so: it is sent back.";
+    }
+
+    /// <summary>For a check after a repair: what the last check sent back, so the evaluator looks there first.</summary>
+    private static string SentBackFor(JsonObject? previous)
+    {
+        var failed = (previous?["requirements"] as JsonArray ?? []).OfType<JsonObject>().Where(r => Json.Bool(r, "met") != true).Select(r => $"{Json.Str(r, "id")} (\"{Json.Str(r, "text")}\")").ToList();
+        if (previous is null || Json.Bool(previous, "passed") == true || (failed.Count == 0 && Json.Strings(previous, "faults").Count == 0))
+        {
+            return "";
+        }
+
+        var what = failed.Count > 0 ? $"requirement{(failed.Count == 1 ? "" : "s")} {string.Join(", ", failed)} not shown working" : OutputText.Truncate(Json.Strings(previous, "faults")[0], 400);
+        return $" The last check sent it back for: {what}. Check that first, then everything else as usual.";
     }
 
     /// <summary>The item's promised test ids that no file under <c>web/src</c> writes as <c>data-testid="…"</c>.</summary>
@@ -998,6 +1096,113 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         return passed
             ? $"Checked and working: {what}{count}."
             : $"Sent back for repair{(round > 0 ? " again" : "")}, at no charge: {what}{count}.";
+    }
+
+    /// <summary>
+    /// Whether the last three failed rounds failed the same way — the same requirements, each for the same reason — so a further
+    /// round would repeat what three could not change. A failure of the evaluator's own free-form faults is never "the same".
+    /// </summary>
+    public static bool SameFailureThrice(IReadOnlyList<IReadOnlyList<string>> failures)
+    {
+        ArgumentNullException.ThrowIfNull(failures);
+        return failures.Count >= 3 && failures[^1] is { Count: > 0 } last && !last.Contains("item:faults")
+            && failures.TakeLast(3).All(f => f.Order(StringComparer.Ordinal).SequenceEqual(last.Order(StringComparer.Ordinal), StringComparer.Ordinal));
+    }
+
+    /// <summary>Whether the last two failed rounds failed the same way: the next repair is told to change its approach.</summary>
+    public static bool SameFailureTwice(IReadOnlyList<IReadOnlyList<string>> failures)
+    {
+        ArgumentNullException.ThrowIfNull(failures);
+        return failures.Count >= 2 && failures[^1] is { Count: > 0 } last && !last.Contains("item:faults")
+            && failures[^2].Order(StringComparer.Ordinal).SequenceEqual(last.Order(StringComparer.Ordinal), StringComparer.Ordinal);
+    }
+
+    /// <summary>What a part is stuck on, in the owner's words: the requirements that could not be shown working.</summary>
+    private static string StuckOn(PlanContract plan, PlanItem item, IReadOnlyList<string> failing)
+    {
+        var texts = failing.Select(f => f.Split(':')[0]).Select(id => plan.RequirementsOf(item).FirstOrDefault(r => r.Id == id)?.Text.TrimEnd('.')).OfType<string>().Distinct().ToList();
+        return texts.Count == 0
+            ? "its check could not be completed"
+            : $"“{string.Join("” and “", texts)}” could not be shown working in the running app";
+    }
+
+    /// <summary>The check task's own line: done, and what follows. The judgement beside it carries the result in full.</summary>
+    private static string CheckDone(PlanItem item, bool passed, int round, int rounds, bool stops)
+    {
+        var of = $"The check of “{item.Text.TrimEnd('.')}”{(round == 0 ? "" : $" after repair {round}")} is finished";
+        return passed ? $"{of}: it works."
+            : stops || round >= rounds ? $"{of}: it still does not work, and no repair follows."
+            : $"{of}: it goes back for repair, at no charge.";
+    }
+
+    /// <summary>
+    /// The repair brief (repair.md): which requirement failed and what the checker saw, quoted; every fault; what earlier
+    /// rounds of this part did and which files they changed, so the round does not start from nothing; and, when it failed
+    /// the same way twice running, the plain instruction to change approach rather than repeat it.
+    /// </summary>
+    private static async Task<string> RepairTaskAsync(RunContext run, PlanContract plan, PlanItem item, int round, JsonObject? last, IReadOnlyList<IReadOnlyList<string>> failures, CancellationToken cancellationToken)
+    {
+        var log = await run.LogReader.ReadAllAsync(cancellationToken);
+        return RepairBrief(plan, item, round, run.Options.MaxRepairRounds, last, failures, log);
+    }
+
+    public static string RepairBrief(PlanContract plan, PlanItem item, int round, int rounds, JsonObject? last, IReadOnlyList<IReadOnlyList<string>> failures, IReadOnlyList<RunEvent> log)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(failures);
+        ArgumentNullException.ThrowIfNull(log);
+        var faults = Json.Strings(last, "faults");
+        var findings = new List<string>();
+        foreach (var r in (last?["requirements"] as JsonArray ?? []).OfType<JsonObject>().Where(r => Json.Bool(r, "met") != true))
+        {
+            var id = Json.Str(r, "id") ?? "";
+            var text = Json.Str(r, "text") ?? "";
+            var saw = Json.Str(r, "evidence") is { Length: > 0 } e ? $" The checker wrote: \"{OutputText.Truncate(e, 700)}\"" : " The checker wrote nothing for it.";
+            var gate = faults.FirstOrDefault(f => f.StartsWith($"Requirement {id} (", StringComparison.Ordinal)) is { } f ? $" Code's check: {OutputText.Truncate(f, 700)}" : "";
+            var kind = Json.Strings(last, "failing").FirstOrDefault(x => x.StartsWith(id + ":", StringComparison.Ordinal))?.Split(':')[1];
+            var todo = kind == EvaluationGate.NotMet
+                ? "It does not work yet: make it work in the running app."
+                : kind == EvaluationGate.Unshown && PlanRequirement.IsAboutScreen(text)
+                    ? "The checker said it works but named nothing code can verify. It is about how a screen presents something, so it is shown by the screen's own test: make sure one test says exactly this in its title, passes, and name it (file > title) in your reply."
+                    : kind == EvaluationGate.Unshown
+                        ? "The checker said it works but cited no call to the running app that shows it. Make sure the app answers the call that shows it, and name that call (METHOD path) in your reply."
+                        : "It was not checked: make sure the running app shows it and the check in the contract can be run.";
+            findings.Add($"- {id} (\"{text}\"): not shown working.{saw}{gate} What to do: {todo}");
+        }
+
+        if (Json.Strings(last, "missingTestIds") is { Count: > 0 } ids)
+        {
+            findings.Add($"- The screens lack the test ids {string.Join(", ", ids)}: add each as data-testid on its element.");
+        }
+
+        // What this part's earlier rounds did, in their own words, and the files they changed: read those first.
+        var agents = Enumerable.Range(0, round).Select(r => $"builder-{item.Id}-{r}").ToHashSet(StringComparer.Ordinal);
+        var replies = log.Where(e => e.Type == HarnessEvents.Message && Json.Str(e.Payload, "kind") == MessageKinds.AgentReply && Json.Bool(e.Payload, "final") == true
+                && Json.Str(e.Payload, HarnessEvents.AgentField) is { } a && agents.Contains(a))
+            .Select(e => $"- {(Json.Str(e.Payload, HarnessEvents.AgentField)!.EndsWith("-0", StringComparison.Ordinal) ? "The build" : "Repair round " + Json.Str(e.Payload, HarnessEvents.AgentField)!.Split('-')[^1])}: {OutputText.Truncate((Json.Str(e.Payload, "reply") ?? "").ReplaceLineEndings(" ").Trim(), 600)}")
+            .ToList();
+        var files = log.Where(e => e.Type == HarnessEvents.ToolRequested && Json.Str(e.Payload, HarnessEvents.AgentField) is { } a && agents.Contains(a)
+                && Json.Str(e.Payload, "name") is "edit_file" or "write_file")
+            .Select(e => Json.ParseArguments(e.Payload["arguments"]).Args is { } args ? Json.Str(args, "path") : null)
+            .OfType<string>().Select(p => p.Trim()).Where(p => p.Length > 0).Distinct(StringComparer.Ordinal).Take(30).ToList();
+        var earlier = replies.Count + files.Count == 0 ? "" :
+            "\n\nWhat earlier rounds of this part did, so you need not start over:\n" + string.Join("\n", replies)
+            + (files.Count == 0 ? "" : $"\nThe files they changed (start there; the rest of the app is as it was): {string.Join(", ", files)}");
+        var same = SameFailureTwice(failures)
+            ? $"\n\nThis is the second check running that failed for the same reason ({string.Join(", ", failures[^1])}). What the last round did did not change the outcome, so do not repeat it: work out why the check still cannot see it working, and change the approach. If it cannot be shown working, say so plainly in your reply."
+            : "";
+        return RunnerResources.Prompt("repair", new Dictionary<string, string>
+        {
+            ["round"] = round.ToString(CultureInfo.InvariantCulture),
+            ["rounds"] = rounds.ToString(CultureInfo.InvariantCulture),
+            ["item"] = $"[{item.Id}] {item.Deliverable} — checked by: {item.Check}\n{TestIdsLine(item)}{Requirements(plan, item)}",
+            ["findings"] = findings.Count == 0 ? "- (no requirement failed: see the faults)" : string.Join("\n", findings),
+            ["evidence"] = Json.Str(last, "evidence") ?? "",
+            ["faults"] = string.Join("\n", faults.Select(f => $"- {f}")),
+            ["earlier"] = earlier,
+            ["same"] = same,
+        });
     }
 
     private static string DivisionName(string slug)

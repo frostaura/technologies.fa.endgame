@@ -1,11 +1,14 @@
 The evaluator checked your work against the contract and it failed. This is repair round {{round}}
-of {{rounds}}. Fix every fault below, verify with the same checks, commit, and reply with what you
-changed.
+of {{rounds}}. Fix what it found, verify with the same checks, commit, and reply with what you
+changed — naming, for each requirement below, the call or the test that now shows it.
 
 Contract item: {{item}}
 
-The evaluator's evidence:
-{{evidence}}
+What the check found, requirement by requirement:
+{{findings}}
 
-Faults:
+Every fault, word for word:
 {{faults}}
+
+The evaluator's evidence:
+{{evidence}}{{earlier}}{{same}}

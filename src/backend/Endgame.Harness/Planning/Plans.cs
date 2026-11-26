@@ -81,6 +81,21 @@ public sealed partial record PlanRequirement(string Id, string Text)
     /// </summary>
     public static bool NeedsNoSignIn(string? text) => NoSignIn().IsMatch(text ?? "");
 
+    /// <summary>
+    /// Whether the words are about how a screen presents something — what a view leads with, its layout, how it reads on a
+    /// phone — rather than what the app does with data ("Make the trip leader's readiness view the product", "on their
+    /// phone"). No call to the running app can show that: a call shows the data, never the screen. Such a requirement is
+    /// shown by the screen's own test, which code runs itself (ARCH-006); a requirement about data never is. "View" counts
+    /// as the noun ("the readiness view"), not the verb ("members view their bookings"); a phone number is data.
+    /// </summary>
+    public static bool IsAboutScreen(string? text) => !NeedsNoSignIn(text) && (Screen().IsMatch(text ?? "") || ViewNoun().IsMatch(text ?? ""));
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(screens?|pages?|layout|laid out|dashboards?|on (their|a|the|your|my|his|her|any) (phones?|mobiles?|tablets?)|phones?(?!\s+numbers?)|mobile(?!\s+numbers?)|tablets?|responsive|looks?|design(ed)?|styl(e|ed|ing)|themes?|dark mode|colou?rs?|fonts?|icons?|highlight(ed|s)?|prominent(ly)?|at a glance|front and cent(re|er)|the product)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex Screen();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?<!\b(can|to|and|or|they|members|people|users|who|i|we|you|admins?|leaders?|owners?|divers?|players?|customers?|everyone|anyone)\s+)\bviews?\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ViewNoun();
+
     /// <summary>What the owner is told when a plan builds something for people who do not sign in (R2-11).</summary>
     public const string PublicOnlyNote = "People can use it without signing in only once you make the app public, which only you can do on its page.";
 

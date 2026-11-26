@@ -26,7 +26,10 @@ idea asked for has failed, however good the rest is.
        words ("Members can book a court for a time slot"), because the owner reads it in normal mode;
      - detail: how it is built, for the builder — entities, endpoints, screens, files;
      - check: the test that will pass, and the call to the running app (signed in as a test member) with
-       the answer expected;
+       the answer expected. A requirement about how a screen presents something — what a view leads with, its
+       layout, how it reads on a phone — is checked by the call that reads the data the screen shows AND the
+       screen's own test that proves the presentation, named by its title; never by anything nobody can run,
+       such as looking at the page on a phone or in a browser;
      - covers: the requirement ids the item delivers;
      - testIds: for an item with anything on screen, every data-testid its screens will carry, by the
        kit's convention (AGENTS.md, write-a-screen): page-<view> on each page (page-home first),

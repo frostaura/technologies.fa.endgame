@@ -161,6 +161,40 @@ view of the data after each change of state (a finished book must leave "reading
 person moves: each link reaches a route that renders its page, pages read the address through the router only, and the
 item's tests click through it with the kit's `renderApp`. The factory's browser proof drives built apps by these ids.
 
+**A requirement about how a screen presents something is shown by the screen's own test, run by code.** Some
+requirements are about a screen, not data: "Make the trip leader's readiness view the product and treat the checklist as
+just its content", "on their phone", a layout, what a view leads with (`PlanRequirement.IsAboutScreen` — view as a noun,
+screen, page, layout, phone, mobile, design, colour, highlight, "the product"; never a no-sign-in requirement, never a
+phone number). No call can show that: a call shows the data, not what the screen does with it. For such a requirement
+the gate also accepts the screen's own test, named in the evidence — in the mark's `tests` list
+(`web/src/trips/TripPage.test.tsx > leads with readiness, above the share link`) or quoted in its evidence — and counts
+it only when **code** ran the app's front-end suite itself (`ScreenTests.Command`: vitest's JSON report) and saw that
+test pass. A name matches a test's title or full name, or at three words or more the start of exactly one title (within
+the file named, when one is); a phrase that fits two tests names none. The item must still have called the running app.
+A test never shows a requirement about data, and a named test that failed is a fault of its own. The planner is told to
+check such a requirement by the data call plus the screen's test named by its title, never by anything nobody can run
+(looking at the page on a phone). The real four-part dive-club build (run `cafe1c2e`) failed its part 3 four checks
+running on exactly this: the evaluator cited the passing test "leads with readiness, above the share link and the kit
+list" every round, and the gate, counting calls alone, refused it.
+
+**A refusal of how the work was shown is checked again, not sent to the builder.** When the evaluator said the item
+works (no faults of its own) or gave no verdict at all, and the only reason it failed is that code could not verify how a
+requirement was shown (`recheck` on the gated answer: every failing requirement `unshown` or `unchecked`, no missing test
+ids), the same build gets one second look by a fresh evaluator (`evaluator-<item>-<round>-recheck`, not billed), told what
+code refused, word for word. Its calls and the first look's both count. In run `cafe1c2e` the builder was instead sent to
+repair the evaluator's citation three times — it added a refresh button, then rewrote the page — and the fourth check ran
+out of steps.
+
+**Repairs converge.** The gate records how each failing requirement failed (`failing`: `r4:unshown`, `r3:not-met`,
+`item:unchecked`, `testids:…`, `item:faults`). The repair brief (`repair.md`, `BuildWorkflow.RepairBrief`) quotes, per
+failed requirement, its words, what the checker wrote and code's reason, with what to do for that kind; then every fault;
+then what earlier rounds of this part said they did and the files they changed, so a round starts there instead of
+re-reading the app. The next check is told what the last one sent back. When two checks running fail the same way, the
+next repair is told plainly to change its approach; when three do, the part stops there (`stoppedEarly` on the final
+judgement) with a plain outcome — "failed its check three times in a row for the same reason — “…” could not be shown
+working" — instead of a fourth round on a stronger model. Failures of the evaluator's own free-form faults are never
+counted as "the same". The fault that lists the calls made says each shape once, ids folded to `{id}`.
+
 ## Checkpoints, asked rules and the person's answer
 
 - **An "asks you first" rule asks.** A rule set's `ask` rule raises an approval even in an unattended run: the rule is

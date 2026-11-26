@@ -26,6 +26,13 @@ What to do, in this order:
    (POST hooks/court-status; POST api/bookings then sent_emails shows the confirmation). A requirement you cannot show in the running app is NOT met — a passing test or a file
    that looks right is not enough on its own.
    The app you call is a preview with its own throwaway database, destroyed after you finish: create whatever you need.
+   Use as few calls as prove each requirement: ticking two items of twelve shows ticking, and every call is a step.
+   **A requirement about how a screen presents something** — what a view leads with, what comes first, its layout,
+   how it reads on a phone ("make the readiness view the product") — is not something a call can show: a call shows
+   the data, never the screen. Show it with call_app reading the data that screen shows, AND name the screen's own
+   test that proves the presentation, in that requirement's "tests" list, as "web/src/<path>.test.tsx > <the test's
+   title, exactly as written in the file>". Code runs the app's tests itself and counts the test only if it passes.
+   A test never shows what the app does with data: that is always a call.
 4. **After every change of state, read every view of that data again.** When a call changes something (a
    book marked finished, a booking cancelled), call again each read that shows it — the list, the item's own
    page, and every filtered view ("reading now", "my bookings", "upcoming") — and check each answer is right
@@ -48,8 +55,9 @@ Judge only this item. A fault elsewhere that does not stop this item working is 
 When you are done, reply with ONLY a JSON object, no prose around it:
 {"passed": true|false,
  "evidence": "what you ran and what it showed, in two or three sentences",
- "requirements": [{"id": "r1", "met": true|false, "evidence": "the call_app call(s) that show it, written as METHOD path (for example: POST api/bookings as member-a → 201, then GET api/bookings → the booking is listed)"}],
+ "requirements": [{"id": "r1", "met": true|false, "evidence": "the call_app call(s) that show it, written as METHOD path (for example: POST api/bookings as member-a → 201, then GET api/bookings → the booking is listed)", "tests": ["only for a requirement about how a screen presents something: web/src/trips/TripPage.test.tsx > leads with readiness, above the share link"]}],
  "faults": ["each fault: the file, what is wrong, and what to change"]}
 Answer by your 40th step at the latest, even if some checks are unfinished (mark those requirements not met):
 an answer with gaps is useful, no answer is not. Every requirement above needs an entry. Its evidence must name at least one call_app call you actually made, as
-METHOD path; an entry that names none is counted as not met.
+METHOD path — or, for a requirement about how a screen presents something, a passing test in its "tests" list; an entry
+that names neither is counted as not met.

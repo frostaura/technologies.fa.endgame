@@ -261,6 +261,9 @@ public sealed partial class WorkflowTests
 
         public List<string> PlanToolResults { get; } = [];
 
+        /// <summary>The evidence the evaluator writes for a requirement, by id; null keeps the default.</summary>
+        public Func<string, string?> EvidenceFor { get; set; } = _ => null;
+
         /// <summary>When set, a failed evaluation names faults this long (twice), as a verbose evaluator does.</summary>
         public string? LongFaults { get; set; }
 
@@ -334,7 +337,7 @@ public sealed partial class WorkflowTests
 
                 var passed = EvaluationPasses(Evaluations++);
                 var requirements = new JsonArray(global::System.Text.RegularExpressions.Regex.Matches(system, @"^- ([rk]\d+):", global::System.Text.RegularExpressions.RegexOptions.Multiline)
-                    .Select(m => (JsonNode)new JsonObject { ["id"] = m.Groups[1].Value, ["met"] = passed, ["evidence"] = calls ? "GET api/recipes as member-a → 200 with the recipe listed" : "The tests cover it." }).ToArray());
+                    .Select(m => (JsonNode)new JsonObject { ["id"] = m.Groups[1].Value, ["met"] = passed, ["evidence"] = EvidenceFor(m.Groups[1].Value) ?? (calls ? "GET api/recipes as member-a → 200 with the recipe listed" : "The tests cover it.") }).ToArray());
                 return ScriptedModel.Text(new JsonObject { ["passed"] = passed, ["evidence"] = "make test: 12 passed", ["requirements"] = requirements, ["faults"] = passed ? new JsonArray() : LongFaults is { } longer ? new JsonArray(longer, "POST without a title returns 500 " + longer) : Json("[\"RecipesApiTests fails: POST without a title returns 500\"]") }.ToJsonString());
             }
 
@@ -977,8 +980,9 @@ public sealed partial class WorkflowTests
     public async Task An_evaluator_that_passes_an_item_without_showing_it_in_the_running_app_is_overruled_and_the_item_repaired()
     {
         var (cp, ws, dock) = BuildRun();
-        // The first evaluation says "passed" from the tests alone, never calling the app: the gate fails it.
-        var factory = new Factory { EvaluatorCallsTheApp = n => n != 0 };
+        // The first evaluation says "passed" from the tests alone, never calling the app: the gate fails it. Its second look at
+        // the same build does the same, so only then is the item sent back to the builder.
+        var factory = new Factory { EvaluatorCallsTheApp = n => n >= 2 };
         var model = factory.Model();
         await RunBuildAsync(cp, model, ws, dock);
         Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
@@ -986,6 +990,7 @@ public sealed partial class WorkflowTests
         Assert.Equal(("recipes-api", 0), (failed["item"]!.GetValue<string>(), failed["round"]!.GetValue<int>()));
         Assert.Contains("never called signed in", failed["faults"]!.ToJsonString(), StringComparison.Ordinal);
         Assert.False(failed["requirements"]![0]!["met"]!.GetValue<bool>());
+        Assert.True(failed["rechecked"]!.GetValue<bool>());
         Assert.StartsWith("Sent back for repair, at no charge: Families can keep their recipes in one place", failed["summary"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.Contains(model.Calls, c => c.Repair && c.TaskType == "build-t1");
         Assert.Equal(2, cp.Types.Count(t => t == "evaluation.passed"));

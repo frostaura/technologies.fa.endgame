@@ -579,10 +579,11 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **You know it worked when:** the card disappears from the list and the badge leaves "Waiting for you".
 - **Variations and refusals:**
   - A failed answer: "Your answer was not recorded: {reason}" and the buttons come back. A second answer gives 409. A note is at most 2000 characters.
+  - When the run ends — finished, failed or cancelled — before anyone answers, every approval it still waits on is closed with it (status `expired`, the note "The work ended before this was answered."), in the same transaction; it leaves "Needs you" and its notice reads "No longer waiting: …". Answering one then gives 409: "The work ended before this was answered, so there is nothing left to approve." The sweep closes any left open from before (R3-2).
   - What each approval means: RUN-08 (start), BLD-04 (plan), TALK-07/TALK-17 (conversation), AUTO-05 (an "Asks you first" rule).
 - **Where:** `runs/ApprovalCard.tsx`, `runModel.answeredText`; `POST /api/runs/{id}/approvals/{approvalId} {decision, note}`; `ApprovalService` (`onDecline`, `comment`); `AgentLoop.AskAsync`.
 - **Reachable from:** UI; MCP `approval_answer` (with `note`).
-- **Covered by tests:** `RunView.test.tsx` ("streams… an inline approval", "rolls an approval back…"); `TryAgainAndChanges.test.tsx` ("tells the truth after a decline"); `PermissionTests.An_asks_you_first_rule_raises_an_approval_even_unattended_and_a_decline_carries_the_note`; `RunsAndTasksTests.A_run_waits_on_an_approval…`; `console.spec.ts`.
+- **Covered by tests:** `RunView.test.tsx` ("streams… an inline approval", "rolls an approval back…"); `TryAgainAndChanges.test.tsx` ("tells the truth after a decline"); `PermissionTests.An_asks_you_first_rule_raises_an_approval_even_unattended_and_a_decline_carries_the_note`; `RunsAndTasksTests.A_run_waits_on_an_approval…`; `RoundThreeServerTests.Approvals_of_a_run_that_ended_stop_waiting_and_the_sweep_closes_ones_left_open`; `console.spec.ts`.
 
 ### RUN-08 Approve the estimate before work starts
 - **Who:** Builder.
@@ -644,6 +645,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   2. "Endgame · Stopped" gives the reason. Examples:
      - "Planning did not produce a plan that covers everything the idea asks for, so nothing was built. “Try again” plans it afresh."
      - "\"{part}\" still did not work after 3 rounds of repair, each on a stronger model, so the app was not published. Its work so far is saved and the repairs were not charged; “Try again” carries on from it."
+     - "\"{part}\" failed its check three times in a row for the same reason — “{requirement}” could not be shown working in the running app — so it was stopped rather than repaired again, and the app was not published. Its work so far is saved and the repairs were not charged; “Try again” carries on from it."
      - "The security review still found problems after one repair, so the app was not published. Its work is saved, technical mode lists each finding, and “Try again” carries on from it."
      - "You declined the plan, so nothing was built. “Try again” plans it afresh."
      - "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; use “Try again” to carry on from where it stopped." (other kinds: "…Nothing was lost.")
@@ -652,7 +654,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Variations and refusals:** every message that promises a restart points at **"Try again"** on the same page (CHG-03).
 - **Where:** `RunExecutor.FinishAsync`; `BuildWorkflow`.
 - **Reachable from:** UI.
-- **Covered by tests:** `WorkflowTests.Repair_rounds_are_capped…`, `…A_security_finding_blocks_publishing_after_one_repair`, `…Work_that_never_passes_its_check_fails_its_task…`.
+- **Covered by tests:** `WorkflowTests.Repair_rounds_are_capped…`, `…A_security_finding_blocks_publishing_after_one_repair`, `…Work_that_never_passes_its_check_fails_its_task…`, `…A_part_that_fails_the_same_way_three_times_stops_before_a_fourth_round`.
 
 ### RUN-12 See a run recover after the Runner was interrupted
 - **Who:** nobody acts.
@@ -836,9 +838,12 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   - An image that does not build is a failed check.
   - No signed-in caller, or no verdict from the evaluator, means a failed check.
   - Code fails the part unless every requirement has evidence from a real call and every promised test id is present. A part for people who do not sign in is shown with calls made signed out on the preview; a requirement for people with no account is shown only that way.
-- **Where:** `BuildWorkflow.EvaluateAsync`, `EvaluationGate.cs`.
+  - A requirement about how a screen presents something ("make the readiness view the product", "on their phone") is shown by the screen's own test, which code runs itself and counts only if it passes; a requirement about data never is.
+  - When the checker said it works but code could not verify how it was shown, the same part is looked at again once, free, before anything is sent back; the step then carries "rechecked".
+  - Each check's own task line says only that the check is finished ("The check of “{part}” is finished: it works."); the result is said once, in the step above.
+- **Where:** `BuildWorkflow.EvaluateAsync`, `EvaluationGate.cs`, `ScreenTests.cs`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.The_evaluator_works_on_a_preview…`; `WorkflowTests.A_part_for_people_who_do_not_sign_in_passes_on_signed_out_calls_cited_with_placeholders`, `A_plan_part_for_people_who_do_not_sign_in_must_be_checked_signed_out`.
+- **Covered by tests:** `WorkflowTests.The_evaluator_works_on_a_preview…`; `WorkflowTests.A_part_for_people_who_do_not_sign_in_passes_on_signed_out_calls_cited_with_placeholders`, `A_plan_part_for_people_who_do_not_sign_in_must_be_checked_signed_out`; `…Part_three_passes_on_the_evidence_it_really_gave_once_code_runs_the_screens_test`, `…A_screen_claim_code_cannot_verify_still_fails`, `…A_check_that_cannot_verify_how_it_was_shown_is_looked_at_again_not_sent_to_the_builder`, `…A_check_reports_its_result_once_not_again_as_its_task`.
 
 ### BLD-08 See a failed part repaired, free, on a stronger model
 - **Who:** Viewer or above.
@@ -851,10 +856,10 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   2. Then "Checked: …" runs again.
   3. At most 3 repair rounds.
 - **You know it worked when:** "Checked and passed" follows a "Sent back".
-- **Variations and refusals:** still failing after 3 rounds, the run fails and the app is not published (RUN-11). The fault is kept as a "lesson" in the engineer's memory.
-- **Where:** `BuildItemAsync`.
+- **Variations and refusals:** still failing after 3 rounds, the run fails and the app is not published (RUN-11). Failing three checks running for the same reason, it stops before the last round, with that said plainly (RUN-11). The repair is told which requirement failed and what the checker saw, quoted, and what earlier rounds did; after two checks failing the same way, it is told to change its approach. The fault is kept as a "lesson" in the engineer's memory.
+- **Where:** `BuildItemAsync`, `BuildWorkflow.RepairBrief`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.A_failed_evaluation_is_repaired_not_billed…`, `…Repair_rounds_are_capped…`.
+- **Covered by tests:** `WorkflowTests.A_failed_evaluation_is_repaired_not_billed…`, `…Repair_rounds_are_capped…`, `…The_repair_brief_quotes_the_failed_requirement_what_the_checker_saw_and_what_earlier_rounds_did`, `…A_part_that_fails_the_same_way_three_times_stops_before_a_fourth_round`.
 
 ### BLD-09 See the security review, and its one free fix
 - **Who:** Viewer or above.
