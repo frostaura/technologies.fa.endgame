@@ -23,14 +23,14 @@ export function Loading({ label, children, className }: { label: string; childre
  * A failed read, recorded on the page where the data would have been. Never shown as an empty
  * list, and never only as a toast.
  */
-export function Failed({ title, reason, onRetry, className }: { title: string; reason: string; onRetry?: () => void; className?: string }) {
+export function Failed({ title, reason, onRetry, refused, className }: { title: string; reason: string; onRetry?: () => void; /** A standing refusal rather than a read that broke: the reason is the whole message. */ refused?: boolean; className?: string }) {
   return (
     <div role="alert" data-state="failed" className={cn("flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint p-5", className)}>
       <div className="flex items-start gap-3">
         <Icon name="verdict" className="mt-0.5 text-attention-text" />
         <div className="flex flex-col gap-1">
           <p className="font-semibold text-attention-text">{title}</p>
-          <p className="text-sm text-ink">{reason} Nothing here is known until it loads.</p>
+          <p className="text-sm text-ink">{refused ? reason : `${reason} Nothing here is known until it loads.`}</p>
         </div>
       </div>
       {onRetry && (

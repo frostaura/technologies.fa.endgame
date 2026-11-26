@@ -71,7 +71,7 @@ export function SecretsView() {
             </Loading>
           )}
           {view.kind === "failed" && (
-            <Failed title={view.status === 403 ? "You cannot see the secrets here" : "The secrets could not be loaded"} reason={view.reason} onRetry={() => void query.refetch()} />
+            <Failed title={view.status === 403 ? "You cannot see the secrets here" : "The secrets could not be loaded"} reason={view.reason} refused={view.status === 403} onRetry={() => void query.refetch()} />
           )}
           {view.kind === "loaded" && (
             <>

@@ -76,7 +76,7 @@ export function PeopleView() {
                 {problem}
               </p>
             )}
-            {view.kind === "failed" && <Failed title={view.status === 403 ? "Only an Admin or the Owner can see the people here" : "The people could not be loaded"} reason={view.reason} onRetry={() => void query.refetch()} />}
+            {view.kind === "failed" && <Failed title={view.status === 403 ? "Only an Admin or the Owner can see the people here" : "The people could not be loaded"} reason={view.reason} refused={view.status === 403} onRetry={() => void query.refetch()} />}
             {view.kind === "loaded" && (
               <>
                 {view.stale && <Stale reason={view.stale.reason} />}

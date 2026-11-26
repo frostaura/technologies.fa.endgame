@@ -55,7 +55,7 @@ export function OperatorView() {
         <p className="max-w-prose text-ink-body">Every organisation on Endgame. Entering one, topping it up or changing its overdraft is written to a log its Owner reads — operator access is never silent.</p>
       </header>
       {me.data && !operator ? (
-        <Failed title="God mode is for FrostAura operators" reason="Your account is not one of FrostAura's operators, so these screens are closed to you." />
+        <Failed title="God mode is for FrostAura operators" reason="Your account is not one of FrostAura's operators, so these screens are closed to you." refused />
       ) : operator ? (
         <>
           <ErrorBoundary name="Every organisation">
