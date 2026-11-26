@@ -170,7 +170,8 @@ const MILESTONES: Record<string, string> = {
 };
 
 function article(role: string): string {
-  const lower = role.charAt(0).toLowerCase() + role.slice(1);
+  // An initialism keeps its capitals: "a QA engineer", not "a qA engineer".
+  const lower = /^[A-Z]{2}/.test(role) ? role : role.charAt(0).toLowerCase() + role.slice(1);
   return /^[aeiou]/i.test(lower) ? `an ${lower}` : `a ${lower}`;
 }
 

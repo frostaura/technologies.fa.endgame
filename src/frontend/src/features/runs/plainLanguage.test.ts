@@ -79,6 +79,7 @@ describe("workflow steps", () => {
   const none = new Set<string>();
   it("reads a hire from its human fields when nothing else announced it", () => {
     expect(workflowStepTitle("hire:stage:build:acme/tools", { data: { name: "Theo", role: "Software engineer", status: "accepted" } }, none)).toBe("Theo joined as a software engineer");
+    expect(workflowStepTitle("hire:stage:build:acme/tools", { data: { name: "Nadia", role: "QA engineer", status: "accepted" } }, none)).toBe("Nadia joined as a QA engineer");
     expect(workflowStepTitle("hire:division:acme/tools", { data: { name: "Sol", role: "Division lead", status: "proposed" } }, none)).toBe("Proposed hiring Sol as a division lead");
     expect(workflowStepTitle("contractor:sweep", { data: { name: "Kit", role: "Analyst" } }, none)).toBe("Briefed Kit, an analyst");
   });

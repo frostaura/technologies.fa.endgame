@@ -256,3 +256,16 @@ test("a step's placeholders read as what they stand for, and quoted words on the
   const [hi, lo] = [lum(ink), lum(ground)].sort((a, b) => b - a) as [number, number];
   expect((hi + 0.05) / (lo + 0.05)).toBeGreaterThanOrEqual(4.5);
 });
+
+test("a flow opened from the end of another starts at its top, on its first step", async ({ page }) => {
+  await withDemo(page);
+  await page.goto("./#/flow/ID-02/step/4");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+  await page.getByRole("link", { name: /^Next:/ }).click();
+  await expect(page).toHaveURL(/#\/flow\/(?!ID-02)[A-Z]+-\d+\/step\/1$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  // It stays there: the reading line does not carry the step on once the page has come to rest.
+  await page.waitForTimeout(1200);
+  await expect(page).toHaveURL(/\/step\/1$/);
+  await expect(page.getByText(/^Step 1 of \d+$/)).toBeVisible();
+});

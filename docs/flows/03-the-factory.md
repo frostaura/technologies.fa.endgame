@@ -747,7 +747,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Steps:**
   1. The panel shows the badge "Proposed", then "Agreed", and "{done} of {n} parts done".
   2. The summary.
-  3. **"What you asked for"**: the requirements in your words.
+  3. **"What you asked for"**: the requirements in your words. On a change to an app, the parts it already had are listed apart, under **"What it already did, checked again"**.
   4. **"Parts of the plan"**: each with "To do", "Passed its check" or "Sent back", and a plain outcome line. In technical mode: the id, detail, "Covers …", "Check: …" and evidence.
   5. **"Left out, on purpose"**: each requirement with its reason.
   6. Technical mode shows the files, tests and check behind each part; a part the planner wrote no plain words for says "The files and tests behind each part are in technical mode."

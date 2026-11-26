@@ -126,6 +126,32 @@ describe("RunView", () => {
     expect(within(technical).getByText("Check: make test passes")).toBeTruthy();
   });
 
+  it("lists what a change asked for apart from what the app already did", async () => {
+    base();
+    renderWithStore(<RunView runId="r1" />);
+    await screen.findByRole("heading", { name: "Researching Pager" });
+    feed([
+      ["run.started", {}],
+      [
+        "plan.proposed",
+        {
+          requirements: [
+            { id: "r1", text: "Show the year next to the author" },
+            { id: "k1", text: "Members can add a book" },
+          ],
+          items: [
+            { id: "year", text: "The list shows the year", check: "Seen in the app", covers: ["r1"] },
+            { id: "keep", text: "Everything the app did before still works", check: "Each part shown working", covers: ["k1"] },
+          ],
+        },
+      ],
+    ]);
+    const asked = screen.getByRole("list", { name: "What you asked for" });
+    expect(asked.textContent).toContain("Show the year next to the author");
+    expect(asked.textContent).not.toContain("Members can add a book");
+    expect(screen.getByRole("list", { name: "What it already did, checked again" }).textContent).toContain("Members can add a book");
+  });
+
   it("shows the raw detail in technical mode", async () => {
     base();
     const { store } = renderWithStore(<RunView runId="r1" />);

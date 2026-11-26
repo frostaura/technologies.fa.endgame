@@ -291,6 +291,10 @@ function Approvals({ runId, approvals }: { runId: string; approvals: DerivedAppr
 function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
   const technical = mode === "technical";
   const passed = plan.items.filter((i) => i.result === "passed").length;
+  // A change's last part re-checks what the app already did: those are not things the owner just asked for.
+  const earlier = new Set(plan.items.filter((i) => i.id === "keep").flatMap((i) => i.covers));
+  const asked = plan.requirements.filter((r) => !earlier.has(r.id));
+  const kept = plan.requirements.filter((r) => earlier.has(r.id));
   return (
     <section aria-labelledby="plan-title" className="flex flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -304,11 +308,21 @@ function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
         </span>
       </div>
       {(technical ? plan.summary : plainOrNull(plan.summary)) && <p className="text-ink-body">{plan.summary}</p>}
-      {plan.requirements.length > 0 && (
+      {asked.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <h3 className="font-display text-base font-semibold">What you asked for</h3>
           <ul aria-label="What you asked for" className="flex list-disc flex-col gap-1 pl-5 text-ink-body">
-            {plan.requirements.map((r) => (
+            {asked.map((r) => (
+              <li key={r.id}>{technical ? `${r.id} · ${r.text}` : r.text}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {kept.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <h3 className="font-display text-base font-semibold">What it already did, checked again</h3>
+          <ul aria-label="What it already did, checked again" className="flex list-disc flex-col gap-1 pl-5 text-ink-body">
+            {kept.map((r) => (
               <li key={r.id}>{technical ? `${r.id} · ${r.text}` : r.text}</li>
             ))}
           </ul>

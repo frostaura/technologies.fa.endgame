@@ -99,19 +99,30 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     scrolledTo.current = null;
     const first = !landed.current;
     landed.current = true;
-    if (first && active <= 1) return;
     scrolling.current = true;
-    scrollToStep(active, !first && !reduced);
+    // A flow opened at its first step starts at the top of the page, wherever the last one was left.
+    if (first && active <= 1) window.scrollTo({ top: 0, behavior: "auto" });
+    else scrollToStep(active, !first && !reduced);
     // Web fonts can reflow the steps after the first scroll; land again once they are in.
-    if (first) void document.fonts?.ready.then(() => scrollToStep(active, false));
-    // The reading line moves nothing until the page has come to rest on the step.
-    const release = () => (scrolling.current = false);
-    const t = window.setTimeout(release, first ? 900 : reduced ? 50 : 1500);
-    const ended = () => !first && window.setTimeout(release, 60);
-    window.addEventListener("scrollend", ended, { once: true });
+    if (first && active > 1) void document.fonts?.ready.then(() => scrollToStep(active, false));
+    // The reading line moves nothing until the page has come to rest on the step: a smooth
+    // scroll takes as long as it takes, so rest is measured, not timed.
+    let last = window.scrollY;
+    let still = 0;
+    const started = Date.now();
+    const watch = window.setInterval(() => {
+      if (window.scrollY === last) still += 1;
+      else {
+        last = window.scrollY;
+        still = 0;
+      }
+      if ((still >= 3 && Date.now() - started > 300) || Date.now() - started > 6000) {
+        window.clearInterval(watch);
+        scrolling.current = false;
+      }
+    }, 80);
     return () => {
-      window.clearTimeout(t);
-      window.removeEventListener("scrollend", ended);
+      window.clearInterval(watch);
       scrolling.current = false;
     };
   }, [active, total, reduced, scrollToStep]);
