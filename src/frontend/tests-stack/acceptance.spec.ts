@@ -163,7 +163,10 @@ test("3. Dock builds the app from the template, with the probe committed through
     expect(health.workspaceImage).toBe("ready");
   }).toPass({ timeout: 20 * 60_000, intervals: [5_000] });
 
-  // An agent's way in: a workspace on the app's repository, two files written, committed.
+  // An agent's way in, exactly as the Runner takes it (R2-4, ARCH-004): a workspace for a run on the app's repository, two
+  // files written and committed — onto the run's own branch, never the app's line — then the run's work published as the
+  // app's next version, which is what Dock builds. Before R2-4 a commit went straight onto the line; since, a commit that is
+  // never published is never built, so this step publishes it as the factory does.
   const runId = randomUUID();
   await dockCall("POST", "/internal/workspaces", {
     runId, appId: story.probeApp, ref: null, leaseExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(), limits: null, allowedHosts: null,
@@ -179,6 +182,12 @@ test("3. Dock builds the app from the template, with the probe committed through
   } finally {
     await dock.delete(`${DOCK}/internal/workspaces/${runId}`);
   }
+
+  const published = await dockCall<{ id: string; message: string }>("POST", `/internal/repos/${story.probeApp}/runs/${runId}/publish`, {
+    title: "Add the acceptance probe", authorName: "Endgame factory", authorEmail: "factory@endgame.localhost",
+  });
+  expect(published.message).toContain(`Endgame-Run: ${runId}`);
+  note(`the probe published as version ${published.id.slice(0, 12)}`);
 
   await buildAndStart(story.probeApp);
   await buildAndStart(story.kitApp);

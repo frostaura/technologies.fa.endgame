@@ -18,7 +18,7 @@ against the same Edge, and always removes the stack and everything its Dock made
 | --- | --- | --- |
 | 1 | The development sign-in works through the console. | `1. the development sign-in…` |
 | 2 | An organisation (the first by its Owner; later ones by an operator), a division, a project and apps are created through the API. | `2. …` |
-| 3 | Dock creates each app's repository from the kit's template; a probe is committed through a workspace (the Runner's way in); Dock builds and starts both apps. | `3. …` |
+| 3 | Dock creates each app's repository from the kit's template; a probe is committed through a workspace onto its run's own branch and published as the app's next version (the Runner's way in, R2-4); Dock builds and starts both apps. | `3. …` |
 | 4 | Both address shapes serve the app through the real Edge. Private: signed out → the edge's sign-in page; a member gets in; a signed-in stranger gets 403; on the subdomain the member's session arrives by hand-off as a host-only `endgame.app.<id>` cookie. | `4. …` |
 | 5 | A secret set at the organisation is read inside the app through the platform API (compared by hash), and never appears in a console read. | `5. …` |
 | 6 | With a one-minute idle setting (time compressed) the app sleeps, and a request wakes it; the edge reports the wake. | `6. …` |
