@@ -186,6 +186,11 @@ public sealed class OntologyService(EndgameDbContext db, TenantSession session, 
             .Concat(await db.TelemetryMetrics.AsNoTracking().Where(t => t.OrganisationId == org && appIds.Contains(t.AppId)).Select(t => t.AppId).Distinct().ToListAsync(cancellationToken))
             .Concat(await db.TelemetryLogs.AsNoTracking().Where(t => t.OrganisationId == org && appIds.Contains(t.AppId)).Select(t => t.AppId).Distinct().ToListAsync(cancellationToken))
             .ToHashSet();
+        // Data: every app that has run has a database of its own on the shared server (an app is provisioned with one when it is
+        // first published), and one that reports stored bytes plainly holds data — so the graph and "What it uses" can say so.
+        var stored = (await db.HostingSamples.AsNoTracking().Where(h => h.OrganisationId == org && appIds.Contains(h.AppId) && h.StorageBytes > 0).Select(h => h.AppId).Distinct().ToListAsync(cancellationToken))
+            .Concat(apps.Where(a => a.PublishedAt is not null).Select(a => a.Id))
+            .ToHashSet();
         string Service(string name)
         {
             Node(new OntologyNode($"service:{name}", "service", name, null, null, null));
@@ -210,6 +215,12 @@ public sealed class OntologyService(EndgameDbContext db, TenantSession session, 
 
         foreach (var a in appIds)
         {
+            if (stored.Contains(a))
+            {
+                Edge($"app:{a}", Service("data"), DependsOn);
+                Edge($"app:{a}", Service("data"), DataFlowsTo, "stored records");
+            }
+
             if (usedModels.Contains(a))
             {
                 Edge($"app:{a}", Service("models"), DependsOn);

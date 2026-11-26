@@ -384,7 +384,7 @@ public sealed class HireService(
         monthlyCreditLimit is { } limit && limit < expected ? limit : expected;
 
     /// <summary>
-    /// The rule for a need the factory raises (assumption A-?? in docs/assumptions-log.md): before anyone is proposed, look up
+    /// The rule for a need the factory raises (assumption 48 in docs/assumptions-log.md): before anyone is proposed, look up
     /// the chain from the need's level. An employee on the payroll with that role who works at that level or above it — their
     /// "works at … and everything beneath it" reaches the need — does the work; nobody is proposed. A sibling's employee (the
     /// engineer of another project) does not reach it. The nearest one wins, then the longest serving.

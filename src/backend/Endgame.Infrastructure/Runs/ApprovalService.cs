@@ -8,14 +8,26 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Endgame.Infrastructure.Runs;
 
-public sealed record ApprovalView(Guid Id, Guid RunId, string Title, string Detail, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AnsweredAt, Guid? AnsweredBy, string? Comment);
+/// <param name="Detail">The plain sentence the owner reads.</param>
+/// <param name="Technical">What technical mode shows beside it — the tool, its arguments, the rule that asked (D71); null when none was sent.</param>
+public sealed record ApprovalView(Guid Id, Guid RunId, string Title, string Detail, string Status, DateTimeOffset RequestedAt, DateTimeOffset? AnsweredAt, Guid? AnsweredBy, string? Comment,
+    string? Technical = null);
 
 /// <summary>Checkpoints: a run raises one and waits; a person with rights over the run's scope answers it.</summary>
 public sealed class ApprovalService(EndgameDbContext db, TenantSession session, RunService runs, TimeProvider clock)
 {
+    public const int MaxTechnical = 4000;
+
     /// <param name="onDecline"><c>continues</c> or <c>stops</c>: what declining does to the work, so the console can say it truthfully.</param>
-    public async Task<ApprovalView> RaiseAsync(Guid runId, string title, string? detail, CancellationToken cancellationToken, string? onDecline = null)
+    /// <param name="technical">The technical detail, kept beside the plain one in the run's <c>approval.requested</c> event (never in its place).</param>
+    public async Task<ApprovalView> RaiseAsync(Guid runId, string title, string? detail, CancellationToken cancellationToken, string? onDecline = null, string? technical = null)
     {
+        var tech = string.IsNullOrWhiteSpace(technical) ? null : technical.Trim();
+        if (tech is { Length: > MaxTechnical })
+        {
+            tech = tech[..MaxTechnical];
+        }
+
         if (onDecline is not (null or "continues" or "stops"))
         {
             throw EndgameProblem.Invalid("onDecline is 'continues' or 'stops'.");
@@ -53,8 +65,9 @@ public sealed class ApprovalService(EndgameDbContext db, TenantSession session, 
             ["question"] = trimmed,
             ["detail"] = approval.Detail,
             ["onDecline"] = onDecline ?? "continues",
+            ["technical"] = tech,
         })], null, null, cancellationToken);
-        return View(approval);
+        return View(approval) with { Technical = tech };
     }
 
     /// <summary>Answers a pending approval, once. A second answer is a conflict.</summary>
@@ -92,7 +105,36 @@ public sealed class ApprovalService(EndgameDbContext db, TenantSession session, 
     {
         session.UseOrganisation(organisationId);
         var rows = await db.Approvals.AsNoTracking().Where(a => a.OrganisationId == organisationId && a.RunId == runId).OrderBy(a => a.RequestedAt).ToListAsync(cancellationToken);
-        return rows.Select(View).ToList();
+        var technical = await TechnicalAsync(db, organisationId, rows.Select(a => a.Id).ToList(), cancellationToken);
+        return rows.Select(a => View(a) with { Technical = technical.GetValueOrDefault(a.Id) }).ToList();
+    }
+
+    /// <summary>The technical detail each approval was raised with, read from its <c>approval.requested</c> event.</summary>
+    public static async Task<Dictionary<Guid, string>> TechnicalAsync(EndgameDbContext db, Guid organisationId, IReadOnlyCollection<Guid> approvalIds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        var result = new Dictionary<Guid, string>();
+        if (approvalIds is not { Count: > 0 })
+        {
+            return result;
+        }
+
+        var ids = approvalIds.Distinct().ToList();
+        var payloads = await db.RunEvents.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && e.Type == RunEventTypes.ApprovalRequested)
+            .Join(db.Approvals.AsNoTracking().Where(a => a.OrganisationId == organisationId && ids.Contains(a.Id)),
+                e => new { e.OrganisationId, e.RunId }, a => new { a.OrganisationId, a.RunId }, (e, a) => e.PayloadJson)
+            .ToListAsync(cancellationToken);
+        foreach (var payload in payloads)
+        {
+            if (JsonNode.Parse(payload) is JsonObject p && p["approvalId"] is JsonValue id && Guid.TryParse(id.ToString(), out var approval)
+                && ids.Contains(approval) && p["technical"] is JsonValue t && t.GetValueKind() == System.Text.Json.JsonValueKind.String)
+            {
+                result[approval] = t.GetValue<string>();
+            }
+        }
+
+        return result;
     }
 
     private static ApprovalView View(ApprovalRecord a) => new(a.Id, a.RunId, a.Title, a.Detail, a.Status, a.RequestedAt, a.AnsweredAt, a.AnsweredBy, a.Comment);

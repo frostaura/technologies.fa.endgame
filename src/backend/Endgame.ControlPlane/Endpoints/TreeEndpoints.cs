@@ -26,8 +26,16 @@ public sealed record CreateOrganisationRequest(string? Name, string? Slug, strin
 /// <param name="InvitationEmailed">The code was also e-mailed to the Owner (only when a mail server is configured).</param>
 /// <param name="NameCheck">How the name was checked against FrostAura's own subdomains.</param>
 /// <param name="Screening">How it was screened against the red lines (null on first run).</param>
+/// <param name="Balance">Its credits: 0, always, until it is topped up. Endgame invents no starter credits (D63).</param>
+/// <param name="CreditsNote">The reminder to show with the result: it has no credits until it is topped up, so its first work waits.</param>
 public sealed record OrganisationCreated(Guid Id, string Slug, string Name, string OwnerEmail, string? OwnerInvitationCode, DateTimeOffset? InvitationExpiresAt,
-    bool InvitationEmailed = false, NameCheck? NameCheck = null, ScreeningView? Screening = null);
+    bool InvitationEmailed = false, NameCheck? NameCheck = null, ScreeningView? Screening = null, decimal Balance = 0m, string? CreditsNote = null)
+{
+    /// <summary>What a new organisation is told about its credits, by name.</summary>
+    public static string NoCreditsYet(string name, bool byOperator) => byOperator
+        ? $"{name} has no credits until you top it up: its first piece of work waits for budget until then."
+        : $"{name} has no credits until FrostAura tops it up: its first piece of work waits for budget until then.";
+}
 
 /// <param name="Method"><c>model</c> or <c>manual</c>.</param>
 /// <param name="Result"><c>clear</c>: a breach is refused, so a created organisation is always clear.</param>
@@ -99,7 +107,8 @@ internal static class TreeEndpoints
             {
                 // First run: whoever is signed in names the first organisation and becomes its Owner.
                 var first = await accounts.CreateFirstOrganisationAsync(named, me.Id, ct);
-                return Results.Created($"/api/organisations/{first.Id}", new OrganisationCreated(first.Id, first.Slug, first.Name, me.Email!, null, null, false, check));
+                return Results.Created($"/api/organisations/{first.Id}", new OrganisationCreated(first.Id, first.Slug, first.Name, me.Email!, null, null, false, check,
+                    CreditsNote: OrganisationCreated.NoCreditsYet(first.Name, byOperator: false)));
             }
 
             // Provisioning screens the organisation against the red lines (CLAUDE.md rule 4) before anything exists.
@@ -131,7 +140,7 @@ internal static class TreeEndpoints
             var emailed = code is not null && expires is { } until
                 && await mailer.SendAsync(await scopes.RequireAsync(created.Slug, ct), owner.Email!, code, until, "Owner", me.DisplayName, ct);
             return Results.Created($"/api/organisations/{created.Id}", new OrganisationCreated(created.Id, created.Slug, created.Name, owner.Email!, code, expires, emailed, check,
-                new ScreeningView(screened.Method, "clear", screened.Reason)));
+                new ScreeningView(screened.Method, "clear", screened.Reason), CreditsNote: OrganisationCreated.NoCreditsYet(created.Name, byOperator: true)));
         })
         .WithName("CreateOrganisation")
         .WithSummary("On first run, the signed-in person names the first organisation and becomes its Owner; after that, FrostAura operators provision organisations, each screened against the red lines from what it does (description) — refused on a breach, and when no model can be reached unless the operator records a screening decision with a reason.")
@@ -146,7 +155,7 @@ internal static class TreeEndpoints
                  })
         {
             var group = api.MapGroup(route).WithTags("Tree");
-            group.MapPost("", async (CreateNodeRequest request, ClaimsPrincipal principal, AccessService access, TreeService tree, CancellationToken ct) =>
+            group.MapPost("", async (CreateNodeRequest request, ClaimsPrincipal principal, AccessService access, TreeService tree, EdgeNotifier edge, CancellationToken ct) =>
             {
                 var (parent, _) = await access.RequireAsync(principal.Id(), request.Parent, createRole, ct);
                 if (parent.Level != level - 1)
@@ -155,6 +164,12 @@ internal static class TreeEndpoints
                 }
 
                 var node = await tree.CreateChildAsync(parent, request.Name ?? "", request.Slug ?? "", ct);
+                if (level == NodeLevel.App)
+                {
+                    // A new app has an address at once, and Edge answers there "This app isn't ready yet" until it is published (D68).
+                    await edge.RoutesChangedAsync(ct);
+                }
+
                 return Results.Created($"/api{route}/{node.Id}", node);
             })
             .WithName($"Create{level}").WithSummary($"Creates {level.WithArticle()} under its parent scope.").Produces<NodeView>(201);
@@ -198,17 +213,28 @@ internal static class TreeEndpoints
             var result = await values.SetAsync(resolved, parsed, key, request.Value, me.Id, access.IsOperator(me) ? Actor.Operator : Actor.Member, ct);
             if (parsed == CascadeKind.Setting || parsed == CascadeKind.Budget)
             {
-                edge.RoutesChanged();
+                await edge.RoutesChangedAsync(ct);
             }
 
             return Results.Ok(result);
         })
         .WithName("SetCascadeValue").WithSummary("Sets a budget, rule set, context, setting or secret at a scope; it applies beneath unless narrowed.").Produces<EffectiveValue>();
-        cascade.MapDelete("", async (string? scope, string? kind, string? key, ClaimsPrincipal principal, AccessService access, CascadeService values, CancellationToken ct) =>
+        cascade.MapDelete("", async (string? scope, string? kind, string? key, ClaimsPrincipal principal, AccessService access, CascadeService values, EdgeNotifier edge, CancellationToken ct) =>
         {
             var parsed = Kind(kind);
             var (resolved, _) = await access.RequireAsync(principal.Id(), scope, CascadeService.RoleToSet(parsed, key ?? ""), ct);
-            return await values.RemoveAsync(resolved, parsed, key ?? "", ct) ? Results.NoContent() : Problems.From(EndgameProblem.NotFound($"A {kind} '{key}' set at '{scope}'"));
+            if (!await values.RemoveAsync(resolved, parsed, key ?? "", ct))
+            {
+                return Problems.From(EndgameProblem.NotFound($"A {kind} '{key}' set at '{scope}'"));
+            }
+
+            if (parsed == CascadeKind.Setting || parsed == CascadeKind.Budget)
+            {
+                // Removing a cap (or a sleep, access or overdraft setting) changes what Edge serves, at once (D67).
+                await edge.RoutesChangedAsync(ct);
+            }
+
+            return Results.NoContent();
         })
         .WithName("RemoveCascadeValue").WithSummary("Removes a value set at a scope; what is inherited applies again.");
 
@@ -282,7 +308,7 @@ internal static class TreeEndpoints
             }
 
             // A top-up settles the debt first and restores paused apps at once (spec, Overdraft).
-            edge.RoutesChanged();
+            await edge.RoutesChangedAsync(ct);
             return Results.Ok(new { entry.Id, entry.Amount, entry.CreatedAt, Organisation = organisation.Path.ToString() });
         })
         .WithName("TopUpCredits").WithSummary("Adds credits to an organisation (FrostAura operators only; logged for the Owner to read).");
@@ -320,7 +346,7 @@ internal static class TreeEndpoints
             if (request.Status is not null)
             {
                 // Archiving or reactivating a level, or suspending an organisation, changes what is served.
-                edge.RoutesChanged();
+                await edge.RoutesChangedAsync(ct);
             }
 
             return Results.Ok(updated);

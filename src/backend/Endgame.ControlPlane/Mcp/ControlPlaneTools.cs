@@ -115,7 +115,13 @@ internal static class ControlPlaneTools
                     throw EndgameProblem.Invalid($"{NodeLevels.Capitalised(level.WithArticle())} is created under {(level - 1).WithArticle()}; '{parent.Path}' is {parent.Level.WithArticle()}.");
                 }
 
-                return await c.S<TreeService>().CreateChildAsync(parent, c.Req("name"), c.Req("slug"), c.Ct);
+                var node = await c.S<TreeService>().CreateChildAsync(parent, c.Req("name"), c.Req("slug"), c.Ct);
+                if (level == NodeLevel.App)
+                {
+                    await c.S<EdgeNotifier>().RoutesChangedAsync(c.Ct);
+                }
+
+                return node;
             }),
         Write("node_update", "Renames a division, project or app, or changes its status (active or archived; an app's is reported by hosting).",
             Schema(("scope", Str("The node's scope path."), true), ("name", Str("A new name."), false), ("status", Str("A new status."), false)), async c =>
@@ -165,7 +171,7 @@ internal static class ControlPlaneTools
                 var result = await c.S<CascadeService>().SetAsync(scope, kind, key, c.Node("value"), c.UserId, Actor.Mcp, c.Ct);
                 if (kind is CascadeKind.Setting or CascadeKind.Budget)
                 {
-                    c.S<EdgeNotifier>().RoutesChanged();
+                    await c.S<EdgeNotifier>().RoutesChangedAsync(c.Ct);
                 }
 
                 return result;
@@ -176,7 +182,14 @@ internal static class ControlPlaneTools
                 var kind = TreeEndpoints.Kind(c.Req("kind"));
                 var key = c.Req("key");
                 var (scope, _) = await c.S<AccessService>().RequireAsync(c.UserId, c.Req("scope"), CascadeService.RoleToSet(kind, key), c.Ct);
-                return new { removed = await c.S<CascadeService>().RemoveAsync(scope, kind, key, c.Ct) };
+                var removed = await c.S<CascadeService>().RemoveAsync(scope, kind, key, c.Ct);
+                if (removed && kind is CascadeKind.Setting or CascadeKind.Budget)
+                {
+                    // Removing a cap or a setting changes what Edge serves, at once (D67).
+                    await c.S<EdgeNotifier>().RoutesChangedAsync(c.Ct);
+                }
+
+                return new { removed };
             }),
 
         // ------------------------------------------------------------------ ideas and verdicts
@@ -356,7 +369,7 @@ internal static class ControlPlaneTools
                 var (scope, _) = await c.S<AccessService>().RequireAsync(c.UserId, c.Req("scope"), MemberRole.Admin, c.Ct);
                 var value = c.Dec("monthlyCredits") ?? throw EndgameProblem.Invalid("monthlyCredits is a number.");
                 var result = await c.S<CascadeService>().SetAsync(scope, CascadeKind.Budget, CascadeKeys.MonthlyCredits, JsonValue.Create(value), c.UserId, Actor.Mcp, c.Ct);
-                c.S<EdgeNotifier>().RoutesChanged();
+                await c.S<EdgeNotifier>().RoutesChangedAsync(c.Ct);
                 return result;
             }),
 
@@ -592,7 +605,7 @@ internal static class ControlPlaneTools
                     await cascade.SetAsync(app, CascadeKind.Setting, CascadeKeys.Access, JsonValue.Create(access), c.UserId, Actor.Mcp, c.Ct);
                 }
 
-                c.S<EdgeNotifier>().RoutesChanged();
+                await c.S<EdgeNotifier>().RoutesChangedAsync(c.Ct);
                 return await c.S<ReadModels>().AppAsync(app, c.Ct);
             }),
         Write("app_ask", "Answers a plain-language question from an app's own telemetry: an answer, a chart and the query behind it. Charged to the app (estimate in the answer).",

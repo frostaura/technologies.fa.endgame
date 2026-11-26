@@ -61,6 +61,7 @@ public sealed record ProjectNodeView(
 /// <param name="Health"><c>healthy</c>, <c>degraded</c>, <c>down</c>, <c>unknown</c>, or <c>paused</c> while Edge serves its holding page (see <paramref name="Paused"/>).</param>
 /// <param name="Paused">Why Edge is serving the holding page instead of the app, exactly as Edge serves it (D66); null when it is not paused.</param>
 /// <param name="NotBuilt">Its build stopped before anything was published (D81); null otherwise.</param>
+/// <param name="Status">The app's own status: draft, building, running, sleeping, stopped, failed or archived — a draft has never been built.</param>
 public sealed record AppNodeView(
     Guid Id,
     string Slug,
@@ -76,7 +77,8 @@ public sealed record AppNodeView(
     string? Role = null,
     bool Archived = false,
     PausedView? Paused = null,
-    NotBuiltView? NotBuilt = null);
+    NotBuiltView? NotBuilt = null,
+    string? Status = null);
 
 /// <summary>Why an app is paused behind Edge's holding page (D66): the routing table's own reason, in words.</summary>
 /// <param name="Reason"><c>budget_exhausted</c> (a monthly budget on its chain is spent) or <c>overdraft_limit</c> (the organisation reached its overdraft limit).</param>
@@ -85,7 +87,8 @@ public sealed record PausedView(string Reason, string Note);
 
 public sealed record VerdictNeed(string Kind, Guid Id, Guid IdeaId, string Title, string Verdict, string? Detail);
 
-public sealed record ApprovalNeed(string Kind, Guid Id, Guid RunId, Guid ApprovalId, string Title, string? Detail);
+/// <param name="Technical">Technical mode's detail, beside the plain <paramref name="Detail"/>; null when none.</param>
+public sealed record ApprovalNeed(string Kind, Guid Id, Guid RunId, Guid ApprovalId, string Title, string? Detail, string? Technical = null);
 
 /// <summary>A hire proposal waiting for the owner: over budget, or the hire checkpoint is on.</summary>
 public sealed record HireNeed(string Kind, Guid Id, Guid HireId, string Title, string? Detail, string Scope, decimal ExpectedMonthlyCredits);
@@ -99,6 +102,8 @@ public sealed record TreeView(DateTimeOffset GeneratedAt, string ViewerRole, Org
     bool FirstRun = false);
 
 /// <summary>A run as the console reads it. Status words: queued, running, waiting, paused, finished, failed, cancelled.</summary>
+/// <param name="Detail">How it ended, technically (the faults), from its <c>run.finished</c>; for technical mode. Null while it runs or when none was given.</param>
+/// <param name="Reason">Why it ended when that is more than its outcome, for example <c>declined_at_start</c>; null otherwise.</param>
 public sealed record PublicRunView(
     Guid Id,
     string Kind,
@@ -117,7 +122,9 @@ public sealed record PublicRunView(
     string? Outcome,
     string? Summary,
     DateTimeOffset CreatedAt,
-    bool CanTryAgain = false);
+    bool CanTryAgain = false,
+    string? Detail = null,
+    string? Reason = null);
 
 public sealed record ResearchView(decimal EstimatedCredits, decimal SpentCredits, string? By);
 
@@ -155,7 +162,7 @@ public sealed record DecisionHistoryView(string? Verdict, string? Headline, stri
 
 /// <summary>Work on this idea that stopped and can be tried again (CHG-03): its run, what it was, and why it stopped.</summary>
 /// <param name="What"><c>research</c> or <c>build</c>.</param>
-/// <param name="Why"><c>failed</c>, <c>cancelled</c>, <c>budget</c> or <c>plan-declined</c>.</param>
+/// <param name="Why"><c>failed</c>, <c>cancelled</c>, <c>budget</c>, <c>plan-declined</c> or <c>start-declined</c> (the owner declined to start it).</param>
 public sealed record TryAgainView(Guid RunId, string What, string Why);
 
 public sealed record IdeaEstimateView(decimal Credits, string Basis);

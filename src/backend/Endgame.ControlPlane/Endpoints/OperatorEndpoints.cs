@@ -78,7 +78,7 @@ internal static class OperatorEndpoints
                     At = clock.GetUtcNow(),
                 });
                 await db.SaveChangesAsync(ct);
-                edge.RoutesChanged();
+                await edge.RoutesChangedAsync(ct);
                 return Results.Ok((await overview.SummariesAsync(ct)).Single(o => o.Id == org.OrganisationId));
             })
             .WithName("SetOrganisationOverdraft")

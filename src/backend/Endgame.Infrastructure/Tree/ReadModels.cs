@@ -43,8 +43,21 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             ?? throw EndgameProblem.NotFound("The run");
         var scope = await scopes.ForRowAsync(run.OrganisationId, run.DivisionId, run.ProjectId, run.AppId, cancellationToken);
         var (estimates, spent) = await RunCostsAsync(organisationId, [runId], cancellationToken);
-        return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId), await CanTryAgainAsync(run, cancellationToken));
+        var (detail, reason) = RunStatuses.IsTerminal(run.Status) ? await FinishedAsync(run, cancellationToken) : (null, null);
+        return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId), await CanTryAgainAsync(run, cancellationToken)) with { Detail = detail, Reason = reason };
     }
+
+    /// <summary>The technical <c>detail</c> and the <c>reason</c> a run's <c>run.finished</c> gave, when it gave them.</summary>
+    private async Task<(string? Detail, string? Reason)> FinishedAsync(RunRecord run, CancellationToken cancellationToken)
+    {
+        var payload = await db.RunEvents.AsNoTracking()
+            .Where(e => e.OrganisationId == run.OrganisationId && e.RunId == run.Id && e.Type == RunEventTypes.RunFinished)
+            .OrderByDescending(e => e.Seq).Select(e => e.PayloadJson).FirstOrDefaultAsync(cancellationToken);
+        return payload is not null && JsonNode.Parse(payload) is JsonObject p ? (Text(p["detail"]), Text(p["reason"])) : (null, null);
+    }
+
+    /// <summary>The <c>run.finished</c> reason when the owner declined to start the work.</summary>
+    public const string DeclinedAtStart = "declined_at_start";
 
     /// <summary>Whether this run is the latest attempt at research, a build or a change, and stopped without finishing (CHG-03).</summary>
     private async Task<bool> CanTryAgainAsync(RunRecord run, CancellationToken cancellationToken)
@@ -220,7 +233,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                     var paused = Paused(route);
                     return new AppNodeView(a.Id, a.Slug, a.Name, paused is null ? AppHealth(a.Status, summary) : "paused", paused is null ? AppRunning(a.Status, alwaysOn) : "paused",
                         route?.Access ?? Domain.Platform.AppAccess.Private, shares.GetValueOrDefault(a.Id), summary is null ? null : (int)Math.Min(int.MaxValue, summary.VisitsToday), summary?.LastVisitAt,
-                        Spend(s => s.AppId == a.Id), Workers(d.Id, p.Id, a.Id), RoleAt(d.Id, p.Id, a.Id), a.Status == NodeStatuses.Archived, paused, notBuilt.GetValueOrDefault(a.Id));
+                        Spend(s => s.AppId == a.Id), Workers(d.Id, p.Id, a.Id), RoleAt(d.Id, p.Id, a.Id), a.Status == NodeStatuses.Archived, paused, notBuilt.GetValueOrDefault(a.Id), a.Status);
                 }).ToList();
 
                 var active = liveRuns.FirstOrDefault(r => r.ProjectId == p.Id && r.Kind != RunKinds.Conversation);
@@ -310,11 +323,13 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                                orderby a.RequestedAt
                                select new { Approval = a, r.DivisionId, r.ProjectId, r.AppId }).ToListAsync(cancellationToken);
         bool Sees(IScopedRecord row) => everything || new[] { row.DivisionId, row.ProjectId, row.AppId }.Any(id => id is { } x && visible.Contains(x));
+        var technical = await Runs.ApprovalService.TechnicalAsync(db, organisationId, approvals.Select(a => a.Approval.Id).ToList(), cancellationToken);
         var needs = new List<object>();
         needs.AddRange(ideas.Where(Sees).Select(i => new VerdictNeed("verdict", i.Id, i.Id, IdeaTitle(i.Text), i.Verdict!, i.VerdictSummary)));
         needs.AddRange(approvals
             .Where(a => everything || new[] { a.DivisionId, a.ProjectId, a.AppId }.Any(id => id is { } x && visible.Contains(x)))
-            .Select(a => new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, a.Approval.Title, a.Approval.Detail.Length == 0 ? null : a.Approval.Detail)));
+            .Select(a => new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, a.Approval.Title, a.Approval.Detail.Length == 0 ? null : a.Approval.Detail,
+                technical.GetValueOrDefault(a.Approval.Id))));
         return needs;
     }
 
@@ -494,12 +509,13 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         TryAgainView? tryAgain = null;
         if (status == "failed" && latest is not null)
         {
-            tryAgain = new TryAgainView(latest.Id, "research", latest.Status == RunStatuses.Cancelled ? "cancelled" : latest.BudgetExhaustedAt is not null ? "budget" : "failed");
+            tryAgain = new TryAgainView(latest.Id, "research", (await FinishedAsync(latest, cancellationToken)).Reason == DeclinedAtStart ? "start-declined"
+                : latest.Status == RunStatuses.Cancelled ? "cancelled" : latest.BudgetExhaustedAt is not null ? "budget" : "failed");
         }
         else if (idea.Status == IdeaStatuses.Building && idea.BuildRunId is { } lastBuild
                  && await db.Runs.AsNoTracking().SingleOrDefaultAsync(r => r.OrganisationId == organisationId && r.Id == lastBuild, cancellationToken) is { Status: RunStatuses.Failed or RunStatuses.Cancelled } stopped)
         {
-            tryAgain = new TryAgainView(stopped.Id, "build", StopReason(stopped));
+            tryAgain = new TryAgainView(stopped.Id, "build", (await FinishedAsync(stopped, cancellationToken)).Reason == DeclinedAtStart ? "start-declined" : StopReason(stopped));
         }
 
         var history = await DecisionHistoryAsync(organisationId, researchRuns, cancellationToken);

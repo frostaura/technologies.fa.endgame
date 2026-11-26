@@ -146,9 +146,12 @@ Shared vocabulary used below:
 - **Variations and refusals:**
   - Over the room left, or with the hire checkpoint on: it waits (HIRE-01/03) and raises a "needs you" item and a notification "Hire <Name> as <role>?".
   - The same need raised again returns the existing open or accepted proposal (200), not a second one. Simultaneous raises also end as one proposal.
-- **Where:** `HireService.RaiseAsync`. `POST /internal/hires`. `POST /api/hires`. `NotificationService` (hire).
+  - A need the factory raises that an employee above already covers (same role, working at that level or above it) proposes nobody: the answer is 200 with `hire.status` `covered`, `hire.employeeId` and `coveredBy` naming that employee, and an open proposal for the same need is withdrawn ("Withdrawn: {Name} already does this work here."). A person's own proposal and a recurring-role promotion are never held back.
+  - The expected monthly cost is never more than the proposal's own budget, when it has one (raised or edited).
+  - A withdrawn proposal is `declined` with `withdrawn: true`, decided by "Endgame"; its notice reads "Hiring {Name} as {role} was withdrawn".
+- **Where:** `HireService.RaiseAsync`, `CoveringAsync`. `POST /internal/hires`. `POST /api/hires`. `NotificationService` (hire).
 - **Reachable from:** system (Runner). People reach it by API, MCP `hire_raise` or HIRE-07.
-- **Covered by tests:** `WorkforceTests.A_need_within_budget_is_hired_at_once_in_auto_mode_and_the_same_need_is_one_proposal`.
+- **Covered by tests:** `WorkforceTests.A_need_within_budget_is_hired_at_once_in_auto_mode_and_the_same_need_is_one_proposal`; `WalkTwoServerTests.A_need_someone_above_already_covers…`, `A_proposals_expected_monthly_cost_is_held_to_its_own_budget`.
 
 ### HIRE-07 Propose a recurring contractor role as a permanent hire
 - **Who:** Admin or Owner. Everyone else reads the roles.
@@ -225,10 +228,10 @@ Shared vocabulary used below:
   4. The track record shows four tiles:
      - "Work accepted": "<a> of <b>" or "No work judged yet". Detail "<n> pieces sent back" / "Nothing sent back", plus " · <n> judgements of others’ work".
      - "Repairs not charged": "<n> repairs of its own mistakes, never billed" or "No repairs of its own work".
-     - "Cost so far": "Budget <n> a month, <n> used", or "<n> this month; no budget of its own, the one above holds".
-     - "Estimates": a headline, or "None scored yet" / "Scored once its first estimated work finishes". Detail "Across <n> pieces of work. The largest miss was <n>%."
+     - "Cost so far": "Budget <n> a month, <n> used", or "<n> this month; no budget of its own, the one above holds". Both figures count the contractors it briefs, as its budget does (`trackRecord.cost`; its own share is `ownToDateCredits` / `ownMonthCredits`).
+     - "Estimates": a headline, or "None scored yet" / "Scored once its first estimated work finishes". Detail "Across <n> pieces of work. The largest miss was <n>%." A run nobody owns is scored to whoever its model calls were mostly charged to, a contractor's calls counting as its briefer's — so a researcher is scored on the research it led.
   5. "Job description" lists Mandate, Works at, May use, Services, Budget ("… a month, including the contractors it briefs") and Thinking power. Technical mode adds "Identifier".
-  6. "Recent work" shows run chips ("Now: <title>", "Its last piece of work") and up to 12 tasks with status ("To do", "In progress", "Blocked", "Done", "Did not succeed", "Cancelled") and "Estimated <n>, cost <n>" or "No estimate".
+  6. "Recent work" shows run chips ("Now: <title>", "Its last piece of work") and the runs it led (`recentRuns`, newest first, up to 12: its own, ones it held a task in, ones charged to it, ones it briefed contractors for), and up to 12 tasks with status ("To do", "In progress", "Blocked", "Done", "Did not succeed", "Cancelled") and "Estimated <n>, cost <n>" or "No estimate".
   7. "Contractors it has briefed" (EMP-07) and "Talk to <Name>" (EMP-08) follow. The memory sits in the aside (MEM-01).
 - **You know it worked when:** the four track-record tiles and the job description are shown.
 - **Variations and refusals:**
@@ -237,7 +240,7 @@ Shared vocabulary used below:
   - Viewers and Builders see no action buttons.
 - **Where:** `EmployeeView.tsx`, `workforceModel.ts`. `GET /api/employees/{id}`, `GET /api/tasks?scope=&employeeId=`. `EmployeeService.DetailAsync` and `TrackRecordAsync`.
 - **Reachable from:** UI. Also MCP `employee_get` and `employees_list`. `GET /api/employees/{id}/track-record` is API only, and nothing in the console calls it.
-- **Covered by tests:** `EmployeeView.test.tsx` (track record, factory work, technical mode, loading and failed). `workforce.spec.ts` ("track record, job in plain words…"). `WorkforceTests.The_track_record_is_derived_from_runs_their_logs_and_the_ledger`.
+- **Covered by tests:** `EmployeeView.test.tsx` (track record, factory work, technical mode, loading and failed). `workforce.spec.ts` ("track record, job in plain words…"). `WorkforceTests.The_track_record_is_derived_from_runs_their_logs_and_the_ledger`; `WalkTwoServerTests.A_researchers_cost_budget_used_recent_work_and_estimates_count_the_contractors_it_briefs`.
 
 ### EMP-02 Reassign an employee
 - **Who:** Admin at the employee's current level and at the destination.
@@ -354,7 +357,7 @@ Shared vocabulary used below:
   3. "Reports to it:" links to each report's record.
   4. A contractor's own page shows the badge, "<Role> · Contractor", the section "Its brief", the link "Briefed by <name>", and the memory note "A contractor keeps no memory: what it learns goes to the employee who briefed it."
 - **You know it worked when:** the contractor count and the list match the chart.
-- **Variations and refusals:** a contractor page shows no conversation and no memory editing; an Admin can cap it or stop it there (EMP-11). A person cannot brief a contractor: contractors are created and finished by the Runner (`/internal/contractors`).
+- **Variations and refusals:** a contractor finishes when the run that briefed it ends, however it ends (RUN-06), so "working now" never outlives the work; a contractor page shows no conversation and no memory editing; an Admin can cap it or stop it there (EMP-11). A person cannot brief a contractor: contractors are created and finished by the Runner (`/internal/contractors`).
 - **Where:** `EmployeeView.tsx` (ContractorsBriefed). `EmployeeService.StartContractorAsync` and `FinishContractorAsync`.
 - **Reachable from:** UI to read. Creating and finishing is system only.
 - **Covered by tests:** `EmployeeView.test.tsx`; `WorkforceEdits.test.tsx` ("links each contractor working now…"). `WorkforceTests` (contractors).
@@ -523,7 +526,7 @@ Shared vocabulary used below:
 - **Steps:**
   1. The panel reads "Not reviewed yet. A review merges what repeats, removes what is stale and corrects bad habits.", or "Last review, <time ago>" with "<n> notes merged, <n> removed as out of date, <n> habits corrected." and the link "See the review".
   2. Press "Review now". The link "Review started — watch it" appears and opens the review run.
-  3. When the run reports, entries are merged, removed or corrected ("Merged at a review" / "Corrected at a review"), and the panel updates.
+  3. When the run reports, entries are merged, removed or corrected ("Merged at a review" / "Corrected at a review"), and the panel updates. A removal or correction the review gave no reason for stores none, so the change log quotes nothing.
 - **You know it worked when:** "Review started — watch it" appears. Later, "Last review, …" shows the new counts.
 - **Variations and refusals:**
   - "The review did not start: <reason>". Released or contractor: 409 "Only an employee on the payroll has a memory to review."
@@ -531,7 +534,7 @@ Shared vocabulary used below:
   - Failed log read: "The last review could not be loaded: …" with "Try again".
 - **Where:** `EmployeeView.tsx` (ReviewPanel). `POST /api/employees/{id}/reviews`. `MemoryService.ReviewAsync`.
 - **Reachable from:** UI.
-- **Covered by tests:** `EmployeeView.test.tsx` ("starts a review"). `workforce.spec.ts`. `WorkflowTests.A_memory_review_consolidates_prunes_and_corrects_and_drops_what_names_no_entry`.
+- **Covered by tests:** `EmployeeView.test.tsx` ("starts a review"). `workforce.spec.ts`. `WorkflowTests.A_memory_review_consolidates_prunes_and_corrects_and_drops_what_names_no_entry`; `WalkTwoServerTests.A_review_that_gives_no_reason_stores_none`.
 
 ### MEM-06 The employee writes and reads its own memory
 - **Who:** the system (Runner, for the employee).
@@ -794,7 +797,8 @@ Shared vocabulary used below:
   5. Press "Set it up" ("Setting it up…"). The control plane puts the name and what it does to a model through the model gateway, against the four red lines (tobacco, exploitative gambling or predatory finance; weapons used against civilians; animal harm and industrial cruelty; surveillance and authoritarian tooling — prediction markets and regulated forecasting markets are not gambling). The call is recorded as a platform cost, charged to no organisation. An answer the model gives in a shape that cannot be read is asked for once more (a second platform cost).
   6. A new Owner gets a one-time panel "The Owner's invitation code", with "<Name> is set up for <email>. The code was e-mailed to them too." or "E-mail is not set up here, so give them this code yourself." and "They use it to make their passkey before <date>." plus any name-check note, and "It was screened against the red lines and crosses none: <reason>" (or "You screened it against the red lines yourself: <reason>").
   7. An Owner who already has an account gets "<Name> is set up. <email> already has a passkey, so they can sign in as its Owner now." with the same screening sentence.
-  8. The organisation appears in the list with its standing security reviewer. Its operator log gets "Screened against the red lines: it crosses none (by a model)" — or "(by hand: <reason>)" — with who screened it, how and when, and "Set up the organisation".
+  8. The answer carries `balance` 0 and `creditsNote` "<Name> has no credits until you top it up: its first piece of work waits for budget until then." Endgame invents no starter credits; top it up (OP-05). Until then its credits and its chart say `neverToppedUp`.
+  9. The organisation appears in the list with its standing security reviewer. Its operator log gets "Screened against the red lines: it crosses none (by a model)" — or "(by hand: <reason>)" — with who screened it, how and when, and "Set up the organisation".
 - **You know it worked when:** the code panel or the success line appears, and a new card is listed.
 - **Variations and refusals:**
   - Local checks: "2 to 40 lowercase letters, digits and hyphens." · "That does not look like an e-mail address." (the button is disabled).
@@ -810,7 +814,7 @@ Shared vocabulary used below:
   - The first organisation of a fresh install (ORG-02) is not screened here.
 - **Where:** `OperatorView.tsx` (ProvisionAside), `store/sensitive.ts` (provisionOrganisation). `POST /api/organisations { name, slug, ownerEmail, ownerDisplayName?, description, screening? }`. `Platform/OrganisationScreening.cs`, `Application/Gateway/PlatformModelCalls.cs` (`platform_costs`), `ReservedNames.cs`.
 - **Reachable from:** UI.
-- **Covered by tests:** `OperatorView.test.tsx` ("provisions an organisation…shows their code once", "asks for the operator's own screening…; a breach is refused"). `breadth.spec.ts` ("…a reserved name is refused"). `BreadthTests.Organisation_names_that_frostaura_uses_are_refused_and_an_incomplete_zone_pauses_new_names`. `ScreensAndRolesTests` (`Provisioning_screens_what_the_organisation_does_as_a_platform_cost_and_logs_how`, `A_breach_is_refused_naming_the_line_and_why_and_nothing_is_set_up`, `With_no_model_provisioning_is_refused_unless_the_operator_records_a_decision_with_a_reason`).
+- **Covered by tests:** `OperatorView.test.tsx` ("provisions an organisation…shows their code once", "asks for the operator's own screening…; a breach is refused"). `breadth.spec.ts` ("…a reserved name is refused"). `BreadthTests.Organisation_names_that_frostaura_uses_are_refused_and_an_incomplete_zone_pauses_new_names`. `WalkTwoServerTests.A_new_organisation_says_it_has_no_credits_until_it_is_topped_up`. `ScreensAndRolesTests` (`Provisioning_screens_what_the_organisation_does_as_a_platform_cost_and_logs_how`, `A_breach_is_refused_naming_the_line_and_why_and_nothing_is_set_up`, `With_no_model_provisioning_is_refused_unless_the_operator_records_a_decision_with_a_reason`).
 
 ### OP-04 Enter an organisation in God mode, and act there as Admin
 - **Who:** operator.

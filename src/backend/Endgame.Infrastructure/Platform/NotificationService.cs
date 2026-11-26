@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Endgame.Application.Common;
 using Endgame.Application.Email;
 using Endgame.Domain.Access;
+using Endgame.Domain.Credits;
 using Endgame.Domain.Platform;
 using Endgame.Domain.Runs;
 using Endgame.Domain.Tree;
@@ -43,7 +44,9 @@ public sealed record NotificationSubject(string Kind, Guid Id);
 /// or declined. Its title then says what happened ("You approved “Accept this plan?”", "Theo was hired as …"), and
 /// it no longer counts as unread (D40).
 /// </param>
-public sealed record NotificationView(Guid Id, string Kind, string Severity, string Title, string Detail, string Scope, NotificationSubject? Subject, DateTimeOffset CreatedAt, bool Read, DateTimeOffset? EmailedAt, bool Resolved = false);
+/// <param name="Technical">For an approval: technical mode's detail beside the plain <paramref name="Detail"/> (D71); null otherwise.</param>
+public sealed record NotificationView(Guid Id, string Kind, string Severity, string Title, string Detail, string Scope, NotificationSubject? Subject, DateTimeOffset CreatedAt, bool Read, DateTimeOffset? EmailedAt, bool Resolved = false,
+    string? Technical = null);
 
 public sealed record NotificationFeed(string Organisation, int Unread, IReadOnlyList<NotificationView> Notifications);
 
@@ -136,7 +139,11 @@ public sealed class NotificationService(
         bool Unread(NotificationRecord n) => !read.Contains(n.Id) && !answered.ContainsKey(n.Id);
         var paths = new Dictionary<(Guid?, Guid?, Guid?), string>();
         var views = new List<NotificationView>();
-        foreach (var n in visible.Where(n => !unreadOnly || Unread(n)).Take(Math.Clamp(limit, 1, MaxFeed)))
+        var shown = visible.Where(n => !unreadOnly || Unread(n)).Take(Math.Clamp(limit, 1, MaxFeed)).ToList();
+        var technical = await Runs.ApprovalService.TechnicalAsync(db, org.OrganisationId,
+            shown.Where(n => n.Kind == NotificationKinds.Approval && n.DedupeKey.StartsWith("approval:", StringComparison.Ordinal))
+                .Select(n => Guid.TryParseExact(n.DedupeKey["approval:".Length..], "N", out var a) ? a : Guid.Empty).Where(a => a != Guid.Empty).ToList(), cancellationToken);
+        foreach (var n in shown)
         {
             if (!paths.TryGetValue((n.DivisionId, n.ProjectId, n.AppId), out var path))
             {
@@ -148,7 +155,9 @@ public sealed class NotificationService(
             var resolved = answered.TryGetValue(n.Id, out var outcome);
             views.Add(new NotificationView(n.Id, n.Kind, n.Severity, resolved ? outcome! : n.Title, n.Detail, path,
                 subject?["kind"] is JsonValue k && Guid.TryParse(subject["id"]?.GetValue<string>(), out var sid) ? new NotificationSubject(k.GetValue<string>(), sid) : null,
-                n.CreatedAt, read.Contains(n.Id) || resolved, n.EmailedAt, resolved));
+                n.CreatedAt, read.Contains(n.Id) || resolved, n.EmailedAt, resolved,
+                n.Kind == NotificationKinds.Approval && Guid.TryParseExact(n.DedupeKey.StartsWith("approval:", StringComparison.Ordinal) ? n.DedupeKey["approval:".Length..] : "", "N", out var aid)
+                    ? technical.GetValueOrDefault(aid) : null));
         }
 
         session.UseOrganisation(org.OrganisationId);

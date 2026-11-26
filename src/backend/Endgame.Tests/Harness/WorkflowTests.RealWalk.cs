@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using Endgame.Domain.Credits;
 using Endgame.Harness;
 using Endgame.Harness.Model;
 using Endgame.Harness.Permissions;

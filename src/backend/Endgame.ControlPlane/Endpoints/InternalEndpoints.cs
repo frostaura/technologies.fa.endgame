@@ -32,7 +32,8 @@ public sealed record CheckoutRequest(Guid TaskId, Guid RunId, Guid? EmployeeId, 
 public sealed record CreateTaskRequest(string? Scope, Guid? RunId, Guid? ParentTaskId, string? Title, string? Description, decimal? EstimateCredits, IReadOnlyList<Guid>? DependsOn);
 
 /// <param name="OnDecline"><c>continues</c> (the step is not taken, the work goes on) or <c>stops</c> (the work stops); the console says which.</param>
-public sealed record RaiseApprovalRequest(Guid RunId, string? Title, string? Detail, string? OnDecline = null);
+/// <param name="Technical">Technical mode's detail (tool, arguments, the rule that asked), kept beside the plain <paramref name="Detail"/>.</param>
+public sealed record RaiseApprovalRequest(Guid RunId, string? Title, string? Detail, string? OnDecline = null, string? Technical = null);
 
 public sealed record PublishedRequest(string? Version);
 
@@ -182,7 +183,7 @@ internal static class InternalEndpoints
         .WithName("GetContext").WithSummary("The resolved cascade for a scope: context, rule sets, budgets, settings, secret names and roles, each with the level that set it; and needsYou, what waits on a person there and beneath it (as home shows it).").Produces<ContextView>();
 
         group.MapPost("/approvals", async (RaiseApprovalRequest request, ApprovalService approvals, CancellationToken ct) =>
-            Results.Created("/internal/approvals", await approvals.RaiseAsync(request.RunId, request.Title ?? "", request.Detail, ct, request.OnDecline)))
+            Results.Created("/internal/approvals", await approvals.RaiseAsync(request.RunId, request.Title ?? "", request.Detail, ct, request.OnDecline, request.Technical)))
         .WithName("RaiseApproval").WithSummary("Raises a checkpoint; the run waits until someone with rights answers it.").Produces<ApprovalView>(201);
 
         group.MapGet("/routes", async (TreeService tree, CancellationToken ct) => Results.Ok(await tree.RoutesAsync(ct)))

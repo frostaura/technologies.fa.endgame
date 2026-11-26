@@ -548,7 +548,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Starts at:** **"Cancel"**.
 - **Needs:** a run that is not finished.
 - **Level:** Core. **Learn first:** RUN-01.
-- **What you learn:** cancelling ends the work for good and releases the credits it was holding.
+- **What you learn:** cancelling ends the work for good, releases the credits it was holding, and closes every contractor it briefed.
 - **Steps:**
   1. Press **"Cancel"**.
   2. The confirmation reads "Stop this work for good?" with **"Yes, cancel it"** / **"Keep going"**.
@@ -557,9 +557,11 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Variations and refusals:**
   - An already finished run gives 409.
   - A cancelled build, change or research can be started again from the run page's **"Try again"** (CHG-03, VERD-12).
-- **Where:** `POST /api/runs/{id}/cancel`.
+  - Every contractor the run briefed finishes with it, however the run ended (cancelled, failed, budget-stopped or finished): it leaves the organisation band, the graph and its briefer's "working now". One left open by an older run is closed by the next sweep.
+  - A build cancelled (or failed) before anything was published withdraws its open hire proposals — declined by Endgame, not a person, with the reason "Withdrawn: the build of {app} was cancelled before anything was built. Trying the build again proposes this hire again." Its project and app are kept, and read "Not built — the build was cancelled." (`notBuilt`), so "Try again" still works.
+- **Where:** `POST /api/runs/{id}/cancel`; `RunService` (`run.finished`), `LeaseSweep`.
 - **Reachable from:** UI; MCP.
-- **Covered by tests:** `RunView.test.tsx` ("asks before cancelling"); `RunsAndTasksTests.Pause_resume_and_cancel…`.
+- **Covered by tests:** `RunView.test.tsx` ("asks before cancelling"); `RunsAndTasksTests.Pause_resume_and_cancel…`; `WalkTwoServerTests.Cancelling_a_run_closes_every_contractor_it_briefed…`, `A_build_cancelled_before_anything_was_built_withdraws_its_hires…`.
 
 ### RUN-07 Answer an approval a run is waiting on
 - **Who:** Builder at the run's scope.
@@ -715,13 +717,14 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   1. The division is the idea's own one if it was proposed to a division. Otherwise it is the verdict's proposed division, defaulting to "labs"; it is created if it is new.
   2. The project and the app are created, or reused when their slugs already exist.
   3. "The builder · Placed" reads "{name} will live in a new division, {Division}, as the project {Project}." (or "…will live in {Division}…").
-- **You know it worked when:** the message appears, and the org chart shows the new project.
+  4. From that moment the build is the app's work: the run moves to the app's scope, so the project's card shows it under way (stage "building", its progress and spend) and every later model call is charged — and capped — at the app, the project and the division, even though the Runner still names the scope it started at.
+- **You know it worked when:** the message appears, and the org chart shows the new project with the build under way.
 - **Variations and refusals:**
   - **No person confirms or edits the placement.** There is no checkpoint for it.
   - The start screen's "A home for it — Endgame suggests a division and a name." is closer to "decides".
 - **Where:** `BuildWorkflow.PlaceAsync`; `POST /internal/tree/nodes`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.Build_places_plans_builds…`; `factory.spec.ts` step 3.
+- **Covered by tests:** `WorkflowTests.Build_places_plans_builds…`; `factory.spec.ts` step 3; `WalkTwoServerTests.A_placed_build_is_the_work_of_its_project_and_its_spend_lands_there`.
 
 ### BLD-02 See hires the factory proposes or makes
 - **Who:** nobody acts in auto-mode; an Admin decides a proposal.
@@ -741,10 +744,12 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Variations and refusals:**
   - A failed raise: "Endgame · A hire could not be raised" / "…The work goes ahead without one."
   - The work never stops for a hire; it is unattributed until the hire is accepted.
+  - Someone already covers it: an employee with that role who works at the need's level or above it ("Works at … and everything beneath it") does the work, and nobody is proposed (the answer is `covered`). An employee of another project does not cover this one, so a second project still proposes its own engineer.
+  - A build that stops before anything is published withdraws the proposals it raised (RUN-06); trying it again raises them again (CHG-03).
   - The start screen says how hires happen at the place chosen: in auto-mode "hired as they are needed, inside the budget"; with the hire checkpoint on, "proposed with a cost, and waits for you" (IDEA-02).
 - **Where:** `Workforce.HireAsync`; `HireService` (auto-accept); `POST /internal/hires`.
 - **Reachable from:** UI for deciding (another reader); MCP `hire_decide`.
-- **Covered by tests:** `WorkflowTests.A_new_division_and_a_recurring_job_raise_their_hires…`; `WorkforceTests.A_need_within_budget_is_hired_at_once…`, `…Over_budget_or_at_a_hire_checkpoint…`.
+- **Covered by tests:** `WorkflowTests.A_new_division_and_a_recurring_job_raise_their_hires…`; `WorkforceTests.A_need_within_budget_is_hired_at_once…`, `…Over_budget_or_at_a_hire_checkpoint…`; `WalkTwoServerTests.A_need_someone_above_already_covers_proposes_nobody_and_a_siblings_employee_does_not_cover_it`.
 
 ### BLD-03 Read the plan: what you asked for, what was left out and why
 - **Who:** Viewer or above.
@@ -1084,7 +1089,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   3. Press **"Start it again"** ("Starting…") or **"Not now"**. You are taken to the new run.
   4. The new run says "Endgame · Carrying on": "This picks up where the earlier attempt stopped: {n} of {m} parts were already built and checked, so they are kept, not rebuilt or charged again." The plan shows those parts as "Built and checked in the earlier attempt; kept, not built or charged again."
 - **You know it worked when:** the new run finishes; the idea's "Watch the work that followed" now opens it.
-- **Variations and refusals:** a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable". While an employee on the project is paused, a build or change is not started again: "It was not started again: {Name}, who works on this app, is paused…".
+- **Variations and refusals:** a build that stopped before anything was published raises its hires again (its earlier proposals were withdrawn, RUN-06); a start the owner declined says so ("start-declined"); a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable". While an employee on the project is paused, a build or change is not started again: "It was not started again: {Name}, who works on this app, is paused…".
 - **Where:** `runs/TryAgain.tsx`, `RunView.tsx` `StoppedPanel`, `VerdictView.tsx`; `POST /api/runs/{id}/retry/estimate`, `POST /api/runs/{id}/retry`; `RetryService`, `IdeaService.RetryBuildAsync`, `FactoryEstimates`; `BuildWorkflow.CarryOverAsync`.
 - **Reachable from:** UI; MCP `run_retry_estimate`, `run_retry`; the conversation (`try_again`, TALK-18).
 - **Covered by tests:** `WorkflowTests.A_build_tried_again_keeps_its_placement_plan_and_finished_parts_and_builds_only_the_rest`, `…A_declined_plan_says_so_and_a_try_again_plans_afresh`; `TryAgainAndChangesTests.A_stopped_build_is_built_again_priced_for_what_is_left_and_carrying_on_from_the_earlier_attempt`; `TryAgainAndChanges.test.tsx`.

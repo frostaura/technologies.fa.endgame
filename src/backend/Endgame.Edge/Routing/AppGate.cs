@@ -34,14 +34,10 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
             return;
         }
 
-        switch (app.Route.Availability)
+        if (app.Route.Availability == AppAvailability.Paused)
         {
-            case AppAvailability.Paused:
-                await UnavailablePage.WriteAsync(context, app.Route.PausedReason == PausedReasons.BudgetExhausted ? Unavailable.BudgetSpent : Unavailable.Paused, mark);
-                return;
-            case AppAvailability.Unpublished:
-                await UnavailablePage.WriteAsync(context, Unavailable.NotReady, mark);
-                return;
+            await UnavailablePage.WriteAsync(context, app.Route.PausedReason == PausedReasons.BudgetExhausted ? Unavailable.BudgetSpent : Unavailable.Paused, mark);
+            return;
         }
 
         var prefix = route.Metadata?.GetValueOrDefault(AppProxyConfig.PrefixKey) ?? "";
@@ -76,6 +72,14 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
             {
                 context.Items[AppRequestTransforms.SessionItem] = session;
             }
+        }
+
+        // An app with an address and no published version yet says so — to whoever may open it; a visitor who may not is
+        // sent to sign in or refused first, exactly as for a published app (D68, ACC-16).
+        if (app.Route.Availability == AppAvailability.Unpublished)
+        {
+            await UnavailablePage.WriteAsync(context, Unavailable.NotReady, mark);
+            return;
         }
 
         app.Enter();

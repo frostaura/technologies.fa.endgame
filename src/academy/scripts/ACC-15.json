@@ -39,7 +39,7 @@
           "kind": "demo",
           "highlight": {
             "text": "This app has stopped for a moment",
-            "note": "Shift Rota crashed: it is started again shortly."
+            "note": "Shift Rota crashed: its owner has been told, and the next visit starts it again."
           }
         }
       ]

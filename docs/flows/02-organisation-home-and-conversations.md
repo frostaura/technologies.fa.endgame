@@ -49,7 +49,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   3. The person types the organisation's name, then fills in "The idea" (a text area). They can toggle any of the constraint chips ("Members sign in", "Works on a phone", "Sends email", "Uses AI inside the app", "Receives data from a device") and add "Anything else, in your own words".
   4. Once the idea reaches 12 characters, the panel "Research comes first" fetches an estimate (`POST /api/ideas/estimate`, free) and shows "Estimated {credits}".
   5. The person presses "Research this idea". While it works, the button reads "Starting research…".
-  6. The console first calls `POST /api/organisations {name, slug}`. The control plane validates the slug, checks it against reserved names, creates the organisation, makes the caller its Owner, and adds the standing Security reviewer employee. It then calls `POST /api/ideas`.
+  6. The console first calls `POST /api/organisations {name, slug}`. The control plane validates the slug, checks it against reserved names, creates the organisation, makes the caller its Owner, and adds the standing Security reviewer employee. Its answer carries `balance` 0 and `creditsNote` "{Name} has no credits until FrostAura tops it up: its first piece of work waits for budget until then." — Endgame invents no starter credits, so `/api/credits` and the chart read `neverToppedUp: true` until the first top-up. It then calls `POST /api/ideas`.
   7. The browser goes to the research run at `/runs/{id}`. From here on it is the ideas and runs flows (RUN-01).
 - **You know it worked when:** you land on the research run's page, and the header gains the organisation's name and the credits pill.
 - **Variations and refusals:**
