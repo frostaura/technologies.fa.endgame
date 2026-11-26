@@ -70,7 +70,7 @@ export function AssistantsView() {
                 <Skeleton className="h-16 rounded-sm" />
               </Loading>
             )}
-            {view.kind === "failed" && <Failed title="The assistants you let in could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+            {view.kind === "failed" && <Failed title="The assistants you let in could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
             {view.kind === "loaded" && (
               <>
                 {view.stale && <Stale reason={view.stale.reason} />}
@@ -103,6 +103,13 @@ function status(t: AccessToken): { label: string; tone: "success" | "quiet" | "a
   return { label: "Active", tone: "success" };
 }
 
+/** When a key stops, as of now: a revoked key says when it was revoked, never an end it will not reach. */
+function lifetime(t: AccessToken): string {
+  if (t.revokedAt) return ` · revoked ${formatDate(t.revokedAt)}`;
+  if (!t.expiresAt) return " · never ends";
+  return ` · ${t.active ? "ends" : "ended"} ${formatDate(t.expiresAt)}`;
+}
+
 function TokenRow({ token, technical, organisation }: { token: AccessToken; technical: boolean; organisation: string }) {
   const [revoke, revoking] = useRevokeTokenMutation();
   const [confirm, setConfirm] = useState(false);
@@ -124,7 +131,7 @@ function TokenRow({ token, technical, organisation }: { token: AccessToken; tech
           <span className="break-words font-semibold">{token.name}</span>
           <span className="text-sm text-ink-body">
             {ROLE_NAME[token.role]} in {organisation} · made {formatDate(token.createdAt)}
-            {token.expiresAt ? ` · ${token.active ? "ends" : "ended"} ${formatDate(token.expiresAt)}` : " · never ends"}
+            {lifetime(token)}
           </span>
           {technical && <code className="font-mono text-xs text-ink-muted">{token.prefix}… · {token.id}</code>}
         </div>

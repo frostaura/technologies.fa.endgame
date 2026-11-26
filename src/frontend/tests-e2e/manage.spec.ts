@@ -183,7 +183,7 @@ test.describe("the whole job of an employee", () => {
     await ask.getByLabel("Why this hire").fill("Nobody designs here.");
     await ask.getByRole("button", { name: "Ask for this hire" }).click();
     await expect(page).toHaveURL(/\/hires\/h-/);
-    await expect(page.getByRole("heading", { name: "Kit, designer" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kit, Designer" })).toBeVisible();
     await expectNoSidewaysScroll(page);
   });
 

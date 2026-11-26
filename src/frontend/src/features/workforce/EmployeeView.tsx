@@ -96,7 +96,7 @@ export function EmployeeView({ employeeId }: { employeeId: string }) {
           <Skeleton className="h-56 rounded-md" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title={view.status === 404 ? "This employee could not be found" : "The employee could not be loaded"} reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title={view.status === 404 ? "This employee could not be found" : "The employee could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -609,7 +609,7 @@ function RecentWork({ employee }: { employee: Employee }) {
           <Skeleton className="h-12 rounded-sm" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="Recent work could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="Recent work could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && view.stale && <Stale reason={view.stale.reason} />}
       {view.kind === "loaded" &&
         (tasks.length === 0 ? (
@@ -735,7 +735,7 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
           <Skeleton className="h-20 rounded-xs" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The memory could not be loaded" reason={view.reason} onRetry={() => void memory.refetch()} />}
+      {view.kind === "failed" && <Failed title="The memory could not be loaded" reason={view.reason} status={view.status} onRetry={() => void memory.refetch()} />}
       {view.kind === "loaded" && view.stale && <Stale reason={view.stale.reason} />}
       {view.kind === "loaded" &&
         (view.data.length === 0 ? (
@@ -784,7 +784,8 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
     event.preventDefault();
     setError(null);
     try {
-      await remove({ id: employee.id, entryId: entry.id, why: why.trim() || "Removed by a person", includeArchived }).unwrap();
+      // No reason given is sent as none, so the log never quotes one that was not said (D28).
+      await remove({ id: employee.id, entryId: entry.id, why: why.trim() || null, includeArchived }).unwrap();
     } catch (e) {
       setError(`It was not removed: ${describeError(e as never)}`);
     }
@@ -916,7 +917,7 @@ function MemoryHistory({ changes, entries, onRetry }: { changes: ViewState<Memor
           <Skeleton className="h-10 rounded-xs" />
         </Loading>
       )}
-      {changes.kind === "failed" && <Failed title="What changed in the memory could not be loaded" reason={changes.reason} onRetry={onRetry} />}
+      {changes.kind === "failed" && <Failed title="What changed in the memory could not be loaded" reason={changes.reason} status={changes.status} onRetry={onRetry} />}
       {changes.kind === "loaded" &&
         (changes.data.length === 0 ? (
           <p data-state="empty" className="text-sm text-ink-muted">

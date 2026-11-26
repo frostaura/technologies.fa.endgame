@@ -32,7 +32,7 @@ export function AccountView() {
           <Skeleton className="h-48 rounded-md" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="Your account could not be loaded" reason={view.reason} onRetry={() => void me.refetch()} />}
+      {view.kind === "failed" && <Failed title="Your account could not be loaded" reason={view.reason} status={view.status} onRetry={() => void me.refetch()} />}
       {view.kind === "loaded" && <AccountBody me={view.data} />}
     </AppShell>
   );
@@ -109,14 +109,22 @@ function AccountBody({ me }: { me: Me }) {
   );
 }
 
+/** What a saved passkey means, by how many there now are. */
+function savedPasskey(total: number): string {
+  if (total <= 1) return "The passkey is saved. It signs you in now.";
+  return total === 2 ? "The new passkey is saved. Either one signs you in now." : "The new passkey is saved. Any of them signs you in now.";
+}
+
 /** Your passkeys: how many, and adding another on this device (ID-08). */
 function Passkeys({ me }: { me: Me }) {
   const [options] = usePasskeyRegisterOptionsMutation();
   const [complete] = usePasskeyRegisterCompleteMutation();
-  const [state, setState] = useState<{ kind: "idle" } | { kind: "working" } | { kind: "done" } | { kind: "failed"; reason: string }>({ kind: "idle" });
+  const [state, setState] = useState<{ kind: "idle" } | { kind: "working" } | { kind: "done"; total: number } | { kind: "failed"; reason: string }>({ kind: "idle" });
   const supported = passkeysSupported();
 
   const add = async () => {
+    // How many there are once this one is saved: the words differ for a first passkey (ID-08).
+    const total = me.passkeys + 1;
     setState({ kind: "working" });
     try {
       // Signed in, the control plane registers the new passkey on this account; the name and e-mail are its own.
@@ -124,7 +132,7 @@ function Passkeys({ me }: { me: Me }) {
       const credential = (await navigator.credentials.create({ publicKey: toCreationOptions(publicKey) })) as PublicKeyCredential | null;
       if (!credential) throw new Error("No passkey was created.");
       await complete({ credential: registrationJson(credential) }).unwrap();
-      setState({ kind: "done" });
+      setState({ kind: "done", total });
     } catch (e) {
       setState({ kind: "failed", reason: e && typeof e === "object" && "status" in e ? describeError(e as never) : describePasskeyError(e) });
     }
@@ -147,11 +155,11 @@ function Passkeys({ me }: { me: Me }) {
         </p>
       )}
       <Button className="self-start" disabled={!supported || state.kind === "working"} onClick={() => void add()}>
-        {state.kind === "working" ? "Waiting for your device…" : "Add another passkey"}
+        {state.kind === "working" ? "Waiting for your device…" : me.passkeys === 0 ? "Add a passkey" : "Add another passkey"}
       </Button>
       {state.kind === "done" && (
         <p role="status" className="text-success-text">
-          The new passkey is saved. Either one signs you in now.
+          {savedPasskey(state.total)}
         </p>
       )}
       {state.kind === "failed" && (

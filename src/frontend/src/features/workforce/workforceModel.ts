@@ -25,18 +25,45 @@ function plainTier(tier: string | null): string {
   return "Standard";
 }
 
+/**
+ * Every tool an employee can be given, in plain words. A test reads the harness's own tools (every
+ * `ITool` in the backend) and the demo's, and fails when one has no plain name here.
+ */
 const TOOLS: Record<string, string> = {
   read_file: "Read files",
   list_files: "Look through the files",
   search: "Search the work",
   web_search: "Search the web",
+  read_page: "Read web pages",
   edit_file: "Change files",
   write_file: "Write new files",
   run: "Run commands and tests",
   git_diff: "Compare changes",
+  commit: "Save its work",
+  git_commit: "Save its work",
+  load_skill: "Use a skill",
+  remember: "Remember things",
   notes: "Keep notes",
+  tasks: "Keep a task list",
   spawn: "Brief contractors",
+  brief_contractor: "Brief contractors",
+  propose_plan: "Propose a plan",
+  mark_item: "Tick off the plan",
+  check_preview: "Try the app before it is published",
+  sent_emails: "Read the e-mails an app sent",
+  read_organisation: "Read the organisation",
+  ask_app: "Ask an app's data",
+  propose_hire: "Propose hires",
+  start_idea: "Start work on an idea",
+  change_app: "Ask for a change to an app",
+  adjust_setting: "Change a setting",
+  try_again: "Try stopped work again",
 };
+
+/** A tool's plain name, or null when it has none. */
+export function plainTool(tool: string): string | null {
+  return TOOLS[tool.replace(/\(.*\)$/, "")] ?? null;
+}
 
 export function toolLabel(tool: string, mode: Mode): string {
   const base = tool.replace(/\(.*\)$/, "");
@@ -46,8 +73,8 @@ export function toolLabel(tool: string, mode: Mode): string {
   return pattern ? `${plain}, limited` : plain;
 }
 
-/** Every tool the harness offers, for choosing from in normal mode. */
-export const KNOWN_TOOLS = Object.keys(TOOLS);
+/** The tools offered for choosing in a job and in rules; the others come with the work an agent is given. */
+export const KNOWN_TOOLS: readonly string[] = ["read_file", "list_files", "search", "web_search", "edit_file", "write_file", "run", "git_diff", "notes", "spawn"];
 
 const SERVICES: Record<string, string> = {
   identity: "Sign-in",
@@ -87,6 +114,23 @@ export const MEMORY_KIND: Record<MemoryKind, string> = {
 };
 
 export const MEMORY_KINDS = Object.keys(MEMORY_KIND) as MemoryKind[];
+
+/**
+ * "Theo, Software engineer": the role as it was written, initialisms and all. When the name is the
+ * role (a promoted contractor role is named after it), it is said once.
+ */
+export function nameWithRole(name: string, role: string): string {
+  return name.trim().toLowerCase() === role.trim().toLowerCase() ? name : `${name}, ${role}`;
+}
+
+/**
+ * What a hire is expected to cost a month: never more than its own budget, which caps it. The
+ * proposal's estimate is the server's; a cap set below it is what holds.
+ */
+export function expectedMonthly(hire: { expectedMonthlyCredits: number; jobDescription: { monthlyCreditLimit: number | null } }): number {
+  const cap = hire.jobDescription.monthlyCreditLimit;
+  return cap !== null && cap < hire.expectedMonthlyCredits ? cap : hire.expectedMonthlyCredits;
+}
 
 /** The name of the node a scope (a path of slugs) points at, read from the tree. */
 export function scopeName(tree: Tree | undefined, scope: string): string {
@@ -182,17 +226,24 @@ export function memoryChangeLine(change: MemoryChange): string {
   return `${MEMORY_ACTION[change.action]} ${MEMORY_BY[change.by] ?? `by ${change.by}`}`;
 }
 
-/** The title an entry had when it changed, read defensively from the change's detail. */
+/**
+ * The title an entry had when it changed, read defensively from the change's detail: a correction
+ * carries `before` and `after`, the others the title itself; otherwise the entry's own.
+ */
 export function memoryChangeTitle(change: MemoryChange, entries: MemoryEntry[]): string | null {
-  const detail = change.detail as { title?: unknown; why?: unknown } | null;
-  const title = typeof detail?.title === "string" ? detail.title : (entries.find((e) => e.id === change.memoryId)?.title ?? null);
-  return title;
+  const detail = change.detail as { title?: unknown; after?: { title?: unknown } | null; before?: { title?: unknown } | null } | null;
+  for (const title of [detail?.after?.title, detail?.title, detail?.before?.title]) if (typeof title === "string" && title.trim()) return title.trim();
+  return entries.find((e) => e.id === change.memoryId)?.title ?? null;
 }
 
-/** Why an entry was removed, when the person said. */
+/** Words the log once stored in place of a reason; they are not one. */
+const NO_REASON = new Set(["removed by a person", "no reason given."]);
+
+/** Why an entry was changed or removed, when someone said. */
 export function memoryChangeWhy(change: MemoryChange): string | null {
   const detail = change.detail as { why?: unknown } | null;
-  return typeof detail?.why === "string" && detail.why.trim() ? detail.why.trim() : null;
+  const why = typeof detail?.why === "string" ? detail.why.trim() : "";
+  return why && !NO_REASON.has(why.toLowerCase()) ? why : null;
 }
 
 /** A job as the editor holds it: every field as text, the lists as chosen. */

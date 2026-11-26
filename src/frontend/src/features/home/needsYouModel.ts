@@ -1,4 +1,4 @@
-import { formatCredits } from "@/lib/format";
+import { formatCredits, tidyCreditAmounts } from "@/lib/format";
 import { firstSentence, shortTitle } from "@/lib/plain";
 import type { NeedsYou, VerdictOutcome } from "@/store/types";
 
@@ -10,7 +10,7 @@ const PREAMBLE = /^(the case against(,)? (argued )?first\.?|verdict:\s*)/i;
 /** The first sentence that says something, skipping research's own preamble. */
 export function meaningfulLine(detail: string | null, max = 150): string | null {
   if (!detail) return null;
-  let rest = detail.replace(/\s+/g, " ").trim();
+  let rest = tidyCreditAmounts(detail.replace(/\s+/g, " ").trim());
   for (let i = 0; i < 3 && PREAMBLE.test(rest); i++) rest = rest.replace(PREAMBLE, "").trim();
   return rest ? firstSentence(rest, max) : null;
 }

@@ -45,7 +45,7 @@ describe("SecretsView", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.dataset.state).toBe("failed");
     expect(alert.textContent).toContain("You cannot see the secrets here");
-    expect(alert.textContent).toContain("This needs the admin role at 'acme/tools' (403)");
+    expect(alert.textContent).toContain("This needs the admin role here.");
     expect(screen.queryByText(/No secrets apply/)).toBeNull();
     expect(screen.queryByRole("region", { name: "Add a secret" })).toBeNull();
   });
@@ -119,7 +119,7 @@ describe("SecretsView", () => {
     expect(await within(screen.getByRole("list", { name: "Secrets" })).findByText("NEW_KEY")).toBeTruthy();
     await waitFor(() => expect(pending.answer).toBeDefined());
     pending.answer?.(problem(403, "This needs the admin role"));
-    expect(await within(form).findByText(/NEW_KEY was not saved: This needs the admin role \(403\) Nothing changed/)).toBeTruthy();
+    expect(await within(form).findByText(/NEW_KEY was not saved: This needs the admin role\. Nothing changed/)).toBeTruthy();
     // The store batches its notifications to the next frame; the row goes then.
     await waitFor(() => expect(within(screen.getByRole("list", { name: "Secrets" })).queryByText("NEW_KEY")).toBeNull());
   });
@@ -131,6 +131,22 @@ describe("SecretsView", () => {
     fireEvent.change(screen.getByLabelText("New value for MAPS_KEY"), { target: { value: "next" } });
     fireEvent.click(screen.getByRole("button", { name: "Replace the secret" }));
     await waitFor(() => expect(api.calls.find((c) => c.method === "PUT")?.body).toEqual({ scope: "acme/tools", name: "MAPS_KEY", value: "next" }));
+    // Saved, the form closes and the row says so (D32).
+    expect(await screen.findByText("MAPS_KEY is saved. Its value is sealed and will not be shown.")).toBeTruthy();
+    expect(screen.queryByLabelText("New value for MAPS_KEY")).toBeNull();
+    expect(screen.getByRole("button", { name: "Replace" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("drops a saved message once another action is taken on the page (D33)", async () => {
+    stub(json(LIST), { "PUT /api/secrets": json({ name: "NEW_KEY", setAtLevel: "division", setAtPath: "acme/tools", setAt: "2026-11-25T00:00:00Z", inherited: false, overrides: [] }), "DELETE /api/secrets": json(null, 204) });
+    renderWithStore(<SecretsView />);
+    const form = await screen.findByRole("region", { name: "Add a secret" });
+    fireEvent.change(within(form).getByLabelText("Name"), { target: { value: "NEW_KEY" } });
+    fireEvent.change(within(form).getByLabelText("Value"), { target: { value: "v" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Save the secret" }));
+    expect(await within(form).findByText(/NEW_KEY is saved/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(within(form).queryByText(/NEW_KEY is saved/)).toBeNull();
   });
 
   it("removes a secret only after it is confirmed, saying what applies again", async () => {
@@ -149,7 +165,7 @@ describe("SecretsView", () => {
     renderWithStore(<SecretsView />);
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove it" }));
-    expect(await screen.findByText(/MAPS_KEY was not removed: Not yours to remove \(403\) It still applies/)).toBeTruthy();
+    expect(await screen.findByText(/MAPS_KEY was not removed: Not yours to remove\. It still applies/)).toBeTruthy();
     expect(within(screen.getByRole("list", { name: "Secrets" })).getByText("MAPS_KEY")).toBeTruthy();
   });
 

@@ -27,12 +27,26 @@ describe("HireView", () => {
     stub(problem(404, "Not found"));
     renderWithStore(<HireView hireId="h1" />);
     expect((await screen.findByRole("alert")).textContent).toContain("This hire proposal could not be found");
+    // A not-found is an answer: the way back, not a retry (D62).
+    expect(screen.getByRole("link", { name: "Back to the org chart" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("says one cost everywhere when its own budget is below the expected cost (D24)", async () => {
+    const capped = hireFixture({ expectedMonthlyCredits: 1500, jobDescription: { ...hireFixture().jobDescription, monthlyCreditLimit: 800 } });
+    stub(json(capped));
+    renderWithStore(<HireView hireId="h1" />);
+    expect(await screen.findByText("800")).toBeTruthy();
+    expect(screen.getByText("credits a month at most: its own budget caps it")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Hire Lin" }));
+    expect(screen.getByText("Hire Lin at about 800 credits a month?")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("1,500");
   });
 
   it("shows the drafted job and its monthly cost in plain words, and whether it fits the budget", async () => {
     stub(json(hireFixture()));
     renderWithStore(<HireView hireId="h1" />);
-    expect(await screen.findByRole("heading", { name: "Lin, engineer" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Lin, Engineer" })).toBeTruthy();
     expect(screen.getByText("Build Ledger to its plan.")).toBeTruthy();
     expect(screen.getByText("Strong, for building")).toBeTruthy();
     expect(screen.getByText("300")).toBeTruthy();
@@ -70,6 +84,16 @@ describe("HireView", () => {
     await waitFor(() => expect(screen.getByText("300")).toBeTruthy());
     expect((api.calls.find((c) => c.method === "PATCH")?.body as { expectedMonthlyCredits: number }).expectedMonthlyCredits).toBe(250);
   });
+
+  it("saves a budget below the expected cost as the cost too, so the page and the server agree (D24)", async () => {
+    const api = stub(json(hireFixture()), { "PATCH /api/hires/h1": "pending" });
+    renderWithStore(<HireView hireId="h1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit the proposal" }));
+    fireEvent.change(screen.getByLabelText("Its own monthly budget (optional)"), { target: { value: "200" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the proposal" }));
+    expect(await screen.findByText("200")).toBeTruthy();
+    expect(api.calls.find((c) => c.method === "PATCH")?.body).toMatchObject({ expectedMonthlyCredits: 200, jobDescription: { monthlyCreditLimit: 200 } });
+  });
 });
 
 describe("HiresView", () => {
@@ -84,7 +108,7 @@ describe("HiresView", () => {
       "POST /api/hires": json(hireFixture({ id: "h9" }), 201),
     });
     renderWithStore(<HiresView />);
-    expect(await screen.findByRole("link", { name: /Lin, engineer for Tools/ })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: /Lin, Engineer for Tools/ })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Decided" }).textContent).toContain("Ruth");
     fireEvent.click(await screen.findByRole("button", { name: "Propose as a permanent hire" }));
     fireEvent.change(screen.getByLabelText("Name the new employee"), { target: { value: "Sam" } });

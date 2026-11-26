@@ -7,9 +7,9 @@ import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useGetCreditsQuery, useGetMeQuery } from "@/store/api";
-import type { BudgetLine, Credits, MemberRole, Membership } from "@/store/types";
+import type { BudgetLine, Credits, MemberRole } from "@/store/types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { roleRank } from "@/lib/roles";
+import { highestGrant, roleRank } from "@/lib/roles";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { AppShell } from "../shell/AppShell";
 import { CapControl, NarrowerLimit, NarrowerLimits, OwnLimit, TopUpRequests } from "./CreditsActions";
@@ -40,7 +40,7 @@ export function CreditsView() {
           <Skeleton className="h-72 rounded-md" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="Credits could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="Credits could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -52,12 +52,6 @@ export function CreditsView() {
 }
 
 /** The highest level a person holds a role at in one organisation: a division before a project before an app. */
-function highestGrant(memberships: Membership[], organisation: string): Membership | undefined {
-  return memberships
-    .filter((m) => m.organisationSlug === organisation)
-    .sort((a, b) => a.scope.split("/").length - b.scope.split("/").length || a.scope.localeCompare(b.scope))[0];
-}
-
 function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Credits; organisation: string; isAdmin: boolean; branch: string | null }) {
   const negative = credits.balance < 0;
   return (

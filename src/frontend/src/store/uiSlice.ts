@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { Mode } from "@/features/runs/runModel";
+import { api } from "./api";
 import type { OrganisationRef } from "./types";
 
 /** What the docked conversation is scoped to: a node of the tree, or one employee on it. */
@@ -30,6 +31,11 @@ export interface UiState {
    * that does not carry `?organisation=` — keeps working on it until they leave (OP-04).
    */
   entered: OrganisationRef | null;
+  /**
+   * Whether this page has held a session. A sign-in screen shown after one (a sign-out, or a session
+   * that ended) is not a signed-out arrival, so it keeps no return address for the next person (ID-04).
+   */
+  hadSession: boolean;
 }
 
 const MODE_KEY = "endgame.mode";
@@ -82,7 +88,7 @@ export function conversationKey(selection: Pick<Selection, "scope" | "employeeId
 
 export const uiSlice = createSlice({
   name: "ui",
-  initialState: (): UiState => ({ mode: readStoredMode(), selection: null, conversations: {}, entered: readStoredEntered() }),
+  initialState: (): UiState => ({ mode: readStoredMode(), selection: null, conversations: {}, entered: readStoredEntered(), hadSession: false }),
   reducers: {
     modeSet(state, action: PayloadAction<Mode>) {
       state.mode = action.payload;
@@ -108,6 +114,18 @@ export const uiSlice = createSlice({
       message.error = action.payload.error;
       message.state = action.payload.error ? "failed" : "sent";
     },
+  },
+  extraReducers: (builder) => {
+    builder.addMatcher(api.endpoints.getMe.matchFulfilled, (state) => {
+      state.hadSession = true;
+    });
+    // Nothing of one person's session is left for the next to sign in on this tab: not where they
+    // were, not what they said, not an organisation they entered.
+    builder.addMatcher(api.endpoints.logout.matchFulfilled, (state) => {
+      state.selection = null;
+      state.conversations = {};
+      state.entered = null;
+    });
   },
 });
 

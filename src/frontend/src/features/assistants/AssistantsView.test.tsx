@@ -40,6 +40,15 @@ describe("AssistantsView", () => {
     expect(screen.getByRole("heading", { level: 1, name: "MCP access tokens" })).toBeTruthy();
   });
 
+  it("says when a revoked key was revoked, never an end it will not reach (D7)", async () => {
+    const revoked = { ...TOKENS[0], id: "t3", name: "Lost laptop", revokedAt: "2026-11-24T10:00:00Z", active: false };
+    stub(json([revoked]));
+    renderWithStore(<AssistantsView />);
+    const row = (await screen.findByText("Lost laptop")).closest("li") as HTMLElement;
+    expect(row.textContent).toContain("revoked 24 Nov 2026");
+    expect(row.textContent).not.toMatch(/ended|ends/);
+  });
+
   it("shows loading, a failed read and an empty list distinctly", async () => {
     stub("pending");
     renderWithStore(<AssistantsView />);

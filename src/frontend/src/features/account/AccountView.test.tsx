@@ -58,10 +58,25 @@ describe("Your account", () => {
     });
     renderWithStore(<AccountView />);
     fireEvent.click(await screen.findByRole("button", { name: "Add another passkey" }));
-    expect(await screen.findByText("The new passkey is saved. Either one signs you in now.")).toBeTruthy();
+    expect(await screen.findByText("The new passkey is saved. Any of them signs you in now.")).toBeTruthy();
     expect(api.calls.some((c) => c.path === "/api/auth/passkey/register/complete")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Add another passkey" }));
     expect((await screen.findByText(/No passkey was added:/)).getAttribute("role")).toBe("alert");
+  });
+
+  it("words a first passkey as the only one (D1)", async () => {
+    const created = { id: "cred", rawId: new Uint8Array([1]).buffer, type: "public-key", response: { clientDataJSON: new Uint8Array([1]).buffer, attestationObject: new Uint8Array([2]).buffer, getTransports: () => ["internal"] }, getClientExtensionResults: () => ({}), authenticatorAttachment: "platform" };
+    vi.stubGlobal("PublicKeyCredential", function PublicKeyCredential() {});
+    Object.defineProperty(navigator, "credentials", { value: { create: vi.fn().mockResolvedValueOnce(created) }, configurable: true });
+    const NONE = { ...TWO, passkeys: 0 };
+    stub(NONE, {
+      "POST /api/auth/passkey/register/options": json({ publicKey: { challenge: "AQ", rp: { name: "Endgame" }, user: { id: "AQ", name: "o@example.test", displayName: "Owner" }, pubKeyCredParams: [{ type: "public-key", alg: -7 }] } }),
+      "POST /api/auth/passkey/register/complete": json({ ...TWO, passkeys: 1 }),
+    });
+    renderWithStore(<AccountView />);
+    expect(screen.queryByRole("button", { name: "Add another passkey" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Add a passkey" }));
+    expect(await screen.findByText("The passkey is saved. It signs you in now.")).toBeTruthy();
   });
 
   it("switches the organisation every screen works in", async () => {

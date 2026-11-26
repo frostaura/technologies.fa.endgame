@@ -22,7 +22,7 @@ Shared vocabulary used below:
 - **Steps:**
   1. Press "Hiring". The page title reads "Hiring for <name>" with the intro "Hires are proposed when the organisation needs someone: a new division, a project reaching a new stage, or a job that keeps coming back. In auto-mode one that fits the budget is taken on at once; otherwise it waits for you here."
   2. The proposals load (up to 200, newest first). The section "Waiting for you" holds open proposals. The section "Decided" holds accepted and declined ones.
-  3. Each card shows a badge ("Waiting for you" / "Hired" / "Declined"), "<Name>, <role> for <place>", "About <n> credits a month" plus ", more than the budget has room for" when it does not fit, then the trigger text and the date.
+  3. Each card shows a badge ("Waiting for you" / "Hired" / "Declined"), "<Name>, <Role> for <place>" (the role as written; a name that is the role is said once), "About <n> credits a month" plus ", more than the budget has room for" when it does not fit, then the trigger text and the date.
   4. The aside holds "Contractor roles that keep coming back" (HIRE-07) and "People let go" (EMP-09). An Admin also sees "Ask for a hire" above the proposals (HIRE-09).
 - **You know it worked when:** the heading "Hiring for <name>" appears with the "Waiting for you" section, or the empty state.
 - **Variations and refusals:**
@@ -44,7 +44,7 @@ Shared vocabulary used below:
 - **Starts at:** a card on `/hires`, a "Hire proposed" card in the org chart's "needs you" strip, or a notification. Opens `/hires/<id>`.
 - **Needs:** a proposal in your organisation.
 - **Steps:**
-  1. The page opens with a badge ("Hire proposed" / "Hired" / "Declined") and the heading "<Name>, <role>".
+  1. The page opens with a badge ("Hire proposed" / "Hired" / "Declined") and the heading "<Name>, <Role>" (the role as written, once when the name is the role).
   2. The subtitle reads "For <place> · <trigger> · Raised by a person|Endgame <date>", followed by the reason.
   3. The section "The drafted job description" lists:
      - "Mandate" (or "Not written yet")
@@ -55,12 +55,12 @@ Shared vocabulary used below:
      - "Thinking power", e.g. "Standard, for reading and judging"
      - "Reports to", or "Nobody: it answers to you"
      - "Replaces" (only for a promotion): "The recurring contractor role “<role>”"
-  4. The aside "What it costs" shows the big number and "credits a month, expected", then "Fits the budget" or "More than the budget has room for", then "<n> credits of room left this month where it would work."
+  4. The aside "What it costs" shows the big number and "credits a month, expected" (when its own budget is lower than the expected cost, the budget and "credits a month at most: its own budget caps it"; the list and the confirmation say the same number), then "Fits the budget" or "More than the budget has room for", then "<n> credits of room left this month where it would work."
   5. The aside also says: "An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start."
 - **You know it worked when:** the job description and the "What it costs" aside are both shown.
 - **Variations and refusals:**
   - Technical mode adds the real tool and tier names.
-  - Not found: "This hire proposal could not be found". Other failure: "The hire proposal could not be loaded".
+  - Not found: "This hire proposal could not be found", "This was not found, or you cannot see it." and "Back to the org chart" (a not-found is an answer, so there is no retry). Other failure: "The hire proposal could not be loaded".
   - A Viewer or Builder sees "An Admin or the Owner decides on hires." instead of the buttons.
   - The room left is the tightest monthly cap on the scope's chain, or the balance plus the overdraft, whichever is lower. It is recalculated on every read.
 - **Where:** `HireView.tsx`, `workforceModel.ts`. `GET /api/hires/{id}`. `INF/Work/HireService.cs` (ViewAsync, HeadroomAsync).
@@ -123,6 +123,7 @@ Shared vocabulary used below:
 - **You know it worked when:** the new values show in "The drafted job description" and in the cost aside.
 - **Variations and refusals:**
   - Local checks: "It needs a name and a role." · "A budget is a number of credits a month, or empty for none of its own." · "The monthly cost is a number of credits." · an emptied reason: "Say why this hire is needed; a proposal always gives its reason." (nothing is sent).
+  - A budget below the expected cost caps it: under the cost field, "Its own budget caps what it can cost: an expected cost above the budget is saved as the budget.", and the cost is sent as the budget.
   - **Emptying the budget removes it** (`clearMonthlyCreditLimit`); "Reports to: Nobody" clears the manager (`clearReportsTo`).
   - Thinking power, once set, is changed, not taken away: the standard choice is offered only while none is set.
   - Server refusal: "The edit was not saved: <reason> The proposal is as it was." and every field goes back. A decided proposal is 409 "The proposal was <status>; only an open proposal is edited."
@@ -179,7 +180,7 @@ Shared vocabulary used below:
 - **Needs:** the role qualifies as recurring (HIRE-07).
 - **Steps:**
   1. The contractor leaves the chart.
-  2. A promotion proposal is raised, named after the role ("<Role>, <role> for <place>"), at what the contractors cost scaled to a month. Its reason reads "<n> <Role> contractors were briefed here in the last 30 days, costing <n> credits. Standing work is cheaper, and better remembered, done by an employee." What the contractor learned goes into the briefer's memory (MEM-06).
+  2. A promotion proposal is raised, named after the role, which is then said once ("<Role> for <place>"), at what the contractors cost scaled to a month. Its reason reads "<n> <Role> contractors were briefed here in the last 30 days, costing <n> credits. Standing work is cheaper, and better remembered, done by an employee." What the contractor learned goes into the briefer's memory (MEM-06).
   3. The proposal reports to the briefer and copies the briefer's tools, services and thinking power.
   4. It is then auto-hired or waits, as in HIRE-06.
 - **You know it worked when:** a proposal with the trigger "A contractor role keeps recurring…" appears on `/hires`.
@@ -231,7 +232,7 @@ Shared vocabulary used below:
   7. "Contractors it has briefed" (EMP-07) and "Talk to <Name>" (EMP-08) follow. The memory sits in the aside (MEM-01).
 - **You know it worked when:** the four track-record tiles and the job description are shown.
 - **Variations and refusals:**
-  - Not found: "This employee could not be found". Other failure: "The employee could not be loaded".
+  - Not found: "This employee could not be found", "This was not found, or you cannot see it." and "Back to the org chart" (a not-found is an answer, so there is no retry). Other failure: "The employee could not be loaded".
   - No tasks: "<Name> has not taken on any tasks here yet." Failed: "Recent work could not be loaded".
   - Viewers and Builders see no action buttons.
 - **Where:** `EmployeeView.tsx`, `workforceModel.ts`. `GET /api/employees/{id}`, `GET /api/tasks?scope=&employeeId=`. `EmployeeService.DetailAsync` and `TrackRecordAsync`.
@@ -507,7 +508,7 @@ Shared vocabulary used below:
   1. Fill in "Why should <Name> forget this? (optional)".
   2. Press "Remove it". The entry disappears at once ("Keep it" cancels).
 - **You know it worked when:** the entry is no longer listed.
-- **Variations and refusals:** "It was not removed: <reason>" puts it back. An empty reason is logged as "Removed by a person". A released employee's archived memory is refused over the API too (409, as MEM-03).
+- **Variations and refusals:** "It was not removed: <reason>" puts it back. With no reason the request sends none: the change log reads "Removed by a person: <title>" and quotes nothing. A reason given is quoted under it. A released employee's archived memory is refused over the API too (409, as MEM-03).
 - **Where:** `DELETE /api/employees/{id}/memory/{entryId}?why=`. `MemoryService.RemoveAsync`.
 - **Reachable from:** UI; MCP `memory_forget` (AST-12).
 - **Covered by tests:** `EmployeeView.test.tsx`. `workforce.spec.ts`.
@@ -573,7 +574,7 @@ Shared vocabulary used below:
   - No organisation: "There are no credits to show until your organisation is named." with a "Start" link.
   - Failed: "Credits could not be loaded". Header pill failure: "Balance unavailable".
   - The page reads the active organisation: the one an operator entered in God mode, or the one a person in several chose (ID-02).
-  - A person whose roles all sit below the organisation reads credits at the highest level they hold one — their division, else their project, else their app — as home does for them (ORG-19): "Your role is in {name}, so this shows its spending and caps. The balance is the whole organisation’s, which its work draws on." The three figures and the budgets are that level's; an Admin there sets its caps (CRED-03). The header pill still reads "Balance unavailable".
+  - A person whose roles all sit below the organisation reads credits at the highest level they hold one — their division, else their project, else their app — as home does for them (ORG-19): "Your role is in {name}, so this shows its spending and caps. The balance is the whole organisation’s, which its work draws on." The three figures and the budgets are that level's; an Admin there sets its caps (CRED-03). The header pill reads the balance at that same level, so it shows the organisation's balance rather than a failure.
 - **Where:** `features/credits/CreditsView.tsx` (`highestGrant`), `creditsModel.ts`, `shell/AppShell.tsx` (CreditsPill). `GET /api/credits?scope=<org, or the person's own level>`. `ReadModels.CreditsAsync`.
 - **Reachable from:** UI. Also MCP `credits_get`.
 - **Covered by tests:** `CreditsView.test.tsx` (including "reads credits at the division of someone granted only that division…"), `creditsModel.test.ts`. `CascadeCreditsAndAppsTests.Credits_show_balance_budgets_in_tree_order_and_top_ups`.
@@ -886,7 +887,7 @@ Shared vocabulary used below:
 - **Needs:** operator.
 - **Steps:**
   1. Fill in "The most it may go below zero", with the hint "No interest and no fees, ever. At the limit its employees stop and its apps pause; nothing is deleted."
-  2. Press "Save". The card updates at once and reads "<Name> may now go <n> below zero at most. Its own limit can only be tighter."
+  2. Press "Save". The card updates at once; once saved the form closes and the card reads "<Name> may now go <n> below zero at most. Its own limit can only be tighter." until the next action on it.
   3. Routing is recalculated, and the Owner's log gets "Changed the deepest overdraft to <n> credits below zero".
 - **You know it worked when:** "Overdraft allowed" on the card shows the new figure.
 - **Variations and refusals:**

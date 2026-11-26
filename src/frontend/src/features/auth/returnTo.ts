@@ -13,8 +13,16 @@ export function safeReturnTo(path: string | null | undefined): string | null {
   return path;
 }
 
-/** Called as the sign-in screen first draws, before the address is replaced with /sign-in. */
-export function rememberReturnTo(): string | null {
+/**
+ * Called as the sign-in screen first draws, before the address is replaced with /sign-in. Only a
+ * signed-out arrival keeps an address (ID-04): after a sign-out, or a session that ended on this
+ * page, the address is the previous person's, so it is dropped and the next one starts at home.
+ */
+export function rememberReturnTo(arrival = true): string | null {
+  if (!arrival) {
+    forgetReturnTo();
+    return null;
+  }
   // The console's own address, which in the demo's hash mode is after the # (ARCH-009), not the page's path.
   const here = typeof window === "undefined" ? null : safeReturnTo(currentAddress());
   try {
@@ -33,5 +41,14 @@ export function takeReturnTo(fallback: string | null): string | null {
     return kept ?? fallback;
   } catch {
     return fallback;
+  }
+}
+
+/** Drops any kept address: a sign-out leaves nothing for whoever signs in next on this tab. */
+export function forgetReturnTo() {
+  try {
+    window.sessionStorage.removeItem(KEY);
+  } catch {
+    // Storage can be refused; then nothing was kept either.
   }
 }

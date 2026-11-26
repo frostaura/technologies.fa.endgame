@@ -466,8 +466,8 @@ export const api = createApi({
         }
       },
     }),
-    removeMemory: build.mutation<null, { id: string; entryId: string; why: string; includeArchived: boolean }>({
-      query: ({ id, entryId, why }) => ({ url: `employees/${encodeURIComponent(id)}/memory/${encodeURIComponent(entryId)}?why=${encodeURIComponent(why)}`, method: "DELETE" }),
+    removeMemory: build.mutation<null, { id: string; entryId: string; why: string | null; includeArchived: boolean }>({
+      query: ({ id, entryId, why }) => ({ url: `employees/${encodeURIComponent(id)}/memory/${encodeURIComponent(entryId)}${why ? `?why=${encodeURIComponent(why)}` : ""}`, method: "DELETE" }),
       async onQueryStarted({ id, entryId, includeArchived }, { dispatch, queryFulfilled }) {
         const undo = dispatch(api.util.updateQueryData("getMemory", { id, includeArchived }, (list) => list.filter((e) => e.id !== entryId)));
         try {
