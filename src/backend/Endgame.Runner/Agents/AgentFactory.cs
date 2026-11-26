@@ -29,6 +29,7 @@ public sealed class AgentFactory(RunnerOptions options)
             new NotesTool(), new LoadSkillTool(), new TasksTool(), new SpawnTool(),
         ]),
         Permissions = Policy(run, "build", ["edit_file", "write_file", "run", "commit", "tasks"]),
+        Progress = new ProgressReports("builder", "Still building", repair ? "Still repairing this part" : "Still building this part"),
         Repair = repair,
         // A whole feature across entity, migration, endpoints, screens and tests: the first live build needed more than 50.
         Limits = new AgentLimits { MaxSteps = 70 },
@@ -45,6 +46,8 @@ public sealed class AgentFactory(RunnerOptions options)
         SystemPrompt = RunnerResources.Prompt("planner", new Dictionary<string, string> { ["root"] = root, ["skills"] = SkillLibrary.Index(run.Skills, BuilderSkills) }),
         Tools = new ToolRegistry([new ReadFileTool(), new ListFilesTool(), new SearchTool(), new GitDiffTool(), new LoadSkillTool(), new NotesTool(), new ProposePlanTool(idea)]),
         Permissions = Policy(run, "plan", []).WithMode(AgentMode.Plan),
+        Title = "Drew up the plan",
+        Progress = new ProgressReports("planner", "Still planning", "Still reading the app and deciding the parts of the plan"),
         AutoAcceptPlan = false,
         StopHooks = [],
         Limits = new AgentLimits { MaxSteps = 30 },
@@ -66,6 +69,7 @@ public sealed class AgentFactory(RunnerOptions options)
         }.OfType<ITool>()),
         // The evaluator may run checks but never change files: no write tool, and file writes denied outright.
         Permissions = Policy(run, "evaluate", ["run"], deny: ["edit_file", "write_file", "commit"]),
+        Progress = new ProgressReports("evaluator", "Still checking", "Still checking this part in the running app"),
         StopHooks = [],
         // Reading the change, two checks and every requirement in the running app: a live evaluator of a five-requirement item ran out at 30.
         Limits = new AgentLimits { MaxSteps = 50 },
@@ -87,12 +91,17 @@ public sealed class AgentFactory(RunnerOptions options)
         Tools = new ToolRegistry([new NotesTool()]),
         Permissions = Policy(run, "research", []).WithMode(AgentMode.Plan),
         StopHooks = [],
-        Limits = new AgentLimits { MaxSteps = 8, MaxOutputTokens = 8000 },
+        // No web search unless a workflow gives this agent a search budget of its own.
+        Limits = new AgentLimits { MaxSteps = 8, MaxOutputTokens = 8000, MaxSearchesPerCall = 0 },
     };
 
     public AgentDefinition Conversation(RunContext run, IEnumerable<ITool> tools) => Base(run, "assistant", options.ChatTaskType) with
     {
-        SystemPrompt = RunnerResources.Prompt("conversation", new Dictionary<string, string> { ["scope"] = run.Run.Scope }),
+        SystemPrompt = RunnerResources.Prompt("conversation", new Dictionary<string, string>
+        {
+            ["place"] = PlaceNames.Of(run).Name(run.Run.Scope),
+            ["places"] = PlaceNames.Of(run).Listing(),
+        }),
         Tools = new ToolRegistry(tools),
         // Starting an idea, changing an app, trying stopped work again or changing a setting is the owner's call: each asks, as a
         // checkpoint the person answers in the conversation itself, before it happens.

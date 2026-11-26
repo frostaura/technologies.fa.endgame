@@ -12,8 +12,11 @@ public sealed class RunnerOptions
     /// <summary>Edge's control listener, which apps cannot reach: the evaluator's way into a private preview.</summary>
     public string EdgeControlUrl { get; set; } = "http://edge:8081";
 
-    /// <summary>Runs worked at once by this process.</summary>
+    /// <summary>Runs other than conversations worked at once by this process (its work lane).</summary>
     public int Concurrency { get; set; } = 2;
+
+    /// <summary>Conversations answered at once, in a lane of their own beside the work lane, so a chat never waits behind long runs (D47).</summary>
+    public int ConversationConcurrency { get; set; } = 2;
 
     /// <summary>How long a lease lasts; it is renewed every third of that.</summary>
     public int LeaseSeconds { get; set; } = 90;

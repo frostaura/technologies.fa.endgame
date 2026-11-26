@@ -57,7 +57,7 @@ public sealed partial class WorkflowTests
         Assert.DoesNotContain(cp.Requests, r => r == "POST /internal/tree/nodes");
         // The plan quotes the request, and code adds the check of everything the app did before, one requirement per part.
         var plan = cp.Payload("plan.accepted")!;
-        Assert.Contains(plan["requirements"]!.AsArray(), r => r!["text"]!.GetValue<string>() == "rate each recipe from one to five stars");
+        Assert.Contains(plan["requirements"]!.AsArray(), r => r!["text"]!.GetValue<string>() == "Rate each recipe from one to five stars");
         var keep = plan["items"]!.AsArray().Single(i => i!["id"]!.GetValue<string>() == BuildWorkflow.KeepItem)!;
         Assert.Equal(["k1", "k2"], keep["covers"]!.AsArray().Select(c => c!.GetValue<string>()));
         Assert.Contains(plan["requirements"]!.AsArray(), r => r!["id"]!.GetValue<string>() == "k1" && r["text"]!.GetValue<string>() == "Families can keep their recipes in one place");
@@ -210,7 +210,9 @@ public sealed partial class WorkflowTests
         var planner = model.Calls.First(c => System(c).Contains("You are the planner", StringComparison.Ordinal));
         var task = planner.Messages[1]!["content"]!.GetValue<string>();
         Assert.Contains("Agreed after research, and part of what is built:\n- Add a shopping list made from a recipe.", task, StringComparison.Ordinal);
-        Assert.Equal("Recipe box for families\nShare recipes between households.\n\nAgreed after research, and part of what is built:\n- Add a shopping list made from a recipe.",
+        // D31: what an agreed change replaces is marked replaced, never kept beside it as a second requirement.
+        Assert.Contains(BuildWorkflow.ChangeWins, task, StringComparison.Ordinal);
+        Assert.Equal("Recipe box for families\nShare recipes between households.\n\nAgreed after research, and part of what is built:\n- Add a shopping list made from a recipe.\n\n" + BuildWorkflow.ChangeWins,
             BuildWorkflow.WithAgreedChanges("Recipe box for families\nShare recipes between households.", ["Add a shopping list made from a recipe.", " "]));
     }
 
@@ -273,7 +275,7 @@ public sealed partial class WorkflowTests
         await EstimateTests.Executor(cp, model, workflows: [new ConversationWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
 
         Assert.Equal(
-            ["Change the app: Members can rate each recipe from one to five stars?", "Try again: Build: Recipe box?", "Turn on the “Before the plan is carried out” checkpoint here?"],
+            ["Change web: Members can rate each recipe from one to five stars?", "Try again: Build: Recipe box?", "Turn on the “Before the plan is carried out” checkpoint in web?"],
             cp.Approvals);
         Assert.All(cp.Approvals, a => Assert.DoesNotContain("_", a, StringComparison.Ordinal));
         Assert.DoesNotContain(cp.Requests, r => r is "POST /internal/apps/changes" || r.EndsWith("/retry", StringComparison.Ordinal) || r == "PUT /internal/cascade");

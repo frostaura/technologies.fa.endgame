@@ -60,7 +60,28 @@ public static partial class TestIdConvention
 }
 
 /// <summary>One thing the idea asks for, in the idea's own words, as the planner extracted it.</summary>
-public sealed record PlanRequirement(string Id, string Text);
+public sealed partial record PlanRequirement(string Id, string Text)
+{
+    /// <summary>
+    /// A clause quoted from the idea, read as a statement of its own: a leading "and", "then" or "also" dropped and its first
+    /// letter capitalised, so "and the trip leader sees who is ready" reads "The trip leader sees who is ready". The words are
+    /// the idea's, unchanged.
+    /// </summary>
+    public static string AsStatement(string text)
+    {
+        var t = Leading().Replace((text ?? "").Trim(), "");
+        return t.Length == 0 ? t : char.ToUpperInvariant(t[0]) + t[1..];
+    }
+
+    /// <summary>An example or a qualifier cut off from the statement it belongs to ("as a line above the list", "for example …").</summary>
+    public static bool IsFragment(string text) => Qualifier().IsMatch((text ?? "").Trim());
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^(and|then|also|plus)\s+", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex Leading();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[""“'(]*(for example|for instance|e\.g\.?|i\.e\.?|such as|like|as an?|as the|so that|including|which|where)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex Qualifier();
+}
 
 /// <summary>A requirement the plan deliberately does not build, and why — shown to the owner.</summary>
 public sealed record PlanLeftOut(string Requirement, string Reason);
@@ -157,7 +178,7 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
             })
             .ToList();
         var requirements = (o["requirements"] as JsonArray ?? []).OfType<JsonObject>()
-            .Select((r, n) => new PlanRequirement(Json.Str(r, "id") is { Length: > 0 } id ? id : $"r{n + 1}", Json.Str(r, "text") ?? ""))
+            .Select((r, n) => new PlanRequirement(Json.Str(r, "id") is { Length: > 0 } id ? id : $"r{n + 1}", PlanRequirement.AsStatement(Json.Str(r, "text") ?? "")))
             .ToList();
         var leftOut = (o["leftOut"] as JsonArray ?? []).OfType<JsonObject>()
             .Select(l => new PlanLeftOut(Json.Str(l, "requirement") ?? "", Json.Str(l, "reason") ?? ""))
@@ -243,6 +264,14 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
             if (words.Count == 0)
             {
                 faults.Add($"Requirement '{requirement.Id}' is empty: quote what the idea asks for.");
+                continue;
+            }
+
+            // A requirement is a whole statement the person made (D83): an example or a qualifier split off by a comma is not
+            // something an app can be shown doing, and the checker counted it as a requirement not met.
+            if (PlanRequirement.IsFragment(requirement.Text))
+            {
+                faults.Add($"Requirement '{requirement.Id}' (\"{requirement.Text}\") is part of another statement, not one of its own: keep an example or a qualifier (\"as …\", \"for example …\", \"such as …\") with the statement it belongs to, as one requirement.");
                 continue;
             }
 

@@ -10,6 +10,7 @@
     "ControlPlaneUrl": "http://control-plane:8080",
     "DockUrl": "http://dock:8080",
     "Concurrency": 2,
+    "ConversationConcurrency": 2,
     "LeaseSeconds": 90,
     "PollSeconds": 2,
     "ShutdownGraceSeconds": 20,

@@ -276,6 +276,13 @@ public interface IApprovalGate
     /// </summary>
     async Task<ApprovalAnswer> AskAsync(string title, string detail, string onDecline, CancellationToken cancellationToken) =>
         new(await RequestAsync(title, detail, cancellationToken), null);
+
+    /// <summary>
+    /// The same, with the plain sentence the owner reads in <paramref name="detail"/> and the tool, its arguments and the
+    /// rule kept apart in <paramref name="technical"/> for technical mode (D71).
+    /// </summary>
+    Task<ApprovalAnswer> AskAsync(string title, string detail, string onDecline, string? technical, CancellationToken cancellationToken) =>
+        AskAsync(title, detail, onDecline, cancellationToken);
 }
 
 /// <summary>A person's answer to an approval, and the note they wrote with it (or null).</summary>
@@ -295,4 +302,17 @@ public static class ApprovalConsequence
 public interface IApprovalTitle
 {
     string ApprovalTitle(JsonObject arguments);
+}
+
+/// <summary>The plain sentence under an approval's title (D71): why it is asked, never the tool line.</summary>
+public static class ApprovalDetail
+{
+    /// <summary>Why a permission check asked, in the owner's words, from the rule that asked.</summary>
+    public static string For(PermissionDecision asked)
+    {
+        ArgumentNullException.ThrowIfNull(asked);
+        return asked.Rule.StartsWith("cascade:", StringComparison.Ordinal)
+            ? "Your rules for this stage ask for your sign-off before this is done. If you decline, it is not done and the work carries on without it."
+            : "This waits for your sign-off before it is done. If you decline, it is not done and nothing changes.";
+    }
 }
