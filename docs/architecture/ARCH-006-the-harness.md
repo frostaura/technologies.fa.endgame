@@ -170,8 +170,10 @@ the gate also accepts the screen's own test, named in the evidence — in the ma
 (`web/src/trips/TripPage.test.tsx > leads with readiness, above the share link`) or quoted in its evidence — and counts
 it only when **code** ran the app's front-end suite itself (`ScreenTests.Command`: vitest's JSON report) and saw that
 test pass. A name matches a test's title or full name, or at three words or more the start of exactly one title (within
-the file named, when one is); a phrase that fits two tests names none. The item must still have called the running app.
-A test never shows a requirement about data, and a named test that failed is a fault of its own. The planner is told to
+the file named, when one is); a phrase that fits two tests names none. The test counts only beside the data the screen
+presents: some requirement's evidence must cite a call made to the running app, so a mocked screen test never stands in
+for the app. A test never shows a requirement about data, never shows what worked before in a change's check (the
+`keep` part, `KeepCheck`), and a named test that failed is a fault of its own. The planner is told to
 check such a requirement by the data call plus the screen's test named by its title, never by anything nobody can run
 (looking at the page on a phone). The real four-part dive-club build (run `cafe1c2e`) failed its part 3 four checks
 running on exactly this: the evaluator cited the passing test "leads with readiness, above the share link and the kit

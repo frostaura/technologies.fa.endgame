@@ -143,10 +143,13 @@ public sealed partial class WorkflowTests
         // A requirement about data is never shown by a test, however well it passes.
         var dataByTest = EvaluationGate.Apply(plan, plan.Items[0], ReadinessAnswer(Round0R4, r3: $"The test '{LeadsWithReadiness}' passes."), Round0Calls, null, null, Suite());
         Assert.False(dataByTest["passed"]!.GetValue<bool>());
-        Assert.Equal(["r3:unshown"], Failing(dataByTest));
+        // …and with no data read from the running app, the screen's test does not count either.
+        Assert.Equal(["r3:unshown", "r4:unshown"], Failing(dataByTest));
 
         // And a screen part whose evaluator never called the running app has shown nothing working.
         Assert.False(EvaluationGate.Apply(plan, plan.Items[0], ReadinessAnswer(Round0R4), [], null, null, Suite())["passed"]!.GetValue<bool>());
+
+        Assert.Contains("beside a call that shows the data it presents", dataByTest["faults"]!.ToJsonString(), StringComparison.Ordinal);
     }
 
     [Fact]

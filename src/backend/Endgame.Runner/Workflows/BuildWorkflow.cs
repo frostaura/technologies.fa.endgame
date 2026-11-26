@@ -850,7 +850,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var calls = evaluators.SelectMany(e => CallAppTool.CallsIn(log, e)).Distinct(StringComparer.Ordinal).ToList();
         var signedOut = evaluators.SelectMany(e => CheckPreviewTool.CallsIn(log, e)).Distinct(StringComparer.Ordinal).ToList();
         var marks = (answer["requirements"] as JsonArray ?? []).OfType<JsonObject>().ToList();
-        var screenClaimed = plan.RequirementsOf(item).Any(r => PlanRequirement.IsAboutScreen(r.Text) && marks.Any(m => Json.Str(m, "id") == r.Id && Json.Bool(m, "met") == true));
+        // Not for the check of what worked before: a regression is shown by the data the part reads in the running app (KeepCheck).
+        var screenClaimed = item.Id != KeepItem && plan.RequirementsOf(item).Any(r => PlanRequirement.IsAboutScreen(r.Text) && marks.Any(m => Json.Str(m, "id") == r.Id && Json.Bool(m, "met") == true));
         var tests = screenClaimed ? await ScreenTests.RunAsync(workspace, cancellationToken) : ScreenTests.Outcome.NotRun;
         return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken), signedOut, tests.Tests, tests.Problem);
     }

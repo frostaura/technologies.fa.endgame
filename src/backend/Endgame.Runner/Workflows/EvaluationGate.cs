@@ -79,6 +79,9 @@ public static partial class EvaluationGate
                 : "The running app was never called signed in (call_app), so no requirement is shown working; call it for each requirement.");
         }
 
+        // A screen's test counts only beside the data it shows, read from the running app: some requirement's evidence cites a
+        // call that was made. A mocked screen test alone never stands in for the app.
+        var dataShown = marks.Any(m => counted.Any(c => Cites(Json.Str(m, "evidence") ?? "", c)));
         foreach (var requirement in requirements)
         {
             var mark = marks.FirstOrDefault(m => Json.Str(m, "id") == requirement.Id);
@@ -89,7 +92,7 @@ public static partial class EvaluationGate
             var cited = usable.Where(c => Cites(evidence, c)).ToList();
             var marked = Json.Bool(mark, "met") == true;
             // A requirement about a screen may be shown by the screen's own test, which code ran: never one about data.
-            var named = screen && marked && cited.Count == 0 ? ScreenTests.Named(mark, screenTests) : [];
+            var named = screen && marked && cited.Count == 0 && dataShown ? ScreenTests.Named(mark, screenTests) : [];
             var passedTests = named.Where(t => t.Passed).ToList();
             var met = marked && (cited.Count > 0 || passedTests.Count > 0) && counted.Count > 0;
             if (!met)
@@ -105,7 +108,7 @@ public static partial class EvaluationGate
                         : noSignIn
                             ? $"Requirement {requirement.Id} (\"{requirement.Text}\") is about people who do not sign in, so it is shown with check_preview, signed out; its evidence names no such call that was made (signed-out calls made: {CallList(signedOutCalls)})."
                             : screen
-                                ? ScreenFault(requirement, named, counted, signedOutPart, screenTests, testsProblem)
+                                ? ScreenFault(requirement, named, counted, signedOutPart, dataShown, screenTests, testsProblem)
                                 : $"Requirement {requirement.Id} (\"{requirement.Text}\") is marked met, but its evidence names no {(signedOutPart ? "call_app or check_preview" : "call_app")} call that was made (calls made: {CallList(counted)}).");
             }
 
@@ -139,7 +142,7 @@ public static partial class EvaluationGate
         gated["recheck"] = !passed && onlyShowing && !failing.Any(f => f.StartsWith("testids:", StringComparison.Ordinal)) && (claimedWorking || notChecked);
     }
 
-    private static string ScreenFault(PlanRequirement requirement, IReadOnlyList<ScreenTest> named, IReadOnlyList<string> counted, bool signedOutPart, IReadOnlyList<ScreenTest> tests, string? problem)
+    private static string ScreenFault(PlanRequirement requirement, IReadOnlyList<ScreenTest> named, IReadOnlyList<string> counted, bool signedOutPart, bool dataShown, IReadOnlyList<ScreenTest> tests, string? problem)
     {
         var head = $"Requirement {requirement.Id} (\"{requirement.Text}\") is about how a screen presents something, so it is shown by a {(signedOutPart ? "call_app or check_preview" : "call_app")} call that reads the data the screen shows, or by the screen's own test, named exactly as it is written, which code runs itself";
         if (named.Count > 0)
@@ -148,6 +151,11 @@ public static partial class EvaluationGate
         }
 
         var ran = problem is not null ? $"; {problem}" : tests.Count == 0 ? "" : $"; code ran the app's front-end tests and none is the one named ({tests.Count} tests ran)";
+        if (!dataShown)
+        {
+            return $"{head}, beside a call that shows the data it presents: no requirement's evidence names a call that was made (calls made: {CallList(counted)}{ran}).";
+        }
+
         return $"{head}. Its evidence names neither (calls made: {CallList(counted)}{ran}).";
     }
 
