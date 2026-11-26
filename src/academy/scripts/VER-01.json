@@ -24,9 +24,21 @@
     {
       "step": 3,
       "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Show every saved step"
+          }
+        },
+        {
+          "wait": {
+            "text": "The factory recorded its progress"
+          }
+        }
+      ],
       "highlight": {
         "text": "The factory recorded its progress",
-        "note": "The factory's own bookkeeping is named as such."
+        "note": "The factory's own bookkeeping is folded away until you ask for every saved step."
       }
     },
     {

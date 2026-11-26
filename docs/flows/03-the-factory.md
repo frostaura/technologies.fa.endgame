@@ -33,7 +33,8 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - If the organisation was created but the idea failed, the organisation stays. On the retry the name field is gone, because the session now has an organisation.
   - The idea may be 1 to 20,000 characters, constraints the same; otherwise 400.
   - A reserved FrostAura name is refused (TreeEndpoints, another reader).
-  - The side panel shows **"What happens next"**: Research → Verdict → A home for it → Hiring → Design, build, test, review → Running, privately.
+  - A new organisation starts with no credits, so beside the estimate the page says "A new organisation starts with no credits, and this needs about {credits}. Research starts, then waits for a top-up before it spends anything."
+  - The side panel shows **"What happens next"**: Research → Verdict → A home for it → Hiring → Build, check, review → Running, privately.
 - **Where:** `features/start/StartView.tsx`. `POST /api/ideas/estimate`, `POST /api/organisations`, `POST /api/ideas` (WorkEndpoints), `IdeaService.CreateAsync`.
 - **Reachable from:** UI (also API/MCP, see IDEA-06).
 - **Covered by tests:** `StartView.test.tsx` ("names the organisation on first run…"); `tests-e2e/console.spec.ts` ("first run: name the organisation, see the estimate, research…"); `IdeasAndConversationsTests.The_estimate_is_free_and_works_before_an_organisation_exists`.
@@ -56,7 +57,8 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - The divisions cannot be read: "The divisions could not be loaded, so for now it can only go to the whole organisation."
   - What happens next cannot be read: "What happens next could not be worked out" with **"Try again"**.
   - "Research did not start: … Nothing was charged." on a refusal.
-- **Where:** `StartView.tsx`, `startModel.ts`; `POST /api/ideas/estimate {scope}`, `POST /api/ideas {scope}`, `GET /api/autonomy?scope=`.
+  - Less to spend here than the estimate (the organisation's balance and overdraft room, less what is held for work in flight, under the tightest cap on the way up): beside the estimate, "You have {room} to spend here, and this needs about {credits}. It starts, then waits for a top-up before it spends anything." with **"See credits"**. The button still works; the run waits for budget (RUN-09).
+- **Where:** `StartView.tsx`, `startModel.ts` (`roomFor`, `shortfall`); `POST /api/ideas/estimate {scope}`, `POST /api/ideas {scope}`, `GET /api/autonomy?scope=`, `GET /api/credits?scope=`.
 - **Reachable from:** UI.
 - **Covered by tests:** `StartView.test.tsx` (including "sends the chosen division with both the estimate and the idea…", "tells someone below Builder why…", "what happens next"); `tests-e2e/manage.spec.ts` ("the estimate and the idea name the division chosen", "a Viewer is told why…"); `IdeasAndConversationsTests.An_idea_queues_research…`.
 
@@ -143,15 +145,16 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   1. The heading reads "Ideas from your portfolio".
   2. Optionally pick the scope under **"Suggest for"**: "{Org} (the whole organisation)" or a division. The picker only appears when there is more than one choice.
   3. In the side panel **"Ask for ideas"** ("…suggests up to five products that fill a gap"), press **"See what it costs"** ("Working it out…" while it works).
-  4. Read "At most {credits}." and the basis. Press **"Suggest ideas"** ("Starting…") or **"Not now"**.
-  5. The panel changes to "Working out the suggestions." / "They appear on this page as soon as they are ready." with **"Watch it work"**, which links to the suggest run. The page checks for new suggestions every 10 seconds.
-  6. Cards appear, each with: the title, "Suggested {time ago}", the idea, **"The gap it fills"**, **"Why you are placed to build it"**, and **"What it would reuse"** as badges.
+  4. Read "About {credits}." (what it usually costs) and the basis, which says the most it can ever cost. Press **"Suggest ideas"** ("Starting…") or **"Not now"**.
+  5. The panel reads the suggest run itself and says what it is doing: while it works, "The suggestions are being worked out." / "They appear here as soon as they are ready; you can watch the work meanwhile." with **"Watch it work"**, which links to the suggest run. The page checks the run and for new suggestions every 10 seconds.
+  6. Cards appear, each with: the title, "Suggested {time ago}", the idea, **"The gap it fills"**, **"Why you are placed to build it"**, and **"What it would reuse"** as badges. A platform service is named as the app page names it ("Sign-in", "E-mail"); technical mode shows what the model wrote.
 - **You know it worked when:** suggestion cards appear under the list "Suggested ideas". In the run, the message "Research · New ideas for you" appears ("A new idea for you" for one).
 - **Variations and refusals:**
   - Below Builder: "Asking for ideas spends credits, so it needs the Builder role here."
   - Estimate refused: "No estimate could be made: … Nothing was started."
   - Start refused: "The suggestions were not started: …"
   - Empty list: "No suggestions waiting" / "Ask for ideas and Endgame looks at what you already hold for gaps worth filling." While working: "The suggestions are being worked out".
+  - With the start checkpoint on (RUN-08), the run waits for your word first: the page says "It is waiting for you to approve the start" / "Nothing is worked out until you approve it." with **"Approve it"**, which opens the run. A paused run says "It is paused"; a stopped one "It stopped before any suggestions were made" with **"See what happened"**.
   - No organisation: "There is nothing to suggest from until your organisation is named".
   - A project or app scope is moved up to its division.
   - The run can fail with "No usable suggestion was made: …" or "What the organisation holds could not be read…".
@@ -167,7 +170,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** a suggestion becomes an ordinary idea, with its own research estimate first.
 - **Steps:**
   1. Press **"Take this idea"** ("Working it out…").
-  2. Read "Researching it costs at most {credits}." and the basis.
+  2. Read "Researching it costs about {credits}." and the basis, which says the most it can ever cost.
   3. Press **"Research this idea"** ("Starting…") or **"Not now"**.
   4. You are taken to the new idea's page `/ideas/{id}`. It shows "Research in progress" (VERD-02).
 - **You know it worked when:** the idea page shows the badge "Research in progress". On `/suggestions` the card moves under "Taken or set aside" with **"Taken — see its research"**.
@@ -238,7 +241,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 ### VERD-02 Open an idea's verdict page
 - **Who:** Viewer or above.
 - **Starts at:** any of these lead to `/ideas/{id}`:
-  - **"Read it"** on a finished research run;
+  - **"Read it"** on a finished research run ("The verdict is ready"); research that stopped offers "See the idea" / "Open it" instead, as there is no verdict to read;
   - the home strip's **"Verdict waiting"** card;
   - a notification;
   - "Taken — see its research".
@@ -457,7 +460,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** every step of the work is visible as it happens, and a dropped connection loses nothing.
 - **Steps:**
   1. The page loads (skeleton, "Loading the work").
-  2. The header shows the status badge ("Waiting to start", "Working", "Waiting for you", "Paused", "Finished", "Did not succeed", "Cancelled"), the stream state ("Connecting…", "Live" with a pulsing dot, "Reconnecting…"), the title and "Started {time}".
+  2. The header shows the status badge ("Waiting to start", "Working", "Waiting for you", "Paused", "Finished", "Did not succeed", "Cancelled", or "You declined to start this" for work declined at its start checkpoint), the stream state ("Connecting…", "Live" with a pulsing dot, "Reconnecting…"), the title and "Started {time}".
   3. Steps arrive under "Step by step". Before the first one: "Waiting for the first step". Events are taken in together, a batch at a time, so a long build's thousands of events draw at once rather than one by one.
   4. A run with more than 200 steps shows the latest 200, under "{n} earlier steps folded away; the latest 200 are below." with **"Show 200 earlier steps"** (or as many as are left), which unfolds them 200 at a time.
   5. The stream closes when the run finishes.
@@ -477,12 +480,12 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Foundation. **Learn first:** RUN-01.
 - **What you learn:** normal mode tells the work in plain words and never names infrastructure.
 - **Steps:**
-  1. The count line reads "{n} actions taken" (", {n} refused by your rules" when any were refused).
+  1. The count line reads "{n} actions taken" (", {n} refused by your rules" when any were refused). A run that took no action, such as a conversation that only answered, shows no count.
   2. Messages appear as "{speaker} · {title}".
-  3. Contractor and agent groups fold away once done, for example "Built: {part}", "Checked: {part}", "Drew up the plan"; "Show its {n} steps" unfolds one.
+  3. Contractor and agent groups fold away once done, for example "Built: {part}", "Checked: {part}", "Drew up the plan"; "Show its {n} steps" unfolds one. A group still under way is titled in the present tense ("Looking for existing products", "Building: {part}") with "Working"; once the run has ended, a group that never reported back reads "Stopped".
   4. The mechanics are summarised, for example "Read 4 files · Changed 2 files · Ran the tests — 12 passed".
   5. Refused actions read "An action was refused by your rules" / "It was not carried out. The work continues without it."
-  6. **"Outcome"** shows the closing plain message.
+  6. **"Outcome"** shows the closing plain message. A conversation's outcome is its reply, drawn from its markdown (bold, lists, inline code).
 - **You know it worked when:** no ids, file names or model names appear.
 - **Variations and refusals:** a line that would name infrastructure is hidden.
 - **Where:** `timeline.ts`, `runModel.ts`.
@@ -564,7 +567,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   2. Optionally type into **"Add a note (optional)"**.
   3. Under the buttons: "Declining skips only this step; the work goes on without it." or, for the start and plan checkpoints, "Declining stops this work."
   4. Press **"Approve"** or **"Decline"**. The card reads "Approved. Sending…" or "Declined. Sending…", then "Approved. The work carries on from here.", "Declined. It was not done; the work continues without it." or "Declined. It was not done, so the work has stopped."
-  5. The step "You answered: approved" or "rejected" is logged; the note is given back to the agent ("Their note: …").
+  5. The step "You answered: approved" or "declined" is logged, with your note beneath it; the note is given back to the agent ("Their note: …").
 - **You know it worked when:** the card disappears from the list and the badge leaves "Waiting for you".
 - **Variations and refusals:**
   - A failed answer: "Your answer was not recorded: {reason}" and the buttons come back. A second answer gives 409. A note is at most 2000 characters.
@@ -582,7 +585,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Steps:**
   1. The card asks "Start this work? Estimated {n} credits." The detail (technical mode) reads "{h} credits are left in the budget."
   2. Press **"Approve"** to start.
-  3. Press **"Decline"** to end the run "Did not succeed", with the outcome "You declined to start this work at its estimate, so nothing was done and nothing was charged." The card says "Declined. It was not done, so the work has stopped."
+  3. Press **"Decline"** to end the run. The card says "Declined. It was not done, so the work has stopped." The badge reads "You declined to start this" (not a failure), the outcome "You declined to start this work at its estimate, so nothing was done and nothing was charged.", the cost reads "Charged" with no estimate score, and **"Try again"** is offered under "You declined to start this at its estimate, so nothing was done and nothing was charged."
 - **You know it worked when:** after approving, "Work started" and the work appear.
 - **Variations and refusals:** this applies to every run kind the Runner gates, including research, build, suggest and conversation runs.
 - **Where:** `RunExecutor.GateAsync`.
@@ -667,13 +670,13 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** an estimate is shown first and scored against what the work really cost.
 - **Steps:**
   1. **"Estimate"** shows "Not yet made" or the figure, with "Shown before the work began".
-  2. **"Spent so far"** shows what the work was charged, a bar and "{p}% of the estimate". It is the run's own cost: the billable settlements in its log, counted as the ledger counts them, so a free repair is not in it and the figure matches "cost {y}" once scored. The bar turns to the attention colour above 100%.
+  2. **"Spent so far"** shows what the work was charged, a bar and "{p}% of the estimate". It is the run's own cost: the billable settlements in its log, counted as the ledger counts them, so a free repair is not in it and the figure matches "cost {y}" once scored. The percentage is the true one ("130% of the estimate"); the bar stops at full and turns to the attention colour above 100%. A small amount is never rounded to 0: it keeps two decimals ("0.05 credits") or reads "less than 0.01 credits".
   3. While running, **"Held for calls in flight"** shows "Reserved before each call, released when it settles".
   4. When finished, **"Estimate against actual"** shows "on the estimate", "{n}% over" or "{n}% under", with "Estimated {x}, cost {y}", and **"Not charged"** shows the credits the work used repairing its own mistakes, "Repairs of the work’s own mistakes, never billed".
   5. The aside **"Where the credits go"** says "Credits are held before each step and settled from what it really cost. Repairing a mistake of its own is never billed." with **"See credits"**.
   6. Free repairs are named in the steps: "Sent back for repair, at no charge: …", and "Fixed what the security review found, at no charge".
 - **You know it worked when:** "Estimate against actual" appears on a finished run.
-- **Variations and refusals:** "Not charged" appears once the run has finished (from `estimate.scored.nonBillableCredits`); while it runs, each free repair is named in the steps.
+- **Variations and refusals:** "Not charged" appears once the run has finished (from `estimate.scored.nonBillableCredits`); while it runs, each free repair is named in the steps. Work declined at its start never began, so it shows only "Estimate" and "Charged" ("You declined to start it, so nothing was done."), with no score.
 - **Where:** `RunView.tsx` `CostPanel`, `RunAside`; `Estimator.Score`.
 - **Reachable from:** UI; MCP `credits_get`.
 - **Covered by tests:** `runModel.test.ts` (a free repair is not in what was spent); `RunView.test.tsx` ("…says one cost the log and the run agree on"); `TryAgainAndChanges.test.tsx` ("…shows what was not charged…"); `EstimateTests.An_estimate_is_made_before_work_and_scored…`.
@@ -889,7 +892,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 ### BLD-12 Design (icons and brand assets): not present
 - **Who:** not applicable. **Starts at:** not applicable. **Needs:** not applicable.
 - **Level:** not applicable. **Learn first:** not applicable. **What you learn:** not applicable. **You know it worked when:** not applicable.
-- **Steps:** none. The spec's design stage and the start screen's "Design, build, test, review" have no separate stage in code. The build goes placement → plan → build → evaluate → review → publish.
+- **Steps:** none. The spec's design stage has no separate stage in code, and the start screen says so: its step reads "Build, check, review". The build goes placement → plan → build → evaluate → review → publish.
 - **Variations and refusals:** not applicable.
 - **Where:** `BuildWorkflow.cs` (no design stage).
 - **Reachable from:** nowhere.

@@ -44,12 +44,12 @@
         },
         {
           "wait": {
-            "text": "At most"
+            "text": "About 2 credits"
           }
         }
       ],
       "highlight": {
-        "text": "At most",
+        "text": "About 2 credits",
         "note": "The cost first."
       }
     },

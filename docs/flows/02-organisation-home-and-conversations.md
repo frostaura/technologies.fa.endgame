@@ -248,6 +248,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - the app's name with an app icon (a link);
      - a health chip: "Healthy", "Struggling", "Down" or "Health unknown";
      - a running chip: "Always on", "Awake", "Asleep", "Waking" or "Paused";
+     - an app that was never built (nothing measured, still starting) shows the single chip "Not built yet" in place of these;
      - an access chip: "Public", "Shared with {n}", "Shared" or "Private";
      - "{n} visits today" (or "{time ago} last visit", or "Not measured yet" when nothing has been measured);
      - "{n} credits this month".
@@ -270,7 +271,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 
      Hovering shows the activity.
   2. Under the chips, working employees get a typing line, "{Name}: {activity}".
-  3. Contractors appear as one dashed spinning line: "{n} contractor(s) · {activity}".
+  3. Contractors appear as one dashed spinning line: "{n} contractor(s) · {activity}". On the organisation band a contractor is named by its role, "{Role} · contractor", with the step it is doing after it ("— Looked for evidence people will pay"); so is its node in "Who works on what".
   4. Selecting an employee chip scopes the conversation to that employee (TALK-05).
 - **You know it worked when:** a working employee shows animated dots and their activity.
 - **Variations and refusals:** none further.
@@ -799,7 +800,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   3. If nothing has been said yet: "Ask what needs you, or tell it what to change. It answers for {org} and everything beneath it."
   4. Below the log: label "Message {org}", input placeholder "Ask, or tell it what to change", the button "Send" (disabled while the input is blank or the cost is being worked out), and under it "A message here costs at most {ceiling} credits, usually about {credits} credits; it is charged at what it actually costs." ("Working out what a message costs…" while it loads).
   5. The person types a question (for example "what is over budget?") and presses "Send". Their bubble, headed "You", appears right away, faded while it sends (`POST /api/conversations {scope}`). Typing dots and "Working on it" show.
-  6. The Runner answers using `read_organisation`. The reply streams in as a grey bubble headed "Endgame". When the run did tool work, the link "See how it got there" appears (TALK-12).
+  6. The Runner answers using `read_organisation`. The reply streams in as a grey bubble headed "Endgame", drawn from its markdown: bold, italics, lists, inline code and links read as formatting, never as asterisks or backticks, and nothing in it is ever run as HTML. The runner's closing word is not printed beside a reply, so each thing is said once; a notice with a reason of its own (the budget ran out) stays, in the attention colour. When the run did tool work, the link "See how it got there" appears (TALK-12).
   7. Up to two lines under the log show employees working anywhere in the tree: "{Name} is {activity}".
 - **You know it worked when:** a grey reply bubble appears under your message.
 - **Variations and refusals:** see TALK-13 to TALK-15. If the cost cannot be worked out: "What a message costs could not be worked out: {reason} Its cost is still held before each step and shown with the reply." and Send stays available.

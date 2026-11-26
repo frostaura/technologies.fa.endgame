@@ -16,7 +16,7 @@
         },
         {
           "wait": {
-            "text": "Researching it costs at most"
+            "text": "Researching it costs about"
           }
         }
       ],
@@ -29,7 +29,7 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "text": "Researching it costs at most",
+        "text": "Researching it costs about",
         "note": "The research estimate, and its basis."
       }
     },

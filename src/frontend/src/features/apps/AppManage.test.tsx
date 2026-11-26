@@ -55,6 +55,9 @@ function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {},
     "GET /api/ontology": json(ONTOLOGY_APP),
     "GET /api/apps/a1/dashboard": json([]),
     "GET /api/apps/a1/versions": json(VERSIONS),
+    // The app's own conversation reads its history and a message's cost; unstubbed, a slow run drew their failure as an alert.
+    "GET /api/conversations": json({ scope: APP.scope, conversationId: null, employeeId: null, messages: [] }),
+    "GET /api/conversations/estimate": json({ credits: 0.5, ceiling: 2, basis: "" }),
     "GET /api/cascade": (req) => json(req.path.includes("kind=budget") ? INHERITED_CAP : []),
     ...extra,
   });

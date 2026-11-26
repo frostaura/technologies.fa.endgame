@@ -104,7 +104,7 @@
           ],
           "highlight": {
             "text": "You declined to start this work at its estimate, so nothing was done and nothing was charged.",
-            "note": "Declined: it ends “Did not succeed”, and nothing was charged."
+            "note": "Declined: it reads “You declined to start this”, not a failure; nothing was charged, and Try again is offered."
           }
         }
       ]
