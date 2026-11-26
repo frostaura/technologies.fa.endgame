@@ -396,12 +396,12 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **What you learn:** removing a grant at one level leaves grants set elsewhere in place.
 - **Steps:**
   1. The person clicks **"Remove {name}"**. A confirmation shows: "{name} loses this role at once. Grants set elsewhere stay.", with **"Remove"** and **"Keep them"**.
-  2. They click **"Remove"**. The row disappears at once and the grant is deleted.
-- **You know it worked when:** the row is gone after the list refreshes.
+  2. They click **"Remove"**. The row disappears at once and the grant is deleted. Above the list: "{name} no longer has a role in {place}."
+- **You know it worked when:** the row is gone after the list refreshes and the line above the list says so.
 - **Variations and refusals:**
   - Refused: the row returns and "{name} still has their role: {reason}" appears above the list.
   - The Owner's grant: "The Owner's role cannot be revoked."
-  - The person's account and passkey stay. When it was the last grant of someone who has not made a passkey yet, their pending invitation code is cancelled with it (the answer says `invitationCancelled: true`): they can no longer register with it.
+  - The person's account and passkey stay. When it was the last grant of someone who has not made a passkey yet, their pending invitation code is cancelled with it (the answer says `invitationCancelled: true`): they can no longer register with it, and the line above the list reads "{name} no longer has a role in {place}, and the invitation code they were sent no longer works."
 - **Where:** `PeopleView.tsx`. `DELETE /api/members/{membershipId}`.
 - **Reachable from:** UI; MCP (`member_revoke`)
 - **Covered by tests:** `PeopleView.test.tsx` "asks before removing someone and removes them"; `breadth.spec.ts`.

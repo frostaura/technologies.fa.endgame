@@ -120,6 +120,29 @@ describe("approvals say what happens", () => {
 describe("the conversation", () => {
   const SELECTION = { scope: "acme/tools/pager/web", kind: "app" as const, trail: ["Acme", "Tools", "Pager", "Pager"] };
 
+  it("a reply that stopped because no AI model could be reached says so plainly and offers Try again, which sends it again", async () => {
+    const SAID = "Endgame could not reach its AI models, so the work stopped before it was finished. What was done is kept; try again, and if it keeps happening, tell FrostAura.";
+    const api = stubApi({
+      "GET /api/me": json(ME),
+      "GET /api/conversations": json({ scope: SELECTION.scope, conversationId: "c1", employeeId: null, messages: [] }),
+      "POST /api/conversations/estimate": json({ credits: 0.5, ceiling: 4, basis: "B" }),
+      "POST /api/conversations": json({ ...NEW_RUN, id: "c-run", kind: "conversation", status: "running" }, 201),
+    });
+    renderWithStore(<ConversationDock tree={TREE as never} selection={SELECTION} />);
+    fireEvent.change(await screen.findByLabelText("Message Pager"), { target: { value: "Is it up?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));
+    feed([
+      ["message", { from: "owner", text: "Is it up?" }],
+      ["message", { from: "runner", title: "Stopped", milestone: "finished", text: SAID }],
+      ["run.finished", { outcome: "failed", summary: SAID, detail: "gateway: 503" }],
+    ]);
+    expect(await screen.findByText(SAID)).toBeTruthy();
+    expect(screen.queryByText(/gateway: 503/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(api.calls.filter((c) => c.method === "POST" && c.path === "/api/conversations").length).toBe(2));
+  });
+
   it("shows the cost first, answers its own approval inline with a note, names who spoke, and says when the budget stopped a reply", async () => {
     const api = stubApi({
       "GET /api/me": json(ME),

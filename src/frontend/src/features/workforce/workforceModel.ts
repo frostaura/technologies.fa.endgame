@@ -1,6 +1,7 @@
 import type { BadgeTone } from "@/components/ui/badge";
+import { formatNumber } from "@/lib/format";
 import type { Mode } from "@/features/runs/runModel";
-import type { EmployeePatch, EmployeeStatus, Hire, HireEdit, HireTrigger, JobDescription, MemoryChange, MemoryEntry, MemoryKind, PersonRef, RecurringRole, Tree } from "@/store/types";
+import type { EmployeePatch, EmployeeStatus, Hire, HireEdit, HireTrigger, JobDescription, MemoryChange, MemoryEntry, MemoryKind, PersonRef, RecurringRole, TrackRecord, Tree } from "@/store/types";
 
 /**
  * The workforce in plain words. Normal mode never names a model, a tool's internal name or the
@@ -330,4 +331,24 @@ export function waitingProposal(hires: Hire[] | undefined, role: RecurringRole):
         ((h.needKey?.startsWith("promotion:") === true && h.needKey.endsWith(`:${named}`)) || h.contractorRole?.trim().toLowerCase() === named || h.role.trim().toLowerCase() === named),
     ) ?? null
   );
+}
+
+/**
+ * What an employee has cost, with the contractors it briefs (D74): its budget counts their spending too, so the figures
+ * beside the budget do as well. `TrackRecord.cost` is its own model calls only.
+ */
+export function employeeCosts(record: Pick<TrackRecord, "cost" | "contractors">): { toDate: number; month: number; contractorsMonth: number } {
+  return {
+    toDate: record.cost.toDateCredits + record.contractors.toDateCredits,
+    month: record.cost.monthCredits + record.contractors.monthCredits,
+    contractorsMonth: record.contractors.monthCredits,
+  };
+}
+
+/** The line under "Cost so far": this month against the budget, and how much of it the contractors spent. */
+export function costLine(costs: { month: number; contractorsMonth: number }, monthlyLimit: number | null): string {
+  const theirs = costs.contractorsMonth > 0 ? `, ${formatNumber(costs.contractorsMonth)} of it by the contractors it briefs` : "";
+  return monthlyLimit !== null
+    ? `Budget ${formatNumber(monthlyLimit)} a month, ${formatNumber(costs.month)} used this month${theirs}`
+    : `${formatNumber(costs.month)} this month${theirs}; no budget of its own, the one above holds`;
 }

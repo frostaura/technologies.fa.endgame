@@ -81,6 +81,16 @@ describe("AppView", () => {
     expect(within(alert).queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
+  it("while paused for budget, Health says Paused with the reason, never Healthy (D66)", async () => {
+    stub(json({ ...APP, running: "paused", health: { state: "healthy", summary: "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it." } }));
+    renderWithStore(<AppView appId="a1" />);
+    const today = await screen.findByRole("region", { name: "Today" });
+    expect(today.textContent).toContain("Paused");
+    expect(today.textContent).toContain("Paused: a monthly budget above it is spent. Raising the budget or the new month restores it.");
+    expect(today.textContent).not.toContain("Healthy");
+    expect(today.textContent).not.toContain("No errors today");
+  });
+
   it("shows status, both addresses, telemetry and its running and access settings", async () => {
     stub(json(APP));
     renderWithStore(<AppView appId="a1" />);

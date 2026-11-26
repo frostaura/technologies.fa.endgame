@@ -6,6 +6,7 @@ import { match } from "./http";
 import { consoleCalls } from "./consoleEndpoints";
 import { clock, seek, tick } from "./engine";
 import { answerApproval } from "./routes/work";
+import { MODELS_UNREACHABLE } from "./scripts";
 import { buildWorld } from "../world/scenarios";
 import "../world/scenarios.s4";
 import { IDS, ORG, PEOPLE } from "../world/default";
@@ -275,6 +276,19 @@ describe("live work", () => {
     expect(idea?.status).toBe("verdict");
     expect(idea?.verdict).not.toBeNull();
     expect(w.notifications.some((n) => n.kind === "verdict" && n.subject?.id === IDS.ideaTides)).toBe(true);
+  });
+
+  it("with no AI model reachable, research stops at once, plainly, with nothing charged and the detail kept technical (D64)", () => {
+    const w = as("owner");
+    w.modelsOffline = true;
+    expect(seek(w, "research:models-unreachable", () => undefined)).toBe(true);
+    const r = w.runs.find((x) => x.run.ideaId === IDS.ideaTides);
+    expect(r?.run.status).toBe("failed");
+    expect(r?.run.summary).toBe(MODELS_UNREACHABLE);
+    const finished = r?.events.find((e) => e.type === "run.finished");
+    expect(finished?.payload).toMatchObject({ outcome: "failed", summary: MODELS_UNREACHABLE });
+    expect(String(finished?.payload.detail)).toContain("503");
+    expect(r?.events.some((e) => e.type === "subagent.started")).toBe(false);
   });
 
   it("builds to a private app, repairs a sent-back part at no charge, and fixes the security finding", () => {

@@ -39,9 +39,10 @@ export function canTryAgain(world: World, r: DemoRun): boolean {
 }
 
 function why(r: DemoRun): TryAgainOffer["why"] {
+  // A declined start finishes cancelled (declined_at_start): it is said as declined, not as a cancel.
+  if (r.run.summary?.startsWith("The owner declined to start")) return "start-declined";
   if (r.run.status === "cancelled") return "cancelled";
   if (r.run.budgetExhausted) return "budget";
-  if (r.run.summary?.startsWith("The owner declined to start")) return "start-declined";
   return r.run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
 }
 

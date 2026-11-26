@@ -165,7 +165,7 @@ Shared vocabulary used below:
 - **Variations and refusals:**
   - Empty name: "Give the new employee a name."
   - Below Admin the button is replaced by "An Admin or the Owner proposes it as a hire."
-  - **One need, one proposal:** the screen sends the role as `contractorRole` and the control plane makes the need key the system uses itself (`promotion:<node>:<role>`), so proposing a role the system already proposed returns that proposal.
+  - **One need, one proposal:** the screen sends the role as `contractorRole` and the control plane makes the need key the system uses itself (`promotion:<node>:<role>`), so proposing a role the system already proposed returns that proposal. While a proposal for the role waits, the button is replaced by "Already proposed — open it", which opens that proposal.
   - Server refusal: "The hire was not proposed: <reason>". Empty list: "No contractor role recurs here yet." Failed read: "Recurring roles could not be loaded".
 - **Where:** `HiresView.tsx` (RecurringRow). `GET /api/employees/recurring-roles?scope=`. `POST /api/hires` (trigger promotion). `HireService.PromotionNeedKey`.
 - **Reachable from:** UI.

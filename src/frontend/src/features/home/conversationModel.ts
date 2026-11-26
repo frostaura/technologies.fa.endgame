@@ -1,3 +1,4 @@
+import { approxCredits, formatCredits, formatNumber } from "@/lib/format";
 /**
  * What the conversation shows of a run's messages. The runner closes every run with a word of its
  * own (a message from "runner" with no `code`); in a conversation the reply already is that word,
@@ -50,4 +51,18 @@ export function distinctReplies<T extends SaidLine>(messages: readonly T[]): T[]
 
 function normalise(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * What a message costs, before it is sent (D77). The usual figure leads; a ceiling far above it (more than 20 times) is
+ * said as a separate sentence, so "at most 169, usually about 0" never reads as a 169-credit message.
+ */
+export function messageCostLine(credits: number, ceiling: number | null): string {
+  if (ceiling === null) return `A message here is estimated at ${approxCredits(credits)}.`;
+  if (ceiling > 20 * Math.max(credits, 0.01)) {
+    const usual = credits < 1 ? "Usually well under 1 credit." : `Usually about ${formatCredits(credits)}.`;
+    return `${usual} It can never cost more than ${formatNumber(ceiling)}, the most its steps could cost; it is charged at what it actually costs.`;
+  }
+  const usual = credits < 0.1 ? approxCredits(credits) : `about ${formatCredits(credits)}`;
+  return `A message here costs at most ${formatCredits(ceiling)}, usually ${usual}; it is charged at what it actually costs.`;
 }

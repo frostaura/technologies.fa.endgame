@@ -78,6 +78,11 @@ describe("activity as sentences (D82)", () => {
 
 describe("the chart after the real-stack walk", () => {
   // D30: an app that was never built is one quiet chip, not "Waking" and "Health unknown".
+  it("shows a paused app as Paused, with no Healthy chip beside it (D66)", () => {
+    const paused = { health: "healthy", running: "paused", access: "private", sharedWith: 0, visitsToday: 3, lastVisitAt: "t" } as const;
+    expect(appChips(paused).map((c) => c.label)).toEqual(["Paused", "Private"]);
+  });
+
   it("shows a draft app as not built yet", () => {
     const draft = { health: "unknown", running: "starting", access: "private", sharedWith: 0, visitsToday: null, lastVisitAt: null } as const;
     expect(appChips(draft).map((c) => c.label)).toEqual(["Not built yet"]);

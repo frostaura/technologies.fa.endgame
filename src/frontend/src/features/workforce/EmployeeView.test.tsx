@@ -88,6 +88,23 @@ describe("EmployeeView", () => {
     expect(calls.some((c) => c.method === "GET" && c.path.startsWith("/api/tasks?") && c.path.includes("employeeId=e1"))).toBe(true);
   });
 
+  // D74 + D75: a researcher's cost counts the contractors its budget includes, and research it did is not "no work".
+  it("counts the contractors it briefs in its cost, and says research it finished is work", async () => {
+    const trackRecord = {
+      ...employeeDetailFixture().trackRecord,
+      runs: { finished: 7, succeeded: 6, failed: 1, cancelled: 0 },
+      cost: { toDateCredits: 1.3, monthCredits: 1.3 },
+      contractors: { engaged: 21, working: 0, toDateCredits: 67, monthCredits: 67 },
+    };
+    stub(json({ ...employeeDetailFixture({ lastRunId: "r7", jobDescription: { ...employeeDetailFixture().employee.jobDescription, monthlyCreditLimit: 400 } }), trackRecord }), { "GET /api/tasks": json([]) });
+    renderWithStore(<EmployeeView employeeId="e1" />);
+    const record = await screen.findByRole("region", { name: "Track record" });
+    expect(record.textContent).toContain("68 credits");
+    expect(record.textContent).toContain("Budget 400 a month, 68 used this month, 67 of it by the contractors it briefs");
+    expect(await screen.findByText(/has finished 7 pieces of work here, none of it split into tasks/)).toBeTruthy();
+    expect(screen.queryByText(/has not taken on any/)).toBeNull();
+  });
+
   it("technical mode names the tools and the tier", async () => {
     stub(json(employeeDetailFixture()));
     const { store } = renderWithStore(<EmployeeView employeeId="e1" />);

@@ -146,7 +146,10 @@ export interface DemoApproval {
   id: string;
   runId: string;
   title: string;
+  /** The plain sentence the owner reads. */
   detail: string;
+  /** The tool line behind it, for technical mode (`approval.requested`'s `technical`). */
+  technical?: string;
   answer: "approved" | "rejected" | null;
   /** What approving it does, by name; read by the run engine. */
   onApprove:

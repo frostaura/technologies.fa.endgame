@@ -20,6 +20,11 @@ export function formatCredits(n: number): string {
   return `${formatNumber(n)} ${n === 1 ? "credit" : "credits"}`;
 }
 
+/** An approximate figure: below a tenth it reads "less than 0.1 credits", never "about 0" (D77). */
+export function approxCredits(n: number): string {
+  return n < 0.1 ? "less than 0.1 credits" : formatCredits(n);
+}
+
 /** The first letter in capitals: a requirement written as a clause reads as an item (D31). */
 export function capitalise(text: string): string {
   const t = text.trimStart();

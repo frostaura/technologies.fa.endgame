@@ -25,7 +25,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   6. The side column shows "Running", "Who can open it", "What it may spend", "What it uses", "The app itself" and "It is yours". In technical mode it also shows "Underneath". The side column says one thing at a time: what a card's last action did is replaced by its next one, and cleared when another card acts.
   7. The page re-reads the app every 20 seconds, but only while the browser tab has focus.
 - **Variations and refusals:**
-  - An unknown id gives "This app could not be found".
+  - An unknown id gives "This app could not be found" — with "This was not found, or you cannot see it." and "Back to the org chart" in place of "Try again" (a not-found is an answer, so it does not say "Nothing here is known until it loads.").
   - Any other failure gives "The app could not be loaded", with the reason and a retry.
   - A stale cached copy shows a stale notice above the page.
   - Each section has its own error boundary, so one broken section does not blank the page. The boundaries are named "The app's settings", "What it may spend", "What it uses", "The app itself", "The download", "Asking about this app", "The dashboard", "The history", "Sharing" and "The secrets".

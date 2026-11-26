@@ -134,7 +134,7 @@ describe("the conversation", () => {
     const runId = (sent.body as { id: string }).id;
     seek(w, "conversation:approval", () => undefined);
     const a = approve(w, runId);
-    expect(a?.title).toBe("Change the app: Let members cancel a booking up to an hour before it starts.?");
+    expect(a?.title).toBe("Change Court booking: Let members cancel a booking up to an hour before it starts?");
     expect(w.runs.some((r) => r.run.kind === "task" && r.run.title.startsWith("Change: Let members cancel"))).toBe(true);
   });
 

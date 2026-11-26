@@ -13,6 +13,8 @@ const COURT = { app: IDS.tableBookings };
 const NOTES = { app: IDS.courseNotes };
 const court = (w: World) => w.apps.find((a) => a.id === IDS.tableBookings);
 
+defineScenario({ name: "research-models-unreachable", title: "No AI model can be reached, so research stops at once and nothing is charged", apply: (w) => (w.modelsOffline = true), route: "/start" });
+
 defineScenario({ name: "ask-unavailable", title: "No model is configured, so nothing about an app can be asked", apply: (w) => (w.modelsOffline = true), route: "/apps/{app}", featured: COURT });
 
 defineScenario({

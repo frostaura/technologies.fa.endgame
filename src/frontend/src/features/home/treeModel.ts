@@ -29,7 +29,15 @@ export function healthChip(health: AppHealth): Chip {
  */
 export function appChips(app: Pick<TreeApp, "health" | "running" | "access" | "sharedWith" | "visitsToday" | "lastVisitAt">): Chip[] {
   if (app.running === "starting" && app.health === "unknown" && app.visitsToday === null && app.lastVisitAt === null) return [{ label: "Not built yet", tone: "quiet", icon: "build" }];
+  // Paused for budget or the overdraft, it serves nobody: "Healthy" beside it would be untrue (D66). A crashed app is
+  // also not running, and stays "Down".
+  if (app.running === "paused" && app.health !== "down") return [runningChip(app.running), accessChip(app.access, app.sharedWith)];
   return [healthChip(app.health), runningChip(app.running), accessChip(app.access, app.sharedWith)];
+}
+
+/** An app's health as its page says it: paused outranks whatever it measured before it was paused (D66). */
+export function appHealthChip(health: AppHealth, running: AppRunning): Chip {
+  return running === "paused" && health !== "down" ? runningChip(running) : healthChip(health);
 }
 
 export function runningChip(running: AppRunning): Chip {
