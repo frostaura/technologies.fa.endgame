@@ -23,6 +23,14 @@ public sealed class ModelGateway(
     IModelProvider provider,
     TimeProvider clock)
 {
+    /// <summary>
+    /// The reasoning a structured answer may spend, out of its output cap (R2-6): a quarter, between 512 and 4,000 tokens,
+    /// so the answer always has the rest. Measured live on 2026-11-26 with the memory review's real 4,925-token prompt on
+    /// qwen/qwen3.7-flash: effort "low" spent all 8,000 tokens reasoning (finish "length", no answer); a budget of 2,000
+    /// spent exactly 2,000 and answered in 2,383, valid JSON, finish "stop".
+    /// </summary>
+    public static int ReasoningBudget(int maxTokens) => Math.Clamp(maxTokens / 4, Math.Min(512, maxTokens / 2), 4000);
+
     public const string SettlementEvent = "endgame.settlement";
 
     private const int MaxErrorText = 500;
@@ -251,7 +259,9 @@ public sealed class ModelGateway(
             // Rule 5: always explicit where the model reasons at all.
             body["reasoning"] = route.Reasoning == "off"
                 ? new JsonObject { ["enabled"] = false }
-                : new JsonObject { ["effort"] = route.Reasoning };
+                : request.Structured
+                    ? new JsonObject { ["max_tokens"] = ReasoningBudget(maxTokens) }
+                    : new JsonObject { ["effort"] = route.Reasoning };
         }
 
         if (route.Models.Count > 1)

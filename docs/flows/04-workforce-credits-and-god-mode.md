@@ -531,7 +531,7 @@ Shared vocabulary used below:
 - **Variations and refusals:**
   - "The review did not start: <reason>". Released or contractor: 409 "Only an employee on the payroll has a memory to review."
   - The review's own result is applied with `POST /internal/employees/{id}/memory/review` (system), once, after every part is reviewed: a large memory is reviewed in parts of at most 40 entries, related entries together, each shown as "Reviewed part <n> of <m> of the memory".
-  - An answer cut off at its length limit is asked for once more with twice the room, not charged; cut off again, the run fails with "The review's answer was too long to finish, so the memory was left as it was." An answer in the wrong shape fails with "The review gave no answer in the agreed form, so the memory was left as it was."
+  - An answer cut off at its length limit is asked for once more with twice the room, not charged; cut off again, the run fails with "The review's answer was too long to finish, so the memory was left as it was. Try again."; one that stopped before answering, with "The review stopped before it gave an answer, so the memory was left as it was. Try again." An answer in the wrong shape fails with "The review gave no answer in the agreed form, so the memory was left as it was."
   - Failed log read: "The last review could not be loaded: …" with "Try again".
 - **Where:** `EmployeeView.tsx` (ReviewPanel). `POST /api/employees/{id}/reviews`. `MemoryService.ReviewAsync`.
 - **Reachable from:** UI.

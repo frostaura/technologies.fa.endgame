@@ -32,6 +32,13 @@ public sealed class ChatRequest
     /// </summary>
     public bool PreferJson { get; set; }
 
+    /// <summary>
+    /// The caller reads the answer as data (R2-6). On a route whose models reason, the reasoning is given a budget of its own
+    /// (<c>reasoning.max_tokens</c>, see <see cref="ModelGateway.ReasoningBudget"/>) instead of an effort: at effort "low" a
+    /// reasoning model spent all 8,000 output tokens of a memory review thinking and never answered.
+    /// </summary>
+    public bool Structured { get; set; }
+
     public ChatLimits? Limits { get; set; }
 
     public bool Stream { get; set; }

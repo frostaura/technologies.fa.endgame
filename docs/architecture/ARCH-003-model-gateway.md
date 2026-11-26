@@ -61,6 +61,13 @@ gateway is not built yet; this is the design it must follow.
     judge, screens, memory review, suggestions, the evaluator, the security reviewer and the planner's
     `propose_plan`); with no tools on the call it also sets `preferJson`, which the gateway turns into
     `response_format: json_object` wherever every model on the route takes one — never a refusal.
+    **Reasoning is bounded, not just the answer.** A structured call (`structured: true`: every harness agent above,
+    ask, organisation screening) sends `reasoning: { max_tokens: … }` — a quarter of its output cap, 512 to 4,000 —
+    instead of the route's effort. Measured live on 2026-11-26 with the memory review's real 4,925-token prompt on
+    `qwen/qwen3.7-flash`: at effort `low` it spent 8,000 of 8,000 output tokens reasoning (`finish_reason: length`, empty
+    content — run ce7705cd, four calls), so doubling the cap could never help; with `reasoning.max_tokens: 2000` it reasoned
+    exactly 2,000, answered in 2,383 with valid JSON and stopped. A reply cut at its limit with no content at all is
+    returned to the loop as a cut-off, never retried as an empty reply at the same cap.
 
 ## Routing table shape
 

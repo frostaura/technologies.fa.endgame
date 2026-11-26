@@ -149,6 +149,11 @@ public sealed class GatewayModelClient(HttpClient http, bool stream = true) : IM
             body["preferJson"] = true;
         }
 
+        if (call.Structured)
+        {
+            body["structured"] = true;
+        }
+
         if (call.ProviderOrder is { Count: > 0 } order)
         {
             // Needs the control plane to pass it on as provider.order (see the lane report).
@@ -192,7 +197,9 @@ public sealed class GatewayModelClient(HttpClient http, bool stream = true) : IM
             Searches = StreamAssembler.SearchesOf(usage),
             Citations = citations,
         };
-        return StreamAssembler.IsEmpty(result.Message)
+        // A reply that stopped at its output limit before saying anything (a reasoning model spent it all thinking) is not
+        // an empty reply to retry as it is: it is returned, so the loop asks again with more room or reports it cut off (R2-6).
+        return StreamAssembler.IsEmpty(result.Message) && result.FinishReason != FinishReasons.Length
             ? throw new ModelCallException(ModelFailure.EmptyReply, "The model replied with nothing: no text and no tool call.", settled)
             : result;
     }
@@ -431,7 +438,7 @@ public sealed class StreamAssembler
             }).ToArray());
         }
 
-        if (IsEmpty(message))
+        if (IsEmpty(message) && finish != FinishReasons.Length)
         {
             throw new ModelCallException(ModelFailure.EmptyReply, "The model replied with nothing: no text and no tool call.", SettledCredits);
         }

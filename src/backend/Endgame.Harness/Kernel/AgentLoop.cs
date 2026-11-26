@@ -174,7 +174,9 @@ public sealed class AgentLoop
             }
 
             var accounting = Accounting(reply);
-            if (agent.StructuredAnswer && reply.FinishReason == FinishReasons.Length)
+            // A reply read by code, or one that said nothing at all, cut at its output limit (R2-6).
+            var said = message["content"] is JsonValue sv && sv.TryGetValue<string>(out var st) && !string.IsNullOrWhiteSpace(st);
+            if (reply.FinishReason == FinishReasons.Length && (agent.StructuredAnswer || (toolCalls is null && !said)))
             {
                 // A reply read by code and cut at its output limit is not an answer in the wrong form: it did not fit (R2-6).
                 var cutText = message["content"] is JsonValue cv && cv.TryGetValue<string>(out var cs) ? cs : "";
@@ -480,7 +482,8 @@ public sealed class AgentLoop
             state.PinnedProvider is { } p ? [p] : null,
             $"{agent.RunId}:{agent.Id}:{step}:{attempt}:{services.SessionNonce}",
             MaxSearches: state.SearchAllowed == false ? 0 : agent.Limits.MaxSearchesPerCall,
-            PreferJson: agent.StructuredAnswer && schemas.Count == 0), cancellationToken), cancellationToken);
+            PreferJson: agent.StructuredAnswer && schemas.Count == 0,
+            Structured: agent.StructuredAnswer), cancellationToken), cancellationToken);
         Replay.ApplyAccounting(state, Accounting(reply));
         return reply;
     }

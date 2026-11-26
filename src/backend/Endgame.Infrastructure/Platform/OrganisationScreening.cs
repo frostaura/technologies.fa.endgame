@@ -170,6 +170,8 @@ public sealed class OrganisationScreening(PlatformModelCalls calls, TimeProvider
             new JsonObject { ["role"] = "user", ["content"] = $"Name: {name}\nAddress name: {slug}\nWhat it does: {what}" },
         ],
         Limits = new ChatLimits { MaxTokens = maxTokens },
+        // Read as data: the model's reasoning gets a budget of its own, so the answer fits (R2-6).
+        Structured = true,
         Temperature = 0,
         // Both of the route's models take a response format: ask for a JSON object outright, not only in words.
         ResponseFormat = new JsonObject { ["type"] = "json_object" },

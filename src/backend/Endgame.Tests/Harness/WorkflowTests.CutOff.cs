@@ -18,6 +18,38 @@ public sealed partial class WorkflowTests
         new JsonObject { ["role"] = "assistant", ["content"] = "{\"merged\": [{\"from\": [\"" },
         FinishReasons.Length, "qwen/qwen3.7-flash", "ProviderA", 6168, call.MaxTokens, 0, 0.1m, 0.01m, !call.Repair);
 
+    /// <summary>
+    /// The memory review's real reply on the dev stack (run ce7705cd, 2026-11-26), as OpenRouter returned it: qwen/qwen3.7-flash
+    /// spent every one of its 8,000 output tokens reasoning, so the message has no content at all and the finish is "length".
+    /// </summary>
+    private static JsonObject RealCutOffCompletion() => JsonNode.Parse("""
+        {"id": "gen-recorded", "model": "qwen/qwen3.7-flash", "provider": "Alibaba",
+         "choices": [{"index": 0, "finish_reason": "length", "native_finish_reason": "length",
+                      "message": {"role": "assistant", "content": "", "reasoning": "The entries about the packing checklist repeat..."}}],
+         "usage": {"prompt_tokens": 4925, "completion_tokens": 8000, "completion_tokens_details": {"reasoning_tokens": 8000}, "cost": 0.00107409}}
+        """)!.AsObject();
+
+    [Fact]
+    public async Task A_reply_that_spent_its_whole_budget_reasoning_is_a_cut_off_not_an_empty_reply_and_the_review_says_so()
+    {
+        // Before: the client threw "replied with nothing", the retry policy asked four times at the same 8,000, and the review
+        // said "no answer in the agreed form". Now the reply reaches the loop as cut off, is asked once more with twice the
+        // room, and the review says it was too long.
+        var reply = GatewayModelClient.FromCompletion(RealCutOffCompletion(), 0.81m, 0.107m);
+        Assert.Equal(FinishReasons.Length, reply.FinishReason);
+        Assert.Equal(8000, reply.CompletionTokens);
+
+        var employee = Guid.NewGuid();
+        var cp = new FakeControlPlane("frostaura/technologies", "review");
+        cp.Append("message", new JsonObject { ["from"] = "owner", ["kind"] = "memory.review", ["employeeId"] = employee.ToString(), ["text"] = "Review it." });
+        cp.Memory[employee] = [new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["title"] = "Entry", ["body"] = "Body.", ["kind"] = "fact", ["scope"] = "frostaura" }];
+        var model = new ScriptedModel { Fallback = c => GatewayModelClient.FromCompletion(RealCutOffCompletion(), 0.81m, c.Repair ? 0m : 0.107m) };
+        await EstimateTests.Executor(cp, model, workflows: [new ReviewWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
+        Assert.Equal("The review's answer was too long to finish, so the memory was left as it was. Try again.", cp.Run["summary"]!.GetValue<string>());
+        Assert.Equal([(MemoryReview.OutputTokens, false, true), (MemoryReview.OutputTokens * 2, true, true)], model.Calls.Select(c => (c.MaxTokens, c.Repair, c.Structured)));
+        Assert.Empty(cp.MemoryReviews);
+    }
+
     [Fact]
     public async Task A_structured_answer_cut_off_is_asked_for_again_with_twice_the_room_unbilled_and_as_json()
     {

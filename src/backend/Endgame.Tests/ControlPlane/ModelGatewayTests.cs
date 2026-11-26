@@ -75,6 +75,20 @@ public sealed class ModelGatewayTests(PostgresServer postgres) : IAsyncLifetime
         }, options.Routes["summarise"], stream: false).Body;
         Assert.Equal("json_object", Body(true, null)["response_format"]!["type"]!.GetValue<string>());
         Assert.Null(Body(false, null)["response_format"]);
+        // A structured answer bounds the reasoning by a budget, not an effort (R2-6): at effort "low" qwen/qwen3.7-flash spent all
+        // 8,000 output tokens of the memory review thinking; with reasoning.max_tokens 2,000 it answered in 2,383.
+        JsonObject Structured(bool structured, int maxTokens) => ModelGateway.Prepare(options, credits, new ChatRequest
+        {
+            TaskType = "summarise",
+            Messages = [new JsonObject { ["role"] = "user", ["content"] = "Review it." }],
+            Structured = structured,
+            Limits = new ChatLimits { MaxTokens = maxTokens },
+        }, options.Routes["summarise"], stream: false).Body;
+        Assert.Equal(2000, Structured(true, 8000)["reasoning"]!["max_tokens"]!.GetValue<int>());
+        Assert.Null(Structured(true, 8000)["reasoning"]!["effort"]);
+        Assert.Equal(4000, Structured(true, 16000)["reasoning"]!["max_tokens"]!.GetValue<int>());
+        Assert.Equal(200, Structured(true, 400)["reasoning"]!["max_tokens"]!.GetValue<int>());
+        Assert.Equal("low", Structured(false, 8000)["reasoning"]!["effort"]!.GetValue<string>());
         Assert.Null(Body(true, [new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = "notes", ["parameters"] = new JsonObject { ["type"] = "object" } } }])["response_format"]);
     }
 
