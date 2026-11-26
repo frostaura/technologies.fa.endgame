@@ -14,8 +14,9 @@ export function UserMenu() {
     );
   }
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="text-ink-muted" data-testid="signed-in-as">
+    // A phone keeps the row to the way out; the name shows from a tablet up, and is read out everywhere.
+    <div className="flex min-w-0 items-center gap-1 text-sm sm:gap-3">
+      <span className="truncate text-ink-muted max-sm:sr-only" data-testid="signed-in-as">
         {me.data.displayName}
       </span>
       <Button asChild variant="ghost" size="sm">

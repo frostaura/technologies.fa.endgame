@@ -1,16 +1,18 @@
 import { Link, useParams } from "react-router";
 import { NotFoundError, useApiQuery } from "@endgame/appkit";
 import { Card, CardContent, CardHeader, CardTitle, EmptyState, FailedState, LoadingState } from "@endgame/appkit/ui";
+import { usePageTitle } from "../usePageTitle";
 import { formatWhen, type NoteDetail } from "./types";
 
 /** One note, by id. Lazy-loaded: its code arrives only when someone opens a note. */
 export default function NoteDetailPage() {
   const { id } = useParams();
   const note = useApiQuery<NoteDetail>(id ? `notes/${encodeURIComponent(id)}` : null);
+  usePageTitle(note.status === "loaded" ? note.data.title : "A note");
 
   return (
     <section className="flex flex-col gap-6" data-testid="page-note">
-      <Link to="/" className="text-sm font-semibold text-primary hover:text-primary-hover">
+      <Link to="/" className="flex min-h-11 items-center self-start text-sm font-semibold text-primary hover:text-primary-hover">
         ← All notes
       </Link>
       {note.status === "loading" && <LoadingState label="Loading the note…" />}

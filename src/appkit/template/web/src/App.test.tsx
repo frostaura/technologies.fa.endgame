@@ -60,4 +60,14 @@ describe("moving between pages", () => {
     fireEvent.click(within(await screen.findByTestId("page-not-found")).getByRole("link"));
     expect(await screen.findByTestId("page-home")).toBeTruthy();
   });
+
+  it("names the tab after the page and the app, not the template", async () => {
+    serve(api);
+    renderApp(<App />, { at: "/" });
+    await screen.findByTestId("note-item");
+    expect(document.title).toBe("All notes · Notes");
+    fireEvent.click(screen.getByTestId("new-note"));
+    await screen.findByTestId("page-new-note");
+    expect(document.title).toBe("New note · Notes");
+  });
 });

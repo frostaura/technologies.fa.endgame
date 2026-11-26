@@ -1,8 +1,9 @@
 import * as React from "react";
 import { cn } from "./cn.js";
 
+/** A phone zooms into a box set under 16px when it takes the focus: on a phone the text is 16px. */
 const control =
-  "w-full rounded-sm border bg-surface px-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50";
+  "w-full rounded-sm border bg-surface px-3 text-base text-ink sm:text-sm placeholder:text-ink-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50";
 
 /** `invalid` marks the control for sighted users and screen readers alike. */
 type Invalid = { invalid?: boolean };

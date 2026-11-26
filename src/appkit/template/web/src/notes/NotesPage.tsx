@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { useApiQuery } from "@endgame/appkit";
 import { Button, Card, CardContent, CardHeader, CardTitle, EmptyState, FailedState, LoadingState } from "@endgame/appkit/ui";
+import { usePageTitle } from "../usePageTitle";
 import { formatWhen, type NoteSummary } from "./types";
 
 /**
@@ -9,12 +10,13 @@ import { formatWhen, type NoteSummary } from "./types";
  */
 export function NotesPage() {
   const notes = useApiQuery<NoteSummary[]>("notes");
+  usePageTitle("All notes");
 
   return (
     <section className="flex flex-col gap-6" data-testid="page-home">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">All notes</h1>
-        <Button asChild>
+        <Button asChild className="max-sm:w-full">
           <Link to="/notes/new" data-testid="new-note">
             New note
           </Link>

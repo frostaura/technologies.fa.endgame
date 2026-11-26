@@ -60,6 +60,10 @@ export const typography = {
 /** Named widths. `page` bounds the console so lines stay readable on an ultrawide. */
 export const layout = {
   width: { page: "96rem", aside: "22rem" },
+  /** A phone's safe area — the notch and the home indicator — for pages drawn edge to edge (`viewport-fit=cover`). */
+  safe: { top: "env(safe-area-inset-top, 0px)", bottom: "env(safe-area-inset-bottom, 0px)", left: "env(safe-area-inset-left, 0px)", right: "env(safe-area-inset-right, 0px)" },
+  /** The smallest comfortable touch target. */
+  touch: "44px",
 } as const;
 
 // ---------------------------------------------------------------------------------------------

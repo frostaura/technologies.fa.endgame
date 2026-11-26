@@ -6,8 +6,13 @@
 
 /* No colour or size is declared here: they come from the kit's token layer through the Tailwind preset. */
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
-    @apply min-h-screen bg-ground font-sans text-ink;
+    @apply min-h-dvh bg-ground font-sans text-ink;
   }
 
   h1,
