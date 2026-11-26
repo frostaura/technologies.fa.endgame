@@ -87,7 +87,7 @@ export function AutonomyView() {
           <Skeleton className="h-48 rounded-md" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The autonomy settings could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="The autonomy settings could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}

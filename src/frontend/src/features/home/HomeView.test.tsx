@@ -104,6 +104,19 @@ describe("HomeView", () => {
     window.history.replaceState(null, "", "/");
   });
 
+  it("an organisation that is not there is an answer, with no 'Nothing here is known'", async () => {
+    window.history.replaceState(null, "", "/?organisation=nowhere");
+    stubApi({
+      "GET /api/me": json({ ...ME, isOperator: true, organisation: null, memberships: [] }),
+      "GET /api/tree?organisation=nowhere": problem(404, "The organisation 'nowhere' was not found, or you cannot see it."),
+    });
+    renderWithStore(<HomeView />);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).not.toContain("Nothing here is known until it loads.");
+    expect(within(alert).getByRole("link", { name: "Back to the org chart" })).toBeTruthy();
+    window.history.replaceState(null, "", "/");
+  });
+
   it("leads a first run to Start", async () => {
     stub(json({ generatedAt: "2026-11-24T10:00:00Z", viewerRole: "none", organisation: null, divisions: [], needsYou: [] }));
     renderWithStore(<HomeView />);
@@ -137,7 +150,7 @@ describe("HomeView", () => {
     expect(within(band).getByText("division").previousSibling?.textContent).toBe("1");
     expect(within(band).getByText("employee").previousSibling?.textContent).toBe("1");
     expect(within(band).getByText("credits this month").previousSibling?.textContent).toBe("77");
-    expect(screen.getByText(/Kit is fixing the export/)).toBeTruthy();
+    expect(screen.getAllByText(/Kit is fixing the export/).length).toBeGreaterThan(0);
   });
 
   it("scopes the breadcrumb and the conversation to the selected node, and streams the reply", async () => {

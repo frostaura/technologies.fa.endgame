@@ -35,6 +35,10 @@ describe("OntologyView", () => {
     const b = renderWithStore(<OntologyView scope="acme" view="org-chart" />);
     expect((await screen.findByRole("alert")).textContent).toContain("The organisation graph could not be loaded");
     b.unmount();
+    stubApi({ "GET /api/ontology": problem(403, "Not yours") });
+    const c = renderWithStore(<OntologyView scope="acme" view="org-chart" />);
+    expect((await screen.findByRole("alert")).textContent).not.toContain("Nothing here is known until it loads.");
+    c.unmount();
     stubApi({ "GET /api/ontology": json({ ...ONTOLOGY, edges: ONTOLOGY.edges.filter((e) => e.type === "owns") }) });
     renderWithStore(<OntologyView scope="acme" view="data-flow" />);
     expect(await screen.findByText("No data flows yet")).toBeTruthy();

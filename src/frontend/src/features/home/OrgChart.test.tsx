@@ -5,7 +5,7 @@ import { ME, json, renderWithStore, stubApi } from "@/test/harness";
 import { OrgChart } from "./OrgChart";
 import { tidyFigures } from "./needsYouModel";
 import { nodeName } from "./ontologyModel";
-import { appChips, workerActivity, workerLabel } from "./treeModel";
+import { activityLine, appChips, progressLine, workerActivity, workerLabel } from "./treeModel";
 
 const app = { id: "a1", slug: "web", name: "Ledger web", health: "healthy", running: "awake", access: "private", sharedWith: 0, visitsToday: 1, lastVisitAt: null, spend: { monthCredits: 1 }, workers: [], status: "archived" };
 const TREE = {
@@ -50,6 +50,29 @@ describe("OrgChart", () => {
     renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
     expect((screen.getByRole("button", { name: /Tools/ }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole("link", { name: "Manage Tools" })).toBeNull();
+  });
+});
+
+describe("activity as sentences (D82)", () => {
+  it("reads a run's title as what the person is doing", () => {
+    expect(activityLine("Theo", "Change: Show how many books each member has read")).toBe("Theo is making a change: Show how many books each member has read");
+    expect(activityLine("Theo", "Build: Club Reading List")).toBe("Theo is building: Club Reading List");
+    expect(activityLine("Iris", "Research: A shared equipment log")).toBe("Iris is researching: A shared equipment log");
+    expect(activityLine("Iris", "Looking for competitors")).toBe("Iris is looking for competitors");
+    expect(activityLine("Lena", "Paused")).toBe("Lena: Paused");
+  });
+
+  it("never prints step 0 of 0, and draws no bar until there is a plan", () => {
+    expect(progressLine({ label: "Change: Show how many", step: 0, of: 0 })).toBe("Change: Show how many");
+    expect(progressLine({ label: "Build: Ledger", step: 1, of: 4 })).toBe("Build: Ledger, step 1 of 4");
+    stubApi({ "GET /api/me": json(ME) });
+    const tools = TREE.divisions[0] as Tree["divisions"][number];
+    const project = { ...tools.projects[0], stage: "building", progress: { runId: "r1", label: "Change: Show how many", step: 0, of: 0, spentCredits: 2, estimatedCredits: null }, workers: [{ id: "e1", name: "Theo", role: "Software engineer", kind: "employee", activity: "Change: Show how many", status: "working" }] };
+    const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
+    const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    expect(container.textContent).not.toContain("step 0 of 0");
+    expect(container.textContent).toContain("Theo is making a change: Show how many");
+    expect(screen.getByRole("link", { name: "Watch the work" })).toBeTruthy();
   });
 });
 

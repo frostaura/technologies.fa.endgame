@@ -62,7 +62,7 @@ export function RunView({ runId }: { runId: string }) {
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: title }]} aside={view.kind === "loaded" ? <RunAside runId={runId} /> : undefined}>
       {view.kind === "loading" && <RunSkeleton />}
       {view.kind === "failed" && (
-        <Failed title={view.status === 404 ? "This work could not be found" : "This work could not be loaded"} reason={view.reason} onRetry={() => void query.refetch()} />
+        <Failed title={view.status === 404 ? "This work could not be found" : "This work could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />
       )}
       {view.kind === "loaded" && (
         <>

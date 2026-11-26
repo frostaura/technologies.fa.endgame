@@ -72,6 +72,15 @@ describe("AppView", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("This app could not be found");
   });
 
+  it("a missing app is an answer: no 'Nothing here is known', and a way back instead of Try again", async () => {
+    stub(problem(404, "App not found"));
+    renderWithStore(<AppView appId="a1" />);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).not.toContain("Nothing here is known until it loads.");
+    expect(within(alert).getByRole("link", { name: "Back to the org chart" }).getAttribute("href")).toBe("/");
+    expect(within(alert).queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
   it("shows status, both addresses, telemetry and its running and access settings", async () => {
     stub(json(APP));
     renderWithStore(<AppView appId="a1" />);

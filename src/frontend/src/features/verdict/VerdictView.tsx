@@ -65,7 +65,7 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
           </div>
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title={view.status === 404 ? "This idea could not be found" : "The verdict could not be loaded"} reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title={view.status === 404 ? "This idea could not be found" : "The verdict could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}

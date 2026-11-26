@@ -6,7 +6,7 @@ import { node, orgOf, uuidFor, type DemoApp, type DemoRun, type World } from "./
  * Each says which RTK Query tags it touched through `world.changed`.
  */
 
-export function notify(world: World, n: Omit<NotificationItem, "id" | "createdAt" | "read" | "emailedAt"> & { key: string }) {
+export function notify(world: World, n: Omit<NotificationItem, "id" | "createdAt" | "read" | "emailedAt" | "resolved"> & { key: string }) {
   const { key, ...rest } = n;
   const id = uuidFor(`notification:${key}`);
   if (world.notifications.some((x) => x.id === id)) return;

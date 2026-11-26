@@ -17,7 +17,7 @@ import { ApprovalCard } from "../runs/ApprovalCard";
 import { deriveRun, isTerminal } from "../runs/runModel";
 import { useRunStream } from "../runs/useRunStream";
 import { distinctReplies, noticesToShow, withoutClosingRepeats } from "./conversationModel";
-import { activeWork } from "./treeModel";
+import { activeWork, activityLine } from "./treeModel";
 
 /**
  * The one conversation, docked beside the org chart and scoped to whatever is selected. What was
@@ -132,7 +132,7 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
         {busy.slice(0, 2).map((w) => (
           <div key={w.name} className="flex items-center gap-2.5 text-sm text-ink-muted">
             <TypingDots />
-            {w.name} is {lowerFirst(w.activity)}
+            {activityLine(w.name, w.activity)}
           </div>
         ))}
       </div>
@@ -247,10 +247,6 @@ function Notice({ text, budget, finished = false }: { text: string; budget: bool
       )}
     </div>
   );
-}
-
-function lowerFirst(s: string): string {
-  return s.charAt(0).toLowerCase() + s.slice(1);
 }
 
 export function TypingDots({ label }: { label?: string }) {

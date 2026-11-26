@@ -117,6 +117,22 @@ describe("HiresView", () => {
     expect(api.calls.find((c) => c.method === "POST")?.body).toMatchObject({ scope: "acme/tools", name: "Sam", role: "Competitor sweep", trigger: "promotion", expectedMonthlyCredits: 90 });
   });
 
+  // D78: with a proposal for the role already waiting, the aside leads to it instead of proposing again.
+  it("leads a recurring role whose proposal already waits to that proposal", async () => {
+    window.history.replaceState(null, "", "/hires?scope=acme");
+    stubApi({
+      "GET /api/me": json(ME),
+      "GET /api/credits": json(CREDITS),
+      "GET /api/tree": json(TREE),
+      "GET /api/hires": json([hireFixture({ id: "h7", scope: "acme/tools", role: "Competitor sweep", trigger: "promotion", contractorRole: "Competitor sweep" })]),
+      "GET /api/employees/recurring-roles": json([{ scope: "acme/tools", role: "Competitor sweep", contractors: 3, windowDays: 30, costCredits: 90, lastBriefedBy: "e1", lastBrief: "Sweep the competitors." }]),
+    });
+    renderWithStore(<HiresView />);
+    const open = await screen.findByRole("link", { name: "Already proposed — open it" });
+    expect(open.getAttribute("href")).toBe("/hires/h7");
+    expect(screen.queryByRole("button", { name: "Propose as a permanent hire" })).toBeNull();
+  });
+
   it("shows nothing proposed as an empty state, and a failed read as a failure", async () => {
     window.history.replaceState(null, "", "/hires?scope=acme");
     stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/tree": json(TREE), "GET /api/hires": json([]), "GET /api/employees/recurring-roles": problem(500, "Down") });

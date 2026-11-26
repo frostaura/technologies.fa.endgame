@@ -54,7 +54,7 @@ export function App() {
     return (
       <main className="mx-auto flex min-h-screen max-w-form flex-col justify-center gap-4 px-4">
         <img src="/brand/endgame-mark.svg" alt="" width={40} height={40} className="size-10" />
-        <Failed title="Endgame could not check who you are" reason={describeError(me.error)} onRetry={() => void me.refetch()} />
+        <Failed title="Endgame could not check who you are" reason={describeError(me.error)} status={errorStatus(me.error)} onRetry={() => void me.refetch()} />
       </main>
     );
   }

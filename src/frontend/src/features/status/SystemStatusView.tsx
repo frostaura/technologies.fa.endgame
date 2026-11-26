@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import { Failed } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +27,7 @@ export function SystemStatusView() {
       </div>
 
       {view.kind === "loading" && <LoadingState />}
-      {view.kind === "failed" && <FailedState reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="System status could not be loaded" reason={view.reason} status={view.status} unknown="Nothing below is known until a check succeeds." onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && <LoadedState status={view.status} stale={view.stale} />}
     </section>
   );
@@ -38,23 +39,6 @@ function LoadingState() {
       <CardContent className="flex items-center gap-3 pt-5 text-sm text-ink-muted">
         <Loader2 aria-hidden className="size-5 animate-spin text-primary motion-reduce:animate-none" />
         Checking every service…
-      </CardContent>
-    </Card>
-  );
-}
-
-function FailedState({ reason, onRetry }: { reason: string; onRetry: () => void }) {
-  return (
-    <Card role="alert" data-state="failed" className="border-attention-text/30 bg-attention-tint">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-attention-text">
-          <XCircle aria-hidden className="size-5" />
-          System status could not be loaded
-        </CardTitle>
-        <p className="text-sm text-ink">{reason} Nothing below is known until a check succeeds.</p>
-      </CardHeader>
-      <CardContent>
-        <Button onClick={onRetry}>Try again</Button>
       </CardContent>
     </Card>
   );

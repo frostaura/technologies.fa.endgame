@@ -76,6 +76,8 @@ function Row({ organisation, item, onNavigate }: { organisation: string; item: N
   const [markRead] = useMarkReadMutation();
   const [problem, setProblem] = useState<string | null>(null);
   const lines = notificationLines(item);
+  // An answered notice is settled: its title already says what happened, so it is never new and has nothing to mark (D40).
+  const unread = !item.read && !item.resolved;
   const read = async () => {
     setProblem(null);
     try {
@@ -85,25 +87,31 @@ function Row({ organisation, item, onNavigate }: { organisation: string; item: N
     }
   };
   return (
-    <li data-notification={item.id} data-read={item.read} className={cn("flex min-w-0 flex-col gap-1.5 rounded-sm border px-4 py-3", item.read ? "bg-surface" : item.severity === "urgent" ? "border-attention-line bg-attention-wash" : "border-primary-line bg-primary-tint")}>
+    <li
+      data-notification={item.id}
+      data-read={item.read || item.resolved}
+      data-resolved={item.resolved}
+      className={cn("flex min-w-0 flex-col gap-1.5 rounded-sm border px-4 py-3", !unread ? "bg-surface" : item.severity === "urgent" ? "border-attention-line bg-attention-wash" : "border-primary-line bg-primary-tint")}
+    >
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={item.severity === "urgent" ? "attention-strong" : "primary"}>{lines.kind}</Badge>
-        {!item.read && <span className="text-xs font-semibold text-ink">New</span>}
+        <Badge tone={item.resolved ? "quiet" : item.severity === "urgent" ? "attention-strong" : "primary"}>{lines.kind}</Badge>
+        {unread && <span className="text-xs font-semibold text-ink">New</span>}
+        {item.resolved && <Badge tone="success">Answered</Badge>}
         <span className="ml-auto text-xs text-ink-muted">{timeAgo(item.createdAt)}</span>
       </div>
       <Link
         href={notificationHref(item)}
         onClick={() => {
-          if (!item.read) void read();
+          if (unread) void read();
           onNavigate?.();
         }}
-        className="break-words font-semibold text-ink hover:text-primary-hover"
+        className={cn("break-words hover:text-primary-hover", item.resolved ? "font-medium text-ink-body" : "font-semibold text-ink")}
       >
         {lines.title}
       </Link>
       {lines.line && <p className="line-clamp-2 break-words text-sm text-ink-body">{lines.line}</p>}
       <div className="flex flex-wrap items-center gap-x-3">
-        {!item.read && (
+        {unread && (
           <Button size="sm" variant="ghost" className="px-0" onClick={() => void read()}>
             Mark read
           </Button>

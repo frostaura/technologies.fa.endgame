@@ -32,7 +32,11 @@ describe("SuggestionsView", () => {
     cleanup();
     stub(json([]));
     renderWithStore(<SuggestionsView />);
-    expect(await screen.findByText("No suggestions waiting")).toBeTruthy();
+    expect(await screen.findByText("No suggestions waiting")).toBeTruthy();    cleanup();
+    stub(problem(403, "Only a Builder sees suggestions"));
+    renderWithStore(<SuggestionsView />);
+    expect((await screen.findByText("The suggested ideas could not be loaded")).closest("[data-state]")?.textContent).not.toContain("Nothing here is known until it loads.");
+
   });
 
   it("shows each open idea with the gap it fills, why this organisation and what it reuses; the rest are set apart", async () => {

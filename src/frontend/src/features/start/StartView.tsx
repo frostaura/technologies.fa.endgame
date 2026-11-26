@@ -323,7 +323,7 @@ function NextSteps({ scope, division }: { scope: string | null; division: string
           <Skeleton className="h-12" />
         </Loading>
       )}
-      {scope && view.kind === "failed" && <Failed title="What happens next could not be worked out" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {scope && view.kind === "failed" && <Failed title="What happens next could not be worked out" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {(!scope || view.kind === "loaded") && (
         <ol className="flex flex-col gap-5">
           {nextSteps(autonomy, division).map(([title, text], i) => (

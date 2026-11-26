@@ -1,6 +1,7 @@
 import { arr, bool, dict, nullable, num, obj, oneOf, record, str, unknownValue, withDefault, type Guard } from "@/lib/guards";
 import { normaliseVerdict } from "@/features/verdict/verdictModel";
 import type {
+  RoleRevoked,
   CascadeValue,
   ChangeEstimate,
   ConversationEstimate,
@@ -582,6 +583,7 @@ export const memberGuard: Guard<Member> = obj<Member>({
   invitationExpiresAt: withDefault(ns, null),
 });
 export const membersGuard: Guard<Member[]> = arr(memberGuard);
+export const roleRevokedGuard: Guard<RoleRevoked> = obj<RoleRevoked>({ revoked: s, invitationCancelled: withDefault(bool, false) });
 export const invitationGuard: Guard<MemberInvitation> = obj<MemberInvitation>({ member: memberGuard, invitationCode: ns, expiresAt: ns, emailed: withDefault(bool, false) });
 
 // AI assistant access ---------------------------------------------------------------------------
@@ -618,6 +620,7 @@ export const notificationsGuard: Guard<NotificationFeed> = obj<NotificationFeed>
       createdAt: s,
       read: bool,
       emailedAt: withDefault(ns, null),
+      resolved: withDefault(bool, false),
     }),
   ),
 });

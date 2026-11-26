@@ -25,8 +25,8 @@ import { ItIsYours, TechnicalDetails, WhatItUses } from "./AppAside";
 import { AppItself, AppSpending, IdleMinutes, RebuildAndRestart } from "./AppManage";
 import { capNote } from "./appModel";
 import { AskPanel, Dashboard } from "./AskPanel";
-import { useCardNote } from "./cardNote";
-import { CardNotesProvider } from "./CardNotes";
+import { useCardNote } from "@/components/cardNote";
+import { CardNotesProvider } from "@/components/CardNotes";
 import { ChangeRequest } from "./ChangeRequest";
 import { History } from "./History";
 import { AppConversation } from "../home/ConversationDock";
@@ -64,7 +64,7 @@ export function AppView({ appId }: { appId: string }) {
           </div>
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title={view.status === 404 ? "This app could not be found" : "The app could not be loaded"} reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title={view.status === 404 ? "This app could not be found" : "The app could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -322,7 +322,7 @@ function Sharing({ app }: { app: AppDetail }) {
           <Skeleton className="h-12 rounded-sm" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="Who it is shared with could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="Who it is shared with could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -456,7 +456,7 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
           <Skeleton className="h-8 rounded-xs" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The secrets could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="The secrets could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" &&
         (view.data.effective.length === 0 ? (
           <p data-state="empty" className="text-ink-muted">

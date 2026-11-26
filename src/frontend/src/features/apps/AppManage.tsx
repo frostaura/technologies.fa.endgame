@@ -15,7 +15,7 @@ import { parseCredits } from "../credits/creditsModel";
 import { ArchiveNode, DeleteNode, Outcome, RenameNode } from "../tree/NodeControls";
 import { isArchived } from "../tree/treeManage";
 import { ALLOWANCE_KEY, CAP_KEY, numberOf as number } from "./appModel";
-import { useCardNote } from "./cardNote";
+import { useCardNote } from "@/components/cardNote";
 
 type Said = { ok: boolean; text: string };
 
@@ -41,8 +41,8 @@ export function AppSpending({ app, isAdmin, nameOf }: { app: AppDetail; isAdmin:
           <Skeleton className="h-16 rounded-xs" />
         </Loading>
       )}
-      {budgetView.kind === "failed" && <Failed title="Its cap could not be loaded" reason={budgetView.reason} onRetry={() => void budgets.refetch()} />}
-      {settingView.kind === "failed" && <Failed title="Its AI allowance could not be loaded" reason={settingView.reason} onRetry={() => void settings.refetch()} />}
+      {budgetView.kind === "failed" && <Failed title="Its cap could not be loaded" reason={budgetView.reason} status={budgetView.status} onRetry={() => void budgets.refetch()} />}
+      {settingView.kind === "failed" && <Failed title="Its AI allowance could not be loaded" reason={settingView.reason} status={settingView.status} onRetry={() => void settings.refetch()} />}
       {budgetView.kind === "loaded" && (
         <Limit
           app={app}

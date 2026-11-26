@@ -241,7 +241,7 @@ export function Dashboard({ appId, canChange }: { appId: string; canChange: bool
           <Skeleton className="h-48 rounded-md" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The dashboard could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="The dashboard could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {problem && (
         <p role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
           {problem}

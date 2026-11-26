@@ -15,7 +15,7 @@ import { useGetEmployeesQuery, useGetEmployeesWithReleasedQuery, useGetHiresQuer
 import type { Employee, Hire, RecurringRole, Tree } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 import { JobFields, type JobDraft } from "./JobFields";
-import { STATUS as EMPLOYEE_STATUS, TRIGGER, draftProblem, expectedMonthly, nameWithRole, possibleManagers, scopeName } from "./workforceModel";
+import { STATUS as EMPLOYEE_STATUS, TRIGGER, draftProblem, expectedMonthly, nameWithRole, possibleManagers, scopeName, waitingProposal } from "./workforceModel";
 
 /** Hiring at a scope: the proposals waiting and decided, and contractor roles that keep coming back. */
 export function HiresView() {
@@ -146,6 +146,7 @@ function HireCard({ hire, tree, index }: { hire: Hire; tree: Tree | undefined; i
 }
 
 function RecurringRoles({ scope, tree, isAdmin }: { scope: string; tree: Tree | undefined; isAdmin: boolean }) {
+  const hires = useGetHiresQuery({ scope });
   const query = useGetRecurringRolesQuery(scope);
   const view = viewOf(query);
   return (
@@ -168,7 +169,7 @@ function RecurringRoles({ scope, tree, isAdmin }: { scope: string; tree: Tree | 
         ) : (
           <ul aria-label="Recurring roles" className="flex flex-col gap-2.5">
             {view.data.map((r) => (
-              <RecurringRow key={`${r.scope}-${r.role}`} role={r} tree={tree} isAdmin={isAdmin} />
+              <RecurringRow key={`${r.scope}-${r.role}`} role={r} tree={tree} isAdmin={isAdmin} waiting={waitingProposal(hires.data, r)} />
             ))}
           </ul>
         ))}
@@ -176,7 +177,7 @@ function RecurringRoles({ scope, tree, isAdmin }: { scope: string; tree: Tree | 
   );
 }
 
-function RecurringRow({ role, tree, isAdmin }: { role: RecurringRole; tree: Tree | undefined; isAdmin: boolean }) {
+function RecurringRow({ role, tree, isAdmin, waiting }: { role: RecurringRole; tree: Tree | undefined; isAdmin: boolean; waiting: Hire | null }) {
   const [propose, state] = useProposeHireMutation();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -212,7 +213,11 @@ function RecurringRow({ role, tree, isAdmin }: { role: RecurringRole; tree: Tree
         Briefed {plural(role.contractors, "time")} in {plural(role.windowDays, "day")} at {scopeName(tree, role.scope)}, costing {formatCredits(role.costCredits)}.
       </span>
       {role.lastBrief && <span className="text-sm text-ink-muted">Last brief: {role.lastBrief}</span>}
-      {open ? (
+      {waiting ? (
+        <Link href={paths.hire(waiting.id)} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+          Already proposed — open it
+        </Link>
+      ) : open ? (
         <form onSubmit={(e) => void submit(e)} aria-label={`Propose ${role.role} as a hire`} className="flex flex-col gap-2 pt-1">
           <label htmlFor={`name-${role.role}`} className="text-sm font-medium">
             Name the new employee

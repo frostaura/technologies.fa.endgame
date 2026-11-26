@@ -1,5 +1,6 @@
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import type { SerializedError } from "@reduxjs/toolkit";
+import { errorStatus } from "@/lib/queryState";
 import type { SystemStatus } from "@/store/api";
 
 /** How often the view asks again. Health is live, not a snapshot from page load. */
@@ -11,7 +12,7 @@ export const POLL_INTERVAL_MS = 10_000;
  */
 export type StatusViewState =
   | { kind: "loading" }
-  | { kind: "failed"; reason: string }
+  | { kind: "failed"; reason: string; status: number | null }
   | { kind: "loaded"; status: SystemStatus; stale: { reason: string } | null };
 
 export function describeError(error: FetchBaseQueryError | SerializedError | undefined): string {
@@ -35,7 +36,7 @@ export function toViewState(query: {
   if (query.data) {
     return { kind: "loaded", status: query.data, stale: query.isError ? { reason: describeError(query.error) } : null };
   }
-  if (query.isError) return { kind: "failed", reason: describeError(query.error) };
+  if (query.isError) return { kind: "failed", reason: describeError(query.error), status: errorStatus(query.error) };
   return { kind: "loading" };
 }
 

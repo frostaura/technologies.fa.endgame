@@ -1,6 +1,6 @@
 import type { BadgeTone } from "@/components/ui/badge";
 import type { Mode } from "@/features/runs/runModel";
-import type { EmployeePatch, EmployeeStatus, HireEdit, HireTrigger, JobDescription, MemoryChange, MemoryEntry, MemoryKind, PersonRef, Tree } from "@/store/types";
+import type { EmployeePatch, EmployeeStatus, Hire, HireEdit, HireTrigger, JobDescription, MemoryChange, MemoryEntry, MemoryKind, PersonRef, RecurringRole, Tree } from "@/store/types";
 
 /**
  * The workforce in plain words. Normal mode never names a model, a tool's internal name or the
@@ -314,4 +314,20 @@ export function hireEditFrom(before: JobDraftShape, after: JobDraftShape, extra:
   if (p.reportsTo !== undefined) edit.reportsTo = p.reportsTo;
   if (p.clearReportsTo) edit.clearReportsTo = true;
   return edit;
+}
+
+/**
+ * The proposal already waiting for a recurring role, if one is: the control plane raises one need per role and place
+ * (`HireService.PromotionNeedKey`), so proposing again only returns it (D78).
+ */
+export function waitingProposal(hires: Hire[] | undefined, role: RecurringRole): Hire | null {
+  const named = role.role.trim().toLowerCase();
+  return (
+    hires?.find(
+      (h) =>
+        h.status === "proposed" &&
+        h.scope === role.scope &&
+        ((h.needKey?.startsWith("promotion:") === true && h.needKey.endsWith(`:${named}`)) || h.contractorRole?.trim().toLowerCase() === named || h.role.trim().toLowerCase() === named),
+    ) ?? null
+  );
 }

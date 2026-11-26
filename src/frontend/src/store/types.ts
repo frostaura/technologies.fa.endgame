@@ -921,6 +921,12 @@ export interface RestoreResult {
 // People — `GET/POST/PATCH/DELETE /api/members`
 // ---------------------------------------------------------------------------------------------
 
+/** `DELETE /api/members/{id}`: the revoked grant, and whether the person's unused invitation code was cancelled with it (their last grant, no passkey yet). */
+export interface RoleRevoked {
+  revoked: string;
+  invitationCancelled: boolean;
+}
+
 export interface Member {
   membershipId: string;
   userId: string;
@@ -987,6 +993,11 @@ export interface NotificationItem {
   createdAt: string;
   read: boolean;
   emailedAt: string | null;
+  /**
+   * True when what it asked is already answered (a verdict decided, an approval given or declined, a hire accepted or
+   * declined): its title then says what happened, `read` is true and it is not counted unread.
+   */
+  resolved: boolean;
 }
 
 export interface NotificationFeed {

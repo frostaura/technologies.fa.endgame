@@ -11,6 +11,7 @@ import type {
   AskChart,
   AskEstimate,
   Member,
+  RoleRevoked,
   MemberRole,
   NotificationFeed,
   OperatorEntry,
@@ -719,8 +720,9 @@ export const api = createApi({
         }
       },
     }),
-    removeMember: build.mutation<null, { scope: string; membershipId: string }>({
+    removeMember: build.mutation<RoleRevoked, { scope: string; membershipId: string }>({
       query: ({ membershipId }) => ({ url: `members/${encodeURIComponent(membershipId)}`, method: "DELETE" }),
+      extraOptions: guarded(g.roleRevokedGuard, "the removed role"),
       async onQueryStarted({ scope, membershipId }, { dispatch, queryFulfilled }) {
         const undo = dispatch(api.util.updateQueryData("getMembers", scope, (list) => list.filter((x) => x.membershipId !== membershipId)));
         try {

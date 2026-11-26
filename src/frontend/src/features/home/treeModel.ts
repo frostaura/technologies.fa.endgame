@@ -211,3 +211,25 @@ export function workerActivity(w: { name: string; activity: string | null; kind?
   if (w.activity) return w.activity;
   return isContractor(w) ? w.name.replace(/\s*\(contractor\)\s*$/i, "").trim() || null : null;
 }
+
+/** A run's title prefix ("Change: …") as what a person is doing with it. */
+const DOING: Record<string, string> = { build: "building", change: "making a change", research: "researching", "memory review": "reviewing what it remembers" };
+
+/**
+ * A worker's activity as a sentence (D82). An activity is usually a run's title ("Change: Show how many books…"), which
+ * is no verb: "Theo is change: …" read wrongly. A known prefix becomes what they are doing, a gerund keeps "is", and
+ * anything else follows the name ("Theo: …").
+ */
+export function activityLine(name: string, activity: string): string {
+  const text = activity.trim();
+  const prefixed = /^([A-Za-z][A-Za-z ]*?):\s+(.+)$/.exec(text);
+  const doing = prefixed ? DOING[(prefixed[1] ?? "").toLowerCase()] : undefined;
+  if (prefixed && doing) return `${name} is ${doing}: ${prefixed[2]}`;
+  if (/^[A-Za-z]+ing\b/.test(text) && !/^(nothing|something|everything|thing)\b/i.test(text)) return `${name} is ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+  return `${name}: ${text}`;
+}
+
+/** A project's work under way: its title, and its step only once there is a plan to count ("step 0 of 0" never, D82). */
+export function progressLine(progress: { label: string; step: number; of: number }): string {
+  return progress.of > 0 ? `${progress.label}, step ${progress.step} of ${progress.of}` : progress.label;
+}

@@ -44,8 +44,8 @@ export function PeopleView() {
   const admin = roleRank(role) >= roleRank("admin");
   const org = active.organisation;
   const here = scopeName(tree.data, scope);
-  // A removal refused after the person left the list is said here, where it stays readable.
-  const [problem, setProblem] = useState<string | null>(null);
+  // A removal — done or refused — is said here, after the person left the list, where it stays readable.
+  const [outcome, setOutcome] = useState<{ done: boolean; text: string } | null>(null);
 
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), ...(scope.includes("/") ? [{ label: here }] : []), { label: "People" }]} aside={<RolesAside />}>
@@ -71,9 +71,14 @@ export function PeopleView() {
                 <Skeleton className="h-16 rounded-sm" />
               </Loading>
             )}
-            {problem && (
+            {outcome && !outcome.done && (
               <p role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
-                {problem}
+                {outcome.text}
+              </p>
+            )}
+            {outcome?.done && (
+              <p role="status" data-state="done" className="rounded-xs bg-success-tint px-4 py-3 text-success-text">
+                {outcome.text}
               </p>
             )}
             {view.kind === "failed" && <Failed title={view.status === 403 ? "You cannot see the people here" : "The people could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
@@ -87,7 +92,7 @@ export function PeopleView() {
                 ) : (
                   <ul aria-label="People" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
                     {view.data.map((m) => (
-                      <MemberRow key={m.membershipId} member={m} scope={scope} tree={tree.data} canChange={admin} self={m.userId === me.data?.user.id} viewerIsOwner={role === "owner"} onRefused={setProblem} />
+                      <MemberRow key={m.membershipId} member={m} scope={scope} tree={tree.data} canChange={admin} self={m.userId === me.data?.user.id} viewerIsOwner={role === "owner"} here={here} onOutcome={setOutcome} />
                     ))}
                   </ul>
                 )}
@@ -133,7 +138,8 @@ function MemberRow({
   canChange,
   self,
   viewerIsOwner,
-  onRefused,
+  here,
+  onOutcome,
 }: {
   member: Member;
   scope: string;
@@ -141,7 +147,8 @@ function MemberRow({
   canChange: boolean;
   self: boolean;
   viewerIsOwner: boolean;
-  onRefused: (text: string | null) => void;
+  here: string;
+  onOutcome: (outcome: { done: boolean; text: string } | null) => void;
 }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const [changeRole, changing] = useChangeRoleMutation();
@@ -177,11 +184,12 @@ function MemberRow({
   };
   const drop = async () => {
     setConfirm(false);
-    onRefused(null);
+    onOutcome(null);
     try {
-      await remove({ scope, membershipId: member.membershipId }).unwrap();
+      const revoked = await remove({ scope, membershipId: member.membershipId }).unwrap();
+      onOutcome({ done: true, text: removedLine(member.displayName, here, revoked.invitationCancelled) });
     } catch (e) {
-      onRefused(`${member.displayName} still has their role: ${describeError(e as never)}`);
+      onOutcome({ done: false, text: `${member.displayName} still has their role: ${describeError(e as never)}` });
     }
   };
 
@@ -254,6 +262,11 @@ function MemberRow({
       )}
     </li>
   );
+}
+
+/** What People says once a grant is removed; a cancelled code is said, so no one expects it to work (D8). */
+function removedLine(name: string, here: string, invitationCancelled: boolean): string {
+  return invitationCancelled ? `${name} no longer has a role in ${here}, and the invitation code they were sent no longer works.` : `${name} no longer has a role in ${here}.`;
 }
 
 /** What a pending person's row says about their code. */

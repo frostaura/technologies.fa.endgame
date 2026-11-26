@@ -1,7 +1,7 @@
-import type { AppDetail, BudgetLine, Credits, Idea, Me, Membership, NeedsYou, OperatorOrganisation, Pricing, RunningCost, Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
+import type { AppDetail, BudgetLine, Credits, Idea, Me, Membership, NeedsYou, NotificationItem, OperatorOrganisation, Pricing, RunningCost, Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import { highestIn, homeOrganisation, roleAt } from "./access";
 import { ideaState } from "./tryAgain";
-import { DEFAULT_PRICING, appAt, chain, levelOf, node, orgOf, organisation, spentBelow, within, type DemoApp, type DemoUser, type World } from "./world";
+import { DEFAULT_PRICING, appAt, chain, levelOf, node, orgOf, organisation, spentBelow, within, type DemoApp, type DemoNotification, type DemoUser, type World } from "./world";
 
 /**
  * The control plane's views, built from the world: what `ConsoleViews.cs` and the endpoint files
@@ -335,4 +335,35 @@ export function operatorOrganisationView(world: World, slug: string): OperatorOr
 /** The nodes on a path's chain, for breadcrumbs and messages. */
 export function namesOn(world: World, path: string): string[] {
   return chain(path).map((p) => node(world, p)?.name ?? p);
+}
+
+/**
+ * A notification as the feed sends it (`NotificationService.AnsweredAsync`): a verdict decided or a hire answered
+ * comes back resolved and read, titled with what happened, and is not counted unread.
+ */
+export function noticeAsNow(world: World, n: DemoNotification, viewer: DemoUser): NotificationItem {
+  const { organisation: _organisation, answered, ...rest } = n;
+  void _organisation;
+  const outcome = noticeOutcome(world, n, viewer);
+  if (outcome !== null) return { ...rest, title: outcome, read: true, resolved: true };
+  return { ...rest, read: n.read || answered === true, resolved: answered === true };
+}
+
+function noticeOutcome(world: World, n: DemoNotification, viewer: DemoUser): string | null {
+  const id = n.subject?.id;
+  if (!id) return null;
+  if (n.kind === "verdict" && n.subject?.kind === "idea") {
+    const i = world.ideas.find((x) => x.id === id);
+    if (!i || i.status === "verdict") return null;
+    const who = i.decision?.via === "person" ? (i.decision.by === viewer.displayName ? "You" : i.decision.by) : "Someone";
+    if (i.status === "decided" && i.decision?.choice === "build") return `${who} chose to build: ${i.title}`;
+    if (i.status === "decided" && i.decision?.choice === "drop") return `${who} dropped: ${i.title}`;
+    return `Being researched again: ${i.title}`;
+  }
+  if (n.kind === "hire" && n.subject?.kind === "hire") {
+    const h = world.hires.find((x) => x.id === id);
+    if (!h || h.status === "proposed") return null;
+    return h.status === "accepted" ? `${h.name} was hired as ${h.role}` : `${h.name} was not hired as ${h.role}`;
+  }
+  return null;
 }

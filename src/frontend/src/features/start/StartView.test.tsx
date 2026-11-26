@@ -151,6 +151,13 @@ describe("what happens next", () => {
     expect(researchPromise(checkpoints)).toBe("You are charged for research only. Nothing is built until you have seen the verdict and decided.");
   });
 
+  it("a refused read of what happens next is an answer, with no 'Nothing here is known'", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/autonomy": problem(403, "Not allowed here") });
+    renderWithStore(<StartView />);
+    const alert = await screen.findByText("What happens next could not be worked out");
+    expect(alert.closest("[data-state]")?.textContent).not.toContain("Nothing here is known until it loads.");
+  });
+
   // D63: with less to spend than the research needs, the page says so before the button is pressed, and still lets it start.
   it("says beside the estimate when there is not enough to spend, and still allows the start", async () => {
     stubApi({
