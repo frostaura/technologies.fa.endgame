@@ -63,6 +63,7 @@ public sealed class AppIdentityService(
     IOptions<IdentityPasskeyOptions> passkeys,
     IOptions<AppSessionOptions> options,
     TreeService tree,
+    EdgeNotifier edge,
     IServiceProvider services,
     TimeProvider clock)
 {
@@ -398,6 +399,7 @@ public sealed class AppIdentityService(
         var users = db.AppEndUsers.Where(u => u.OrganisationId == app.OrganisationId && u.AppId == app.AppId && u.Email == address).Select(u => u.Id);
         await db.AppSessions.Where(s => s.OrganisationId == app.OrganisationId && s.AppId == app.AppId && s.EndUserId != null && users.Contains(s.EndUserId.Value) && s.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now), cancellationToken);
+        await edge.AccessEndedAsync(cancellationToken);
         return removed > 0;
     }
 
@@ -569,6 +571,7 @@ public sealed class AppIdentityService(
         }
 
         http.Response.Cookies.Delete(name, CookieOptions(http, null));
+        await edge.AccessEndedAsync(cancellationToken);
     }
 
     /// <summary>Every app session cookie the request carries, revoked and cleared (the console's sign-out calls this too).</summary>
@@ -588,7 +591,8 @@ public sealed class AppIdentityService(
     /// The console's sign-out: every app session the member holds — at every app, in every organisation, on the
     /// platform's host and on every organisation subdomain, from any browser — is revoked, and any hand-off not yet
     /// redeemed is spent. Clearing the cookies the request happened to carry is not enough: a subdomain's cookie is
-    /// never sent to the platform's host, so its session would outlive the sign-out (D53).
+    /// never sent to the platform's host, so its session would outlive the sign-out (D53). Edge is then told to
+    /// forget the access answers it reuses, and waited for, so the next request on any host is asked again (R2-10).
     /// </summary>
     public async Task<int> EndMemberSessionsAsync(Guid memberId, CancellationToken cancellationToken)
     {
@@ -599,6 +603,9 @@ public sealed class AppIdentityService(
         await db.AppHandoffs.Where(h => h.UserId == memberId && h.UsedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(h => h.UsedAt, now), cancellationToken);
         session.Clear();
+        // Edge reuses an access answer for a few seconds per cookie; without this, the app stays open on an answer
+        // given before the sign-out (R2-10).
+        await edge.AccessEndedAsync(cancellationToken);
         return revoked;
     }
 

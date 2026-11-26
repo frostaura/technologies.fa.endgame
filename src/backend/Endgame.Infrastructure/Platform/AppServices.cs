@@ -594,6 +594,38 @@ public sealed class EdgeNotifier(IHttpClientFactory http, IOptions<ServiceAddres
             logger.LogDebug("Edge was not told about a routing change ({Message}); it will see it on its next poll.", ex.Message);
         }
     }
+
+    /// <summary>
+    /// Sessions ended (a sign-out, an unshare, a revoked role): tells Edge to forget every access answer it
+    /// reuses (<c>POST {EdgeControl}/internal/access/forget</c>) and waits, at most <see cref="Timeout"/>, for it to
+    /// have done so — so the very next request on any host is asked again, never let through on an answer given
+    /// for a session that no longer exists (R2-10). A failure is logged and never fails the sign-out.
+    /// </summary>
+    public async Task AccessEndedAsync(CancellationToken cancellationToken)
+    {
+        var control = addresses.Value.EdgeControl;
+        if (string.IsNullOrWhiteSpace(control) || !Uri.TryCreate(control, UriKind.Absolute, out var root))
+        {
+            return;
+        }
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(root, "/internal/access/forget"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", configuration["ENDGAME_SERVICE_TOKEN"]);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(Timeout);
+            using var response = await http.CreateClient(ClientName).SendAsync(request, timeout.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Edge answered {Status} when told to forget its access answers; they lapse within its cache window.", (int)response.StatusCode);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
+        {
+            logger.LogWarning("Edge was not told that sessions ended ({Message}); its access answers lapse within its cache window.", ex.Message);
+        }
+    }
 }
 
 // ------------------------------------------------------------------------------------ callbacks

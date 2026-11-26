@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Endgame.Edge.Access;
 using Endgame.Edge.Routing;
 using Endgame.Edge.Runtime;
 using Endgame.Hosting.Contracts;
@@ -23,6 +24,13 @@ public static class ControlEndpoints
         {
             var snapshot = await routes.RefreshAsync(ct);
             return Results.Ok(new RoutesRefreshed(snapshot.Version, snapshot.Apps.Count));
+        });
+
+        // A session ended somewhere (the control plane's sign-out, unshare or app sign-out): no reused access answer survives it.
+        control.MapPost("/access/forget", (AccessGate access) =>
+        {
+            access.Forget();
+            return Results.NoContent();
         });
 
         control.MapPost("/apps/{id:guid}/state", (Guid id, AppStateReport report, AppRegistry registry, IOptions<EdgeOptions> options) =>

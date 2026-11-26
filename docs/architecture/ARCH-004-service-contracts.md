@@ -389,6 +389,9 @@ when the app has no database yet. `start` asks the control plane for a fresh app
 `POST /internal/routes/refresh` → `{ version, apps }`; `POST /internal/apps/{id}/state` (Dock's crash
 reports); `POST /internal/apps/{id}/platform/schedules/{name}` (platform callbacks, above);
 `POST /internal/usage/flush` (closes the hosting-usage period now);
+`POST /internal/access/forget` → `204` (drops every access answer Edge reuses — 15 s per cookie and app — so the next
+request on any host is asked again; the control plane calls it, waiting at most 5 s, whenever sessions end: the console's
+sign-out, an app sign-out, an unshare, a revoked role; Edge's own sign-out page forgets them too);
 `ANY /internal/apps/{id}/call/{**path}` (the per-app MCP surface's and the evaluator's signed-in calls, *MCP* above);
 on these two routes `X-Endgame-Preview: 1` sends the request to the app's preview (`app-<id:N>-pv`) instead: never woken
 or marked asleep, allowed before the app is published (a paused app is still refused); the header is never forwarded;

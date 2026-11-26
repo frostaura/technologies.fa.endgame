@@ -94,6 +94,9 @@ public sealed class ControlPlaneApp : IAsyncDisposable
         return client;
     }
 
+    /// <summary>A handler that sends straight into this control plane: what a peer service (Edge, in a test) calls it through.</summary>
+    public HttpMessageHandler Handler() => factory.Server.CreateHandler();
+
     public HttpClient Internal()
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = BaseAddress, HandleCookies = false });
