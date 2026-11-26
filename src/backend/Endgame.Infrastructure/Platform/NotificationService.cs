@@ -176,7 +176,7 @@ public sealed class NotificationService(
         var approvals = await db.Approvals.AsNoTracking().Where(a => a.OrganisationId == organisationId && approvalIds.Contains(a.Id) && a.Status != ApprovalStatuses.Pending)
             .Select(a => new { a.Id, a.Title, a.Status, a.AnsweredBy }).ToDictionaryAsync(a => a.Id, cancellationToken);
         var hires = await db.HireProposals.AsNoTracking().Where(h => h.OrganisationId == organisationId && hireIds.Contains(h.Id) && h.Status != Domain.Workforce.HireStatuses.Proposed)
-            .Select(h => new { h.Id, h.Name, h.Role, h.Status }).ToDictionaryAsync(h => h.Id, cancellationToken);
+            .Select(h => new { h.Id, h.Name, h.Role, h.Status, h.DecidedVia, h.DecidedBy }).ToDictionaryAsync(h => h.Id, cancellationToken);
         var ideas = await db.Ideas.AsNoTracking().Where(i => i.OrganisationId == organisationId && ideaIds.Contains(i.Id) && i.Status != IdeaStatuses.AwaitingDecision)
             .Select(i => new { i.Id, i.Text, i.Status, i.DecidedBy }).ToDictionaryAsync(i => i.Id, cancellationToken);
         var people = approvals.Values.Select(a => a.AnsweredBy).Concat(ideas.Values.Select(i => i.DecidedBy)).OfType<Guid>().Distinct().ToList();
@@ -194,7 +194,9 @@ public sealed class NotificationService(
                     _ => $"No longer waiting: “{a.Title}”",
                 },
                 NotificationKinds.Hire when Keyed(n, "hire:") is { } id && hires.TryGetValue(id, out var h) =>
-                    h.Status == Domain.Workforce.HireStatuses.Accepted ? $"{h.Name} was hired as {h.Role}" : $"{h.Name} was not hired as {h.Role}",
+                    h.Status == Domain.Workforce.HireStatuses.Accepted ? $"{h.Name} was hired as {h.Role}"
+                    : Work.HireService.IsWithdrawn(h.Status, h.DecidedVia, h.DecidedBy) ? $"Hiring {h.Name} as {h.Role} was withdrawn"
+                    : $"{h.Name} was not hired as {h.Role}",
                 NotificationKinds.Verdict when Keyed(n, "verdict:") is { } id && ideas.TryGetValue(id, out var i) => i.Status switch
                 {
                     IdeaStatuses.Building => $"{Who(i.DecidedBy)} chose to build: {ReadModels.IdeaTitle(i.Text)}",

@@ -32,6 +32,13 @@ public sealed class GatewayContext(EndgameDbContext db, ScopeResolver scopes, Ru
 
             employeeId ??= run.EmployeeId;
             lease = run.LeaseExpiresAt;
+
+            // A build moves to the app it builds once it is placed (D80); a Runner that started it still names the scope it
+            // was started at. The call is the run's work, so it is charged — and capped — where the run now is.
+            if (Narrower(run, resolved))
+            {
+                resolved = await scopes.ForRowAsync(run.OrganisationId, run.DivisionId, run.ProjectId, run.AppId, cancellationToken);
+            }
         }
 
         if (employeeId is { } employee
@@ -42,6 +49,13 @@ public sealed class GatewayContext(EndgameDbContext db, ScopeResolver scopes, Ru
 
         return new Attribution(resolved.OrganisationId, resolved.DivisionId, resolved.ProjectId, resolved.AppId, employeeId, runId, resolved.Path.ToString(), lease);
     }
+
+    /// <summary>True when the run sits beneath <paramref name="scope"/>, on its own branch.</summary>
+    private static bool Narrower(Persistence.Records.RunRecord run, ResolvedScope scope) =>
+        (run.DivisionId, run.ProjectId, run.AppId) != (scope.DivisionId, scope.ProjectId, scope.AppId)
+        && (scope.DivisionId == null || scope.DivisionId == run.DivisionId)
+        && (scope.ProjectId == null || scope.ProjectId == run.ProjectId)
+        && (scope.AppId == null || scope.AppId == run.AppId);
 
     public Task MarkBudgetExhaustedAsync(Guid organisationId, Guid runId, CancellationToken cancellationToken) =>
         runs.MarkBudgetExhaustedAsync(organisationId, runId, cancellationToken);

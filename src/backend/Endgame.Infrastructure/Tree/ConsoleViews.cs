@@ -21,13 +21,25 @@ public sealed record WorkerView(Guid Id, string Name, string Role, string Kind, 
 // never works it out itself. Archived marks a division, project or app that is archived: kept, not served.
 
 /// <param name="Role">The viewer's effective role at the organisation itself; null when their grants all sit lower.</param>
-public sealed record OrganisationNodeView(Guid Id, string Slug, string Name, string? Summary, SpendView Spend, IReadOnlyList<WorkerView> Workers, string? Role = null);
+/// <param name="NeverToppedUp">True while the organisation has never been topped up: it has no credits, so its first piece of work waits for budget (D63).</param>
+public sealed record OrganisationNodeView(Guid Id, string Slug, string Name, string? Summary, SpendView Spend, IReadOnlyList<WorkerView> Workers, string? Role = null,
+    bool NeverToppedUp = false);
 
 public sealed record DivisionNodeView(Guid Id, string Slug, string Name, SpendView Spend, IReadOnlyList<WorkerView> Workers, IReadOnlyList<ProjectNodeView> Projects,
     string? Role = null, bool Archived = false);
 
 public sealed record ProgressView(Guid RunId, string Label, int Step, int Of, decimal SpentCredits, decimal? EstimatedCredits);
 
+/// <summary>
+/// An app (or the project holding it) whose build ended without anything ever being published (D81): kept, not deleted, so
+/// "Try again" still works, and said plainly so it does not read as live.
+/// </summary>
+/// <param name="Reason"><c>cancelled</c>, <c>failed</c>, <c>budget</c> or <c>plan-declined</c>: why the build stopped.</param>
+/// <param name="Note">The line to show, for example "Not built — the build was cancelled."</param>
+/// <param name="RunId">The build that stopped: the run "Try again" starts from.</param>
+public sealed record NotBuiltView(string Reason, string Note, Guid RunId, Guid? IdeaId);
+
+/// <param name="Stage"><c>researching</c>, <c>building</c>, <c>reviewing</c>, <c>live</c>, <c>planning</c>, <c>paused</c> or <c>not-built</c> (its build stopped before anything was published; see <paramref name="NotBuilt"/>).</param>
 public sealed record ProjectNodeView(
     Guid Id,
     string Slug,
@@ -40,11 +52,15 @@ public sealed record ProjectNodeView(
     IReadOnlyList<WorkerView> Workers,
     IReadOnlyList<AppNodeView> Apps,
     string? Role = null,
-    bool Archived = false);
+    bool Archived = false,
+    NotBuiltView? NotBuilt = null);
 
 /// <param name="Access">private, shared or public, resolved down the cascade.</param>
 /// <param name="SharedWith">How many addresses the app is shared with.</param>
 /// <param name="VisitsToday">Page visits today (UTC) from the app's own telemetry. Null until the app has reported anything: unknown, never zero.</param>
+/// <param name="Health"><c>healthy</c>, <c>degraded</c>, <c>down</c>, <c>unknown</c>, or <c>paused</c> while Edge serves its holding page (see <paramref name="Paused"/>).</param>
+/// <param name="Paused">Why Edge is serving the holding page instead of the app, exactly as Edge serves it (D66); null when it is not paused.</param>
+/// <param name="NotBuilt">Its build stopped before anything was published (D81); null otherwise.</param>
 public sealed record AppNodeView(
     Guid Id,
     string Slug,
@@ -58,7 +74,14 @@ public sealed record AppNodeView(
     SpendView Spend,
     IReadOnlyList<WorkerView> Workers,
     string? Role = null,
-    bool Archived = false);
+    bool Archived = false,
+    PausedView? Paused = null,
+    NotBuiltView? NotBuilt = null);
+
+/// <summary>Why an app is paused behind Edge's holding page (D66): the routing table's own reason, in words.</summary>
+/// <param name="Reason"><c>budget_exhausted</c> (a monthly budget on its chain is spent) or <c>overdraft_limit</c> (the organisation reached its overdraft limit).</param>
+/// <param name="Note">For example "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it."</param>
+public sealed record PausedView(string Reason, string Note);
 
 public sealed record VerdictNeed(string Kind, Guid Id, Guid IdeaId, string Title, string Verdict, string? Detail);
 
@@ -154,6 +177,9 @@ public sealed record AppSettingsView(string Running, string Access);
 /// prices, each with what it assumes; or <c>state: not-enough-history</c> (under 24 hours measured) with no figures. Never null.
 /// </param>
 /// <param name="EndUsers">How many end users have registered for the app (members who open it are not counted).</param>
+/// <param name="Health"><c>state</c> is <c>healthy</c>, <c>degraded</c>, <c>down</c>, <c>unknown</c>, or <c>paused</c> while Edge serves its holding page; <c>summary</c> says why.</param>
+/// <param name="Paused">Why Edge serves the holding page instead of the app (D66), exactly as Edge serves it; null when it is not paused.</param>
+/// <param name="NotBuilt">Its build stopped before anything was published (D81); null otherwise.</param>
 public sealed record PublicAppView(
     Guid Id,
     string Name,
@@ -170,7 +196,9 @@ public sealed record PublicAppView(
     string Status,
     string? Version,
     DateTimeOffset? PublishedAt,
-    int IdleMinutes);
+    int IdleMinutes,
+    PausedView? Paused = null,
+    NotBuiltView? NotBuilt = null);
 
 /// <param name="EmployeeId">On an employee's row: the employee, whose cap is set on its own record.</param>
 /// <param name="SpentCredits">On an employee's row: its own spend and that of the contractors it briefs, which its cap also covers.</param>
@@ -204,6 +232,7 @@ public sealed record OverdraftView(decimal FrostauraLimit, decimal? OwnLimit, IR
 public sealed record TopUpView(DateTimeOffset At, decimal Credits, string Note);
 
 /// <summary><c>GET /api/credits?scope=</c>.</summary>
+/// <param name="NeverToppedUp">True while the organisation has never been topped up: it has no credits until FrostAura tops it up, so its first piece of work waits for budget (D63).</param>
 public sealed record CreditsView(
     string Scope,
     decimal Balance,
@@ -215,7 +244,8 @@ public sealed record CreditsView(
     OverdraftView? Overdraft,
     IReadOnlyList<TopUpView> TopUps,
     decimal HeldCredits,
-    decimal Available);
+    decimal Available,
+    bool NeverToppedUp = false);
 
 /// <param name="By">Who said it, by name: the person who sent it, or the employee who answered; null for Endgame's own assistant.</param>
 /// <param name="Code">A machine-readable reason on Endgame's own notices, such as <c>budget_exhausted</c>.</param>

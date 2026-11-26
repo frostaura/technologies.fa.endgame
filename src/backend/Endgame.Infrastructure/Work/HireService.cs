@@ -16,9 +16,11 @@ namespace Endgame.Infrastructure.Work;
 public sealed record HireDecisionView(string Via, string By, DateTimeOffset At, string? Note);
 
 /// <summary>A hire proposal as the console shows it: the drafted job description, the expected monthly cost and why, and whether it fits the budget now.</summary>
-/// <param name="Status"><c>proposed</c>, <c>accepted</c> or <c>declined</c>.</param>
+/// <param name="Status"><c>proposed</c>, <c>accepted</c> or <c>declined</c>; in the answer to a raise only, <c>covered</c> (see <see cref="HireRaised"/>).</param>
 /// <param name="Trigger"><c>division</c>, <c>stage</c>, <c>recurring</c>, <c>promotion</c> or <c>owner</c>.</param>
 /// <param name="RaisedBy"><c>person</c> or <c>runner</c>.</param>
+/// <param name="ExpectedMonthlyCredits">What it should cost a month: never more than its own budget (<c>jobDescription.monthlyCreditLimit</c>) when it has one.</param>
+/// <param name="Withdrawn">Declined by the platform, not by a person: the work it was for stopped before anything was built (D81). <c>decision.note</c> says why.</param>
 public sealed record HireView(
     Guid Id,
     string Status,
@@ -38,7 +40,8 @@ public sealed record HireView(
     Guid? RaisedByRunId,
     HireDecisionView? Decision,
     Guid? EmployeeId,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool Withdrawn = false);
 
 /// <summary>A need for a hire: the drafted job description, what it should cost a month and why.</summary>
 public sealed record HireInput(
@@ -53,7 +56,12 @@ public sealed record HireInput(
     string? ContractorRole);
 
 /// <summary>The proposal, and whether this call created it (false: the same need was already raised).</summary>
-public sealed record HireRaised(HireView Hire, bool Created);
+/// <param name="CoveredBy">
+/// The factory raised a need that someone already covers (D22, D70): an employee with that role works at the need's level or
+/// above it, so their "works at … and everything beneath it" reaches it. Nothing is proposed; <c>hire</c> then has status
+/// <c>covered</c>, its <c>id</c> and <c>employeeId</c> are that employee's, and the work is theirs.
+/// </param>
+public sealed record HireRaised(HireView Hire, bool Created, EmployeeView? CoveredBy = null);
 
 /// <summary>
 /// Hiring (spec: <i>hiring is triggered by the ontology</i>). A need is raised by the Runner or the
@@ -94,12 +102,25 @@ public sealed class HireService(
         }
 
         session.UseOrganisation(scope.OrganisationId);
-        if (needKey is not null && await ExistingAsync(scope.OrganisationId, needKey, cancellationToken) is { } existing)
+        var existing = needKey is null ? null : await ExistingAsync(scope.OrganisationId, needKey, cancellationToken);
+        if (existing is { Status: HireStatuses.Accepted })
         {
             return new HireRaised(await ViewAsync(existing, cancellationToken), false);
         }
 
-        if (input.ExpectedMonthlyCredits is not { } expected || expected < 0)
+        // The factory's needs are met from the chain above first (D22, D70): nobody is proposed for work someone already covers.
+        if (byUser is null && trigger is HireTriggers.Stage or HireTriggers.Division or HireTriggers.Recurring
+            && await CoveringAsync(scope, input.Role, cancellationToken) is { } covering)
+        {
+            return await CoveredAsync(scope, covering, needKey, cancellationToken);
+        }
+
+        if (existing is not null)
+        {
+            return new HireRaised(await ViewAsync(existing, cancellationToken), false);
+        }
+
+        if (input.ExpectedMonthlyCredits is not { } asked || asked < 0)
         {
             throw EndgameProblem.Invalid("expectedMonthlyCredits is what the employee should cost a month, in credits (0 or more): shown before anyone accepts it.");
         }
@@ -113,6 +134,8 @@ public sealed class HireService(
         var job = input.JobDescription ?? new JobDescriptionInput(null, null, null, null, null);
         var draft = employees.NewEmployee(scope, input.Name ?? "", input.Role ?? "", job, input.ReportsTo);
         await employees.RequireManagerAsync(scope.OrganisationId, draft.Id, input.ReportsTo, cancellationToken);
+        // A hire with a budget of its own never costs more than it (a recurring role's cost so far can be higher).
+        var expected = Capped(asked, draft.MonthlyCreditLimit);
         var reason = input.Reason?.Trim() ?? "";
         if (reason.Length is 0 or > 4000)
         {
@@ -251,7 +274,7 @@ public sealed class HireService(
         row.MonthlyCreditLimit = draft.MonthlyCreditLimit;
         row.ModelTier = draft.ModelTier;
         row.ReportsToId = reportsTo;
-        row.ExpectedMonthlyCredits = edit.ExpectedMonthlyCredits ?? row.ExpectedMonthlyCredits;
+        row.ExpectedMonthlyCredits = Capped(edit.ExpectedMonthlyCredits ?? row.ExpectedMonthlyCredits, draft.MonthlyCreditLimit);
         row.Reason = edit.Reason?.Trim() is { Length: > 0 } reason ? reason : row.Reason;
         row.UpdatedAt = clock.GetUtcNow();
         await db.SaveChangesAsync(cancellationToken);
@@ -356,6 +379,68 @@ public sealed class HireService(
         return (await employees.GetAsync(organisationId, contractorId, cancellationToken), written, promotion);
     }
 
+    /// <summary>The expected monthly cost, held to the hire's own budget when it has one and that is lower.</summary>
+    public static decimal Capped(decimal expected, decimal? monthlyCreditLimit) =>
+        monthlyCreditLimit is { } limit && limit < expected ? limit : expected;
+
+    /// <summary>
+    /// The rule for a need the factory raises (assumption A-?? in docs/assumptions-log.md): before anyone is proposed, look up
+    /// the chain from the need's level. An employee on the payroll with that role who works at that level or above it — their
+    /// "works at … and everything beneath it" reaches the need — does the work; nobody is proposed. A sibling's employee (the
+    /// engineer of another project) does not reach it. The nearest one wins, then the longest serving.
+    /// </summary>
+    public async Task<EmployeeRecord?> CoveringAsync(ResolvedScope scope, string? role, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var wanted = role?.Trim();
+        if (string.IsNullOrEmpty(wanted))
+        {
+            return null;
+        }
+
+        session.UseOrganisation(scope.OrganisationId);
+        var candidates = await db.Employees.AsNoTracking()
+            .Where(e => e.OrganisationId == scope.OrganisationId && e.Kind == EmployeeKinds.Employee && e.Status != EmployeeStatuses.Released)
+            .Where(e => (e.DivisionId == null || e.DivisionId == scope.DivisionId) && (e.ProjectId == null || e.ProjectId == scope.ProjectId) && (e.AppId == null || e.AppId == scope.AppId))
+            .OrderBy(e => e.CreatedAt).ThenBy(e => e.Id)
+            .ToListAsync(cancellationToken);
+        return candidates
+            .Where(e => string.Equals(e.Role.Trim(), wanted, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(e => e.AppId is not null ? 3 : e.ProjectId is not null ? 2 : e.DivisionId is not null ? 1 : 0)
+            .FirstOrDefault();
+    }
+
+    /// <summary>A need someone already covers: nothing is proposed, and an open proposal for the same need is withdrawn.</summary>
+    private async Task<HireRaised> CoveredAsync(ResolvedScope scope, EmployeeRecord covering, string? needKey, CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow();
+        if (needKey is not null)
+        {
+            session.UseOrganisation(scope.OrganisationId);
+            await db.HireProposals
+                .Where(h => h.OrganisationId == scope.OrganisationId && h.NeedKey == needKey && h.Status == HireStatuses.Proposed)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(h => h.Status, HireStatuses.Declined)
+                    .SetProperty(h => h.DecidedVia, IdeaDecisions.ByAutoMode)
+                    .SetProperty(h => h.DecidedBy, (Guid?)null)
+                    .SetProperty(h => h.DecidedAt, now)
+                    .SetProperty(h => h.DecisionNote, $"Withdrawn: {covering.Name} already does this work here.")
+                    .SetProperty(h => h.UpdatedAt, now), cancellationToken);
+        }
+
+        var employee = await employees.GetAsync(scope.OrganisationId, covering.Id, cancellationToken);
+        var hire = new HireView(covering.Id, HireCovered, HireTriggers.Stage, needKey, employee.Scope, $"{covering.Name} already works here as {covering.Role}.", covering.Name, covering.Role,
+            employee.JobDescription, employee.ReportsTo, 0m, true, 0m, null, "runner", null, null, covering.Id, covering.CreatedAt);
+        return new HireRaised(hire, false, employee);
+    }
+
+    /// <summary>The status a raise answers with when someone already covers the need; never stored.</summary>
+    public const string HireCovered = "covered";
+
+    /// <summary>True for a proposal the platform withdrew (declined with no person deciding), never for a person's decline.</summary>
+    public static bool IsWithdrawn(string status, string? decidedVia, Guid? decidedBy) =>
+        status == HireStatuses.Declined && decidedVia == IdeaDecisions.ByAutoMode && decidedBy is null;
+
     private async Task<decimal> HeadroomAsync(ResolvedScope scope, CancellationToken cancellationToken) =>
         (await ledger.PositionAsync(scope, null, clock.GetUtcNow(), cancellationToken)).Headroom().Credits;
 
@@ -386,7 +471,8 @@ public sealed class HireService(
         HireDecisionView? decision = null;
         if (h.DecidedAt is { } at)
         {
-            var by = h.DecidedVia == IdeaDecisions.ByAutoMode
+            var by = IsWithdrawn(h.Status, h.DecidedVia, h.DecidedBy) ? "Endgame"
+                : h.DecidedVia == IdeaDecisions.ByAutoMode
                 ? "auto-mode"
                 : await db.Users.AsNoTracking().Where(u => u.Id == h.DecidedBy).Select(u => u.DisplayName).SingleOrDefaultAsync(cancellationToken) ?? "";
             decision = new HireDecisionView(h.DecidedVia ?? IdeaDecisions.ByPerson, by, at, h.DecisionNote);
@@ -396,6 +482,6 @@ public sealed class HireService(
         return new HireView(h.Id, h.Status, h.Trigger, h.NeedKey, path, h.Reason, h.Name, h.Role,
             new JobDescriptionView(h.Mandate, path, h.Tools, h.Services, h.MonthlyCreditLimit, h.ModelTier), manager,
             h.ExpectedMonthlyCredits, h.ExpectedMonthlyCredits <= headroom, headroom, h.ContractorRole,
-            h.RaisedByUserId is null ? "runner" : "person", h.RaisedByRunId, decision, h.EmployeeId, h.CreatedAt);
+            h.RaisedByUserId is null ? "runner" : "person", h.RaisedByRunId, decision, h.EmployeeId, h.CreatedAt, IsWithdrawn(h.Status, h.DecidedVia, h.DecidedBy));
     }
 }
