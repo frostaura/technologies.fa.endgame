@@ -17,7 +17,10 @@ What to do, in this order:
    requirement promises. Use two members (member-a and member-b) when a requirement is about whose data is
    whose, and role admin when it is something only an administrator does. Paths are relative to the app
    ("api/bookings"), no leading slash. check_preview calls it SIGNED OUT, to confirm that what needs signing
-   in answers 401. For an incoming endpoint a device calls (a webhook at hooks/<name>), read its MapWebhook
+   in answers 401 — and to show a requirement for people who do not sign in ("with no account", "without
+   signing in"): that one is shown ONLY with check_preview calls, cited as METHOD path like any other. In
+   evidence, write each call's real path, or the path with placeholders for the ids it made
+   (PUT api/trips/{tripId}/items/{itemId}). For an incoming endpoint a device calls (a webhook at hooks/<name>), read its MapWebhook
    line for the name, header, scheme and secret name, then use call_webhook: the platform signs it. For an
    e-mail the app sends, make the call that should send it, then read sent_emails. Cite these as METHOD path too
    (POST hooks/court-status; POST api/bookings then sent_emails shows the confirmation). A requirement you cannot show in the running app is NOT met — a passing test or a file

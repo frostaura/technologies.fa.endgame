@@ -125,7 +125,16 @@ probe. Now (`PlanContract.Faults(idea)`, `ProposePlanTool(idea)`, `EvaluationGat
 | Item text and the summary are plain words; files and endpoints go in `detail`. | `propose_plan` refuses (`OwnerText`). |
 | The evaluator shows each requirement its item covers working in the **running** app, signed in as a test member (`call_app`: a session from `POST /internal/apps/{id}/test-session`, the call through Edge's `/internal/apps/{id}/call/{path}`), and cites those calls as `METHOD path`. | Code's gate reads the calls the evaluator made from the run log and fails an item whose every requirement is not marked met with evidence naming a call that was made, or that never called the app at all, whatever the evaluator wrote. The failure goes to repair, unbilled, one tier up. |
 
-`check_preview` remains, signed out, to confirm that what needs signing in answers 401. Two requirements cannot be shown
+`check_preview` remains, signed out, to confirm that what needs signing in answers 401 — and it is the only way to show
+a requirement for people who do not sign in (R2-11; `PlanRequirement.NeedsNoSignIn`: "with no account", "without
+signing in"). The planner keeps such a requirement and builds it to work signed out; `propose_plan` refuses an item
+covering one whose check does not say it is made signed out, and the plan tells the owner it works for those people
+once they make the app public (ARCH-005, *Who may open an app*). The gate counts the evaluator's signed-out calls
+(read back from `check_preview`'s results, `… — METHOD path signed out`) for every requirement of such a part, and
+for a no-sign-in requirement only those. Evidence may name a call by its path with placeholders for the ids it made
+(`PUT api/trips/{tripId}/items/{itemId}`). Before this, both real builds of a dive-club packing list failed that part
+after three free repair rounds: the evaluator had shown it working signed out (201), but only signed-in calls counted
+and its `{token}` paths matched nothing. Two requirements cannot be shown
 by a signed-in call alone, and the live club build failed on both until the evaluator had: `call_webhook` (a declared
 webhook called as its device would, signed by the control plane with the vault's secret, which the evaluator never
 holds; counted by the gate like a `call_app` call) and `sent_emails` (what the app asked the platform to send). The

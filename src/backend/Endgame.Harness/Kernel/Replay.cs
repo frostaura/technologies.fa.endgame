@@ -50,6 +50,7 @@ public static class Replay
                             break;
                         case MessageKinds.AgentReply:
                             state.Steps++;
+                            state.RetryingCutOff = false;
                             ApplyAccounting(state, p["accounting"] as JsonObject);
                             if (p["assistant"] is JsonObject reply)
                             {
@@ -62,6 +63,9 @@ public static class Replay
                                 state.StopReason = state.EverEdited ? StopReasons.Completed : StopReasons.CompletedNoEdits;
                             }
 
+                            break;
+                        case MessageKinds.ReplyCutOff:
+                            ApplyCutOff(state, p["accounting"] as JsonObject, Json.Bool(p, "retry") == true);
                             break;
                         case MessageKinds.Nudge:
                             ApplyNudge(state, Json.Str(p, "source") ?? "", Json.Str(p, "nudge") ?? Json.Str(p, "text") ?? "");
@@ -88,6 +92,7 @@ public static class Replay
                     if (p["assistant"] is JsonObject assistant)
                     {
                         state.Steps++;
+                        state.RetryingCutOff = false;
                         ApplyAccounting(state, p["accounting"] as JsonObject);
                         state.Messages.Add(assistant.DeepClone());
                         pending.Clear();
@@ -217,6 +222,16 @@ public static class Replay
         ArgumentNullException.ThrowIfNull(state);
         state.Messages = Compactor.Apply(state.Messages, head, cut, summaryMessage);
         state.Compactions++;
+    }
+
+    /// <summary>A structured reply cut off at its output limit (R2-6): a step taken, nothing added to the conversation, and the next call the one retry.</summary>
+    public static void ApplyCutOff(AgentState state, JsonObject? accounting, bool retrying)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        state.Steps++;
+        state.CutOffs++;
+        state.RetryingCutOff = retrying;
+        ApplyAccounting(state, accounting);
     }
 
     public static void ApplyAccounting(AgentState state, JsonObject? accounting)

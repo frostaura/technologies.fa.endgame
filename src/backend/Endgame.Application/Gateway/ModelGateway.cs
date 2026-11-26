@@ -283,6 +283,10 @@ public sealed class ModelGateway(
 
             body["response_format"] = request.ResponseFormat.DeepClone();
         }
+        else if (request.PreferJson && tools.Count == 0 && All("response_format"))
+        {
+            body["response_format"] = new JsonObject { ["type"] = "json_object" };
+        }
 
         if (request.Temperature is { } temperature)
         {

@@ -144,6 +144,11 @@ public sealed class GatewayModelClient(HttpClient http, bool stream = true) : IM
             body["toolChoice"] = call.ToolChoice;
         }
 
+        if (call.PreferJson)
+        {
+            body["preferJson"] = true;
+        }
+
         if (call.ProviderOrder is { Count: > 0 } order)
         {
             // Needs the control plane to pass it on as provider.order (see the lane report).

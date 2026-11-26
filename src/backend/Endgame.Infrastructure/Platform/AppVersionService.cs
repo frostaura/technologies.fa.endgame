@@ -20,7 +20,15 @@ namespace Endgame.Infrastructure.Platform;
 /// <param name="Id">The employee's or the person's id, when known.</param>
 public sealed record VersionAuthor(string Kind, Guid? Id, string Name);
 
-public sealed record AppVersionView(string Commit, string Message, DateTimeOffset At, VersionAuthor Author, bool Live);
+/// <summary>One version of an app, as History lists it (R2-4).</summary>
+/// <param name="Commit">The commit it was built from.</param>
+/// <param name="Message">The commit's own message, for technical mode.</param>
+/// <param name="Title">What it is in plain words, for normal mode: what the person asked for when the change or build that
+/// published it was started; "Brought back an earlier version" for a restore.</param>
+/// <param name="RunId">The build or change that published it, when one did.</param>
+/// <param name="Live">The running app was built from it.</param>
+/// <param name="Current">It is the app's newest version (published or not, after a failed publish of a restore).</param>
+public sealed record AppVersionView(string Commit, string Message, DateTimeOffset At, VersionAuthor Author, bool Live, string Title = "", Guid? RunId = null, bool Current = false);
 
 /// <param name="Live">The commit the running app was built from, or null before it was published.</param>
 public sealed record AppVersionsView(Guid AppId, string? Live, IReadOnlyList<AppVersionView> Versions, bool HasMore);
@@ -45,16 +53,73 @@ public sealed class AppVersionService(
 {
     public const string FactoryAuthor = "factory@";
 
+    /// <summary>
+    /// The app's versions, newest first (R2-4): only those that were live — each build or change that published, each
+    /// restore — and the newest one. A run's own commits, its progress bookkeeping and a failed or cancelled change's work
+    /// are not versions of the app: they are never listed, and never marked "Live now" (that is the published version, by
+    /// its plain title). Versions published before run branches existed are recognised from the publish their run recorded.
+    /// </summary>
     public async Task<AppVersionsView> ListAsync(ResolvedScope app, int skip, int limit, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(app);
-        var log = await dock.LogAsync(app.AppId!.Value, Math.Max(0, skip), Math.Clamp(limit, 1, 200), cancellationToken);
+        var appId = app.AppId!.Value;
+        skip = Math.Max(0, skip);
+        limit = Math.Clamp(limit, 1, 200);
         session.UseOrganisation(app.OrganisationId);
         var live = await db.Apps.AsNoTracking().Where(a => a.OrganisationId == app.OrganisationId && a.Id == app.AppId).Select(a => a.CurrentVersion).SingleOrDefaultAsync(cancellationToken);
-        var authors = await AuthorsAsync(app.OrganisationId, log.Commits, cancellationToken);
-        return new AppVersionsView(app.AppId.Value, live,
-            log.Commits.Select(c => new AppVersionView(c.Id, c.Message.Trim(), c.At, authors[c.Id], IsLive(c.Id, live))).ToList(), log.HasMore);
+        var runs = await db.Runs.AsNoTracking().Where(r => r.OrganisationId == app.OrganisationId && r.AppId == appId).Select(r => new { r.Id, r.Title }).ToListAsync(cancellationToken);
+        var titles = runs.ToDictionary(r => r.Id, r => r.Title);
+        var ids = runs.Select(r => r.Id).ToArray();
+        var published = (await db.Database.SqlQuery<PublishedCommit>($"""
+                SELECT run_id AS "RunId", payload->'data'->>'commit' AS "Commit"
+                FROM run_events
+                WHERE organisation_id = {app.OrganisationId} AND run_id = ANY({ids}) AND type = 'message'
+                  AND payload->>'kind' = 'workflow.step' AND payload->>'step' = 'publish' AND (payload->'data'->>'started')::boolean
+                """).ToListAsync(cancellationToken))
+            .Where(p => p.Commit is { Length: >= 7 })
+            .GroupBy(p => p.Commit!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().RunId, StringComparer.OrdinalIgnoreCase);
+
+        var kept = new List<CommitInfo>();
+        var newest = (string?)null;
+        var more = true;
+        for (int page = 0, from = 0; page < MaxLogPages && kept.Count <= skip + limit; page++, from += 200)
+        {
+            var log = await dock.LogAsync(appId, from, 200, cancellationToken);
+            newest ??= log.Commits.FirstOrDefault()?.Id;
+            kept.AddRange(log.Commits.Where(c => IsLive(c.Id, live) || WasPublished(c, published)));
+            if (!log.HasMore)
+            {
+                more = kept.Count > skip + limit;
+                break;
+            }
+        }
+
+        var shown = kept.Skip(skip).Take(limit).ToList();
+        session.UseOrganisation(app.OrganisationId);
+        var authors = await AuthorsAsync(app.OrganisationId, shown, cancellationToken);
+        return new AppVersionsView(appId, live, shown.Select(c =>
+        {
+            var run = RunBranches.RunOf(c.Message) ?? (published.TryGetValue(c.Id, out var r) ? r : null);
+            var title = run is { } id && titles.TryGetValue(id, out var t) ? VersionTitles.FromRun(t)
+                : IsRestore(c.Message) ? VersionTitles.Restored
+                : VersionTitles.FromMessage(c.Message);
+            return new AppVersionView(c.Id, c.Message.Trim(), c.At, authors[c.Id], IsLive(c.Id, live), title, run, c.Id == newest);
+        }).ToList(), more);
     }
+
+    /// <summary>The most of the line read for one page of History: 2,000 commits.</summary>
+    private const int MaxLogPages = 10;
+
+    private sealed record PublishedCommit(Guid RunId, string? Commit);
+
+    private static bool WasPublished(CommitInfo commit, IReadOnlyDictionary<string, Guid> published) =>
+        RunBranches.RunOf(commit.Message) is not null || IsRestore(commit.Message) || published.ContainsKey(commit.Id);
+
+    private static bool IsRestore(string message) => message.StartsWith(RestorePrefix, StringComparison.Ordinal);
+
+    /// <summary>How a restore's commit message begins (Dock's default, and the message this service sends).</summary>
+    public const string RestorePrefix = "Restore the version ";
 
     /// <summary>
     /// Makes <paramref name="commit"/>'s code the newest version, as a new commit by the person, then
@@ -70,7 +135,7 @@ public sealed class AppVersionService(
         }
 
         var appId = app.AppId!.Value;
-        var restored = await dock.RestoreAsync(appId, new RestoreRequest(commit, by.DisplayName, by.Email ?? "", $"Restore the version {commit[..Math.Min(12, commit.Length)]}"), cancellationToken);
+        var restored = await dock.RestoreAsync(appId, new RestoreRequest(commit, by.DisplayName, by.Email ?? "", $"{RestorePrefix}{commit[..Math.Min(12, commit.Length)]}"), cancellationToken);
 
         var madePrivate = false;
         if (await identity.AccessOfAsync(app, cancellationToken) == AppAccess.Public)
@@ -97,7 +162,7 @@ public sealed class AppVersionService(
 
         session.UseOrganisation(app.OrganisationId);
         var authors = await AuthorsAsync(app.OrganisationId, [restored], cancellationToken);
-        return new RestoreResult(new AppVersionView(restored.Id, restored.Message.Trim(), restored.At, authors[restored.Id], published), published, madePrivate, error);
+        return new RestoreResult(new AppVersionView(restored.Id, restored.Message.Trim(), restored.At, authors[restored.Id], published, VersionTitles.Restored, null, true), published, madePrivate, error);
     }
 
     /// <summary>
@@ -130,7 +195,10 @@ public sealed class AppVersionService(
         session.UseOrganisation(app.OrganisationId);
         var live = await db.Apps.AsNoTracking().Where(a => a.OrganisationId == app.OrganisationId && a.Id == appId).Select(a => a.CurrentVersion).SingleOrDefaultAsync(cancellationToken);
         var authors = await AuthorsAsync(app.OrganisationId, [newest], cancellationToken);
-        return new RestoreResult(new AppVersionView(newest.Id, newest.Message.Trim(), newest.At, authors[newest.Id], published || IsLive(newest.Id, live)), published, false, error);
+        var title = RunBranches.RunOf(newest.Message) is { } run && await db.Runs.AsNoTracking().Where(r => r.OrganisationId == app.OrganisationId && r.Id == run).Select(r => r.Title).SingleOrDefaultAsync(cancellationToken) is { } t
+            ? VersionTitles.FromRun(t)
+            : IsRestore(newest.Message) ? VersionTitles.Restored : VersionTitles.FromMessage(newest.Message);
+        return new RestoreResult(new AppVersionView(newest.Id, newest.Message.Trim(), newest.At, authors[newest.Id], published || IsLive(newest.Id, live), title, RunBranches.RunOf(newest.Message), true), published, false, error);
     }
 
     /// <summary>
@@ -263,4 +331,36 @@ public sealed class AppVersionService(
         var at = email.IndexOf('@', StringComparison.Ordinal);
         return at == 32 && Guid.TryParseExact(email[..at], "N", out var id) ? id : null;
     }
+}
+
+/// <summary>A version's plain title (R2-4): what the person asked for, never a commit message in normal mode.</summary>
+public static class VersionTitles
+{
+    public const string Restored = "Brought back an earlier version";
+
+    private static readonly string[] RunPrefixes = ["Change: ", "Build: "];
+
+    /// <summary>The run's title without its kind ("Change: Show how many books…" → "Show how many books…").</summary>
+    public static string FromRun(string title)
+    {
+        var text = (title ?? "").Trim();
+        foreach (var prefix in RunPrefixes)
+        {
+            if (text.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                text = text[prefix.Length..].Trim();
+            }
+        }
+
+        return Clip(text.Length > 0 ? text : "A new version");
+    }
+
+    /// <summary>A version no run names (the first one, or one made by hand): its message's first line.</summary>
+    public static string FromMessage(string message)
+    {
+        var first = (message ?? "").Split('\n')[0].Trim();
+        return Clip(first.Length > 0 ? first : "A new version");
+    }
+
+    private static string Clip(string text) => text.Length <= 200 ? text : text[..197].TrimEnd() + "...";
 }

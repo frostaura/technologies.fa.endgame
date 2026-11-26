@@ -14,6 +14,16 @@ public interface IPlatformCosts
     Task RecordAsync(PlatformCost cost, CancellationToken cancellationToken);
 }
 
+/// <summary>What every caller that reads a model's answer as JSON checks (R2-6).</summary>
+public static class StructuredReplies
+{
+    /// <summary>OpenRouter's <c>finish_reason</c> when the answer stopped at its output limit: whatever it was writing is incomplete.</summary>
+    public const string CutOff = "length";
+
+    /// <summary>The finish reason of a chat completion body, or null.</summary>
+    public static string? FinishReason(System.Text.Json.Nodes.JsonNode? body) => body?["choices"]?[0]?["finish_reason"]?.ToString();
+}
+
 /// <summary>A platform call's answer: the assistant's text, the model that gave it, the cost in dollars, and why it stopped.</summary>
 /// <param name="FinishReason">OpenRouter's <c>finish_reason</c>: <c>stop</c>, or <c>length</c> when the answer was cut at the token limit.</param>
 public sealed record PlatformReply(string Content, string? Model, string? GenerationId, decimal CostUsd, string? FinishReason = null);

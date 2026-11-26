@@ -41,16 +41,24 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
         Assert.True(program.HasMore);
         Assert.Equal(3, program.Content!.Split('\n').Length);
 
-        // A second version, made the way agents make them: in a workspace, committed back.
+        // A second version, made the way agents make them: in a workspace, committed back — onto the run's own branch, so
+        // the app's line is untouched until the run publishes (R2-4).
         var run = await CreateWorkspaceAsync(app);
         await WriteAsync(run, "NOTES.md", "hello\n");
         var commit = await env.DockAsync<WorkspaceCommitResult>(HttpMethod.Post, $"/internal/workspaces/{run:D}/commit", new WorkspaceCommitRequest("Add notes", Author, AuthorEmail));
         await DestroyWorkspaceAsync(run);
+        Assert.Equal([created.Head], (await env.DockAsync<CommitLog>(HttpMethod.Get, $"/internal/repos/{app:D}/log")).Commits.Select(c => c.Id));
 
+        // Published: one version on the line, titled with what was asked for; the run's own commit sits behind it.
+        var published = await env.DockAsync<CommitInfo>(HttpMethod.Post, $"/internal/repos/{app:D}/runs/{run:D}/publish", new PublishRunRequest("Keep notes", "Endgame factory", "factory@endgame.test"));
+        Assert.Equal([created.Head, commit.CommitId], published.Parents);
+        Assert.StartsWith("Keep notes\n\nEndgame-Run: ", published.Message, StringComparison.Ordinal);
         var log = await env.DockAsync<CommitLog>(HttpMethod.Get, $"/internal/repos/{app:D}/log");
-        Assert.Equal([commit.CommitId, created.Head], log.Commits.Select(c => c.Id));
+        Assert.Equal([published.Id, created.Head], log.Commits.Select(c => c.Id));
+        var atPublished = await env.DockAsync<FilePage>(HttpMethod.Get, $"/internal/repos/{app:D}/files?path=NOTES.md");
+        Assert.Equal("hello", atPublished.Content);
         var restored = await env.DockAsync<CommitInfo>(HttpMethod.Post, $"/internal/repos/{app:D}/restore", new RestoreRequest(created.Head, "Owner Person", "owner@endgame.test", null));
-        Assert.Equal([commit.CommitId], restored.Parents);
+        Assert.Equal([published.Id], restored.Parents);
         using (var gone = await env.DockAsync(HttpMethod.Get, $"/internal/repos/{app:D}/files?path=NOTES.md"))
         {
             Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
@@ -75,7 +83,7 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     }
 
     [DockerFact]
-    public async Task A_workspace_commit_carries_the_employee_as_author_and_refuses_a_moved_branch()
+    public async Task A_workspace_commit_carries_the_employee_as_author_and_publishing_refuses_a_moved_line()
     {
         var app = Guid.NewGuid();
         await env.DockAsync<RepositoryInfo>(HttpMethod.Post, "/internal/repos", new CreateRepositoryRequest(app));
@@ -89,18 +97,22 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
             await WriteAsync(first, "src/feature.txt", "one");
             var made = await env.DockAsync<WorkspaceCommitResult>(HttpMethod.Post, $"/internal/workspaces/{first:D}/commit", new WorkspaceCommitRequest("Add the feature", Author, AuthorEmail));
             Assert.True(made.Changed);
-            var head = (await env.DockAsync<CommitLog>(HttpMethod.Get, $"/internal/repos/{app:D}/log?limit=1")).Commits.Single();
+            var head = (await env.DockAsync<CommitLog>(HttpMethod.Get, $"/internal/repos/{app:D}/log?ref={RunBranches.Of(first)}&limit=1")).Commits.Single();
             Assert.Equal(made.CommitId, head.Id);
             Assert.Equal(Author, head.AuthorName);
             Assert.Equal(AuthorEmail, head.AuthorEmail);
             Assert.Equal("Add the feature", head.Message);
 
-            // The second workspace started from the old head; its commit must not overwrite the first.
+            // The second run started from the same version and keeps its own branch; whichever publishes second finds the
+            // line moved, and nothing of the first is overwritten.
             await WriteAsync(second, "src/other.txt", "two");
-            using var conflict = await env.DockAsync(HttpMethod.Post, $"/internal/workspaces/{second:D}/commit", new WorkspaceCommitRequest("Other", Author, AuthorEmail));
+            var other = await env.DockAsync<WorkspaceCommitResult>(HttpMethod.Post, $"/internal/workspaces/{second:D}/commit", new WorkspaceCommitRequest("Other", Author, AuthorEmail));
+            Assert.True(other.Changed);
+            var published = await env.DockAsync<CommitInfo>(HttpMethod.Post, $"/internal/repos/{app:D}/runs/{first:D}/publish", new PublishRunRequest("Add the feature", "Endgame factory", "factory@endgame.test"));
+            using var conflict = await env.DockAsync(HttpMethod.Post, $"/internal/repos/{app:D}/runs/{second:D}/publish", new PublishRunRequest("Other", "Endgame factory", "factory@endgame.test"));
             Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
             Assert.Contains("conflict", await conflict.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-            Assert.Equal(made.CommitId, (await env.DockAsync<RepositoryInfo>(HttpMethod.Get, $"/internal/repos/{app:D}")).Head);
+            Assert.Equal(published.Id, (await env.DockAsync<RepositoryInfo>(HttpMethod.Get, $"/internal/repos/{app:D}")).Head);
         }
         finally
         {
@@ -612,7 +624,7 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
         }
 
         var clock = Stopwatch.StartNew();
-        var build = await env.DockAsync<BuildResult>(HttpMethod.Post, $"/internal/apps/{app:D}/build", new BuildRequest(null));
+        var build = await env.DockAsync<BuildResult>(HttpMethod.Post, $"/internal/apps/{app:D}/build", new BuildRequest(RunBranches.Of(run)));
         output.WriteLine($"template build: {clock.Elapsed.TotalSeconds:F0}s");
         var started = await env.DockAsync<AppStatus>(HttpMethod.Post, $"/internal/apps/{app:D}/start", new StartAppRequest(HostingEnvironment.OrganisationId, null, null, null, null));
         Assert.Equal(AppRuntimeState.Running, started.State);

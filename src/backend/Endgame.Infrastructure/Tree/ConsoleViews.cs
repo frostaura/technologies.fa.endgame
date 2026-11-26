@@ -28,7 +28,13 @@ public sealed record OrganisationNodeView(Guid Id, string Slug, string Name, str
 public sealed record DivisionNodeView(Guid Id, string Slug, string Name, SpendView Spend, IReadOnlyList<WorkerView> Workers, IReadOnlyList<ProjectNodeView> Projects,
     string? Role = null, bool Archived = false);
 
-public sealed record ProgressView(Guid RunId, string Label, int Step, int Of, decimal SpentCredits, decimal? EstimatedCredits);
+/// <param name="Step">The step under way, counted from 1 (R2-9: never "step 0"); <paramref name="Of"/> when every step is done; 0 only when the run has no steps.</param>
+/// <param name="Done">The steps finished, for a progress bar.</param>
+public sealed record ProgressView(Guid RunId, string Label, int Step, int Of, decimal SpentCredits, decimal? EstimatedCredits, int Done = 0)
+{
+    /// <summary>The progress of a run with <paramref name="done"/> of <paramref name="of"/> steps finished.</summary>
+    public static (int Step, int Done) Counting(int done, int of) => (of <= 0 ? 0 : Math.Min(done + 1, of), Math.Max(0, done));
+}
 
 /// <summary>
 /// An app (or the project holding it) whose build ended without anything ever being published (D81): kept, not deleted, so
@@ -104,6 +110,9 @@ public sealed record TreeView(DateTimeOffset GeneratedAt, string ViewerRole, Org
 /// <summary>A run as the console reads it. Status words: queued, running, waiting, paused, finished, failed, cancelled.</summary>
 /// <param name="Detail">How it ended, technically (the faults), from its <c>run.finished</c>; for technical mode. Null while it runs or when none was given.</param>
 /// <param name="Reason">Why it ended when that is more than its outcome, for example <c>declined_at_start</c>; null otherwise.</param>
+/// <param name="EstimateCredits">The latest estimate: the re-estimate from the plan once there is one.</param>
+/// <param name="FirstEstimateCredits">The estimate shown before the work began (the run's first <c>estimate.made</c>); null when none was made (R2-8).</param>
+/// <param name="PlanEstimateCredits">The re-estimate from the plan (<c>estimate.made</c> with stage <c>plan</c>), null until the plan is priced (R2-8).</param>
 public sealed record PublicRunView(
     Guid Id,
     string Kind,
@@ -124,7 +133,9 @@ public sealed record PublicRunView(
     DateTimeOffset CreatedAt,
     bool CanTryAgain = false,
     string? Detail = null,
-    string? Reason = null);
+    string? Reason = null,
+    decimal? FirstEstimateCredits = null,
+    decimal? PlanEstimateCredits = null);
 
 public sealed record ResearchView(decimal EstimatedCredits, decimal SpentCredits, string? By);
 

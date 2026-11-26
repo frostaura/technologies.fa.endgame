@@ -57,11 +57,12 @@ public sealed class ResearchWorkflow : IWorkflow
         var screen = run.Journal.Get("screen");
         if (screen is null)
         {
-            var screener = await WorkflowSupport.RunAgentAsync(run, run.Agents.Researcher(run, "red-line-screen", RunnerResources.Prompt("idea-screen", new Dictionary<string, string> { ["idea"] = idea, ["constraints"] = constraints })) with
+            var screener = await WorkflowSupport.RunAgentAsync(run, run.Agents.Answerer(run, "red-line-screen", RunnerResources.Prompt("idea-screen", new Dictionary<string, string> { ["idea"] = idea, ["constraints"] = constraints })) with
             {
                 Title = "Checked the idea against FrostAura's red lines",
                 TaskType = run.Options.SummaryTaskType,
-                Limits = new AgentLimits { MaxSteps = 2, MaxOutputTokens = 1500, MaxSearchesPerCall = 0 },
+                // Room for a reasoning model to think and still answer (R2-6): 1,500 was cut off mid-answer.
+                Limits = new AgentLimits { MaxSteps = 2, MaxOutputTokens = 4000, MaxSearchesPerCall = 0 },
             }, NoWorkspace.Instance, "Screen the idea now and reply with the JSON object.", cancellationToken);
             if (screener.Unreachable)
             {
@@ -140,12 +141,13 @@ public sealed class ResearchWorkflow : IWorkflow
         var context = new VerdictContext(idea, reports.Select(r => r.Strand).ToList(), pool.All, run.Run.Scope);
         JsonObject? verdict = null;
         IReadOnlyList<string> faults = [];
+        var cutOff = false;
         for (var attempt = 0; attempt < 2 && verdict is null; attempt++)
         {
             var task = attempt == 0
                 ? "Weigh the research and reply with the verdict as the JSON object."
                 : $"Your last verdict could not be recorded. Fix exactly these faults and reply with the whole JSON object again:\n- {string.Join("\n- ", faults)}";
-            var judgeAgent = AgentFactory.As(run, run.Agents.Researcher(run, attempt == 0 ? "judge" : "judge-corrected", judgePrompt) with
+            var judgeAgent = AgentFactory.As(run, run.Agents.Answerer(run, attempt == 0 ? "judge" : "judge-corrected", judgePrompt) with
             {
                 Title = attempt == 0 ? "Weighed the evidence and wrote the verdict" : "Asked for the verdict again",
                 Limits = new AgentLimits { MaxSteps = 4, MaxOutputTokens = 8000, MaxSearchesPerCall = 0 },
@@ -160,6 +162,14 @@ public sealed class ResearchWorkflow : IWorkflow
             if (WorkflowOutcome.FromAgent(judge) is { } judgeStopped)
             {
                 return judgeStopped;
+            }
+
+            cutOff = judge.CutOff;
+            if (judge.CutOff)
+            {
+                // Not a verdict in the wrong form: it did not fit (R2-6). Asked once more, for a tighter one.
+                faults = ["The verdict was too long to finish: it stopped at the output limit. Write the same verdict more tightly: fewer, shorter sentences."];
+                continue;
             }
 
             var (document, problems) = VerdictBuilder.Build(WorkflowSupport.JsonAnswer(judge.FinalText), context);
@@ -194,7 +204,9 @@ public sealed class ResearchWorkflow : IWorkflow
         if (verdict is null)
         {
             // The faults are instructions to the judge, for technical mode only; the owner reads what happened (D64).
-            const string plain = "The research could not reach a verdict it could record, so none was recorded and nothing will be built. Try again to research it afresh.";
+            var plain = cutOff
+                ? "The verdict was too long to finish, so none was recorded and nothing will be built. Try again to research it afresh."
+                : "The research could not reach a verdict it could record, so none was recorded and nothing will be built. Try again to research it afresh.";
             return WorkflowOutcome.Failure(plain) with { ForOwner = plain, Detail = $"What was wrong: {string.Join("; ", faults.Take(5))}" };
         }
 

@@ -484,6 +484,12 @@ public sealed class FakeDock : HttpMessageHandler
 
     public bool FailBuild { get; set; }
 
+    /// <summary>The runs published onto the app's line (<c>POST /internal/repos/{id}/runs/{run}/publish</c>), as asked.</summary>
+    public List<JsonObject> Published { get; } = [];
+
+    /// <summary>The reference each build was of (null: the app's line).</summary>
+    public List<string?> Builds { get; } = [];
+
     public DockClient Client() => new(new HttpClient(this) { BaseAddress = new Uri("http://dock") });
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -492,8 +498,15 @@ public sealed class FakeDock : HttpMessageHandler
         Calls.Add($"{request.Method} {path}");
         var body = request.Content is null ? null : JsonNode.Parse(await request.Content.ReadAsStringAsync(cancellationToken) is { Length: > 0 } t ? t : "null");
         var appId = path.Split('/').Length > 3 ? path.Split('/')[3] : "";
+        if (path.EndsWith("/publish", StringComparison.Ordinal) && path.Contains("/runs/", StringComparison.Ordinal))
+        {
+            Published.Add(body!.AsObject());
+            return Json(new JsonObject { ["id"] = "c0020000", ["message"] = $"{body!["title"]}\n\nEndgame-Run: {path.Split('/')[5]}", ["authorName"] = body["authorName"]?.DeepClone(), ["authorEmail"] = body["authorEmail"]?.DeepClone(), ["at"] = "2026-11-26T10:00:00Z", ["parents"] = new JsonArray("c0000000", "c0010000") });
+        }
+
         if (path.EndsWith("/build", StringComparison.Ordinal))
         {
+            Builds.Add(body?["ref"]?.GetValue<string>());
             return FailBuild
                 ? Json(new JsonObject { ["code"] = "build_failed", ["detail"] = "error CS1002: ; expected" }, HttpStatusCode.UnprocessableEntity)
                 : Json(new JsonObject { ["appId"] = appId, ["commit"] = "c0010000", ["image"] = $"app-{appId}:c001", ["durationMs"] = 6000, ["logTail"] = "Build succeeded." });
@@ -543,8 +556,14 @@ public sealed class FakeWorkspaces(FakeWorkspace workspace) : IWorkspaceProvider
 {
     public int Released { get; private set; }
 
-    public Task<(IWorkspace Workspace, bool Recreated)> EnsureAsync(Guid runId, Guid appId, DateTimeOffset leaseExpiresAt, CancellationToken cancellationToken) =>
-        Task.FromResult<(IWorkspace, bool)>((workspace, false));
+    /// <summary>Where each run asked its workspace to start (R2-4).</summary>
+    public List<string?> StartedFrom { get; } = [];
+
+    public Task<(IWorkspace Workspace, bool Recreated)> EnsureAsync(Guid runId, Guid appId, DateTimeOffset leaseExpiresAt, string? startFrom, CancellationToken cancellationToken)
+    {
+        StartedFrom.Add(startFrom);
+        return Task.FromResult<(IWorkspace, bool)>((workspace, false));
+    }
 
     public Task RenewAsync(Guid runId, DateTimeOffset leaseExpiresAt, CancellationToken cancellationToken) => Task.CompletedTask;
 

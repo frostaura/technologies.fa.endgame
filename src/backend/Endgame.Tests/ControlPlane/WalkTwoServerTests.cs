@@ -11,6 +11,7 @@ using Endgame.Infrastructure.Sweeps;
 using Endgame.Infrastructure.Tree;
 using Endgame.Tests.Fixtures;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Endgame.Tests.ControlPlane;
@@ -205,6 +206,104 @@ public sealed class WalkTwoServerTests(PostgresServer postgres) : IAsyncLifetime
             runId = again,
         }));
         Assert.NotEqual(hire, reraised["hire"]!["id"]!.GetValue<string>());
+    }
+
+    // ---------------------------------------------------------------- R2-3
+
+    [Fact]
+    public async Task The_sweep_withdraws_open_hires_from_before_the_tidy_rules_covered_or_raised_by_a_build_that_ended_unbuilt()
+    {
+        // Rows as they were left before the live rules: a proposal for a need Iris now covers from the organisation, and two
+        // a build raised that ended without the rule ever running (its run marked cancelled behind the platform's back).
+        object Hire(string scope, string key, string name, string role, Guid? run) => new
+        {
+            scope,
+            trigger = "stage",
+            needKey = key,
+            reason = "The work reached this level.",
+            name,
+            role,
+            jobDescription = new { mandate = "Do it.", modelTier = "build" },
+            expectedMonthlyCredits = 400m,
+            runId = run,
+        };
+        var research = (await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/hires", Hire(Division, $"stage:research:{Division}", "Iris", "Market researcher", null))))["hire"]!["id"]!.GetValue<string>();
+        var build = await RunAsync(Division, "build", "Build Squash");
+        await runner.LeaseAsync(build, "runner-test", 120, CancellationToken.None);
+        await AppendAsync(build, "message", Placement(appId));
+        var theo = (await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/hires", Hire(Project, $"stage:build:{Project}", "Theo", "Software engineer", build))))["hire"]!["id"]!.GetValue<string>();
+        var nadia = (await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/hires", Hire(Project, $"stage:evaluate:{Project}", "Nadia", "QA engineer", build))))["hire"]!["id"]!.GetValue<string>();
+        await HireAsync("frostaura", "Iris", "Market researcher");
+        await using (var scope = app.Scope())
+        {
+            scope.ServiceProvider.GetRequiredService<Endgame.Infrastructure.Tenancy.TenantSession>().UseSystem();
+            var db = scope.ServiceProvider.GetRequiredService<Endgame.Infrastructure.Persistence.EndgameDbContext>();
+            await db.Runs.Where(r => r.Id == build).ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "cancelled").SetProperty(r => r.FinishedAt, DateTimeOffset.UtcNow).SetProperty(r => r.LeaseHolder, (string?)null).SetProperty(r => r.LeaseExpiresAt, (DateTimeOffset?)null));
+        }
+
+        var sweep = app.Services.GetRequiredService<LeaseSweep>();
+        Assert.Equal(3, (await sweep.SweepOnceAsync(CancellationToken.None)).HiresWithdrawn);
+        Assert.Equal(0, (await sweep.SweepOnceAsync(CancellationToken.None)).HiresWithdrawn);
+        var covered = await ControlPlaneApp.Ok(owner.GetAsync($"/api/hires/{research}"));
+        Assert.True(covered["withdrawn"]!.GetValue<bool>());
+        Assert.Equal("Withdrawn: Iris already does this work here.", covered["decision"]!["note"]!.GetValue<string>());
+        foreach (var hire in new[] { theo, nadia })
+        {
+            var row = await ControlPlaneApp.Ok(owner.GetAsync($"/api/hires/{hire}"));
+            Assert.True(row["withdrawn"]!.GetValue<bool>());
+            Assert.Contains("was cancelled before anything was built", row["decision"]!["note"]!.GetValue<string>(), StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain((await ControlPlaneApp.Ok(owner.GetAsync("/api/tree")))["needsYou"]!.AsArray(), n => n!["kind"]!.GetValue<string>() == "hire");
+    }
+
+    // ---------------------------------------------------------------- R2-8
+
+    [Fact]
+    public async Task A_run_keeps_the_estimate_shown_before_the_work_and_the_re_estimate_from_the_plan_apart()
+    {
+        var build = await RunAsync(Division, "build", "Build Squash");
+        await runner.LeaseAsync(build, "runner-test", 120, CancellationToken.None);
+        var before = await ControlPlaneApp.Ok(owner.GetAsync($"/api/runs/{build}"));
+        Assert.Null(before["firstEstimateCredits"]);
+        await AppendAsync(build, "estimate.made", new JsonObject { ["credits"] = 10m, ["basis"] = "start", ["stage"] = "start" });
+        var started = await ControlPlaneApp.Ok(owner.GetAsync($"/api/runs/{build}"));
+        Assert.Equal(10m, started["firstEstimateCredits"]!.GetValue<decimal>());
+        Assert.Null(started["planEstimateCredits"]);
+
+        await AppendAsync(build, "estimate.made", new JsonObject { ["credits"] = 4.8m, ["basis"] = "the plan", ["stage"] = "plan" });
+        var planned = await ControlPlaneApp.Ok(owner.GetAsync($"/api/runs/{build}"));
+        Assert.Equal((10m, 4.8m, 4.8m), (planned["firstEstimateCredits"]!.GetValue<decimal>(), planned["planEstimateCredits"]!.GetValue<decimal>(), planned["estimateCredits"]!.GetValue<decimal>()));
+    }
+
+    // ---------------------------------------------------------------- R2-5
+
+    [Fact]
+    public async Task An_approval_raised_before_the_plain_detail_fix_reads_plainly_with_its_tool_line_kept_for_technical_mode()
+    {
+        var run = await RunAsync(Division, "conversation", "Talk");
+        await runner.LeaseAsync(run, "runner-test", 120, CancellationToken.None);
+        const string raw = "adjust_setting: checkpoint.hire=false. No rule allows adjust_setting here. Checkpoint: adjust_setting.";
+        await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/approvals", new { runId = run, title = "Change a setting here?", detail = raw }));
+        var need = (await ControlPlaneApp.Ok(owner.GetAsync("/api/tree")))["needsYou"]!.AsArray().Single(n => n!["kind"]!.GetValue<string>() == "approval")!;
+        Assert.StartsWith("Turn off the “Before anyone is hired” checkpoint in ", need["title"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal(Endgame.Domain.Access.ApprovalWords.ByDefault, need["detail"]!.GetValue<string>());
+        Assert.Equal(raw, need["technical"]!.GetValue<string>());
+        // The run's own log reads the same way, so its page says it plainly too.
+        var asked = (await runner.ReadEventsAsync(run, 0, 500, CancellationToken.None)).Single(e => e.Type == "approval.requested").Payload;
+        Assert.Equal((need["title"]!.GetValue<string>(), Endgame.Domain.Access.ApprovalWords.ByDefault, raw), (asked["title"]!.GetValue<string>(), asked["detail"]!.GetValue<string>(), asked["technical"]!.GetValue<string>()));
+    }
+
+    [Theory]
+    [InlineData("Change a setting here?", "adjust_setting: hire_checkpoint=false. No rule allows adjust_setting here. Checkpoint: adjust_setting.", "Change a setting here?")]
+    [InlineData("Try again: Research: a lift board?", "try_again: 075ba848-baef-4980-ae4e-84e68a640987. No rule allows try_again here. Checkpoint: try_again.", "Try again: Research: a lift board?")]
+    [InlineData("Change a setting here?", "adjust_setting: sleep.idle_minutes=25. No rule allows adjust_setting here. Checkpoint: adjust_setting.", "Let the apps here sleep after 25 idle minutes?")]
+    public void An_older_tool_line_becomes_technical_detail_and_the_plain_sentence_takes_its_place(string title, string detail, string plainTitle)
+    {
+        var (t, d, technical) = Endgame.Infrastructure.Runs.OlderApprovals.Plain(title, detail, null, null);
+        Assert.Equal((plainTitle, Endgame.Domain.Access.ApprovalWords.ByDefault, detail), (t, d, technical));
+        // A row that already has its technical detail, or a plain detail, is left as it is.
+        Assert.Equal(("T?", "Plain words.", (string?)null), Endgame.Infrastructure.Runs.OlderApprovals.Plain("T?", "Plain words.", null, null));
     }
 
     // ---------------------------------------------------------------- D66

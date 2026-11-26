@@ -72,12 +72,13 @@ public sealed class SuggestWorkflow : IWorkflow
         var taken = Taken(context);
         IReadOnlyList<JsonObject> kept = [];
         var why = "";
+        var cutOff = false;
         for (var attempt = 0; attempt < Attempts && kept.Count == 0; attempt++)
         {
             var task = attempt == 0
                 ? "Suggest the ideas now, as the JSON object."
                 : $"None of your suggestions could be kept: {why} Reply with the whole JSON object again, with new, complete ideas.";
-            var agent = AgentFactory.As(run, run.Agents.Researcher(run, attempt == 0 ? "suggester" : "suggester-corrected", prompt) with
+            var agent = AgentFactory.As(run, run.Agents.Answerer(run, attempt == 0 ? "suggester" : "suggester-corrected", prompt) with
             {
                 Limits = new AgentLimits { MaxSteps = 3, MaxOutputTokens = 6000, MaxSearchesPerCall = 0 },
             }, researcher, memory, canRemember: false);
@@ -87,14 +88,21 @@ public sealed class SuggestWorkflow : IWorkflow
                 return stopped;
             }
 
-            (kept, why) = Keep(WorkflowSupport.JsonAnswer(result.FinalText), taken, max);
+            cutOff = result.CutOff;
+            (kept, why) = result.CutOff
+                ? ([], "the answer was too long to finish. Suggest fewer ideas, each in tighter words.")
+                : Keep(WorkflowSupport.JsonAnswer(result.FinalText), taken, max);
         }
 
         if (kept.Count == 0)
         {
             return WorkflowOutcome.Failure($"No usable suggestion was made: {why}")
                 with
-            { ForOwner = "No new idea worth suggesting came out of what the organisation holds this time, so nothing was added. Asking again later, once there is more to build on, may find one." };
+            {
+                ForOwner = cutOff
+                ? "The suggestions were too long to finish, so nothing was added. Asking again usually gives a shorter answer."
+                : "No new idea worth suggesting came out of what the organisation holds this time, so nothing was added. Asking again later, once there is more to build on, may find one."
+            };
         }
 
         try

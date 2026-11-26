@@ -34,7 +34,7 @@ public sealed class TaskWorkflow(BuildWorkflow? factory = null) : IWorkflow
         }
 
         var request = Json.Str(run.OwnerMessage(), "text") ?? run.Run.Title;
-        var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), cancellationToken);
+        var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), run.StartFrom(), cancellationToken);
         var agent = run.Agents.Builder(run, "builder", run.Options.BuildTiers[0], repair: false, workspace.Root,
             RunnerResources.Prompt("task", new Dictionary<string, string> { ["root"] = workspace.Root, ["skills"] = Endgame.Harness.Skills.SkillLibrary.Index(run.Skills, AgentFactory.BuilderSkills) }));
         var loop = new AgentLoop(agent, run.Services(), workspace, run.Sink);

@@ -585,6 +585,8 @@ public sealed partial class WorkflowTests
         Assert.Equal("failed", cp.Run["status"]!.GetValue<string>());
         Assert.Contains("still failed its check after 3 repair rounds", cp.Run["summary"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.Equal(4, cp.Types.Count(t => t == "evaluation.failed"));
+        // R2-4: a build that failed never publishes, so none of its work reaches the app's line.
+        Assert.Empty(dock.Published);
         var tiers = cp.Events.Where(e => e.Type == "evaluation.failed").Select(e => e.Payload["tier"]!.GetValue<string>());
         Assert.Equal(["build", "build-t1", "build-t2", "build-t3"], tiers);
         Assert.DoesNotContain(cp.Events, e => e.Payload["agent"]?.GetValue<string>()?.StartsWith("builder-recipes-page", StringComparison.Ordinal) == true);

@@ -252,6 +252,29 @@ public sealed class AskTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_answer_cut_off_at_its_limit_is_asked_again_with_twice_the_room_and_a_second_cut_says_it_was_too_long()
+    {
+        // R2-6: what a reasoning model returns when its answer does not fit: the JSON stops, finish_reason "length".
+        const string cut = """{"sql": "SELECT count(*) AS n FROM requ""";
+        var calls = 0;
+        openRouter.Chat = (request, http) => Interlocked.Increment(ref calls) switch
+        {
+            1 => FakeOpenRouter.Completion(0.0002m, cut, finish: "length")(request, http),
+            2 => FakeOpenRouter.Completion(0.0002m, """{"sql": "SELECT count(*) AS n FROM requests", "chart": {"kind": "number"}}""")(request, http),
+            _ => FakeOpenRouter.Completion(0.0002m, """{"answer": "Ten."}""")(request, http),
+        };
+        var before = openRouter.Requests.Count;
+        var answer = await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/apps/{bookings}/ask", new { question = "How many requests?" }));
+        Assert.Equal("Ten.", answer["answer"]!.GetValue<string>());
+        Assert.Equal([AskService.MaxTokens, AskService.MaxTokens * 2], openRouter.Requests.Skip(before).Take(2).Select(r => r["max_tokens"]!.GetValue<int>()));
+
+        openRouter.Chat = (request, http) => FakeOpenRouter.Completion(0.0002m, cut, finish: "length")(request, http);
+        var refused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync($"/api/apps/{bookings}/ask", new { question = "How many requests?" }), (HttpStatusCode)422);
+        Assert.Equal("ask_too_long", refused["code"]!.GetValue<string>());
+        Assert.Equal("The answer was too long to finish", refused["title"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task A_refused_query_gets_one_repair_that_is_not_charged_and_a_second_refusal_ends_it()
     {
         openRouter.Chat = Answers(

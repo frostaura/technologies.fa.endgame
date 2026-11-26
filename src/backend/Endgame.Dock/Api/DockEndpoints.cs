@@ -24,6 +24,7 @@ public static class DockEndpoints
             repos.LogAsync(appId, @ref, skip ?? 0, limit ?? 50, ct));
         api.MapGet("/repos/{appId:guid}/files", (Guid appId, string? @ref, string? path, int? offset, int? limit, RepositoryService repos, CancellationToken ct) =>
             repos.ReadAsync(appId, @ref, path, offset ?? 0, limit ?? 0, ct));
+        api.MapPost("/repos/{appId:guid}/runs/{runId:guid}/publish", (Guid appId, Guid runId, PublishRunRequest body, RepositoryService repos, CancellationToken ct) => repos.PublishRunAsync(appId, runId, body, ct));
         api.MapPost("/repos/{appId:guid}/restore", (Guid appId, RestoreRequest body, RepositoryService repos, CancellationToken ct) => repos.RestoreAsync(appId, body, ct));
         api.MapGet("/repos/{appId:guid}/archive", async (Guid appId, string? @ref, RepositoryService repos, CancellationToken ct) =>
             Results.File(await repos.ArchiveAsync(appId, @ref, ct), "application/gzip", $"{appId:D}.tar.gz"));

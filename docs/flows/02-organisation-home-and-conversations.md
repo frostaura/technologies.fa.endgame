@@ -228,7 +228,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   1. The card shows its name (a selection button) and "Manage".
   2. A stage chip appears unless the project is live with apps. The stages the server sends are "Researching", "Reviewing", "Building", "Planning", "Live" and "Paused".
   3. The card shows "{credits} this month" and an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all.
-  4. If work is under way: "{stage}, step {x} of {y}" (just "{stage}" until there is a plan to count, with no bar), then "{spent} of an estimated {estimate}" (or "{spent} so far" when there is no estimate), a moving progress bar once there is a plan, and the link "Watch the work", which goes to `/runs/{id}`.
+  4. If work is under way: "{stage}, step {x} of {y}" — {x} the step under way, counted from 1 (`progress.step`; `progress.done` counts the finished ones) — (just "{stage}" until there is a plan to count, with no bar), then "{spent} of an estimated {estimate}" (or "{spent} so far" when there is no estimate), a moving progress bar once there is a plan, and the link "Watch the work", which goes to `/runs/{id}`.
   5. Below that: its apps (ORG-10) and its people (ORG-11).
 - **You know it worked when:** "Watch the work" opens the live run.
 - **Variations and refusals:**

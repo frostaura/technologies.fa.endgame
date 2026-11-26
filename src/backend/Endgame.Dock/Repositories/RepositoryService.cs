@@ -89,13 +89,17 @@ public sealed partial class RepositoryService(IOptions<DockOptions> options, ILo
         return exit == 0 ? stdout.Trim() : throw DockProblem.NotFound($"The version '{reference}'");
     }
 
+    /// <summary>
+    /// The versions on a line, newest first. First parent only: a published run's own commits sit behind its one published
+    /// version and are not versions of the app (R2-4).
+    /// </summary>
     public async Task<CommitLog> LogAsync(Guid appId, string? reference, int skip, int limit, CancellationToken cancellationToken)
     {
         var commit = await ResolveAsync(appId, reference, cancellationToken);
         limit = Math.Clamp(limit <= 0 ? 50 : limit, 1, 500);
         var output = await GitCli.RunAsync(PathOf(appId),
         [
-            "log", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%B%x1e",
+            "log", "--first-parent", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%B%x1e",
             $"--skip={Math.Max(0, skip)}", $"--max-count={limit + 1}", commit,
         ], cancellationToken: cancellationToken);
         var commits = output.Split('\x1e', StringSplitOptions.RemoveEmptyEntries)
@@ -216,9 +220,10 @@ public sealed partial class RepositoryService(IOptions<DockOptions> options, ILo
     }
 
     /// <summary>
-    /// Takes the commits in a workspace's bundle onto the app's branch if they build on its head.
-    /// When the branch moved meanwhile the commits are kept under <c>refs/workspaces/</c> and a
-    /// conflict is returned: nothing is lost and nothing is overwritten.
+    /// Takes the commits in a workspace's bundle onto the run's own branch (<see cref="RunBranches.Of"/>), never the app's
+    /// line: a run's work reaches the app's history only when it is published (<see cref="PublishRunAsync"/>, R2-4). The
+    /// first commit starts the branch; later ones must build on its head, or a conflict is returned and the commits are kept
+    /// under <c>refs/workspaces/</c>: nothing is lost and nothing is overwritten.
     /// </summary>
     public async Task<string> AcceptBundleAsync(Guid appId, Guid runId, string bundle, CancellationToken cancellationToken)
     {
@@ -229,7 +234,14 @@ public sealed partial class RepositoryService(IOptions<DockOptions> options, ILo
             var holding = $"refs/workspaces/{runId:D}";
             await GitCli.RunAsync(repository, ["fetch", "-q", "--no-tags", "--no-write-fetch-head", bundle, $"+HEAD:{holding}"], cancellationToken: cancellationToken);
             var incoming = (await GitCli.RunAsync(repository, ["rev-parse", holding], cancellationToken: cancellationToken)).Trim();
-            var head = (await GitCli.RunAsync(repository, ["rev-parse", BranchRef], cancellationToken: cancellationToken)).Trim();
+            var branch = "refs/heads/" + RunBranches.Of(runId);
+            var head = await HeadOfAsync(repository, branch, cancellationToken);
+            if (head is null)
+            {
+                await GitCli.RunAsync(repository, ["update-ref", branch, incoming], cancellationToken: cancellationToken);
+                return incoming;
+            }
+
             if (incoming == head)
             {
                 return head;
@@ -239,13 +251,67 @@ public sealed partial class RepositoryService(IOptions<DockOptions> options, ILo
             if (fastForward != 0)
             {
                 throw new DockProblem(StatusCodes.Status409Conflict, DockProblemCodes.Conflict,
-                    "The app's code changed since this workspace was created.",
-                    $"The workspace's commit {incoming[..12]} is kept; the current version is {head[..12]}.");
+                    "This run's code changed since this workspace was created.",
+                    $"The workspace's commit {incoming[..12]} is kept; the run's newest is {head[..12]}.");
             }
 
-            await GitCli.RunAsync(repository, ["update-ref", BranchRef, incoming, head], cancellationToken: cancellationToken);
+            await GitCli.RunAsync(repository, ["update-ref", branch, incoming, head], cancellationToken: cancellationToken);
             return incoming;
         }, cancellationToken);
+    }
+
+    /// <summary>The commit a run's branch is at, or null when the run has committed nothing.</summary>
+    public async Task<string?> RunHeadAsync(Guid appId, Guid runId, CancellationToken cancellationToken)
+    {
+        RequireExists(appId);
+        return await HeadOfAsync(PathOf(appId), "refs/heads/" + RunBranches.Of(runId), cancellationToken);
+    }
+
+    /// <summary>
+    /// Publishes a run's work (R2-4): one commit on the app's line whose tree is the run's newest and whose message is the
+    /// title — what the person asked for — with the run named in a trailer; the run's own commits are its second parent, so
+    /// nothing is lost and the line's first-parent history is exactly the versions that were published. A run with nothing
+    /// new publishes the line as it is. When the line moved since the run began (a restore, another change), nothing is
+    /// published: 409.
+    /// </summary>
+    public async Task<CommitInfo> PublishRunAsync(Guid appId, Guid runId, PublishRunRequest request, CancellationToken cancellationToken)
+    {
+        RequireAuthor(request.AuthorName, request.AuthorEmail);
+        var title = (request.Title ?? "").ReplaceLineEndings(" ").Trim();
+        if (title.Length is 0 or > 500)
+        {
+            throw DockProblem.Invalid("A published version needs a title of 1 to 500 characters.");
+        }
+
+        return await LockedAsync(appId, async () =>
+        {
+            var repository = PathOf(appId);
+            var line = await ResolveAsync(appId, null, cancellationToken);
+            var work = await HeadOfAsync(repository, "refs/heads/" + RunBranches.Of(runId), cancellationToken);
+            if (work is null || work == line || (await GitCli.RunRawAsync(repository, ["merge-base", "--is-ancestor", work, line], cancellationToken: cancellationToken)).ExitCode == 0)
+            {
+                return await CommitAsync(appId, line, cancellationToken);
+            }
+
+            if ((await GitCli.RunRawAsync(repository, ["merge-base", "--is-ancestor", line, work], cancellationToken: cancellationToken)).ExitCode != 0)
+            {
+                throw new DockProblem(StatusCodes.Status409Conflict, DockProblemCodes.Conflict,
+                    "The app's code changed since this work began.",
+                    $"The run's work {work[..12]} does not build on the app's current version {line[..12]}; it is kept on {RunBranches.Of(runId)}.");
+            }
+
+            var tree = (await GitCli.RunAsync(repository, ["rev-parse", work + "^{tree}"], cancellationToken: cancellationToken)).Trim();
+            var message = $"{title}\n\n{RunBranches.Trailer}: {runId:D}";
+            var created = (await GitCli.RunAsync(repository, ["commit-tree", tree, "-p", line, "-p", work, "-m", message], AuthorIdentity(request.AuthorName, request.AuthorEmail), cancellationToken)).Trim();
+            await GitCli.RunAsync(repository, ["update-ref", BranchRef, created, line], cancellationToken: cancellationToken);
+            return await CommitAsync(appId, created, cancellationToken);
+        }, cancellationToken);
+    }
+
+    private static async Task<string?> HeadOfAsync(string repository, string reference, CancellationToken cancellationToken)
+    {
+        var (exit, stdout, _) = await GitCli.RunRawAsync(repository, ["rev-parse", "--verify", "--quiet", reference + "^{commit}"], cancellationToken: cancellationToken);
+        return exit == 0 ? stdout.Trim() : null;
     }
 
     public static void RequireAuthor(string? name, string? email)

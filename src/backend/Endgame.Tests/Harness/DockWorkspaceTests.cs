@@ -23,11 +23,11 @@ public sealed class DockWorkspaceTests(HostingEnvironment env)
         var app = Guid.NewGuid();
         var run = Guid.NewGuid();
         await dock.EnsureRepositoryAsync(app, CancellationToken.None);
-        var (workspace, recreated) = await provider.EnsureAsync(run, app, DateTimeOffset.UtcNow.AddMinutes(10), CancellationToken.None);
+        var (workspace, recreated) = await provider.EnsureAsync(run, app, DateTimeOffset.UtcNow.AddMinutes(10), null, CancellationToken.None);
         try
         {
             Assert.True(recreated);
-            Assert.False((await provider.EnsureAsync(run, app, DateTimeOffset.UtcNow.AddMinutes(10), CancellationToken.None)).Recreated);
+            Assert.False((await provider.EnsureAsync(run, app, DateTimeOffset.UtcNow.AddMinutes(10), null, CancellationToken.None)).Recreated);
 
             // A Windows-line-ending file, edited with Unix line endings: matched, and its own endings kept, byte for byte.
             await workspace.WriteBytesAsync("/workspace/notes/crlf.txt", Encoding.UTF8.GetBytes("alpha\r\nbeta\r\ngamma\r\n"), CancellationToken.None);
@@ -49,7 +49,8 @@ public sealed class DockWorkspaceTests(HostingEnvironment env)
             Assert.Equal(DockProblemCodes.ProtectedPath, refused.Code);
             Assert.Null(await workspace.ReadBytesAsync("/workspace/no-such-file", CancellationToken.None));
 
-            // A scripted agent through the real workspace: edit, verify, commit — the commit lands on the app's branch.
+            // A scripted agent through the real workspace: edit, verify, commit — the commit lands on the run's own branch, and
+            // reaches the app's line only when the run publishes (R2-4).
             var model = new ScriptedModel()
                 .ThenTool("write_file", new { path = "notes/feature.txt", content = "made by the agent\n" })
                 .ThenTool("run", new { command = "cat notes/feature.txt" })
@@ -59,8 +60,11 @@ public sealed class DockWorkspaceTests(HostingEnvironment env)
             var (result, log) = await TestAgents.RunAsync(agent, model, workspace);
             Assert.True(result.Completed);
             Assert.Contains("made by the agent", log.Events.Where(e => e.Type == "tool.result").ElementAt(1).Payload["content"]!.GetValue<string>(), StringComparison.Ordinal);
-            var head = (await dock.EnsureRepositoryAsync(app, CancellationToken.None)).Head;
-            Assert.Equal(result.State.Commits.Single(), head);
+            var line = (await dock.EnsureRepositoryAsync(app, CancellationToken.None)).Head;
+            Assert.NotEqual(result.State.Commits.Single(), line);
+            var published = await dock.PublishRunAsync(app, run, new Endgame.Hosting.Contracts.PublishRunRequest("Add the feature note", "Endgame factory", "factory@endgame.test"), CancellationToken.None);
+            Assert.Equal([line, result.State.Commits.Single()], published.Parents);
+            Assert.Equal(published.Id, (await dock.EnsureRepositoryAsync(app, CancellationToken.None)).Head);
         }
         finally
         {

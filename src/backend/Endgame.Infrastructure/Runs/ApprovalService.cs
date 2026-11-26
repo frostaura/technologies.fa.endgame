@@ -103,10 +103,16 @@ public sealed class ApprovalService(EndgameDbContext db, TenantSession session, 
 
     public async Task<IReadOnlyList<ApprovalView>> ForRunAsync(Guid organisationId, Guid runId, CancellationToken cancellationToken)
     {
+        var (_, scope) = await runs.RequireAsync(runId, cancellationToken);
         session.UseOrganisation(organisationId);
         var rows = await db.Approvals.AsNoTracking().Where(a => a.OrganisationId == organisationId && a.RunId == runId).OrderBy(a => a.RequestedAt).ToListAsync(cancellationToken);
         var technical = await TechnicalAsync(db, organisationId, rows.Select(a => a.Id).ToList(), cancellationToken);
-        return rows.Select(a => View(a) with { Technical = technical.GetValueOrDefault(a.Id) }).ToList();
+        return rows.Select(a =>
+        {
+            // Rows from before the plain-detail fix read as a new one would (R2-5).
+            var (title, detail, tech) = OlderApprovals.Plain(a.Title, a.Detail, technical.GetValueOrDefault(a.Id), scope);
+            return View(a) with { Title = title, Detail = detail, Technical = tech };
+        }).ToList();
     }
 
     /// <summary>The technical detail each approval was raised with, read from its <c>approval.requested</c> event.</summary>

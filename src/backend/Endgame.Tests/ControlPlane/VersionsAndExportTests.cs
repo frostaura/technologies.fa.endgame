@@ -6,9 +6,14 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Nodes;
 using Endgame.Hosting.Contracts;
+using Endgame.Infrastructure.Persistence;
+using Endgame.Infrastructure.Persistence.Records;
+using Endgame.Infrastructure.Tenancy;
 using Endgame.Tests.Fixtures;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Endgame.Tests.ControlPlane;
 
@@ -27,12 +32,13 @@ public sealed class VersionsAndExportTests(PostgresServer postgres) : IAsyncLife
     private readonly ConcurrentQueue<string> calls = new();
     private RestoreRequest? restored;
     private bool hasDatabase = true;
+    private CommitLog? log;
 
     public async Task InitializeAsync()
     {
         dock = await FakePeer.StartAsync(routes =>
         {
-            routes.MapGet("/internal/repos/{id:guid}/log", (Guid id) => Results.Ok(new CommitLog(
+            routes.MapGet("/internal/repos/{id:guid}/log", (Guid id) => Results.Ok(log ?? new CommitLog(
             [
                 new CommitInfo("c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3", "Restore the version a1a1a1a1a1a1", "The Owner", "owner@frostaura.net", DateTimeOffset.Parse("2026-11-25T10:00:00Z", System.Globalization.CultureInfo.InvariantCulture), ["b2"]),
                 new CommitInfo("b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2", "Build F1: bookings", "Endgame employee", $"{employeeId:N}@agents.endgame.frostaura.net", DateTimeOffset.Parse("2026-11-25T09:00:00Z", System.Globalization.CultureInfo.InvariantCulture), ["a1"]),
@@ -81,14 +87,68 @@ public sealed class VersionsAndExportTests(PostgresServer postgres) : IAsyncLife
     {
         var view = await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{appId}/versions"));
         var versions = view["versions"]!.AsArray();
-        Assert.Equal(3, versions.Count);
+        // The restore and the live version; the factory's bookkeeping commit was never live, so it is not a version (R2-4).
+        Assert.Equal(2, versions.Count);
         Assert.Equal(("person", "The Owner"), (versions[0]!["author"]!["kind"]!.GetValue<string>(), versions[0]!["author"]!["name"]!.GetValue<string>()));
+        Assert.Equal("Brought back an earlier version", versions[0]!["title"]!.GetValue<string>());
+        Assert.True(versions[0]!["current"]!.GetValue<bool>());
         Assert.Equal(("employee", "Ada"), (versions[1]!["author"]!["kind"]!.GetValue<string>(), versions[1]!["author"]!["name"]!.GetValue<string>()));
         Assert.Equal(employeeId.ToString(), versions[1]!["author"]!["id"]!.GetValue<string>());
-        Assert.Equal("factory", versions[2]!["author"]!["kind"]!.GetValue<string>());
         Assert.True(versions[1]!["live"]!.GetValue<bool>());
         Assert.False(versions[0]!["live"]!.GetValue<bool>());
         Assert.Equal("b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2", view["live"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task History_lists_only_what_was_live_by_the_plain_title_of_what_was_asked_and_never_a_failed_changes_work()
+    {
+        // A change published as one version (its run named in the trailer), an older version published before run branches
+        // (recognised from its run's publish), and a failed change's commits and bookkeeping left on the line by then.
+        var (published, legacy, failed) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        await using (var scope = app.Scope())
+        {
+            var session = scope.ServiceProvider.GetRequiredService<TenantSession>();
+            session.UseSystem();
+            var db = scope.ServiceProvider.GetRequiredService<EndgameDbContext>();
+            var row = await db.Apps.SingleAsync(a => a.Id == appId);
+            var org = row.OrganisationId;
+            var division = (await db.Projects.SingleAsync(p => p.Id == row.ProjectId)).DivisionId;
+            session.UseOrganisation(org);
+            foreach (var (id, title, status) in new[] { (published, "Change: Show how many books the home page lists.", "succeeded"), (legacy, "Build: A reading list for a book club.", "succeeded"), (failed, "Change: Verify the count line.", "failed") })
+            {
+                db.Runs.Add(new RunRecord { OrganisationId = org, Id = id, DivisionId = division, ProjectId = row.ProjectId, AppId = appId, Kind = "task", Status = status, Title = title, CreatedAt = DateTimeOffset.UtcNow, StartedAt = DateTimeOffset.UtcNow, FinishedAt = DateTimeOffset.UtcNow, LastSeq = 1 });
+            }
+
+            db.RunEvents.Add(new RunEventRecord
+            {
+                OrganisationId = org,
+                RunId = legacy,
+                Seq = 1,
+                Type = "message",
+                At = DateTimeOffset.UtcNow,
+                PayloadJson = new JsonObject { ["kind"] = "workflow.step", ["step"] = "publish", ["agent"] = "workflow", ["data"] = new JsonObject { ["started"] = true, ["commit"] = "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5" } }.ToJsonString(),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var at = DateTimeOffset.Parse("2026-11-26T10:00:00Z", System.Globalization.CultureInfo.InvariantCulture);
+        log = new CommitLog(
+        [
+            new CommitInfo("f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6", $"Show how many books the home page lists.\n\nEndgame-Run: {published:D}", "Endgame factory", "factory@agents.endgame.frostaura.net", at, ["a7", "b8"]),
+            new CommitInfo("a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7", "Repair [book-count-line] evidence: connect call_app calls to r1/r2/r3", "Endgame employee", $"{employeeId:N}@agents.endgame.frostaura.net", at.AddMinutes(-10), ["a8"]),
+            new CommitInfo("a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8", "Record progress: book-count-line is built and checked", "Endgame factory", "factory@agents.endgame.frostaura.net", at.AddMinutes(-20), ["e5"]),
+            new CommitInfo("e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5", "Record progress: i3 is built and checked", "Endgame factory", "factory@agents.endgame.frostaura.net", at.AddHours(-2), ["e4"]),
+            new CommitInfo("e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4", "Start from the app kit", "Endgame", "dock@endgame.invalid", at.AddHours(-3), []),
+        ], false);
+        await ControlPlaneApp.Ok(app.Internal().PostAsJsonAsync($"/internal/apps/{appId}/published", new { version = "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6" }));
+
+        var versions = (await ControlPlaneApp.Ok(owner.GetAsync($"/api/apps/{appId}/versions")))["versions"]!.AsArray();
+        Assert.Equal(["f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6", "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5"], versions.Select(v => v!["commit"]!.GetValue<string>()));
+        Assert.Equal(["Show how many books the home page lists.", "A reading list for a book club."], versions.Select(v => v!["title"]!.GetValue<string>()));
+        Assert.Equal([published.ToString(), legacy.ToString()], versions.Select(v => v!["runId"]!.GetValue<string>()));
+        Assert.Equal([true, false], versions.Select(v => v!["live"]!.GetValue<bool>()));
+        // The raw message stays for technical mode.
+        Assert.StartsWith("Record progress", versions[1]!["message"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
     [Fact]

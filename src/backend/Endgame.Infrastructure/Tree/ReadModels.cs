@@ -44,7 +44,25 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var scope = await scopes.ForRowAsync(run.OrganisationId, run.DivisionId, run.ProjectId, run.AppId, cancellationToken);
         var (estimates, spent) = await RunCostsAsync(organisationId, [runId], cancellationToken);
         var (detail, reason) = RunStatuses.IsTerminal(run.Status) ? await FinishedAsync(run, cancellationToken) : (null, null);
-        return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId), await CanTryAgainAsync(run, cancellationToken)) with { Detail = detail, Reason = reason };
+        var (first, plan) = await EstimatesAsync(run, cancellationToken);
+        return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId), await CanTryAgainAsync(run, cancellationToken))
+            with
+        { Detail = detail, Reason = reason, FirstEstimateCredits = first, PlanEstimateCredits = plan };
+    }
+
+    /// <summary>
+    /// The estimate shown before the work began (the first) and the re-estimate from the plan (R2-8): the console says
+    /// "Estimated 10 before the work began; 4.8 once planned", never the re-estimate as if it had been shown first.
+    /// </summary>
+    private async Task<(decimal? First, decimal? Plan)> EstimatesAsync(RunRecord run, CancellationToken cancellationToken)
+    {
+        var made = await db.RunEvents.AsNoTracking()
+            .Where(e => e.OrganisationId == run.OrganisationId && e.RunId == run.Id && e.Type == RunEventTypes.EstimateMade)
+            .OrderBy(e => e.Seq).Select(e => e.PayloadJson).ToListAsync(cancellationToken);
+        var parsed = made.Select(p => JsonNode.Parse(p) as JsonObject).OfType<JsonObject>()
+            .Select(p => (Credits: p["credits"] is JsonValue v && v.GetValueKind() == JsonValueKind.Number ? v.GetValue<decimal>() : (decimal?)null, Stage: Text(p["stage"])))
+            .Where(p => p.Credits is not null).ToList();
+        return (parsed.Count > 0 ? parsed[0].Credits : null, parsed.LastOrDefault(p => p.Stage == "plan").Credits);
     }
 
     /// <summary>The technical <c>detail</c> and the <c>reason</c> a run's <c>run.finished</c> gave, when it gave them.</summary>
@@ -247,8 +265,9 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                 if (active is not null)
                 {
                     var runTasks = tasks.Where(t => t.RunId == active.Id).ToList();
-                    progress = new ProgressView(active.Id, active.Title, runTasks.Count(t => t.Status == TaskStatuses.Done), runTasks.Count,
-                        runSpend.GetValueOrDefault(active.Id), estimates.TryGetValue(active.Id, out var estimate) ? estimate : null);
+                    var (step, done) = ProgressView.Counting(runTasks.Count(t => t.Status == TaskStatuses.Done), runTasks.Count);
+                    progress = new ProgressView(active.Id, active.Title, step, runTasks.Count,
+                        runSpend.GetValueOrDefault(active.Id), estimates.TryGetValue(active.Id, out var estimate) ? estimate : null, done);
                 }
 
                 projectViews.Add(new ProjectNodeView(p.Id, p.Slug, p.Name, stage, (active ?? last)?.IdeaId ?? projectNotBuilt?.IdeaId, note, progress,
@@ -326,10 +345,15 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var technical = await Runs.ApprovalService.TechnicalAsync(db, organisationId, approvals.Select(a => a.Approval.Id).ToList(), cancellationToken);
         var needs = new List<object>();
         needs.AddRange(ideas.Where(Sees).Select(i => new VerdictNeed("verdict", i.Id, i.Id, IdeaTitle(i.Text), i.Verdict!, i.VerdictSummary)));
-        needs.AddRange(approvals
-            .Where(a => everything || new[] { a.DivisionId, a.ProjectId, a.AppId }.Any(id => id is { } x && visible.Contains(x)))
-            .Select(a => new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, a.Approval.Title, a.Approval.Detail.Length == 0 ? null : a.Approval.Detail,
-                technical.GetValueOrDefault(a.Approval.Id))));
+        foreach (var a in approvals.Where(a => everything || new[] { a.DivisionId, a.ProjectId, a.AppId }.Any(id => id is { } x && visible.Contains(x))))
+        {
+            // Rows from before the plain-detail fix read as a new one would (R2-5).
+            var at = await scopes.ForRowAsync(organisationId, a.DivisionId, a.ProjectId, a.AppId, cancellationToken);
+            var (title, detail, tech) = Runs.OlderApprovals.Plain(a.Approval.Title, a.Approval.Detail, technical.GetValueOrDefault(a.Approval.Id), at);
+            needs.Add(new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, title, detail.Length == 0 ? null : detail, tech));
+        }
+
+        session.UseOrganisation(organisationId);
         return needs;
     }
 

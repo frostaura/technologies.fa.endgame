@@ -234,9 +234,10 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **You know it worked when:** the badge reads "Finished" and "The verdict is ready / Read it" shows.
 - **Variations and refusals:**
   - If the judge's document is refused once, it is sent back to the judge to fix, in a group named "Asked for the verdict again". If it fails again, the run fails with "The research could not reach a verdict it could record, so none was recorded and nothing will be built. Try again to research it afresh." (VERD-12); what was wrong is in technical mode only.
-  - A contractor that returns no usable report is counted as "It did not report back in the agreed form, so its work is not counted."
+  - A contractor that returns no usable report is counted as "It did not report back in the agreed form, so its work is not counted."; one whose report was cut off at its length limit (twice: it is asked once more with twice the room, not charged) as "Its report was too long to finish, so its work is not counted."
+  - A verdict cut off at its length limit is asked for once more with twice the room, then sent back once to be written more tightly; cut off throughout, the run fails with "The verdict was too long to finish, so none was recorded and nothing will be built. Try again to research it afresh."
   - With no connection to the AI models (no key, a key refused, the provider down), the run stops at once: "Endgame could not reach its AI models, so no research was done and nothing was charged. Try again; if it keeps happening, tell FrostAura." No step is corrected or sent back; a contractor that could not reach a model says "It could not reach Endgame's AI models, so it found nothing."
-  - With a rule on web search at the research stage (AUTO-05): "May not" means the researchers are not given web search at all, and each says so; "Asks you first" raises one approval per researcher before its first search, titled "Let this step search the web: {step}?"; declined, that researcher works without searching.
+  - With a rule on web search at the research stage (AUTO-05): "May not" means the researchers are not given web search at all, and each says so; "Asks you first" raises one approval per researcher before its first search, titled "Let this step search the web: {what the step is doing}?" (for example "…: looking for what they leave undone?"); declined, that researcher works without searching.
   - Whenever the run ends — finished, failed, cancelled or out of budget — its contractors are finished with it, so none stays "Working".
   - Each contractor is named by its role ("Demand researcher (contractor)"); the step's title ("Looked for evidence people will pay") is what it did.
 - **Where:** `RunView.tsx`, `timeline.ts`; `ResearchWorkflow.cs`, `VerdictBuilder.cs`.
@@ -570,7 +571,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Core. **Learn first:** RUN-01, AUTO-03.
 - **What you learn:** a checkpoint pauses the work for your word, your note goes back to the work, and declining is told truthfully.
 - **Steps:**
-  1. The card shows the badge **"Needs you"**, what will happen if you approve, in plain words, and under it why it asks ("Your rules for this stage ask for your sign-off before this is done. …", "This waits for your sign-off before it is done. …", "{h} credits are left in the budget."). In technical mode the tool line is added ("change_app: … Checkpoint: change_app.").
+  1. The card shows the badge **"Needs you"**, what will happen if you approve, in plain words, and under it why it asks ("Your rules for this stage ask for your sign-off before this is done. …", "This waits for your sign-off before it is done. …", "{h} credits are left in the budget."). In technical mode the tool line is added ("change_app: … Checkpoint: change_app."). An approval asked before the plain words existed reads the same way: its stored tool line is served as the technical detail, the plain sentence takes its place, and a setting change is titled by what approving does (`OlderApprovals`), on the card, in "Needs you", in its notice and in the run's log.
   2. Optionally type into **"Add a note (optional)"**.
   3. Under the buttons: "Declining skips only this step; the work goes on without it." or, for the start and plan checkpoints, "Declining stops this work."
   4. Press **"Approve"** or **"Decline"**. The card reads "Approved. Sending…" or "Declined. Sending…", then "Approved. The work carries on from here.", "Declined. It was not done; the work continues without it." or "Declined. It was not done, so the work has stopped."
@@ -676,7 +677,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Core. **Learn first:** RUN-01.
 - **What you learn:** an estimate is shown first and scored against what the work really cost.
 - **Steps:**
-  1. **"Estimate"** shows "Not yet made" or the figure, with "Shown before the work began".
+  1. **"Estimate"** shows "Not yet made" or the figure, with "Shown before the work began". The server gives the figure shown before the work (`firstEstimateCredits`) and the re-estimate from the plan (`planEstimateCredits`) apart, so a re-estimated run can say both ("Estimated 10 before the work began; 4.8 once planned").
   2. **"Spent so far"** shows what the work was charged, a bar and "{p}% of the estimate". It is the run's own cost: the billable settlements in its log, counted as the ledger counts them, so a free repair is not in it and the figure matches "cost {y}" once scored. The percentage is the true one ("130% of the estimate"); the bar stops at full and turns to the attention colour above 100%. A small amount is never rounded to 0: it keeps two decimals ("0.05 credits") or reads "less than 0.01 credits".
   3. While running, **"Held for calls in flight"** shows "Reserved before each call, released when it settles".
   4. When finished, **"Estimate against actual"** shows "on the estimate", "{n}% over" or "{n}% under", with "Estimated {x}, cost {y}", and **"Not charged"** shows the credits the work used repairing its own mistakes, "Repairs of the work’s own mistakes, never billed".
@@ -769,6 +770,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Variations and refusals:**
   - A plan that never validates fails the run (RUN-11).
   - **The plan cannot be edited by a person.** There is only approve or reject, and only with the checkpoint on (BLD-04).
+  - Something people do without signing in ("open a trip link with no account") is planned and built, and the plan message ends: "People can use it without signing in only once you make the app public, which only you can do on its page." A private app admits only signed-in members until then (ARCH-005).
 - **Where:** `RunView.tsx` `PlanPanel`; `BuildWorkflow` (planner, `plan.accepted`).
 - **Reachable from:** UI.
 - **Covered by tests:** `RunView.test.tsx` ("shows each plan item in plain words…"); `WorkflowTests.Build_places_plans_builds…`.
@@ -833,10 +835,10 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Variations and refusals:**
   - An image that does not build is a failed check.
   - No signed-in caller, or no verdict from the evaluator, means a failed check.
-  - Code fails the part unless every requirement has evidence from a real call and every promised test id is present.
+  - Code fails the part unless every requirement has evidence from a real call and every promised test id is present. A part for people who do not sign in is shown with calls made signed out on the preview; a requirement for people with no account is shown only that way.
 - **Where:** `BuildWorkflow.EvaluateAsync`, `EvaluationGate.cs`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.The_evaluator_works_on_a_preview…`.
+- **Covered by tests:** `WorkflowTests.The_evaluator_works_on_a_preview…`; `WorkflowTests.A_part_for_people_who_do_not_sign_in_passes_on_signed_out_calls_cited_with_placeholders`, `A_plan_part_for_people_who_do_not_sign_in_must_be_checked_signed_out`.
 
 ### BLD-08 See a failed part repaired, free, on a stronger model
 - **Who:** Viewer or above.
@@ -1087,7 +1089,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   1. The panel says why it stopped: "This work stopped before it finished. What was finished is kept.", "This work was cancelled. What was finished is kept.", "The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged." (with **"See credits"**) or "The plan was declined, so nothing was built."
   2. Press **"Try again"** ("Working it out…"). It reads, for example, "1 of its 2 parts are already built and checked; they are kept, not built or charged again." (or "The plan agreed before is kept, and all {n} of its parts are built." / "It is planned afresh, then built part by part."), **"Estimated {credits}"** — priced for what is left — and the basis.
   3. Press **"Start it again"** ("Starting…") or **"Not now"**. You are taken to the new run.
-  4. The new run says "Endgame · Carrying on": "This picks up where the earlier attempt stopped: {n} of {m} parts were already built and checked, so they are kept, not rebuilt or charged again." The plan shows those parts as "Built and checked in the earlier attempt; kept, not built or charged again."
+  4. The new run says "Endgame · Carrying on": "This picks up where the earlier attempt stopped: {n} of {m} parts were already built and checked, so they are kept, not rebuilt or charged again." (with one part: "1 of {m} parts was already built and checked, so it is kept, …") The plan shows those parts as "Built and checked in the earlier attempt; kept, not built or charged again."
 - **You know it worked when:** the new run finishes; the idea's "Watch the work that followed" now opens it.
 - **Variations and refusals:** a build that stopped before anything was published raises its hires again (its earlier proposals were withdrawn, RUN-06); a start the owner declined says so ("start-declined"); a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable". While an employee on the project is paused, a build or change is not started again: "It was not started again: {Name}, who works on this app, is paused…".
 - **Where:** `runs/TryAgain.tsx`, `RunView.tsx` `StoppedPanel`, `VerdictView.tsx`; `POST /api/runs/{id}/retry/estimate`, `POST /api/runs/{id}/retry`; `RetryService`, `IdeaService.RetryBuildAsync`, `FactoryEstimates`; `BuildWorkflow.CarryOverAsync`.

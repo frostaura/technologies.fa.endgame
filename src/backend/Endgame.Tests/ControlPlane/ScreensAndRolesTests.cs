@@ -91,7 +91,12 @@ public sealed class ScreensAndRolesTests(PostgresServer postgres) : IAsyncLifeti
     private static Func<JsonObject, HttpContext, Task> Answers(params string[] contents)
     {
         var next = 0;
-        return (request, http) => FakeOpenRouter.Completion(0.0003m, contents[Math.Min(Interlocked.Increment(ref next) - 1, contents.Length - 1)], id: $"gen-screen-{next}")(request, http);
+        return (request, http) =>
+        {
+            var content = contents[Math.Min(Interlocked.Increment(ref next) - 1, contents.Length - 1)];
+            // A cut-off answer arrives as OpenRouter sends it: finish_reason "length".
+            return FakeOpenRouter.Completion(0.0003m, content, id: $"gen-screen-{next}", finish: content == CutOff ? "length" : null)(request, http);
+        };
     }
 
     // What qwen/qwen3.7-flash really answered on 2026-11-26 at the old 400-token limit: it reasoned first, and
@@ -109,11 +114,9 @@ public sealed class ScreensAndRolesTests(PostgresServer postgres) : IAsyncLifeti
         Assert.Equal("Booking software {for clubs} crosses no line.", created["screening"]!["reason"]!.GetValue<string>());
         var asked = openRouter.Requests.ToList();
         Assert.Equal(2, asked.Count);
-        Assert.All(asked, r =>
-        {
-            Assert.Equal("json_object", r["response_format"]!["type"]!.GetValue<string>());
-            Assert.Equal(Endgame.Infrastructure.Platform.OrganisationScreening.MaxTokens, r["max_tokens"]!.GetValue<int>());
-        });
+        Assert.All(asked, r => Assert.Equal("json_object", r["response_format"]!["type"]!.GetValue<string>()));
+        // The cut-off answer is asked for again with twice the room (R2-6).
+        Assert.Equal([Endgame.Infrastructure.Platform.OrganisationScreening.MaxTokens, Endgame.Infrastructure.Platform.OrganisationScreening.MaxTokens * 2], asked.Select(r => r["max_tokens"]!.GetValue<int>()));
         // Both calls are platform costs.
         Assert.Equal(2, (await PlatformCostsAsync()).Count);
     }
@@ -129,6 +132,15 @@ public sealed class ScreensAndRolesTests(PostgresServer postgres) : IAsyncLifeti
         Assert.Equal(2, openRouter.Requests.Count);
         var created = await ProvisionAsync(screening: Provisioning.Manual);
         Assert.Equal("manual", created["screening"]!["method"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Two_cut_off_answers_are_reported_as_too_long_to_finish()
+    {
+        openRouter.Chat = Answers(CutOff, CutOff);
+        var refused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync("/api/organisations",
+            new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = "Sells booking software to squash clubs." }), HttpStatusCode.ServiceUnavailable);
+        Assert.Contains("the model's answer was too long to finish", refused["detail"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
     [Theory]

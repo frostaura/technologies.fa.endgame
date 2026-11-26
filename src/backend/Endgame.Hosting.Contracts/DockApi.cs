@@ -127,7 +127,40 @@ public sealed record WriteFileResult(string Path, long Bytes);
 /// <summary><c>POST /internal/workspaces/{id}/commit</c>: the employee is the author.</summary>
 public sealed record WorkspaceCommitRequest(string Message, string AuthorName, string AuthorEmail);
 
-/// <summary>The commit now at the head of the app's branch.</summary>
+/// <summary>
+/// <c>POST /internal/repos/{appId}/runs/{runId}/publish</c>: the run's work becomes the app's next version (R2-4). A run's
+/// commits are kept on its own branch (<see cref="RunBranches"/>) while it works; only publishing puts them on the app's
+/// line, as one commit whose message is <paramref name="Title"/> — what the person asked for — so the history lists what
+/// was live, and a run that never published leaves nothing on it.
+/// </summary>
+public sealed record PublishRunRequest(string Title, string AuthorName, string AuthorEmail);
+
+/// <summary>Where a run's work is kept until it is published.</summary>
+public static class RunBranches
+{
+    /// <summary>The trailer naming the run in a published version's commit message.</summary>
+    public const string Trailer = "Endgame-Run";
+
+    /// <summary>The branch a run's commits are kept on: <c>runs/&lt;run id, 32 hex&gt;</c>.</summary>
+    public static string Of(Guid runId) => $"runs/{runId:N}";
+
+    /// <summary>The run a published version's message names, or null.</summary>
+    public static Guid? RunOf(string? message)
+    {
+        foreach (var line in (message ?? "").Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith(Trailer + ":", StringComparison.Ordinal) && Guid.TryParse(trimmed[(Trailer.Length + 1)..].Trim(), out var run))
+            {
+                return run;
+            }
+        }
+
+        return null;
+    }
+}
+
+/// <summary>The commit now at the head of the run's branch.</summary>
 /// <param name="CommitId">The commit.</param>
 /// <param name="Changed">False when the workspace held nothing new: the id is the unchanged head.</param>
 public sealed record WorkspaceCommitResult(string CommitId, bool Changed);

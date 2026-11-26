@@ -79,6 +79,15 @@ public sealed record AgentDefinition
     /// <summary>Repairing its own failed work: the gateway records it as not billable.</summary>
     public bool Repair { get; init; }
 
+    /// <summary>
+    /// The agent's answer is read by code — a JSON object in its final reply, or a structured tool call such as
+    /// <c>propose_plan</c> (R2-6). A reply cut off at its output limit (<c>finish_reason: length</c>) is then asked for
+    /// again once, with twice the room and never billed; cut off again, a final answer ends the agent with
+    /// <see cref="StopReasons.AnswerCutOff"/> rather than a malformed answer. When the call offers no tools, a JSON
+    /// object is asked for outright, wherever the route's models take a response format.
+    /// </summary>
+    public bool StructuredAnswer { get; init; }
+
     public string AuthorName { get; init; } = "Endgame agent";
 
     public string AuthorEmail { get; init; } = "agent@endgame.local";
@@ -184,6 +193,12 @@ public sealed class AgentState
 
     public string? StopReason { get; set; }
 
+    /// <summary>Replies cut off at their output limit and asked for again (R2-6); they do not count against the step limit.</summary>
+    public int CutOffs { get; set; }
+
+    /// <summary>The next call is the one retry of a cut-off reply: twice the room, not billed.</summary>
+    public bool RetryingCutOff { get; set; }
+
     /// <summary>Tool calls requested before a crash whose results were never recorded.</summary>
     public int InterruptedCalls { get; set; }
 
@@ -238,6 +253,9 @@ public sealed record AgentResult(string StopReason, string? FinalText, AgentStat
 
     /// <summary>No model could be reached: the agent's silence says nothing about its work.</summary>
     public bool Unreachable => StopReason == StopReasons.ModelUnreachable;
+
+    /// <summary>The answer was too long to finish: it says nothing about the work's form, only that it did not fit (R2-6).</summary>
+    public bool CutOff => StopReason == StopReasons.AnswerCutOff;
 }
 
 /// <summary>Every way an agent's session can end.</summary>
@@ -251,6 +269,9 @@ public static class StopReasons
     public const string BudgetSliceSpent = "budget_slice_spent";
     public const string CeilingUnreachable = "ceiling_unreachable";
     public const string ModelError = "model_error";
+
+    /// <summary>A structured answer was cut off at its output limit twice, the second time with twice the room (R2-6).</summary>
+    public const string AnswerCutOff = "answer_cut_off";
 
     /// <summary>The models could not be reached, or refused the call, after the retries ARCH-006 allows: no answer at all came back.</summary>
     public const string ModelUnreachable = "model_unreachable";

@@ -24,9 +24,12 @@ public sealed record AccessDecision(string Decision, string? SessionToken, strin
 /// <summary>
 /// Enforces private, shared and public at the edge (spec, "Apps are private by default"). The
 /// control plane owns sessions and decides, per app, through <c>POST /internal/access/check</c>;
-/// the answer is reused briefly for the same cookie and app. When it does not answer — down, an
-/// error, or no such endpoint — a private or shared app is closed and a public one opens with no
-/// session. Nothing at the edge ever decides access on its own.
+/// the answer is reused briefly for the same cookie and app. Whenever a session ends — a console
+/// sign-out, an app sign-out, an unshare — the control plane tells the edge to forget every answer it
+/// holds (<c>POST /internal/access/forget</c>), so the very next request is asked again (D53, R2-10):
+/// a reused answer must never outlive the session it was given for. When the control plane does not
+/// answer — down, an error, or no such endpoint — a private or shared app is closed and a public one
+/// opens with no session. Nothing at the edge ever decides access on its own.
 /// </summary>
 public sealed class AccessGate(IHttpClientFactory http, IOptions<EdgeOptions> options, IConfiguration configuration, TimeProvider time, ILogger<AccessGate> logger)
 {
@@ -72,6 +75,9 @@ public sealed class AccessGate(IHttpClientFactory http, IOptions<EdgeOptions> op
 
         return decision.Decision == AccessDecision.UnavailableDecision ? decision : Remember(key, decision, now);
     }
+
+    /// <summary>Drops every reused answer: the next request for any app, on any host, is asked again.</summary>
+    public void Forget() => cache.Clear();
 
     private AccessDecision Remember(string key, AccessDecision decision, DateTimeOffset now)
     {

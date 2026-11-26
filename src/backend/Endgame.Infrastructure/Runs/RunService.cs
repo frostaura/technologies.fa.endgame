@@ -244,8 +244,35 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
             .OrderBy(e => e.Seq)
             .Take(take)
             .ToListAsync(cancellationToken);
-        return rows.Select(e => new RunEventView(e.Seq, e.Type, e.At, JsonNode.Parse(e.PayloadJson))).ToList();
+        var views = rows.Select(e => new RunEventView(e.Seq, e.Type, e.At, JsonNode.Parse(e.PayloadJson))).ToList();
+        // An approval asked before the plain-detail fix reads as a new one would (R2-5): its tool line kept for technical mode.
+        if (views.Any(v => v.Type == RunEventTypes.ApprovalRequested && v.Payload is JsonObject p && PayloadText(p, "technical") is null))
+        {
+            var run = await db.Runs.AsNoTracking().SingleAsync(r => r.OrganisationId == organisationId && r.Id == runId, cancellationToken);
+            var scope = await scopes.ForRowAsync(organisationId, run.DivisionId, run.ProjectId, run.AppId, cancellationToken);
+            foreach (var view in views.Where(v => v.Type == RunEventTypes.ApprovalRequested))
+            {
+                if (view.Payload is JsonObject p && PayloadText(p, "technical") is null && PayloadText(p, "detail") is { } detail)
+                {
+                    var (title, plain, technical) = OlderApprovals.Plain(PayloadText(p, "title") ?? "", detail, null, scope);
+                    if (technical is not null)
+                    {
+                        p["title"] = title;
+                        p["question"] = title;
+                        p["detail"] = plain;
+                        p["technical"] = technical;
+                    }
+                }
+            }
+
+            session.UseOrganisation(organisationId);
+        }
+
+        return views;
     }
+
+    private static string? PayloadText(JsonObject payload, string key) =>
+        payload[key] is JsonValue v && v.GetValueKind() == System.Text.Json.JsonValueKind.String ? v.GetValue<string>() : null;
 
     /// <summary>
     /// Appends events, assigning the next sequence numbers. When <paramref name="leaseHolder"/> is given
