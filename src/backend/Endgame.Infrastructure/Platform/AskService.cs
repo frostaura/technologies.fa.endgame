@@ -386,6 +386,8 @@ public sealed class AskService(
                 Scope = app.Path.ToString(),
                 Messages = messages,
                 ResponseFormat = new JsonObject { ["type"] = "json_object" },
+                // Read as data: the model's reasoning gets a budget of its own, so the answer fits (R2-6).
+                Structured = true,
                 Limits = new ChatLimits { MaxTokens = room },
                 Temperature = 0,
                 // The retry of an answer cut at the platform's own limit is never charged.

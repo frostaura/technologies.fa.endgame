@@ -218,7 +218,13 @@ public sealed class ReviewWorkflow : IWorkflow
 
                 if (result.CutOff)
                 {
-                    return WorkflowOutcome.Failure("The review's answer was too long to finish, so the memory was left as it was.");
+                    return WorkflowOutcome.Failure("The review's answer was too long to finish, so the memory was left as it was. Try again.");
+                }
+
+                if (!result.Completed)
+                {
+                    // It stopped before it answered (the model failed, or the steps ran out): not an answer in the wrong form.
+                    return WorkflowOutcome.Failure("The review stopped before it gave an answer, so the memory was left as it was. Try again.") with { Detail = result.FinalText };
                 }
 
                 if (WorkflowSupport.JsonAnswer(result.FinalText) is not { } read)

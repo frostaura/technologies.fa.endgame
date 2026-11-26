@@ -19,6 +19,7 @@ namespace Endgame.Harness.Model;
 /// <param name="ToolChoice">Sent only when the served model lists <c>tool_choice</c> as supported.</param>
 /// <param name="MaxSearches">On a route with web search, the most searches this call may make (0: none); null leaves the route's maximum.</param>
 /// <param name="PreferJson">The answer is one JSON object: asked for as a response format wherever the route's models take one (R2-6).</param>
+/// <param name="Structured">The answer is read by code: the gateway bounds the model's reasoning so the answer itself fits (R2-6).</param>
 public sealed record ChatCall(
     string TaskType,
     string Scope,
@@ -32,7 +33,8 @@ public sealed record ChatCall(
     string? IdempotencyKey,
     string? ToolChoice = null,
     int? MaxSearches = null,
-    bool PreferJson = false);
+    bool PreferJson = false,
+    bool Structured = false);
 
 /// <summary>A settled reply: the assistant message verbatim plus what the gateway reported about the call.</summary>
 public sealed record ModelReply(
