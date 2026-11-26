@@ -42,7 +42,8 @@
   - each choice carries a one-sentence `basis` (its awake hours, what was measured, memory, storage, requests), and
     `prices` states today's rates in credits.
 - **A3 — paused.** When the organisation is past its overdraft limit, or a budget above the app is spent,
-  `running` is `paused` and the summary says which ([UC-111](UC-111-metering-overdraft-and-god-mode.md)).
+  `running` and `health.state` are `paused`, `paused.reason` names which, and the summary says it
+  ([UC-111](UC-111-metering-overdraft-and-god-mode.md)). Setting or removing a budget reaches Edge before the request answers.
 
 ## Rules this use case must honour
 

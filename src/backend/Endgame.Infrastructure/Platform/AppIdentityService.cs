@@ -219,25 +219,28 @@ public sealed class AppIdentityService(
 
     // ------------------------------------------------------------------ app-scoped session tokens
 
-    private sealed record TokenPayload(Guid A, string K, Guid U, Guid? S);
+    /// <param name="R">A member token's role ceiling (wire name), when it was minted for a capped caller — an access token's MCP call (D61). Null: none.</param>
+    private sealed record TokenPayload(Guid A, string K, Guid U, Guid? S, string? R = null);
 
     /// <summary>An app-scoped token: sealed, time-limited, naming one app — never a browser cookie, so an app cannot replay it against the console.</summary>
-    private string IssueToken(Guid appId, string kind, Guid subject, Guid? sessionId, DateTimeOffset until)
+    private string IssueToken(Guid appId, string kind, Guid subject, Guid? sessionId, DateTimeOffset until, MemberRole? ceiling = null)
     {
-        var payload = JsonSerializer.Serialize(new TokenPayload(appId, kind, subject, sessionId), Json);
+        var payload = JsonSerializer.Serialize(new TokenPayload(appId, kind, subject, sessionId, ceiling?.ToWire()), Json);
         return TokenPrefix + protection.CreateProtector(TokenPurpose).ToTimeLimitedDataProtector().Protect(payload, until);
     }
 
     /// <summary>
     /// An app-scoped session token for a member who holds a role on the app, as Edge would mint at the
-    /// door: what the app's MCP surface calls the app with on that member's behalf.
+    /// door: what the app's MCP surface calls the app with on that member's behalf. <paramref name="ceiling"/> is the
+    /// caller's role ceiling — an access token's role — carried in the token, so the app sees the member at that role at
+    /// most, never above their real one (D61).
     /// </summary>
-    public async Task<string> MemberTokenAsync(ResolvedScope app, Guid memberId, CancellationToken cancellationToken)
+    public async Task<string> MemberTokenAsync(ResolvedScope app, Guid memberId, CancellationToken cancellationToken, MemberRole? ceiling = null)
     {
         ArgumentNullException.ThrowIfNull(app);
         _ = await access.EffectiveRoleAsync(memberId, app, cancellationToken)
             ?? throw EndgameProblem.NotFound($"The scope '{app.Path}'");
-        return IssueToken(app.AppId!.Value, "member", memberId, null, clock.GetUtcNow().AddMinutes(options.Value.TokenMinutes));
+        return IssueToken(app.AppId!.Value, "member", memberId, null, clock.GetUtcNow().AddMinutes(options.Value.TokenMinutes), ceiling);
     }
 
     /// <summary>The roles a test member may hold: never the Owner's.</summary>
@@ -317,9 +320,14 @@ public sealed class AppIdentityService(
             var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == payload.U, cancellationToken);
             var role = user is null ? null : await access.EffectiveRoleAsync(user.Id, app, cancellationToken)
                 ?? (await access.IsOperatorAsync(user.Id, cancellationToken) ? new RoleGrant(user.Id, MemberRole.Admin, NodeLevel.Organisation, app.OrganisationId, app.Nodes[0].Path) : null);
-            return user is null || role is null
-                ? null
-                : new ResolvedAppSession(new AppUserView(UserId(user.Id), user.Email ?? "", user.DisplayName, "member", role.Role.ToWire()), expires);
+            if (user is null || role is null)
+            {
+                return null;
+            }
+
+            // The token's ceiling holds: the lower of the person's real role now and the one the token was minted at (D61).
+            var seen = payload.R is { } capped && MemberRoles.All.Contains(capped) && MemberRoles.FromWire(capped) is var ceiling && ceiling < role.Role ? ceiling : role.Role;
+            return new ResolvedAppSession(new AppUserView(UserId(user.Id), user.Email ?? "", user.DisplayName, "member", seen.ToWire()), expires);
         }
 
         if (payload.K != "endUser")

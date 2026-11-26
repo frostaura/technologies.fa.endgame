@@ -43,8 +43,21 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             ?? throw EndgameProblem.NotFound("The run");
         var scope = await scopes.ForRowAsync(run.OrganisationId, run.DivisionId, run.ProjectId, run.AppId, cancellationToken);
         var (estimates, spent) = await RunCostsAsync(organisationId, [runId], cancellationToken);
-        return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId), await CanTryAgainAsync(run, cancellationToken));
+        var (detail, reason) = RunStatuses.IsTerminal(run.Status) ? await FinishedAsync(run, cancellationToken) : (null, null);
+        return Run(run, scope.Path.ToString(), estimates.GetValueOrDefault(runId), spent.GetValueOrDefault(runId), await CanTryAgainAsync(run, cancellationToken)) with { Detail = detail, Reason = reason };
     }
+
+    /// <summary>The technical <c>detail</c> and the <c>reason</c> a run's <c>run.finished</c> gave, when it gave them.</summary>
+    private async Task<(string? Detail, string? Reason)> FinishedAsync(RunRecord run, CancellationToken cancellationToken)
+    {
+        var payload = await db.RunEvents.AsNoTracking()
+            .Where(e => e.OrganisationId == run.OrganisationId && e.RunId == run.Id && e.Type == RunEventTypes.RunFinished)
+            .OrderByDescending(e => e.Seq).Select(e => e.PayloadJson).FirstOrDefaultAsync(cancellationToken);
+        return payload is not null && JsonNode.Parse(payload) is JsonObject p ? (Text(p["detail"]), Text(p["reason"])) : (null, null);
+    }
+
+    /// <summary>The <c>run.finished</c> reason when the owner declined to start the work.</summary>
+    public const string DeclinedAtStart = "declined_at_start";
 
     /// <summary>Whether this run is the latest attempt at research, a build or a change, and stopped without finishing (CHG-03).</summary>
     private async Task<bool> CanTryAgainAsync(RunRecord run, CancellationToken cancellationToken)
@@ -156,6 +169,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             .ToDictionary(x => x.Key, x => x.Count);
         var routes = (await tree.RoutesAsync(cancellationToken)).Routes.Where(r => r.OrganisationId == organisationId).ToDictionary(r => r.AppId);
         session.UseOrganisation(organisationId);
+        var notBuilt = await NotBuiltAsync(organisationId, apps, cancellationToken);
+        var neverToppedUp = !await db.CreditEntries.AsNoTracking().AnyAsync(c => c.OrganisationId == organisationId && c.Kind == "top_up", cancellationToken);
 
         var everything = grants.Any(g => g.Level == NodeLevel.Organisation);
         var visible = grants.Select(g => g.NodeId).ToHashSet();
@@ -215,14 +230,19 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                     var alwaysOn = mode is not null && JsonNode.Parse(mode.Entry.ValueJson)?.ToString() == "always_on";
                     var route = routes.GetValueOrDefault(a.Id);
                     var summary = measured.GetValueOrDefault(a.Id);
-                    return new AppNodeView(a.Id, a.Slug, a.Name, AppHealth(a.Status, summary), route?.Paused == true ? "paused" : AppRunning(a.Status, alwaysOn),
+                    var paused = Paused(route);
+                    return new AppNodeView(a.Id, a.Slug, a.Name, paused is null ? AppHealth(a.Status, summary) : "paused", paused is null ? AppRunning(a.Status, alwaysOn) : "paused",
                         route?.Access ?? Domain.Platform.AppAccess.Private, shares.GetValueOrDefault(a.Id), summary is null ? null : (int)Math.Min(int.MaxValue, summary.VisitsToday), summary?.LastVisitAt,
-                        Spend(s => s.AppId == a.Id), Workers(d.Id, p.Id, a.Id), RoleAt(d.Id, p.Id, a.Id), a.Status == NodeStatuses.Archived);
+                        Spend(s => s.AppId == a.Id), Workers(d.Id, p.Id, a.Id), RoleAt(d.Id, p.Id, a.Id), a.Status == NodeStatuses.Archived, paused, notBuilt.GetValueOrDefault(a.Id), a.Status);
                 }).ToList();
 
                 var active = liveRuns.FirstOrDefault(r => r.ProjectId == p.Id && r.Kind != RunKinds.Conversation);
                 var last = lastProjectRuns.FirstOrDefault(r => r.ProjectId == p.Id);
-                var (stage, note) = ProjectStage(p, active, last, pApps);
+                // A project whose only apps were never built, because their build stopped, reads "Not built" — not as live, not as planning (D81).
+                var projectNotBuilt = active is null && pApps.Count > 0 && pApps.All(a => notBuilt.ContainsKey(a.Id) || a.Status == NodeStatuses.Archived) && pApps.Any(a => notBuilt.ContainsKey(a.Id))
+                    ? pApps.Select(a => notBuilt.GetValueOrDefault(a.Id)).OfType<NotBuiltView>().First()
+                    : null;
+                var (stage, note) = projectNotBuilt is not null ? ("not-built", projectNotBuilt.Note) : ProjectStage(p, active, last, pApps);
                 ProgressView? progress = null;
                 if (active is not null)
                 {
@@ -231,8 +251,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                         runSpend.GetValueOrDefault(active.Id), estimates.TryGetValue(active.Id, out var estimate) ? estimate : null);
                 }
 
-                projectViews.Add(new ProjectNodeView(p.Id, p.Slug, p.Name, stage, (active ?? last)?.IdeaId, note, progress,
-                    Spend(s => s.ProjectId == p.Id), Workers(d.Id, p.Id, null), appViews, RoleAt(d.Id, p.Id, null), p.Status == NodeStatuses.Archived));
+                projectViews.Add(new ProjectNodeView(p.Id, p.Slug, p.Name, stage, (active ?? last)?.IdeaId ?? projectNotBuilt?.IdeaId, note, progress,
+                    Spend(s => s.ProjectId == p.Id), Workers(d.Id, p.Id, null), appViews, RoleAt(d.Id, p.Id, null), p.Status == NodeStatuses.Archived, projectNotBuilt));
             }
 
             divisionViews.Add(new DivisionNodeView(d.Id, d.Slug, d.Name, Spend(s => s.DivisionId == d.Id), Workers(d.Id, null, null), projectViews,
@@ -244,7 +264,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var summary = $"{Count(divisionViews.Count, "division")} · {Count(shownProjects, "project")} · {Count(shownApps, "app")} · {Count(employees.Count(e => e.Kind == Domain.Workforce.EmployeeKinds.Employee), "employee")}";
         var root = new OrganisationNodeView(organisation.Id, organisation.Slug, organisation.Name, summary,
             everything ? Spend(_ => true) : new SpendView(divisionViews.Sum(v => v.Spend.MonthCredits)),
-            everything ? Workers(null, null, null) : [], RoleAt(null, null, null));
+            everything ? Workers(null, null, null) : [], RoleAt(null, null, null), neverToppedUp);
         var needs = await NeedsYouAsync(organisationId, everything, visible, cancellationToken);
         needs = [.. needs, .. await WorkforceNeedsAsync(organisationId, everything, visible, employees.Where(e => idle[e.Id].Flagged).ToList(), idle, cancellationToken)];
         var viewer = RoleResolver.Resolve(grants)?.Role.ToWire() ?? "none";
@@ -303,11 +323,13 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                                orderby a.RequestedAt
                                select new { Approval = a, r.DivisionId, r.ProjectId, r.AppId }).ToListAsync(cancellationToken);
         bool Sees(IScopedRecord row) => everything || new[] { row.DivisionId, row.ProjectId, row.AppId }.Any(id => id is { } x && visible.Contains(x));
+        var technical = await Runs.ApprovalService.TechnicalAsync(db, organisationId, approvals.Select(a => a.Approval.Id).ToList(), cancellationToken);
         var needs = new List<object>();
         needs.AddRange(ideas.Where(Sees).Select(i => new VerdictNeed("verdict", i.Id, i.Id, IdeaTitle(i.Text), i.Verdict!, i.VerdictSummary)));
         needs.AddRange(approvals
             .Where(a => everything || new[] { a.DivisionId, a.ProjectId, a.AppId }.Any(id => id is { } x && visible.Contains(x)))
-            .Select(a => new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, a.Approval.Title, a.Approval.Detail.Length == 0 ? null : a.Approval.Detail)));
+            .Select(a => new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, a.Approval.Title, a.Approval.Detail.Length == 0 ? null : a.Approval.Detail,
+                technical.GetValueOrDefault(a.Approval.Id))));
         return needs;
     }
 
@@ -360,6 +382,59 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         }
 
         return last?.Status == RunStatuses.Failed ? ("planning", "The last piece of work failed.") : ("planning", null);
+    }
+
+    /// <summary>Why Edge serves an app's holding page, from the same routing table Edge reads (D66); null when it is served.</summary>
+    public static PausedView? Paused(RouteView? route) => route?.Paused != true
+        ? null
+        : route.PausedReason == Application.Gateway.Refusals.OverdraftLimit
+            ? new PausedView(Application.Gateway.Refusals.OverdraftLimit, "Paused: the organisation reached its overdraft limit. A top-up restores it at once.")
+            : new PausedView(Application.Gateway.Refusals.BudgetExhausted, "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it.");
+
+    /// <summary>
+    /// The apps that were never built because their latest build stopped (D81): never published, and the newest build placed
+    /// in them failed or was cancelled. Kept as they are, so "Try again" still works, and said plainly.
+    /// </summary>
+    private async Task<Dictionary<Guid, NotBuiltView>> NotBuiltAsync(Guid organisationId, IReadOnlyList<App> apps, CancellationToken cancellationToken)
+    {
+        var unbuilt = apps.Where(a => a.PublishedAt is null && a.Status is NodeStatuses.Draft or NodeStatuses.Building).Select(a => (Guid?)a.Id).ToList();
+        if (unbuilt.Count == 0)
+        {
+            return [];
+        }
+
+        var builds = await db.Runs.AsNoTracking()
+            .Where(r => r.OrganisationId == organisationId && r.Kind == RunKinds.Build && unbuilt.Contains(r.AppId))
+            .GroupBy(r => r.AppId)
+            .Select(g => g.OrderByDescending(r => r.CreatedAt).First())
+            .ToListAsync(cancellationToken);
+        return builds.Where(r => r.Status is RunStatuses.Failed or RunStatuses.Cancelled)
+            .ToDictionary(r => r.AppId!.Value, NotBuilt);
+    }
+
+    /// <summary>What a build that stopped before publishing anything says on the chart and the app page.</summary>
+    public static NotBuiltView NotBuilt(RunRecord build)
+    {
+        ArgumentNullException.ThrowIfNull(build);
+        var reason = StopReason(build);
+        var note = reason switch
+        {
+            "cancelled" => "Not built — the build was cancelled.",
+            "budget" => "Not built — the build stopped when the budget ran out.",
+            "plan-declined" => "Not built — the plan was declined.",
+            _ => "Not built — the build stopped before it finished.",
+        };
+        return new NotBuiltView(reason, note, build.Id, build.IdeaId);
+    }
+
+    /// <summary>Why a failed or cancelled run stopped: <c>cancelled</c>, <c>budget</c>, <c>plan-declined</c> or <c>failed</c>.</summary>
+    public static string StopReason(RunRecord run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return run.Status == RunStatuses.Cancelled ? "cancelled"
+            : run.BudgetExhaustedAt is not null ? "budget"
+            : run.Summary?.StartsWith("The owner rejected the plan", StringComparison.Ordinal) == true ? "plan-declined"
+            : "failed";
     }
 
     /// <summary>
@@ -434,13 +509,13 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         TryAgainView? tryAgain = null;
         if (status == "failed" && latest is not null)
         {
-            tryAgain = new TryAgainView(latest.Id, "research", latest.Status == RunStatuses.Cancelled ? "cancelled" : latest.BudgetExhaustedAt is not null ? "budget" : "failed");
+            tryAgain = new TryAgainView(latest.Id, "research", (await FinishedAsync(latest, cancellationToken)).Reason == DeclinedAtStart ? "start-declined"
+                : latest.Status == RunStatuses.Cancelled ? "cancelled" : latest.BudgetExhaustedAt is not null ? "budget" : "failed");
         }
         else if (idea.Status == IdeaStatuses.Building && idea.BuildRunId is { } lastBuild
                  && await db.Runs.AsNoTracking().SingleOrDefaultAsync(r => r.OrganisationId == organisationId && r.Id == lastBuild, cancellationToken) is { Status: RunStatuses.Failed or RunStatuses.Cancelled } stopped)
         {
-            tryAgain = new TryAgainView(stopped.Id, "build", stopped.Status == RunStatuses.Cancelled ? "cancelled" : stopped.BudgetExhaustedAt is not null ? "budget"
-                : stopped.Summary?.StartsWith("The owner rejected the plan", StringComparison.Ordinal) == true ? "plan-declined" : "failed");
+            tryAgain = new TryAgainView(stopped.Id, "build", (await FinishedAsync(stopped, cancellationToken)).Reason == DeclinedAtStart ? "start-declined" : StopReason(stopped));
         }
 
         var history = await DecisionHistoryAsync(organisationId, researchRuns, cancellationToken);
@@ -534,12 +609,15 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var route = (await tree.RoutesAsync(cancellationToken)).Routes.FirstOrDefault(r => r.AppId == app.Id);
         session.UseOrganisation(scope.OrganisationId);
         var addresses = tree.Addresses(scope.Path);
-        var health = AppHealth(app.Status, measured);
+        var paused = Paused(route);
+        var notBuilt = (await NotBuiltAsync(scope.OrganisationId, [app], cancellationToken)).GetValueOrDefault(app.Id);
+        session.UseOrganisation(scope.OrganisationId);
+        // While Edge serves the holding page, the app is paused, not healthy, whatever it measured before (D66).
+        var health = paused is null ? AppHealth(app.Status, measured) : "paused";
         var summary = app.Status switch
         {
-            _ when route?.Paused == true => route.PausedReason == Application.Gateway.Refusals.OverdraftLimit
-                ? "Paused: the organisation reached its overdraft limit. A top-up restores it at once."
-                : "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it.",
+            _ when paused is not null => paused.Note,
+            _ when notBuilt is not null => notBuilt.Note,
             NodeStatuses.Running when health == "degraded" => $"Running, but {measured!.RecentErrors} of the last {measured.RecentRequests} responses failed.",
             NodeStatuses.Running => app.CurrentVersion is null ? "Running." : $"Running version {app.CurrentVersion}.",
             NodeStatuses.Sleeping => "Asleep; it wakes on the next visit.",
@@ -558,11 +636,12 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             ["latencyP95Ms"] = measured.LatencyP95Ms,
             ["lastVisitAt"] = measured.LastVisitAt,
         };
-        return new PublicAppView(app.Id, app.Name, scope.Path.ToString(), new HealthView(health, summary), route?.Paused == true ? "paused" : AppRunning(app.Status, alwaysOn),
+        return new PublicAppView(app.Id, app.Name, scope.Path.ToString(), new HealthView(health, summary), paused is not null ? "paused" : AppRunning(app.Status, alwaysOn),
             new AppAddressesView(addresses.Path, addresses.Subdomain), telemetryView,
             new CostView(spent, cap is null ? null : CascadeService.NumberOf(JsonNode.Parse(cap.Entry.ValueJson))),
             new AppSettingsView(alwaysOn ? "always-on" : "sleep", access), runningCost, sharedWith, endUsers, app.Status, app.CurrentVersion, app.PublishedAt,
-            idle is null ? TreeService.DefaultIdleMinutes : (int)(CascadeService.NumberOf(JsonNode.Parse(idle.Entry.ValueJson)) ?? TreeService.DefaultIdleMinutes));
+            idle is null ? TreeService.DefaultIdleMinutes : (int)(CascadeService.NumberOf(JsonNode.Parse(idle.Entry.ValueJson)) ?? TreeService.DefaultIdleMinutes),
+            paused, notBuilt);
     }
 
     // ---------------------------------------------------------------- credits
@@ -612,7 +691,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             .Select(e => new TopUpView(e.CreatedAt, e.Amount, e.Note ?? "")).ToListAsync(cancellationToken);
         return new CreditsView(scope.Path.ToString(), position.Balance, new MonthView(spent, ai, spent - ai), monthsLeft, budgets, estimates,
             new NotChargedView(notCharged, repairs), new OverdraftView(frostaura, own < 0 ? null : own, limits), topUps,
-            position.HeldOrganisation, position.Balance + position.OverdraftLimit);
+            position.HeldOrganisation, position.Balance + position.OverdraftLimit, topUps.Count == 0);
     }
 
     /// <summary>The narrower overdraft limits (division, project, app) on the scope's chain above it and beneath it, in tree order.</summary>
@@ -702,7 +781,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
 
     /// <summary>
     /// Estimates scored against what the work cost, in the scope (and for one employee when given — the run's owner, or
-    /// for a run nobody owns, such as a factory build, the employee its billable model calls were mostly charged to): the
+    /// for a run nobody owns, such as a factory build or research, the employee its billable model calls were mostly charged
+    /// to, a contractor's calls counting as its briefer's, so the researcher who led the work is scored for it (D75)): the
     /// Runner's <c>estimate.scored { expectedCredits, actualCredits }</c>, and the older
     /// <c>{ estimated, actual }</c>. Null before any was scored.
     /// </summary>
@@ -720,9 +800,10 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                 WHERE e.organisation_id = @org AND e.type = 'estimate.scored'
                   AND (@division IS NULL OR r.division_id = @division) AND (@project IS NULL OR r.project_id = @project) AND (@app IS NULL OR r.app_id = @app)
                   AND (@employee IS NULL OR COALESCE(r.employee_id, (
-                        SELECT c.employee_id FROM credit_entries c
+                        SELECT COALESCE(w.briefed_by, c.employee_id) FROM credit_entries c
+                        LEFT JOIN employees w ON w.organisation_id = c.organisation_id AND w.id = c.employee_id
                         WHERE c.organisation_id = r.organisation_id AND c.run_id = r.id AND c.kind = 'settlement' AND c.billable AND c.employee_id IS NOT NULL
-                        GROUP BY c.employee_id ORDER BY SUM(c.amount) DESC, c.employee_id LIMIT 1)) = @employee)) x
+                        GROUP BY COALESCE(w.briefed_by, c.employee_id) ORDER BY SUM(c.amount) DESC, COALESCE(w.briefed_by, c.employee_id) LIMIT 1)) = @employee)) x
             WHERE x.estimated IS NOT NULL AND x.actual IS NOT NULL
             """, cancellationToken, P("org", scope.OrganisationId), P("division", scope.DivisionId), P("project", scope.ProjectId), P("app", scope.AppId), P("employee", employeeId));
         var pieces = new List<(decimal Estimated, decimal Actual)>();

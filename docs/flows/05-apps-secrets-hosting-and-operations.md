@@ -1199,15 +1199,15 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Core
 - **Learn first:** APP-11
 - **What you learn:** a cap holds for everything beneath it; nothing is lost, and the app returns when the budget is raised or the month turns.
-- **You know it worked when:** visitors see the page below, and the app page's Health note reads "Paused: a monthly budget above it is spent…".
+- **You know it worked when:** visitors see the page below, and the app page's Health reads paused with "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it." — on the chart too.
 - **Steps:**
   1. Edge serves "This app is paused" / "It has used this month's budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns." It never wakes the app.
-  2. The app page shows the paused summary.
-  3. Raising the budget (APP-11) or the month turning restores the app.
+  2. The app page and its chart row read health `paused` (never "Healthy"), with `paused { reason: budget_exhausted, note }` — from the same routing table Edge serves. At the overdraft limit the reason is `overdraft_limit` and the note "Paused: the organisation reached its overdraft limit. A top-up restores it at once." (HOST-04).
+  3. Raising or removing the budget (APP-11), a top-up, or the month turning restores the app. A person's budget, overdraft or top-up change has Edge read the new table before the request answers, so the app is back at once.
 - **Variations and refusals:** none.
 - **Where:** `AppGate.cs`; `ReadModels.AppAsync`
 - **Reachable from:** UI. The budget is raised on the app page (APP-11) or the credits page, or by API or MCP.
-- **Covered by tests:** `EdgePipelineTests.An_app_paused_by_a_spent_budget_says_so`, `A_paused_app_gets_its_holding_page_and_is_never_woken`
+- **Covered by tests:** `EdgePipelineTests.An_app_paused_by_a_spent_budget_says_so`, `A_paused_app_gets_its_holding_page_and_is_never_woken`; `WalkTwoServerTests.An_app_paused_by_a_spent_budget_reads_paused_with_its_reason_on_the_chart_and_its_page`, `Setting_or_removing_a_budget_has_Edge_read_the_new_table_before_the_request_returns`
 
 ### HOST-04 An app paused at the overdraft limit
 - **Who:** a visitor; the owner
@@ -1232,17 +1232,17 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Needs:** the app crashes
 - **Level:** Core
 - **Learn first:** HOST-01, VER-02
-- **What you learn:** a crash is caught, shown in plain words, retried after a pause, and reported to a person.
+- **What you learn:** a crash is caught, shown in plain words, started again by the next visit after a short pause, and reported to a person.
 - **You know it worked when:** visitors see the page below, and a notification titled "<App> stopped working" appears.
 - **Steps:**
-  1. Edge serves "This app has stopped for a moment" / "Something went wrong inside it. It will be started again shortly — please try again in a moment." (Retry-After 15) and makes no wake for 15 seconds.
+  1. Edge serves "This app has stopped for a moment" / "Something went wrong inside it, and its owner has been told. Please try again in a minute: the next visit starts it again." (Retry-After 15) and makes no wake for 15 seconds. Nothing restarts it without a visit; after the pause, the next visit starts its last version again.
   2. Dock reports the app as failed. The notification reads "<App> stopped working" / "It crashed and visitors see an unavailable page. Its last good version can be restored from its history." (at most once a minute per app).
   3. The app page shows Health "Down" with "It stopped working and needs attention.".
   4. The owner may restore an earlier version (VER-02).
 - **Variations and refusals:** a crash during a wake fails every waiting visitor at once. A crash report that was lost is caught by asking Dock.
 - **Where:** `AppGate.cs`; `AppRuntime.MarkCrashed`; `InternalEndpoints.cs` `/apps/{id}/state`
 - **Reachable from:** UI
-- **Covered by tests:** `AppRuntimeTests` (crash tests); `HostingIntegrationTests.A_crash_gets_the_unavailable_page_at_once_is_reported_and_recovers`
+- **Covered by tests:** `AppRuntimeTests` (crash tests); `HostingIntegrationTests.A_crash_gets_the_unavailable_page_at_once_is_reported_and_recovers`; `EdgeRoutingTests.The_crash_page_says_what_is_true…`
 
 ### HOST-06 Reach an app at either of its two addresses
 - **Who:** any visitor

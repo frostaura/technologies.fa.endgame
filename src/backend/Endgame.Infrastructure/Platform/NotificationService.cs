@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Endgame.Application.Common;
 using Endgame.Application.Email;
 using Endgame.Domain.Access;
+using Endgame.Domain.Credits;
 using Endgame.Domain.Platform;
 using Endgame.Domain.Runs;
 using Endgame.Domain.Tree;
@@ -43,7 +44,9 @@ public sealed record NotificationSubject(string Kind, Guid Id);
 /// or declined. Its title then says what happened ("You approved “Accept this plan?”", "Theo was hired as …"), and
 /// it no longer counts as unread (D40).
 /// </param>
-public sealed record NotificationView(Guid Id, string Kind, string Severity, string Title, string Detail, string Scope, NotificationSubject? Subject, DateTimeOffset CreatedAt, bool Read, DateTimeOffset? EmailedAt, bool Resolved = false);
+/// <param name="Technical">For an approval: technical mode's detail beside the plain <paramref name="Detail"/> (D71); null otherwise.</param>
+public sealed record NotificationView(Guid Id, string Kind, string Severity, string Title, string Detail, string Scope, NotificationSubject? Subject, DateTimeOffset CreatedAt, bool Read, DateTimeOffset? EmailedAt, bool Resolved = false,
+    string? Technical = null);
 
 public sealed record NotificationFeed(string Organisation, int Unread, IReadOnlyList<NotificationView> Notifications);
 
@@ -136,7 +139,11 @@ public sealed class NotificationService(
         bool Unread(NotificationRecord n) => !read.Contains(n.Id) && !answered.ContainsKey(n.Id);
         var paths = new Dictionary<(Guid?, Guid?, Guid?), string>();
         var views = new List<NotificationView>();
-        foreach (var n in visible.Where(n => !unreadOnly || Unread(n)).Take(Math.Clamp(limit, 1, MaxFeed)))
+        var shown = visible.Where(n => !unreadOnly || Unread(n)).Take(Math.Clamp(limit, 1, MaxFeed)).ToList();
+        var technical = await Runs.ApprovalService.TechnicalAsync(db, org.OrganisationId,
+            shown.Where(n => n.Kind == NotificationKinds.Approval && n.DedupeKey.StartsWith("approval:", StringComparison.Ordinal))
+                .Select(n => Guid.TryParseExact(n.DedupeKey["approval:".Length..], "N", out var a) ? a : Guid.Empty).Where(a => a != Guid.Empty).ToList(), cancellationToken);
+        foreach (var n in shown)
         {
             if (!paths.TryGetValue((n.DivisionId, n.ProjectId, n.AppId), out var path))
             {
@@ -148,7 +155,9 @@ public sealed class NotificationService(
             var resolved = answered.TryGetValue(n.Id, out var outcome);
             views.Add(new NotificationView(n.Id, n.Kind, n.Severity, resolved ? outcome! : n.Title, n.Detail, path,
                 subject?["kind"] is JsonValue k && Guid.TryParse(subject["id"]?.GetValue<string>(), out var sid) ? new NotificationSubject(k.GetValue<string>(), sid) : null,
-                n.CreatedAt, read.Contains(n.Id) || resolved, n.EmailedAt, resolved));
+                n.CreatedAt, read.Contains(n.Id) || resolved, n.EmailedAt, resolved,
+                n.Kind == NotificationKinds.Approval && Guid.TryParseExact(n.DedupeKey.StartsWith("approval:", StringComparison.Ordinal) ? n.DedupeKey["approval:".Length..] : "", "N", out var aid)
+                    ? technical.GetValueOrDefault(aid) : null));
         }
 
         session.UseOrganisation(org.OrganisationId);
@@ -176,7 +185,7 @@ public sealed class NotificationService(
         var approvals = await db.Approvals.AsNoTracking().Where(a => a.OrganisationId == organisationId && approvalIds.Contains(a.Id) && a.Status != ApprovalStatuses.Pending)
             .Select(a => new { a.Id, a.Title, a.Status, a.AnsweredBy }).ToDictionaryAsync(a => a.Id, cancellationToken);
         var hires = await db.HireProposals.AsNoTracking().Where(h => h.OrganisationId == organisationId && hireIds.Contains(h.Id) && h.Status != Domain.Workforce.HireStatuses.Proposed)
-            .Select(h => new { h.Id, h.Name, h.Role, h.Status }).ToDictionaryAsync(h => h.Id, cancellationToken);
+            .Select(h => new { h.Id, h.Name, h.Role, h.Status, h.DecidedVia, h.DecidedBy }).ToDictionaryAsync(h => h.Id, cancellationToken);
         var ideas = await db.Ideas.AsNoTracking().Where(i => i.OrganisationId == organisationId && ideaIds.Contains(i.Id) && i.Status != IdeaStatuses.AwaitingDecision)
             .Select(i => new { i.Id, i.Text, i.Status, i.DecidedBy }).ToDictionaryAsync(i => i.Id, cancellationToken);
         var people = approvals.Values.Select(a => a.AnsweredBy).Concat(ideas.Values.Select(i => i.DecidedBy)).OfType<Guid>().Distinct().ToList();
@@ -194,7 +203,9 @@ public sealed class NotificationService(
                     _ => $"No longer waiting: “{a.Title}”",
                 },
                 NotificationKinds.Hire when Keyed(n, "hire:") is { } id && hires.TryGetValue(id, out var h) =>
-                    h.Status == Domain.Workforce.HireStatuses.Accepted ? $"{h.Name} was hired as {h.Role}" : $"{h.Name} was not hired as {h.Role}",
+                    h.Status == Domain.Workforce.HireStatuses.Accepted ? $"{h.Name} was hired as {h.Role}"
+                    : Work.HireService.IsWithdrawn(h.Status, h.DecidedVia, h.DecidedBy) ? $"Hiring {h.Name} as {h.Role} was withdrawn"
+                    : $"{h.Name} was not hired as {h.Role}",
                 NotificationKinds.Verdict when Keyed(n, "verdict:") is { } id && ideas.TryGetValue(id, out var i) => i.Status switch
                 {
                     IdeaStatuses.Building => $"{Who(i.DecidedBy)} chose to build: {ReadModels.IdeaTitle(i.Text)}",

@@ -21,7 +21,9 @@ Everything an agent does is traceable as it happens, and a person can stop or re
    is drained an `event: end` closes the stream.
 3. `POST /api/runs/{id}/pause | resume | cancel` (optional `{ reason }`) → the updated `Run`. Resume puts it
    back in the queue with no lease, so the Runner claims it and replays its log. Cancel finishes it and
-   releases its open reservations.
+   releases its open reservations. Any end of a run — cancel, failure, budget stop or success — closes the
+   contractors it briefed in the same transaction; a build that ends with nothing published also withdraws the
+   hire proposals it raised, and its app and project read `notBuilt`.
 4. A run raises a checkpoint (`POST /internal/approvals`) and waits (`waiting`); the person answers
    `POST /api/runs/{id}/approvals/{approvalId} { decision: approve|reject, note? }` → 204, once.
 5. `GET /api/tasks?scope=&status=&limit=` lists the task graph at and beneath a scope.

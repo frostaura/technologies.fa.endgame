@@ -59,7 +59,9 @@ public sealed record WorkCountsView(int Accepted, int SentBack, decimal? Accepte
 
 public sealed record RunCountsView(int Finished, int Succeeded, int Failed, int Cancelled);
 
-public sealed record CostToDateView(decimal ToDateCredits, decimal MonthCredits);
+/// <summary>What the employee has cost: to date and this month, counting the contractors it briefs — as its budget does (D74).</summary>
+/// <param name="OwnToDateCredits">Its own model calls and hosting, without its contractors.</param>
+public sealed record CostToDateView(decimal ToDateCredits, decimal MonthCredits, decimal OwnToDateCredits = 0, decimal OwnMonthCredits = 0);
 
 /// <summary>Repairs of its own failed work: recorded, never charged (CLAUDE.md rule 9).</summary>
 public sealed record RepairsNotChargedView(decimal Credits, long Calls);
@@ -70,8 +72,13 @@ public sealed record ContractorSpendView(int Engaged, int Working, decimal ToDat
 /// <summary>An employee's track record, derived at read time from its runs, their logs and the ledger — never stored as counters.</summary>
 public sealed record TrackRecordView(Guid EmployeeId, WorkCountsView Work, RunCountsView Runs, RepairsNotChargedView RepairsNotCharged, CostToDateView Cost, ContractorSpendView Contractors, EstimatesView? Estimates);
 
-/// <summary><c>GET /api/employees/{id}</c>: the employee, its track record, the contractors it has working now and who reports to it.</summary>
-public sealed record EmployeeDetailView(EmployeeView Employee, TrackRecordView TrackRecord, IReadOnlyList<EmployeeView> Contractors, IReadOnlyList<EmployeeView> Reports);
+/// <summary>A run an employee led: its own, one it held a task in, one charged to it, or one whose contractors it briefed.</summary>
+/// <param name="Status">queued, running, waiting, paused, finished, failed or cancelled.</param>
+public sealed record LedRunView(Guid Id, string Title, string Kind, string Status, DateTimeOffset StartedAt, DateTimeOffset? FinishedAt);
+
+/// <summary><c>GET /api/employees/{id}</c>: the employee, its track record, the contractors it has working now, who reports to it, and the runs it led, newest first (D74).</summary>
+public sealed record EmployeeDetailView(EmployeeView Employee, TrackRecordView TrackRecord, IReadOnlyList<EmployeeView> Contractors, IReadOnlyList<EmployeeView> Reports,
+    IReadOnlyList<LedRunView>? RecentRuns = null);
 
 /// <summary>A job description as written by the owner, a proposal or the Runner. Null fields keep what is there.</summary>
 public sealed record JobDescriptionInput(string? Mandate, IReadOnlyList<string>? Tools, IReadOnlyList<string>? Services, decimal? MonthlyCreditLimit, string? ModelTier);
@@ -165,7 +172,29 @@ public sealed partial class EmployeeService(
             .Where(e => e.OrganisationId == organisationId && e.Status != EmployeeStatuses.Released && (e.BriefedById == employeeId || e.ReportsToId == employeeId))
             .OrderBy(e => e.Name).ToListAsync(cancellationToken);
         var views = await ViewsAsync(organisationId, related, cancellationToken);
-        return new EmployeeDetailView(employee, track, views.Where(v => v.Kind == EmployeeKinds.Contractor).ToList(), views.Where(v => v.Kind == EmployeeKinds.Employee).ToList());
+        return new EmployeeDetailView(employee, track, views.Where(v => v.Kind == EmployeeKinds.Contractor).ToList(), views.Where(v => v.Kind == EmployeeKinds.Employee).ToList(),
+            await LedRunsAsync(organisationId, employeeId, cancellationToken));
+    }
+
+    public const int MaxLedRuns = 12;
+
+    /// <summary>
+    /// The runs an employee led, newest first: its own, one it claimed a task in, one with a model call charged to it, or one
+    /// it briefed contractors for. A researcher holds no tasks, so this is its recent work (D74).
+    /// </summary>
+    public async Task<IReadOnlyList<LedRunView>> LedRunsAsync(Guid organisationId, Guid employeeId, CancellationToken cancellationToken)
+    {
+        session.UseOrganisation(organisationId);
+        var rows = await db.Runs.AsNoTracking()
+            .Where(r => r.OrganisationId == organisationId && r.Kind != RunKinds.Conversation)
+            .Where(r => r.EmployeeId == employeeId
+                || db.Tasks.Any(t => t.OrganisationId == r.OrganisationId && t.RunId == r.Id && t.EmployeeId == employeeId)
+                || db.CreditEntries.Any(c => c.OrganisationId == r.OrganisationId && c.RunId == r.Id && c.EmployeeId == employeeId)
+                || db.Employees.Any(c => c.OrganisationId == r.OrganisationId && c.BriefRunId == r.Id && c.BriefedById == employeeId))
+            .OrderByDescending(r => r.CreatedAt).ThenBy(r => r.Id)
+            .Take(MaxLedRuns)
+            .ToListAsync(cancellationToken);
+        return rows.Select(r => new LedRunView(r.Id, r.Title, ReadModels.RunKind(r.Kind), ReadModels.RunStatus(r.Status), r.StartedAt ?? r.CreatedAt, r.FinishedAt)).ToList();
     }
 
     /// <summary>
@@ -235,7 +264,7 @@ public sealed partial class EmployeeService(
             new WorkCountsView(accepted, sentBack, accepted + sentBack == 0 ? null : decimal.Round(100m * accepted / (accepted + sentBack), 1), (int)n[9]),
             new RunCountsView((int)n[0], (int)n[1], (int)n[2], (int)n[3]),
             new RepairsNotChargedView(credits[2], n[6]),
-            new CostToDateView(credits[0], credits[1]),
+            new CostToDateView(credits[0] + credits[3], credits[1] + credits[4], credits[0], credits[1]),
             new ContractorSpendView((int)n[7], (int)n[8], credits[3], credits[4]),
             estimates);
     }

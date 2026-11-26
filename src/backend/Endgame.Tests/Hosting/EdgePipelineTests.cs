@@ -41,6 +41,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     private readonly Guid privateApp = Guid.NewGuid();
     private readonly Guid pausedApp = Guid.NewGuid();
     private readonly Guid unpublishedApp = Guid.NewGuid();
+    private readonly Guid privateDraftApp = Guid.NewGuid();
     private readonly Guid budgetApp = Guid.NewGuid();
     private static readonly System.Collections.Concurrent.ConcurrentQueue<(string Name, string Signature, string Body)> Callbacks = new();
 
@@ -53,6 +54,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
             Routes.View(privateApp, project: "secret", target: Target, access: AppAccess.Private, hooks: "court-sensor"),
             Routes.View(pausedApp, project: "paused", target: Target, paused: true),
             Routes.View(unpublishedApp, project: "soon", target: Target, version: null),
+            Routes.View(privateDraftApp, project: "draft", target: Target, access: AppAccess.Private, version: null),
             Routes.View(budgetApp, project: "budget", target: Target, paused: true, pausedReason: PausedReasons.BudgetExhausted));
 
         publicPort = FreePort();
@@ -86,7 +88,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         }, services => services.Replace(ServiceDescriptor.Singleton<IAppBackend>(backend)));
         await edge.StartAsync();
         client = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false }) { BaseAddress = new Uri($"http://127.0.0.1:{publicPort}") };
-        await WaitForAsync(async () => (await ControlAsync(HttpMethod.Get, "/internal/routes")).Contains("\"apps\":5", StringComparison.Ordinal));
+        await WaitForAsync(async () => (await ControlAsync(HttpMethod.Get, "/internal/routes")).Contains("\"apps\":6", StringComparison.Ordinal));
     }
 
     public async Task DisposeAsync()
@@ -596,6 +598,21 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     {
         using var response = await client.GetAsync("/acme/apps/soon/web/");
         Assert.Contains("isn&#39;t ready yet", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_private_unpublished_app_asks_a_stranger_to_sign_in_and_tells_a_member_it_is_not_ready()
+    {
+        // The address exists before the first version (D68): who may not open it is sent to sign in, as for any private app.
+        using var stranger = await client.GetAsync("/acme/apps/draft/web/");
+        Assert.Equal(HttpStatusCode.Redirect, stranger.StatusCode);
+        Assert.StartsWith("/acme/apps/draft/web/_endgame/auth/sign-in", stranger.Headers.Location!.OriginalString, StringComparison.Ordinal);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/draft/web/");
+        request.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.MemberSession}");
+        using var member = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, member.StatusCode);
+        Assert.Contains("isn&#39;t ready yet", await member.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
     [Fact]

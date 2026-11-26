@@ -557,15 +557,23 @@ public sealed record RunningCostView(string State, int WindowDays, int MinimumHo
 // ------------------------------------------------------------------------------------ edge
 
 /// <summary>
-/// Tells Edge its routing table changed (<c>POST {EdgeControl}/internal/routes/refresh</c>), best
-/// effort and in the background: Edge polls the table anyway, this only makes a top-up, a pause or
-/// a new webhook take effect at once. Switched off when <c>Services:EdgeControl</c> is empty.
+/// Tells Edge its routing table changed (<c>POST {EdgeControl}/internal/routes/refresh</c>). Edge polls the
+/// table anyway; this makes a top-up, a budget or overdraft change, a pause, a new app or a new webhook take
+/// effect at once. <see cref="RoutesChangedAsync"/> waits for Edge to have read the new table (its refresh
+/// endpoint answers after reading), so a person who changes a budget and opens the app sees the change
+/// (D67); a failure is logged and never fails the change. Switched off when <c>Services:EdgeControl</c> is empty.
 /// </summary>
 public sealed class EdgeNotifier(IHttpClientFactory http, IOptions<ServiceAddresses> addresses, IConfiguration configuration, ILogger<EdgeNotifier> logger)
 {
     public const string ClientName = "edge-control";
 
-    public void RoutesChanged()
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>In the background, for work that is not a person's request.</summary>
+    public void RoutesChanged() => _ = Task.Run(() => RoutesChangedAsync(CancellationToken.None));
+
+    /// <summary>Tells Edge and waits, at most <see cref="Timeout"/>, until it has read the new table.</summary>
+    public async Task RoutesChangedAsync(CancellationToken cancellationToken)
     {
         var control = addresses.Value.EdgeControl;
         if (string.IsNullOrWhiteSpace(control) || !Uri.TryCreate(control, UriKind.Absolute, out var root))
@@ -573,21 +581,18 @@ public sealed class EdgeNotifier(IHttpClientFactory http, IOptions<ServiceAddres
             return;
         }
 
-        var token = configuration["ENDGAME_SERVICE_TOKEN"];
-        _ = Task.Run(async () =>
+        try
         {
-            try
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(root, "/internal/routes/refresh"));
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                using var response = await http.CreateClient(ClientName).SendAsync(request, timeout.Token);
-            }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
-            {
-                logger.LogDebug("Edge was not told about a routing change ({Message}); it will see it on its next poll.", ex.Message);
-            }
-        });
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(root, "/internal/routes/refresh"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", configuration["ENDGAME_SERVICE_TOKEN"]);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(Timeout);
+            using var response = await http.CreateClient(ClientName).SendAsync(request, timeout.Token);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
+        {
+            logger.LogDebug("Edge was not told about a routing change ({Message}); it will see it on its next poll.", ex.Message);
+        }
     }
 }
 

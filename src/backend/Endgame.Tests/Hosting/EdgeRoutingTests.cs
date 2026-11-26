@@ -232,6 +232,15 @@ public sealed class UnavailablePageTests
     }
 
     [Fact]
+    public void The_crash_page_says_what_is_true_the_owner_is_told_and_the_next_visit_starts_it_again()
+    {
+        // Edge keeps a crashed app down for a short pause and the next visit wakes it; nothing restarts it sooner (D69, HOST-05).
+        var (_, message) = UnavailablePage.Copy(Unavailable.Crashed);
+        Assert.Equal("Something went wrong inside it, and its owner has been told. Please try again in a minute: the next visit starts it again.", message);
+        Assert.DoesNotContain("shortly", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Without_a_mark_address_the_page_shows_the_wordmark() =>
         Assert.Contains("class=\"wordmark\"", UnavailablePage.Render(Unavailable.Crashed, null), StringComparison.Ordinal);
 
