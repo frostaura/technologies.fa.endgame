@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TAP } from "@/lib/touch";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -94,7 +95,7 @@ function AccountBody({ me }: { me: Me }) {
                       ))}
                     </ul>
                     {grants.some((g) => roleRank(g.role) >= roleRank("admin")) && (
-                      <Link href={paths.people(org.slug)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+                      <Link href={paths.people(org.slug)} className={cn("self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover", TAP)}>
                         People in {org.name}
                       </Link>
                     )}

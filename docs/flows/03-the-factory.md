@@ -283,14 +283,14 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   7. **"No red line is crossed"**, with the reasoning.
   8. The decision controls (VERD-05 to VERD-09), or the decision already taken (VERD-13).
 - **You know it worked when:** the three cards and the decision buttons are visible.
-- **Variations and refusals:** normal mode strips repository names in brackets from product names. Technical mode shows full URLs.
+- **Variations and refusals:** normal mode strips repository names in brackets from product names. Technical mode shows full URLs. On a phone the order changes so the call comes first: the banner, a red line's alert, then the decision controls full width (a confirmation opens in place), then every other section as a folded row — "The case against, argued first" open, "Who already does this" ("{n} products"), "What gap is left", "Who would want it", "What to change", "What would change the verdict", "No red line is crossed", and VERD-04's three sections, each one tap to open.
 - **Where:** `VerdictView.tsx`, `verdictModel.ts`.
 - **Reachable from:** UI; MCP `idea_get` (raw document).
 - **Covered by tests:** `VerdictView.test.tsx` (the shape tests and "shows the verdict as research wrote it…").
 
 ### VERD-04 Read how often research says no, and how it was researched
 - **Who:** Viewer or above.
-- **Starts at:** the side panel of `/ideas/{id}`.
+- **Starts at:** the side panel of `/ideas/{id}` (on a phone, the last three folded rows of the page).
 - **Needs:** an idea.
 - **Level:** Core. **Learn first:** VERD-03.
 - **What you learn:** a verdict that never says no is treated as a fault, so its record is shown.

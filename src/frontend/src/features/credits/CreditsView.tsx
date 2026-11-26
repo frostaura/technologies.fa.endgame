@@ -1,4 +1,5 @@
 import { Link } from "@/components/Link";
+import { TAP_LINE } from "@/lib/touch";
 import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { estimateHeadline, estimateSpread } from "@/lib/estimates";
 import { formatCredits, formatDate, formatNumber, percent, plural } from "@/lib/format";
@@ -166,11 +167,11 @@ function BudgetRow({ line, lines, organisation, isAdmin }: { line: BudgetLine; l
     >
       <span className={cn("min-w-0 truncate sm:col-span-2", INDENT[Math.min(line.depth, 4)], line.depth <= 1 && "font-semibold")}>
         {line.appId ? (
-          <Link href={paths.app(line.appId)} className="rounded-xs text-primary-link hover:text-primary-hover">
+          <Link href={paths.app(line.appId)} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP_LINE)}>
             {line.name}
           </Link>
         ) : line.employeeId ? (
-          <Link href={paths.employee(line.employeeId)} className="rounded-xs text-primary-link hover:text-primary-hover">
+          <Link href={paths.employee(line.employeeId)} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP_LINE)}>
             {line.name}
           </Link>
         ) : (

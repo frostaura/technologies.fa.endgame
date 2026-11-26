@@ -162,7 +162,7 @@ function Organisation({
         <div className="relative flex min-w-0 flex-col gap-2 max-sm:w-full">
           <span className="text-eyebrow font-semibold uppercase text-primary-ink-soft">Organisation</span>
           <h1 className="font-display text-4xl font-bold max-sm:text-3xl sm:text-hero">
-            <button type="button" aria-pressed={isRootSelected} onClick={() => onSelect(root)} className="rounded-xs text-left">
+            <button type="button" aria-pressed={isRootSelected} onClick={() => onSelect(root)} className="rounded-xs text-left phone:min-h-touch">
               {org.name}
             </button>
           </h1>

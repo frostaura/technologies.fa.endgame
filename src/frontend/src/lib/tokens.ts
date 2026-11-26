@@ -205,6 +205,8 @@ export const layout = {
   height: { graph: "40rem", sheet: "calc(var(--visible-height, 100dvh) - 2.5rem)", visible: "var(--visible-height, 100dvh)" },
   /** The smallest comfortable touch target. */
   touch: "44px",
+  /** The clear band above and below a 32px control (a switch) that makes it a touch target without drawing it larger. */
+  touchPad: "6px",
   /** The phone's bottom bar, above the home indicator's safe area; pages leave this much room under their last line. */
   nav: "4rem",
   /** The phone's header row. */

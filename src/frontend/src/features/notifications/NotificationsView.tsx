@@ -1,4 +1,5 @@
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { Fold } from "@/components/Fold";
 import { Icon } from "@/components/Icon";
 import { Empty } from "@/components/states";
 import { RISE } from "@/lib/motion";
@@ -31,6 +32,7 @@ export function NotificationsView() {
               <NotificationFeed organisation={org.slug} />
             </ErrorBoundary>
           </div>
+          <Fold title="What you are told about" summary="Verdicts, approvals, hires, budgets, credits, apps and security">
           <aside className="flex flex-col gap-2 rounded-md border bg-surface p-5 text-ink-body shadow-card">
             <h2 className="text-lg font-semibold text-ink">What you are told about</h2>
             <ul className="flex list-disc flex-col gap-1 pl-5">
@@ -45,6 +47,7 @@ export function NotificationsView() {
             </ul>
             <p className="text-sm text-ink-muted">Owners and Admins are told about what their grant covers; others see an empty feed.</p>
           </aside>
+          </Fold>
         </div>
       ) : null}
     </AppShell>

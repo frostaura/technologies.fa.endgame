@@ -1,4 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
+import { cn } from "@/lib/utils";
+import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
@@ -241,7 +243,7 @@ export function AppItself({ app, canChange, isAdmin }: { app: AppDetail; canChan
         <p className="text-sm text-ink-muted">A Builder or above renames or archives it.</p>
       )}
       {isAdmin && <DeleteNode level="app" id={app.id} name={app.name} tree={tree} onDeleted={() => navigate(entered ? paths.homeOf(entered) : paths.home())} />}
-      <Link href={paths.manage(app.scope, entered)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+      <Link href={paths.manage(app.scope, entered)} className={cn("self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover", TAP)}>
         Manage it with the rest of the organisation
       </Link>
     </section>

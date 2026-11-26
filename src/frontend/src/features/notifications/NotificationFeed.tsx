@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { timeAgo } from "@/lib/format";
+import { formatNumber, timeAgo } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { cn } from "@/lib/utils";
+import { useViewport } from "@/lib/useViewport";
 import { useAppSelector } from "@/store";
 import { useGetNotificationsQuery, useMarkAllReadMutation, useMarkReadMutation } from "@/store/api";
 import type { NotificationItem } from "@/store/types";
-import { notificationHref, notificationLines, settledLabel } from "./notificationModel";
+import { notificationHref, notificationLines, PHONE_PAGE, phoneShown, settledLabel } from "./notificationModel";
 import { NOTIFICATIONS_POLL_MS } from "./useUnread";
 
 /** The feed of what needs the person, newest first: each links to what it is about, and can be marked read. */
@@ -19,6 +21,9 @@ export function NotificationFeed({ organisation, limit, onNavigate, compact = fa
   const view = viewOf(query);
   const [markAll, all] = useMarkAllReadMutation();
   const [problem, setProblem] = useState<string | null>(null);
+  // A phone opens on what is unread and the newest few, and shows older ones a page at a time.
+  const phone = useViewport() === "phone";
+  const [older, setOlder] = useState(0);
 
   const readAll = async () => {
     setProblem(null);
@@ -59,15 +64,30 @@ export function NotificationFeed({ organisation, limit, onNavigate, compact = fa
               Verdicts waiting, approvals, hires, budgets running low and anything that breaks appear here.
             </Empty>
           ) : (
-            <ul aria-label="Notifications" className="flex flex-col gap-2">
-              {view.data.notifications.slice(0, limit).map((n) => (
-                <Row key={n.id} organisation={organisation} item={n} onNavigate={onNavigate} />
-              ))}
-            </ul>
+            <PagedRows items={view.data.notifications.slice(0, limit)} paged={phone && limit === undefined} older={older} onOlder={() => setOlder((n) => n + PHONE_PAGE)}>
+              {(n) => <Row key={n.id} organisation={organisation} item={n} onNavigate={onNavigate} />}
+            </PagedRows>
           )}
         </>
       )}
     </div>
+  );
+}
+
+function PagedRows({ items, paged, older, onOlder, children }: { items: NotificationItem[]; paged: boolean; older: number; onOlder: () => void; children: (n: NotificationItem) => ReactNode }) {
+  const shown = paged ? phoneShown(items, older) : items;
+  const hidden = items.length - shown.length;
+  return (
+    <>
+      <ul aria-label="Notifications" className="flex flex-col gap-2">
+        {shown.map(children)}
+      </ul>
+      {hidden > 0 && (
+        <Button variant="soft" className="w-full" onClick={onOlder}>
+          Show older ({formatNumber(Math.min(hidden, PHONE_PAGE))} of {formatNumber(hidden)})
+        </Button>
+      )}
+    </>
   );
 }
 
@@ -106,7 +126,7 @@ function Row({ organisation, item, onNavigate }: { organisation: string; item: N
           if (unread) void read();
           onNavigate?.();
         }}
-        className={cn("break-words hover:text-primary-hover", item.resolved ? "font-medium text-ink-body" : "font-semibold text-ink")}
+        className={cn("break-words hover:text-primary-hover", TAP, item.resolved ? "font-medium text-ink-body" : "font-semibold text-ink")}
       >
         {lines.title}
       </Link>

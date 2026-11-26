@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
@@ -209,7 +210,7 @@ function AppBody({ app }: { app: AppDetail }) {
       )}
 
       {builder && (
-        <Fold title="Change it" summary="Say what to change; it is built in a preview first">
+        <Fold title={`Change ${app.name}`} summary="Say what to change; it is built in a preview first">
           <ErrorBoundary name="Changing this app">
             <ChangeRequest appId={app.id} appName={app.name} />
           </ErrorBoundary>
@@ -243,7 +244,7 @@ function AppBody({ app }: { app: AppDetail }) {
           <Fold title="Sharing" summary={app.settings.access === "shared" ? plural(app.sharedWith, "person", "people") : capitalise(app.settings.access)}>
             <ErrorBoundary name="Sharing">{app.settings.access === "shared" ? admin ? <Sharing app={app} /> : <SharingForOthers app={app} /> : <SharingOff app={app} />}</ErrorBoundary>
           </Fold>
-          <Fold title="Its secrets">
+          <Fold title="Secrets">
             <ErrorBoundary name="The secrets">
               <AppSecrets scope={app.scope} canSee={admin} />
             </ErrorBoundary>
@@ -481,7 +482,7 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
           <Icon name="secrets" tinted />
           Secrets
         </h2>
-        <Link href={paths.secrets(scope)} className="rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+        <Link href={paths.secrets(scope)} className={cn("rounded-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
           Manage secrets
         </Link>
       </div>

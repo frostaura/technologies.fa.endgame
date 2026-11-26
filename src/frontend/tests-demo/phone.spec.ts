@@ -7,11 +7,13 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
  * pages open short.
  *
  * Page heights on arrival (the budgets): the org chart under 2,400 px, an app's page under 2,000 px,
- * a run under 3,200 px — about two to four screens, where they were 6,300, 7,300 and 11,500.
+ * a run under 3,200 px, a verdict under 2,400 px with its first decision in the first 1,400 px, and
+ * notifications under 2,600 px — about two to four screens, where they were 6,300, 7,300, 11,500,
+ * up to 7,300 and 5,200. Every control on every main screen, folds opened, is a thumb's height.
  */
 
 const SUB = "/technologies.fa.endgame/demo/index.html";
-const BUDGET = { home: 2400, app: 2000, run: 3200 } as const;
+const BUDGET = { home: 2400, app: 2000, run: 3200, verdict: 2400, decision: 1400, notifications: 2600 } as const;
 
 test.use({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 
@@ -178,6 +180,113 @@ test.describe("the console on a phone", () => {
     await expect(trail.getByText("Court booking").last()).toBeVisible();
   });
 
+  test("every control on every main screen is a thumb's height, folded sections opened", async ({ page }) => {
+    const found: string[] = [];
+    for (const s of SCREENS) {
+      await open(page, s.scenario, s.route, s.persona);
+      await openFolds(page);
+      for (const t of await shortTargets(page)) found.push(`${s.name}: ${t}`);
+    }
+    // The sheets: More, and the conversation with a reply in it.
+    await open(page, "default", "/");
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /^More/ }).click();
+    for (const t of await shortTargets(page)) found.push(`More: ${t}`);
+    await page.keyboard.press("Escape");
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /^Talk/ }).click();
+    for (const t of await shortTargets(page)) found.push(`the conversation: ${t}`);
+    expect(found).toEqual([]);
+  });
+
+  test("the conversation opens at its latest message, follows the reply, and says it is working on it", async ({ page }) => {
+    await open(page, "default", "/");
+    const bar = page.getByRole("navigation", { name: "Main" });
+    const sheet = page.getByRole("dialog");
+    const log = sheet.getByRole("log");
+    const atFoot = () => log.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight <= 48);
+    await bar.getByRole("button", { name: /^Talk/ }).click();
+    for (const q of ["What needs me today?", "What did we spend last month?"]) {
+      await sheet.getByLabel(/^Message /).fill(q);
+      await sheet.getByRole("button", { name: "Send" }).click();
+      // From the moment it is sent, something says the answer is on its way, in view.
+      await expect(sheet.locator("[data-working]").last()).toBeInViewport();
+      // The reply arrives and stays in view: the log follows it to its foot.
+      await expect(sheet.locator("[data-working]")).toHaveCount(0, { timeout: 30_000 });
+      await expect.poll(atFoot).toBe(true);
+    }
+    // Closed and opened again, it opens at the latest, not the oldest.
+    await page.keyboard.press("Escape");
+    await bar.getByRole("button", { name: /^Talk/ }).click();
+    expect(await log.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    await expect.poll(atFoot).toBe(true);
+    // Reading what was said before while a reply arrives: left there, with a way down to it.
+    await sheet.getByLabel(/^Message /).fill("What is Rosa building?");
+    await sheet.getByRole("button", { name: "Send" }).click();
+    await log.evaluate((el) => el.scrollTo({ top: 0 }));
+    const jump = sheet.getByRole("button", { name: "New reply" });
+    await expect(jump).toBeVisible({ timeout: 20_000 });
+    expect(await log.evaluate((el) => el.scrollTop)).toBeLessThan(48);
+    await jump.click();
+    await expect.poll(atFoot).toBe(true);
+    await expect(jump).toHaveCount(0);
+  });
+
+  test("an opened fold says its title once", async ({ page }) => {
+    await open(page, "app-busy");
+    await page.getByRole("button", { name: /^Dashboard/ }).click();
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toHaveCount(1);
+    await expect(page.getByText("Dashboard", { exact: true }).locator("visible=true")).toHaveCount(1);
+  });
+
+  for (const [scenario, firstDecision] of [
+    ["verdict-build", /^Build/],
+    ["verdict-do-not-build", /^Change the idea/],
+    ["verdict-red-line", /^Change the idea/],
+  ] as const) {
+    test(`a verdict (${scenario}) opens short: the verdict, then the decision, then the evidence folded with the case against open`, async ({ page }) => {
+      await open(page, scenario);
+      expect(await height(page)).toBeLessThanOrEqual(BUDGET.verdict);
+      const decision = page.getByRole("region", { name: "Your decision" }).getByRole("button", { name: firstDecision }).first();
+      const top = await decision.evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+      expect(top, "the first decision is too far down").toBeLessThanOrEqual(BUDGET.decision);
+      const box = await decision.boundingBox();
+      expect(box?.width ?? 0, "the decision is not full width").toBeGreaterThanOrEqual(320);
+      await thumbSized(decision);
+      await expect(page.getByRole("button", { name: /^The case against/ })).toHaveAttribute("aria-expanded", "true");
+      for (const name of [/^Who already does this/, /^What gap is left/, /^Who would want it/, /^How often research says no/]) await expect(page.getByRole("button", { name })).toHaveAttribute("aria-expanded", "false");
+      if (scenario === "verdict-red-line") {
+        const card = page.getByRole("alert").filter({ hasText: "crosses a red line" });
+        await expect(card).toBeVisible();
+        const cardTop = await card.evaluate((el) => el.getBoundingClientRect().top);
+        const firstFold = await page.locator("[data-fold]").first().evaluate((el) => el.getBoundingClientRect().top);
+        expect(cardTop).toBeLessThan(firstFold);
+      }
+    });
+  }
+
+  test("dropping an idea is confirmed in place, full width", async ({ page }) => {
+    await open(page, "verdict-do-not-build");
+    await page.getByRole("button", { name: "Drop the idea" }).click();
+    const confirm = page.getByRole("group", { name: "Confirm" });
+    await expect(confirm).toBeInViewport();
+    await thumbSized(confirm.getByRole("button", { name: "Yes" }));
+  });
+
+  test("notifications open short: the unread and the newest ten, then older ones ten at a time", async ({ page }) => {
+    await open(page, "default", "/notifications");
+    expect(await height(page)).toBeLessThanOrEqual(BUDGET.notifications);
+    const rows = page.getByRole("list", { name: "Notifications" }).locator("[data-notification]");
+    const first = await rows.count();
+    const older = page.getByRole("button", { name: /^Show older/ });
+    if (await older.count()) {
+      await older.click();
+      expect(await rows.count()).toBeGreaterThan(first);
+      expect((await rows.count()) - first).toBeLessThanOrEqual(10);
+    }
+    // Every unread notice is among those shown from the start.
+    const unread = Number((await page.getByText(/^\d+ unread$/).textContent())?.match(/\d+/)?.[0] ?? 0);
+    expect(await page.locator("[data-notification][data-read=false]").count()).toBe(unread);
+  });
+
   test("a step written at desktop size finds what a phone folded away", async ({ page }) => {
     await open(page, "app-busy");
     const found = await page.evaluate(() => (window as unknown as { endgameDemo: { highlight: (a: { text: string }) => Promise<boolean | undefined> } }).endgameDemo.highlight({ text: "Bring back" }));
@@ -188,6 +297,40 @@ test.describe("the console on a phone", () => {
     expect(layout.bottom).toBeGreaterThanOrEqual(56);
   });
 });
+
+/** Opens every folded section on the page, so what they hold is measured too. */
+async function openFolds(page: Page) {
+  const rows = page.locator("[data-fold] > button[aria-expanded=false]");
+  for (let n = await rows.count(); n > 0; n = await rows.count()) await rows.first().click();
+}
+
+/**
+ * Every control on screen shorter than a thumb's 44 px, described. Not counted: a link that is a word
+ * in a sentence (drawn inline, among other words), a visually hidden "skip" link, and a control whose
+ * tap area is stretched over its card by an absolutely placed `::after` (the whole card takes the tap).
+ */
+async function shortTargets(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const sel = "a[href], button, [role=button], [role=link], input:not([type=hidden]), select, textarea, summary, [role=tab], [role=switch], [role=radio], [role=checkbox]";
+    for (const el of document.querySelectorAll<HTMLElement>(sel)) {
+      if (el.closest("[data-demo-chrome], [hidden]")) continue;
+      const r = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      if (r.width <= 1 || r.height <= 1 || style.visibility === "hidden" || style.display === "none") continue;
+      if (r.height >= 43.5) continue;
+      if (getComputedStyle(el, "::after").position === "absolute" && (el.offsetParent?.getBoundingClientRect().height ?? 0) >= 44) continue;
+      const own = (el.textContent ?? "").trim();
+      const around = (el.parentElement?.textContent ?? "").trim();
+      if (el.tagName === "A" && style.display === "inline" && around.length > own.length + 3) continue;
+      if ((el as HTMLInputElement).type === "checkbox" || (el as HTMLInputElement).type === "radio") {
+        if ((el.closest("label")?.getBoundingClientRect().height ?? 0) >= 43.5) continue;
+      }
+      out.push(`${el.tagName.toLowerCase()} "${(el.getAttribute("aria-label") ?? own).slice(0, 60)}" is ${Math.round(r.height)} px tall`);
+    }
+    return out;
+  });
+}
 
 /** The sign-in page has no bottom bar: on screen within the first screen's height. */
 async function inFirstScreenWithoutBar(target: Locator) {
