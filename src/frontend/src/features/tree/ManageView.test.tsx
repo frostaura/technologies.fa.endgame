@@ -81,7 +81,7 @@ describe("ManageView", () => {
   it("records a failed read of the tree, never an empty organisation", async () => {
     stub({ "GET /api/tree": problem(500, "The database did not answer") });
     renderWithStore(<ManageView />);
-    expect((await screen.findByText("The organisation could not be loaded")).closest('[role="alert"]')?.textContent).toContain("The database did not answer (500)");
+    expect((await screen.findByText("The organisation could not be loaded")).closest('[role="alert"]')?.textContent).toContain("The database did not answer.");
   });
 
   it("adds a division with its address made from the name and editable until it is made", async () => {
@@ -115,7 +115,7 @@ describe("ManageView", () => {
     expect(screen.getByText(/Its address stays tools/)).toBeTruthy();
     fireEvent.change(name, { target: { value: "Toolkit" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the name" }));
-    expect(await screen.findByText(/The name was not changed: This needs the admin role \(403\) It is back to Tools\./)).toBeTruthy();
+    expect(await screen.findByText(/The name was not changed: This needs the admin role\. It is back to Tools\./)).toBeTruthy();
     expect(within(screen.getByRole("navigation", { name: "Every part of the organisation" })).getByRole("button", { name: "Tools" })).toBeTruthy();
   });
 
@@ -181,7 +181,7 @@ describe("ManageView", () => {
     fireEvent.change(screen.getByLabelText("What it is about"), { target: { value: "Purpose" } });
     fireEvent.change(screen.getByLabelText("What it says"), { target: { value: "Runs every product we own." } });
     fireEvent.click(screen.getByRole("button", { name: "Add it" }));
-    expect(await screen.findByText(/Purpose was not saved: This needs the builder role \(403\)/)).toBeTruthy();
+    expect(await screen.findByText(/Purpose was not saved: This needs the builder role\./)).toBeTruthy();
     expect(api.calls.find((c) => c.method === "PUT")?.body).toEqual({ scope: "acme", kind: "context", key: "purpose", value: "Runs every product we own." });
     await waitFor(() => expect(screen.getByText("Nothing is said about Acme yet.")).toBeTruthy());
   });

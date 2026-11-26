@@ -37,7 +37,7 @@ export function NotificationFeed({ organisation, limit, onNavigate, compact = fa
           <Skeleton className="h-16 rounded-sm" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="Your notifications could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="Your notifications could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}

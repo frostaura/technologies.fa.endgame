@@ -86,7 +86,7 @@ export function OperatorAccessView() {
             </Loading>
           )}
           {view.kind === "failed" && (
-            <Failed title={view.status === 403 ? "Only the Owner can read the operator log" : "The operator log could not be loaded"} reason={view.reason} refused={view.status === 403} onRetry={() => void query.refetch()} />
+            <Failed title={view.status === 403 ? "Only the Owner can read the operator log" : "The operator log could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />
           )}
           {view.kind === "loaded" && (
             <>

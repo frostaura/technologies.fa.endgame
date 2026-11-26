@@ -43,7 +43,7 @@ describe("StartView", () => {
     await screen.findByLabelText("The idea");
     describeIdea();
     const alert = await screen.findByText(/The estimate could not be worked out/, {}, { timeout: 2000 });
-    expect(alert.textContent).toContain("Estimates are unavailable (503)");
+    expect(alert.textContent).toContain("Estimates are unavailable.");
     expect((screen.getByRole("button", { name: "Research this idea" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -75,7 +75,7 @@ describe("StartView", () => {
     await screen.findByText("Estimated 50 credits", {}, { timeout: 2000 });
     fireEvent.click(screen.getByRole("button", { name: "Research this idea" }));
     const alert = await screen.findByText(/Research did not start/);
-    expect(alert.textContent).toContain("The budget would be exceeded (402)");
+    expect(alert.textContent).toContain("The budget would be exceeded.");
     expect(alert.textContent).toContain("Nothing was charged.");
   });
 });

@@ -71,7 +71,7 @@ describe("caps on the Credits screen", () => {
     fireEvent.click((await budgets()).getByRole("button", { name: "Change the cap on Tools" }));
     fireEvent.change(screen.getByLabelText("Credits a month"), { target: { value: "900" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the cap" }));
-    expect(await screen.findByText(/The cap was not changed: This needs the admin role \(403\) It is as it was\./)).toBeTruthy();
+    expect(await screen.findByText(/The cap was not changed: This needs the admin role\. It is as it was\./)).toBeTruthy();
     expect((await budgets()).getByText("10 of 400")).toBeTruthy();
   });
 
@@ -116,7 +116,7 @@ describe("removing an overdraft limit", () => {
     stub({ "DELETE /api/cascade": problem(500, "Boom") });
     renderWithStore(<CreditsView />);
     fireEvent.click(await screen.findByRole("button", { name: "Remove Tools's tighter limit" }));
-    expect(await screen.findByText(/Tools's limit was not removed: Boom \(500\) It still stops at its own limit\./)).toBeTruthy();
+    expect(await screen.findByText(/Tools's limit was not removed: Boom\. It still stops at its own limit\./)).toBeTruthy();
     expect(within(screen.getByRole("list", { name: "Tighter limits already set" })).getByText("100 below zero")).toBeTruthy();
     cleanup();
     stub({ "DELETE /api/cascade": json(null, 204) });

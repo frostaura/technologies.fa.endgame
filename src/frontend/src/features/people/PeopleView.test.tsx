@@ -40,7 +40,7 @@ describe("PeopleView", () => {
   it("records a refusal as a failed read, never an empty list", async () => {
     stub(problem(403, "This needs the admin role"));
     renderWithStore(<PeopleView />);
-    expect(await screen.findByText("Only an Admin or the Owner can see the people here")).toBeTruthy();
+    expect(await screen.findByText("You cannot see the people here")).toBeTruthy();
     expect(screen.queryByText(/No one holds a role/)).toBeNull();
   });
 
@@ -124,7 +124,7 @@ describe("PeopleView", () => {
       "GET /api/tree": json({ ...TREE, viewerRole: "admin", organisation: { ...TREE.organisation, role: "admin" }, divisions: [{ ...TREE.divisions[0], role: "viewer" }] }),
     });
     renderWithStore(<PeopleView />);
-    expect(await screen.findByText("Only an Admin or the Owner can see the people here")).toBeTruthy();
+    expect(await screen.findByText("You cannot see the people here")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Invite someone" })).toBeNull();
     window.history.replaceState(null, "", "/");
   });

@@ -66,7 +66,7 @@ describe("an employee's whole job", () => {
     fireEvent.click(form.getByRole("checkbox", { name: "Change files" }));
     fireEvent.change(form.getByLabelText("Its own monthly budget"), { target: { value: "" } });
     fireEvent.click(form.getByRole("button", { name: "Save the job" }));
-    expect(await screen.findByText(/Could not change the job: 'x' is not a model tier \(400\)/)).toBeTruthy();
+    expect(await screen.findByText(/Could not change the job: 'x' is not a model tier\./)).toBeTruthy();
     expect(screen.getByText(/Product researcher · Employee/)).toBeTruthy();
     expect(api.calls.find((c) => c.method === "PATCH")?.body).toEqual({ role: "Lead researcher", clearMonthlyCreditLimit: true, jobDescription: { tools: ["read_file", "web_search", "spawn", "edit_file"] } });
   });

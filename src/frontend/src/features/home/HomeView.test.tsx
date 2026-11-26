@@ -85,7 +85,7 @@ describe("HomeView", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.dataset.state).toBe("failed");
     expect(alert.textContent).toContain("The organisation could not be loaded");
-    expect(alert.textContent).toContain("The tree could not be read (500)");
+    expect(alert.textContent).toContain("The tree could not be read.");
     expect(screen.queryByText(/has nothing in it yet/)).toBeNull();
     expect(screen.queryByText("Name your organisation, then describe your first idea.")).toBeNull();
   });
@@ -195,7 +195,7 @@ describe("HomeView", () => {
     await screen.findByRole("region", { name: "Organisation chart" });
     fireEvent.change(screen.getByLabelText("Message Acme"), { target: { value: "Hello" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    const alert = await screen.findByText(/Not sent: Busy \(503\)/);
+    const alert = await screen.findByText(/Not sent: Busy\./);
     expect(within(alert).getByRole("button", { name: "Send again" })).toBeTruthy();
   });
 
@@ -264,7 +264,7 @@ describe("HomeView", () => {
     const log = await screen.findByRole("log", { name: "Conversation with Acme" });
     const alert = await within(log).findByRole("alert");
     expect(alert.dataset.state).toBe("failed");
-    expect(alert.textContent).toContain("History unavailable (500)");
+    expect(alert.textContent).toContain("History unavailable.");
     expect(within(log).queryByText(/Ask what needs you/)).toBeNull();
     expect((screen.getByLabelText("Message Acme") as HTMLInputElement).disabled).toBe(false);
   });

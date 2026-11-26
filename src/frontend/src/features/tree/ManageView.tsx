@@ -71,7 +71,7 @@ export function ManageView() {
           <Skeleton className="h-80 rounded-md lg:col-span-2" />
         </Loading>
       )}
-      {org && view.kind === "failed" && <Failed title="The organisation could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {org && view.kind === "failed" && <Failed title="The organisation could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && selected && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}

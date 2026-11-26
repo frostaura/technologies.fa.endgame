@@ -111,7 +111,7 @@ describe("the app page by role", () => {
     renderWithStore(<AppView appId="a1" />);
     fireEvent.change(await screen.findByLabelText("Sleeps after this many idle minutes"), { target: { value: "30" } });
     fireEvent.click(within(screen.getByRole("form", { name: "Idle minutes before it sleeps" })).getByRole("button", { name: "Save" }));
-    expect(await screen.findByText(/It was not changed: This needs the builder role \(403\) It still sleeps after 15 idle minutes\./)).toBeTruthy();
+    expect(await screen.findByText(/It was not changed: This needs the builder role\. It still sleeps after 15 idle minutes\./)).toBeTruthy();
   });
 
   it("refuses idle minutes outside 1 to 1,440 before asking", async () => {

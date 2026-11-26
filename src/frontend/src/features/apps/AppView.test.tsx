@@ -195,7 +195,7 @@ describe("AppView", () => {
     const sharing = await screen.findByRole("region", { name: "Sharing" });
     const alert = await within(sharing).findByRole("alert");
     expect(alert.dataset.state).toBe("failed");
-    expect(alert.textContent).toContain("This needs the admin role (403)");
+    expect(alert.textContent).toContain("This needs the admin role.");
     expect(within(sharing).queryByText(/Not shared with anyone yet/)).toBeNull();
   });
 
@@ -246,7 +246,7 @@ describe("AppView", () => {
     await screen.findByRole("list", { name: "People it is shared with" });
     fireEvent.change(screen.getByLabelText("Invite by e-mail"), { target: { value: "cy@example.test" } });
     fireEvent.click(screen.getByRole("button", { name: "Invite" }));
-    expect(await screen.findByText(/cy@example.test was not invited: That address is already registered \(409\)/)).toBeTruthy();
+    expect(await screen.findByText(/cy@example.test was not invited: That address is already registered\./)).toBeTruthy();
     expect(screen.queryByText("cy@example.test", { selector: "span" })).toBeNull();
   });
 
