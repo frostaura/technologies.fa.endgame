@@ -133,16 +133,16 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Needs:** signed in
 - **Level:** Foundation
 - **Learn first:** ID-02
-- **What you learn:** signing out of the console also ends every app session this browser holds.
+- **What you learn:** signing out of the console also ends every app session you hold, on every address and in every browser.
 - **Steps:**
   1. The person clicks **"Sign out"**. The button is disabled while the request runs.
-  2. The server ends the console session, then ends and clears every app session cookie the browser sent.
+  2. The server ends the console session, revokes every app session the person holds as a member — including those on the organisation's own address, whose cookies this browser never sends here — and ends and clears every app session cookie the browser sent.
   3. The session check now answers 401, so the console moves to `/sign-in` and shows the sign-in screen.
 - **You know it worked when:** the **"Sign in"** screen appears at `/sign-in` and stays after a reload.
-- **Variations and refusals:** there is no confirmation step.
-- **Where:** `features/shell/AppShell.tsx` (`SignOut`). `POST /api/auth/logout`, `AppIdentityService.SignOutEverywhereAsync`.
+- **Variations and refusals:** there is no confirmation step. An app opened afterwards at the organisation's own address asks the person to sign in again.
+- **Where:** `features/shell/AppShell.tsx` (`SignOut`). `POST /api/auth/logout`, `AppIdentityService.EndMemberSessionsAsync` and `SignOutEverywhereAsync`.
 - **Reachable from:** UI
-- **Covered by tests:** `App.test.tsx` "signs out to the sign-in screen and stays there"; `SignInTests` first-person test (signs out and back in).
+- **Covered by tests:** `App.test.tsx` "signs out to the sign-in screen and stays there"; `SignInTests` first-person test (signs out and back in); `AppAccessTests.Signing_out_of_the_console_ends_the_members_app_sessions_on_every_host`.
 
 ### ID-07 Try to register without an invitation
 - **Who:** stranger

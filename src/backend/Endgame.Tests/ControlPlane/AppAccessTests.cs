@@ -187,6 +187,46 @@ public sealed class AppAccessTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Signing_out_of_the_console_ends_the_members_app_sessions_on_every_host()
+    {
+        // D53: the Owner signs in, opens the app on the organisation subdomain (a hand-off), then signs out on the platform's host.
+        var member = new Browser(app);
+        await member.SignInMemberAsync("owner@frostaura.net");
+        async Task<(string Cookie, DateTimeOffset Expires)> SubdomainSessionAsync(Guid appId)
+        {
+            var link = new Uri((await ControlPlaneApp.Ok(member.PostAsync($"/api/app-auth/{appId}/handoff", new { })))["url"]!.GetValue<string>());
+            var redeemed = await ControlPlaneApp.Ok(service.PostAsJsonAsync("/internal/access/handoff", new { appId, code = System.Web.HttpUtility.ParseQueryString(link.Query)["code"]! }));
+            return ($"{redeemed["cookieName"]!.GetValue<string>()}={redeemed["cookieValue"]!.GetValue<string>()}", redeemed["expiresAt"]!.GetValue<DateTimeOffset>());
+        }
+
+        var (bookingsCookie, expires) = await SubdomainSessionAsync(bookings);
+        var (ladderCookie, _) = await SubdomainSessionAsync(ladder);
+        // A member's subdomain session stands in for the console session: hours, not the two weeks an end user keeps.
+        Assert.InRange(expires, DateTimeOffset.UtcNow.AddHours(11), DateTimeOffset.UtcNow.AddHours(12).AddMinutes(1));
+        var before = await CheckAsync(bookings, bookingsCookie);
+        Assert.Equal("allow", before["decision"]!.GetValue<string>());
+        Assert.Equal("allow", (await CheckAsync(ladder, ladderCookie))["decision"]!.GetValue<string>());
+        // A hand-off asked for and not yet redeemed.
+        var pending = new Uri((await ControlPlaneApp.Ok(member.PostAsync($"/api/app-auth/{bookings}/handoff", new { })))["url"]!.GetValue<string>());
+
+        // The sign-out request carries only the platform host's console cookie, never the subdomain's.
+        Assert.DoesNotContain("endgame.app.", member.CookieHeader, StringComparison.Ordinal);
+        await ControlPlaneApp.Expect(await member.PostAsync("/api/auth/logout", new { }), HttpStatusCode.NoContent);
+
+        // The subdomain is asked to sign in again, at both apps; the token minted earlier no longer resolves; the hand-off is spent.
+        Assert.Equal("sign-in", (await CheckAsync(bookings, bookingsCookie))["decision"]!.GetValue<string>());
+        Assert.Equal("sign-in", (await CheckAsync(ladder, ladderCookie))["decision"]!.GetValue<string>());
+        var kit = app.Internal();
+        kit.DefaultRequestHeaders.Authorization = new("Bearer", (await ControlPlaneApp.Ok(service.PostAsync($"/internal/apps/{bookings}/token", null)))["token"]!.GetValue<string>());
+        await ControlPlaneApp.Expect(await kit.PostAsJsonAsync("/platform/v1/identity/resolve", new { session = before["sessionToken"]!.GetValue<string>() }), HttpStatusCode.Unauthorized);
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync("/internal/access/handoff", new { appId = bookings, code = System.Web.HttpUtility.ParseQueryString(pending.Query)["code"]! }), HttpStatusCode.Gone);
+
+        // Signing in again works as before.
+        await member.SignInMemberAsync("owner@frostaura.net");
+        Assert.Equal("allow", (await CheckAsync(bookings, (await SubdomainSessionAsync(bookings)).Cookie))["decision"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task An_end_user_belongs_to_one_app_and_can_never_reach_the_console_or_another_app()
     {
         await SetAccessAsync(bookings, "public");

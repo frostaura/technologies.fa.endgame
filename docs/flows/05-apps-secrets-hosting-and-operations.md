@@ -843,7 +843,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. Edge calls `POST /api/app-auth/{appId}/sign-out`, which revokes the session and clears the cookie.
   2. If the person was a member, the console session is logged out too.
   3. They return inside the app.
-  4. Signing out of the console also revokes every app session the browser holds.
+  4. Signing out of the console also revokes every app session the person holds as a member, on every address, and every app session the browser holds.
 - **Variations and refusals:** a failure is only logged; not verified what the person sees.
 - **Where:** `Access/AuthPages.cs`; `AppIdentityService.SignOutAsync` / `SignOutEverywhereAsync`
 - **Reachable from:** UI
