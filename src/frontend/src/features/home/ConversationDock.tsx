@@ -271,7 +271,7 @@ export function TypingDots({ label }: { label?: string }) {
 }
 
 /** The answer is on its way: shown from the moment a message is sent until the work that answers it ends. */
-function Working({ text = "Working on it" }: { text?: string }) {
+function Working({ text }: { text: string }) {
   return (
     <div data-working="" className="flex items-center gap-2.5 text-sm text-ink-muted">
       <TypingDots />
@@ -287,8 +287,8 @@ function Exchange({ message, onRetry, answerer }: { message: ChatMessage; onRetr
         <Sender name="You" mine />
         <p className={cn("max-w-bubble rounded-md rounded-br-xs bg-primary px-4 py-2.5 text-primary-ink", message.state === "sending" && "opacity-70")}>{message.text}</p>
       </div>
-      {/* From the moment it is sent: the run that answers it is still being started. */}
-      {message.state === "sending" && <Working />}
+      {/* From the moment it is sent, before the work that answers it has started ("Working on it" then takes over). */}
+      {message.state === "sending" && <Working text="Sending…" />}
       {message.state === "failed" && (
         <div role="alert" className="flex flex-col gap-2 self-end rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           Not sent: {message.error}
