@@ -28,6 +28,7 @@ import {
 import { provisionOrganisation } from "@/store/sensitive";
 import type { OperatorEntry, OperatorOrganisation, OrganisationProvisioned, Pricing, TopUpRequest } from "@/store/types";
 import { parseCredits } from "../credits/creditsModel";
+import { Fold } from "@/components/Fold";
 import { AppShell } from "../shell/AppShell";
 import { pricingRows } from "./operatorModel";
 
@@ -46,7 +47,16 @@ export function OperatorView() {
   const me = useGetMeQuery(undefined);
   const operator = me.data?.isOperator === true;
   return (
-    <AppShell crumbs={[{ label: "God mode" }]} aside={operator ? <ProvisionAside /> : undefined}>
+    <AppShell
+      crumbs={[{ label: "God mode" }]}
+      aside={
+        operator ? (
+          <Fold title="Set up an organisation" summary="For a person FrostAura has invited">
+            <ProvisionAside />
+          </Fold>
+        ) : undefined
+      }
+    >
       <header className={cn("flex flex-col gap-1.5", RISE)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold">
           <Icon name="god-mode" tinted className="size-7" />
@@ -65,13 +75,17 @@ export function OperatorView() {
             <ErrorBoundary name="Top-up requests">
               <Requests />
             </ErrorBoundary>
-            <ErrorBoundary name="Top-ups made">
-              <TopUps />
-            </ErrorBoundary>
+            <Fold title="Top-ups made" summary="Every top-up, newest first">
+              <ErrorBoundary name="Top-ups made">
+                <TopUps />
+              </ErrorBoundary>
+            </Fold>
           </div>
-          <ErrorBoundary name="The prices">
-            <PricingPanel />
-          </ErrorBoundary>
+          <Fold title="The prices" summary="Credits per dollar, the margin and the hosting rates">
+            <ErrorBoundary name="The prices">
+              <PricingPanel />
+            </ErrorBoundary>
+          </Fold>
         </>
       ) : null}
     </AppShell>

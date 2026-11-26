@@ -5,6 +5,7 @@ import { describeError } from "@/lib/queryState";
 import { useAppSelector } from "@/store";
 import { useAnswerApprovalMutation } from "@/store/api";
 import { answeredText, EXPIRED, type DerivedApproval } from "./runModel";
+import { ClampedText } from "@/components/Fold";
 
 /**
  * One checkpoint a run is waiting on: what will happen if it is approved, in plain words (the tool and its arguments are
@@ -55,7 +56,7 @@ function OpenApproval({ runId, approval, compact }: { runId: string; approval: D
         Needs you
       </Badge>
       <p className="text-base font-semibold">{approval.question}</p>
-      {approval.detail && <p className="break-words text-sm text-attention-deep">{approval.detail}</p>}
+      {approval.detail && <ClampedText className="break-words text-sm text-attention-deep">{approval.detail}</ClampedText>}
       {technical && approval.technical && <p className="break-words font-mono text-xs text-attention-deep">{approval.technical}</p>}
       {optimistic ? (
         <p role="status" className="font-medium text-ink">
@@ -63,7 +64,8 @@ function OpenApproval({ runId, approval, compact }: { runId: string; approval: D
         </p>
       ) : (
         <>
-          <div className="flex flex-col gap-1">
+          {/* A phone puts the answer first and the optional note under it (the order class). */}
+          <div className="flex flex-col gap-1 max-sm:order-1">
             <label htmlFor={noteId} className="text-sm text-attention-deep">
               Add a note (optional)
             </label>
@@ -76,13 +78,13 @@ function OpenApproval({ runId, approval, compact }: { runId: string; approval: D
               autoComplete="off"
             />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 max-sm:grid max-sm:grid-cols-2">
             <Button onClick={() => void decide("approve")}>Approve</Button>
             <Button variant="outline" onClick={() => void decide("reject")}>
               Decline
             </Button>
           </div>
-          <p className="text-sm text-attention-deep">
+          <p className="text-sm text-attention-deep max-sm:order-2">
             {approval.onDecline === "stops" ? "Declining stops this work." : "Declining skips only this step; the work goes on without it."}
           </p>
         </>

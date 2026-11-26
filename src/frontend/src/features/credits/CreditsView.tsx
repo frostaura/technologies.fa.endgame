@@ -12,6 +12,7 @@ import type { BudgetLine, Credits, MemberRole } from "@/store/types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { highestGrant, roleRank } from "@/lib/roles";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
+import { Fold } from "@/components/Fold";
 import { AppShell } from "../shell/AppShell";
 import { CapControl, NarrowerLimit, NarrowerLimits, OwnLimit, TopUpRequests } from "./CreditsActions";
 import { noCapLine, paceLine } from "./creditsModel";
@@ -74,7 +75,7 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
           Your role is in {branch}, so this shows its spending and caps. The balance is the whole organisation&rsquo;s, which its work draws on.
         </p>
       )}
-      <section className={cn("relative flex flex-wrap items-end justify-between gap-5 overflow-hidden rounded-lg px-6 py-8 text-primary-ink sm:px-8", negative ? "bg-attention-text" : "bg-primary", RISE)}>
+      <section className={cn("relative flex flex-wrap items-end justify-between gap-5 overflow-hidden rounded-lg px-6 py-8 text-primary-ink max-sm:px-5 max-sm:py-6 sm:px-8", negative ? "bg-attention-text" : "bg-primary", RISE)}>
         <div aria-hidden className="absolute -top-24 right-20 size-aura animate-drift rounded-full bg-violet opacity-75 blur-aura motion-reduce:animate-none" />
         <div aria-hidden className="absolute -bottom-36 -right-20 size-aura animate-drift rounded-full bg-teal opacity-75 blur-aura animate-delay-5 motion-reduce:animate-none" />
         <div className="relative flex flex-col gap-1.5">
@@ -82,15 +83,15 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
           <h1 className="font-display text-5xl font-bold sm:text-balance">{formatNumber(credits.balance)}</h1>
           <span className="text-primary-tint">{paceLine(credits)}</span>
         </div>
-        <div className="relative flex flex-wrap gap-8">
+        <div className="relative flex flex-wrap gap-8 max-sm:grid max-sm:w-full max-sm:grid-cols-3 max-sm:gap-3">
           {[
             ["Spent this month", credits.month.spent],
             ["On AI work", credits.month.ai],
             ["On hosting", credits.month.hosting],
           ].map(([label, n]) => (
-            <div key={label} className="flex flex-col gap-0.5">
-              <span className="text-primary-tint">{label}</span>
-              <span className="font-display text-2xl font-bold">{formatNumber(n as number)}</span>
+            <div key={label} className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-primary-tint max-sm:text-xs">{label}</span>
+              <span className="font-display text-2xl font-bold max-sm:text-xl">{formatNumber(n as number)}</span>
             </div>
           ))}
         </div>
@@ -108,11 +109,14 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
             No spending or caps anywhere in the tree yet.
           </p>
         ) : (
-          <ul aria-label="Budgets" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-            {credits.budgets.map((line) => (
-              <BudgetRow key={`${line.scope}#${line.level}#${line.name}`} line={line} lines={credits.budgets} organisation={organisation} isAdmin={isAdmin} />
-            ))}
-          </ul>
+          // A phone folds the tree to a line: how many levels, how many carry a cap of their own.
+          <Fold title="Every level’s spending and cap" summary={`${plural(credits.budgets.filter((l) => l.level !== "employee").length, "level")}, ${plural(credits.budgets.filter((l) => l.capCredits !== null).length, "cap")} set`}>
+            <ul aria-label="Budgets" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
+              {credits.budgets.map((line) => (
+                <BudgetRow key={`${line.scope}#${line.level}#${line.name}`} line={line} lines={credits.budgets} organisation={organisation} isAdmin={isAdmin} />
+              ))}
+            </ul>
+          </Fold>
         )}
       </section>
 
@@ -190,6 +194,7 @@ function OverdraftAside({ credits, organisation, role }: { credits: Credits; org
   const isAdmin = roleRank(role) >= roleRank("admin");
   return (
     <>
+      <Fold title="If you run out" summary={credits.overdraft ? `You can go ${formatNumber(credits.overdraft.ownLimit ?? credits.overdraft.frostauraLimit)} below zero` : "Work stops at zero"}>
       <section className={cn("flex flex-col gap-3", RISE)}>
         <h2 className="text-lg font-semibold">If you run out</h2>
         <p className="text-ink-body">Nothing stops at zero. You can go below it, down to your limit, and the next top-up settles it.</p>
@@ -222,6 +227,8 @@ function OverdraftAside({ credits, organisation, role }: { credits: Credits; org
         )}
         <p className="text-sm text-ink-muted">An overdraft never carries interest or fees.</p>
       </section>
+      </Fold>
+      <Fold title="At the limit" summary="What stops, and what is kept">
       <section className="flex flex-col gap-2.5">
         <h2 className="text-lg font-semibold">At the limit</h2>
         <ul className="flex flex-col gap-2 text-ink-body">
@@ -232,6 +239,8 @@ function OverdraftAside({ credits, organisation, role }: { credits: Credits; org
         </ul>
         <span className="text-sm text-ink-muted">You are warned at zero and again halfway to the limit.</span>
       </section>
+      </Fold>
+      <Fold title="Top-ups" summary={credits.topUps.length === 0 ? "None yet" : plural(credits.topUps.length, "top-up")}>
       <section className="flex flex-col gap-2.5">
         <h2 className="text-lg font-semibold">Top-ups</h2>
         {credits.topUps.length === 0 ? (
@@ -252,6 +261,7 @@ function OverdraftAside({ credits, organisation, role }: { credits: Credits; org
           </ul>
         )}
       </section>
+      </Fold>
       <section id="asking-for-more" className="flex scroll-mt-6 flex-col gap-2.5">
         <h2 className="text-lg font-semibold">Asking for more</h2>
         <p className="text-ink-body">There is no card on file: FrostAura adds credits by hand when you ask.</p>

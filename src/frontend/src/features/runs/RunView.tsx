@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ClampedHeading, Fold } from "@/components/Fold";
+import { useViewport } from "@/lib/useViewport";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -43,6 +45,8 @@ const STATE_EVENTS = new Set(["run.paused", "run.resumed", "run.finished"]);
 
 /** How many of the latest steps a long run draws at first; earlier ones are shown on request, this many at a time. */
 const STEPS_AT_ONCE = 200;
+/** On a phone: a screenful or two, so a long run's page opens short. */
+const PHONE_STEPS_AT_ONCE = 12;
 
 const TONE_CLASS: Record<StepTone, string> = {
   structure: "bg-primary-tint text-primary",
@@ -138,13 +142,14 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
 
   return (
     <>
-      <div className={cn("flex flex-wrap items-start justify-between gap-5", RISE)}>
+      {/* A phone puts the heading first and what waits for an answer straight under it (the order classes). */}
+      <div className={cn("flex flex-wrap items-start justify-between gap-5 max-sm:-order-2 max-sm:gap-4", RISE)}>
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={badge.tone}>{badge.label}</Badge>
             <StreamBadge stream={log.stream} terminal={terminal} />
           </div>
-          <h1 className="text-3xl font-semibold">{run.title}</h1>
+          <ClampedHeading className="text-3xl font-semibold max-sm:text-2xl">{run.title}</ClampedHeading>
           <span className="text-ink-body">Started {formatTime(run.startedAt)}</span>
           {mode === "technical" && (
             <code className="break-all font-mono text-xs text-ink-muted">
@@ -221,7 +226,11 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
 
       <Approvals runId={run.id} approvals={derived.approvals} />
 
-      {derived.plan && <PlanPanel plan={derived.plan} mode={mode} publicOnlyNote={derived.publicOnlyNote} />}
+      {derived.plan && (
+        <Fold title="The plan" summary={planSummary(derived.plan)} icon={<Icon name="plan" tinted />}>
+          <PlanPanel plan={derived.plan} mode={mode} publicOnlyNote={derived.publicOnlyNote} />
+        </Fold>
+      )}
 
       {outcome && (
         <section className="rounded-md border bg-surface p-5 shadow-card">
@@ -275,13 +284,13 @@ function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, dec
   // Work declined at its start never began: there is nothing to score its estimate against (D19).
   if (declined)
     return (
-      <section aria-label="Cost" className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <section aria-label="Cost" className="grid grid-cols-2 gap-3 sm:gap-4">
         {estimateTile}
         <Stat label="Charged" value={formatCredits(spent)} note="You declined to start it, so nothing was done." />
       </section>
     );
   return (
-    <section aria-label="Cost" className={cn("grid grid-cols-1 gap-4", scored ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3")}>
+    <section aria-label="Cost" className={cn("grid grid-cols-2 gap-3 sm:gap-4", scored ? "xl:grid-cols-4" : "sm:grid-cols-3")}>
       {estimateTile}
       <Stat label="Spent so far" value={formatCredits(spent)} note={against ? `${share(spent, against)}% of ${estimateName(against, estimate, replanned)}` : "Settled from each call’s own cost"} bar={against ? share(spent, against) : null} />
       {scored ? (
@@ -290,17 +299,17 @@ function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, dec
           <Stat label="Not charged" value={formatCredits(notCharged)} note="Repairs of the work’s own mistakes, never billed" />
         </>
       ) : (
-        <Stat label="Held for calls in flight" value={formatCredits(reserved)} note="Reserved before each call, released when it settles" />
+        <Stat label="Held for calls in flight" value={formatCredits(reserved)} note="Reserved before each call, released when it settles" className="max-sm:col-span-2" />
       )}
     </section>
   );
 }
 
-function Stat({ label, value, note, extra = null, bar = null }: { label: string; value: string; note: string; extra?: string | null; bar?: number | null }) {
+function Stat({ label, value, note, extra = null, bar = null, className }: { label: string; value: string; note: string; extra?: string | null; bar?: number | null; className?: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card">
-      <span className="text-ink-muted">{label}</span>
-      <span className="font-display text-2xl font-semibold">{value}</span>
+    <div className={cn("flex min-w-0 flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card max-sm:px-3.5 max-sm:py-3", className)}>
+      <span className="text-ink-muted max-sm:text-sm">{label}</span>
+      <span className="break-words font-display text-2xl font-semibold max-sm:text-xl">{value}</span>
       {bar !== null && <Bar value={percent(bar, 100)} label={`${bar}% of the estimate spent`} tone={bar > 100 ? "attention" : "primary"} className="my-1" />}
       <span className="text-sm text-ink-body">{note}</span>
       {extra && <span className="text-sm text-ink-body">{extra}</span>}
@@ -315,10 +324,35 @@ function Stat({ label, value, note, extra = null, bar = null }: { label: string;
 function Approvals({ runId, approvals }: { runId: string; approvals: DerivedApproval[] }) {
   const pending = approvals.filter((a) => a.answer === null);
   const expired = approvals.filter((a) => a.answer === EXPIRED);
+  const phone = useViewport() === "phone";
+  const ref = useRef<HTMLElement>(null);
+  const [outOfView, setOutOfView] = useState(false);
+  // On a phone, an approval scrolled out of sight leaves a bar pinned at the top until it is answered.
+  useEffect(() => {
+    const el = ref.current;
+    if (!phone || !el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => setOutOfView(!!entry && !entry.isIntersecting && entry.boundingClientRect.top < 0));
+    io.observe(el);
+    return () => io.disconnect();
+  }, [phone, pending.length]);
   return (
     <>
+      {phone && pending.length > 0 && outOfView && (
+        <button
+          type="button"
+          data-pinned-approval=""
+          onClick={() => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          className="fixed inset-x-0 top-0 z-30 flex min-h-touch items-center gap-3 border-b border-attention-line bg-attention-tint px-4 pb-2 pt-safe-t text-left text-attention-text shadow-raised"
+        >
+          <span className="flex min-w-0 flex-1 flex-col pt-2">
+            <span className="font-semibold">{pending.length === 1 ? "Waiting for your approval" : `${pending.length} approvals wait for you`}</span>
+            <span className="truncate text-sm text-attention-deep">{pending[0]?.question ?? ""}</span>
+          </span>
+          <span className="shrink-0 pt-2 font-semibold underline">Answer</span>
+        </button>
+      )}
       {pending.length > 0 && (
-        <section aria-label="Waiting for your approval" className="flex flex-col gap-3">
+        <section ref={ref} aria-label="Waiting for your approval" className="flex scroll-mt-4 flex-col gap-3 max-sm:-order-1">
           {pending.map((a) => (
             <ApprovalCard key={a.id} runId={runId} approval={a} />
           ))}
@@ -339,6 +373,13 @@ function Approvals({ runId, approvals }: { runId: string; approvals: DerivedAppr
  * The plan as a contract: each item in the owner's words, with whether it passed its check. The
  * files, endpoints and test commands behind each item are technical detail, shown in technical mode.
  */
+/** What the folded plan says on a phone: how far it has got. */
+function planSummary(plan: DerivedPlan): string {
+  const passed = plan.items.filter((i) => i.result === "passed").length;
+  const state = plan.accepted ? "Agreed" : "Proposed";
+  return plan.items.length > 0 ? `${state} · ${formatNumber(passed)} of ${plural(plan.items.length, "part")} done` : state;
+}
+
 function PlanPanel({ plan, mode, publicOnlyNote }: { plan: DerivedPlan; mode: Mode; publicOnlyNote: string | null }) {
   const technical = mode === "technical";
   const passed = plan.items.filter((i) => i.result === "passed").length;
@@ -433,9 +474,21 @@ function PlanPanel({ plan, mode, publicOnlyNote }: { plan: DerivedPlan; mode: Mo
 function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]; mode: Mode; derived: DerivedRun; stream: StreamStatus; terminal: boolean }) {
   const plan = derived.plan;
   const timeline = useMemo(() => buildTimeline(events, mode, (id: string) => planItemLabel(plan, id, mode)), [events, mode, plan]);
-  const [shown, setShown] = useState(STEPS_AT_ONCE);
+  // A phone draws the latest steps first, a screenful at a time; anything wider, in order, two hundred at a time.
+  const phone = useViewport() === "phone";
+  const batch = phone ? PHONE_STEPS_AT_ONCE : STEPS_AT_ONCE;
+  const [shown, setShown] = useState(batch);
   const hidden = Math.max(0, timeline.items.length - shown);
-  const items = hidden > 0 ? timeline.items.slice(hidden) : timeline.items;
+  const latest = hidden > 0 ? timeline.items.slice(hidden) : timeline.items;
+  const items = phone ? [...latest].reverse() : latest;
+  const more = hidden > 0 && (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-border-strong bg-surface px-5 py-3 max-sm:px-4">
+      <span className="text-ink-body">{phone ? `${plural(hidden, "earlier step")} not shown yet.` : `${plural(hidden, "earlier step")} folded away; the latest ${formatNumber(items.length)} are below.`}</span>
+      <Button size="sm" variant="outline" onClick={() => setShown((n) => n + batch)}>
+        {`Show ${plural(Math.min(batch, hidden), "earlier step")}`}
+      </Button>
+    </div>
+  );
   return (
     <section aria-labelledby="trace-title" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -461,19 +514,14 @@ function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]
         )
       ) : (
         <>
-          {hidden > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-border-strong bg-surface px-5 py-3">
-              <span className="text-ink-body">{`${plural(hidden, "earlier step")} folded away; the latest ${formatNumber(items.length)} are below.`}</span>
-              <Button size="sm" variant="outline" onClick={() => setShown((n) => n + STEPS_AT_ONCE)}>
-                {`Show ${plural(Math.min(STEPS_AT_ONCE, hidden), "earlier step")}`}
-              </Button>
-            </div>
-          )}
+          {!phone && more}
+          {phone && <p className="-mt-1 text-sm text-ink-muted">The latest step first.</p>}
           <ol aria-label="Steps" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
             {items.map((item) => (
               <TimelineRow key={item.key} item={item} />
             ))}
           </ol>
+          {phone && more}
         </>
       )}
     </section>
@@ -564,8 +612,10 @@ function RunAside({ runId }: { runId: string }) {
   const events = log?.events;
   const derived = useMemo(() => deriveRun(events ?? []), [events]);
   const active = useActiveOrganisation();
+  const done = derived.tasks.filter((t) => t.status === "done").length;
   return (
     <>
+      <Fold title="Tasks" summary={derived.tasks.length === 0 ? "None yet" : `${formatNumber(done)} of ${plural(derived.tasks.length, "task")} done`}>
       <section aria-labelledby="tasks-title" className="flex flex-col gap-3">
         <h2 id="tasks-title" className="text-lg font-semibold">
           Tasks
@@ -582,6 +632,7 @@ function RunAside({ runId }: { runId: string }) {
           </ul>
         )}
       </section>
+      </Fold>
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">Where the credits go</h2>
         <p className="text-ink-body">Credits are held before each step and settled from what it really cost. Repairing a mistake of its own is never billed.</p>

@@ -5,6 +5,8 @@ import { formatTime } from "@/lib/format";
 import { viewOf } from "@/lib/queryState";
 import { navigate, paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
+import { useViewport } from "@/lib/useViewport";
+import { Disclosure } from "@/components/Fold";
 import { useAppSelector } from "@/store";
 import { useGetOntologyQuery } from "@/store/api";
 import type { Ontology, OntologyNode } from "@/store/types";
@@ -85,6 +87,15 @@ function Graph({ graph, view }: { graph: Ontology; view: "org-chart" | "data-flo
     return `${plain.get(e.edge.from) ?? ""} ${edgeWords(e.edge.type)} ${plain.get(e.edge.to) ?? ""}${tell ? ` (${label})` : ""}`;
   };
   const named = hovered === null ? undefined : layout.edges[hovered];
+  const phone = useViewport() === "phone";
+  // The nodes a line starts from, in the drawing's order; a phone groups them by kind, the kinds in the order they first appear.
+  const sources = layout.nodes.filter((p) => graph.edges.some((e) => e.from === p.node.id));
+  const groups: { type: string; label: string; items: typeof sources }[] = [];
+  for (const p of sources) {
+    const g = groups.find((x) => x.type === p.node.type);
+    if (g) g.items.push(p);
+    else groups.push({ type: p.node.type, label: plurals(nodeType(p.node)), items: [p] });
+  }
 
   const down = (e: PointerEvent<HTMLDivElement>) => {
     const el = scroller.current;
@@ -182,33 +193,57 @@ function Graph({ graph, view }: { graph: Ontology; view: "org-chart" | "data-flo
         </svg>
       </div>
 
-      {/* The same graph as a list: phones read it here, and screen readers everywhere. */}
-      <ul aria-label={view === "data-flow" ? "How data flows" : "Who works on what"} className="flex flex-col gap-2.5 md:sr-only">
-        {layout.nodes
-          .filter((p) => graph.edges.some((e) => e.from === p.node.id))
-          .map((p) => (
-            <li key={p.node.id} className="flex flex-col gap-1 rounded-sm border bg-surface px-4 py-3">
-              <span className="text-xs text-ink-muted">{nodeType(p.node)}</span>
-              <NodeName node={p.node} />
-              <ul className="flex flex-col gap-0.5 text-ink-body">
-                {graph.edges
-                  .filter((e) => e.from === p.node.id)
-                  .map((e, i) => {
-                    const to = graph.nodes.find((n) => n.id === e.to);
-                    const label = edgeLabel(e);
-                    return (
-                      <li key={`${e.to}-${e.type}-${i}`}>
-                        {edgeWords(e.type)} {to ? <NodeName node={to} inline /> : e.to}
-                        {label && <span className="text-ink-muted"> ({label})</span>}
-                      </li>
-                    );
-                  })}
+      {/* The same graph as a list: phones read it here, grouped by kind and folded; screen readers everywhere. */}
+      {phone ? (
+        <div aria-label={view === "data-flow" ? "How data flows" : "Who works on what"} role="group" className="flex flex-col gap-2.5">
+          {groups.map((g, i) => (
+            <Disclosure key={g.type} title={`${g.label} · ${g.items.length}`} summary={g.items.slice(0, 3).map((p) => nodeName(p.node, mode)).join(", ") + (g.items.length > 3 ? "…" : "")} defaultOpen={i === 0}>
+              <ul className="flex flex-col divide-y rounded-md border bg-surface">
+                {g.items.map((p) => (
+                  <NodeEdges key={p.node.id} node={p.node} graph={graph} showType={false} />
+                ))}
               </ul>
-            </li>
+            </Disclosure>
           ))}
-      </ul>
+        </div>
+      ) : (
+        <ul aria-label={view === "data-flow" ? "How data flows" : "Who works on what"} className="flex flex-col gap-2.5 md:sr-only">
+          {sources.map((p) => (
+            <NodeEdges key={p.node.id} node={p.node} graph={graph} showType card />
+          ))}
+        </ul>
+      )}
     </>
   );
+}
+
+/** One node and the lines that leave it, said as sentences. */
+function NodeEdges({ node, graph, showType, card = false }: { node: OntologyNode; graph: Ontology; showType: boolean; card?: boolean }) {
+  return (
+    <li className={cn("flex flex-col gap-1 px-4 py-3", card && "rounded-sm border bg-surface")}>
+      {showType && <span className="text-xs text-ink-muted">{nodeType(node)}</span>}
+      <NodeName node={node} />
+      <ul className="flex flex-col gap-0.5 text-ink-body">
+        {graph.edges
+          .filter((e) => e.from === node.id)
+          .map((e, i) => {
+            const to = graph.nodes.find((n) => n.id === e.to);
+            const label = edgeLabel(e);
+            return (
+              <li key={`${e.to}-${e.type}-${i}`}>
+                {edgeWords(e.type)} {to ? <NodeName node={to} inline /> : e.to}
+                {label && <span className="text-ink-muted"> ({label})</span>}
+              </li>
+            );
+          })}
+      </ul>
+    </li>
+  );
+}
+
+/** "Employee" → "Employees", for a group's title. */
+function plurals(word: string): string {
+  return /y$/.test(word) && !/[aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : word.endsWith("s") ? word : `${word}s`;
 }
 
 function NodeName({ node, inline = false }: { node: OntologyNode; inline?: boolean }) {

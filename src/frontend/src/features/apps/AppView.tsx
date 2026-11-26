@@ -5,7 +5,7 @@ import { Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
-import { formatCredits, formatDate, formatDuration, formatNumber, headlineNumber, plural, timeAgo } from "@/lib/format";
+import { capitalise, formatCredits, formatDate, formatDuration, formatNumber, headlineNumber, plural, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -30,6 +30,8 @@ import { CardNotesProvider } from "@/components/CardNotes";
 import { ChangeRequest } from "./ChangeRequest";
 import { History } from "./History";
 import { AppConversation } from "../home/ConversationDock";
+import { Fold } from "@/components/Fold";
+import { Talk } from "../shell/talk";
 
 export function AppView({ appId }: { appId: string }) {
   const query = useGetAppQuery(appId, { pollingInterval: 20_000, skipPollingIfUnfocused: true });
@@ -103,22 +105,35 @@ function AppAsideColumn({ app, orgName }: { app: AppDetail; orgName: string }) {
   // The side panel says one thing at a time: what the last card did (D37).
   return (
     <CardNotesProvider>
-      <ErrorBoundary name="The app's settings">
-        <Settings app={app} orgName={orgName} canRun={builder} canChooseWho={admin} />
-      </ErrorBoundary>
-      <ErrorBoundary name="What it may spend">
-        <AppSpending app={app} isAdmin={admin} nameOf={nameOf} />
-      </ErrorBoundary>
-      <ErrorBoundary name="What it uses">
-        <WhatItUses app={app} canSeeSecrets={admin} />
-      </ErrorBoundary>
-      <ErrorBoundary name="The app itself">
-        <AppItself app={app} canChange={builder} isAdmin={admin} />
-      </ErrorBoundary>
-      <ErrorBoundary name="The download">
-        <ItIsYours app={app} isOwner={owner} />
-      </ErrorBoundary>
-      {technical && <TechnicalDetails app={app} />}
+      {/* A phone folds each of these to a named row under the page's own sections. */}
+      <Fold title="Running and who can open it" summary={`${capitalise(app.settings.access)} · ${app.settings.running === "always-on" ? "always on" : "sleeps when idle"}`}>
+        <ErrorBoundary name="The app's settings">
+          <Settings app={app} orgName={orgName} canRun={builder} canChooseWho={admin} />
+        </ErrorBoundary>
+      </Fold>
+      <Fold title="What it may spend">
+        <ErrorBoundary name="What it may spend">
+          <AppSpending app={app} isAdmin={admin} nameOf={nameOf} />
+        </ErrorBoundary>
+      </Fold>
+      <Fold title="What it uses">
+        <ErrorBoundary name="What it uses">
+          <WhatItUses app={app} canSeeSecrets={admin} />
+        </ErrorBoundary>
+      </Fold>
+      <Fold title="The app itself" summary="Its version, rebuilding it, archiving it">
+        <ErrorBoundary name="The app itself">
+          <AppItself app={app} canChange={builder} isAdmin={admin} />
+        </ErrorBoundary>
+        <ErrorBoundary name="The download">
+          <ItIsYours app={app} isOwner={owner} />
+        </ErrorBoundary>
+      </Fold>
+      {technical && (
+        <Fold title="Technical details">
+          <TechnicalDetails app={app} />
+        </Fold>
+      )}
     </CardNotesProvider>
   );
 }
@@ -136,9 +151,9 @@ function AppBody({ app }: { app: AppDetail }) {
   const healthText = { success: "text-success-text", attention: "text-attention-text", "attention-strong": "text-attention-text" } as Record<string, string>;
   return (
     <>
-      <div className={cn("flex flex-wrap items-start justify-between gap-5", RISE)}>
+      <div className={cn("flex flex-wrap items-start justify-between gap-5 max-sm:-order-3 max-sm:gap-3", RISE)}>
         <div className="flex min-w-0 flex-col gap-1.5">
-          <h1 className="text-3xl font-semibold">{app.name}</h1>
+          <h1 className="text-3xl font-semibold max-sm:text-2xl">{app.name}</h1>
           <span className="break-words text-ink-body">
             {app.addresses.subdomain ? (
               <>
@@ -149,12 +164,12 @@ function AppBody({ app }: { app: AppDetail }) {
             )}
           </span>
         </div>
-        <a href={app.addresses.subdomain ?? app.addresses.path} target="_blank" rel="noreferrer noopener" className={buttonVariants()}>
+        <a href={app.addresses.subdomain ?? app.addresses.path} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants(), "max-sm:w-full")}>
           Open the app
         </a>
       </div>
 
-      <section aria-label="Today" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <section aria-label="Today" className="grid grid-cols-2 gap-3 max-sm:-order-2 sm:gap-4 xl:grid-cols-4">
         <Tile index={1} label="Health" value={health.label} valueClass={healthText[health.tone] ?? "text-ink"} note={healthNote(app, technical)} pulse={health.label === "Healthy"} />
         {t ? (
           <>
@@ -194,29 +209,45 @@ function AppBody({ app }: { app: AppDetail }) {
       )}
 
       {builder && (
-        <ErrorBoundary name="Changing this app">
-          <ChangeRequest appId={app.id} appName={app.name} />
-        </ErrorBoundary>
+        <Fold title="Change it" summary="Say what to change; it is built in a preview first">
+          <ErrorBoundary name="Changing this app">
+            <ChangeRequest appId={app.id} appName={app.name} />
+          </ErrorBoundary>
+        </Fold>
       )}
-      <ErrorBoundary name="Asking about this app">
-        <AskPanel appId={app.id} canAsk={builder} />
-      </ErrorBoundary>
-      <ErrorBoundary name="The dashboard">
-        <Dashboard appId={app.id} canChange={builder} />
-      </ErrorBoundary>
+      <Fold title="Ask about it" summary="A question about its data, answered with a chart">
+        <ErrorBoundary name="Asking about this app">
+          <AskPanel appId={app.id} canAsk={builder} />
+        </ErrorBoundary>
+      </Fold>
+      <Fold title="Dashboard" summary="The questions kept on it">
+        <ErrorBoundary name="The dashboard">
+          <Dashboard appId={app.id} canChange={builder} />
+        </ErrorBoundary>
+      </Fold>
+
+      {/* A phone draws the button that opens this conversation straight under the figures (its order class). */}
       <ErrorBoundary name="The conversation">
-        <TalkToApp scope={app.scope} />
+        <Talk label={`Talk to ${app.name}`} launcherClassName="max-sm:-order-1">
+          <TalkToApp scope={app.scope} />
+        </Talk>
       </ErrorBoundary>
 
-      <div className="grid grid-cols-1 items-start gap-6 2xl:grid-cols-2">
-        <ErrorBoundary name="The history">
-          <History app={app} canRestore={builder} />
-        </ErrorBoundary>
-        <div className="flex flex-col gap-6">
-          <ErrorBoundary name="Sharing">{app.settings.access === "shared" ? admin ? <Sharing app={app} /> : <SharingForOthers app={app} /> : <SharingOff app={app} />}</ErrorBoundary>
-          <ErrorBoundary name="The secrets">
-            <AppSecrets scope={app.scope} canSee={admin} />
+      <div className="grid grid-cols-1 items-start gap-6 max-sm:gap-5 2xl:grid-cols-2">
+        <Fold title="History" summary="Every version, and bringing one back">
+          <ErrorBoundary name="The history">
+            <History app={app} canRestore={builder} />
           </ErrorBoundary>
+        </Fold>
+        <div className="flex flex-col gap-6 max-sm:gap-5">
+          <Fold title="Sharing" summary={app.settings.access === "shared" ? plural(app.sharedWith, "person", "people") : capitalise(app.settings.access)}>
+            <ErrorBoundary name="Sharing">{app.settings.access === "shared" ? admin ? <Sharing app={app} /> : <SharingForOthers app={app} /> : <SharingOff app={app} />}</ErrorBoundary>
+          </Fold>
+          <Fold title="Its secrets">
+            <ErrorBoundary name="The secrets">
+              <AppSecrets scope={app.scope} canSee={admin} />
+            </ErrorBoundary>
+          </Fold>
         </div>
       </div>
     </>
@@ -482,9 +513,9 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
 
 function Tile({ index, label, value, note, valueClass, pulse = false }: { index: number; label: string; value: string; note: string; valueClass?: string; pulse?: boolean }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0", RISE, stagger(index))}>
-      <span className="text-ink-muted">{label}</span>
-      <span className={cn("flex items-center gap-2.5 font-display text-2xl font-semibold", valueClass)}>
+    <div className={cn("flex min-w-0 flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0 max-sm:px-3.5 max-sm:py-3", RISE, stagger(index))}>
+      <span className="text-ink-muted max-sm:text-sm">{label}</span>
+      <span className={cn("flex items-center gap-2.5 break-words font-display text-2xl font-semibold max-sm:text-xl", valueClass)}>
         {pulse && <span aria-hidden className="size-2.5 animate-pulse rounded-full bg-success motion-reduce:animate-none" />}
         {value}
       </span>

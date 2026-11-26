@@ -117,6 +117,10 @@ export const motion = {
       "100%": { transform: "scale(1)" },
     },
     shimmer: { from: { backgroundPosition: "-200% 0" }, to: { backgroundPosition: "200% 0" } },
+    /** A sheet rising from the foot of the screen; one coming in from the side; the page dimming behind it. */
+    sheet: { from: { transform: "translateY(24px)", opacity: "0" }, to: { transform: "none", opacity: "1" } },
+    slide: { from: { transform: "translateX(32px)", opacity: "0" }, to: { transform: "none", opacity: "1" } },
+    fade: { from: { opacity: "0" }, to: { opacity: "1" } },
   },
   animation: {
     rise: "rise .7s cubic-bezier(.2,.7,.2,1) both",
@@ -131,6 +135,9 @@ export const motion = {
     bob: "bob 1.2s ease-in-out infinite",
     stamp: "stamp .6s .35s cubic-bezier(.2,.9,.3,1.2) both",
     shimmer: "shimmer 1.6s linear infinite",
+    sheet: "sheet .22s cubic-bezier(.2,.7,.2,1) both",
+    slide: "slide .22s cubic-bezier(.2,.7,.2,1) both",
+    fade: "fade .2s ease-out both",
     live: "grow 1.1s .35s cubic-bezier(.2,.7,.2,1) both, sheen 1s linear infinite",
   },
   /** Stagger between siblings that rise in. */
@@ -160,13 +167,59 @@ export const typography = {
   },
 } as const;
 
+/**
+ * Where the layout changes, as widths of the console's own viewport (inside a frame, the frame's
+ * width — so a narrow frame shows the phone layout with no special case). Tailwind's own values,
+ * written down once so CSS (`sm:`, `lg:`) and the shell's script (`useViewport`) agree.
+ *
+ * - phone: below `sm` — one column, the compact header and the bottom bar. A phone on its side is
+ *   short rather than narrow: below `lg` and under `short` tall it is a phone too.
+ * - tablet: `sm` to `lg` — the full header, two columns where a screen has them, the conversation
+ *   in a side sheet.
+ * - desktop: `lg` and up — the conversation and side panels beside the page.
+ */
+export const breakpoints = { sm: 640, md: 768, lg: 1024, xl: 1280, "2xl": 1536, short: 500 } as const;
+
+/** Tailwind's `screens`, from {@link breakpoints}. Plain widths only, so `max-sm:` and friends exist. */
+export const screens = {
+  sm: `${breakpoints.sm}px`,
+  md: `${breakpoints.md}px`,
+  lg: `${breakpoints.lg}px`,
+  xl: `${breakpoints.xl}px`,
+  "2xl": `${breakpoints["2xl"]}px`,
+} as const;
+
+/** The `short:` variant: a phone on its side. */
+export const shortQuery = `(max-height: ${breakpoints.short - 0.02}px)`;
+
+/** The media queries the shell's script reads, from the same numbers. */
+export const viewportQueries = {
+  phone: `(max-width: ${breakpoints.sm - 0.02}px), ${shortQuery} and (max-width: ${breakpoints.lg - 0.02}px)`,
+  desktop: `(min-width: ${breakpoints.lg}px)`,
+} as const;
+
 /** Named widths. `page` bounds the console so lines stay readable on an ultrawide. */
 export const layout = {
   width: { page: "96rem", aside: "22rem", dock: "26rem", form: "40rem", prose: "45rem", aura: "20rem", bubble: "85%", reply: "92%" },
-  /** The organisation graph's frame: tall enough to read, short enough to keep the page in view. */
-  height: { graph: "40rem" },
+  /** The organisation graph's frame: tall enough to read, short enough to keep the page in view. A bottom sheet's tallest. */
+  height: { graph: "40rem", sheet: "calc(var(--visible-height, 100dvh) - 2.5rem)", visible: "var(--visible-height, 100dvh)" },
   /** The smallest comfortable touch target. */
   touch: "44px",
+  /** The phone's bottom bar, above the home indicator's safe area; pages leave this much room under their last line. */
+  nav: "4rem",
+  /** The phone's header row. */
+  bar: "3.5rem",
+  /** A bottom sheet stops this far short of the top, so the page behind still shows it is a sheet. */
+  sheetGap: "2.5rem",
+  /** The device's safe area: the notch, the rounded corners, the home indicator (`viewport-fit=cover`). */
+  safe: { top: "env(safe-area-inset-top, 0px)", bottom: "env(safe-area-inset-bottom, 0px)", left: "env(safe-area-inset-left, 0px)", right: "env(safe-area-inset-right, 0px)" },
+  /** The bottom bar with the safe area under it: what a page leaves free at its foot on a phone. */
+  navSafe: "calc(4rem + env(safe-area-inset-bottom, 0px))",
+  /**
+   * What is left of the screen above the on-screen keyboard. A sheet that holds a text box sizes to it,
+   * so the box stays above the keyboard; the shell keeps the variables current from `visualViewport`.
+   */
+  visible: { height: "var(--visible-height, 100dvh)", top: "var(--visible-top, 0px)" },
   /** The narrowest a labelled field may be squeezed to in a row beside its button; below it the row wraps. */
   field: "12rem",
   /** Grid tracks: a chart's label column beside its bars; a table of figures with a name column. */

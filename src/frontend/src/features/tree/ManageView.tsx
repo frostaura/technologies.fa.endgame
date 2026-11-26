@@ -15,6 +15,8 @@ import { useAppSelector } from "@/store";
 import { useGetAppQuery, useGetMeQuery, type TreeArg } from "@/store/api";
 import type { ManagedLevel, MemberRole } from "@/store/types";
 import { CardNotesProvider } from "@/components/CardNotes";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useViewport } from "@/lib/useViewport";
 import { AppShell } from "../shell/AppShell";
 import { ContextPanel } from "./ContextPanel";
 import { ArchiveNode, CreateChild, DeleteNode, RenameNode } from "./NodeControls";
@@ -43,13 +45,20 @@ export function ManageView() {
   const entered = active.entered ? org?.slug : undefined;
   const roleOf = (scope: string): MemberRole | null => effectiveRole(query.data, me.data, scope);
   const nameOf = (path: string) => nodeAt(nodes, path)?.name ?? path.split("/").pop() ?? path;
-  const select = (scope: string) => navigate(paths.manage(scope, entered), { replace: true });
+  // A phone takes two steps: the outline alone, then the part chosen (a page of its own, so Back returns to the outline).
+  const phone = useViewport() === "phone";
+  const select = (scope: string) => navigate(paths.manage(scope, entered), { replace: !phone });
+  const outlineHref = `/tree${entered ? `?organisation=${encodeURIComponent(entered)}` : ""}`;
+  const step: "both" | "outline" | "part" = !phone ? "both" : asked ? "part" : "outline";
 
   return (
     <AppShell
-      crumbs={[...(org ? [{ label: org.name, href: entered ? paths.homeOf(entered) : paths.home() }] : []), { label: "Manage" }]}
+      crumbs={[
+        ...(org ? [{ label: org.name, href: entered ? paths.homeOf(entered) : paths.home() }] : []),
+        ...(step === "part" && selected ? [{ label: "Manage", href: outlineHref }, { label: selected.name }] : [{ label: "Manage" }]),
+      ]}
       aside={
-        selected ? (
+        selected && step !== "outline" ? (
           <ErrorBoundary name="What this is" resetKey={selected.scope}>
             <ContextPanel key={selected.scope} scope={selected.scope} name={selected.name} level={selected.level} canWrite={roleRank(roleOf(selected.scope)) >= roleRank("builder")} nameOf={nameOf} />
           </ErrorBoundary>
@@ -77,10 +86,18 @@ export function ManageView() {
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
-            <Outline nodes={nodes} selected={selected.scope} onSelect={select} />
-            <ErrorBoundary name="The part chosen" resetKey={selected.scope}>
-              <NodePanel key={selected.scope} node={selected} nodes={nodes} role={roleOf(selected.scope)} tree={arg} onSelect={select} startAdding={search.get("add") === "1"} />
-            </ErrorBoundary>
+            {step !== "part" && <Outline nodes={nodes} selected={step === "outline" ? "" : selected.scope} onSelect={select} />}
+            {step === "part" && (
+              <Link href={outlineHref} className="flex min-h-touch items-center gap-1 self-start rounded-xs font-semibold text-primary-link">
+                <ChevronLeft aria-hidden className="size-4" />
+                Every part of the organisation
+              </Link>
+            )}
+            {step !== "outline" && (
+              <ErrorBoundary name="The part chosen" resetKey={selected.scope}>
+                <NodePanel key={selected.scope} node={selected} nodes={nodes} role={roleOf(selected.scope)} tree={arg} onSelect={select} startAdding={search.get("add") === "1"} />
+              </ErrorBoundary>
+            )}
           </div>
         </>
       )}
@@ -108,6 +125,7 @@ function Outline({ nodes, selected, onSelect }: { nodes: ManagedNode[]; selected
               <Icon name={ICON[n.level]} tinted={!n.archived} className="size-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{n.name}</span>
               {n.archived && <Badge tone="quiet">Archived</Badge>}
+              <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-muted sm:hidden" />
             </button>
           </li>
         ))}

@@ -34,6 +34,8 @@ import {
 import type { Employee, EmployeeDetail, MemoryChange, MemoryEntry, MemoryKind, LedRun, TaskItem, TrackRecord, Tree } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { ConversationDock } from "../home/ConversationDock";
+import { Talk } from "../shell/talk";
+import { Fold } from "@/components/Fold";
 import { namesFor } from "../home/treeModel";
 import { useAppDispatch } from "@/store";
 import { JobFields } from "./JobFields";
@@ -78,9 +80,11 @@ export function EmployeeView({ employeeId }: { employeeId: string }) {
       crumbs={crumbs}
       aside={
         detail ? (
-          <ErrorBoundary name="The memory">
-            <MemoryPanel employee={detail.employee} tree={tree.data} />
-          </ErrorBoundary>
+          <Fold title={`What ${detail.employee.name} remembers`} summary="Its curated memory, and what changed in it">
+            <ErrorBoundary name="The memory">
+              <MemoryPanel employee={detail.employee} tree={tree.data} />
+            </ErrorBoundary>
+          </Fold>
         ) : undefined
       }
     >
@@ -132,7 +136,8 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
 
   return (
     <>
-      <div className={cn("flex flex-wrap items-start justify-between gap-5", RISE)}>
+      {/* A phone draws who this is first, then the button that opens the conversation with it (the order classes). */}
+      <div className={cn("flex flex-wrap items-start justify-between gap-5 max-sm:-order-2", RISE)}>
         <div className="flex min-w-0 items-center gap-4">
           <span className={cn("rounded-full", !released && employee.status === "working" && "animate-halo motion-reduce:animate-none")}>
             <Avatar name={employee.name} seed={employee.id} size="lg" />
@@ -208,6 +213,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
 
       {employee.kind === "employee" && !released && tree?.organisation && (
         <ErrorBoundary name="The conversation">
+          <Talk label={`Talk to ${employee.name}`} launcherClassName="max-sm:-order-1">
           <section aria-labelledby="talk-title" className="flex flex-col gap-3">
             <h2 id="talk-title" className="text-lg font-semibold">
               Talk to {employee.name}
@@ -219,6 +225,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
               />
             </div>
           </section>
+          </Talk>
         </ErrorBoundary>
       )}
     </>
