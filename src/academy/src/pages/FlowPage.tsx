@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Flow, Step } from "../content/types.ts";
-import { flow as flowById, isOperator, nextInPath, scripts, shotFor, track } from "../lib/data.ts";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { CLIENT_LEVELS, type Flow, type Step } from "../content/types.ts";
+import { flow as flowById, isOperator, scripts, shotFor, track } from "../lib/data.ts";
 import { ROLE_LABEL } from "../lib/labels.ts";
 import { go, href } from "../lib/router.ts";
-import { markDone, markSeen, useProgress } from "../lib/progress.ts";
+import { catalogue, progressStore, useProgress } from "../lib/progress.ts";
+import { resumeStep, type FlowProgress } from "../progress/model.ts";
+import { milestones, nextUp, trackStats, type Next } from "../progress/derive.ts";
 import { useReducedMotion } from "../lib/motion.ts";
+import { isSplit, useSplit } from "../lib/media.ts";
+import { useSwipe } from "../lib/swipe.ts";
+import { StepPager } from "../components/StepPager.tsx";
+import { ui } from "../components/ui.ts";
 import { Blocks } from "../components/Blocks.tsx";
 import { Inline } from "../components/Inline.tsx";
 import { LevelBadge, ReachChip } from "../components/Chips.tsx";
@@ -14,6 +20,9 @@ import { variationScript } from "../content/scripts.ts";
 import { Stage } from "../stage/Stage.tsx";
 import { mediaOf, type Media } from "../stage/media.ts";
 import { NotFound } from "./NotFound.tsx";
+
+/** How long a step must be on screen to count as seen: long enough to read that it is there, not a flick past. */
+const SEEN_AFTER_MS = 800;
 
 const MEDIA_LABEL: Record<Media, string> = {
   demo: "Live",
@@ -38,7 +47,18 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
   // The address is the one source of truth for the step: the highlighted card, "Step n of m", the
   // console and its caption all read it. Choosing a step, the arrow keys, scrolling, Back and
   // Forward, and a pasted link all move the step by moving the address.
-  const active = Math.min(Math.max(initialStep ?? 1, 1), Math.max(total, 1));
+  // Opened with no step named: where the learner left it, if they began it and did not finish.
+  const [resumedFrom] = useState(() => (initialStep === null ? resumeStep(progressStore.get().progress, f.id) : null));
+  const active = Math.min(Math.max(initialStep ?? resumedFrom ?? 1, 1), Math.max(total, 1));
+  const [resumeShown, setResumeShown] = useState(resumedFrom !== null);
+  // On a phone, the console enlarged over the steps (the pager then carries the step's words).
+  const [big, setBig] = useState(false);
+  const split = useSplit();
+  const pagerRef = useRef<HTMLDivElement>(null);
+  const finishRef = useRef<HTMLElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [pagerH, setPagerH] = useState(0);
+  const [atEnd, setAtEnd] = useState(false);
   const [run, setRun] = useState(0);
   // "Try it yourself" hands the console over on one step; any other step takes it back.
   const [interactiveAt, setInteractiveAt] = useState<number | null>(null);
@@ -54,7 +74,6 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
   /** The step the reader scrolled to: already in place, so the page does not scroll to it again. */
   const scrolledTo = useRef<number | null>(null);
   const landed = useRef(false);
-  const next = nextInPath(f);
   const operator = isOperator(f);
 
   const stepAddress = useCallback((n: number) => `/flow/${f.id}/step/${n}`, [f.id]);
@@ -64,18 +83,44 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     if (total && initialStep !== active) go(stepAddress(active), { replace: true });
   }, [active, initialStep, stepAddress, total]);
 
+  // A step shown for a moment is seen (and the last step makes the flow done); a step flicked past is not.
   useEffect(() => {
-    if (total) markSeen(f.id, active);
+    if (!total) return;
+    const t = window.setTimeout(() => progressStore.view(f.id, active, total), SEEN_AFTER_MS);
+    return () => window.clearTimeout(t);
   }, [active, f.id, total]);
+
+  // The offer to start again stands until the learner moves off the step they came back to.
+  if (resumeShown && resumedFrom !== null && active !== resumedFrom) setResumeShown(false);
+
+  // The pager's height, so the enlarged console stops above it at any text size.
+  useEffect(() => {
+    const el = pagerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setPagerH(Math.round(el.getBoundingClientRect().height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [split, total]);
+
+  // The end of the flow is in view: Next then takes the learner on to the next flow.
+  useEffect(() => {
+    const el = finishRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setAtEnd(!!e?.isIntersecting), { threshold: 0.35 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [total]);
 
   /**
    * Where a step should sit to be "the one being read": the middle of the viewport beside the
    * stage on a wide screen; just under the sticky stage on a phone, where the stage sits on top.
    */
   const readingLine = useCallback(() => {
-    const stage = stageRef.current?.getBoundingClientRect();
-    const wide = window.matchMedia?.("(min-width: 1024px)").matches ?? true;
-    return wide || !stage ? window.innerHeight * 0.42 : stage.bottom + 24;
+    const stage = stageRef.current;
+    if (isSplit() || !stage) return window.innerHeight * 0.42;
+    // Where the sticky stage comes to rest (its sticky offset plus its height), not where it sits
+    // now: before the page has scrolled, the stage is still lower down in the flow.
+    return (parseFloat(getComputedStyle(stage).top) || 0) + stage.offsetHeight + 24;
   }, []);
 
   const scrollToStep = useCallback(
@@ -201,6 +246,18 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     return () => window.removeEventListener("keydown", onKey);
   }, [goTo]);
 
+  // A sideways swipe over the stage or the steps walks them, as the arrow keys do.
+  useSwipe(gridRef, { onLeft: () => goTo(asked.current + 1), onRight: () => goTo(asked.current - 1), enabled: total > 1 && !interactive });
+
+  const toFinish = () => {
+    const el = finishRef.current;
+    if (!el) return;
+    scrolling.current = true;
+    window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - (isSplit() ? 96 : readingLine() - 8)), behavior: reduced ? "auto" : "smooth" });
+    window.setTimeout(() => (scrolling.current = false), reduced ? 50 : 900);
+    el.focus({ preventScroll: true });
+  };
+
   const variation = branch && script ? script.variations?.[branch.index] : undefined;
   const branchScript = branch && script ? variationScript(script, branch.index) : undefined;
   const showBranch = (index: number) => {
@@ -214,12 +271,39 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
   };
 
   const prereqs = f.learnFirst.flatMap((p) => flowById(p) ?? []);
-  const done = progress.flows[f.id] === "done";
+  const mine = progress.flows[f.id];
+  const done = !!mine?.done;
+  const furthest = Math.max(mine?.furthest ?? 0, active);
   const pathTitle = f.level ? track(f.level)?.title ?? f.level : null;
+  const next = nextUp(progress, f.level ? track(f.level) : undefined, catalogue, f.id);
+
+  const end = atEnd && next ? (
+    <a href={href(`/flow/${next.flow.id}`)} className={`${ui.primary} min-w-0 px-4`} aria-label={`Next flow: ${next.flow.id} ${next.flow.title}`}>
+      <span className="truncate">Next: {next.flow.id}</span>
+    </a>
+  ) : atEnd ? (
+    <a href={href("/progress")} className={`${ui.primary} px-4`}>Your progress</a>
+  ) : (
+    <button type="button" onClick={toFinish} className={`${ui.primary} px-4`}>Finish</button>
+  );
+  const pager =
+    total > 0 ? (
+      <StepPager
+        variant={split ? "inline" : "bar"}
+        active={active}
+        total={total}
+        furthest={furthest}
+        onPrev={() => goTo(asked.current - 1)}
+        onNext={() => goTo(asked.current + 1)}
+        end={end}
+        text={!split && big ? <Inline text={f.steps[active - 1]?.text ?? ""} self={f.id} /> : undefined}
+        resumed={resumeShown && resumedFrom !== null ? { step: resumedFrom, onRestart: () => goTo(1) } : undefined}
+      />
+    ) : null;
 
   return (
-    <article className="mx-auto w-full max-w-page px-4 pb-20 sm:px-6">
-      <header className="pb-10 pt-10 sm:pt-14">
+    <article className="mx-auto w-full max-w-page px-4 pb-10 sm:px-6 split:pb-20" style={pagerH ? ({ "--pager-h": `${pagerH}px` } as CSSProperties) : undefined}>
+      <header className="pb-8 pt-8 sm:pb-10 sm:pt-14">
         <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm text-ink-muted" data-print="hide">
           {f.level && pathTitle ? <a className="hover:text-ink" href={href(operator ? "/operator" : `/path/${f.level}`)}>{pathTitle}</a> : <a className="hover:text-ink" href={href("/browse")}>Browse</a>}
           <span aria-hidden="true">/</span>
@@ -229,13 +313,17 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
           <span className="rounded-full bg-ink px-3 py-1 font-mono text-xs font-semibold text-primary-ink">{f.id}{f.aliases.length ? ` – ${f.aliases[f.aliases.length - 1]}` : ""}</span>
           <LevelBadge level={f.level} />
           <ReachChip reach={f.reach} />
-          {done && <span className="rounded-full bg-success-tint px-2.5 py-0.5 text-xs font-semibold text-success-text">Done</span>}
+          {done ? (
+            <span className="rounded-full bg-success-tint px-2.5 py-0.5 text-xs font-semibold text-success-text">Done</span>
+          ) : mine ? (
+            <span className="rounded-full bg-primary-tint px-2.5 py-0.5 text-xs font-semibold text-primary-link">Started · {mine.furthest} of {total} seen</span>
+          ) : null}
         </div>
         <div className="mt-4 grid gap-8 lg:grid-cols-12 lg:gap-12">
         <div className="lg:col-span-7">
-        <h1 className="max-w-prose font-display text-title-sm font-bold text-ink sm:text-title">{f.title}</h1>
+        <h1 className="max-w-prose break-words font-display text-title-sm font-bold text-ink sm:text-title">{f.title}</h1>
         {f.whatYouLearn && (
-          <p className="mt-5 max-w-prose text-lead text-ink-body">
+          <p className="mt-5 max-w-prose text-lead-sm text-ink-body sm:text-lead">
             <Inline text={sentence(f.whatYouLearn)} self={f.id} />
           </p>
         )}
@@ -277,8 +365,8 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
       </header>
 
       {total > 0 ? (
-        <div className="grid gap-8 lg:grid-cols-12 lg:gap-12">
-          <div ref={stageRef} className="sticky top-header-sm z-10 md:top-header -mx-4 h-stage-sm border-b bg-surface/95 px-4 pb-3 pt-2 backdrop-blur sm:-mx-6 sm:px-6 lg:order-2 lg:col-span-7 lg:mx-0 lg:h-stage lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none" data-print="hide">
+        <div ref={gridRef} className="grid gap-6 split:grid-cols-12 split:gap-8 lg:gap-12">
+          <div ref={stageRef} className={`sticky top-header-sm z-10 -mx-4 border-b bg-surface/95 px-4 pb-3 pt-2 backdrop-blur sm:-mx-6 sm:px-6 md:top-header short:top-header-short split:order-2 split:col-span-7 split:mx-0 split:h-stage short:split:h-stage-short split:border-0 split:bg-transparent split:p-0 split:backdrop-blur-none ${big ? "h-stage-full" : "h-stage-sm"}`} data-print="hide">
             <Stage
               flow={f}
               script={branchScript ?? script}
@@ -290,6 +378,8 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
               }
               captured={(n) => (branch && variation ? (n === variation.steps.length ? shotFor(f.id, `v${branch.index + 1}`) : undefined) : shotFor(f.id, n))}
               run={run}
+              pager={split ? pager : undefined}
+              expand={split ? undefined : { on: big, toggle: () => setBig((b) => !b) }}
               interactive={interactive}
               onTry={() => setInteractiveAt(active)}
               onReplay={() => {
@@ -298,10 +388,9 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
               }}
             />
           </div>
-          <div className="lg:order-1 lg:col-span-5">
-            <p className="mb-4 flex items-center justify-between text-sm text-ink-muted" data-print="hide">
-              <span>Step {active} of {total}</span>
-              <span className="hidden lg:inline">Scroll, or press <kbd className="rounded-xxs border px-1 font-mono text-xs">←</kbd> <kbd className="rounded-xxs border px-1 font-mono text-xs">→</kbd></span>
+          <div className="min-w-0 split:order-1 split:col-span-5">
+            <p className="mb-4 hidden text-sm text-ink-muted lg:block" data-print="hide">
+              Scroll, or press <kbd className="rounded-xxs border px-1 font-mono text-xs">←</kbd> <kbd className="rounded-xxs border px-1 font-mono text-xs">→</kbd>
             </p>
             <ol className="space-y-4" aria-label="Steps">
               {f.steps.map((s, i) => (
@@ -312,6 +401,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
                   media={mediaOf(f, script, s.n)}
                   scripted={!!script?.steps.some((x) => x.step === s.n)}
                   active={s.n === active}
+                  seen={s.n <= (mine?.furthest ?? 0)}
                   showSection={!!s.section && s.section !== f.steps[i - 1]?.section}
                   onSelect={() => goTo(s.n)}
                   refCb={(el) => {
@@ -320,7 +410,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
                 />
               ))}
             </ol>
-            <Finish flow={f} done={done} next={next} />
+            <Finish flow={f} entry={mine} next={next} sectionRef={finishRef} />
           </div>
         </div>
       ) : (
@@ -331,16 +421,21 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
       )}
 
       <Variations flow={f} branches={script?.variations?.map((v) => v.title) ?? []} playing={branch?.index ?? null} onShow={total > 0 ? showBranch : undefined} />
+      {!split && pager && (
+        // Sticky to the bottom edge of the article: over the steps while they are read, and at rest above the footer at the end.
+        <div ref={pagerRef} className="sticky bottom-0 z-20 -mx-4 mt-10 sm:-mx-6">{pager}</div>
+      )}
     </article>
   );
 }
 
-function StepCard({ step, flow, media, scripted, active, showSection, onSelect, refCb }: {
+function StepCard({ step, flow, media, scripted, active, seen, showSection, onSelect, refCb }: {
   step: Step;
   flow: Flow;
   media: Media;
   scripted: boolean;
   active: boolean;
+  seen: boolean;
   showSection: boolean;
   onSelect: () => void;
   refCb: (el: HTMLLIElement | null) => void;
@@ -351,12 +446,15 @@ function StepCard({ step, flow, media, scripted, active, showSection, onSelect, 
       {/* One card, one outline: the card's own border marks the step being read, and the keyboard's focus on its button (whose ring would end above the chip). */}
       <div data-testid="step-card" className={`rounded-md border-2 bg-surface transition-colors ${active ? "border-primary shadow-card" : "border-transparent hover:border-border focus-within:border-primary"}`}>
         <button type="button" onClick={onSelect} aria-current={active ? "step" : undefined} className="flex w-full items-start gap-4 rounded-md px-4 pt-4 text-left focus-visible:ring-0 focus-visible:ring-offset-0 sm:px-5">
-          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-display text-sm font-semibold transition-colors ${active ? "bg-primary text-primary-ink" : "bg-quiet text-quiet-text"}`}>{step.n}</span>
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-display text-sm font-semibold transition-colors ${active ? "bg-primary text-primary-ink" : seen ? "bg-primary-tint text-primary-link" : "bg-quiet text-quiet-text"}`}>
+            {step.n}
+            {seen && !active && <span className="sr-only">, seen</span>}
+          </span>
           <span className="min-w-0 flex-1 pt-1 text-step text-ink">
             <Inline text={step.text} self={flow.id} />
           </span>
         </button>
-        <div className="pb-4 pl-16 pr-4 text-sm sm:pr-5">
+        <div className="min-w-0 pb-4 pl-16 pr-4 text-sm sm:pr-5">
           {step.children.length > 0 && <Blocks blocks={step.children} self={flow.id} />}
           {scripted && MEDIA_LABEL[media] && (
             <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary-tint px-2.5 py-0.5 text-xs font-medium text-primary-link" data-print="hide">
@@ -370,24 +468,61 @@ function StepCard({ step, flow, media, scripted, active, showSection, onSelect, 
   );
 }
 
-function Finish({ flow: f, done, next }: { flow: Flow; done: boolean; next: Flow | undefined }) {
+/**
+ * The end of a flow: how to know it worked, then — once it is done — the moment that says so, what
+ * it added up to, and the next flow one tap away.
+ */
+function Finish({ flow: f, entry, next, sectionRef }: { flow: Flow; entry: FlowProgress | undefined; next: Next | undefined; sectionRef: RefObject<HTMLElement | null> }) {
+  const progress = useProgress();
+  const done = !!entry?.done;
+  const t = f.level ? track(f.level) : undefined;
+  const stats = t ? trackStats(progress, t) : undefined;
+  const earnedNow = done && entry?.doneAt
+    ? milestones(progress, catalogue, CLIENT_LEVELS).filter((m) => m.earned && m.at === entry.doneAt && !isOperator(f))
+    : [];
+  const summary = stats ? `${stats.done} of ${stats.total} on ${t?.title ?? f.level}${stats.complete ? ": path complete" : ""}` : "";
   return (
-    <section aria-labelledby="worked" className="mt-10 rounded-lg bg-night p-6 text-primary-ink sm:p-8">
+    <section ref={sectionRef} tabIndex={-1} aria-labelledby="worked" className="mt-10 rounded-lg bg-night p-6 text-primary-ink focus:outline-none sm:p-8">
       <p className="text-eyebrow font-semibold uppercase text-live">You know it worked when</p>
-      <p id="worked" className="mt-3 text-lead">{f.workedWhen ? <Inline text={f.workedWhen} self={f.id} plainIds tone="dark" /> : "The last step above is what you see."}</p>
+      <p id="worked" className="mt-3 text-lead-sm sm:text-lead">{f.workedWhen ? <Inline text={f.workedWhen} self={f.id} plainIds tone="dark" /> : "The last step above is what you see."}</p>
+      <p role="status" className="sr-only">{done ? `Flow done. ${summary}.` : ""}</p>
+      {done && (
+        <div className="mt-6 flex items-start gap-4 border-t border-surface/15 pt-6" data-print="hide" data-testid="flow-done">
+          <span className="flex h-medal w-medal shrink-0 items-center justify-center rounded-full bg-live text-night" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="h-6 w-6"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </span>
+          <div className="min-w-0">
+            <p className="font-display text-2xl font-semibold">Done{next ? <span className="text-primary-ink-soft"> — next: {next.flow.id}</span> : null}</p>
+            {summary && <p className="mt-1 text-sm text-primary-ink-soft">{summary}</p>}
+            {earnedNow.length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-2" aria-label="Milestones earned">
+                {earnedNow.map((m) => (
+                  <li key={m.id} className="rounded-full border border-live/50 px-3 py-1 text-xs font-semibold text-live">Milestone: {m.title}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
       <div className="mt-6 flex flex-wrap gap-3" data-print="hide">
-        <button type="button" onClick={() => markDone(f.id, !done)} className={`min-h-touch rounded-full px-5 text-sm font-semibold ${done ? "bg-success text-primary-ink" : "bg-surface text-ink hover:bg-primary-tint"}`} aria-pressed={done}>
+        {done && next && (
+          <a href={href(`/flow/${next.flow.id}`)} className={`${ui.light} min-w-0 px-5`}>
+            <span className="truncate">Next: {next.flow.id} {next.flow.title}</span>
+          </a>
+        )}
+        <button type="button" onClick={() => progressStore.setDone(f.id, !done)} className={done ? ui.lightOutline : ui.light} aria-pressed={done}>
           {done ? "Done ✓" : "Mark as done"}
         </button>
-        {next && (
-          <a href={href(`/flow/${next.id}`)} className="inline-flex min-h-touch items-center rounded-full border-2 border-primary-ink-soft px-5 text-sm font-semibold hover:bg-surface/10">
-            Next: {next.id} {next.title}
+        {!done && next && (
+          <a href={href(`/flow/${next.flow.id}`)} className={`${ui.lightOutline} min-w-0`}>
+            <span className="truncate">Next: {next.flow.id} {next.flow.title}</span>
           </a>
         )}
         {!next && f.level && (
-          <a href={href("/finish")} className="inline-flex min-h-touch items-center rounded-full border-2 border-primary-ink-soft px-5 text-sm font-semibold hover:bg-surface/10">End of the path</a>
+          <a href={href("/progress")} className={ui.lightOutline}>{stats?.complete ? "Path complete: your progress" : "Your progress"}</a>
         )}
       </div>
+      {done && next?.before && <p className="mt-3 text-sm text-primary-ink-soft" data-print="hide">{next.flow.id} is a “learn first” for {next.before.id}, the next flow on this path.</p>}
     </section>
   );
 }

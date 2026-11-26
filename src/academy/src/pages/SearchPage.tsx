@@ -1,12 +1,14 @@
 import { searchFlows } from "../lib/data.ts";
 import { href } from "../lib/router.ts";
-import { LevelBadge, ReachChip } from "../components/Chips.tsx";
+import { LevelBadge, ProgressDot, ReachChip } from "../components/Chips.tsx";
+import { stateOf, useProgress } from "../lib/progress.ts";
 import { Search } from "../components/Search.tsx";
 import { snippet } from "../lib/snippet.ts";
 import { Eyebrow, Page } from "../components/Shell.tsx";
 
 export function SearchPage({ q, operator }: { q: string; operator: boolean }) {
   const hits = q ? searchFlows(q, operator ? "operator" : "client", 60) : [];
+  const progress = useProgress();
   return (
     <Page className="max-w-prose">
       <Eyebrow>{operator ? "Search the operator handbook" : "Search"}</Eyebrow>
@@ -19,8 +21,9 @@ export function SearchPage({ q, operator }: { q: string; operator: boolean }) {
       <ol className="mt-4 divide-y rounded-lg border bg-surface empty:hidden">
         {hits.map((h) => (
           <li key={h.flow.id}>
-            <a href={href(`/flow/${h.flow.id}`)} className="group block px-5 py-4 hover:bg-ground">
-              <span className="flex flex-wrap items-center gap-3">
+            <a href={href(`/flow/${h.flow.id}`)} className="group block px-4 py-4 hover:bg-ground sm:px-5">
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <ProgressDot state={stateOf(progress, h.flow.id)} />
                 <span className="font-mono text-xs font-semibold text-primary-link">{h.flow.id}</span>
                 <span className="font-medium text-ink group-hover:text-primary-link">{h.flow.title}</span>
                 <LevelBadge level={h.flow.level} />

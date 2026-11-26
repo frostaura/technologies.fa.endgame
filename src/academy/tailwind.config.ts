@@ -12,12 +12,15 @@ const config: Config = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      screens: academy.screens,
       fontSize: Object.fromEntries(Object.entries(academy.fontSize).map(([k, [size, rest]]) => [k, [size, { ...rest }]])),
       maxWidth: academy.width,
       width: academy.width,
       height: academy.height,
       minHeight: academy.height,
+      maxHeight: academy.maxHeight,
       inset: academy.inset,
+      padding: academy.padding,
     },
   },
 };

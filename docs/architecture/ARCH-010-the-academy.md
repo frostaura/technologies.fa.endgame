@@ -61,12 +61,37 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   the operator log. The player keeps it for every later step (`personaAt`); a jump replays it.
 - **The site** (`src/academy/src/`) is React with hash routing and relative URLs, built as one
   classic deferred script (iife) so it runs from `file://`. Content, scripts and the prebuilt search
-  index are bundled. Progress (not started / seen / done, and where the learner left off) lives in
-  `localStorage`, every access guarded.
+  index are bundled. Progress lives on the device (see **Progress** below).
 - **The step is the address.** `#/flow/<ID>/step/<n>` is the one source of truth for the step being
   read: the highlighted card, "Step n of m", the console and its caption all follow it. Choosing a
   step and the arrow keys push an address (so Back and Forward walk the steps); scrolling replaces
   it with the step crossing the reading line; an address changed by hand moves the step.
+- **Progress** (`src/progress/`) is plain data and pure functions (`model.ts`: seen, done, resume,
+  clamp, merge, the streak, the export code; `derive.ts`: per-path counts, next up, milestones), a
+  store over `localStorage` (`store.ts`), and one instance wired to the content (`lib/progress.ts`).
+  A step is *seen* once it has been on screen for 800 ms; a flow is *done* when its last step is
+  seen, or by "Mark as done". It is read synchronously before the first paint, so nothing that
+  shows progress moves the page when it appears. Details under **Data**.
+- **Small screens.** Below the `split:` query (`theme/tokens.ts`: 1024 px wide, or a phone or small
+  tablet on its side) the stage sits on top, sticky under a one-row header, at `50svh`; the steps
+  scroll under it; and a step pager (Previous, "Step n of m" with one segment per step, Next) is
+  sticky to the bottom edge of the article, above the home indicator — so the step, its caption and
+  the controls are always in reach of a thumb, and it comes to rest above the footer. A sideways
+  swipe over the stage or the steps walks them (`lib/swipe.ts`; a mostly vertical stroke, a short
+  one, or one that starts in a field or something that scrolls sideways is left alone). "Larger
+  console" grows the stage to everything but the header and the pager, which then carries the
+  step's words. At `split:` the steps sit beside the stage and the pager sits under it; on a short
+  screen (`short:`, under 600 px tall) the stage's controls fold into one row with the pager. On a
+  phone the header is the mark, the way back to where the learner left off, search and a menu; the
+  rest opens as a sheet from the bottom edge (`components/Sheet.tsx`, the browser's `<dialog>`).
+  Heights use `svh` (the stage never jumps as the address bar collapses), the full-screen demo
+  `dvh`; `viewport-fit=cover` with safe-area padding keeps content off the notch and the home
+  indicator. Every control is at least 44 px.
+- **The demo at phone width.** The frame is the stage's width, and the demo is the real console,
+  whose layout follows its own viewport: in a 360–400 px frame it is the console's phone layout,
+  with no parameter or message needed. Its spotlight, cursor and note are drawn inside the frame
+  (fixed to the frame's viewport, and `reveal` scrolls only the demo's own page), so they stay on
+  screen with it.
 - **Placeholders** in the flow text (`{Org}`, `{credits}`, `{reason}`) are set as a small variable
   token of what they stand for ("your organisation's name", "number of credits"; otherwise the word
   in the braces, de-camel-cased — `src/content/placeholders.ts`), on the site and in the PDFs. The
@@ -165,8 +190,41 @@ project **Court booking**, and the Admin **Ada Lovelace**.
 
 ## Data
 
-Nothing is stored server-side. The browser keeps `endgame-academy:progress:v1` in `localStorage`
-(per flow: seen or done; the last flow and step); "Forget my progress" on the About page clears it.
+Nothing is stored server-side, and there are no accounts (assumption 50): progress is per device.
+The browser keeps `endgame-academy:progress:v2` in `localStorage`:
+
+```
+{ v: 2,
+  flows: { "<FLOW-ID>": { step, furthest, done, started, seen, doneAt } },   // epoch ms; 0 = unknown
+  last:  { flow, step, at } | null,                                          // "pick up where you left off"
+  days:  ["2026-11-26", …] }                                                 // local days with a step shown, ≤ 400
+```
+
+- **Keyed by flow id, read against today's content**: an alias is filed under its flow, a step past
+  a flow's new end is clamped to it, and a flow that is gone (or has no steps) is dropped without a
+  word. The first version (`…:v1`, seen/done only) is carried forward once and removed.
+- **Unavailable storage** (a private window, blocked site data, a full quota) is probed once; the
+  store then keeps progress in memory for the visit and the progress page says so quietly. Another
+  tab's change arrives through the `storage` event.
+- **Pick up where you left off**: the cover, the Learn page and the progress page carry a card with
+  the flow, "Step n of m" and its segments; the header carries a "Resume" pill (or "Next up", once
+  that flow is finished). Opening a flow begun and not finished, with no step in the address, lands
+  on its step, and the pager offers "Start from the beginning".
+- **Derived, never stored**: per-path counts (the operator handbook apart from the client paths),
+  *next up* (the next flow not done in the path's order — after the one just finished, then from the
+  top — with any missing "Learn first" put ahead of it, however deep), the badge per finished path,
+  the milestones (first, 10, 25, 50, 100 flows where the academy has that many; a whole path; every
+  path, each dated from `doneAt`), and the streak (days in a row ending today or yesterday). So a
+  reset, an import or a content change can never leave a badge the record does not prove.
+- **The end of a flow**: Next on the last step is "Finish", which brings in "You know it worked
+  when" and — once the flow is done — "Done — next: …", the path's count, any milestone it earned,
+  and the next flow one tap away (in the panel and in the pager). A polite live region says it.
+- **"Your progress"** (`#/progress`): the overall figure, the paths and their badges, milestones,
+  the operator handbook apart, and the controls: export as a file or an `EGA2.` code (base64url of
+  a compact JSON), import by pasting or choosing a file (merged: the furthest step of each flow, the
+  earliest start, the newest place, every day), and reset after a confirmation. One line says it
+  stays on the device.
+- Progress is never drawn on paper: the print route renders no shell, so the PDFs carry none of it.
 
 ## Invariants
 
@@ -183,6 +241,10 @@ Nothing is stored server-side. The browser keeps `endgame-academy:progress:v1` i
   `tests-e2e/academy.spec.ts`.
 - The site requests nothing but its own files; the QR code is generated at build.
 - The Pages workflow runs on push to `main` and manual dispatch only, never on a schedule.
+- Nothing on a phone scrolls sideways: every page type is checked at 390 × 844 with touch
+  (`document.documentElement.scrollWidth <= clientWidth`) — `tests-e2e/academy.spec.ts`.
+- Progress never leaves the device, and the model's rules (seen, done, resume, clamp, merge, reset,
+  import and export, storage unavailable) are held by `src/progress/*.test.ts`.
 
 ## Decisions
 
@@ -194,6 +256,9 @@ Nothing is stored server-side. The browser keeps `endgame-academy:progress:v1` i
 | The bridge is postMessage with an envelope and echoed ids | The demo is a separate build by another lane; a message contract can be diffed and tested from both sides | Reaching into the iframe's DOM (couples the academy to the console's markup) |
 | Spotlights by visible text, quoted exactly as the flow quotes it | The console carries almost no `data-testid`s, and the flows already name every control's words | CSS selectors into the console's markup |
 | PDFs rendered from the site's own print route | One source; the print version is a page like any other | A second, PDF-only template |
+| Progress per device, in `localStorage`, moved between devices by a file or a code | The site is static with no server, and makes no request beyond its own files; accounts would add a service and personal data for a learning aid | Accounts and a sync service; a URL that carries the progress (it would leak into history and shared links) |
+| On a phone the stage stays on top and the pager sits on the bottom edge, rather than the steps as a sheet over a full-screen console | It keeps the scrolling list, the address-as-step model and the reading line exactly as on desktop; the console stays visible while reading; "Larger console" gives the sheet-like view when wanted | A bottom sheet of step text over the console (a second way of reading the same steps, and it hides the console's lower half) |
+| `svh` for the stage, `dvh` only for the full-screen demo | The stage must not resize as the address bar collapses mid-scroll (the frame would reflow under the learner) | `vh` (too tall with the bar shown on iOS); `dvh` (jumps) |
 | Captured images are generated, not committed (`public/shots/*/` is git-ignored); the Pages workflow makes them | They are reproducible from the scripts and the demo, and committing hundreds of binaries would churn the repository on every screen change | Committing them (repository growth, stale pictures) |
 
 ## Not built yet

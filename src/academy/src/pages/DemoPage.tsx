@@ -13,12 +13,12 @@ export function DemoPage({ back }: { back: string }) {
     return () => b.dispose();
   }, []);
   return (
-    <div className="flex h-screen flex-col bg-surface">
-      <div className="flex items-center gap-3 border-b px-4 py-2">
+    <div className="flex h-screen-d flex-col bg-surface">
+      <div className="flex items-center gap-3 border-b px-2 py-1 sm:px-4 sm:py-2">
         <a href={back} className="inline-flex min-h-touch items-center gap-2 rounded-full px-3 text-sm font-medium text-ink hover:bg-ground">
           <span aria-hidden="true">←</span> Back to the academy
         </a>
-        <span className="ml-auto flex items-center gap-2 text-sm text-ink-muted">
+        <span className="ml-auto flex min-w-0 items-center gap-2 truncate text-sm text-ink-muted">
           <Mark className="h-5 w-5" /> Live demo, on sample data
         </span>
       </div>
