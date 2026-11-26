@@ -269,6 +269,36 @@ public sealed class WalkTwoServerTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal((10m, 4.8m, 4.8m), (planned["firstEstimateCredits"]!.GetValue<decimal>(), planned["planEstimateCredits"]!.GetValue<decimal>(), planned["estimateCredits"]!.GetValue<decimal>()));
     }
 
+    // ---------------------------------------------------------------- R2-5
+
+    [Fact]
+    public async Task An_approval_raised_before_the_plain_detail_fix_reads_plainly_with_its_tool_line_kept_for_technical_mode()
+    {
+        var run = await RunAsync(Division, "conversation", "Talk");
+        await runner.LeaseAsync(run, "runner-test", 120, CancellationToken.None);
+        const string raw = "adjust_setting: checkpoint.hire=false. No rule allows adjust_setting here. Checkpoint: adjust_setting.";
+        await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/approvals", new { runId = run, title = "Change a setting here?", detail = raw }));
+        var need = (await ControlPlaneApp.Ok(owner.GetAsync("/api/tree")))["needsYou"]!.AsArray().Single(n => n!["kind"]!.GetValue<string>() == "approval")!;
+        Assert.StartsWith("Turn off the “Before anyone is hired” checkpoint in ", need["title"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal(Endgame.Domain.Access.ApprovalWords.ByDefault, need["detail"]!.GetValue<string>());
+        Assert.Equal(raw, need["technical"]!.GetValue<string>());
+        // The run's own log reads the same way, so its page says it plainly too.
+        var asked = (await runner.ReadEventsAsync(run, 0, 500, CancellationToken.None)).Single(e => e.Type == "approval.requested").Payload;
+        Assert.Equal((need["title"]!.GetValue<string>(), Endgame.Domain.Access.ApprovalWords.ByDefault, raw), (asked["title"]!.GetValue<string>(), asked["detail"]!.GetValue<string>(), asked["technical"]!.GetValue<string>()));
+    }
+
+    [Theory]
+    [InlineData("Change a setting here?", "adjust_setting: hire_checkpoint=false. No rule allows adjust_setting here. Checkpoint: adjust_setting.", "Change a setting here?")]
+    [InlineData("Try again: Research: a lift board?", "try_again: 075ba848-baef-4980-ae4e-84e68a640987. No rule allows try_again here. Checkpoint: try_again.", "Try again: Research: a lift board?")]
+    [InlineData("Change a setting here?", "adjust_setting: sleep.idle_minutes=25. No rule allows adjust_setting here. Checkpoint: adjust_setting.", "Let the apps here sleep after 25 idle minutes?")]
+    public void An_older_tool_line_becomes_technical_detail_and_the_plain_sentence_takes_its_place(string title, string detail, string plainTitle)
+    {
+        var (t, d, technical) = Endgame.Infrastructure.Runs.OlderApprovals.Plain(title, detail, null, null);
+        Assert.Equal((plainTitle, Endgame.Domain.Access.ApprovalWords.ByDefault, detail), (t, d, technical));
+        // A row that already has its technical detail, or a plain detail, is left as it is.
+        Assert.Equal(("T?", "Plain words.", (string?)null), Endgame.Infrastructure.Runs.OlderApprovals.Plain("T?", "Plain words.", null, null));
+    }
+
     // ---------------------------------------------------------------- D66
 
     [Fact]

@@ -344,10 +344,15 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var technical = await Runs.ApprovalService.TechnicalAsync(db, organisationId, approvals.Select(a => a.Approval.Id).ToList(), cancellationToken);
         var needs = new List<object>();
         needs.AddRange(ideas.Where(Sees).Select(i => new VerdictNeed("verdict", i.Id, i.Id, IdeaTitle(i.Text), i.Verdict!, i.VerdictSummary)));
-        needs.AddRange(approvals
-            .Where(a => everything || new[] { a.DivisionId, a.ProjectId, a.AppId }.Any(id => id is { } x && visible.Contains(x)))
-            .Select(a => new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, a.Approval.Title, a.Approval.Detail.Length == 0 ? null : a.Approval.Detail,
-                technical.GetValueOrDefault(a.Approval.Id))));
+        foreach (var a in approvals.Where(a => everything || new[] { a.DivisionId, a.ProjectId, a.AppId }.Any(id => id is { } x && visible.Contains(x))))
+        {
+            // Rows from before the plain-detail fix read as a new one would (R2-5).
+            var at = await scopes.ForRowAsync(organisationId, a.DivisionId, a.ProjectId, a.AppId, cancellationToken);
+            var (title, detail, tech) = Runs.OlderApprovals.Plain(a.Approval.Title, a.Approval.Detail, technical.GetValueOrDefault(a.Approval.Id), at);
+            needs.Add(new ApprovalNeed("approval", a.Approval.Id, a.Approval.RunId, a.Approval.Id, title, detail.Length == 0 ? null : detail, tech));
+        }
+
+        session.UseOrganisation(organisationId);
         return needs;
     }
 

@@ -383,29 +383,7 @@ public sealed partial class AdjustSettingTool(ControlPlaneClient controlPlane, s
     {
         ArgumentNullException.ThrowIfNull(names);
         ArgumentNullException.ThrowIfNull(scope);
-        var raw = (value ?? "").Trim().Trim('"').Trim().ToLowerInvariant();
-        bool? on = raw switch { "true" or "on" or "yes" => true, "false" or "off" or "no" => false, _ => null };
-        var place = names.Name(scope);
-        var apps = names.Apps(scope);
-        var Apps = char.ToUpperInvariant(apps[0]) + apps[1..];
-        var number = int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0 ? n : (int?)null;
-        string Checkpoint(string label) => on is true ? $"Turn on the “{label}” checkpoint in {place}" : $"Turn off the “{label}” checkpoint in {place}";
-        string CheckpointDone(string label) => on is true ? $"The “{label}” checkpoint is now on in {place}." : $"The “{label}” checkpoint is now off in {place}.";
-        return key switch
-        {
-            Endgame.Domain.Cascade.Autonomy.Key when raw == "checkpoints" => ($"Stop for your sign-off at checkpoints in {place}", $"{place} now stops for your sign-off at the checkpoints that are on."),
-            Endgame.Domain.Cascade.Autonomy.Key when raw == "auto" => ($"Switch {place} to auto-mode", $"{place} now works in auto-mode."),
-            Endgame.Domain.Cascade.Autonomy.CheckpointStart when on is not null => (Checkpoint("Before work starts"), CheckpointDone("Before work starts")),
-            Endgame.Domain.Cascade.Autonomy.CheckpointPlan when on is not null => (Checkpoint("Before the plan is carried out"), CheckpointDone("Before the plan is carried out")),
-            Endgame.Domain.Cascade.Autonomy.CheckpointHire when on is not null => (Checkpoint("Before anyone is hired"), CheckpointDone("Before anyone is hired")),
-            Endgame.Domain.Cascade.CascadeKeys.SleepMode when raw == "always_on" => ($"Keep {apps} always on", $"{Apps} now stay on, even when nobody is using them."),
-            Endgame.Domain.Cascade.CascadeKeys.SleepMode when raw == "auto" => ($"Let {apps} sleep when nobody is using them", $"{Apps} now sleep when nobody is using them."),
-            Endgame.Domain.Cascade.CascadeKeys.SleepIdleMinutes when number is { } minutes => ($"Let {apps} sleep after {Count(minutes, "idle minute")}", $"{Apps} now sleep after {Count(minutes, "idle minute")}."),
-            Endgame.Domain.Cascade.AgentSettings.WorkforceIdleDays when number is { } days => ($"Flag employees in {place} who have had no work for {Count(days, "day")}", $"Employees in {place} who have had no work for {Count(days, "day")} are now flagged."),
-            _ => null,
-        };
-
-        static string Count(int n, string one) => n == 1 ? $"1 {one}" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{n} {one}s");
+        return Endgame.Domain.Cascade.SettingWords.Describe(key, value, names.Name(scope), names.Apps(scope));
     }
 
     private static JsonNode? Parsed(string? raw)

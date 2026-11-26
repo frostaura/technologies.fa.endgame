@@ -311,8 +311,6 @@ public static class ApprovalDetail
     public static string For(PermissionDecision asked)
     {
         ArgumentNullException.ThrowIfNull(asked);
-        return asked.Rule.StartsWith("cascade:", StringComparison.Ordinal)
-            ? "Your rules for this stage ask for your sign-off before this is done. If you decline, it is not done and the work carries on without it."
-            : "This waits for your sign-off before it is done. If you decline, it is not done and nothing changes.";
+        return asked.Rule.StartsWith("cascade:", StringComparison.Ordinal) ? Endgame.Domain.Access.ApprovalWords.ByRule : Endgame.Domain.Access.ApprovalWords.ByDefault;
     }
 }

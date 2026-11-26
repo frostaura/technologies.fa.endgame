@@ -64,6 +64,9 @@ public sealed class NotificationService(
     IEmailSender sender,
     TimeProvider clock)
 {
+    /// <summary>How an approval's notice is titled: this, then the approval's own title.</summary>
+    public const string ApprovalNeededPrefix = "Approval needed: ";
+
     public const int MaxFeed = 200;
 
     /// <summary>Raises one notification unless its key was raised before. True when it is new.</summary>
@@ -153,11 +156,19 @@ public sealed class NotificationService(
 
             var subject = JsonNode.Parse(n.SubjectJson);
             var resolved = answered.TryGetValue(n.Id, out var outcome);
-            views.Add(new NotificationView(n.Id, n.Kind, n.Severity, resolved ? outcome! : n.Title, n.Detail, path,
+            var (noticeTitle, noticeDetail, noticeTechnical) = (n.Title, n.Detail, (string?)null);
+            if (n.Kind == NotificationKinds.Approval && n.Title.StartsWith(ApprovalNeededPrefix, StringComparison.Ordinal))
+            {
+                // A notice raised before the plain-detail fix reads as a new one would (R2-5).
+                var (plainTitle, plainDetail, raw) = Runs.OlderApprovals.Plain(n.Title[ApprovalNeededPrefix.Length..], n.Detail, null, null);
+                (noticeTitle, noticeDetail, noticeTechnical) = (ApprovalNeededPrefix + plainTitle, plainDetail, raw);
+            }
+
+            views.Add(new NotificationView(n.Id, n.Kind, n.Severity, resolved ? outcome! : noticeTitle, noticeDetail, path,
                 subject?["kind"] is JsonValue k && Guid.TryParse(subject["id"]?.GetValue<string>(), out var sid) ? new NotificationSubject(k.GetValue<string>(), sid) : null,
                 n.CreatedAt, read.Contains(n.Id) || resolved, n.EmailedAt, resolved,
                 n.Kind == NotificationKinds.Approval && Guid.TryParseExact(n.DedupeKey.StartsWith("approval:", StringComparison.Ordinal) ? n.DedupeKey["approval:".Length..] : "", "N", out var aid)
-                    ? technical.GetValueOrDefault(aid) : null));
+                    ? technical.GetValueOrDefault(aid) ?? noticeTechnical : null));
         }
 
         session.UseOrganisation(org.OrganisationId);
@@ -182,8 +193,11 @@ public sealed class NotificationService(
         }
 
         session.UseOrganisation(organisationId);
-        var approvals = await db.Approvals.AsNoTracking().Where(a => a.OrganisationId == organisationId && approvalIds.Contains(a.Id) && a.Status != ApprovalStatuses.Pending)
-            .Select(a => new { a.Id, a.Title, a.Status, a.AnsweredBy }).ToDictionaryAsync(a => a.Id, cancellationToken);
+        var approvals = (await db.Approvals.AsNoTracking().Where(a => a.OrganisationId == organisationId && approvalIds.Contains(a.Id) && a.Status != ApprovalStatuses.Pending)
+            .Select(a => new { a.Id, a.Title, a.Detail, a.Status, a.AnsweredBy }).ToListAsync(cancellationToken))
+            // An answer to an approval from before the plain-detail fix names it as a new one would (R2-5).
+            .Select(a => new { a.Id, Title = Runs.OlderApprovals.Plain(a.Title, a.Detail, null, null).Title, a.Status, a.AnsweredBy })
+            .ToDictionary(a => a.Id);
         var hires = await db.HireProposals.AsNoTracking().Where(h => h.OrganisationId == organisationId && hireIds.Contains(h.Id) && h.Status != Domain.Workforce.HireStatuses.Proposed)
             .Select(h => new { h.Id, h.Name, h.Role, h.Status, h.DecidedVia, h.DecidedBy }).ToDictionaryAsync(h => h.Id, cancellationToken);
         var ideas = await db.Ideas.AsNoTracking().Where(i => i.OrganisationId == organisationId && ideaIds.Contains(i.Id) && i.Status != IdeaStatuses.AwaitingDecision)
@@ -392,7 +406,7 @@ public sealed class NotificationSweep(IServiceScopeFactory scopeFactory, IOption
                                select new { a.Id, a.Title, a.Detail, a.RunId, r.DivisionId, r.ProjectId, r.AppId }).ToListAsync(cancellationToken);
         foreach (var a in approvals)
         {
-            await Raise(a.DivisionId, a.ProjectId, a.AppId, NotificationKinds.Approval, $"Approval needed: {a.Title}", a.Detail.Length == 0 ? "Work is waiting for your sign-off." : a.Detail,
+            await Raise(a.DivisionId, a.ProjectId, a.AppId, NotificationKinds.Approval, $"{NotificationService.ApprovalNeededPrefix}{a.Title}", a.Detail.Length == 0 ? "Work is waiting for your sign-off." : a.Detail,
                 new NotificationSubject("run", a.RunId), $"approval:{a.Id:N}");
         }
 
