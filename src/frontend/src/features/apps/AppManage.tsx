@@ -15,6 +15,9 @@ import { parseCredits } from "../credits/creditsModel";
 import { ArchiveNode, DeleteNode, Outcome, RenameNode } from "../tree/NodeControls";
 import { isArchived } from "../tree/treeManage";
 import { ALLOWANCE_KEY, CAP_KEY, numberOf as number } from "./appModel";
+import { useCardNote } from "./cardNote";
+
+type Said = { ok: boolean; text: string };
 
 /**
  * What the app may spend (APP-11, APP-12): its own monthly cap, and its own AI allowance — what the
@@ -96,8 +99,12 @@ function Limit({
   const [remove, removing] = useRemoveCascadeMutation();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(entry && number(entry) !== null ? String(number(entry)) : "");
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
-  const [removed, setRemoved] = useState(false);
+  // One note for this card, replaced by its next action and cleared when another card acts (D37).
+  const [note, setNote] = useCardNote<Said | { removed: true }>(`limit:${valueKey}`);
+  const result = note && "text" in note ? note : null;
+  const removed = note !== null && "removed" in note;
+  const setResult = (r: Said | null) => setNote(r);
+  const setRemoved = (r: boolean) => setNote(r ? { removed: true } : null);
   const id = useId();
   const n = parseCredits(value);
   const own = entry?.setAtPath === app.scope;
@@ -123,7 +130,6 @@ function Limit({
     try {
       await remove({ scope: app.scope, kind, key: valueKey }).unwrap();
     } catch (e) {
-      setRemoved(false);
       setResult({ ok: false, text: `It was not removed: ${describeError(e as never)} It is as it was.` });
     }
   };
@@ -175,7 +181,7 @@ export function IdleMinutes({ app, canChange }: { app: AppDetail; canChange: boo
   const [update, state] = useUpdateAppSettingsMutation();
   const dispatch = useAppDispatch();
   const [value, setValue] = useState(String(app.idleMinutes));
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [result, setResult] = useCardNote<Said>("idle-minutes");
   const id = useId();
   const n = Number(value.trim());
   const valid = /^\d+$/.test(value.trim()) && n >= 1 && n <= 1440;
@@ -198,13 +204,16 @@ export function IdleMinutes({ app, canChange }: { app: AppDetail; canChange: boo
 
   if (!canChange) return <p className="text-sm text-ink-muted">It sleeps after {plural(app.idleMinutes, "idle minute")}. A Builder or above changes it.</p>;
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label="Idle minutes before it sleeps" className="flex flex-wrap items-end gap-2" noValidate>
-      <Field id={id} label="Sleeps after this many idle minutes" hint="From 1 to 1,440 (a day)." problem={value.trim() && !valid ? "A whole number of minutes, from 1 to 1,440." : null} className="min-w-0 flex-1">
-        <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={`${id}-hint`} aria-invalid={!valid} />
-      </Field>
-      <Button type="submit" size="sm" variant="outline" disabled={!valid || n === app.idleMinutes || state.isLoading}>
-        Save
-      </Button>
+    // The field and its button share a row; what saving said sits under them, so neither squeezes the label (D34).
+    <form onSubmit={(e) => void submit(e)} aria-label="Idle minutes before it sleeps" className="flex flex-col gap-2" noValidate>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field id={id} label="Sleeps after this many idle minutes" hint="From 1 to 1,440 (a day)." problem={value.trim() && !valid ? "A whole number of minutes, from 1 to 1,440." : null} className="min-w-field flex-1">
+          <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={`${id}-hint`} aria-invalid={!valid} />
+        </Field>
+        <Button type="submit" size="sm" variant="outline" disabled={!valid || n === app.idleMinutes || state.isLoading}>
+          Save
+        </Button>
+      </div>
       {result && <Outcome ok={result.ok}>{result.text}</Outcome>}
     </form>
   );

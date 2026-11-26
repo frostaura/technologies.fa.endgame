@@ -167,6 +167,8 @@ export const layout = {
   height: { graph: "40rem" },
   /** The smallest comfortable touch target. */
   touch: "44px",
+  /** The narrowest a labelled field may be squeezed to in a row beside its button; below it the row wraps. */
+  field: "12rem",
   /** Grid tracks: a chart's label column beside its bars; a table of figures with a name column. */
   columns: { "chart-row": "minmax(3rem, 9rem) minmax(0, 1fr)", "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))" },
   /** Where the org chart's connecting wire sits under a division's badge. */

@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
+import { Markdown } from "@/components/Markdown";
 import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { formatCredits, formatNumber, formatTime, percent, plural } from "@/lib/format";
+import { capitalise, formatCredits, formatNumber, formatTime, percent, plural, share } from "@/lib/format";
 import { RISE } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -16,8 +17,9 @@ import { useControlRunMutation, useGetRunQuery } from "@/store/api";
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
-import { accuracy, deriveRun, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
-import { buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
+import { accuracy, deriveRun, isStartDeclined, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
+import { distinctReplies } from "../home/conversationModel";
+import { actionCount, buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
 import { useRunStream } from "./useRunStream";
 import { ApprovalCard } from "./ApprovalCard";
 import { TryAgain } from "./TryAgain";
@@ -31,6 +33,9 @@ const STATUS: Record<RunStatus, { label: string; tone: BadgeTone }> = {
   failed: { label: "Did not succeed", tone: "attention-strong" },
   cancelled: { label: "Cancelled", tone: "quiet" },
 };
+
+/** Work the owner declined at its start: not a failure, and said in the same neutral voice as a pause (D19). */
+const DECLINED = { label: "You declined to start this", tone: "quiet" as BadgeTone };
 
 /** The events that change a run's state: once one arrives after a control, the log is the status again. */
 const STATE_EVENTS = new Set(["run.paused", "run.resumed", "run.finished"]);
@@ -62,7 +67,7 @@ export function RunView({ runId }: { runId: string }) {
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
-          <RunBody run={view.data} />
+          <RunBody run={view.data} refetch={() => void query.refetch()} />
         </>
       )}
     </AppShell>
@@ -79,7 +84,7 @@ function RunSkeleton() {
   );
 }
 
-function RunBody({ run }: { run: Run }) {
+function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
   const [retry, setRetry] = useState(0);
   const log = useRunStream(run.id, retry);
   const mode = useAppSelector((s) => s.ui.mode);
@@ -96,9 +101,19 @@ function RunBody({ run }: { run: Run }) {
   // While a control request is in flight the optimistic status wins; then what it did; afterwards the log.
   const status: RunStatus = controlState.isLoading ? run.status : settled && !logMoved ? settled.status : (derived.status ?? run.status);
   const terminal = isTerminal(status);
-  // run.finished's summary may be technical (ARCH-004); normal mode says the closing message instead.
+  // What the page knows of the run beyond its log (whether it can be tried again) was read while it ran: once the log
+  // says it ended, read it again, so "Try again" is offered here as it is on the idea's page (D20).
+  const logEnded = isTerminal(derived.status);
+  useEffect(() => {
+    if (logEnded && !isTerminal(run.status)) refetch();
+  }, [logEnded, run.status, refetch]);
+  const declined = status === "failed" && (isStartDeclined(derived.finishedSummary) || isStartDeclined(run.summary));
+  // run.finished's summary may be technical (ARCH-004); normal mode says the closing message instead. A conversation's
+  // outcome is its reply, as written (D13).
+  const reply = run.kind === "conversation" ? (distinctReplies(derived.messages).at(-1)?.text ?? null) : null;
   const lastPlain = [...derived.messages].reverse().find((m) => m.from !== "owner" && plainOrNull(m.text))?.text ?? null;
-  const outcome = mode === "technical" ? derived.finishedSummary : (plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null));
+  const outcome = mode === "technical" ? derived.finishedSummary : (reply ?? plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null));
+  const badge = declined ? DECLINED : STATUS[status];
   const estimate = derived.estimateCredits ?? run.estimateCredits;
   // One figure, from one source: the log's billable settlements, as the ledger counts them, so it is the run's own
   // cost (spentCredits); the run's figure stands in only until the log's first events arrive.
@@ -120,7 +135,7 @@ function RunBody({ run }: { run: Run }) {
       <div className={cn("flex flex-wrap items-start justify-between gap-5", RISE)}>
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={STATUS[status].tone}>{STATUS[status].label}</Badge>
+            <Badge tone={badge.tone}>{badge.label}</Badge>
             <StreamBadge stream={log.stream} terminal={terminal} />
           </div>
           <h1 className="text-3xl font-semibold">{run.title}</h1>
@@ -177,7 +192,8 @@ function RunBody({ run }: { run: Run }) {
         </div>
       )}
 
-      {/* Only research ends in a verdict: a build run started from an idea carries its ideaId too, and offers none. */}
+      {/* Only research ends in a verdict: a build run started from an idea carries its ideaId too, and offers none.
+          Research that stopped has no verdict to read, so the link says what is there: the idea (D59). */}
       {terminal && run.kind === "research" && run.ideaId && (
         <Link
           href={paths.idea(run.ideaId)}
@@ -185,17 +201,17 @@ function RunBody({ run }: { run: Run }) {
         >
           <span className="flex items-center gap-2">
             <Icon name="verdict" tinted />
-            {status === "finished" ? "The verdict is ready" : "See what research found"}
+            {status === "finished" ? "The verdict is ready" : "See the idea"}
           </span>
-          <span className="text-primary-link">Read it</span>
+          <span className="text-primary-link">{status === "finished" ? "Read it" : "Open it"}</span>
         </Link>
       )}
 
       {terminal && status !== "finished" && (run.budgetExhausted || run.canTryAgain) && (
-        <StoppedPanel run={run} derived={derived} />
+        <StoppedPanel run={run} derived={derived} declined={declined} />
       )}
 
-      <CostPanel estimate={estimate} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} />
+      <CostPanel estimate={estimate} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} declined={declined} />
 
       <Approvals runId={run.id} approvals={derived.approvals} />
 
@@ -204,7 +220,7 @@ function RunBody({ run }: { run: Run }) {
       {outcome && (
         <section className="rounded-md border bg-surface p-5 shadow-card">
           <h2 className="mb-2 text-lg font-semibold">Outcome</h2>
-          <p className="whitespace-pre-line text-ink-body">{outcome}</p>
+          {mode === "technical" ? <p className="whitespace-pre-line break-words text-ink-body">{outcome}</p> : <Markdown text={outcome} className="text-ink-body" />}
         </section>
       )}
 
@@ -231,8 +247,8 @@ function StreamBadge({ stream, terminal }: { stream: StreamStatus; terminal: boo
  * Why the work stopped and how to start it again (RUN-10, RUN-11): a budget stop is said plainly with the way to more
  * credits; stopped research, a build or a change offers "Try again", which carries on from where it stopped.
  */
-function StoppedPanel({ run, derived }: { run: Run; derived: DerivedRun }) {
-  const why = run.budgetExhausted ? "budget" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
+function StoppedPanel({ run, derived, declined }: { run: Run; derived: DerivedRun; declined: boolean }) {
+  const why = run.budgetExhausted ? "budget" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : declined ? "start-declined" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
   if (run.canTryAgain) return <TryAgain runId={run.id} ideaId={run.ideaId} why={why} showCredits={run.budgetExhausted} />;
   return (
     <section aria-label="Stopped for budget" className="flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
@@ -244,11 +260,19 @@ function StoppedPanel({ run, derived }: { run: Run; derived: DerivedRun }) {
   );
 }
 
-function CostPanel({ estimate, spent, reserved, scored, notCharged }: { estimate: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number }) {
+function CostPanel({ estimate, spent, reserved, scored, notCharged, declined }: { estimate: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number; declined: boolean }) {
+  // Work declined at its start never began: there is nothing to score its estimate against (D19).
+  if (declined)
+    return (
+      <section aria-label="Cost" className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Stat label="Estimate" value={estimate !== null ? formatCredits(estimate) : "Not yet made"} note="Shown before the work began" />
+        <Stat label="Charged" value={formatCredits(spent)} note="You declined to start it, so nothing was done." />
+      </section>
+    );
   return (
     <section aria-label="Cost" className={cn("grid grid-cols-1 gap-4", scored ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3")}>
       <Stat label="Estimate" value={estimate !== null ? formatCredits(estimate) : "Not yet made"} note="Shown before the work began" />
-      <Stat label="Spent so far" value={formatCredits(spent)} note={estimate ? `${percent(spent, estimate)}% of the estimate` : "Settled from each call’s own cost"} bar={estimate ? percent(spent, estimate) : null} />
+      <Stat label="Spent so far" value={formatCredits(spent)} note={estimate ? `${share(spent, estimate)}% of the estimate` : "Settled from each call’s own cost"} bar={estimate ? share(spent, estimate) : null} />
       {scored ? (
         <>
           <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual)} note={`Estimated ${formatNumber(scored.estimated)}, cost ${formatNumber(scored.actual)}`} />
@@ -266,7 +290,7 @@ function Stat({ label, value, note, bar = null }: { label: string; value: string
     <div className="flex flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card">
       <span className="text-ink-muted">{label}</span>
       <span className="font-display text-2xl font-semibold">{value}</span>
-      {bar !== null && <Bar value={bar} label={`${bar}% of the estimate spent`} tone={bar > 100 ? "attention" : "primary"} className="my-1" />}
+      {bar !== null && <Bar value={percent(bar, 100)} label={`${bar}% of the estimate spent`} tone={bar > 100 ? "attention" : "primary"} className="my-1" />}
       <span className="text-sm text-ink-body">{note}</span>
     </div>
   );
@@ -313,7 +337,7 @@ function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
           <h3 className="font-display text-base font-semibold">What you asked for</h3>
           <ul aria-label="What you asked for" className="flex list-disc flex-col gap-1 pl-5 text-ink-body">
             {asked.map((r) => (
-              <li key={r.id}>{technical ? `${r.id} · ${r.text}` : r.text}</li>
+              <li key={r.id}>{technical ? `${r.id} · ${r.text}` : capitalise(r.text)}</li>
             ))}
           </ul>
         </div>
@@ -323,7 +347,7 @@ function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
           <h3 className="font-display text-base font-semibold">What it already did, checked again</h3>
           <ul aria-label="What it already did, checked again" className="flex list-disc flex-col gap-1 pl-5 text-ink-body">
             {kept.map((r) => (
-              <li key={r.id}>{technical ? `${r.id} · ${r.text}` : r.text}</li>
+              <li key={r.id}>{technical ? `${r.id} · ${r.text}` : capitalise(r.text)}</li>
             ))}
           </ul>
         </div>
@@ -388,7 +412,7 @@ function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]
         <span className="text-sm text-ink-muted" data-testid="action-count">
           {mode === "technical"
             ? `${plural(timeline.modelCalls, "model call")} · ${plural(timeline.toolCalls, "tool call")} · ${plural(timeline.denials, "denial")}`
-            : `${plural(timeline.actions, "action")} taken${timeline.denials > 0 ? `, ${formatNumber(timeline.denials)} refused by your rules` : ""}`}
+            : actionCount(timeline.actions, timeline.denials)}
         </span>
       </div>
       {timeline.items.length === 0 ? (

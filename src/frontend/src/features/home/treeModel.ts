@@ -1,6 +1,6 @@
 import type { BadgeTone } from "@/components/ui/badge";
 import type { IconName } from "@/components/iconNames";
-import { formatNumber, plural } from "@/lib/format";
+import { capitalise, formatNumber, plural } from "@/lib/format";
 import type { AppAccess, AppHealth, AppRunning, ProjectStage, Tree, TreeApp, Worker } from "@/store/types";
 import type { Selection } from "@/store/uiSlice";
 
@@ -21,6 +21,15 @@ export function healthChip(health: AppHealth): Chip {
     default:
       return { label: "Health unknown", tone: "quiet", icon: "health" };
   }
+}
+
+/**
+ * An app's chips on the chart. One the tree reports as starting with nothing ever measured has never been built (a
+ * draft, or its first build under way): it is "Not built yet", not "Waking" and "Health unknown" (D30).
+ */
+export function appChips(app: Pick<TreeApp, "health" | "running" | "access" | "sharedWith" | "visitsToday" | "lastVisitAt">): Chip[] {
+  if (app.running === "starting" && app.health === "unknown" && app.visitsToday === null && app.lastVisitAt === null) return [{ label: "Not built yet", tone: "quiet", icon: "build" }];
+  return [healthChip(app.health), runningChip(app.running), accessChip(app.access, app.sharedWith)];
 }
 
 export function runningChip(running: AppRunning): Chip {
@@ -184,7 +193,21 @@ export function orgFigures(counts: OrgCounts, monthCredits: number): { value: st
   ];
 }
 
-/** "Kit · Engineer", or just the name when the name is the role (a standing hire named for its job). */
-export function workerLabel(w: { name: string; role: string }): string {
+/**
+ * "Kit · Engineer", or just the name when the name is the role (a standing hire named for its job). A contractor has no
+ * name of its own (the runner names it after its step): it is its role, "Demand researcher · contractor" (D51).
+ */
+export function workerLabel(w: { name: string; role: string; kind?: Worker["kind"] }): string {
+  if (isContractor(w)) return `${capitalise(w.role.trim() || "Contractor")} · contractor`;
   return w.name.trim().toLowerCase() === w.role.trim().toLowerCase() ? w.name : `${w.name} · ${w.role}`;
+}
+
+function isContractor(w: { name: string; kind?: Worker["kind"] }): boolean {
+  return w.kind === "contractor" || /\(contractor\)\s*$/i.test(w.name);
+}
+
+/** What a worker is doing: its activity, or for a contractor the step it was named after ("Looked for evidence people will pay"). */
+export function workerActivity(w: { name: string; activity: string | null; kind?: Worker["kind"] }): string | null {
+  if (w.activity) return w.activity;
+  return isContractor(w) ? w.name.replace(/\s*\(contractor\)\s*$/i, "").trim() || null : null;
 }

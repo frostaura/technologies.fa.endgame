@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCredits, formatNumber, possessive } from "./format";
+import { formatCredits, formatNumber, percent, possessive, share } from "./format";
 
 describe("formatNumber", () => {
   it("never shows a signed zero: a debt smaller than a tenth of a credit reads 0", () => {
@@ -14,6 +14,24 @@ describe("formatNumber", () => {
     expect(formatNumber(2.46)).toBe("2.5");
     expect(formatNumber(-12.4)).toBe("-12");
     expect(formatNumber(9548)).toBe("9,548");
+  });
+});
+
+describe("small amounts (D12)", () => {
+  it("never rounds a real cost to nothing", () => {
+    expect(formatNumber(0.05)).toBe("0.1");
+    expect(formatNumber(0.04)).toBe("0.04");
+    expect(formatCredits(0.045)).toBe("0.05 credits");
+    expect(formatCredits(0.001)).toBe("less than 0.01 credits");
+    expect(formatNumber(0)).toBe("0");
+  });
+});
+
+describe("share (D16)", () => {
+  it("is the true percentage, past 100, while percent stays clamped for a bar", () => {
+    expect(share(16, 12.3)).toBe(130);
+    expect(percent(16, 12.3)).toBe(100);
+    expect(share(1, 0)).toBe(0);
   });
 });
 

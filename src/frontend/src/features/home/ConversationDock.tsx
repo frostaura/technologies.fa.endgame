@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useActiveTree } from "@/lib/useActiveOrganisation";
 import { Avatar } from "@/components/Avatar";
 import { Link } from "@/components/Link";
+import { Markdown } from "@/components/Markdown";
 import { Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/format";
@@ -15,6 +16,7 @@ import { conversationKey, messageQueued, messageSettled, type ChatMessage, type 
 import { ApprovalCard } from "../runs/ApprovalCard";
 import { deriveRun, isTerminal } from "../runs/runModel";
 import { useRunStream } from "../runs/useRunStream";
+import { distinctReplies, noticesToShow, withoutClosingRepeats } from "./conversationModel";
 import { activeWork } from "./treeModel";
 
 /**
@@ -30,7 +32,7 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
   const history = viewOf(historyQuery);
   // A turn sent in this visit is drawn from its live run; the history copy of it is left out.
   const liveRuns = new Set(messages.map((m) => m.runId).filter((id): id is string => id !== null));
-  const earlier = history.kind === "loaded" ? groupTurns(history.data.messages.filter((m) => !liveRuns.has(m.runId))) : [];
+  const earlier = history.kind === "loaded" ? groupTurns(withoutClosingRepeats(history.data.messages.filter((m) => !liveRuns.has(m.runId)))) : [];
   const [start] = useStartConversationMutation();
   const [draft, setDraft] = useState("");
   const inputId = useId();
@@ -214,19 +216,27 @@ function EarlierTurn({ turn, myName, answerer }: { turn: Turn; myName: string | 
       <Sender name={turn.by ?? answerer ?? "Endgame"} />
       <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">
         {turn.texts.map((text, i) => (
-          <p key={i} className="whitespace-pre-line">
-            {text}
-          </p>
+          <Markdown key={i} text={text} />
         ))}
       </div>
     </div>
   );
 }
 
-/** Endgame's own word in the conversation: no reply was written, and why, with the way to more credits when it was the budget. */
-function Notice({ text, budget }: { text: string; budget: boolean }) {
+/**
+ * Endgame's own word in the conversation: no reply was written, and why, with the way to more credits when it was the budget.
+ * Only a stop reads as one; work that finished is said in the ordinary voice.
+ */
+function Notice({ text, budget, finished = false }: { text: string; budget: boolean; finished?: boolean }) {
   return (
-    <div role="status" className="flex max-w-reply flex-col gap-2 rounded-md border border-attention-line bg-attention-tint px-4 py-3 text-sm text-attention-text">
+    <div
+      role="status"
+      data-tone={finished ? "neutral" : "attention"}
+      className={cn(
+        "flex max-w-reply flex-col gap-2 rounded-md border px-4 py-3 text-sm",
+        finished ? "border-border bg-surface text-ink-body" : "border-attention-line bg-attention-tint text-attention-text",
+      )}
+    >
       {text}
       {budget && (
         <Link href={paths.credits()} className="self-start rounded-xs font-semibold underline">
@@ -277,8 +287,9 @@ function Replies({ runId, answerer }: { runId: string; answerer: string | null }
   const run = deriveRun(log.events);
   const done = isTerminal(run.status);
   // The run's log opens with the owner's own message; it is already drawn as their bubble. Endgame's own notices stand apart.
-  const replies = run.messages.filter((m) => m.from !== "owner" && m.from !== "runner");
-  const notices = run.messages.filter((m) => m.from === "runner");
+  // Each thing said once: the closing word never repeats, or stands in for, the reply (D10, D49).
+  const replies = distinctReplies(run.messages);
+  const notices = noticesToShow(run.messages);
   const budget = log.events.some((e) => e.type === "message" && e.payload.code === "budget_exhausted");
   const pending = run.approvals.filter((a) => a.answer === null);
   const by = log.events.map((e) => (e.type === "message" && e.payload.from === "assistant" && typeof e.payload.by === "string" ? e.payload.by : null)).find((n) => n !== null) ?? answerer;
@@ -289,15 +300,13 @@ function Replies({ runId, answerer }: { runId: string; answerer: string | null }
           <Sender name={by ?? "Endgame"} />
           <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">
             {replies.map((m) => (
-              <p key={m.seq} className="whitespace-pre-line">
-                {m.text}
-              </p>
+              <Markdown key={m.seq} text={m.text} />
             ))}
           </div>
         </div>
       )}
       {notices.map((m) => (
-        <Notice key={m.seq} text={m.text} budget={budget} />
+        <Notice key={m.seq} text={m.text} budget={budget} finished={run.status === "finished" && !m.code} />
       ))}
       {/* The conversation's own checkpoints are answered here, in the conversation (TALK-07). */}
       {pending.map((a) => (

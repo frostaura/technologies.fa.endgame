@@ -22,7 +22,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   3. The heading is the app's name. Under it is the subdomain address followed by "· also at <path address>", or only the path address when there is no subdomain.
   4. A button reads "Open the app".
   5. The four tiles appear (APP-02), then "Ask about this app", "Dashboard", "History", the sharing card and the "Secrets" card.
-  6. The side column shows "Running", "Who can open it", "What it may spend", "What it uses", "The app itself" and "It is yours". In technical mode it also shows "Underneath".
+  6. The side column shows "Running", "Who can open it", "What it may spend", "What it uses", "The app itself" and "It is yours". In technical mode it also shows "Underneath". The side column says one thing at a time: what a card's last action did is replaced by its next one, and cleared when another card acts.
   7. The page re-reads the app every 20 seconds, but only while the browser tab has focus.
 - **Variations and refusals:**
   - An unknown id gives "This app could not be found".
@@ -107,7 +107,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Advanced · **Learn first:** APP-04 · **What you learn:** a sleeping app costs least, and how soon it sleeps is yours to choose.
 - **Steps:**
   1. Under the running choices, **"Sleeps after this many idle minutes"** holds the current value, with "From 1 to 1,440 (a day)."
-  2. Type a number and press **"Save"**. "It sleeps after <n> idle minutes now." appears.
+  2. Type a number and press **"Save"**. "It sleeps after <n> idle minutes now." appears under the field and its button, which keep their width at any size.
 - **You know it worked when:** the message shows, and "Underneath" in technical mode reads the new value.
 - **Variations and refusals:**
   - Locally: "A whole number of minutes, from 1 to 1,440." and the button stays disabled. The server: "sleep.idle_minutes is a whole number from 1 to 1440."
@@ -171,7 +171,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** a row of chips appears, ending with "Open to AI assistants".
 - **Steps:**
   1. The section shows the "Loading what it uses" skeleton.
-  2. Chips appear for each platform service the organisation graph says the app depends on: "Sign-in", "Data", "AI", "E-mail", "Incoming data", "Schedules", "Visits and errors measured". Technical mode shows the raw service names instead.
+  2. Chips appear for each platform service the app depends on: "Sign-in", "Data", "AI", "E-mail", "Incoming data", "Schedules", "Visits and errors measured". "Data" is shown for every app that has been built, since each has a database of its own; the others come from the organisation graph. Technical mode shows the raw service names instead.
   3. Further chips follow:
      - "No one has signed up yet", or "<n> people signed up"
      - "Shared with <n> people", only when the app is shared
@@ -324,9 +324,9 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** plain questions are answered from the app's own telemetry, charged at the real cost, and a failed attempt is repaired once at no charge.
 - **You know it worked when:** the question appears as a heading with "Cost <n> of at most <m>", one to three plain sentences, and a chart.
 - **Steps:**
-  1. The person presses "Ask it". The button reads "Asking…".
+  1. The person presses "Ask it". The button reads "Asking…", and under it "Writing the query, then reading the records. It usually takes up to half a minute."
   2. A model writes one read-only query, which is guarded and run against the app's telemetry views. If it is refused or fails, the model is shown why and tries once more, and that repair is not charged. A second call puts the rows into words.
-  3. The answer appears: the question as a heading, "Cost <charged> of at most <estimate>", the answer text, and the chart, which is a single number, bars (up to 24, three series at most), a line (up to 120 points) or a table (first 50 rows).
+  3. The answer appears: the question as a heading, "Cost <charged> of at most <estimate>", the answer text, and the chart, which is a single number, bars (up to 24, three series at most), a line (up to 120 points) or a table (first 50 rows). Bars and lines start at zero, so a small change looks small.
   4. If there were more rows than shown: "Only the first rows are shown; there were more."
   5. The credit balance is refreshed.
 - **Variations and refusals:**
@@ -444,7 +444,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Steps:**
   1. The section reads "Any version can be brought back." and shows a skeleton.
   2. Up to 10 versions are listed, newest first. Each shows a plain title (the first line, without its plan-id prefix), the author (an employee's name links to their page; otherwise "The factory" or the person's name), the time ago, and "Live now" on the live one.
-  3. The factory's own commits are titled "The factory recorded its progress". A restore is titled "An earlier version, brought back". A title that names files falls back to "A change by <name>".
+  3. The factory's own bookkeeping (its progress records, and notes about checking or repairing its work) is folded away in normal mode: **"Show every saved step (<n> more)"** lists it too, titled "The factory recorded its progress" for the factory's own commits; **"Show only the changes"** folds it again. The live version is never folded. A restore is titled "An earlier version, brought back". A title that names files falls back to "A change by <name>".
   4. "Show earlier versions" loads 10 more. It reads "Loading…" while it waits.
 - **Variations and refusals:**
   - With no versions: "No versions yet" with "The first version appears here once it is built."

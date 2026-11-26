@@ -31,7 +31,7 @@ const config: Config = {
       spacing: { aura: layout.width.aura },
       gridTemplateColumns: layout.columns,
       minHeight: { touch: layout.touch },
-      minWidth: { touch: layout.touch },
+      minWidth: { touch: layout.touch, field: layout.field },
       margin: { wire: layout.wireInset },
       keyframes: motion.keyframes,
       animation: motion.animation,

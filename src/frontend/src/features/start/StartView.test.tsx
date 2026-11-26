@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { autonomyFixture, ideaFixture } from "@/test/fixtures";
-import { nextSteps, researchPromise } from "./startModel";
+import { nextSteps, researchPromise, roomFor, shortfall } from "./startModel";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { StartView } from "./StartView";
 
@@ -146,8 +146,53 @@ describe("what happens next", () => {
     const steps = Object.fromEntries(nextSteps(checkpoints, "Labs"));
     expect(steps.Verdict).toBe("Build, change, or do not build. Nothing is built until you decide; you can overrule it.");
     expect(steps.Research).toContain("It waits for your word once its estimate is known.");
-    expect(steps["Design, build, test, review"]).toContain("The plan waits for you to agree it first.");
+    expect(steps["Build, check, review"]).toContain("The plan waits for you to agree it first.");
     expect(steps.Hiring).toContain("hired as they are needed");
     expect(researchPromise(checkpoints)).toBe("You are charged for research only. Nothing is built until you have seen the verdict and decided.");
+  });
+
+  // D63: with less to spend than the research needs, the page says so before the button is pressed, and still lets it start.
+  it("says beside the estimate when there is not enough to spend, and still allows the start", async () => {
+    stubApi({
+      "GET /api/me": json(ME),
+      "GET /api/credits": json({ ...CREDITS, balance: 0, available: 0, heldCredits: 0 }),
+      "POST /api/ideas/estimate": json({ credits: 12, basis: "" }),
+    });
+    renderWithStore(<StartView />);
+    await screen.findByLabelText("The idea");
+    describeIdea();
+    const note = await screen.findByTestId("estimate-shortfall", {}, { timeout: 2000 });
+    expect(note.textContent).toContain("You have 0 credits to spend here, and this needs about 12 credits.");
+    expect(note.textContent).toContain("waits for a top-up");
+    expect(screen.getByRole("link", { name: "See credits" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Research this idea" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("says nothing about room when there is enough", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json({ ...CREDITS, available: 500, heldCredits: 0 }), "POST /api/ideas/estimate": json({ credits: 12, basis: "" }) });
+    renderWithStore(<StartView />);
+    await screen.findByLabelText("The idea");
+    describeIdea();
+    await screen.findByText("Estimated 12 credits", {}, { timeout: 2000 });
+    expect(screen.queryByTestId("estimate-shortfall")).toBeNull();
+  });
+});
+
+describe("roomFor and shortfall (D63)", () => {
+  it("is the tighter of what the organisation can spend and the room under each cap above the place", () => {
+    const budgets = [
+      { scope: "acme", name: "Acme", level: "organisation" as const, depth: 0, spentCredits: 10, capCredits: 100, appId: null },
+      { scope: "acme/tools", name: "Tools", level: "division" as const, depth: 1, spentCredits: 18, capCredits: 20, appId: null },
+      { scope: "acme/other", name: "Other", level: "division" as const, depth: 1, spentCredits: 0, capCredits: 1, appId: null },
+    ];
+    expect(roomFor({ available: 50, heldCredits: 5, budgets }, "acme")).toBe(45);
+    expect(roomFor({ available: 50, heldCredits: 5, budgets }, "acme/tools")).toBe(2);
+    expect(roomFor({ available: -3, heldCredits: 0, budgets: [] }, "acme")).toBe(0);
+    expect(shortfall(45, 12)).toBeNull();
+    expect(shortfall(2, 12)).toMatch(/You have 2 credits to spend here, and this needs about 12 credits\./);
+  });
+
+  it("names the work after research as it is: build, check, review — there is no design stage (D17)", () => {
+    expect(nextSteps(null, null).map(([t]) => t)).toContain("Build, check, review");
   });
 });

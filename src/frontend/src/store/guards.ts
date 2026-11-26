@@ -245,7 +245,7 @@ export const ideaGuard: Guard<Idea> = obj<Idea>({
     [],
   ),
   tryAgain: withDefault(
-    nullable(obj<NonNullable<Idea["tryAgain"]>>({ runId: s, what: oneOf(["research", "build"] as const), why: oneOf(["failed", "cancelled", "budget", "plan-declined"] as const) })),
+    nullable(obj<NonNullable<Idea["tryAgain"]>>({ runId: s, what: oneOf(["research", "build"] as const), why: oneOf(["failed", "cancelled", "budget", "plan-declined", "start-declined"] as const) })),
     null,
   ),
 });

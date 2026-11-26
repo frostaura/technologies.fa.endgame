@@ -46,13 +46,13 @@ describe("SuggestionsView", () => {
   });
 
   it("shows what asking for ideas costs before it starts, then says they are being worked out", async () => {
-    const api = stub(json([]), { "POST /api/ideas/suggestions/estimate": json({ credits: 83.57, basis: "Up to 6 steps reading what the organisation holds." }), "POST /api/ideas/suggestions": json({ run: RUN, estimate: { credits: 83.57, basis: "x" } }, 201) });
+    const api = stub(json([]), { "POST /api/ideas/suggestions/estimate": json({ credits: 83.57, basis: "Up to 6 steps reading what the organisation holds." }), "POST /api/ideas/suggestions": json({ run: RUN, estimate: { credits: 83.57, basis: "x" } }, 201), "GET /api/runs/r7": json({ ...RUN, status: "running" }) });
     renderWithStore(<SuggestionsView />);
     fireEvent.click(await screen.findByRole("button", { name: "See what it costs" }));
-    expect(await screen.findByText("At most 84 credits.")).toBeTruthy();
+    expect(await screen.findByText("About 84 credits.")).toBeTruthy();
     expect(api.calls.some((c) => c.path === "/api/ideas/suggestions" && c.method === "POST")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Suggest ideas" }));
-    expect((await screen.findByRole("link", { name: "Watch it work" })).getAttribute("href")).toBe("/runs/r7");
+    expect((await screen.findAllByRole("link", { name: "Watch it work" }))[0]?.getAttribute("href")).toBe("/runs/r7");
     expect(screen.getByText("The suggestions are being worked out")).toBeTruthy();
   });
 
@@ -61,7 +61,7 @@ describe("SuggestionsView", () => {
     renderWithStore(<SuggestionsView />);
     const card = (await screen.findByRole("list", { name: "Suggested ideas" })).querySelector('[data-suggestion="s1"]') as HTMLElement;
     fireEvent.click(within(card).getByRole("button", { name: "Take this idea" }));
-    expect(await within(card).findByText("Researching it costs at most 40 credits.")).toBeTruthy();
+    expect(await within(card).findByText("Researching it costs about 40 credits.")).toBeTruthy();
     fireEvent.click(within(card).getByRole("button", { name: "Research this idea" }));
     await waitFor(() => expect(window.location.pathname).toBe("/ideas/i9"));
     expect(api.calls.find((c) => c.path === "/api/ideas/suggestions/s1/take")?.body).toEqual({ constraints: [] });
@@ -75,5 +75,31 @@ describe("SuggestionsView", () => {
     await waitFor(() => expect(screen.queryByRole("list", { name: "Suggested ideas" })).toBeNull());
     expect(await screen.findByText(/“Court ladder” was not set aside: Already taken/)).toBeTruthy();
     await waitFor(() => expect(screen.getByRole("list", { name: "Suggested ideas" }).querySelector('[data-suggestion="s1"]')).toBeTruthy());
+  });
+
+  // D42: the run is read, so a start that waits for approval is said, with the way to approve it.
+  it("says when the suggestions wait for you to approve their start", async () => {
+    stub(json([]), {
+      "POST /api/ideas/suggestions/estimate": json({ credits: 2, basis: "" }),
+      "POST /api/ideas/suggestions": json({ run: RUN, estimate: { credits: 2, basis: "" } }, 201),
+      "GET /api/runs/r7": json({ ...RUN, status: "waiting" }),
+    });
+    renderWithStore(<SuggestionsView />);
+    fireEvent.click(await screen.findByRole("button", { name: "See what it costs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Suggest ideas" }));
+    expect(await screen.findByText("It is waiting for you to approve the start")).toBeTruthy();
+    expect(screen.queryByText("The suggestions are being worked out")).toBeNull();
+    expect(screen.getAllByRole("link", { name: "Approve it" })[0]?.getAttribute("href")).toBe("/runs/r7");
+  });
+
+  // D50: a platform service the model names by its key reads as the app page names it.
+  it("names a reused platform service the way the app page does", async () => {
+    stub(json([{ ...SUGGESTIONS[0], reuses: ["identity (service)", "email", "Bookings"] }]));
+    renderWithStore(<SuggestionsView />);
+    const card = (await screen.findByRole("list", { name: "Suggested ideas" })).querySelector('[data-suggestion="s1"]') as HTMLElement;
+    expect(within(card).getByText("Sign-in")).toBeTruthy();
+    expect(within(card).getByText("E-mail")).toBeTruthy();
+    expect(within(card).getByText("Bookings")).toBeTruthy();
+    expect(within(card).queryByText(/\(service\)/)).toBeNull();
   });
 });

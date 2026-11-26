@@ -1,11 +1,12 @@
-import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { modeSet } from "@/store/uiSlice";
 import type { AppDetail } from "@/store/types";
 import { ASK_ANSWER, ASK_ESTIMATE, ONTOLOGY_APP, SAVED, VERSIONS } from "@/test/breadth";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { AppView } from "./AppView";
-import { versionTitle } from "./appModel";
+import { isBookkeeping, reuseLabel, servicesOf, versionTitle } from "./appModel";
+import { AskChartView } from "./AskChart";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const APP: AppDetail = {
@@ -183,7 +184,10 @@ describe("history", () => {
     const list = await screen.findByRole("list", { name: "Versions" });
     expect(within(list).getByText("Fix ownership check on book status update")).toBeTruthy();
     expect(within(list).getByText("Replace the Notes screens with the Books screens")).toBeTruthy();
-    expect(within(list).getByText("The factory recorded its progress")).toBeTruthy();
+    // D38: the factory's own bookkeeping is folded behind "Show every saved step" in normal mode.
+    expect(within(list).queryByText("The factory recorded its progress")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show every saved step (1 more)" }));
+    expect(within(screen.getByRole("list", { name: "Versions" })).getByText("The factory recorded its progress")).toBeTruthy();
     expect(within(list).getAllByRole("link", { name: "Theo" })[0]?.getAttribute("href")).toBe("/employees/e1");
     expect(within(list).getByText("Live now")).toBeTruthy();
     expect(list.textContent).not.toMatch(/f2a84f83|web\/src/);
@@ -273,5 +277,84 @@ describe("what it uses, and taking it away", () => {
     expect(within(underneath).getByText("awake")).toBeTruthy();
     expect(within(underneath).getAllByText("f2a84f83c1f6d2852e9f62f57720ec931052273d").length).toBeGreaterThan(0);
     await waitFor(() => expect(screen.getByText(/MCP: .*\/mcp\/apps\/a1/)).toBeTruthy());
+  });
+});
+
+describe("after the real-stack walk", () => {
+  // D38: a repair's progress note reads as bookkeeping; a real change, and the live version, never do.
+  it("tells the factory's bookkeeping from a change", () => {
+    const v = (message: string, kind: "employee" | "factory" = "employee", live = false) => ({ commit: "c", message, at: "t", author: { kind, id: null, name: "Theo" }, live });
+    expect(isBookkeeping(v("Record real-id running-app verification of the Notes→Books replacement (repair round 2)"))).toBe(true);
+    expect(isBookkeeping(v("Document repair round 1"))).toBe(true);
+    expect(isBookkeeping(v("Anything", "factory"))).toBe(true);
+    expect(isBookkeeping(v("Anything", "factory", true))).toBe(false);
+    expect(isBookkeeping(v("Fix ownership check on book status update"))).toBe(false);
+  });
+
+  // D35: an app built on the kit has a database of its own, so it uses Data; a draft uses nothing yet.
+  it("counts Data among what a built app uses", async () => {
+    expect(servicesOf({ id: "a1", status: "running", version: "1" }, ONTOLOGY_APP)).toEqual(["data", "telemetry", "identity"]);
+    expect(servicesOf({ id: "a1", status: "draft", version: null }, { nodes: [], edges: [] })).toEqual([]);
+    stub();
+    renderWithStore(<AppView appId="a1" />);
+    expect(within(await screen.findByRole("list", { name: "What it uses" })).getByText("Data")).toBeTruthy();
+  });
+
+  // D50: the same plain service names wherever a service is named.
+  it("names a service the way the app page does", () => {
+    expect(reuseLabel("identity (service)")).toBe("Sign-in");
+    expect(reuseLabel("the email service")).toBe("E-mail");
+    expect(reuseLabel("Court booking's sessions")).toBe("Court booking's sessions");
+  });
+
+  // D39: while the one call runs, the page says what it does and how long it usually takes.
+  it("says what asking does while it waits", async () => {
+    stub({ "POST /api/apps/a1/ask/estimate": json(ASK_ESTIMATE), "POST /api/apps/a1/ask": "pending" });
+    renderWithStore(<AppView appId="a1" />);
+    fireEvent.change(await screen.findByLabelText("Ask about this app"), { target: { value: "Visits this week?" } });
+    fireEvent.click(within(askPanel()).getByRole("button", { name: "See what it costs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ask it" }));
+    expect((await screen.findByTestId("ask-progress")).textContent).toContain("usually takes up to half a minute");
+  });
+
+  // D39: a bar or line starts at zero, so 4 → 3 reads as a quarter less, not a collapse.
+  it("draws bars and lines from zero", () => {
+    const chart = (kind: "bar" | "line") => ({ kind, x: "day", y: ["visits"], series: [{ name: "visits", points: [{ x: "Mon", y: 4 }, { x: "Tue", y: 3 }] }] });
+    const { container, unmount } = render(<AskChartView chart={chart("bar")} columns={[]} rows={[]} />);
+    const widths = [...container.querySelectorAll<HTMLElement>("[style]")].map((el) => el.style.width);
+    expect(widths).toEqual(["100%", "75%"]);
+    unmount();
+    const line = render(<AskChartView chart={chart("line")} columns={[]} rows={[]} />);
+    expect(line.container.textContent).toContain("0");
+    const points = line.container.querySelector("polyline")?.getAttribute("points") ?? "";
+    // 3 of 4 sits a quarter of the way down from the top, not at the bottom.
+    const ys = points.split(" ").map((p) => Number(p.split(",")[1]));
+    expect(ys[1]).toBeGreaterThan(ys[0] ?? 0);
+    expect(ys[1]).toBeLessThan(150);
+  });
+
+  // D34 + D37: what saving said sits under the field, and the side panel says one thing at a time.
+  it("keeps the idle-minutes field whole beside its message, and one message in the side panel", async () => {
+    stub({
+      "POST /api/apps/a1/settings": json({ ...APP, idleMinutes: 30 }),
+      "GET /api/cascade": json([]),
+      "PUT /api/cascade": json({ kind: "budget", key: "monthly_credits", value: 50, setAtLevel: "app", setAtPath: APP.scope, setAt: "t", overrides: [] }),
+    });
+    renderWithStore(<AppView appId="a1" />);
+    fireEvent.change(await screen.findByLabelText("Sleeps after this many idle minutes"), { target: { value: "30" } });
+    const form = screen.getByRole("form", { name: "Idle minutes before it sleeps" });
+    fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+    const saved = await screen.findByText("It sleeps after 30 idle minutes now.");
+    // The message is not a sibling of the field in its row, so it cannot squeeze the label.
+    const field = screen.getByLabelText("Sleeps after this many idle minutes").closest("div.flex-col") as HTMLElement;
+    expect(saved.parentElement).not.toBe(field.parentElement);
+    expect(field.className).toContain("min-w-field");
+    // Another card acts: the first card's message goes.
+    fireEvent.click(screen.getAllByRole("button", { name: "Set one for Ledger web" })[0] as HTMLElement);
+    expect(screen.queryByText("It sleeps after 30 idle minutes now.")).toBeTruthy();
+    fireEvent.change(screen.getAllByLabelText("Credits a month")[0] as HTMLElement, { target: { value: "50" } });
+    fireEvent.click(within(screen.getAllByRole("form", { name: /^Set its/ })[0] as HTMLElement).getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/may spend 50 credits a month here/)).toBeTruthy();
+    expect(screen.queryByText("It sleeps after 30 idle minutes now.")).toBeNull();
   });
 });

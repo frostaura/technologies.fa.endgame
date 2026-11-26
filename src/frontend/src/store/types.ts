@@ -270,7 +270,7 @@ export interface IdeaDecisionHistory {
 export interface TryAgainOffer {
   runId: string;
   what: "research" | "build";
-  why: "failed" | "cancelled" | "budget" | "plan-declined";
+  why: "failed" | "cancelled" | "budget" | "plan-declined" | "start-declined";
 }
 
 /** What trying a stopped piece of work again costs, and how much of it is already done and kept. */
