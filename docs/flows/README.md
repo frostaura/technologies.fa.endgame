@@ -35,7 +35,7 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 
 Five tracks, each in the order the files give them. A lesson can only teach what has a screen, so each track lists the flows a learner can do in the console and counts the rest separately. The **Operator** track is FrostAura's own handbook and is not for clients.
 
-### Foundation — 77 flows, 75 with a screen
+### Foundation — 78 flows, 76 with a screen
 
 What every person needs on day one: signing in, reading the home screen, starting an idea, reading a verdict, opening an app.
 
@@ -409,7 +409,7 @@ Flows that do not exist yet or are purely automatic.
 
 | Reached by | Flows |
 | --- | --- |
-| Screen | 252 |
+| Screen | 253 |
 | API or assistant only | 24 |
 | Command line | 30 |
 | Automatic | 19 |
