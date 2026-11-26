@@ -336,7 +336,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - It times out: "That question took too long to answer. Try a narrower one, such as a shorter period."
   - No route configured: "Questions about apps cannot be answered on this installation yet."
   - 403: "Asking needs the Builder role here. <reason>"
-  - A budget refusal (402) is shown through the generic error text.
+  - A budget refusal (402) is shown through the generic error text, its scope path said as words: "The monthly budget here has 0 credits left; this call needs up to 0.42. …".
   - A table with no rows reads "No rows came back."
 - **Where:** `AskPanel.tsx`, `AskChart.tsx`; `POST /api/apps/{id}/ask` (Builder); `AskService.AskAsync`
 - **Reachable from:** UI; API; MCP `app_ask`
