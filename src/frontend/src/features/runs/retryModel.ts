@@ -17,5 +17,6 @@ export function keptText(estimate: RetryEstimate): string {
   if (estimate.what === "research") return "Research starts again with the same idea, and you see the verdict before anything is built.";
   if (estimate.partsDone === null || estimate.parts === null) return "It is planned afresh, then built part by part.";
   if (estimate.partsDone === 0) return `The plan agreed before is kept, and all ${formatNumber(estimate.parts)} of its parts are built.`;
-  return `${formatNumber(estimate.partsDone)} of its ${formatNumber(estimate.parts)} parts are already built and checked; they are kept, not built or charged again.`;
+  const kept = estimate.partsDone === 1 ? "is already built and checked; it is" : "are already built and checked; they are";
+  return `${formatNumber(estimate.partsDone)} of its ${formatNumber(estimate.parts)} parts ${kept} kept, not built or charged again.`;
 }

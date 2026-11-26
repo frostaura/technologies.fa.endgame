@@ -42,6 +42,9 @@ describe("PeopleView", () => {
     renderWithStore(<PeopleView />);
     expect(await screen.findByText("You cannot see the people here")).toBeTruthy();
     expect(screen.queryByText(/No one holds a role/)).toBeNull();
+    // A refusal is an answer (R2-1): the way back, never "Try again".
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to the org chart" })).toBeTruthy();
   });
 
   it("says when no one holds a role", async () => {

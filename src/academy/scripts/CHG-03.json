@@ -141,7 +141,7 @@
             }
           ],
           "highlight": {
-            "text": "1 of its 2 parts are already built and checked",
+            "text": "1 of its 2 parts is already built and checked",
             "note": "Tried again, only the check of what worked before is left."
           }
         }

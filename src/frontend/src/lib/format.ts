@@ -20,6 +20,19 @@ export function formatCredits(n: number): string {
   return `${formatNumber(n)} ${n === 1 ? "credit" : "credits"}`;
 }
 
+/**
+ * A figure standing alone as a headline — a tile, a card's big number, a project's monthly spend. An
+ * amount that rounds below one tenth reads "0" there (R2-2): "less than 0.01" is a phrase for a
+ * sentence or a cost detail line (formatNumber), not a number to lead with.
+ */
+export function headlineNumber(n: number): string {
+  return Math.abs(n) < 0.05 ? "0" : formatNumber(n);
+}
+
+export function headlineCredits(n: number): string {
+  return `${headlineNumber(n)} ${n === 1 ? "credit" : "credits"}`;
+}
+
 /** An approximate figure: below a tenth it reads "less than 0.1 credits", never "about 0" (D77). */
 export function approxCredits(n: number): string {
   return n < 0.1 ? "less than 0.1 credits" : formatCredits(n);

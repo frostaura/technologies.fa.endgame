@@ -1,4 +1,4 @@
-import { arr, bool, dict, nullable, num, obj, oneOf, record, str, unknownValue, withDefault, type Guard } from "@/lib/guards";
+import { arr, bool, dict, nullable, num, obj, oneOf, optional, record, str, unknownValue, withDefault, type Guard } from "@/lib/guards";
 import { normaliseVerdict } from "@/features/verdict/verdictModel";
 import type {
   AppPaused,
@@ -592,6 +592,9 @@ const appVersion = obj<AppVersion>({
   at: s,
   author: obj<AppVersion["author"]>({ kind: oneOf(["employee", "person", "factory"] as const), id: ns, name: s }),
   live: bool,
+  title: optional(ns),
+  plainTitle: optional(ns),
+  published: optional(bool),
 });
 export const versionsGuard: Guard<AppVersions> = obj<AppVersions>({ appId: s, live: ns, versions: arr(appVersion), hasMore: withDefault(bool, false) });
 export const restoreGuard: Guard<RestoreResult> = obj<RestoreResult>({ version: appVersion, published: bool, madePrivate: bool, publishError: ns });

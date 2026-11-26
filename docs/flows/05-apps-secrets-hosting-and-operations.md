@@ -50,7 +50,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
      - Technical mode shows the raw summary, which can include "Running version <v>.".
   2. **Visits today tile.** The value is a number. The note is one of "<n> errors in <m> requests", "Last visit <time ago>" or "No visits yet".
   3. **Typical response tile.** The value is the median response time, or "No traffic yet". The note is "Slowest 1 in 20: <time>" or "Measured once it has visitors".
-  4. **Cost this month tile.** The value is the credits spent. The note says what holds it: "Its own cap: <n> credits a month", "No cap of its own; <Level>'s <n> credits applies", or "No cap on it or above it".
+  4. **Cost this month tile.** The value is the credits spent ("0" for an amount that rounds below 0.1). The note says what holds it: "Its own cap: <n> credits a month", "No cap of its own; <Level>'s <n> credits applies", or "No cap on it or above it".
 - **Variations and refusals:**
   - Before the app has measured anything, Visits and Typical response both read "Not measured yet". Their notes are "It reports its visits once it has run." and "Measured once it has visitors.".
   - Health is "degraded" when more than one response in twenty failed over the last 15 minutes. The summary then reads "Running, but X of the last Y responses failed.".
@@ -443,13 +443,13 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** a list of versions appears, one of them marked "Live now".
 - **Steps:**
   1. The section reads "Any version can be brought back." and shows a skeleton.
-  2. Up to 10 versions are listed, newest first. Each shows a plain title (the first line, without its plan-id prefix), the author (an employee's name links to their page; otherwise "The factory" or the person's name), the time ago, and "Live now" on the live one.
-  3. The factory's own bookkeeping (its progress records, and notes about checking or repairing its work) is folded away in normal mode: **"Show every saved step (<n> more)"** lists it too, titled "The factory recorded its progress" for the factory's own commits; **"Show only the changes"** folds it again. The live version is never folded. A restore is titled "An earlier version, brought back". A title that names files falls back to "A change by <name>".
+  2. Up to 10 versions are loaded, newest first. Normal mode lists each published change by the plain title Endgame gives it, with the author (an employee's name links to their page; otherwise "The factory" or the person's name), the time ago, and "Live now" on the newest published change that is running — never on a saved step of the factory's own.
+  3. Every saved step without a plain title — the factory's progress records, its notes about checking or repairing its work ("Repair [item] evidence: …", "Verify … (r2)"), and the steps of a change that was never published — is folded away in normal mode: **"Show every saved step (<n> more)"** lists them too, titled "The factory recorded its progress" for the factory's own commits; **"Show only the changes"** folds them again. A restore is titled "An earlier version, brought back". From an older control plane with no plain titles, the first line is the title (without its plan-id prefix), a title that names files falls back to "A change by <name>", and bookkeeping is told by its wording.
   4. "Show earlier versions" loads 10 more. It reads "Loading…" while it waits.
 - **Variations and refusals:**
   - With no versions: "No versions yet" with "The first version appears here once it is built."
   - A failed read: "The history could not be loaded" with a retry.
-  - Technical mode shows the first 12 characters of the commit id and the rest of the message.
+  - Technical mode lists every saved step with its raw message, "Live now" where the server marks it, the first 12 characters of the commit id and the rest of the message.
 - **Where:** `History.tsx`, `appModel.ts`; `GET /api/apps/{id}/versions?limit` (Viewer)
 - **Reachable from:** UI; API; MCP `app_versions`
 - **Covered by tests:** `AppBreadth.test.tsx` ("lists versions with who made each…", "records a failed read and an empty history distinctly", "names a version by its first line…", "names a restore for what it is, not by its commit id"); `VersionsAndExportTests.The_history_names_…`; `tests-e2e/breadth.spec.ts` "history names who made each version…"

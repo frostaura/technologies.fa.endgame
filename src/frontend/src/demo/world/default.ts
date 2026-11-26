@@ -373,7 +373,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
 
   // Versions for Court booking and Shift Rota -----------------------------------------------
   const versions = (appId: string, list: [string, number, "employee" | "person" | "factory", string][]) => {
-    w.versions[appId] = list.map(([message, mins, kind, name], i) => ({ commit: uuidFor(`commit:${appId}:${i}`).replace(/-/g, "").slice(0, 40), message, at: a(mins), author: { kind, id: kind === "employee" ? kasper.id : kind === "person" ? PEOPLE.owner.id : null, name }, live: i === 0 }));
+    w.versions[appId] = list.map(([message, mins, kind, name], i) => ({ commit: uuidFor(`commit:${appId}:${i}`).replace(/-/g, "").slice(0, 40), message, at: a(mins), author: { kind, id: kind === "employee" ? kasper.id : kind === "person" ? PEOPLE.owner.id : null, name }, live: i === 0, title: message, published: true }));
   };
   versions(IDS.tableBookings, [
     ["League block bookings", 2 * day, "employee", "Kasper"],

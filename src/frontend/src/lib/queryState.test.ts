@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { withoutPaths } from "./plain";
 import { describeError, setErrorMode } from "./queryState";
 
 const failed = (status: number, detail?: string) => ({ status, data: detail ? { title: "Forbidden", status, detail } : undefined });
@@ -49,5 +50,14 @@ describe("a failure in technical mode", () => {
       "This needs the admin role at 'acme'; you are a builder there (set at acme). (403)",
     );
     expect(describeError(failed(502))).toBe("Endgame answered 502.");
+  });
+});
+
+describe("scope paths in a sentence (item 8)", () => {
+  it("are retold as words, quoted or not, and an address or a plain slash is left alone", () => {
+    expect(withoutPaths("Autonomy at frostaura/technologies/dive-club is 'checkpoints', so the owner decides on the verdict.")).toBe("Autonomy here is 'checkpoints', so the owner decides on the verdict.");
+    expect(withoutPaths("This needs a Builder at 'acme/tools'.")).toBe("This needs a Builder here.");
+    expect(withoutPaths("It is running privately at /acme/tools/web/.")).toBe("It is running privately at /acme/tools/web/.");
+    expect(withoutPaths("Ask and/or decline.")).toBe("Ask and/or decline.");
   });
 });

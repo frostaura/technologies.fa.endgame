@@ -118,7 +118,7 @@ function Row({ organisation, item, onNavigate }: { organisation: string; item: N
         )}
         {item.emailedAt && <span className="text-xs text-ink-muted">Also e-mailed</span>}
         {technical && <code className="font-mono text-xs text-ink-muted">{item.kind}</code>}
-        {technical && item.technical && <code className="break-all font-mono text-xs text-ink-muted">{item.technical}</code>}
+        {technical && lines.technical && <code className="break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
       </div>
       {problem && (
         <p role="alert" className="text-sm text-attention-text">

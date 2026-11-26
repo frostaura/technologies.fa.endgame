@@ -2,7 +2,7 @@ import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import type { SerializedError } from "@reduxjs/toolkit";
 import type { Mode } from "@/features/runs/runModel";
 import type { MemberRole } from "@/store/types";
-import { isPlain } from "./plain";
+import { isPlain, withoutPaths } from "./plain";
 import { ROLE_NAME, ROLES } from "./roles";
 
 /**
@@ -68,17 +68,6 @@ const NOT_FOUND = /^The [\w ]+ '[^']*' was not found, or you cannot see it\.?$/;
 const DELETE_REFUSAL = /^'[^']*' still has children, work or credit history attached\. Archive it instead\b.*$/;
 /** A wire hint in brackets, "(status: archived)": the field to send, which a person never types. */
 const WIRE_HINT = /\s*\((?:status|kind|role|stage|state|choice|decision): [\w.-]+\)/gi;
-/** A quoted slug path (`'acme/tools'`), which plain words never carry. */
-const QUOTED_PATH = /'[a-z0-9][\w.-]*(\/[\w.-]+)+'/gi;
-
-/** A sentence's scope paths retold as words: "at 'acme/tools'" is "here", a leading path is "This". */
-function withoutPaths(text: string): string {
-  return text
-    .replace(/ at '[a-z0-9][\w./-]*'/gi, " here")
-    .replace(/^'[a-z0-9][\w.-]*(\/[\w.-]+)+'/i, "This")
-    .replace(QUOTED_PATH, "this part");
-}
-
 function plainRoleRefusal(text: string): string | null {
   const m = ROLE_REFUSAL.exec(text);
   const required = m?.[1];

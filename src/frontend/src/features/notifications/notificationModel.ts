@@ -1,5 +1,5 @@
 import { paths } from "@/lib/router";
-import { shortTitle } from "@/lib/plain";
+import { plainDetail, shortTitle } from "@/lib/plain";
 import type { NotificationItem } from "@/store/types";
 import { meaningfulLine } from "../home/needsYouModel";
 
@@ -43,7 +43,8 @@ const KIND: Record<string, string> = {
   "topup.requested": "Top-up request",
 };
 
-/** A notification as the owner reads it: a short title, one line, and what kind of thing it is. */
-export function notificationLines(n: NotificationItem): { kind: string; title: string; line: string | null } {
-  return { kind: KIND[n.kind] ?? "Update", title: shortTitle(n.title, 90), line: meaningfulLine(n.detail, 140) };
+/** A notification as the owner reads it: a short title, one line, what kind of thing it is, and its technical line. */
+export function notificationLines(n: NotificationItem): { kind: string; title: string; line: string | null; technical: string | null } {
+  const { detail, technical } = plainDetail(n.detail, n.technical);
+  return { kind: KIND[n.kind] ?? "Update", title: shortTitle(n.title, 90), line: meaningfulLine(detail, 140), technical };
 }

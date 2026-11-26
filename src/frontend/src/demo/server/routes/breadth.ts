@@ -298,7 +298,7 @@ area("BreadthEndpoints", {
     if (!from) throw notFound("The version");
     for (const v of list) v.live = false;
     const u = me(world);
-    const version = { commit: uuidFor(`restore:${commit}:${world.counter++}`).replace(/-/g, "").slice(0, 40), message: `Restore the version ${commit.slice(0, 12)}`, at: new Date().toISOString(), author: { kind: "person" as const, id: u.id, name: u.displayName }, live: true };
+    const version = { commit: uuidFor(`restore:${commit}:${world.counter++}`).replace(/-/g, "").slice(0, 40), message: `Restore the version ${commit.slice(0, 12)}`, at: new Date().toISOString(), author: { kind: "person" as const, id: u.id, name: u.displayName }, live: true, title: "An earlier version, brought back", published: true };
     list.unshift(version);
     const madePrivate = a.access === "public";
     if (madePrivate) a.access = "private";

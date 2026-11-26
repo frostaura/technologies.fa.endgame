@@ -498,7 +498,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       {
         from: "runner",
         title: "Carrying on",
-        text: o.carried.length === 0 ? "This picks up where the earlier attempt stopped: the plan agreed then is kept, and building starts again from its first part." : `This picks up where the earlier attempt stopped: ${o.carried.length} of ${items.length} parts were already built and checked, so they are kept, not rebuilt or charged again.`,
+        text: o.carried.length === 0 ? "This picks up where the earlier attempt stopped: the plan agreed then is kept, and building starts again from its first part." : `This picks up where the earlier attempt stopped: ${o.carried.length} of ${items.length} parts ${o.carried.length === 1 ? "was" : "were"} already built and checked, so ${o.carried.length === 1 ? "it is" : "they are"} kept, not rebuilt or charged again.`,
         milestone: "carried",
       },
       `${prefix}:carried`,
@@ -727,11 +727,12 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
     const author = { kind: "employee" as const, id: eng.id, name: eng.name };
     if (prefix === "change") {
       const repaired = o.sentBack ? o.items.find((i) => i.id === o.sentBack?.item) : undefined;
-      if (repaired) versions.unshift({ commit: uuidFor(`commit:${run.run.id}:repair`).replace(/-/g, "").slice(0, 40), message: `Repair: ${repaired.text.replace(/\.$/, "")}`, at, author, live: false });
-      versions.unshift({ commit, message: o.versionMessage ?? o.summary, at, author, live: true });
+      // The control plane's versions (R2-4): a plain title on each published version, none on a saved step of the work.
+      if (repaired) versions.unshift({ commit: uuidFor(`commit:${run.run.id}:repair`).replace(/-/g, "").slice(0, 40), message: `Repair [${repaired.id}] evidence: ${repaired.text.replace(/\.$/, "")} (r2)`, at, author, live: false, title: null, published: false });
+      versions.unshift({ commit, message: o.versionMessage ?? o.summary, at, author, live: true, title: o.versionMessage ?? o.summary, published: true });
     } else {
-      versions.unshift({ commit, message: "Security fix: a member changes only their own books", at, author, live: true });
-      for (const i of o.items.slice().reverse()) versions.push({ commit: uuidFor(`commit:${i.id}`).replace(/-/g, "").slice(0, 40), message: i.text, at, author, live: false });
+      versions.unshift({ commit, message: "Security fix: a member changes only their own books", at, author, live: true, title: "Security fix: a member changes only their own books", published: true });
+      for (const i of o.items.slice().reverse()) versions.push({ commit: uuidFor(`commit:${i.id}`).replace(/-/g, "").slice(0, 40), message: i.text, at, author, live: false, title: null, published: false });
     }
     return ["App", "Versions", "Tree"];
   });

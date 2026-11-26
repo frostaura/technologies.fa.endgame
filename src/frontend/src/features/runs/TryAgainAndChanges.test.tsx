@@ -55,7 +55,7 @@ describe("trying again", () => {
 
     fireEvent.click(within(panel).getByRole("button", { name: "Try again" }));
     expect(api.calls.some((c) => c.path === "/api/runs/b1/retry")).toBe(false);
-    expect(await within(panel).findByText("1 of its 2 parts are already built and checked; they are kept, not built or charged again.")).toBeTruthy();
+    expect(await within(panel).findByText("1 of its 2 parts is already built and checked; it is kept, not built or charged again.")).toBeTruthy();
     expect(within(panel).getByText("Estimated 10 credits")).toBeTruthy();
     fireEvent.click(within(panel).getByRole("button", { name: "Start it again" }));
     await waitFor(() => expect(window.location.pathname).toBe("/runs/b2"));

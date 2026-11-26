@@ -10,16 +10,9 @@ import { useAppSelector } from "@/store";
 import { useGetVersionsQuery, useRestoreVersionMutation } from "@/store/api";
 import type { AppDetail, AppVersion, RestoreResult } from "@/store/types";
 import { RebuildAndRestart } from "./AppManage";
-import { isBookkeeping, versionTitle } from "./appModel";
+import { historyRows } from "./appModel";
 
 const PAGE = 10;
-
-/** The versions a person reads: every one in technical mode or on request, otherwise the changes without the factory's bookkeeping — or, when there is nothing else yet, the newest saved step. */
-function shownVersions(versions: AppVersion[], every: boolean): AppVersion[] {
-  if (every) return versions;
-  const changes = versions.filter((v) => !isBookkeeping(v));
-  return changes.length > 0 ? changes : versions.slice(0, 1);
-}
 
 function Author({ v }: { v: AppVersion }) {
   if (v.author.kind === "employee" && v.author.id) {
@@ -89,20 +82,20 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
             </Empty>
           ) : (
             <ol aria-label="Versions" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-              {shownVersions(view.data.versions, technical || everyStep).map((v) => (
+              {historyRows(view.data.versions, technical, everyStep).rows.map(({ version: v, title, live }) => (
                 <li key={v.commit} data-version={v.commit} className="flex flex-col gap-2 border-b px-5 py-3 last:border-b-0">
                   <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                    <span className="min-w-0 flex-1 basis-full break-words font-medium sm:basis-0">{versionTitle(v, technical)}</span>
+                    <span className="min-w-0 flex-1 basis-full break-words font-medium sm:basis-0">{title}</span>
                     <span className="flex flex-wrap items-center gap-2 text-sm text-ink-muted">
                       <Author v={v} />
                       <span aria-hidden>·</span>
                       <time dateTime={v.at} title={formatDate(v.at)}>
                         {timeAgo(v.at)}
                       </time>
-                      {v.live && <Badge tone="success">Live now</Badge>}
+                      {live && <Badge tone="success">Live now</Badge>}
                       {technical && <code className="font-mono text-xs">{v.commit.slice(0, 12)}</code>}
-                      {canRestore && !v.live && confirm?.commit !== v.commit && (
-                        <Button size="sm" variant="ghost" className="min-h-touch px-2 text-primary-link" disabled={restoring.isLoading} onClick={() => setConfirm(v)} aria-label={`Bring back “${versionTitle(v, technical)}” from ${timeAgo(v.at)}`}>
+                      {canRestore && !v.live && !live && confirm?.commit !== v.commit && (
+                        <Button size="sm" variant="ghost" className="min-h-touch px-2 text-primary-link" disabled={restoring.isLoading} onClick={() => setConfirm(v)} aria-label={`Bring back “${title}” from ${timeAgo(v.at)}`}>
                           Bring back
                         </Button>
                       )}
@@ -114,9 +107,9 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
               ))}
             </ol>
           )}
-          {!technical && view.data.versions.some(isBookkeeping) && (
+          {!technical && (everyStep || historyRows(view.data.versions, false, false).folded > 0) && (
             <Button variant="ghost" className="self-start" aria-expanded={everyStep} onClick={() => setEveryStep((x) => !x)}>
-              {everyStep ? "Show only the changes" : `Show every saved step (${formatNumber(view.data.versions.filter(isBookkeeping).length)} more)`}
+              {everyStep ? "Show only the changes" : `Show every saved step (${formatNumber(historyRows(view.data.versions, false, false).folded)} more)`}
             </Button>
           )}
           {view.data.hasMore && (

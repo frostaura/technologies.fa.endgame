@@ -40,7 +40,7 @@ describe("trying stopped work again", () => {
     expect(detail(await call(w, "POST", `runs/${IDS.runBuildReadingList}/retry`))).toBe("Only the idea's latest build can be built again.");
     seek(w, "build:carried", () => undefined);
     const r = w.runs.find((x) => x.run.id === newId);
-    expect(r?.events.find((e) => e.payload.title === "Carrying on")?.payload.text).toBe("This picks up where the earlier attempt stopped: 1 of 3 parts were already built and checked, so they are kept, not rebuilt or charged again.");
+    expect(r?.events.find((e) => e.payload.title === "Carrying on")?.payload.text).toBe("This picks up where the earlier attempt stopped: 1 of 3 parts was already built and checked, so it is kept, not rebuilt or charged again.");
     seek(w, "build:finished", () => undefined);
     expect(r?.run.status).toBe("finished");
     expect(r?.events.filter((e) => e.type === "task.claimed")).toHaveLength(2);

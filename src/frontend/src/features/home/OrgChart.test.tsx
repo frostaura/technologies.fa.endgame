@@ -65,14 +65,31 @@ describe("activity as sentences (D82)", () => {
   it("never prints step 0 of 0, and draws no bar until there is a plan", () => {
     expect(progressLine({ label: "Change: Show how many", step: 0, of: 0 })).toBe("Change: Show how many");
     expect(progressLine({ label: "Build: Ledger", step: 1, of: 4 })).toBe("Build: Ledger, step 1 of 4");
+    // R2-9: a plan with no step begun yet is not "step 0 of 1".
+    expect(progressLine({ label: "Build: Ledger", step: 0, of: 1 })).toBe("Build: Ledger");
     stubApi({ "GET /api/me": json(ME) });
     const tools = TREE.divisions[0] as Tree["divisions"][number];
     const project = { ...tools.projects[0], stage: "building", progress: { runId: "r1", label: "Change: Show how many", step: 0, of: 0, spentCredits: 2, estimatedCredits: null }, workers: [{ id: "e1", name: "Theo", role: "Software engineer", kind: "employee", activity: "Change: Show how many", status: "working" }] };
     const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
     const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
     expect(container.textContent).not.toContain("step 0 of 0");
+    expect(container.textContent).not.toMatch(/\b0 of 0\b|0 of an estimated 0/);
     expect(container.textContent).toContain("Theo is making a change: Show how many");
     expect(screen.getByRole("link", { name: "Watch the work" })).toBeTruthy();
+  });
+});
+
+describe("a project card's work under way (R2-9)", () => {
+  it("never prints step 0 of a plan nor 0 of an estimated 0, and leads with 0 for a tiny monthly spend (R2-2)", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const tools = TREE.divisions[0] as Tree["divisions"][number];
+    const tinyApp = { ...(tools.projects[0]?.apps[0] ?? {}), status: undefined, spend: { monthCredits: 0.004 } };
+    const project = { ...tools.projects[0], stage: "building", spend: { monthCredits: 0.004 }, apps: [tinyApp], progress: { runId: "r1", label: "Build: Ledger", step: 0, of: 4, spentCredits: 0, estimatedCredits: 0 }, workers: [] };
+    const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
+    const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    expect(container.textContent).not.toMatch(/step 0 of|0 of an estimated 0|less than 0\.01/);
+    expect(container.textContent).toContain("0 credits this month");
+    expect(screen.getByText("credits this month").previousSibling?.textContent).toBe("0");
   });
 });
 

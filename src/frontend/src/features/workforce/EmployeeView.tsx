@@ -6,7 +6,7 @@ import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { estimateHeadline } from "@/lib/estimates";
-import { formatCredits, formatNumber, plural, possessive, timeAgo } from "@/lib/format";
+import { formatCredits, formatNumber, headlineCredits, plural, possessive, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf, type ViewState } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -164,10 +164,10 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
           {trackRecord.work.sentBack > 0 ? `${plural(trackRecord.work.sentBack, "piece")} sent back` : "Nothing sent back"}
           {trackRecord.work.judged > 0 && ` · ${plural(trackRecord.work.judged, "judgement")} of others’ work`}
         </Stat>
-        <Stat label="Repairs not charged" value={formatCredits(trackRecord.repairsNotCharged.credits)}>
+        <Stat label="Repairs not charged" value={headlineCredits(trackRecord.repairsNotCharged.credits)}>
           {trackRecord.repairsNotCharged.calls > 0 ? `${plural(trackRecord.repairsNotCharged.calls, "repair")} of its own mistakes, never billed` : "No repairs of its own work"}
         </Stat>
-        <Stat label="Cost so far" value={formatCredits(costs.toDate)}>
+        <Stat label="Cost so far" value={headlineCredits(costs.toDate)}>
           {costLine(costs, job.monthlyCreditLimit)}
         </Stat>
         <Stat label="Estimates" value={trackRecord.estimates && trackRecord.estimates.pieces > 0 ? estimateHeadline(trackRecord.estimates) : "None scored yet"}>

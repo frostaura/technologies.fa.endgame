@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCredits, formatNumber, percent, possessive, share, tidyCreditAmounts } from "./format";
+import { formatCredits, formatNumber, headlineCredits, headlineNumber, percent, possessive, share, tidyCreditAmounts } from "./format";
 import { needLines } from "@/features/home/needsYouModel";
 
 describe("formatNumber", () => {
@@ -51,7 +51,27 @@ describe("credit amounts in a server's sentence (D44)", () => {
   });
 
   it("on a needs-you card", () => {
+    const raw = needLines({ kind: "approval", id: "a2", title: "Try again: Dive Trip Ready?", detail: "try_again: 075ba848-…", scope: "acme" } as never);
+    // R2-5: a card raised before the plain-detail fix keeps its tool line for technical mode only.
+    expect(raw).toMatchObject({ line: "It waits until you answer.", technical: "try_again: 075ba848-…" });
     const card = needLines({ kind: "approval", id: "a1", title: "Start this work? Estimated 0.5 credits.", detail: "277.323824 credits are left in the budget.", scope: "acme" } as never);
     expect(card.line).toBe("277 credits are left in the budget.");
+  });
+});
+
+describe("a headline figure (R2-2)", () => {
+  it("reads 0 when the amount rounds below a tenth, and the sentence form keeps the detail", () => {
+    expect(headlineNumber(0.001)).toBe("0");
+    expect(headlineNumber(0.04)).toBe("0");
+    expect(headlineCredits(0.001)).toBe("0 credits");
+    expect(formatCredits(0.001)).toBe("less than 0.01 credits");
+  });
+
+  it("reads every other amount as formatNumber does", () => {
+    expect(headlineNumber(0)).toBe("0");
+    expect(headlineNumber(0.06)).toBe("0.1");
+    expect(headlineNumber(4.84)).toBe("4.8");
+    expect(headlineNumber(1234)).toBe("1,234");
+    expect(headlineCredits(1)).toBe("1 credit");
   });
 });

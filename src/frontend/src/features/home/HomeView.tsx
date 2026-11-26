@@ -311,7 +311,7 @@ function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
             </Badge>
             <span className="line-clamp-2 break-words text-base font-semibold">{lines.headline}</span>
             <span className={cn("line-clamp-1 break-words", style.detail)}>{lines.line}</span>
-            {technical && item.kind === "approval" && item.technical && <code className="break-all font-mono text-xs text-ink-muted">{item.technical}</code>}
+            {technical && lines.technical && <code className="break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
           </Link>
         );
       })}

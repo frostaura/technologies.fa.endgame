@@ -253,7 +253,10 @@ export function activityLine(name: string, activity: string): string {
   return `${name}: ${text}`;
 }
 
-/** A project's work under way: its title, and its step only once there is a plan to count ("step 0 of 0" never, D82). */
+/**
+ * A project's work under way: its title, and its step only once a step of a plan has begun — never
+ * "step 0 of 0" (D82) nor "step 0 of 4" before the first part starts (R2-9).
+ */
 export function progressLine(progress: { label: string; step: number; of: number }): string {
-  return progress.of > 0 ? `${progress.label}, step ${progress.step} of ${progress.of}` : progress.label;
+  return progress.of > 0 && progress.step > 0 ? `${progress.label}, step ${progress.step} of ${progress.of}` : progress.label;
 }

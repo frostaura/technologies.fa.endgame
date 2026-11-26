@@ -98,7 +98,7 @@ export function learned(world: World, org: string, kind: "build" | "change", rem
   const whole = expected(world, org, kind, kind);
   if (items <= 0 || remaining >= items) return whole;
   const left = Math.ceil(whole.credits * (Math.max(1, remaining) / items) * 100) / 100;
-  return { credits: left, basis: `${whole.basis} Only ${remaining} of its ${items} parts are left to build, so it is priced for those; the parts already built and checked are not built or charged again.` };
+  return { credits: left, basis: `${whole.basis} Only ${remaining} of its ${items} parts ${remaining === 1 ? "is" : "are"} left to build, so it is priced for ${remaining === 1 ? "that one" : "those"}; the parts already built and checked are not built or charged again.` };
 }
 
 /** `FactoryEstimates.ConversationAsync`: what one message costs at most, priced on the thinking power that answers it. */

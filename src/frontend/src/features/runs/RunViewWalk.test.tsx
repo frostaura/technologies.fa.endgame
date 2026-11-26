@@ -76,6 +76,38 @@ describe("RunView after the real-stack walk", () => {
     expect(stat("Spent so far").textContent).toContain("130% of the estimate");
   });
 
+  it("R2-8: the estimate shown before the work began stands, with the plan's re-estimate beside it, and each share names its figure", async () => {
+    await open({ ...RUN, kind: "build", estimateCredits: 4.8 });
+    feed([
+      ["estimate.made", { credits: 10, stage: "start" }],
+      ["estimate.made", { credits: 4.8, stage: "plan" }],
+      ["model.replied", { settledCredits: 2.4 }],
+    ]);
+    const tile = stat("Estimate");
+    expect(tile.textContent).toContain("10 credits");
+    expect(tile.textContent).toContain("Shown before the work began");
+    expect(tile.textContent).toContain("4.8 once planned");
+    expect(stat("Spent so far").textContent).toContain("50% of the 4.8 estimated once planned");
+    cleanup();
+    FakeEventSource.instances = [];
+    await open({ ...RUN, kind: "build", estimateCredits: 4.8 });
+    feed([
+      ["estimate.made", { credits: 10, stage: "start" }],
+      ["estimate.made", { credits: 4.8, stage: "plan" }],
+      ["model.replied", { settledCredits: 5.4 }],
+      ["estimate.scored", { expectedCredits: 4.8, actualCredits: 5.4 }],
+    ]);
+    expect(stat("Estimate against actual").textContent).toContain("Against the 4.8 estimated once planned: cost 5.4");
+  });
+
+  it("R2-8: a run with one estimate (or the old single field) reads as before", async () => {
+    await open({ ...RUN, estimateCredits: 12 });
+    feed([["model.replied", { settledCredits: 6 }]]);
+    expect(stat("Estimate").textContent).toContain("12 credits");
+    expect(stat("Estimate").textContent).not.toContain("once planned");
+    expect(stat("Spent so far").textContent).toContain("50% of the estimate shown before the work began");
+  });
+
   it("D15: work under way is in the present tense", async () => {
     await open();
     feed([

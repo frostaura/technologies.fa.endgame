@@ -276,7 +276,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **You know it worked when:** the list labelled "People" shows rows.
 - **Variations and refusals:**
   - Empty: "No one holds a role in {name} yet" and "Invite someone and they appear here once they accept."
-  - 403: **"You cannot see the people here"**, "Only an Admin or the Owner can do this here. You are a Builder here." (the role they hold), with **"Try again"**. Technical mode shows the server's own detail and the status instead.
+  - 403: **"You cannot see the people here"**, "Only an Admin or the Owner can do this here. You are a Builder here." (the role they hold), with **"Back to the org chart"** — a refusal is an answer, so there is no "Try again". Technical mode shows the server's own detail and the status instead.
   - No organisation yet: "There is no one to show until your organisation is named".
   - The server lists every grant that holds at the scope: set at it or beneath it, and set above it on its chain. A grant from above shows "This grant holds here from {node}; change it there." to someone who may change it.
   - Whether you may manage people here is your role at this level exactly as the server resolves it — the deepest grant on the chain wins, and the organisation's Owner is the Owner everywhere. The tree carries it for every node, so an organisation Admin who is a Viewer in one division is not offered **"Invite someone"** there.

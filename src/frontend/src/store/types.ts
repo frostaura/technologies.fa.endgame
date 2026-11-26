@@ -943,6 +943,14 @@ export interface AppVersion {
   at: string;
   author: { kind: "employee" | "person" | "factory"; id: string | null; name: string };
   live: boolean;
+  /**
+   * The version's plain title, for normal mode (R2-4): null for a saved step that is not a change a person would look
+   * for. Absent from an older control plane, which sends only the raw message; `plainTitle` is read as the same field.
+   */
+  title?: string | null;
+  plainTitle?: string | null;
+  /** Whether this version was ever published; absent from an older control plane. */
+  published?: boolean;
 }
 
 export interface AppVersions {

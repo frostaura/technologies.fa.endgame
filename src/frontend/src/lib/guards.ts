@@ -65,6 +65,11 @@ export function withDefault<T>(guard: Guard<T>, fallback: T): Guard<T> {
   return (v, path) => (v === undefined ? fallback : guard(v, path));
 }
 
+/** A field whose absence means something (an older control plane): absent stays undefined, unlike withDefault. */
+export function optional<T>(guard: Guard<T>): Guard<T | undefined> {
+  return (v, path) => (v === undefined ? undefined : guard(v, path));
+}
+
 export function oneOf<const T extends string>(values: readonly T[]): Guard<T> {
   return (v, path) => {
     if (typeof v !== "string" || !(values as readonly string[]).includes(v)) throw new ShapeError(path, `one of ${values.join(", ")}`, v);
