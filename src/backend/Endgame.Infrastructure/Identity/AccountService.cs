@@ -319,7 +319,12 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
         return (membership.OrganisationId, membership);
     }
 
-    public async Task RevokeAsync(MembershipRecord membership, CancellationToken cancellationToken)
+    /// <summary>
+    /// Revokes one role grant. When it was the person's last grant anywhere and they never made a passkey, their
+    /// pending invitation code is cancelled too: a code is an invitation to a role, and with no role left it would
+    /// only make a role-less account (D8). Someone who has signed in keeps their account.
+    /// </summary>
+    public async Task<RoleRevoked> RevokeAsync(MembershipRecord membership, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(membership);
         if (membership.Role == MemberRole.Owner.ToWire())
@@ -329,5 +334,16 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
 
         session.UseOrganisation(membership.OrganisationId);
         await db.Memberships.Where(m => m.OrganisationId == membership.OrganisationId && m.Id == membership.Id).ExecuteDeleteAsync(cancellationToken);
+        session.UseSystem();
+        var cancelled = !await db.Memberships.AsNoTracking().AnyAsync(m => m.UserId == membership.UserId, cancellationToken)
+            && await db.Users.Where(u => u.Id == membership.UserId && u.InvitationCodeHash != null
+                    && !db.Set<IdentityUserPasskey<Guid>>().Any(p => p.UserId == u.Id))
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.InvitationCodeHash, (string?)null).SetProperty(x => x.InvitationExpiresAt, (DateTimeOffset?)null), cancellationToken) > 0;
+        session.UseOrganisation(membership.OrganisationId);
+        return new RoleRevoked(membership.Id, cancelled);
     }
 }
+
+/// <summary>A revoked grant.</summary>
+/// <param name="InvitationCancelled">True when it was the person's last grant and their unused invitation code was cancelled with it.</param>
+public sealed record RoleRevoked(Guid Revoked, bool InvitationCancelled);

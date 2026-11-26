@@ -619,7 +619,8 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
         var problem = RunStatuses.IsTerminal(current.Status)
             ? EndgameProblem.Conflict($"The run has {current.Status}.")
             : EndgameProblem.Conflict($"The run's lease is held by '{current.LeaseHolder}' until {current.LeaseExpiresAt:O}.");
-        problem.Extensions["status"] = current.Status;
+        // Not "status": that is the problem document's HTTP status (RFC 9457), and the same key twice cannot be parsed (D25).
+        problem.Extensions["runStatus"] = current.Status;
         return problem;
     }
 

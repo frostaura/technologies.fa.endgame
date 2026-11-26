@@ -87,6 +87,64 @@ public sealed class ScreensAndRolesTests(PostgresServer postgres) : IAsyncLifeti
         Assert.Contains("booking software", screened["detail"]!["reason"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
+    /// <summary>Answers in turn: each call gets the next content, the last repeating.</summary>
+    private static Func<JsonObject, HttpContext, Task> Answers(params string[] contents)
+    {
+        var next = 0;
+        return (request, http) => FakeOpenRouter.Completion(0.0003m, contents[Math.Min(Interlocked.Increment(ref next) - 1, contents.Length - 1)], id: $"gen-screen-{next}")(request, http);
+    }
+
+    // What qwen/qwen3.7-flash really answered on 2026-11-26 at the old 400-token limit: it reasoned first, and
+    // the answer was cut mid-sentence (finish_reason "length").
+    private const string CutOff = "{\"breached\": false, \"line\": null, \"reason\": \"The organization builds booking software for squash clubs, which";
+
+    [Fact]
+    public async Task A_cut_off_answer_is_asked_again_once_and_the_model_is_asked_for_json_with_room_to_think()
+    {
+        // D54: the live model's answer could not be read, so every operator set-up failed with 503.
+        openRouter.Chat = Answers(CutOff, "Here is my answer.\n```json\n{\"breached\": false, \"line\": null, \"reason\": \"Booking software {for clubs} crosses no line.\"}\n```\nThat is all.");
+        var created = await ProvisionAsync();
+        Assert.Equal("model", created["screening"]!["method"]!.GetValue<string>());
+        Assert.Equal("clear", created["screening"]!["result"]!.GetValue<string>());
+        Assert.Equal("Booking software {for clubs} crosses no line.", created["screening"]!["reason"]!.GetValue<string>());
+        var asked = openRouter.Requests.ToList();
+        Assert.Equal(2, asked.Count);
+        Assert.All(asked, r =>
+        {
+            Assert.Equal("json_object", r["response_format"]!["type"]!.GetValue<string>());
+            Assert.Equal(Endgame.Infrastructure.Platform.OrganisationScreening.MaxTokens, r["max_tokens"]!.GetValue<int>());
+        });
+        // Both calls are platform costs.
+        Assert.Equal(2, (await PlatformCostsAsync()).Count);
+    }
+
+    [Fact]
+    public async Task Two_unreadable_answers_leave_only_the_screening_by_hand()
+    {
+        openRouter.Chat = Answers(CutOff, "I cannot answer that.");
+        var refused = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync("/api/organisations",
+            new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = "Sells booking software to squash clubs." }), HttpStatusCode.ServiceUnavailable);
+        Assert.Equal("screening_unavailable", refused["code"]!.GetValue<string>());
+        Assert.Contains("the model's answer could not be read", refused["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal(2, openRouter.Requests.Count);
+        var created = await ProvisionAsync(screening: Provisioning.Manual);
+        Assert.Equal("manual", created["screening"]!["method"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("{\"breached\": true, \"line\": \"weapons\", \"reason\": \"r\"}", true)]
+    [InlineData("```json\n{\"breached\": false}\n```", false)]
+    [InlineData("Sure {not json}. {\"breached\": true, \"reason\": \"a } in a string\"} and {\"other\": 1}", true)]
+    public void The_first_whole_json_object_is_read_wherever_it_sits(string content, bool breached) =>
+        Assert.Equal(breached, Endgame.Infrastructure.Platform.OrganisationScreening.ReadAnswer(content)!["breached"]!.GetValue<bool>());
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("No JSON here.")]
+    [InlineData(CutOff)]
+    public void A_missing_or_cut_off_object_reads_as_nothing(string content) =>
+        Assert.Null(Endgame.Infrastructure.Platform.OrganisationScreening.ReadAnswer(content));
+
     [Fact]
     public async Task A_breach_is_refused_naming_the_line_and_why_and_nothing_is_set_up()
     {

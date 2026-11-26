@@ -34,27 +34,43 @@ internal static class Problems
 
     public static IResult Invalid(string detail) => From(EndgameProblem.Invalid(detail));
 
-    /// <summary>Renders anything thrown below an endpoint. An unexpected exception becomes a 500 with no internals.</summary>
+    /// <summary>
+    /// Renders anything thrown below an endpoint. An unexpected exception becomes a 500 with no internals. Each
+    /// failure is logged once, here: a deliberate refusal (<see cref="EndgameProblem"/>, a domain rule, a request
+    /// that could not be read) is expected — a warning when it is a 5xx, information otherwise, with no stack
+    /// trace — and only a genuine fault is an error with its exception. ASP.NET's own "An unhandled exception has
+    /// occurred" entry is suppressed, so nothing is logged twice (D55).
+    /// </summary>
     public static void UseEndgameProblems(this WebApplication app)
     {
-        app.UseExceptionHandler(handler => handler.Run(async context =>
+        app.UseExceptionHandler(new ExceptionHandlerOptions
         {
-            var error = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-            var problem = error switch
+            SuppressDiagnosticsCallback = _ => true,
+            ExceptionHandler = async context =>
             {
-                EndgameProblem p => p,
-                DomainException d => EndgameProblem.Invalid(d.Message),
-                BadHttpRequestException b => new EndgameProblem(b.StatusCode, "invalid_request", "The request could not be read", b.Message),
-                _ => new EndgameProblem(500, "internal_error", "Something went wrong", "The control plane failed to handle this request. It has been logged."),
-            };
-            if (problem.Status >= 500)
-            {
-                context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Endgame.Problems")
-                    .LogError(error, "Unhandled failure on {Method} {Path}", context.Request.Method, context.Request.Path);
-            }
+                var error = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+                var problem = error switch
+                {
+                    EndgameProblem p => p,
+                    DomainException d => EndgameProblem.Invalid(d.Message),
+                    BadHttpRequestException b => new EndgameProblem(b.StatusCode, "invalid_request", "The request could not be read", b.Message),
+                    _ => null,
+                };
+                var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Endgame.Problems");
+                if (problem is null)
+                {
+                    logger.LogError(error, "Unhandled failure on {Method} {Path}", context.Request.Method, context.Request.Path);
+                    problem = new EndgameProblem(500, "internal_error", "Something went wrong", "The control plane failed to handle this request. It has been logged.");
+                }
+                else
+                {
+                    logger.Log(problem.Status >= 500 ? LogLevel.Warning : LogLevel.Information,
+                        "Refused {Method} {Path}: {Status} {Code} — {Detail}", context.Request.Method, context.Request.Path, problem.Status, problem.Code, problem.Detail ?? problem.Title);
+                }
 
-            await From(problem).ExecuteAsync(context);
-        }));
+                await From(problem).ExecuteAsync(context);
+            },
+        });
         app.UseStatusCodePages(async status =>
         {
             var response = status.HttpContext.Response;

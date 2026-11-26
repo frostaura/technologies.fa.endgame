@@ -30,6 +30,74 @@ public sealed class RunsAndTasksTests(PostgresServer postgres) : IAsyncLifetime
         await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/runs/{runId}/events", new { leaseHolder = holder, events = new[] { new { type, payload } } }));
 
     [Fact]
+    public async Task Every_refusal_the_lease_and_runs_endpoints_return_has_each_member_once()
+    {
+        // D25: a refused lease renewal carried "status" twice (the HTTP status and the run's), which the Runner could not parse.
+        var run = await RunAsync();
+        var bodies = new List<string>();
+        async Task<string> Refused(Task<HttpResponseMessage> call, HttpStatusCode expected)
+        {
+            var response = await call;
+            var text = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == expected, $"Expected {(int)expected}, got {(int)response.StatusCode}: {text}");
+            bodies.Add(text);
+            return text;
+        }
+
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/runs/{run}/lease", new { holder = "runner-a", seconds = 60 }));
+        var held = await Refused(service.PostAsJsonAsync($"/internal/runs/{run}/lease", new { holder = "runner-b", seconds = 60 }), HttpStatusCode.Conflict);
+        await Refused(service.PostAsJsonAsync($"/internal/runs/{run}/events", new { leaseHolder = "runner-b", events = new[] { new { type = "message", payload = new { text = "x" } } } }), HttpStatusCode.Conflict);
+        await Refused(service.PostAsJsonAsync($"/internal/runs/{run}/lease", new { holder = "runner-a", seconds = 0 }), HttpStatusCode.BadRequest);
+        await Refused(service.PostAsJsonAsync($"/internal/runs/{Guid.NewGuid()}/lease", new { holder = "runner-a", seconds = 60 }), HttpStatusCode.NotFound);
+        await Refused(service.GetAsync($"/internal/runs/{Guid.NewGuid()}"), HttpStatusCode.NotFound);
+        await ControlPlaneApp.Ok(owner.PostAsync($"/api/runs/{run}/cancel", null));
+        var ended = await Refused(service.PostAsJsonAsync($"/internal/runs/{run}/lease", new { holder = "runner-a", seconds = 60 }), HttpStatusCode.Conflict);
+        await Refused(service.PostAsJsonAsync($"/internal/runs/{run}/events", new { leaseHolder = "runner-a", events = new[] { new { type = "message", payload = new { text = "x" } } } }), HttpStatusCode.Conflict);
+        await Refused(owner.PostAsync($"/api/runs/{run}/pause", null), HttpStatusCode.Conflict);
+        await Refused(owner.GetAsync($"/api/runs/{Guid.NewGuid()}"), HttpStatusCode.NotFound);
+
+        foreach (var body in bodies)
+        {
+            AssertEachMemberOnce(body);
+        }
+
+        // The run's status travels as its own member, beside the HTTP status.
+        var cancelled = System.Text.Json.JsonDocument.Parse(ended).RootElement;
+        Assert.Equal(409, cancelled.GetProperty("status").GetInt32());
+        Assert.Equal("cancelled", cancelled.GetProperty("runStatus").GetString());
+        Assert.Equal("running", System.Text.Json.JsonDocument.Parse(held).RootElement.GetProperty("runStatus").GetString());
+
+        // And no extension can take a member's name in the first place.
+        foreach (var reserved in new[] { "status", "type", "title", "detail", "instance", "code" })
+        {
+            Assert.Throws<ArgumentException>(() => Endgame.Application.Common.EndgameProblem.Conflict("x").Extensions[reserved] = 1);
+        }
+    }
+
+    /// <summary>A strict reader: every object in the document names each member once.</summary>
+    private static void AssertEachMemberOnce(string json)
+    {
+        var reader = new System.Text.Json.Utf8JsonReader(System.Text.Encoding.UTF8.GetBytes(json));
+        var open = new Stack<HashSet<string>>();
+        while (reader.Read())
+        {
+            switch (reader.TokenType)
+            {
+                case System.Text.Json.JsonTokenType.StartObject:
+                    open.Push(new HashSet<string>(StringComparer.Ordinal));
+                    break;
+                case System.Text.Json.JsonTokenType.EndObject:
+                    open.Pop();
+                    break;
+                case System.Text.Json.JsonTokenType.PropertyName:
+                    var name = reader.GetString()!;
+                    Assert.True(open.Peek().Add(name), $"'{name}' appears twice in {json}");
+                    break;
+            }
+        }
+    }
+
+    [Fact]
     public async Task Sequence_numbers_are_gapless_under_concurrent_appends()
     {
         var run = await RunAsync();

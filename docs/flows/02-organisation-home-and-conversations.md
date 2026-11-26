@@ -1135,8 +1135,8 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
      Unread urgent rows are tinted amber; other unread rows are tinted blue.
   5. An aside "What you are told about" lists: "A verdict waiting for your call", "An approval the work is waiting on", "A hire proposed", "A budget at 80% and at its cap", "Credits at zero, halfway to the overdraft limit, and at it", "An app that stopped working", "A security review that found a problem", "For FrostAura’s operators: an Owner asking for a top-up". It adds: "Owners and Admins are told about what their grant covers; others see an empty feed."
 - **You know it worked when:** the page lists your notices, newest first.
-- **Variations and refusals:** the UI asks for at most 50.
-- **Where:** `notifications/NotificationsView.tsx`, `NotificationFeed.tsx`, `notificationModel.ts`.
+- **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …" — and it no longer counts as unread.
+- **Where:** `notifications/NotificationsView.tsx`, `NotificationFeed.tsx`, `notificationModel.ts`; `NotificationService.FeedAsync` (`resolved`).
 - **Reachable from:** UI.
 - **Covered by tests:** `Notifications.test.tsx`: "lists each with a short title, one line and where it leads…".
 

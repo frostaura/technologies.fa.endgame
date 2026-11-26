@@ -37,7 +37,13 @@ public sealed class NotificationOptions
 
 public sealed record NotificationSubject(string Kind, Guid Id);
 
-public sealed record NotificationView(Guid Id, string Kind, string Severity, string Title, string Detail, string Scope, NotificationSubject? Subject, DateTimeOffset CreatedAt, bool Read, DateTimeOffset? EmailedAt);
+/// <param name="Read">True once the person read it — or once what it asked was answered (<paramref name="Resolved"/>).</param>
+/// <param name="Resolved">
+/// True when what it asked for is already answered: a verdict decided, an approval given or declined, a hire accepted
+/// or declined. Its title then says what happened ("You approved “Accept this plan?”", "Theo was hired as …"), and
+/// it no longer counts as unread (D40).
+/// </param>
+public sealed record NotificationView(Guid Id, string Kind, string Severity, string Title, string Detail, string Scope, NotificationSubject? Subject, DateTimeOffset CreatedAt, bool Read, DateTimeOffset? EmailedAt, bool Resolved = false);
 
 public sealed record NotificationFeed(string Organisation, int Unread, IReadOnlyList<NotificationView> Notifications);
 
@@ -94,7 +100,7 @@ public sealed class NotificationService(
         foreach (var home in homes)
         {
             var root = await scopes.ForRowAsync(home, null, null, null, cancellationToken);
-            var amount = decimal.Round(credits, 2).ToString("#,0.##", CultureInfo.InvariantCulture);
+            var amount = CreditText.Format(credits);
             raised += await RaiseAsync(root, NotificationKinds.TopUpRequested, $"{organisationName} asks for {amount} credits",
                 note.Length > 0 ? note : "No note was given. Answer it under Every organisation.", new NotificationSubject("topup_request", requestId), $"topup.requested:{requestId:N}", cancellationToken) ? 1 : 0;
         }
@@ -126,9 +132,11 @@ public sealed class NotificationService(
         var ids = visible.Select(n => n.Id).ToList();
         var read = (await db.NotificationReads.AsNoTracking().Where(r => r.OrganisationId == org.OrganisationId && r.UserId == userId && ids.Contains(r.NotificationId))
             .Select(r => r.NotificationId).ToListAsync(cancellationToken)).ToHashSet();
+        var answered = await AnsweredAsync(org.OrganisationId, userId, visible, cancellationToken);
+        bool Unread(NotificationRecord n) => !read.Contains(n.Id) && !answered.ContainsKey(n.Id);
         var paths = new Dictionary<(Guid?, Guid?, Guid?), string>();
         var views = new List<NotificationView>();
-        foreach (var n in visible.Where(n => !unreadOnly || !read.Contains(n.Id)).Take(Math.Clamp(limit, 1, MaxFeed)))
+        foreach (var n in visible.Where(n => !unreadOnly || Unread(n)).Take(Math.Clamp(limit, 1, MaxFeed)))
         {
             if (!paths.TryGetValue((n.DivisionId, n.ProjectId, n.AppId), out var path))
             {
@@ -137,13 +145,71 @@ public sealed class NotificationService(
             }
 
             var subject = JsonNode.Parse(n.SubjectJson);
-            views.Add(new NotificationView(n.Id, n.Kind, n.Severity, n.Title, n.Detail, path,
+            var resolved = answered.TryGetValue(n.Id, out var outcome);
+            views.Add(new NotificationView(n.Id, n.Kind, n.Severity, resolved ? outcome! : n.Title, n.Detail, path,
                 subject?["kind"] is JsonValue k && Guid.TryParse(subject["id"]?.GetValue<string>(), out var sid) ? new NotificationSubject(k.GetValue<string>(), sid) : null,
-                n.CreatedAt, read.Contains(n.Id), n.EmailedAt));
+                n.CreatedAt, read.Contains(n.Id) || resolved, n.EmailedAt, resolved));
         }
 
         session.UseOrganisation(org.OrganisationId);
-        return new NotificationFeed(org.Path.ToString(), visible.Count(n => !read.Contains(n.Id)), views);
+        return new NotificationFeed(org.Path.ToString(), visible.Count(Unread), views);
+    }
+
+    /// <summary>
+    /// The notifications among <paramref name="rows"/> whose question is already answered, each with a title that says
+    /// what happened. Read from the subject as it is now, so a notice can never ask what was settled.
+    /// </summary>
+    private async Task<Dictionary<Guid, string>> AnsweredAsync(Guid organisationId, Guid viewer, IReadOnlyList<NotificationRecord> rows, CancellationToken cancellationToken)
+    {
+        static Guid? Keyed(NotificationRecord n, string prefix) =>
+            n.DedupeKey.StartsWith(prefix, StringComparison.Ordinal) && Guid.TryParseExact(n.DedupeKey[prefix.Length..], "N", out var id) ? id : null;
+        var approvalIds = rows.Where(n => n.Kind == NotificationKinds.Approval).Select(n => Keyed(n, "approval:")).OfType<Guid>().ToList();
+        var hireIds = rows.Where(n => n.Kind == NotificationKinds.Hire).Select(n => Keyed(n, "hire:")).OfType<Guid>().ToList();
+        var ideaIds = rows.Where(n => n.Kind == NotificationKinds.Verdict).Select(n => Keyed(n, "verdict:")).OfType<Guid>().ToList();
+        var result = new Dictionary<Guid, string>();
+        if (approvalIds.Count + hireIds.Count + ideaIds.Count == 0)
+        {
+            return result;
+        }
+
+        session.UseOrganisation(organisationId);
+        var approvals = await db.Approvals.AsNoTracking().Where(a => a.OrganisationId == organisationId && approvalIds.Contains(a.Id) && a.Status != ApprovalStatuses.Pending)
+            .Select(a => new { a.Id, a.Title, a.Status, a.AnsweredBy }).ToDictionaryAsync(a => a.Id, cancellationToken);
+        var hires = await db.HireProposals.AsNoTracking().Where(h => h.OrganisationId == organisationId && hireIds.Contains(h.Id) && h.Status != Domain.Workforce.HireStatuses.Proposed)
+            .Select(h => new { h.Id, h.Name, h.Role, h.Status }).ToDictionaryAsync(h => h.Id, cancellationToken);
+        var ideas = await db.Ideas.AsNoTracking().Where(i => i.OrganisationId == organisationId && ideaIds.Contains(i.Id) && i.Status != IdeaStatuses.AwaitingDecision)
+            .Select(i => new { i.Id, i.Text, i.Status, i.DecidedBy }).ToDictionaryAsync(i => i.Id, cancellationToken);
+        var people = approvals.Values.Select(a => a.AnsweredBy).Concat(ideas.Values.Select(i => i.DecidedBy)).OfType<Guid>().Distinct().ToList();
+        var names = await db.Users.AsNoTracking().Where(u => people.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, cancellationToken);
+        string Who(Guid? by) => by == viewer ? "You" : by is { } id && names.TryGetValue(id, out var name) && name.Length > 0 ? name : "Someone";
+
+        foreach (var n in rows)
+        {
+            var outcome = n.Kind switch
+            {
+                NotificationKinds.Approval when Keyed(n, "approval:") is { } id && approvals.TryGetValue(id, out var a) => a.Status switch
+                {
+                    ApprovalStatuses.Approved => $"{Who(a.AnsweredBy)} approved “{a.Title}”",
+                    ApprovalStatuses.Rejected => $"{Who(a.AnsweredBy)} declined “{a.Title}”",
+                    _ => $"No longer waiting: “{a.Title}”",
+                },
+                NotificationKinds.Hire when Keyed(n, "hire:") is { } id && hires.TryGetValue(id, out var h) =>
+                    h.Status == Domain.Workforce.HireStatuses.Accepted ? $"{h.Name} was hired as {h.Role}" : $"{h.Name} was not hired as {h.Role}",
+                NotificationKinds.Verdict when Keyed(n, "verdict:") is { } id && ideas.TryGetValue(id, out var i) => i.Status switch
+                {
+                    IdeaStatuses.Building => $"{Who(i.DecidedBy)} chose to build: {ReadModels.IdeaTitle(i.Text)}",
+                    IdeaStatuses.Dropped => $"{Who(i.DecidedBy)} dropped: {ReadModels.IdeaTitle(i.Text)}",
+                    _ => $"Being researched again: {ReadModels.IdeaTitle(i.Text)}",
+                },
+                _ => null,
+            };
+            if (outcome is not null)
+            {
+                result[n.Id] = Clip(outcome, 300);
+            }
+        }
+
+        return result;
     }
 
     public async Task MarkReadAsync(Guid userId, Guid notificationId, CancellationToken cancellationToken)
@@ -425,5 +491,5 @@ public sealed class NotificationSweep(IServiceScopeFactory scopeFactory, IOption
         return raised;
     }
 
-    private static string Credits(decimal value) => decimal.Round(value, 2).ToString("0.##", CultureInfo.InvariantCulture);
+    private static string Credits(decimal value) => CreditText.Format(value);
 }

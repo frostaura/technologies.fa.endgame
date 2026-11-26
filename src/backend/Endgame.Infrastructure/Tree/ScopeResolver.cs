@@ -127,7 +127,8 @@ public sealed class ScopeResolver(EndgameDbContext db, TenantSession session)
     {
         ArgumentNullException.ThrowIfNull(select);
         session.UseSystem();
-        var ids = await select(rows).Take(2).ToListAsync(cancellationToken);
+        // Two are enough to tell "one owner" from "ambiguous"; ordered, so the limit is deterministic (D26).
+        var ids = await select(rows).OrderBy(id => id).Take(2).ToListAsync(cancellationToken);
         if (ids.Count != 1)
         {
             session.Clear();

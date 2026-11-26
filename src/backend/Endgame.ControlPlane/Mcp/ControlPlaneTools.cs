@@ -533,8 +533,7 @@ internal static class ControlPlaneTools
                 var (_, membership) = await accounts.MembershipAsync(c.Id("membershipId"), c.Ct);
                 var scope = await c.S<ScopeResolver>().ForRowAsync(membership.OrganisationId, membership.DivisionId, membership.ProjectId, membership.AppId, c.Ct);
                 await c.S<AccessService>().RequireAsync(c.UserId, scope, membership.Role == MemberRole.Admin.ToWire() ? MemberRole.Owner : MemberRole.Admin, c.Ct);
-                await accounts.RevokeAsync(membership, c.Ct);
-                return new { revoked = membership.Id };
+                return await accounts.RevokeAsync(membership, c.Ct);
             }),
 
         // ------------------------------------------------------------------ secrets (names only)

@@ -576,6 +576,24 @@ public sealed class AppIdentityService(
         }
     }
 
+    /// <summary>
+    /// The console's sign-out: every app session the member holds — at every app, in every organisation, on the
+    /// platform's host and on every organisation subdomain, from any browser — is revoked, and any hand-off not yet
+    /// redeemed is spent. Clearing the cookies the request happened to carry is not enough: a subdomain's cookie is
+    /// never sent to the platform's host, so its session would outlive the sign-out (D53).
+    /// </summary>
+    public async Task<int> EndMemberSessionsAsync(Guid memberId, CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow();
+        session.UseSystem();
+        var revoked = await db.AppSessions.Where(s => s.UserId == memberId && s.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now), cancellationToken);
+        await db.AppHandoffs.Where(h => h.UserId == memberId && h.UsedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(h => h.UsedAt, now), cancellationToken);
+        session.Clear();
+        return revoked;
+    }
+
     private async Task RequireMaySignUpAsync(ResolvedScope app, string mode, string email, string? invitationCode, bool consumeCode, CancellationToken cancellationToken)
     {
         if (mode == AppAccess.Private)
@@ -632,7 +650,8 @@ public sealed class AppIdentityService(
     {
         var token = RandomToken();
         var now = clock.GetUtcNow();
-        var expires = now.AddDays(options.Value.SessionDays);
+        // A member's app session stands in for their console session on another host, so it lives only hours.
+        var expires = userId is null ? now.AddDays(options.Value.SessionDays) : now.AddHours(options.Value.MemberSessionHours);
         session.UseOrganisation(app.OrganisationId);
         db.AppSessions.Add(new AppSessionRecord
         {

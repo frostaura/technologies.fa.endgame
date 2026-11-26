@@ -34,7 +34,7 @@ register.
 4. On first run `organisation` is null; the person names it with `POST /api/organisations { name, slug }`
    and becomes its Owner.
 5. Later sign-ins: `POST .../login/options {}` → `{ publicKey }`, then `.../login/complete { credential }` → `Me`.
-6. `POST /api/auth/logout` ends the session (204).
+6. `POST /api/auth/logout` ends the session (204), and every app session the person holds on any host: an app opened on the organisation subdomain asks them to sign in again.
 
 ## Alternate and failure flows
 

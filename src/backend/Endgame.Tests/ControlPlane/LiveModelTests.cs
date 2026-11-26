@@ -56,4 +56,18 @@ public sealed class LiveModelTests(PostgresServer postgres)
         Assert.True(settled > 0, "The reply carried a cost.");
         Assert.True(reserved >= settled, $"Reserved {reserved} must cover settled {settled}.");
     }
+
+    [LiveFact]
+    public async Task A_real_model_screens_an_organisation_and_its_answer_is_read()
+    {
+        // D54: at the old limit the route's reasoning models spent the budget thinking and the answer was cut off.
+        await using var app = await ControlPlaneApp.StartAsync(postgres, settings: new Dictionary<string, string?>
+        {
+            ["ModelGateway:BaseUrl"] = "https://openrouter.ai",
+            ["OPENROUTER_API_KEY"] = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY"),
+        });
+        var owner = await app.OwnerWithOrganisationAsync();
+        var created = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/organisations", new { name = "Acme", slug = "acme", ownerEmail = "ceo@acme.example", description = "Builds booking software for squash clubs." }));
+        Assert.Equal("model", created["screening"]!["method"]!.GetValue<string>());
+    }
 }

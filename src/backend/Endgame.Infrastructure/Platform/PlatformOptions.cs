@@ -63,6 +63,13 @@ public sealed class AppSessionOptions
     /// <summary>How long an end user stays signed in at an app.</summary>
     public int SessionDays { get; set; } = 14;
 
+    /// <summary>
+    /// How long a member's app session on the organisation subdomain (made by a hand-off from their console
+    /// session) lives. Short, because the console session it came from is the one that counts: when it lapses
+    /// the subdomain asks again, and the platform's host hands a live console session straight back.
+    /// </summary>
+    public int MemberSessionHours { get; set; } = 12;
+
     /// <summary>How long a share's invitation code stays open.</summary>
     public int InvitationDays { get; set; } = 14;
 

@@ -6,6 +6,7 @@ using Endgame.Domain.Runs;
 using Endgame.Infrastructure.Persistence;
 using Endgame.Infrastructure.Persistence.Records;
 using Endgame.Infrastructure.Tenancy;
+using Microsoft.Extensions.Logging;
 
 namespace Endgame.Infrastructure.Platform;
 
@@ -64,9 +65,16 @@ public sealed record ScreeningResult(string Method, bool Breached, string? Line,
 /// with a written reason; without one, provisioning is refused. A model's answer always outranks a
 /// manual decision, which is only taken when there is no answer.
 /// </summary>
-public sealed class OrganisationScreening(PlatformModelCalls calls, TimeProvider clock)
+public sealed class OrganisationScreening(PlatformModelCalls calls, TimeProvider clock, ILogger<OrganisationScreening> logger)
 {
     public const string Purpose = "organisation.screening";
+    public const int Attempts = 2;
+
+    /// <summary>
+    /// Room for a reasoning model to think and still answer: at 400 tokens the route's models spent the budget
+    /// reasoning and the answer was cut mid-sentence (<c>finish_reason: length</c>, D54).
+    /// </summary>
+    public const int MaxTokens = 2000;
     public const string TaskType = "classify";
     public const int MinDescription = 10;
     public const int MaxDescription = 1000;
@@ -106,27 +114,26 @@ public sealed class OrganisationScreening(PlatformModelCalls calls, TimeProvider
         }
 
         ScreeningResult? result = null;
-        string why;
-        try
+        var why = "the model's answer could not be read";
+        // One retry: a reasoning model can spend its budget thinking, or wrap the answer in prose; a second ask
+        // usually reads. Each call is a platform cost, recorded as it is made.
+        for (var attempt = 1; attempt <= Attempts && result is null; attempt++)
         {
-            var reply = await calls.CompleteAsync(new ChatRequest
+            try
             {
-                TaskType = TaskType,
-                Scope = "",
-                Messages =
-                [
-                    new JsonObject { ["role"] = "system", ["content"] = Instructions },
-                    new JsonObject { ["role"] = "user", ["content"] = $"Name: {name}\nAddress name: {slug}\nWhat it does: {what}" },
-                ],
-                Limits = new ChatLimits { MaxTokens = 400 },
-                Temperature = 0,
-            }, Purpose, by, new JsonObject { ["organisation"] = slug, ["name"] = name }, cancellationToken);
-            result = Read(reply, by);
-            why = "the model's answer could not be read";
-        }
-        catch (EndgameProblem problem) when (problem.Status is 502 or 503)
-        {
-            why = "no model could be reached";
+                var reply = await calls.CompleteAsync(Request(name, slug, what), Purpose, by, new JsonObject { ["organisation"] = slug, ["name"] = name, ["attempt"] = attempt }, cancellationToken);
+                result = Read(reply.Content, reply, by);
+                if (result is null)
+                {
+                    logger.LogWarning("Screening {Organisation}: attempt {Attempt} gave an answer that could not be read (model {Model}, finish {Finish}, {Length} characters).",
+                        slug, attempt, reply.Model, reply.FinishReason, reply.Content.Length);
+                }
+            }
+            catch (EndgameProblem problem) when (problem.Status is 502 or 503)
+            {
+                why = "no model could be reached";
+                break;
+            }
         }
 
         result ??= Manual(manual, by, why);
@@ -142,32 +149,97 @@ public sealed class OrganisationScreening(PlatformModelCalls calls, TimeProvider
         return result;
     }
 
-    private ScreeningResult? Read(PlatformReply reply, Guid by)
+    private static ChatRequest Request(string name, string slug, string what) => new()
     {
-        var text = reply.Content.Trim();
-        var start = text.IndexOf('{', StringComparison.Ordinal);
-        var end = text.LastIndexOf('}');
-        if (start < 0 || end <= start)
+        TaskType = TaskType,
+        Scope = "",
+        Messages =
+        [
+            new JsonObject { ["role"] = "system", ["content"] = Instructions },
+            new JsonObject { ["role"] = "user", ["content"] = $"Name: {name}\nAddress name: {slug}\nWhat it does: {what}" },
+        ],
+        Limits = new ChatLimits { MaxTokens = MaxTokens },
+        Temperature = 0,
+        // Both of the route's models take a response format: ask for a JSON object outright, not only in words.
+        ResponseFormat = new JsonObject { ["type"] = "json_object" },
+    };
+
+    private ScreeningResult? Read(string content, PlatformReply reply, Guid by)
+    {
+        if (ReadAnswer(content) is not { } answer || answer["breached"] is not JsonValue breachedValue || !breachedValue.TryGetValue<bool>(out var breached))
         {
             return null;
         }
 
-        try
+        var line = answer["line"]?.ToString();
+        var reason = answer["reason"]?.ToString() is { Length: > 0 } r ? (r.Length > 1000 ? r[..1000] : r) : (breached ? "It crosses a red line." : "It crosses none of the red lines.");
+        return new ScreeningResult("model", breached, breached ? (line is not null && LineNames.ContainsKey(line) ? line : null) : null, reason, reply.Model, reply.CostUsd, by, clock.GetUtcNow());
+    }
+
+    /// <summary>
+    /// The first complete JSON object in a model's answer: bare, inside a code fence, or after a sentence of
+    /// prose — braces inside strings do not count. Null when there is none, or it was cut off.
+    /// </summary>
+    public static JsonObject? ReadAnswer(string? content)
+    {
+        var text = content ?? "";
+        for (var start = text.IndexOf('{', StringComparison.Ordinal); start >= 0; start = text.IndexOf('{', start + 1))
         {
-            var answer = JsonNode.Parse(text[start..(end + 1)]) as JsonObject;
-            if (answer?["breached"] is not JsonValue breachedValue || !breachedValue.TryGetValue<bool>(out var breached))
+            if (Balanced(text, start) is not { } end)
             {
                 return null;
             }
 
-            var line = answer["line"]?.ToString();
-            var reason = answer["reason"]?.ToString() is { Length: > 0 } r ? (r.Length > 1000 ? r[..1000] : r) : (breached ? "It crosses a red line." : "It crosses none of the red lines.");
-            return new ScreeningResult("model", breached, breached ? (line is not null && LineNames.ContainsKey(line) ? line : null) : null, reason, reply.Model, reply.CostUsd, by, clock.GetUtcNow());
+            try
+            {
+                if (JsonNode.Parse(text[start..(end + 1)]) is JsonObject found)
+                {
+                    return found;
+                }
+            }
+            catch (JsonException)
+            {
+                // Not JSON after all (a brace in prose); look further on.
+            }
         }
-        catch (JsonException)
+
+        return null;
+    }
+
+    /// <summary>Where the object that opens at <paramref name="start"/> closes, or null when it never does.</summary>
+    private static int? Balanced(string text, int start)
+    {
+        var depth = 0;
+        var inString = false;
+        for (var i = start; i < text.Length; i++)
         {
-            return null;
+            var c = text[i];
+            if (inString)
+            {
+                if (c == '\\')
+                {
+                    i++;
+                }
+                else if (c == '"')
+                {
+                    inString = false;
+                }
+            }
+            else if (c == '"')
+            {
+                inString = true;
+            }
+            else if (c == '{')
+            {
+                depth++;
+            }
+            else if (c == '}' && --depth == 0)
+            {
+                return i;
+            }
         }
+
+        return null;
     }
 
     private ScreeningResult Manual(ManualScreening? manual, Guid by, string why)

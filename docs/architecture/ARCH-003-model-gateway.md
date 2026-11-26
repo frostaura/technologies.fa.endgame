@@ -45,6 +45,10 @@ gateway is not built yet; this is the design it must follow.
     prepares the call exactly as every call is prepared (`ModelGateway.Prepare`: the route's models,
     ceiling, `max_price` and limits) and sends it through the same provider adapter, but reserves in no
     ledger: the reported cost is written to `platform_costs` (append-only) with what the call was for.
+    The screening asks for `response_format: json_object` with 2000 tokens of room (the `classify`
+    route's models reason first; at 400 they spent the budget thinking and the answer was cut off),
+    reads the first whole JSON object in the answer — bare, fenced or after prose — and asks once more
+    when it cannot; two unreadable answers leave only the operator's screening by hand.
 
 ## Routing table shape
 
