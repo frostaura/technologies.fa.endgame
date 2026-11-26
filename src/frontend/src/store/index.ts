@@ -3,6 +3,7 @@ import { setupListeners } from "@reduxjs/toolkit/query";
 import { useDispatch, useSelector } from "react-redux";
 import { api } from "./api";
 import { runsSlice } from "./runsSlice";
+import { setErrorMode } from "@/lib/queryState";
 import { storeMode, uiSlice } from "./uiSlice";
 
 export function makeStore() {
@@ -13,12 +14,15 @@ export function makeStore() {
   // Refetch on window focus and on reconnect, so a tab left open does not show stale state.
   setupListeners(store.dispatch);
   // The mode toggle is remembered across visits.
+  // Failures are worded for the mode, so the wording helper follows it too.
   let mode = store.getState().ui.mode;
+  setErrorMode(mode);
   store.subscribe(() => {
     const next = store.getState().ui.mode;
     if (next !== mode) {
       mode = next;
       storeMode(next);
+      setErrorMode(next);
     }
   });
   return store;

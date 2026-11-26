@@ -11,6 +11,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 describe("App — the session decides what renders", () => {
@@ -92,6 +93,36 @@ describe("App — the session decides what renders", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(window.location.pathname).toBe("/sign-in");
     expect(screen.getByRole("heading", { name: "Sign in" })).toBeTruthy();
+  });
+
+  it("lands the next person at home after a sign-out, never on the page the last one was on (ID-04)", async () => {
+    window.history.replaceState(null, "", "/people");
+    let signedIn = true;
+    stubApi({
+      "GET /api/me": () => (signedIn ? json(ME) : problem(401, "Not signed in")),
+      "GET /api/auth/options": json({ passkey: true, developmentSignIn: true }),
+      "POST /api/auth/logout": () => {
+        signedIn = false;
+        return json(null);
+      },
+      "POST /api/auth/development": () => {
+        signedIn = true;
+        return json(ME);
+      },
+      // Nothing is left pending: a pending read holds back the session check a sign-out asks for.
+      "GET /api/tree": json({ slug: "acme", name: "Acme", divisions: [] }),
+      "GET /api/credits": json(CREDITS),
+      "GET /api/members": json([]),
+      "GET /api/notifications": json({ items: [], unread: 0 }),
+    });
+    renderWithStore(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/sign-in"));
+    expect(window.sessionStorage.getItem("endgame.return-to")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Development sign-in" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(window.location.pathname).toBe("/");
   });
 
   it("records a failed session check, which is not the same as signed out", async () => {

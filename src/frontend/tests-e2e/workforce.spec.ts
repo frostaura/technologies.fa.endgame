@@ -179,7 +179,7 @@ test.describe("hiring", () => {
     await useScenario("populated");
     await page.goto("/");
     await page.getByRole("region", { name: "Needs you" }).getByRole("link", { name: /A support writer for Software/ }).click();
-    await expect(page.getByRole("heading", { name: "Noor, support writer" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Noor, Support writer" })).toBeVisible();
     await expect(page.getByText("Light, for quick answers")).toBeVisible();
     await expect(page.getByText("Fits the budget")).toBeVisible();
     await page.getByRole("button", { name: "Hire Noor" }).click();
@@ -214,7 +214,7 @@ test.describe("hiring", () => {
     await page.getByRole("button", { name: "Propose as a permanent hire" }).click();
     await page.getByLabel("Name the new employee").fill("Sam");
     await page.getByRole("button", { name: "Propose the hire" }).click();
-    await expect(page.getByRole("heading", { name: "Sam, competitor sweep" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sam, Competitor sweep" })).toBeVisible();
   });
 });
 

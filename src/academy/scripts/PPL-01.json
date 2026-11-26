@@ -86,8 +86,8 @@
           "step": 1,
           "kind": "demo",
           "highlight": {
-            "text": "Only an Admin or the Owner can see the people here",
-            "note": "Lena is a Builder: the server answers 403."
+            "text": "You cannot see the people here",
+            "note": "Lena is a Builder, and only an Admin or the Owner can see the people here."
           }
         }
       ]

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Button } from "./ui/button";
+import { paths } from "@/lib/router";
+import { Button, buttonVariants } from "./ui/button";
+import { Link } from "./Link";
 import { Icon } from "./Icon";
 import type { IconName } from "./iconNames";
 
@@ -22,21 +24,33 @@ export function Loading({ label, children, className }: { label: string; childre
 /**
  * A failed read, recorded on the page where the data would have been. Never shown as an empty
  * list, and never only as a toast.
+ *
+ * `status` is the read's HTTP status, when it had one. A refusal (401, 403) or a not-found (404) is
+ * an answer rather than a read that broke, so its reason is the whole message; a not-found offers the
+ * way back instead of a retry that would only answer the same.
  */
-export function Failed({ title, reason, onRetry, refused, className }: { title: string; reason: string; onRetry?: () => void; /** A standing refusal rather than a read that broke: the reason is the whole message. */ refused?: boolean; className?: string }) {
+export function Failed({ title, reason, onRetry, status, className }: { title: string; reason: string; onRetry?: () => void; status?: number | null; className?: string }) {
+  const notFound = status === 404;
+  const answered = notFound || status === 401 || status === 403;
   return (
     <div role="alert" data-state="failed" className={cn("flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint p-5", className)}>
       <div className="flex items-start gap-3">
         <Icon name="verdict" className="mt-0.5 text-attention-text" />
         <div className="flex flex-col gap-1">
           <p className="font-semibold text-attention-text">{title}</p>
-          <p className="text-sm text-ink">{refused ? reason : `${reason} Nothing here is known until it loads.`}</p>
+          <p className="text-sm text-ink">{answered ? reason : `${reason} Nothing here is known until it loads.`}</p>
         </div>
       </div>
-      {onRetry && (
-        <Button size="sm" className="self-start" onClick={onRetry}>
-          Try again
-        </Button>
+      {notFound ? (
+        <Link href={paths.home()} className={cn(buttonVariants({ size: "sm" }), "self-start")}>
+          Back to the org chart
+        </Link>
+      ) : (
+        onRetry && (
+          <Button size="sm" className="self-start" onClick={onRetry}>
+            Try again
+          </Button>
+        )
       )}
     </div>
   );

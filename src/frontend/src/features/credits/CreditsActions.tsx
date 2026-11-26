@@ -320,7 +320,7 @@ export function TopUpRequests({ organisation, isOwner, isAdmin }: { organisation
               <Skeleton className="h-12 rounded-xs" />
             </Loading>
           )}
-          {view.kind === "failed" && <Failed title="Your top-up requests could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+          {view.kind === "failed" && <Failed title="Your top-up requests could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
           {view.kind === "loaded" && (
             <>
               {view.stale && <Stale reason={view.stale.reason} />}

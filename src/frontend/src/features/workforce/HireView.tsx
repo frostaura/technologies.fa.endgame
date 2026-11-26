@@ -17,7 +17,7 @@ import { api, useDecideHireMutation, useEditHireMutation, useGetEmployeesQuery, 
 import type { Hire, Tree } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { JobFields } from "./JobFields";
-import { TRIGGER, draftOf, draftProblem, hireEditFrom, possibleManagers, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
+import { TRIGGER, draftOf, draftProblem, expectedMonthly, hireEditFrom, nameWithRole, possibleManagers, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
 
 /** One hire proposal: the drafted job, what it costs a month, and the owner's call. */
 export function HireView({ hireId }: { hireId: string }) {
@@ -29,7 +29,7 @@ export function HireView({ hireId }: { hireId: string }) {
   const org = tree.data?.organisation;
   const crumbs: Crumb[] = [
     ...(org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }, { label: "Hiring", href: paths.hires(hire?.scope ?? org.slug) }] : []),
-    { label: hire ? `${hire.name} · ${hire.role}` : "Hire proposal" },
+    { label: hire ? nameWithRole(hire.name, hire.role).replace(", ", " · ") : "Hire proposal" },
   ];
   return (
     <AppShell crumbs={crumbs} aside={hire ? <CostAside hire={hire} /> : undefined}>
@@ -39,7 +39,7 @@ export function HireView({ hireId }: { hireId: string }) {
           <Skeleton className="h-64 rounded-md" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title={view.status === 404 ? "This hire proposal could not be found" : "The hire proposal could not be loaded"} reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title={view.status === 404 ? "This hire proposal could not be found" : "The hire proposal could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -70,7 +70,7 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
           {STATUS[hire.status].label}
         </Badge>
         <h1 className="relative text-3xl font-semibold sm:text-4xl">
-          {hire.name}, {hire.role.toLowerCase()}
+          {nameWithRole(hire.name, hire.role)}
         </h1>
         <p className="relative text-primary-tint">
           For {scopeName(tree, hire.scope)} · {TRIGGER[hire.trigger]} · Raised by {hire.raisedBy === "person" ? "a person" : "Endgame"} {formatDate(hire.createdAt)}
@@ -164,7 +164,7 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
         <form onSubmit={(e) => void submit(e)} aria-label={confirming === "accept" ? "Confirm the hire" : "Confirm declining"} className={cn("flex max-w-prose flex-col gap-2 rounded-md border p-4", confirming === "accept" ? "border-primary bg-primary-tint" : "border-attention-line bg-attention-tint")}>
           <p className="font-medium">
             {confirming === "accept"
-              ? `Hire ${hire.name} at about ${formatCredits(hire.expectedMonthlyCredits)} a month?`
+              ? `Hire ${hire.name} at about ${formatCredits(expectedMonthly(hire))} a month?`
               : "Decline this hire? The same need can be raised again later."}
           </p>
           {confirming === "accept" && !hire.withinBudget && <p className="text-sm text-attention-text">This is more than the budget has room for this month ({formatCredits(hire.headroomCredits)} left).</p>}
@@ -222,9 +222,12 @@ function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; o
     const wrong = draftProblem(draft);
     if (wrong) return setError(wrong);
     if (!Number.isFinite(expected) || expected < 0) return setError("The monthly cost is a number of credits.");
+    // Its own budget caps what it can cost, so an expected cost above the budget is the budget (D24).
+    const cap = draft.budget.trim() === "" ? null : Number(draft.budget.trim());
+    const expectedMonthlyCredits = cap !== null && cap < expected ? cap : expected;
     // A proposal always says why it is needed: emptying the reason is refused here rather than silently kept.
     if (!reason.trim()) return setError("Say why this hire is needed; a proposal always gives its reason.");
-    const change = hireEditFrom(before, draft, { reason: reason.trim(), expectedMonthlyCredits: expected });
+    const change = hireEditFrom(before, draft, { reason: reason.trim(), expectedMonthlyCredits });
     setError(null);
     onError(null);
     const boss = managers.find((m) => m.id === draft.reportsTo);
@@ -234,7 +237,8 @@ function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; o
         h.jobDescription.tools = draft.tools;
         h.jobDescription.services = draft.services;
         if (draft.modelTier) h.jobDescription.modelTier = draft.modelTier;
-        h.jobDescription.monthlyCreditLimit = draft.budget.trim() === "" ? null : Number(draft.budget.trim());
+        h.jobDescription.monthlyCreditLimit = cap;
+        h.expectedMonthlyCredits = expectedMonthlyCredits;
         h.reportsTo = boss ? { id: boss.id, name: boss.name } : null;
       }),
     );
@@ -254,6 +258,7 @@ function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; o
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <Field id="hire-cost" label="Expected credits a month" value={cost} onChange={setCost} numeric />
       </div>
+      <p className="text-sm text-ink-muted">Its own budget caps what it can cost: an expected cost above the budget is saved as the budget.</p>
       <label htmlFor="hire-reason" className="text-sm font-medium">
         Why this hire
       </label>
@@ -291,8 +296,8 @@ function CostAside({ hire }: { hire: Hire }) {
     <>
       <section className={cn("flex flex-col gap-2", RISE)}>
         <h2 className="text-lg font-semibold">What it costs</h2>
-        <span className="font-display text-4xl font-semibold">{formatNumber(hire.expectedMonthlyCredits)}</span>
-        <span className="text-ink-body">credits a month, expected</span>
+        <span className="font-display text-4xl font-semibold">{formatNumber(expectedMonthly(hire))}</span>
+        <span className="text-ink-body">{expectedMonthly(hire) < hire.expectedMonthlyCredits ? "credits a month at most: its own budget caps it" : "credits a month, expected"}</span>
       </section>
       <section className={cn("flex flex-col gap-2 rounded-sm px-4 py-4", hire.withinBudget ? "bg-success-tint" : "bg-attention-tint")}>
         <span className={cn("flex items-center gap-2 font-semibold", hire.withinBudget ? "text-success-text" : "text-attention-text")}>

@@ -55,7 +55,7 @@ export function OperatorView() {
         <p className="max-w-prose text-ink-body">Every organisation on Endgame. Entering one, topping it up or changing its overdraft is written to a log its Owner reads — operator access is never silent.</p>
       </header>
       {me.data && !operator ? (
-        <Failed title="God mode is for FrostAura operators" reason="Your account is not one of FrostAura's operators, so these screens are closed to you." refused />
+        <Failed title="God mode is for FrostAura operators" reason="Your account is not one of FrostAura's operators, so these screens are closed to you." status={403} />
       ) : operator ? (
         <>
           <ErrorBoundary name="Every organisation">
@@ -92,7 +92,7 @@ function Organisations() {
           <Skeleton className="h-48 rounded-md" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The organisations could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="The organisations could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -119,10 +119,17 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
   const [entry, setEntry] = useState<OperatorEntry | null>(null);
   const [action, setAction] = useState<"top-up" | "overdraft" | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // What a closed form came to, said on the card until the next action here.
+  const [saved, setSaved] = useState<string | null>(null);
   const standing = STANDING[org.standing];
+  const open = (next: "top-up" | "overdraft") => {
+    setSaved(null);
+    setAction(action === next ? null : next);
+  };
 
   const go = async () => {
     setProblem(null);
+    setSaved(null);
     try {
       setEntry(await enter(org.slug).unwrap());
     } catch (e) {
@@ -172,15 +179,29 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
             {entering.isLoading ? "Entering…" : `Enter ${org.name}`}
           </Button>
         )}
-        <Button size="sm" variant="outline" aria-expanded={action === "top-up"} onClick={() => setAction(action === "top-up" ? null : "top-up")}>
+        <Button size="sm" variant="outline" aria-expanded={action === "top-up"} onClick={() => open("top-up")}>
           Top up
         </Button>
-        <Button size="sm" variant="soft" aria-expanded={action === "overdraft"} onClick={() => setAction(action === "overdraft" ? null : "overdraft")}>
+        <Button size="sm" variant="soft" aria-expanded={action === "overdraft"} onClick={() => open("overdraft")}>
           Deepest overdraft
         </Button>
       </div>
       {action === "top-up" && <TopUpForm organisation={org.slug} name={org.name} onDone={() => setAction(null)} />}
-      {action === "overdraft" && <OverdraftForm org={org} onDone={() => setAction(null)} />}
+      {action === "overdraft" && (
+        <OverdraftForm
+          org={org}
+          onDone={() => setAction(null)}
+          onSaved={(text) => {
+            setAction(null);
+            setSaved(text);
+          }}
+        />
+      )}
+      {saved && (
+        <p role="status" className="text-sm text-success-text">
+          {saved}
+        </p>
+      )}
       {problem && (
         <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           {problem}
@@ -259,22 +280,23 @@ function TopUpForm({ organisation, name, request, onDone, onAdded }: { organisat
   );
 }
 
-function OverdraftForm({ org, onDone }: { org: OperatorOrganisation; onDone: () => void }) {
+/** The deepest overdraft. Saved, it closes, and the card says what now holds (D57). */
+function OverdraftForm({ org, onDone, onSaved }: { org: OperatorOrganisation; onDone: () => void; onSaved: (text: string) => void }) {
   const [setOverdraft, saving] = useSetOperatorOverdraftMutation();
   const id = useId();
   const [value, setValue] = useState(String(org.overdraft.frostauraLimit));
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
   const n = parseCredits(value);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (n === null) return;
-    setResult(null);
+    setFailure(null);
     try {
       await setOverdraft({ slug: org.slug, credits: n }).unwrap();
-      setResult({ ok: true, text: `${org.name} may now go ${formatNumber(n)} below zero at most. Its own limit can only be tighter.` });
+      onSaved(`${org.name} may now go ${formatNumber(n)} below zero at most. Its own limit can only be tighter.`);
     } catch (e) {
-      setResult({ ok: false, text: `The overdraft was not changed: ${describeError(e as never)} It is back to ${formatNumber(org.overdraft.frostauraLimit)}.` });
+      setFailure(`The overdraft was not changed: ${describeError(e as never)} It is back to ${formatNumber(org.overdraft.frostauraLimit)}.`);
     }
   };
 
@@ -283,9 +305,9 @@ function OverdraftForm({ org, onDone }: { org: OperatorOrganisation; onDone: () 
       <Field id={id} label="The most it may go below zero" hint="No interest and no fees, ever. At the limit its employees stop and its apps pause; nothing is deleted." problem={value.trim() && n === null ? "Type a number of credits." : null}>
         <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={`${id}-hint`} />
       </Field>
-      {result && (
-        <p role={result.ok ? "status" : "alert"} className={result.ok ? "text-success-text" : "rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text"}>
-          {result.text}
+      {failure && (
+        <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+          {failure}
         </p>
       )}
       <div className="flex flex-wrap gap-2">
@@ -293,7 +315,7 @@ function OverdraftForm({ org, onDone }: { org: OperatorOrganisation; onDone: () 
           {saving.isLoading ? "Saving…" : "Save"}
         </Button>
         <Button size="sm" variant="ghost" onClick={onDone}>
-          {result?.ok ? "Done" : "Not now"}
+          Not now
         </Button>
       </div>
     </form>
@@ -321,7 +343,7 @@ function Requests() {
           <Skeleton className="h-20 rounded-sm" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The top-up requests could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="The top-up requests could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -430,7 +452,7 @@ function TopUps() {
           <Skeleton className="h-12 rounded-sm" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The top-ups could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="The top-ups could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" &&
         (view.data.length === 0 ? (
           <Empty icon="credits" title="No top-ups yet" className="p-5" />
@@ -474,7 +496,7 @@ function PricingPanel() {
           <Skeleton className="h-64 rounded-md" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The prices could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="The prices could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
           {view.stale && <Stale reason={view.stale.reason} className="xl:col-span-3" />}

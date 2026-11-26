@@ -6,7 +6,7 @@ import { Icon } from "@/components/Icon";
 import { Skeleton } from "@/components/states";
 import { describeError } from "@/lib/queryState";
 import { navigate } from "@/lib/router";
-import { useAppDispatch } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
 import {
   api,
   useDevelopmentSignInMutation,
@@ -57,7 +57,9 @@ export function SignInView() {
   const supported = passkeysSupported();
   const dispatch = useAppDispatch();
   // Read as the screen first draws: the console replaces the address with /sign-in straight after.
-  const [returnTo] = useState(rememberReturnTo);
+  // Only a signed-out arrival keeps it; after a session on this page it was the previous person's.
+  const hadSession = useAppSelector((s) => s.ui.hadSession);
+  const [returnTo] = useState(() => rememberReturnTo(!hadSession));
 
   const run = async (kind: Exclude<Busy, null>, work: () => Promise<void>) => {
     setBusy(kind);

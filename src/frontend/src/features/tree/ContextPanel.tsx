@@ -44,7 +44,7 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
           <Skeleton className="h-16 rounded-xs" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="What this is could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="What this is could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -87,7 +87,7 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
               <Skeleton className="h-10 rounded-xs" />
             </Loading>
           )}
-          {belowView.kind === "failed" && <Failed title="What lower levels say could not be loaded" reason={belowView.reason} onRetry={() => void below.refetch()} />}
+          {belowView.kind === "failed" && <Failed title="What lower levels say could not be loaded" reason={belowView.reason} status={belowView.status} onRetry={() => void below.refetch()} />}
           {belowView.kind === "loaded" &&
             (belowView.data.length === 0 ? (
               <p data-state="empty" className="text-sm text-ink-muted">

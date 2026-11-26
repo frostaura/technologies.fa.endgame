@@ -5,10 +5,12 @@ import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/format";
 import { shortTitle } from "@/lib/plain";
+import { highestGrant } from "@/lib/roles";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetCreditsQuery, useGetMeQuery, useLogoutMutation } from "@/store/api";
-import { modeSet } from "@/store/uiSlice";
+import { modeSet, storeEntered } from "@/store/uiSlice";
+import { forgetReturnTo } from "@/features/auth/returnTo";
 import { GodModeBand } from "./GodModeBand";
 import { NotificationsBell } from "./NotificationsBell";
 import { OrganisationSwitcher } from "@/features/account/OrganisationSwitcher";
@@ -27,7 +29,11 @@ export interface Crumb {
 export function AppShell({ crumbs, aside, children }: { crumbs: Crumb[]; aside?: ReactNode; children: ReactNode }) {
   const { data: me } = useGetMeQuery(undefined);
   // The balance and the bell are the organisation's being shown: in God mode, the one entered.
-  const org = useActiveOrganisation().organisation;
+  const active = useActiveOrganisation();
+  const org = active.organisation;
+  // Someone whose roles all sit below the organisation reads the balance at their own level, as the
+  // Credits page does: it is still the organisation's balance, and the read is one they may make.
+  const creditsScope = org && !active.entered && active.role === null ? (highestGrant(me?.memberships ?? [], org.slug)?.scope ?? org.slug) : org?.slug;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -57,7 +63,7 @@ export function AppShell({ crumbs, aside, children }: { crumbs: Crumb[]; aside?:
           <div className="order-last flex w-full items-center justify-between gap-3 sm:order-none sm:ml-auto sm:w-auto sm:justify-end">
             <ModeToggle />
             {me && <OrganisationSwitcher compact />}
-            {org && <CreditsPill scope={org.slug} />}
+            {creditsScope && <CreditsPill scope={creditsScope} />}
           </div>
           {org && <NotificationsBell organisation={org.slug} />}
           {me && (
@@ -188,13 +194,19 @@ function CreditsPill({ scope }: { scope: string }) {
   );
 }
 
+/** Signing out leaves nothing for the next person on this tab: no return address, no entered organisation. */
 function SignOut() {
   const [logout, state] = useLogoutMutation();
+  const signOut = async () => {
+    forgetReturnTo();
+    const done = await logout(undefined);
+    if (!("error" in done)) storeEntered(null);
+  };
   return (
     <button
       type="button"
       disabled={state.isLoading}
-      onClick={() => void logout(undefined)}
+      onClick={() => void signOut()}
       className="min-h-touch rounded-xs px-3 text-sm text-ink-muted hover:text-ink disabled:opacity-50"
     >
       Sign out

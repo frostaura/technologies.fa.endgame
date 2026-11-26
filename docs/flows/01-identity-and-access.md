@@ -172,9 +172,10 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Steps:**
   1. "Your passkeys" reads "<n> passkeys can sign you in. Add one on each device you use, so losing one never locks you out."
   2. Press **"Add another passkey"**; it reads "Waiting for your device…". Approve on the device.
-  3. "The new passkey is saved. Either one signs you in now." The count goes up.
+  3. "The new passkey is saved. Either one signs you in now." (with three or more: "Any of them signs you in now.") The count goes up.
 - **You know it worked when:** the count is one higher and the saved message shows.
 - **Variations and refusals:**
+  - No passkey yet: the button reads **"Add a passkey"**, and once it is saved "The passkey is saved. It signs you in now."
   - The device declines or times out: "No passkey was added: <reason>".
   - A browser without passkeys: "This browser cannot make passkeys. Open Endgame in a current browser on a device with a screen lock." and the button is disabled.
   - The same attestation refusals as ID-01. Signed in, the server adds the key to the caller's own account whatever body is sent.
@@ -275,7 +276,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **You know it worked when:** the list labelled "People" shows rows.
 - **Variations and refusals:**
   - Empty: "No one holds a role in {name} yet" and "Invite someone and they appear here once they accept."
-  - 403: **"Only an Admin or the Owner can see the people here"**, with **"Try again"**.
+  - 403: **"You cannot see the people here"**, "Only an Admin or the Owner can do this here. You are a Builder here." (the role they hold), with **"Try again"**. Technical mode shows the server's own detail and the status instead.
   - No organisation yet: "There is no one to show until your organisation is named".
   - The server lists every grant that holds at the scope: set at it or beneath it, and set above it on its chain. A grant from above shows "This grant holds here from {node}; change it there." to someone who may change it.
   - Whether you may manage people here is your role at this level exactly as the server resolves it — the deepest grant on the chain wins, and the organisation's Owner is the Owner everywhere. The tree carries it for every node, so an organisation Admin who is a Viewer in one division is not offered **"Invite someone"** there.
@@ -482,7 +483,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Learn first:** AST-02
 - **What you learn:** you can see when each key was last used, and shut one out at once.
 - **Steps:**
-  1. Each row shows the name, "{Role} in {Organisation} · made {date} · ends/ended {date}" (or "· never ends"), "Last used {time ago}" or "Never used", and a badge: **"Active"**, **"Expired"** or **"Revoked"**. Technical mode adds the prefix and id.
+  1. Each row shows the name, "{Role} in {Organisation} · made {date} · ends/ended {date}" (or "· never ends"; a revoked key "· revoked {date}"), "Last used {time ago}" or "Never used", and a badge: **"Active"**, **"Expired"** or **"Revoked"**. Technical mode adds the prefix and id.
   2. The person clicks **"Revoke"**. A confirmation shows: "The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in.", with **"Revoke it"** and **"Keep it"**.
   3. They click **"Revoke it"**. The badge becomes **"Revoked"** at once, and the key's next call gets 401.
 - **You know it worked when:** the badge reads **"Revoked"** and **"Revoke"** has gone.

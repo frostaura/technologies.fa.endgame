@@ -29,7 +29,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - Any other failure gives "The app could not be loaded", with the reason and a retry.
   - A stale cached copy shows a stale notice above the page.
   - Each section has its own error boundary, so one broken section does not blank the page. The boundaries are named "The app's settings", "What it may spend", "What it uses", "The app itself", "The download", "Asking about this app", "The dashboard", "The history", "Sharing" and "The secrets".
-  - A person with no role at the app or above it gets 404, exactly as for an app that does not exist, so nothing is learned about what they cannot see: the page shows "This app could not be found" with "The scope '<path>' was not found, or you cannot see it. (404)".
+  - A person with no role at the app or above it gets 404, exactly as for an app that does not exist, so nothing is learned about what they cannot see: the page shows "This app could not be found" with "This was not found, or you cannot see it." (technical mode: "The scope '<path>' was not found, or you cannot see it. (404)").
 - **Where:** `features/apps/AppView.tsx`; `GET /api/apps/{id}` (WorkEndpoints, Viewer); `ReadModels.AppAsync`
 - **Reachable from:** UI; API; MCP `app_get`
 - **Covered by tests:** `AppView.test.tsx` ("names the app's own organisation…", "shows a skeleton while loading", "records a failed read and names a missing app"); `tests-e2e/console.spec.ts` "app and credits"; `McpTests`
@@ -648,7 +648,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Learn first:** SEC-03
 - **What you learn:** to change a secret, you replace it; you never read it.
 - **You know it worked when:** "<NAME> is saved. Its value is sealed and will not be shown." appears and "set just now" shows.
-- **Steps:** the person presses "Replace" and a form opens with "New value for <NAME>". They type the value and press "Replace the secret". Pressing "Replace" again closes the form.
+- **Steps:** the person presses "Replace" and a form opens with "New value for <NAME>". They type the value and press "Replace the secret". Once it is saved the form closes and the row keeps the saved message; pressing "Replace" again also closes the form. Any later action on the page (another save, a removal, opening a form) clears the last message.
 - **Variations and refusals:** as SEC-03.
 - **Where:** `SecretsView.tsx`
 - **Reachable from:** UI, API and MCP

@@ -15,7 +15,7 @@ import { useGetEmployeesQuery, useGetEmployeesWithReleasedQuery, useGetHiresQuer
 import type { Employee, Hire, RecurringRole, Tree } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 import { JobFields, type JobDraft } from "./JobFields";
-import { STATUS as EMPLOYEE_STATUS, TRIGGER, draftProblem, possibleManagers, scopeName } from "./workforceModel";
+import { STATUS as EMPLOYEE_STATUS, TRIGGER, draftProblem, expectedMonthly, nameWithRole, possibleManagers, scopeName } from "./workforceModel";
 
 /** Hiring at a scope: the proposals waiting and decided, and contractor roles that keep coming back. */
 export function HiresView() {
@@ -79,7 +79,7 @@ function Proposals({ scope, tree }: { scope: string; tree: Tree | undefined }) {
         <Skeleton className="h-32 rounded-md" />
       </Loading>
     );
-  if (view.kind === "failed") return <Failed title="The hire proposals could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />;
+  if (view.kind === "failed") return <Failed title="The hire proposals could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />;
   const open = view.data.filter((h) => h.status === "proposed");
   const decided = view.data.filter((h) => h.status !== "proposed");
   return (
@@ -132,10 +132,10 @@ function HireCard({ hire, tree, index }: { hire: Hire; tree: Tree | undefined; i
           {STATUS[hire.status].label}
         </Badge>
         <span className="text-base font-semibold">
-          {hire.name}, {hire.role.toLowerCase()} for {scopeName(tree, hire.scope)}
+          {nameWithRole(hire.name, hire.role)} for {scopeName(tree, hire.scope)}
         </span>
         <span className="text-violet-deep">
-          About {formatCredits(hire.expectedMonthlyCredits)} a month{hire.withinBudget ? "" : ", more than the budget has room for"}.
+          About {formatCredits(expectedMonthly(hire))} a month{hire.withinBudget ? "" : ", more than the budget has room for"}.
         </span>
         <span className="text-sm text-ink-body">
           {TRIGGER[hire.trigger]} · {formatDate(hire.createdAt)}
@@ -159,7 +159,7 @@ function RecurringRoles({ scope, tree, isAdmin }: { scope: string; tree: Tree | 
           <Skeleton className="h-20 rounded-xs" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="Recurring roles could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="Recurring roles could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" &&
         (view.data.length === 0 ? (
           <p data-state="empty" className="text-ink-muted">
@@ -354,7 +354,7 @@ function LetGo({ scope, tree }: { scope: string; tree: Tree | undefined }) {
           <Skeleton className="h-14 rounded-xs" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The people let go could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="The people let go could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && view.stale && <Stale reason={view.stale.reason} />}
       {view.kind === "loaded" &&
         (released.length === 0 ? (

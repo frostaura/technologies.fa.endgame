@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Credits } from "@/store/types";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
@@ -41,8 +41,12 @@ describe("CreditsView", () => {
     const api = stubApi({ "GET /api/me": json(me), "GET /api/credits?scope=acme%2Ftools": json(division) });
     renderWithStore(<CreditsView />);
     expect(await screen.findByText(/Your role is in Tools, so this shows its spending and caps/)).toBeTruthy();
-    // The page asks at the division; only the header's balance pill asks at the organisation (ORG-19).
+    // The page and the header's balance pill both ask at the division, never at the organisation
+    // they hold no role at (ORG-19), so the pill shows the organisation's balance, not a failure (D5).
     expect(api.calls.map((c) => c.path)).toContain("/api/credits?scope=acme%2Ftools");
+    expect(api.calls.some((c) => c.path === "/api/credits?scope=acme")).toBe(false);
+    await waitFor(() => expect(document.querySelector("header")?.textContent).toContain("credits left"));
+    expect(screen.queryByText("Balance unavailable")).toBeNull();
     const budgets = screen.getByRole("list", { name: "Budgets" });
     expect(within(budgets).getAllByRole("listitem")).toHaveLength(2);
     expect(screen.queryByText(/An Admin or the Owner sets the caps/)).toBeNull();
@@ -58,7 +62,7 @@ describe("CreditsView", () => {
     stubApi({ "GET /api/me": json(ME), "GET /api/credits": problem(500, "Ledger unavailable") });
     renderWithStore(<CreditsView />);
     const alert = await screen.findByText("Credits could not be loaded");
-    expect(alert.closest('[role="alert"]')?.textContent).toContain("Ledger unavailable (500)");
+    expect(alert.closest('[role="alert"]')?.textContent).toContain("Ledger unavailable.");
     expect(screen.queryByText("Credits left")).toBeNull();
   });
 

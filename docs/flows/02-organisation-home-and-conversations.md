@@ -111,7 +111,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **You know it worked when:** the band shows your organisation's name and its four figures.
 - **Variations and refusals:**
   - The credits pill turns amber when the balance is at or below zero.
-  - "Balance unavailable" appears if the credits read fails, as it does for someone with no role at the organisation itself.
+  - "Balance unavailable", in the amber failure style, appears only when the credits read fails. Someone with no role at the organisation itself has the balance read at their own level (as on Credits), so the pill shows the organisation's balance for them too.
   - Someone whose role is only on part of the tree sees no organisation-level worker chips, and spend summed from the divisions they can see (ORG-19).
   - The summary line's employee count is for the whole organisation, but the "employees" figure counts only the employees visible in the tree. For a person who sees only part of the tree, the two can disagree.
 - **Where:** `HomeView.tsx` (`Organisation`), `shell/AppShell.tsx`, `treeModel.ts` (`orgFigures`, `countTree`); `GET /api/tree`, `GET /api/credits`.
@@ -400,7 +400,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   3. The levels above their grant are names on the way down: the organisation in the breadcrumb is not a button, and the organisation's name in the band takes them back to their own level.
   4. "Who works on what" and "How data flows" ask at the level selected (`GET /api/ontology?scope={selection}`), never at the organisation.
 - **You know it worked when:** the conversation heading reads "Talking to {their level}" with no error, and both graph tabs draw.
-- **Variations and refusals:** someone with grants in two divisions starts at the first; selecting the other works too. The credits pill reads "Balance unavailable": the balance is the organisation's, read at a level they hold no role at.
+- **Variations and refusals:** someone with grants in two divisions starts at the first; selecting the other works too. The credits pill shows the organisation's balance, read at their own level (`GET /api/credits?scope={their level}`), never at the organisation where they hold no role.
 - **Where:** `HomeView.tsx` (`homeSelection`, `selectable`), `lib/roles.ts` (`roleInTree`), `ConversationDock.tsx`, `OntologyView.tsx`; `GET /api/tree` (each node's `role`).
 - **Reachable from:** UI.
 - **Covered by tests:** `HomeView.test.tsx` "starts someone granted only a division at that division, and asks the conversation and the graphs there"; `ScreensAndRolesTests.The_tree_carries_each_nodes_effective_role_and_archived_levels_are_marked_and_not_served`; `TreeEndpointTests` / `AuthorizationMatrixTests`.
@@ -872,7 +872,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Starts at:** `/employees/{id}`, section "Talk to {Name}".
 - **Needs:** the record is an employee (not a contractor) and has not been released; the tree has loaded.
 - **Level:** Core · **Learn first:** TALK-05 · **What you learn:** the same conversation is reachable from the employee's record.
-- **Steps:** the same dock as TALK-05. On this page the hint reads "Only {Name} hears this, and answers from its job and what it remembers.", and the link to the record is left out. It is the same conversation as from the chart, at the employee's level.
+- **Steps:** the same dock as TALK-05. On this page the hint reads "Only {Name} hears this, and answers from its job and what it remembers.", and the link to the record is left out. Before anything is said, the log reads "Ask about its work, or give it something to do. {Name} answers from its job and what it remembers." It is the same conversation as from the chart, at the employee's level.
 - **You know it worked when:** messages sent here also appear when the same employee is selected on home.
 - **Variations and refusals:**
   - Contractors and released employees have no conversation section.
@@ -983,7 +983,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Steps:** under the bubble: "Not sent: {reason}" and the button "Send again", which re-sends the same text as a new message.
 - **You know it worked when:** after "Send again", the bubble goes solid and a reply begins.
 - **Variations and refusals:**
-  - A Viewer: "Not sent: This needs the builder role at '{path}'; you are a viewer there (set at …). (403)". The input and "Send" are still offered to Viewers.
+  - A Viewer: "Not sent: Only a Builder, an Admin or the Owner can do this here. You are a Viewer here." (technical mode: the server's "This needs the builder role at '{path}'; you are a viewer there (set at …). (403)"). The input and "Send" are still offered to Viewers.
   - No role at the level: 404 (ORG-19).
   - Over 20,000 characters: "A message is 1 to 20000 characters."
 - **Where:** `ConversationDock.tsx` (`Exchange`); `ConversationService.PostAsync`.

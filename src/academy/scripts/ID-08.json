@@ -38,7 +38,7 @@
       ],
       "highlight": {
         "text": "The new passkey is saved",
-        "note": "Either one signs you in now, and the count reads 3."
+        "note": "Any of them signs you in now, and the count reads 3."
       }
     }
   ]

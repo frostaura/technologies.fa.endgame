@@ -18,6 +18,8 @@ function stub(log: Route) {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // A test that switches to technical mode must not leave it on for the next.
+  window.localStorage.clear();
 });
 
 describe("OperatorAccessView", () => {
@@ -60,7 +62,7 @@ describe("OperatorAccessView", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.dataset.state).toBe("failed");
     expect(alert.textContent).toContain("Only the Owner can read the operator log");
-    expect(alert.textContent).toContain("This needs the owner role at 'acme' (403)");
+    expect(alert.textContent).toContain("This needs the owner role here.");
     expect(screen.queryByText(/No one from FrostAura has entered/)).toBeNull();
   });
 

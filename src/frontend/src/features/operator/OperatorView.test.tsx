@@ -100,6 +100,19 @@ describe("God mode", () => {
     await waitFor(() => expect(within(card).getByText("Set by you: 0")).toBeTruthy());
   });
 
+  it("closes the deepest-overdraft form once it is saved, and says what holds now (D57)", async () => {
+    const acme = OPERATOR_ORGS.find((o) => o.slug === "acme") as (typeof OPERATOR_ORGS)[number];
+    stub({ "PUT /api/operator/organisations/acme/overdraft": json({ ...acme, overdraft: { ...acme.overdraft, frostauraLimit: 3000 } }) });
+    renderWithStore(<OperatorView />);
+    const card = (await screen.findByRole("list", { name: "Organisations" })).querySelector('[data-org="acme"]') as HTMLElement;
+    fireEvent.click(within(card).getByRole("button", { name: "Deepest overdraft" }));
+    fireEvent.change(within(card).getByLabelText("The most it may go below zero"), { target: { value: "3000" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Save" }));
+    expect(await within(card).findByText(/may now go 3,000 below zero at most/)).toBeTruthy();
+    expect(within(card).queryByLabelText("The most it may go below zero")).toBeNull();
+    expect(within(card).getByRole("button", { name: "Deepest overdraft" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("refuses a margin below one and asks before changing the prices", async () => {
     const api = stub({ "PUT /api/operator/pricing": json({ ...PRICING, pricing: { ...PRICING.pricing, margin: 1.2 }, source: "stored", updatedAt: "2026-11-25T03:00:00Z" }) });
     renderWithStore(<OperatorView />);

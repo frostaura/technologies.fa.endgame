@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { formatCredits, formatNumber, percent, possessive, share } from "./format";
+import { formatCredits, formatNumber, percent, possessive, share, tidyCreditAmounts } from "./format";
+import { needLines } from "@/features/home/needsYouModel";
 
 describe("formatNumber", () => {
   it("never shows a signed zero: a debt smaller than a tenth of a credit reads 0", () => {
@@ -39,5 +40,18 @@ describe("possessive", () => {
   it("adds an apostrophe and s, or only the apostrophe after an s", () => {
     expect(possessive("Acme")).toBe("Acme’s");
     expect(possessive("Harbour Tutors")).toBe("Harbour Tutors’");
+  });
+});
+
+describe("credit amounts in a server's sentence (D44)", () => {
+  it("are rounded as the console rounds them, and nothing else is touched", () => {
+    expect(tidyCreditAmounts("277.323824 credits are left in the budget.")).toBe("277 credits are left in the budget.");
+    expect(tidyCreditAmounts("Only 0.25 credit is left; version 1.2.3 stays.")).toBe("Only 0.3 credit is left; version 1.2.3 stays.");
+    expect(tidyCreditAmounts("12,345.678 credits")).toBe("12,346 credits");
+  });
+
+  it("on a needs-you card", () => {
+    const card = needLines({ kind: "approval", id: "a1", title: "Start this work? Estimated 0.5 credits.", detail: "277.323824 credits are left in the budget.", scope: "acme" } as never);
+    expect(card.line).toBe("277 credits are left in the budget.");
   });
 });

@@ -26,6 +26,17 @@ export function capitalise(text: string): string {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+/**
+ * Credit amounts inside a sentence the server wrote, rounded as the console rounds them:
+ * "277.323824 credits are left" reads "277 credits are left".
+ */
+export function tidyCreditAmounts(text: string): string {
+  return text.replace(/(?<![\d.])(-?\d[\d,]*\.\d+)(?=\s+credits?\b)/g, (raw) => {
+    const n = Number(raw.replace(/,/g, ""));
+    return Number.isFinite(n) ? formatNumber(n) : raw;
+  });
+}
+
 /** "Acme’s", and "Harbour Tutors’" for a name that already ends in s. */
 export function possessive(name: string): string {
   return /s$/i.test(name.trim()) ? `${name}’` : `${name}’s`;

@@ -1,4 +1,4 @@
-import type { Me, MemberRole, Tree } from "@/store/types";
+import type { Me, MemberRole, Membership, Tree } from "@/store/types";
 
 /** The four roles, least to most (spec, *Four fixed member roles*). */
 export const ROLES: readonly MemberRole[] = ["viewer", "builder", "admin", "owner"] as const;
@@ -78,4 +78,11 @@ export function highestIn(me: Pick<Me, "memberships"> | undefined, organisation:
   let best: MemberRole | null = null;
   for (const m of me?.memberships ?? []) if (m.organisationSlug === organisation && roleRank(m.role) > roleRank(best)) best = m.role;
   return best;
+}
+
+/** The highest level a person holds a role at in an organisation: where they read its credits when none is at the top (ORG-19). */
+export function highestGrant(memberships: readonly Membership[], organisation: string): Membership | undefined {
+  return memberships
+    .filter((m) => m.organisationSlug === organisation)
+    .sort((a, b) => a.scope.split("/").length - b.scope.split("/").length || a.scope.localeCompare(b.scope))[0];
 }

@@ -118,7 +118,9 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
         )}
         {history.kind === "loaded" && earlier.length === 0 && messages.length === 0 && (
           <p data-state="empty" className="text-ink-muted">
-            Ask what needs you, or tell it what to change. It answers for {name} and everything beneath it.
+            {selection.kind === "employee"
+              ? `Ask about its work, or give it something to do. ${name} answers from its job and what it remembers.`
+              : `Ask what needs you, or tell it what to change. It answers for ${name} and everything beneath it.`}
           </p>
         )}
         {earlier.map((turn) => (

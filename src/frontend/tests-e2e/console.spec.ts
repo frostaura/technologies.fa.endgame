@@ -158,7 +158,7 @@ test.describe("home — the living org chart", () => {
     await page.goto("/");
     const alert = page.getByRole("alert");
     await expect(alert).toContainText("The organisation could not be loaded");
-    await expect(alert).toContainText("The database did not answer. (500)");
+    await expect(alert).toContainText("The database did not answer.");
     await expect(page.getByRole("region", { name: "Organisation chart" })).toHaveCount(0);
     await useScenario("populated");
     await alert.getByRole("button", { name: "Try again" }).click();

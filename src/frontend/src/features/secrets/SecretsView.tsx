@@ -41,9 +41,11 @@ export function SecretsView() {
   const parts = scope.split("/");
 
   const crumbs: Crumb[] = [...names.map((label, i) => ({ label, href: paths.secrets(parts.slice(0, i + 1).join("/")) })), { label: "Secrets" }];
+  // One outcome on the page at a time: the next action, anywhere on it, replaces the last one's words.
+  const [notice, setNotice] = useState<Notice>(null);
 
   return (
-    <AppShell crumbs={crumbs} aside={view !== "no-organisation" && view.kind === "loaded" ? <AddSecret scope={scope} where={here} existing={view.data.effective} /> : undefined}>
+    <AppShell crumbs={crumbs} aside={view !== "no-organisation" && view.kind === "loaded" ? <AddSecret scope={scope} where={here} existing={view.data.effective} notice={notice} onNotice={setNotice} /> : undefined}>
       <header className={cn("flex flex-col gap-1.5", RISE)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold">
           <Icon name="secrets" tinted className="size-7" />
@@ -71,12 +73,12 @@ export function SecretsView() {
             </Loading>
           )}
           {view.kind === "failed" && (
-            <Failed title={view.status === 403 ? "You cannot see the secrets here" : "The secrets could not be loaded"} reason={view.reason} refused={view.status === 403} onRetry={() => void query.refetch()} />
+            <Failed title={view.status === 403 ? "You cannot see the secrets here" : "The secrets could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />
           )}
           {view.kind === "loaded" && (
             <>
               {view.stale && <Stale reason={view.stale.reason} />}
-              <SecretsBody list={view.data} tree={tree.data} where={here} />
+              <SecretsBody list={view.data} tree={tree.data} where={here} notice={notice} onNotice={setNotice} />
             </>
           )}
         </>
@@ -85,7 +87,24 @@ export function SecretsView() {
   );
 }
 
-function SecretsBody({ list, tree, where }: { list: SecretList; tree: Tree | undefined; where: string }) {
+/** What the last action on the page came to, and where it was taken; null once another starts. */
+type Notice = { at: string; ok: boolean; text: string } | null;
+
+interface NoticeProps {
+  notice: Notice;
+  onNotice: (notice: Notice) => void;
+}
+
+function NoticeLine({ notice, at }: { notice: Notice; at: string }) {
+  if (notice?.at !== at) return null;
+  return (
+    <p role={notice.ok ? "status" : "alert"} data-state={notice.ok ? undefined : "failed"} className={cn("rounded-xs px-4 py-3", notice.ok ? "bg-success-tint text-success-text" : "border border-attention-line bg-attention-tint text-attention-text")}>
+      {notice.text}
+    </p>
+  );
+}
+
+function SecretsBody({ list, tree, where, notice, onNotice }: { list: SecretList; tree: Tree | undefined; where: string } & NoticeProps) {
   const nameOf = (path: string) => namesFor(tree, path).slice(-1)[0] ?? path;
   return (
     <div className="grid grid-cols-1 items-start gap-6 2xl:grid-cols-3">
@@ -98,7 +117,7 @@ function SecretsBody({ list, tree, where }: { list: SecretList; tree: Tree | und
         ) : (
           <ul aria-label="Secrets" className="flex flex-col gap-3">
             {list.effective.map((secret) => (
-              <SecretRow key={secret.name} secret={secret} scope={list.scope} nameOf={nameOf} />
+              <SecretRow key={secret.name} secret={secret} scope={list.scope} nameOf={nameOf} notice={notice} onNotice={onNotice} />
             ))}
           </ul>
         )}
@@ -127,19 +146,23 @@ function SecretsBody({ list, tree, where }: { list: SecretList; tree: Tree | und
   );
 }
 
-function SecretRow({ secret, scope, nameOf }: { secret: SecretName; scope: string; nameOf: (path: string) => string }) {
-  const [mode, setMode] = useState<"idle" | "replace" | "remove">("idle");
+function SecretRow({ secret, scope, nameOf, notice, onNotice }: { secret: SecretName; scope: string; nameOf: (path: string) => string } & NoticeProps) {
+  const [mode, setModeState] = useState<"idle" | "replace" | "remove">("idle");
   const [remove, removing] = useRemoveSecretMutation();
-  const [problem, setProblem] = useState<string | null>(null);
   const setHere = !secret.inherited;
+  const at = `row:${secret.name}`;
+  // Opening or closing anything is a new action: what the last one came to no longer stands.
+  const setMode = (next: "idle" | "replace" | "remove") => {
+    onNotice(null);
+    setModeState(next);
+  };
 
   const confirmRemove = async () => {
     setMode("idle");
-    setProblem(null);
     try {
       await remove({ scope, name: secret.name }).unwrap();
     } catch (e) {
-      setProblem(`${secret.name} was not removed: ${describeError(e as never)} It still applies.`);
+      onNotice({ at, ok: false, text: `${secret.name} was not removed: ${describeError(e as never)} It still applies.` });
     }
   };
 
@@ -177,11 +200,7 @@ function SecretRow({ secret, scope, nameOf }: { secret: SecretName; scope: strin
         </div>
       </div>
 
-      {problem && (
-        <p role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
-          {problem}
-        </p>
-      )}
+      <NoticeLine notice={notice} at={at} />
 
       {mode === "remove" && (
         <div role="group" aria-label={`Confirm removing ${secret.name}`} className="flex flex-col gap-2 rounded-sm bg-attention-tint px-4 py-3">
@@ -201,12 +220,13 @@ function SecretRow({ secret, scope, nameOf }: { secret: SecretName; scope: strin
         </div>
       )}
 
-      {mode === "replace" && <SecretForm scope={scope} fixedName={secret.name} />}
+      {/* A replaced secret closes its form; the saved message stays on the row. */}
+      {mode === "replace" && <SecretForm scope={scope} fixedName={secret.name} at={at} onNotice={onNotice} onSaved={() => setModeState("idle")} />}
     </li>
   );
 }
 
-function AddSecret({ scope, where, existing }: { scope: string; where: string; existing: SecretName[] }) {
+function AddSecret({ scope, where, existing, notice, onNotice }: { scope: string; where: string; existing: SecretName[] } & NoticeProps) {
   return (
     <section aria-label="Add a secret" className={cn("flex flex-col gap-3", RISE)}>
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
@@ -214,19 +234,19 @@ function AddSecret({ scope, where, existing }: { scope: string; where: string; e
         Add a secret
       </h2>
       <p className="text-ink-body">It applies to {where} and everything beneath it. Saving a name that already applies here replaces it.</p>
-      <SecretForm scope={scope} existing={existing} />
+      <SecretForm scope={scope} existing={existing} at="add" onNotice={onNotice} />
+      <NoticeLine notice={notice} at="add" />
     </section>
   );
 }
 
 /** Name and value. The value lives only in this form until it is sent, and is cleared as it goes. */
-function SecretForm({ scope, fixedName, existing = [] }: { scope: string; fixedName?: string; existing?: SecretName[] }) {
+function SecretForm({ scope, fixedName, existing = [], at, onNotice, onSaved }: { scope: string; fixedName?: string; existing?: SecretName[]; at: string; onNotice: (notice: Notice) => void; onSaved?: () => void }) {
   const dispatch = useAppDispatch();
   const [name, setName] = useState(fixedName ?? "");
   const [value, setValue] = useState("");
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const nameId = useId();
   const valueId = useId();
   const nameProblem = fixedName ? null : secretNameProblem(name);
@@ -239,14 +259,15 @@ function SecretForm({ scope, fixedName, existing = [] }: { scope: string; fixedN
     const sending = value;
     setValue("");
     setSaving(true);
-    setResult(null);
+    onNotice(null);
     const outcome = await dispatch(setSecret(scope, name, sending));
     setSaving(false);
     if (outcome.ok) {
-      setResult({ ok: true, text: `${name} is saved. Its value is sealed and will not be shown.` });
+      onNotice({ at, ok: true, text: `${name} is saved. Its value is sealed and will not be shown.` });
       if (!fixedName) setName("");
       setTouched(false);
-    } else setResult({ ok: false, text: `${name} was not saved: ${outcome.reason} Nothing changed; type the value again to retry.` });
+      onSaved?.();
+    } else onNotice({ at, ok: false, text: `${name} was not saved: ${outcome.reason} Nothing changed; type the value again to retry.` });
   };
 
   return (
@@ -288,16 +309,11 @@ function SecretForm({ scope, fixedName, existing = [] }: { scope: string; fixedN
           spellCheck={false}
           className="min-h-12 rounded-sm border border-border-strong bg-surface px-4 font-mono"
         />
-        {touched && value.length === 0 && !saving && !result?.ok && <span className="text-sm text-attention-text">Type the value to store.</span>}
+        {touched && value.length === 0 && !saving && <span className="text-sm text-attention-text">Type the value to store.</span>}
       </div>
       <Button type="submit" className="self-start" disabled={saving}>
         {saving ? "Saving…" : replacing ? "Replace the secret" : "Save the secret"}
       </Button>
-      {result && (
-        <p role={result.ok ? "status" : "alert"} data-state={result.ok ? undefined : "failed"} className={cn("rounded-xs px-4 py-3", result.ok ? "bg-success-tint text-success-text" : "border border-attention-line bg-attention-tint text-attention-text")}>
-          {result.text}
-        </p>
-      )}
     </form>
   );
 }
