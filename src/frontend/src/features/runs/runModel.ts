@@ -427,8 +427,13 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
       return { ...base, tone: "factory", icon: "plan", title: "The plan was agreed", detail: str(p, "summary") };
     case "task.created":
       return { ...base, tone: "structure", icon: "plan", title: `New task: ${str(p, "title") ?? str(p, "summary") ?? "untitled"}` };
-    case "task.claimed":
-      return { ...base, tone: "people", icon: "employee", title: `${str(p, "holder") ?? "Someone"} took on a task`, detail: str(p, "summary") };
+    case "task.claimed": {
+      // Who took it on and what it is, both named (`TaskService.ClaimAsync`): never "Someone took on a task".
+      const holder = str(p, "holder");
+      const summary = str(p, "summary");
+      const title = holder ? (summary ? `${holder} took on: ${summary}` : `${holder} took on a task`) : summary ? `Taken on: ${summary}` : "A task was taken on";
+      return { ...base, tone: "people", icon: "employee", title, detail: null };
+    }
     case "task.done":
       return { ...base, tone: "money", icon: "health", title: "Task done", detail: str(p, "summary") };
     case "task.failed":

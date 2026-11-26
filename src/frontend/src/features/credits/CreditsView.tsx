@@ -5,6 +5,7 @@ import { formatCredits, formatDate, formatNumber, percent, plural } from "@/lib/
 import { RISE, stagger } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
+import { NEVER_TOPPED_UP } from "@/features/start/startModel";
 import { cn } from "@/lib/utils";
 import { useGetCreditsQuery, useGetMeQuery } from "@/store/api";
 import type { BudgetLine, Credits, MemberRole } from "@/store/types";
@@ -56,6 +57,18 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
   const negative = credits.balance < 0;
   return (
     <>
+      {credits.neverToppedUp && (
+        <p role="note" data-testid="never-topped-up" className="flex max-w-prose flex-col gap-1 rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-ink">
+          {NEVER_TOPPED_UP}
+          <button
+            type="button"
+            onClick={() => document.getElementById("asking-for-more")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            className="min-h-touch self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover"
+          >
+            Ask for a top-up
+          </button>
+        </p>
+      )}
       {branch && (
         <p role="note" className="max-w-prose text-ink-body">
           Your role is in {branch}, so this shows its spending and caps. The balance is the whole organisation&rsquo;s, which its work draws on.
@@ -239,7 +252,7 @@ function OverdraftAside({ credits, organisation, role }: { credits: Credits; org
           </ul>
         )}
       </section>
-      <section className="flex flex-col gap-2.5">
+      <section id="asking-for-more" className="flex scroll-mt-6 flex-col gap-2.5">
         <h2 className="text-lg font-semibold">Asking for more</h2>
         <p className="text-ink-body">There is no card on file: FrostAura adds credits by hand when you ask.</p>
         <ErrorBoundary name="Top-up requests">

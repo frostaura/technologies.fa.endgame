@@ -27,18 +27,16 @@ export function isBookkeeping(v: AppVersion): boolean {
 }
 
 /**
- * The services an app uses, from the organisation graph's `depends-on` edges. Every app built on the app kit has a
- * database of its own (ARCH: an app is one container with its own database and role), so once it has been built it
- * uses Data whether or not the graph names it (D35); a draft that was never built uses nothing yet.
+ * The services an app uses, from the organisation graph's `depends-on` edges — authoritative now that the graph names
+ * `service:data` for an app that has run or stores data (D35), so nothing is guessed here.
  */
-export function servicesOf(app: Pick<AppDetail, "id" | "status" | "version">, graph: { nodes: { id: string; type: string; name: string }[]; edges: { from: string; to: string; type: string }[] }): string[] {
+export function servicesOf(app: Pick<AppDetail, "id">, graph: { nodes: { id: string; type: string; name: string }[]; edges: { from: string; to: string; type: string }[] }): string[] {
   const named = graph.edges
     .filter((e) => e.type === "depends-on" && e.from === `app:${app.id}`)
     .map((e) => graph.nodes.find((n) => n.id === e.to))
     .filter((n) => n?.type === "service")
     .map((n) => n?.name ?? "");
-  const built = app.status !== "draft" && (app.version !== null || app.status !== "building");
-  return [...new Set([...(built ? ["data"] : []), ...named])];
+  return [...new Set(named)];
 }
 
 /**

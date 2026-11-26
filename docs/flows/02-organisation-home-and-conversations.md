@@ -248,7 +248,8 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - the app's name with an app icon (a link);
      - a health chip: "Healthy", "Struggling", "Down" or "Health unknown";
      - a running chip: "Always on", "Awake", "Asleep", "Waking" or "Paused";
-     - an app that was never built (nothing measured, still starting) shows the single chip "Not built yet" in place of these;
+     - an app that was never built (a draft, or its first build under way) shows the single chip "Not built yet" in place of these; one whose build stopped before anything was published (`notBuilt`) shows "Not built", with the control plane's line beneath it ("Not built — the build was cancelled."), and its project's stage reads "Not built" with the same line;
+     - an app paused behind Edge's holding page (health `paused`) shows "Paused" in place of its health, with the reason beneath it ("Paused: a monthly budget above it is spent. …");
      - an access chip: "Public", "Shared with {n}", "Shared" or "Private";
      - "{n} visits today" (or "{time ago} last visit", or "Not measured yet" when nothing has been measured);
      - "{n} credits this month".

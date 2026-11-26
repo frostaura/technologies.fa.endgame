@@ -48,7 +48,10 @@ function why(r: DemoRun): TryAgainOffer["why"] {
 
 /** The run as the control plane answers it, with whether it can be tried again. */
 export function runView(world: World, r: DemoRun): Run {
-  return { ...r.run, canTryAgain: canTryAgain(world, r) };
+  // `PublicRun`: `reason` and `detail` come from its `run.finished`.
+  const finished = [...r.events].reverse().find((e) => e.type === "run.finished")?.payload ?? {};
+  const text = (v: unknown) => (typeof v === "string" ? v : null);
+  return { ...r.run, canTryAgain: canTryAgain(world, r), reason: text(finished.reason), detail: text(finished.detail) };
 }
 
 /** The idea as `ReadModels.IdeaAsync` reads it: research that stopped reads "failed", with the offer to try again. */

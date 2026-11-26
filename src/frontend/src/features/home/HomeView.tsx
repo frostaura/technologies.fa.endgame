@@ -286,6 +286,7 @@ function needHref(item: NeedsYou): string {
 }
 
 function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
+  const technical = useAppSelector((st) => st.ui.mode) === "technical";
   if (items.length === 0) {
     return (
       <p data-state="empty" className={cn("flex items-center gap-2 text-success-text", RISE, stagger(1))}>
@@ -310,6 +311,7 @@ function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
             </Badge>
             <span className="line-clamp-2 break-words text-base font-semibold">{lines.headline}</span>
             <span className={cn("line-clamp-1 break-words", style.detail)}>{lines.line}</span>
+            {technical && item.kind === "approval" && item.technical && <code className="break-all font-mono text-xs text-ink-muted">{item.technical}</code>}
           </Link>
         );
       })}

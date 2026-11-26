@@ -142,6 +142,9 @@ area("TreeEndpoints", {
       invitationEmailed: false,
       nameCheck: { slug, source: "built-in", note: "No ops service is configured, so FrostAura's own subdomains were checked against the built-in list only." },
       screening: screened ? { method: screened.method, result: "clear", reason: screened.reason } : null,
+      // `OrganisationCreated.NoCreditsYet`: no starter credits (D63).
+      balance: 0,
+      creditsNote: screened ? `${name} has no credits until you top it up: its first piece of work waits for budget until then.` : `${name} has no credits until FrostAura tops it up: its first piece of work waits for budget until then.`,
     });
   },
 

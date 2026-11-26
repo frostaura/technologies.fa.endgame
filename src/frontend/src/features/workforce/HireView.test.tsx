@@ -54,6 +54,16 @@ describe("HireView", () => {
     expect(document.body.textContent).not.toContain("build-t1");
   });
 
+  it("shows a proposal the platform withdrew as closed, with why, and no decision to make", async () => {
+    stub(json(hireFixture({ status: "declined", withdrawn: true, decision: { via: "platform", by: "Endgame", at: "2026-11-26T10:00:00Z", note: "The build it was for was cancelled before anything was built." } })));
+    renderWithStore(<HireView hireId="h1" />);
+    expect(await screen.findByText("Withdrawn")).toBeTruthy();
+    expect(screen.getByText(/This proposal was withdrawn on .*: nobody needs to answer it\./)).toBeTruthy();
+    expect(screen.getByText("The build it was for was cancelled before anything was built.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Hire / })).toBeNull();
+    expect(screen.queryByText("This hire was declined")).toBeNull();
+  });
+
   it("accepts after confirming, with a note", async () => {
     const api = stub(json(hireFixture()), { "POST /api/hires/h1/accept": json(hireFixture({ status: "accepted", employeeId: "e7", decision: { via: "person", by: "Owner", at: "2026-11-24T10:00:00Z", note: "Go" } })) });
     renderWithStore(<HireView hireId="h1" />);

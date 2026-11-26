@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { modeSet } from "@/store/uiSlice";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NotificationItem } from "@/store/types";
 import { notificationsGuard } from "@/store/guards";
@@ -126,6 +127,16 @@ describe("an answered notice (D40)", () => {
     const hire = panel.querySelector('[data-notification="h1"]') as HTMLElement;
     expect(within(hire).getByText("Answered")).toBeTruthy();
     expect(within(hire).queryByRole("button", { name: "Mark read" })).toBeNull();
+  });
+
+  it("shows an approval's tool line in technical mode only", async () => {
+    stub(json({ ...ANSWERED, notifications: [{ ...ANSWERED.notifications[1], technical: "change_app: acme/tools/ledger/web: Add star ratings." }] }));
+    const { store } = renderWithStore(<NotificationsView />);
+    const main = await screen.findByRole("main");
+    await within(main).findByRole("list", { name: "Notifications" });
+    expect(main.textContent).not.toContain("change_app");
+    act(() => void store.dispatch(modeSet("technical")));
+    expect(main.textContent).toContain("change_app: acme/tools/ledger/web: Add star ratings.");
   });
 
   it("an item from an older server with no resolved field is an open one", () => {

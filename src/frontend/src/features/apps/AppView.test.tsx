@@ -81,6 +81,18 @@ describe("AppView", () => {
     expect(within(alert).queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
+  it("reads the control plane's paused state and an unbuilt app's note on the Health tile (D66, D81)", async () => {
+    stub(json({ ...APP, running: "paused", health: { state: "paused", summary: "Paused: the organisation reached its overdraft limit. A top-up restores it at once." }, paused: { reason: "overdraft_limit", note: "Paused: the organisation reached its overdraft limit. A top-up restores it at once." } }));
+    renderWithStore(<AppView appId="a1" />);
+    const today = await screen.findByRole("region", { name: "Today" });
+    expect(today.textContent).toContain("Paused: the organisation reached its overdraft limit. A top-up restores it at once.");
+    expect(today.textContent).not.toContain("Healthy");
+    cleanup();
+    stub(json({ ...APP, status: "draft", publishedAt: null, version: null, health: { state: "unknown", summary: "Not built — the build was cancelled." }, notBuilt: { reason: "cancelled", note: "Not built — the build was cancelled.", runId: "b1", ideaId: null } }));
+    renderWithStore(<AppView appId="a1" />);
+    expect((await screen.findByRole("region", { name: "Today" })).textContent).toContain("Not built — the build was cancelled.");
+  });
+
   it("while paused for budget, Health says Paused with the reason, never Healthy (D66)", async () => {
     stub(json({ ...APP, running: "paused", health: { state: "healthy", summary: "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it." } }));
     renderWithStore(<AppView appId="a1" />);

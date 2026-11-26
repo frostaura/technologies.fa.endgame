@@ -121,10 +121,12 @@ export const ONTOLOGY_APP = {
     { id: "app:a1", type: "app", name: "Ledger web", scope: "acme/tools/ledger/web", status: "running", attributes: { version: "f2a84f8" } },
     { id: "service:telemetry", type: "service", name: "telemetry", scope: null, status: null, attributes: null },
     { id: "service:identity", type: "service", name: "identity", scope: null, status: null, attributes: null },
+    { id: "service:data", type: "service", name: "data", scope: null, status: null, attributes: null },
   ],
   edges: [
     { from: "app:a1", to: "service:telemetry", type: "depends-on", label: null },
     { from: "app:a1", to: "service:identity", type: "depends-on", label: null },
+    { from: "app:a1", to: "service:data", type: "depends-on", label: null },
     { from: "app:a1", to: "service:telemetry", type: "data-flows-to", label: "operational telemetry" },
   ],
   views: { "org-chart": ["owns", "works-on", "reports-to"], "data-flow": ["depends-on", "data-flows-to"] },

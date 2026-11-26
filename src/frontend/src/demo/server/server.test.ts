@@ -459,3 +459,24 @@ describe("removing a grant (D8, AccountService.RevokeAsync)", () => {
     expect(r.body).toMatchObject({ revoked: grant?.id, invitationCancelled: false });
   });
 });
+
+describe("the second round of server fields (BE-3)", () => {
+  it("a paused app reads health paused with Edge's reason on the chart and its page", async () => {
+    const w = as("owner");
+    const tree = (await call(w, "GET", `tree?organisation=${ORG}`)).body as { divisions: { projects: { apps: { id: string; health: string; paused: { reason: string; note: string } | null; status: string }[] }[] }[] };
+    const stock = tree.divisions.flatMap((d) => d.projects.flatMap((p) => p.apps)).find((a) => a.id === IDS.stockCounter);
+    expect(stock).toMatchObject({ health: "paused", paused: { reason: "budget_exhausted" }, status: "stopped" });
+    const page = (await call(w, "GET", `apps/${IDS.stockCounter}`)).body as { health: { state: string }; paused: { note: string } };
+    expect(page.health.state).toBe("paused");
+    expect(page.paused.note).toMatch(/^Paused: a monthly budget above it is spent/);
+  });
+
+  it("a new organisation is told it has no credits, and its credits say it was never topped up", async () => {
+    const w = as("first-run");
+    const made = (await call(w, "POST", "organisations", { name: "Harbour Tutors", slug: "harbour-tutors" })).body as { balance?: number; creditsNote?: string; slug?: string };
+    expect(made.balance).toBe(0);
+    expect(made.creditsNote).toBe("Harbour Tutors has no credits until FrostAura tops it up: its first piece of work waits for budget until then.");
+    const credits = (await call(w, "GET", "credits?scope=harbour-tutors")).body as { neverToppedUp: boolean };
+    expect(credits.neverToppedUp).toBe(true);
+  });
+});

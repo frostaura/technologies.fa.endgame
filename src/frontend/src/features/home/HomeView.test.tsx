@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Tree } from "@/store/types";
 import { api as consoleApi } from "@/store/api";
+import { modeSet } from "@/store/uiSlice";
 import { FakeEventSource, ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { HomeView } from "./HomeView";
 
@@ -52,6 +53,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // Technical mode is remembered between visits; each test starts in normal mode.
+  localStorage.clear();
 });
 
 describe("HomeView", () => {
@@ -61,6 +64,16 @@ describe("HomeView", () => {
     const loading = screen.getByRole("status", { name: "" });
     expect(loading.dataset.state).toBe("loading");
     expect(screen.queryByRole("region", { name: "Organisation chart" })).toBeNull();
+  });
+
+  it("keeps an approval's tool line for technical mode on its needs-you card", async () => {
+    stub(json({ ...TREE, needsYou: [{ kind: "approval", id: "n2", runId: "r1", approvalId: "a1", title: "Change Ledger: Add star ratings?", detail: "This waits for your sign-off before it is done.", technical: "change_app: acme/tools/ledger/web: Add star ratings." }] }));
+    const { store } = renderWithStore(<HomeView />);
+    const needs = await screen.findByRole("region", { name: "Needs you" });
+    expect(needs.textContent).toContain("Change Ledger: Add star ratings?");
+    expect(needs.textContent).not.toContain("change_app");
+    act(() => void store.dispatch(modeSet("technical")));
+    expect(needs.textContent).toContain("change_app: acme/tools/ledger/web: Add star ratings.");
   });
 
   it("says a verdict waiting in a headline and one line, never its whole summary", async () => {

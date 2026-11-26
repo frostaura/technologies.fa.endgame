@@ -158,6 +158,20 @@ describe("what happens next", () => {
     expect(alert.closest("[data-state]")?.textContent).not.toContain("Nothing here is known until it loads.");
   });
 
+  it("says an organisation never given credits has none until FrostAura adds them, with where to ask (D63)", async () => {
+    stubApi({
+      "GET /api/me": json(ME),
+      "GET /api/credits": json({ ...CREDITS, balance: 0, available: 0, heldCredits: 0, neverToppedUp: true }),
+      "POST /api/ideas/estimate": json({ credits: 12, basis: "" }),
+    });
+    renderWithStore(<StartView />);
+    await screen.findByLabelText("The idea");
+    describeIdea();
+    const note = await screen.findByTestId("estimate-shortfall", {}, { timeout: 2000 });
+    expect(note.textContent).toContain("This organisation has not been given credits yet: FrostAura adds them when you ask.");
+    expect(screen.getByRole("link", { name: "Ask for a top-up" }).getAttribute("href")).toBe("/credits");
+  });
+
   // D63: with less to spend than the research needs, the page says so before the button is pressed, and still lets it start.
   it("says beside the estimate when there is not enough to spend, and still allows the start", async () => {
     stubApi({

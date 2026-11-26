@@ -97,6 +97,14 @@ describe("deriveRun", () => {
 });
 
 describe("describeEvent", () => {
+  it("names who took on a task and what it is, never 'Someone took on a task'", () => {
+    expect(describeEvent(e(20, "task.claimed", { taskId: "t", holder: "Theo", summary: "Keep the club's books" }), "normal")?.title).toBe("Theo took on: Keep the club's books");
+    expect(describeEvent(e(21, "task.claimed", { taskId: "t", holder: "Theo" }), "normal")?.title).toBe("Theo took on a task");
+    expect(describeEvent(e(22, "task.claimed", { taskId: "t", summary: "Keep the club's books" }), "normal")?.title).toBe("Taken on: Keep the club's books");
+    expect(describeEvent(e(23, "task.claimed", { taskId: "t" }), "normal")?.title).not.toContain("Someone");
+  });
+
+
   const denied = e(9, "tool.denied", { tool: "shell.exec", rule: "protected floor", reason: "No shell" });
   const model = e(10, "model.replied", { model: "vendor/model-x", settledCredits: 2, tokens: { input: 10, output: 5 } });
 

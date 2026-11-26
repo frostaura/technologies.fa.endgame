@@ -1,6 +1,9 @@
 import { arr, bool, dict, nullable, num, obj, oneOf, record, str, unknownValue, withDefault, type Guard } from "@/lib/guards";
 import { normaliseVerdict } from "@/features/verdict/verdictModel";
 import type {
+  AppPaused,
+  LedRun,
+  NotBuilt,
   RoleRevoked,
   CascadeValue,
   ChangeEstimate,
@@ -109,16 +112,18 @@ const worker: Guard<Worker> = (v, path) => {
 };
 const workers = withDefault(arr(worker), []);
 
-const health = oneOf(["healthy", "degraded", "down", "unknown"] as const);
+const health = oneOf(["healthy", "degraded", "down", "unknown", "paused"] as const);
+const paused = withDefault(nullable(obj<AppPaused>({ reason: s, note: s })), null);
+const notBuilt = withDefault(nullable(obj<NotBuilt>({ reason: s, note: s, runId: s, ideaId: withDefault(ns, null) })), null);
 const running = oneOf(["asleep", "awake", "always-on", "starting", "paused"] as const);
 const access = oneOf(["private", "shared", "public"] as const);
-const stage = oneOf(["idea", "researching", "verdict", "planning", "building", "evaluating", "reviewing", "publishing", "live", "paused", "dropped"] as const);
+const stage = oneOf(["idea", "researching", "verdict", "planning", "building", "evaluating", "reviewing", "publishing", "live", "paused", "dropped", "not-built"] as const);
 const outcome = oneOf(["build", "change", "do-not-build"] as const);
 
 // A node's role: absent from an older control plane (unknown, so the console works it out), null where the viewer holds none.
 const nodeRole = withDefault<MemberRole | null | undefined>(nullable(role), undefined);
 const archived = withDefault(bool, false);
-const treeApp = obj<TreeApp>({ id: s, slug: s, name: s, health, running, access, sharedWith: withDefault(num, 0), visitsToday: nn, lastVisitAt: ns, spend, workers, role: nodeRole, archived });
+const treeApp = obj<TreeApp>({ id: s, slug: s, name: s, health, running, access, sharedWith: withDefault(num, 0), visitsToday: nn, lastVisitAt: ns, spend, workers, role: nodeRole, archived, paused, notBuilt, status: withDefault(ns, null) });
 const treeProject = obj<TreeProject>({
   id: s,
   slug: s,
@@ -132,6 +137,7 @@ const treeProject = obj<TreeProject>({
   apps: arr(treeApp),
   role: nodeRole,
   archived,
+  notBuilt,
 });
 const treeDivision = obj<TreeDivision>({ id: s, slug: s, name: s, spend, workers, projects: arr(treeProject), role: nodeRole, archived });
 
@@ -141,7 +147,7 @@ const needsYou: Guard<NeedsYou | null> = (v, path) => {
     case "verdict":
       return obj<Extract<NeedsYou, { kind: "verdict" }>>({ kind: oneOf(["verdict"] as const), id: s, ideaId: s, title: s, verdict: outcome, detail: ns })(v, path);
     case "approval":
-      return obj<Extract<NeedsYou, { kind: "approval" }>>({ kind: oneOf(["approval"] as const), id: s, runId: s, approvalId: s, title: s, detail: ns })(v, path);
+      return obj<Extract<NeedsYou, { kind: "approval" }>>({ kind: oneOf(["approval"] as const), id: s, runId: s, approvalId: s, title: s, detail: ns, technical: withDefault(ns, null) })(v, path);
     case "hire":
       return obj<Extract<NeedsYou, { kind: "hire" }>>({ kind: oneOf(["hire"] as const), id: s, hireId: s, title: s, detail: ns, scope: s, expectedMonthlyCredits: num })(v, path);
     case "idle":
@@ -156,7 +162,7 @@ export const treeGuard: Guard<Tree> = (v, path) => {
   const t = obj<Omit<Tree, "needsYou"> & { needsYou: (NeedsYou | null)[] }>({
     generatedAt: s,
     viewerRole: withDefault(oneOf(["viewer", "builder", "admin", "owner", "none"] as const), "owner"),
-    organisation: nullable(obj<NonNullable<Tree["organisation"]>>({ id: s, slug: s, name: s, summary: ns, spend, workers, role: nodeRole })),
+    organisation: nullable(obj<NonNullable<Tree["organisation"]>>({ id: s, slug: s, name: s, summary: ns, spend, workers, role: nodeRole, neverToppedUp: withDefault(bool, false) })),
     divisions: arr(treeDivision),
     needsYou: withDefault(arr(needsYou), []),
     // An older control plane offered naming to everyone with no organisation.
@@ -204,6 +210,7 @@ export const creditsGuard: Guard<Credits> = obj<Credits>({
   topUps: arr(obj<Credits["topUps"][number]>({ at: s, credits: num, note: s })),
   heldCredits: withDefault(num, 0),
   available: withDefault(num, 0),
+  neverToppedUp: withDefault(bool, false),
 });
 
 export const estimateGuard: Guard<IdeaEstimate> = obj<IdeaEstimate>({ credits: num, basis: s });
@@ -273,6 +280,8 @@ export const runGuard: Guard<Run> = obj<Run>({
   summary: withDefault(ns, null),
   createdAt: withDefault(s, ""),
   canTryAgain: withDefault(bool, false),
+  reason: withDefault(ns, null),
+  detail: withDefault(ns, null),
 });
 
 export const runEventGuard: Guard<RunEvent> = obj<RunEvent>({ seq: num, type: s, at: s, payload: withDefault(record, {}) });
@@ -328,6 +337,8 @@ export const appGuard: Guard<AppDetail> = obj<AppDetail>({
   version: withDefault(ns, null),
   publishedAt: withDefault(ns, null),
   idleMinutes: withDefault(num, 15),
+  paused,
+  notBuilt,
 });
 
 export const sharesGuard: Guard<AppShare[]> = arr(obj<AppShare>({ email: s, invitedAt: s, registered: bool }));
@@ -384,21 +395,36 @@ export const employeeGuard: Guard<Employee> = obj<Employee>({
 
 export const employeesGuard: Guard<Employee[]> = arr(employeeGuard);
 
-export const trackRecordGuard: Guard<TrackRecord> = obj<TrackRecord>({
+const trackRecordShape = obj<Omit<TrackRecord, "cost"> & { cost: { toDateCredits: number; monthCredits: number; ownToDateCredits: number | null; ownMonthCredits: number | null } }>({
   employeeId: s,
   work: obj<TrackRecord["work"]>({ accepted: num, sentBack: num, acceptedPercent: nn, judged: withDefault(num, 0) }),
   runs: obj<TrackRecord["runs"]>({ finished: num, succeeded: num, failed: num, cancelled: num }),
   repairsNotCharged: obj<TrackRecord["repairsNotCharged"]>({ credits: num, calls: num }),
-  cost: obj<TrackRecord["cost"]>({ toDateCredits: num, monthCredits: num }),
+  cost: obj<{ toDateCredits: number; monthCredits: number; ownToDateCredits: number | null; ownMonthCredits: number | null }>({ toDateCredits: num, monthCredits: num, ownToDateCredits: withDefault(nn, null), ownMonthCredits: withDefault(nn, null) }),
   contractors: obj<TrackRecord["contractors"]>({ engaged: num, working: num, toDateCredits: num, monthCredits: num }),
   estimates: nullable(estimates),
 });
+
+/**
+ * `cost` counts the contractors it briefs, as its cap does, and `own…` is its share alone. An older control plane sent
+ * its own spend only, with no `own…`: the whole is then its own plus its contractors'.
+ */
+export const trackRecordGuard: Guard<TrackRecord> = (v, path) => {
+  const t = trackRecordShape(v, path);
+  const c = t.cost;
+  const cost =
+    c.ownToDateCredits === null || c.ownMonthCredits === null
+      ? { toDateCredits: c.toDateCredits + t.contractors.toDateCredits, monthCredits: c.monthCredits + t.contractors.monthCredits, ownToDateCredits: c.toDateCredits, ownMonthCredits: c.monthCredits }
+      : { toDateCredits: c.toDateCredits, monthCredits: c.monthCredits, ownToDateCredits: c.ownToDateCredits, ownMonthCredits: c.ownMonthCredits };
+  return { ...t, cost };
+};
 
 export const employeeDetailGuard: Guard<EmployeeDetail> = obj<EmployeeDetail>({
   employee: employeeGuard,
   trackRecord: trackRecordGuard,
   contractors: withDefault(arr(employeeGuard), []),
   reports: withDefault(arr(employeeGuard), []),
+  recentRuns: withDefault(arr(obj<LedRun>({ id: s, title: s, kind: s, status: s, startedAt: s, finishedAt: withDefault(ns, null) })), []),
 });
 
 const memoryKind = oneOf(["fact", "practice", "preference", "lesson"] as const);
@@ -452,6 +478,7 @@ export const hireGuard: Guard<Hire> = obj<Hire>({
   decision: nullable(obj<NonNullable<Hire["decision"]>>({ via: s, by: s, at: s, note: ns })),
   employeeId: ns,
   createdAt: s,
+  withdrawn: withDefault(bool, false),
 });
 
 export const hiresGuard: Guard<Hire[]> = arr(hireGuard);
@@ -621,6 +648,7 @@ export const notificationsGuard: Guard<NotificationFeed> = obj<NotificationFeed>
       read: bool,
       emailedAt: withDefault(ns, null),
       resolved: withDefault(bool, false),
+      technical: withDefault(ns, null),
     }),
   ),
 });
@@ -701,6 +729,8 @@ export const provisionedGuard: Guard<OrganisationProvisioned> = obj<Organisation
   invitationEmailed: withDefault(bool, false),
   nameCheck: withDefault(nullable(obj<NonNullable<OrganisationProvisioned["nameCheck"]>>({ slug: s, source: s, note: ns })), null),
   screening: withDefault(nullable(obj<NonNullable<OrganisationProvisioned["screening"]>>({ method: oneOf(["model", "manual"] as const), result: oneOf(["clear"] as const), reason: s })), null),
+  balance: withDefault(num, 0),
+  creditsNote: withDefault(ns, null),
 });
 
 // Managing the tree and the cascade -----------------------------------------------------------

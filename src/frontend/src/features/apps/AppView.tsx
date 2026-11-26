@@ -124,7 +124,7 @@ function AppAsideColumn({ app, orgName }: { app: AppDetail; orgName: string }) {
 }
 
 function AppBody({ app }: { app: AppDetail }) {
-  const health = appHealthChip(app.health.state, app.running);
+  const health = appHealthChip(app.health.state, app.running, app.paused);
   const { builder, admin } = useAppRole(app);
   const budgets = useGetCascadeQuery({ scope: app.scope, kind: "budget" });
   const nameOf = useNameOf();
@@ -227,7 +227,9 @@ function AppBody({ app }: { app: AppDetail }) {
 function healthNote(app: AppDetail, technical: boolean): string {
   if (technical) return app.health.summary;
   // Paused: the control plane's sentence says why and what restores it ("Paused: a monthly budget above it is spent. …").
-  if (app.running === "paused" && app.health.state !== "down") return plainOrNull(app.health.summary) ?? "Paused: it serves nobody until it is restored.";
+  if (app.notBuilt) return app.notBuilt.note;
+  if (app.paused) return app.paused.note;
+  if (app.health.state === "paused" || (app.running === "paused" && app.health.state !== "down")) return plainOrNull(app.health.summary) ?? "Paused: it serves nobody until it is restored.";
   if (app.health.state === "healthy" && app.telemetry) return app.telemetry.errorsToday === 0 ? "No errors today" : `${plural(app.telemetry.errorsToday, "error")} today`;
   return plainOrNull(app.health.summary) ?? (app.publishedAt ? `Running the version from ${formatDate(app.publishedAt)}` : "Not published yet");
 }

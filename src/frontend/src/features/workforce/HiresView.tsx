@@ -15,7 +15,7 @@ import { useGetEmployeesQuery, useGetEmployeesWithReleasedQuery, useGetHiresQuer
 import type { Employee, Hire, RecurringRole, Tree } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 import { JobFields, type JobDraft } from "./JobFields";
-import { STATUS as EMPLOYEE_STATUS, TRIGGER, draftProblem, expectedMonthly, nameWithRole, possibleManagers, scopeName, waitingProposal } from "./workforceModel";
+import { STATUS as EMPLOYEE_STATUS, TRIGGER, draftProblem, expectedMonthly, hireBadge, nameWithRole, possibleManagers, scopeName, waitingProposal } from "./workforceModel";
 
 /** Hiring at a scope: the proposals waiting and decided, and contractor roles that keep coming back. */
 export function HiresView() {
@@ -67,7 +67,6 @@ export function HiresView() {
   );
 }
 
-const STATUS = { proposed: { label: "Waiting for you", tone: "violet" }, accepted: { label: "Hired", tone: "success" }, declined: { label: "Declined", tone: "quiet" } } as const;
 
 function Proposals({ scope, tree }: { scope: string; tree: Tree | undefined }) {
   const query = useGetHiresQuery({ scope });
@@ -128,8 +127,8 @@ function HireCard({ hire, tree, index }: { hire: Hire; tree: Tree | undefined; i
         href={paths.hire(hire.id)}
         className="flex h-full flex-col gap-1.5 rounded-md border border-violet-line bg-violet-tint px-5 py-4 text-ink transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0"
       >
-        <Badge tone={STATUS[hire.status].tone} className="self-start bg-surface">
-          {STATUS[hire.status].label}
+        <Badge tone={hireBadge(hire, "Waiting for you").tone} className="self-start bg-surface">
+          {hireBadge(hire, "Waiting for you").label}
         </Badge>
         <span className="text-base font-semibold">
           {nameWithRole(hire.name, hire.role)} for {scopeName(tree, hire.scope)}
@@ -137,6 +136,7 @@ function HireCard({ hire, tree, index }: { hire: Hire; tree: Tree | undefined; i
         <span className="text-violet-deep">
           About {formatCredits(expectedMonthly(hire))} a month{hire.withinBudget ? "" : ", more than the budget has room for"}.
         </span>
+        {hire.withdrawn && hire.decision?.note && <span className="text-sm text-ink-body">{hire.decision.note}</span>}
         <span className="text-sm text-ink-body">
           {TRIGGER[hire.trigger]} · {formatDate(hire.createdAt)}
         </span>

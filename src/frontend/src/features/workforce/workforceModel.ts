@@ -334,21 +334,25 @@ export function waitingProposal(hires: Hire[] | undefined, role: RecurringRole):
 }
 
 /**
- * What an employee has cost, with the contractors it briefs (D74): its budget counts their spending too, so the figures
- * beside the budget do as well. `TrackRecord.cost` is its own model calls only.
+ * What an employee has cost (D74). `cost` already counts the contractors it briefs, as its budget does; `own…` is its
+ * share alone (`trackRecordGuard` makes an older control plane's figures read the same way).
  */
-export function employeeCosts(record: Pick<TrackRecord, "cost" | "contractors">): { toDate: number; month: number; contractorsMonth: number } {
-  return {
-    toDate: record.cost.toDateCredits + record.contractors.toDateCredits,
-    month: record.cost.monthCredits + record.contractors.monthCredits,
-    contractorsMonth: record.contractors.monthCredits,
-  };
+export function employeeCosts(record: Pick<TrackRecord, "cost">): { toDate: number; month: number; ownMonth: number } {
+  return { toDate: record.cost.toDateCredits, month: record.cost.monthCredits, ownMonth: record.cost.ownMonthCredits ?? record.cost.monthCredits };
 }
 
-/** The line under "Cost so far": this month against the budget, and how much of it the contractors spent. */
-export function costLine(costs: { month: number; contractorsMonth: number }, monthlyLimit: number | null): string {
-  const theirs = costs.contractorsMonth > 0 ? `, ${formatNumber(costs.contractorsMonth)} of it by the contractors it briefs` : "";
+/** The line under "Cost so far": this month against the budget, including the contractors it briefs, and its own share. */
+export function costLine(costs: { month: number; ownMonth: number }, monthlyLimit: number | null): string {
+  const theirs = costs.ownMonth < costs.month ? `, including the contractors it briefs; ${formatNumber(costs.ownMonth)} of its own` : "";
   return monthlyLimit !== null
     ? `Budget ${formatNumber(monthlyLimit)} a month, ${formatNumber(costs.month)} used this month${theirs}`
     : `${formatNumber(costs.month)} this month${theirs}; no budget of its own, the one above holds`;
+}
+
+/** A proposal's state as a badge. One the platform closed itself (`withdrawn`) reads as withdrawn, not as a person's no. */
+export function hireBadge(hire: Pick<Hire, "status" | "withdrawn">, proposed = "Hire proposed"): { label: string; tone: BadgeTone } {
+  if (hire.withdrawn) return { label: "Withdrawn", tone: "quiet" };
+  if (hire.status === "accepted") return { label: "Hired", tone: "success" };
+  if (hire.status === "declined") return { label: "Declined", tone: "quiet" };
+  return { label: proposed, tone: "violet" };
 }

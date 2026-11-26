@@ -108,12 +108,12 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
     if (logEnded && !isTerminal(run.status)) refetch();
   }, [logEnded, run.status, refetch]);
   // A declined start finishes cancelled with reason declined_at_start (older runs: failed, known by the summary).
-  const declined = (status === "failed" || status === "cancelled") && (isStartDeclined(derived.finishedSummary, derived.finishedReason) || isStartDeclined(run.summary));
+  const declined = (status === "failed" || status === "cancelled") && (isStartDeclined(derived.finishedSummary, derived.finishedReason) || isStartDeclined(run.summary, run.reason));
   // run.finished's summary may be technical (ARCH-004); normal mode says the closing message instead. A conversation's
   // outcome is its reply, as written (D13).
   const reply = run.kind === "conversation" ? (distinctReplies(derived.messages).at(-1)?.text ?? null) : null;
   const lastPlain = [...derived.messages].reverse().find((m) => m.from !== "owner" && plainOrNull(m.text))?.text ?? null;
-  const outcome = mode === "technical" ? [derived.finishedSummary, derived.finishedDetail].filter(Boolean).join("\n\n") || null : (reply ?? plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null));
+  const outcome = mode === "technical" ? [derived.finishedSummary, derived.finishedDetail ?? run.detail].filter(Boolean).join("\n\n") || null : (reply ?? plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null));
   const badge = declined ? DECLINED : STATUS[status];
   const estimate = derived.estimateCredits ?? run.estimateCredits;
   // One figure, from one source: the log's billable settlements, as the ledger counts them, so it is the run's own

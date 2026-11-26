@@ -291,10 +291,10 @@ describe("after the real-stack walk", () => {
     expect(isBookkeeping(v("Fix ownership check on book status update"))).toBe(false);
   });
 
-  // D35: an app built on the kit has a database of its own, so it uses Data; a draft uses nothing yet.
-  it("counts Data among what a built app uses", async () => {
-    expect(servicesOf({ id: "a1", status: "running", version: "1" }, ONTOLOGY_APP)).toEqual(["data", "telemetry", "identity"]);
-    expect(servicesOf({ id: "a1", status: "draft", version: null }, { nodes: [], edges: [] })).toEqual([]);
+  // D35: the graph names service:data for an app that has run or stores data; nothing is guessed beyond its edges.
+  it("counts Data among what an app uses when the graph says so, and nothing it does not", async () => {
+    expect(servicesOf({ id: "a1" }, ONTOLOGY_APP)).toEqual(["telemetry", "identity", "data"]);
+    expect(servicesOf({ id: "a1" }, { nodes: [], edges: [] })).toEqual([]);
     stub();
     renderWithStore(<AppView appId="a1" />);
     expect(within(await screen.findByRole("list", { name: "What it uses" })).getByText("Data")).toBeTruthy();

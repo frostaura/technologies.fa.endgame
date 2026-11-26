@@ -31,7 +31,7 @@ import {
   useReviewMemoryMutation,
   useUpdateEmployeeMutation,
 } from "@/store/api";
-import type { Employee, EmployeeDetail, MemoryChange, MemoryEntry, MemoryKind, TaskItem, TrackRecord, Tree } from "@/store/types";
+import type { Employee, EmployeeDetail, MemoryChange, MemoryEntry, MemoryKind, LedRun, TaskItem, TrackRecord, Tree } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { ConversationDock } from "../home/ConversationDock";
 import { namesFor } from "../home/treeModel";
@@ -201,7 +201,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
       </section>
 
       <ErrorBoundary name="Recent work">
-        <RecentWork employee={employee} runs={trackRecord.runs} />
+        <RecentWork employee={employee} runs={trackRecord.runs} led={detail.recentRuns ?? []} />
       </ErrorBoundary>
 
       <ContractorsBriefed detail={detail} />
@@ -579,7 +579,20 @@ const TASK_STATUS: Record<TaskItem["status"], string> = {
   cancelled: "Cancelled",
 };
 
-function RecentWork({ employee, runs: worked }: { employee: Employee; runs: TrackRecord["runs"] }) {
+/** A run's status as a person reads it on the employee's page. */
+const LED_STATUS: Record<string, string> = {
+  queued: "Waiting to start",
+  running: "Working",
+  waiting_approval: "Waiting for you",
+  waiting: "Waiting for you",
+  finished: "Finished",
+  paused: "Paused",
+  succeeded: "Finished",
+  failed: "Did not succeed",
+  cancelled: "Cancelled",
+};
+
+function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs: TrackRecord["runs"]; led: LedRun[] }) {
   // The tasks it claimed — a factory build's items, checks and reviews included — kept as its work once they are done.
   const query = useGetTasksQuery({ scope: employee.scope, limit: 50, employeeId: employee.id });
   const view = viewOf(query);
@@ -613,7 +626,22 @@ function RecentWork({ employee, runs: worked }: { employee: Employee; runs: Trac
       {view.kind === "failed" && <Failed title="Recent work could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && view.stale && <Stale reason={view.stale.reason} />}
       {view.kind === "loaded" &&
-        (tasks.length === 0 ? (
+        (tasks.length === 0 && led.length > 0 ? (
+          // Research and reviews are not split into tasks: the runs it led are its work (D75).
+          <div className="overflow-hidden rounded-md border bg-surface shadow-card">
+            <ul aria-label="Work it led" className="flex flex-col divide-y">
+              {led.map((r) => (
+                <li key={r.id} className="grid grid-cols-1 gap-x-5 gap-y-1 px-5 py-3.5 sm:grid-cols-4">
+                  <Link href={paths.run(r.id)} className="rounded-xs font-medium text-primary-link hover:text-primary-hover sm:col-span-2">
+                    {r.title}
+                  </Link>
+                  <span className="text-ink-body">{LED_STATUS[r.status] ?? r.status}</span>
+                  <span className="text-ink-body sm:text-right">{r.finishedAt ? `Finished ${timeAgo(r.finishedAt)}` : `Started ${timeAgo(r.startedAt)}`}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : tasks.length === 0 ? (
           <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
             {worked.finished > 0
               ? `${employee.name} has finished ${plural(worked.finished, "piece")} of work here, none of it split into tasks (research is not).${employee.lastRunId ? " Its last piece of work is linked above." : ""}`

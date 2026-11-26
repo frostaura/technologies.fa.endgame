@@ -28,6 +28,15 @@ afterEach(() => {
 });
 
 describe("CreditsView", () => {
+  it("says plainly when the organisation has never been given credits, and where to ask (D63)", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json({ ...CREDITS, balance: 0, topUps: [], neverToppedUp: true }) });
+    renderWithStore(<CreditsView />);
+    const note = await screen.findByTestId("never-topped-up");
+    expect(note.textContent).toContain("This organisation has not been given credits yet: FrostAura adds them when you ask.");
+    expect(within(note).getByRole("button", { name: "Ask for a top-up" })).toBeTruthy();
+  });
+
+
   it("reads credits at the division of someone granted only that division, and lets its Admin set caps there", async () => {
     const division: Credits = {
       ...CREDITS,

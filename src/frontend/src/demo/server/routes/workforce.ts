@@ -138,10 +138,20 @@ area("WorkforceEndpoints", {
   "GET employees/{id}": (req, { world }) => {
     const e = employee(world, req.params.id ?? "");
     requireRole(world, e.scope, "viewer");
-    const trackRecord = world.trackRecords.find((t) => t.employeeId === e.id) ?? blankTrackRecord(e.id);
+    const kept = world.trackRecords.find((t) => t.employeeId === e.id) ?? blankTrackRecord(e.id);
+    // `EmployeeService.TrackRecordAsync`: its cost counts the contractors it briefs, as its cap does; `own…` is its share.
+    const own = kept.cost;
+    const trackRecord = { ...kept, cost: { toDateCredits: own.toDateCredits + kept.contractors.toDateCredits, monthCredits: own.monthCredits + kept.contractors.monthCredits, ownToDateCredits: own.ownToDateCredits ?? own.toDateCredits, ownMonthCredits: own.ownMonthCredits ?? own.monthCredits } };
+    const WIRE: Record<string, string> = { finished: "succeeded", waiting: "waiting_approval" };
+    const recentRuns = world.runs
+      .filter((r) => r.run.employeeId === e.id)
+      .sort((x, y) => y.run.startedAt.localeCompare(x.run.startedAt))
+      .slice(0, 12)
+      .map((r) => ({ id: r.run.id, title: r.run.title, kind: r.run.kind, status: WIRE[r.run.status] ?? r.run.status, startedAt: r.run.startedAt, finishedAt: r.run.finishedAt }));
     return ok({
       employee: e,
       trackRecord,
+      recentRuns,
       contractors: world.employees.filter((c) => c.kind === "contractor" && c.briefedBy?.id === e.id && c.status === "working"),
       reports: world.employees.filter((r) => r.reportsTo?.id === e.id && r.status !== "released"),
     });
@@ -470,6 +480,10 @@ function ontology(world: World, scope: string): Ontology {
     }
     if (a.telemetry) {
       edges.push({ from: id, to: service("telemetry"), type: "depends-on", label: null }, { from: id, to: service("telemetry"), type: "data-flows-to", label: "operational telemetry" });
+    }
+    // `OntologyService`: an app that has run or stores data depends on its database.
+    if (a.telemetry || a.publishedAt || a.endUsers > 0) {
+      edges.push({ from: id, to: service("data"), type: "depends-on", label: null }, { from: id, to: service("data"), type: "data-flows-to", label: "stored records" });
     }
   }
   const orgChart = nodes.filter((n) => ["organisation", "division", "project", "app", "employee"].includes(n.type)).map((n) => n.id);

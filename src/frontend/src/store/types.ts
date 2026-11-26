@@ -50,10 +50,25 @@ export interface AuthOptions {
 // Tree
 // ---------------------------------------------------------------------------------------------
 
-export type AppHealth = "healthy" | "degraded" | "down" | "unknown";
+export type AppHealth = "healthy" | "degraded" | "down" | "unknown" | "paused";
+
+/** Why Edge serves an app's holding page instead of it (D66): the routing table's reason, and the line to show. */
+export interface AppPaused {
+  reason: "budget_exhausted" | "overdraft_limit" | string;
+  note: string;
+}
+
+/** A build that stopped before anything was published (D81): kept, so "Try again" works, and said plainly. */
+export interface NotBuilt {
+  reason: "cancelled" | "failed" | "budget" | "plan-declined" | string;
+  /** "Not built — the build was cancelled." */
+  note: string;
+  runId: string;
+  ideaId: string | null;
+}
 export type AppRunning = "asleep" | "awake" | "always-on" | "starting" | "paused";
 export type AppAccess = "private" | "shared" | "public";
-export type ProjectStage = "idea" | "researching" | "verdict" | "planning" | "building" | "evaluating" | "reviewing" | "publishing" | "live" | "paused" | "dropped";
+export type ProjectStage = "idea" | "researching" | "verdict" | "planning" | "building" | "evaluating" | "reviewing" | "publishing" | "live" | "paused" | "dropped" | "not-built";
 
 export interface Worker {
   id: string;
@@ -95,6 +110,10 @@ export interface TreeApp {
   role?: MemberRole | null;
   /** Archived: kept, but not served. */
   archived?: boolean;
+  paused?: AppPaused | null;
+  notBuilt?: NotBuilt | null;
+  /** The app's own status: draft, building, running, sleeping, stopped, failed or archived. */
+  status?: string | null;
 }
 
 export interface ProjectProgress {
@@ -123,6 +142,8 @@ export interface TreeProject {
   role?: MemberRole | null;
   /** Archived: kept, but its apps are not served. */
   archived?: boolean;
+  /** Its build stopped before anything was published; `stage` is "not-built". */
+  notBuilt?: NotBuilt | null;
 }
 
 export interface TreeDivision {
@@ -140,7 +161,7 @@ export interface TreeDivision {
 
 export type NeedsYou =
   | { kind: "verdict"; id: string; ideaId: string; title: string; verdict: VerdictOutcome; detail: string | null }
-  | { kind: "approval"; id: string; runId: string; approvalId: string; title: string; detail: string | null }
+  | { kind: "approval"; id: string; runId: string; approvalId: string; title: string; detail: string | null; technical?: string | null }
   | { kind: "hire"; id: string; hireId: string; title: string; detail: string | null; scope: string; expectedMonthlyCredits: number }
   | { kind: "idle"; id: string; employeeId: string; title: string; detail: string | null };
 
@@ -149,7 +170,7 @@ export interface Tree {
   /** The signed-in person's role over the whole tree as shown; "none" on first run. */
   viewerRole: MemberRole | "none";
   /** Null on first run. `role` is the viewer's role at the organisation itself: null when their grants all sit lower. */
-  organisation: (OrganisationRef & { summary: string | null; spend: Spend; workers: Worker[]; role?: MemberRole | null }) | null;
+  organisation: (OrganisationRef & { summary: string | null; spend: Spend; workers: Worker[]; role?: MemberRole | null; neverToppedUp?: boolean }) | null;
   divisions: TreeDivision[];
   needsYou: NeedsYou[];
   /** With no organisation: true only while none exists anywhere, so this person may name the first. */
@@ -327,6 +348,10 @@ export interface Run {
   createdAt: string;
   /** The latest attempt at research, a build or a change, stopped without finishing: it can be tried again. */
   canTryAgain: boolean;
+  /** Why it finished (`declined_at_start`), from its `run.finished`. */
+  reason?: string | null;
+  /** `run.finished`'s technical detail: technical mode only. */
+  detail?: string | null;
 }
 
 export interface RunEvent {
@@ -394,6 +419,8 @@ export interface AppDetail {
   publishedAt: string | null;
   /** Minutes idle before it sleeps. */
   idleMinutes: number;
+  paused?: AppPaused | null;
+  notBuilt?: NotBuilt | null;
 }
 
 /** One running choice's monthly figure and what it assumes. */
@@ -527,6 +554,8 @@ export interface Credits {
   heldCredits: number;
   /** What can still be spent: the balance plus the overdraft limit. */
   available: number;
+  /** True while the organisation has never been topped up: it has no credits until FrostAura adds them (D63). */
+  neverToppedUp?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -613,7 +642,8 @@ export interface TrackRecord {
   work: { accepted: number; sentBack: number; acceptedPercent: number | null; judged: number };
   runs: { finished: number; succeeded: number; failed: number; cancelled: number };
   repairsNotCharged: { credits: number; calls: number };
-  cost: { toDateCredits: number; monthCredits: number };
+  /** Its own spend and that of the contractors it briefs, as its cap counts them; `own…` is its share alone. */
+  cost: { toDateCredits: number; monthCredits: number; ownToDateCredits?: number; ownMonthCredits?: number };
   contractors: { engaged: number; working: number; toDateCredits: number; monthCredits: number };
   estimates: Estimates | null;
 }
@@ -625,6 +655,17 @@ export interface EmployeeDetail {
   /** Contractors it has briefed that are working now. */
   contractors: Employee[];
   reports: Employee[];
+  /** The runs it led, newest first (up to 12). */
+  recentRuns?: LedRun[];
+}
+
+export interface LedRun {
+  id: string;
+  title: string;
+  kind: string;
+  status: string;
+  startedAt: string;
+  finishedAt: string | null;
 }
 
 export interface JobDescriptionInput {
@@ -698,6 +739,8 @@ export interface Hire {
   decision: { via: string; by: string; at: string; note: string | null } | null;
   employeeId: string | null;
   createdAt: string;
+  /** Declined by the platform, not a person: the work it was for stopped before anything was built. `decision.note` says why. */
+  withdrawn?: boolean;
 }
 
 export interface HireEdit {
@@ -998,6 +1041,8 @@ export interface NotificationItem {
    * declined): its title then says what happened, `read` is true and it is not counted unread.
    */
   resolved: boolean;
+  /** Technical mode's detail (an approval's tool line), beside the plain `detail`. */
+  technical?: string | null;
 }
 
 export interface NotificationFeed {
@@ -1119,6 +1164,10 @@ export interface OrganisationProvisioned {
   nameCheck: { slug: string; source: string; note: string | null } | null;
   /** How what it does was screened against the red lines: by the model, or by the operator when no model answered. */
   screening: { method: "model" | "manual"; result: "clear"; reason: string } | null;
+  /** Its credits: 0 until it is topped up. */
+  balance: number;
+  /** The reminder to show with the result: no credits until it is topped up, so its first work waits. */
+  creditsNote: string | null;
 }
 
 /** An operator's own red-line screening, sent only when no model could be reached. */

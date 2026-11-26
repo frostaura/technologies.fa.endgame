@@ -16,6 +16,8 @@ export function healthChip(health: AppHealth): Chip {
       return { label: "Healthy", tone: "success", icon: "health" };
     case "degraded":
       return { label: "Struggling", tone: "attention", icon: "health" };
+    case "paused":
+      return { label: "Paused", tone: "attention", icon: "asleep" };
     case "down":
       return { label: "Down", tone: "attention-strong", icon: "health" };
     default:
@@ -27,17 +29,30 @@ export function healthChip(health: AppHealth): Chip {
  * An app's chips on the chart. One the tree reports as starting with nothing ever measured has never been built (a
  * draft, or its first build under way): it is "Not built yet", not "Waking" and "Health unknown" (D30).
  */
-export function appChips(app: Pick<TreeApp, "health" | "running" | "access" | "sharedWith" | "visitsToday" | "lastVisitAt">): Chip[] {
-  if (app.running === "starting" && app.health === "unknown" && app.visitsToday === null && app.lastVisitAt === null) return [{ label: "Not built yet", tone: "quiet", icon: "build" }];
+export function appChips(app: Pick<TreeApp, "health" | "running" | "access" | "sharedWith" | "visitsToday" | "lastVisitAt"> & Partial<Pick<TreeApp, "paused" | "notBuilt" | "status">>): Chip[] {
+  // Its build stopped before anything was published (D81): "Not built", with the reason said beside it (`notBuilt.note`).
+  if (app.notBuilt) return [{ label: "Not built", tone: "quiet", icon: "build" }];
+  const neverBuilt = app.status ? app.status === "draft" || app.status === "building" : app.running === "starting" && app.health === "unknown" && app.visitsToday === null && app.lastVisitAt === null;
+  if (neverBuilt) return [{ label: "Not built yet", tone: "quiet", icon: "build" }];
   // Paused for budget or the overdraft, it serves nobody: "Healthy" beside it would be untrue (D66). A crashed app is
   // also not running, and stays "Down".
-  if (app.running === "paused" && app.health !== "down") return [runningChip(app.running), accessChip(app.access, app.sharedWith)];
+  if (isPaused(app)) return [runningChip("paused"), accessChip(app.access, app.sharedWith)];
   return [healthChip(app.health), runningChip(app.running), accessChip(app.access, app.sharedWith)];
 }
 
+/** Paused behind Edge's holding page: the control plane says so (`health: paused`, `paused`); an older one only by `running`. */
+function isPaused(app: { health: AppHealth; running: AppRunning; paused?: unknown }): boolean {
+  return app.health === "paused" || !!app.paused || (app.running === "paused" && app.health !== "down" && app.health !== "unknown");
+}
+
 /** An app's health as its page says it: paused outranks whatever it measured before it was paused (D66). */
-export function appHealthChip(health: AppHealth, running: AppRunning): Chip {
-  return running === "paused" && health !== "down" ? runningChip(running) : healthChip(health);
+export function appHealthChip(health: AppHealth, running: AppRunning, paused?: unknown): Chip {
+  return isPaused({ health, running, paused }) ? runningChip("paused") : healthChip(health);
+}
+
+/** The line under an app on the chart: why it is paused, or why it was never built — the control plane's own words. */
+export function appNote(app: Partial<Pick<TreeApp, "paused" | "notBuilt">>): string | null {
+  return app.notBuilt?.note ?? app.paused?.note ?? null;
 }
 
 export function runningChip(running: AppRunning): Chip {
@@ -73,13 +88,14 @@ const STAGE_LABEL: Record<ProjectStage, string> = {
   live: "Live",
   paused: "Paused",
   dropped: "Dropped",
+  "not-built": "Not built",
 };
 
 export function stageChip(stage: ProjectStage): Chip {
   const label = STAGE_LABEL[stage];
   if (stage === "verdict") return { label, tone: "attention-strong", icon: "verdict" };
   if (stage === "live") return { label, tone: "success", icon: "publish" };
-  if (stage === "paused" || stage === "dropped") return { label, tone: "quiet" };
+  if (stage === "paused" || stage === "dropped" || stage === "not-built") return { label, tone: "quiet" };
   if (stage === "researching" || stage === "idea") return { label, tone: "teal", icon: "research" };
   return { label, tone: "solid", icon: "build" };
 }
