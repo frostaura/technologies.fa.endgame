@@ -168,7 +168,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             {
                 await run.Sink.AppendAsync(
                 [
-                    new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["title"] = "Waiting for budget", ["code"] = "estimate_over_budget", ["text"] = string.Create(CultureInfo.InvariantCulture, $"The plan is estimated at {estimate.Credits} credits, more than the {room} left, so building has not started. Raise the budget, then resume."), ["estimate"] = estimate.Credits, ["headroom"] = room }),
+                    new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["title"] = "Waiting for budget", ["code"] = "estimate_over_budget", ["text"] = string.Create(CultureInfo.InvariantCulture, $"The plan is estimated at {CreditText.Format(estimate.Credits)} credits, more than the {CreditText.Format(room)} left, so building has not started. Raise the budget, then resume."), ["estimate"] = estimate.Credits, ["headroom"] = room }),
                     new RunEvent(RunEventTypes.RunPaused, new JsonObject { ["by"] = "runner", ["reason"] = "estimate_over_budget" }),
                 ], cancellationToken);
                 return WorkflowOutcome.Suspend("plan estimate over budget");

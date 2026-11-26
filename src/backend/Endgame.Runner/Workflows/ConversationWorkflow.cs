@@ -89,7 +89,8 @@ public sealed class ConversationWorkflow : IWorkflow
             await run.Journal.RecordAsync("answered", new JsonObject(), cancellationToken);
         }
 
-        return result.Completed ? WorkflowOutcome.Success(OutputText.Truncate(answer, 500))
+        // The reply is the conversation's own ending: no closing "The work is finished" message after it.
+        return result.Completed ? WorkflowOutcome.Success(OutputText.Truncate(answer, 500)) with { Announced = true }
             : result.Unreachable ? WorkflowOutcome.Unreachable(answer, result.FinalText) with { Announced = true }
             : WorkflowOutcome.Failure(answer);
     }

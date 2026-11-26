@@ -277,7 +277,7 @@ public sealed class ReadOrganisationTool(ControlPlaneClient controlPlane, string
 {
     public string Name => "read_organisation";
 
-    public string Description => "Read about the organisation at the scope being discussed (or a scope beneath it): 'overview' (levels, context, settings, budgets), 'workforce', 'tasks', 'runs' or 'credits'.";
+    public string Description => "Read about the organisation at the scope being discussed (or a scope beneath it): 'overview' (levels, context, settings, budgets, and needsYou: everything waiting on the owner — approvals, verdicts, hires — so read it whenever you are asked what is waiting), 'workforce', 'tasks', 'runs' or 'credits'.";
 
     public JsonObject Parameters => Schema.Object(new JsonObject
     {

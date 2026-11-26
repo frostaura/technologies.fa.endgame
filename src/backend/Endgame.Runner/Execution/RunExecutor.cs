@@ -152,7 +152,7 @@ public sealed class RunExecutor(
         if (headroom is { } room && expected > room)
         {
             // The budget is the limit that is always on: in every autonomy mode, work that would break it waits (IDEA-04).
-            var text = string.Create(CultureInfo.InvariantCulture, $"This work is estimated at {expected} credits, more than the {room} left in its budget, so it has not started. Raise the budget or top up, then resume it.");
+            var text = string.Create(CultureInfo.InvariantCulture, $"This work is estimated at {CreditText.Format(expected ?? 0m)} credits, more than the {CreditText.Format(room)} left in its budget, so it has not started. Raise the budget or top up, then resume it.");
             await ctx.Sink.AppendAsync(
             [
                 new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["title"] = "Waiting for budget", ["code"] = "estimate_over_budget", ["text"] = text, ["estimate"] = expected, ["headroom"] = room }),
@@ -166,15 +166,15 @@ public sealed class RunExecutor(
         if (ctx.Run.Kind != RunKinds.Conversation && autonomy == "checkpoints" && ctx.Setting("checkpoint.start")?.GetValueKind() == System.Text.Json.JsonValueKind.True)
         {
             var answer = await new ControlPlaneApprovals(ctx.ControlPlane, ctx.Run.Id).AskAsync(
-                string.Create(CultureInfo.InvariantCulture, $"Start this work? Estimated {expected} credits."),
-                headroom is { } h ? string.Create(CultureInfo.InvariantCulture, $"{h} credits are left in the budget.") : "The budget's headroom is not known.",
+                string.Create(CultureInfo.InvariantCulture, $"Start this work? Estimated {CreditText.Format(expected ?? 0m)} credits."),
+                headroom is { } h ? string.Create(CultureInfo.InvariantCulture, $"{CreditText.Format(h)} credits are left in the budget.") : "The budget's headroom is not known.",
                 ApprovalConsequence.Stops,
                 cancellationToken);
             if (!answer.Approved)
             {
                 // Not a failure, and nothing to score: the owner chose not to start (D19).
                 var note = string.IsNullOrWhiteSpace(answer.Note) ? "" : $" Your note: “{OutputText.Truncate(answer.Note.Trim(), 300)}”";
-                return WorkflowOutcome.Declined($"You declined to start this work at its estimate, so nothing was done and nothing was charged.{note}");
+                return WorkflowOutcome.Declined("The owner declined to start this work at its estimate.", $"You declined to start this work at its estimate, so nothing was done and nothing was charged.{note}");
             }
         }
 

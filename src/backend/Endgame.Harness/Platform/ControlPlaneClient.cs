@@ -263,7 +263,7 @@ public sealed class ControlPlaneClient(HttpClient http)
     }
 
     /// <summary>A contractor briefed by an employee, on the chart while it works; its model calls carry its id.</summary>
-    public async Task<Guid> StartContractorAsync(string scope, Guid briefedBy, string role, string name, string brief, Guid? runId, CancellationToken cancellationToken)
+    public async Task<Guid> StartContractorAsync(string scope, Guid briefedBy, string role, string? name, string brief, Guid? runId, CancellationToken cancellationToken)
     {
         using var response = await Http.PostAsJsonAsync("/internal/contractors", new { scope, briefedBy, role, name, brief, runId }, Json.Web, cancellationToken);
         return Guid.Parse(Json.Str(await ReadAsync<JsonObject>(response, cancellationToken), "id")!);

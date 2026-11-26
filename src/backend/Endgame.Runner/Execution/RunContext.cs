@@ -49,7 +49,8 @@ public sealed record WorkflowOutcome(WorkflowEnd End, string Summary)
     /// <summary>What the owner reads when no AI model could be reached.</summary>
     public const string UnreachableForOwner = "Endgame could not reach its AI models, so the work stopped before it was finished. What was done is kept; try again, and if it keeps happening, tell FrostAura.";
 
-    public static WorkflowOutcome Declined(string forOwner) => new(WorkflowEnd.Declined, forOwner) { ForOwner = forOwner };
+    /// <summary>A declined start: the summary begins "The owner declined to start", which the console keys on; the owner reads <paramref name="forOwner"/>.</summary>
+    public static WorkflowOutcome Declined(string summary, string forOwner) => new(WorkflowEnd.Declined, summary) { ForOwner = forOwner };
 
     /// <summary>No model could be reached: said plainly, with what the gateway answered kept for technical mode.</summary>
     public static WorkflowOutcome Unreachable(string forOwner, string? detail) =>

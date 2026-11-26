@@ -110,6 +110,7 @@ public sealed class EstimateTests
             Assert.Contains("Too dear this month.", said, StringComparison.Ordinal);
             Assert.DoesNotContain("estimate.scored", cp.Types);
             Assert.Equal("declined_at_start", cp.Payload("run.finished")!["reason"]!.GetValue<string>());
+            Assert.StartsWith("The owner declined to start", cp.Payload("run.finished")!["summary"]!.GetValue<string>(), StringComparison.Ordinal);
         }
         else
         {
@@ -128,6 +129,8 @@ public sealed class EstimateTests
         await Executor(cp, model, workflows: [new ConversationWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
         Assert.Empty(cp.Approvals);
         Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
+        // The reply is the ending: no "The work is finished" after it.
+        Assert.DoesNotContain(cp.Events, e => e.Type == "message" && e.Payload["from"]?.GetValue<string>() == "runner");
 
         // The budget still holds: an estimate over the headroom pauses it before anything is asked of a model.
         var poor = new FakeControlPlane(Scope, "conversation", "How many apps do we have?") { Headroom = 0.1m };

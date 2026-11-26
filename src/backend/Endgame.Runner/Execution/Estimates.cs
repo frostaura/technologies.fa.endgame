@@ -8,6 +8,13 @@ using Endgame.Harness.Planning;
 
 namespace Endgame.Runner.Execution;
 
+/// <summary>Credits as people read them (D44): at most two decimals, trailing zeros trimmed — "277.32", "1.5", "20".</summary>
+public static class CreditText
+{
+    public static string Format(decimal credits) =>
+        decimal.Round(credits, 2, MidpointRounding.AwayFromZero).ToString("0.##", CultureInfo.InvariantCulture);
+}
+
 /// <summary>An estimate shown before work starts (CLAUDE.md rule 11).</summary>
 public sealed record Estimate(decimal Credits, string Basis, int Samples);
 

@@ -251,8 +251,9 @@ public sealed class ResearchWorkflow : IWorkflow
                 {
                     // One role per strand: three strands in one burst are not a recurring job (the control plane proposes a
                     // promotion for a role briefed three times), while the same strand across ideas is.
-                    // Named by its role (D60): the step's title is what it is doing, not who it is.
-                    contractor = await run.ControlPlane.StartContractorAsync(run.Run.Scope, briefer, Role(strand.Id), Role(strand.Id), strand.Strand, run.Run.Id, cancellationToken);
+                    // Named by its role (D60): no name is sent, so the control plane names it "{role} (contractor)"; the step's
+                    // title stays its activity.
+                    contractor = await run.ControlPlane.StartContractorAsync(run.Run.Scope, briefer, Role(strand.Id), null, strand.Strand, run.Run.Id, cancellationToken);
                 }
                 catch (ServiceProblemException)
                 {

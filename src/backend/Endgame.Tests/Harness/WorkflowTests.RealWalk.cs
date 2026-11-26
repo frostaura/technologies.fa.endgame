@@ -333,8 +333,9 @@ public sealed partial class WorkflowTests
         Assert.StartsWith("Endgame could not reach its AI models, so no research was done", cp.Run["summary"]!.GetValue<string>(), StringComparison.Ordinal);
         // D73: the contractors were finished with the run, not left working.
         Assert.Equal(3, cp.ContractorsFinished.Count);
-        // D60: each is named by its role, not by its step.
-        Assert.All(cp.Contractors, c => Assert.Equal(c["role"]!.GetValue<string>(), c["name"]!.GetValue<string>()));
+        // D60: none is named by its step: no name is sent, so the control plane names it by its role.
+        Assert.All(cp.Contractors, c => Assert.Null(c["name"]));
+        Assert.All(cp.Contractors, c => Assert.EndsWith("researcher", c["role"]!.GetValue<string>(), StringComparison.Ordinal));
     }
 
     [Fact]
@@ -423,6 +424,30 @@ public sealed partial class WorkflowTests
             new("subagent.finished", new JsonObject { ["subagent"] = "contractor-existing" }),
         };
         Assert.Equal([b], RunExecutor.OpenContractors(log));
+    }
+
+    // ---- D44: credits as people read them -----------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("277.323824", "277.32")]
+    [InlineData("20", "20")]
+    [InlineData("1.50", "1.5")]
+    [InlineData("0.005", "0.01")]
+    public void Credits_are_shown_with_at_most_two_decimals(string credits, string shown) =>
+        Assert.Equal(shown, CreditText.Format(decimal.Parse(credits, global::System.Globalization.CultureInfo.InvariantCulture)));
+
+    [Fact]
+    public async Task The_start_checkpoint_and_the_budget_pause_show_rounded_credits()
+    {
+        var cp = new FakeControlPlane("frostaura/technologies", "task", "x") { Headroom = 277.323824m, AnswerApproval = _ => true };
+        cp.Setting("autonomy", JsonValue.Create("checkpoints")!);
+        cp.Setting("checkpoint.start", JsonValue.Create(true)!);
+        await EstimateTests.Executor(cp, new ScriptedModel()).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
+        Assert.Equal("277.32 credits are left in the budget.", cp.ApprovalsAsked.Single()["detail"]!.GetValue<string>());
+
+        var poor = new FakeControlPlane("frostaura/technologies", "task", "x") { Headroom = 0.123456m };
+        await EstimateTests.Executor(poor, new ScriptedModel()).ExecuteAsync(poor.Info(), "runner-test", () => false, CancellationToken.None);
+        Assert.StartsWith("This work is estimated at 1.5 credits, more than the 0.12 left", poor.Events.Single(e => e.Payload["code"]?.GetValue<string>() == "estimate_over_budget").Payload["text"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
     // ---- D83: a requirement is a whole statement -------------------------------------------------------------------------

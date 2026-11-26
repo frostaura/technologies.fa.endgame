@@ -235,6 +235,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - With no connection to the AI models (no key, a key refused, the provider down), the run stops at once: "Endgame could not reach its AI models, so no research was done and nothing was charged. Try again; if it keeps happening, tell FrostAura." No step is corrected or sent back; a contractor that could not reach a model says "It could not reach Endgame's AI models, so it found nothing."
   - With a rule on web search at the research stage (AUTO-05): "May not" means the researchers are not given web search at all, and each says so; "Asks you first" raises one approval per researcher before its first search, titled "Let this step search the web: {step}?"; declined, that researcher works without searching.
   - Whenever the run ends — finished, failed, cancelled or out of budget — its contractors are finished with it, so none stays "Working".
+  - Each contractor is named by its role ("Demand researcher (contractor)"); the step's title ("Looked for evidence people will pay") is what it did.
 - **Where:** `RunView.tsx`, `timeline.ts`; `ResearchWorkflow.cs`, `VerdictBuilder.cs`.
 - **Reachable from:** UI; MCP `run_events`.
 - **Covered by tests:** `WorkflowTests.Research_fans_out_registered_contractors…`, `…The_search_budget_is_sized_from_the_estimate…`, `…A_verdict_the_control_plane_refuses_goes_back_to_the_judge_once…`, `…With_no_model_connection_research_stops_plainly_without_correction_rounds`, `…Under_may_not_the_researchers_are_not_offered_web_search…`, `…Under_asks_you_first_each_step_raises_one_plain_approval…`, `…Contractors_of_a_run_that_ended_part_way_are_closed_with_it`; `RunView.test.tsx` ("links a finished research run to its verdict"); `factory.spec.ts` step 2.
@@ -584,7 +585,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Advanced. **Learn first:** RUN-07, AUTO-03.
 - **What you learn:** with the start checkpoint on, you approve the cost before anything begins.
 - **Steps:**
-  1. The card asks "Start this work? Estimated {n} credits." The detail (technical mode) reads "{h} credits are left in the budget."
+  1. The card asks "Start this work? Estimated {n} credits." The detail reads "{h} credits are left in the budget." Both figures are shown with at most two decimals ("277.32").
   2. Press **"Approve"** to start.
   3. Press **"Decline"** (optionally with a note) to end the run. It is not a failure and its estimate is not scored: "You declined · You declined to start this work at its estimate, so nothing was done and nothing was charged. Your note: “…”" The run ends as cancelled, with the reason `declined_at_start` (technical mode). The card says "Declined. It was not done, so the work has stopped."
 - **You know it worked when:** after approving, "Work started" and the work appear.
