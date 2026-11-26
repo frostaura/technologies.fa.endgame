@@ -32,7 +32,12 @@ public sealed class PostgresServer : IAsyncLifetime
 
         var port = FreePort();
         container = $"endgame-test-pg-{Guid.NewGuid():N}"[..32];
-        await Docker($"run -d --rm --name {container} --label endgame-tests=1 -e POSTGRES_PASSWORD={Password} -p 127.0.0.1:{port}:5432 {Image} -c max_connections=300");
+        // A test host that crashed or was killed left its container (and, removed without -v, its volume) behind: gone first.
+        await TestContainers.RemoveStaleAsync();
+        // The data directory is a tmpfs, so the image's VOLUME never becomes an anonymous volume on disk (R3-3).
+        await Hosting.DockerCli.CheckedAsync(TimeSpan.FromMinutes(5), [
+            "run", "-d", "--rm", "--name", container, .. TestContainers.Labels(), "--tmpfs", "/var/lib/postgresql/data:rw",
+            "-e", $"POSTGRES_PASSWORD={Password}", "-p", $"127.0.0.1:{port}:5432", Image, "-c", "max_connections=300"]);
         AdminConnectionString = $"Host=127.0.0.1;Port={port};Database=postgres;Username=postgres;Password={Password};Pooling=false;Timeout=5";
         var deadline = DateTime.UtcNow.AddSeconds(60);
         while (true)
@@ -56,7 +61,8 @@ public sealed class PostgresServer : IAsyncLifetime
     {
         if (container is not null)
         {
-            await Docker($"rm -f {container}");
+            // With its volumes: "docker rm -f" alone keeps them, and one day of test runs left 74.9 GB behind (R3-3).
+            await Docker($"rm -f -v {container}");
         }
     }
 

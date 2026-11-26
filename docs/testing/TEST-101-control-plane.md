@@ -61,6 +61,13 @@ The acceptance statements of UC-101 to UC-115. The ones with the most weight, an
 - `PostgresServer` — a throwaway `postgres:16.16-alpine` container on a free loopback port, started with the
   docker CLI (so the Docker client library never loads into the test process), one database per test class.
   `ENDGAME_TEST_POSTGRES=<admin connection string>` uses a server you started instead. Never the compose stack's database.
+  Its data directory is a tmpfs, so it never leaves a volume on disk, and it is removed with `docker rm -f -v`.
+- `TestContainers` (R3-3) — one day of test runs once left 54 anonymous volumes holding 74.9 GB and filled the disk.
+  Every container a test starts (the PostgreSQL fixture, the hosting stack's) is labelled `endgame-tests=1` with its
+  test host's process id and start time, and is removed with its volumes. Each fixture first removes the labelled
+  containers whose test host is no longer running (with `-v`), and the hosting fixture also removes everything under
+  such a run's `test-endgame-<run>-` prefix. Unlabelled containers from before the labels are removed only once older
+  than three hours, so another run in progress is never touched; nothing of a stack (`endgame-*`) or a named volume is.
 - `FakeOpenRouter` — an in-test Kestrel server answering in OpenRouter's shapes: `usage.cost`, streams with the
   usage on the last chunk, an error inside a 200, a mid-stream error chunk, a 404 when no provider fits
   `max_price`, and `/api/v1/generation`. It keeps every request body for assertions and can hold calls in flight.

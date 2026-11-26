@@ -7,6 +7,8 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Endgame.Hosting.Contracts;
 
+using Endgame.Tests.Fixtures;
+
 namespace Endgame.Tests.Hosting;
 
 /// <summary>
@@ -71,6 +73,8 @@ public sealed class HostingEnvironment : IAsyncLifetime
         }
 
         await DockerCli.RemoveEverythingOursAsync();
+        // A run whose test host died left its whole stack — and what its Dock made — behind: removed first (R3-3).
+        await DockerCli.RemoveStaleRunsAsync();
         SubnetPool = await DockerCli.SubnetPoolAsync();
         ControlPlane = await FakeControlPlane.StartAsync(Token, listenOnAllInterfaces: OperatingSystem.IsLinux());
 
@@ -91,18 +95,18 @@ public sealed class HostingEnvironment : IAsyncLifetime
         string[] hostGateway = ["--add-host", "host.docker.internal:host-gateway"];
 
         await DockerCli.CheckedAsync("network", "create", "--label", "endgame.test=1", Container("ctl"));
-        await DockerCli.CheckedAsync(["run", "-d", "--name", Container("postgres"), "--network", Container("ctl"),
+        await DockerCli.CheckedAsync(["run", "-d", "--name", Container("postgres"), .. TestContainers.Labels(), "--tmpfs", "/var/lib/postgresql/data:rw", "--network", Container("ctl"),
             "-e", $"POSTGRES_PASSWORD={postgresPassword}", "postgres:16.16-alpine"]);
         // The proxy reaches the fake control plane by a name with only an IPv4 address: Docker
         // Desktop also gives host.docker.internal an IPv6 one, which the proxy tries first and cannot reach.
-        await DockerCli.CheckedAsync(["run", "-d", "--name", Container("egress"), "--network", Container("ctl"), "--add-host", $"{PlatformHost}:host-gateway",
+        await DockerCli.CheckedAsync(["run", "-d", "--name", Container("egress"), .. TestContainers.Labels(), "--network", Container("ctl"), "--add-host", $"{PlatformHost}:host-gateway",
             "--sysctl", "net.ipv6.conf.all.disable_ipv6=1", Container("egress:it")]);
         await WaitAsync("PostgreSQL", async () => (await DockerCli.RunAsync(TimeSpan.FromSeconds(10), "exec", Container("postgres"), "pg_isready", "-U", "postgres")).ExitCode == 0, TimeSpan.FromMinutes(1));
 
         var template = Path.Combine(RepositoryRoot, "src", "backend", "Endgame.Tests", "Hosting", "Fixtures", "app-template");
         await DockerCli.CheckedAsync(
         [
-            "run", "-d", "--name", Container("dock"), "--network", Container("ctl"), .. hostGateway,
+            "run", "-d", "--name", Container("dock"), .. TestContainers.Labels(), "--network", Container("ctl"), .. hostGateway,
             "--group-add", SocketGroup(),
             "-v", "/var/run/docker.sock:/var/run/docker.sock",
             "-v", $"{Container("dock-data")}:/data",
@@ -130,7 +134,7 @@ public sealed class HostingEnvironment : IAsyncLifetime
         ]);
         await DockerCli.CheckedAsync(
         [
-            "run", "-d", "--name", Container("edge"), "--network", $"name={Container("ctl")},gw-priority=100", .. hostGateway,
+            "run", "-d", "--name", Container("edge"), .. TestContainers.Labels(), "--network", $"name={Container("ctl")},gw-priority=100", .. hostGateway,
             "-p", $"127.0.0.1:{edgePort}:8080",
             "-p", $"127.0.0.1:{edgeControlPort}:8081",
             "-e", $"{HostingConventions.ServiceTokenVariable}={Token}",

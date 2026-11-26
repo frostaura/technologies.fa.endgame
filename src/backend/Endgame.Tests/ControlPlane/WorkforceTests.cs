@@ -424,7 +424,8 @@ public sealed class WorkforceTests(PostgresServer postgres) : IAsyncLifetime
         var capped = Guid.Parse((await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/contractors", new { scope = Project, briefedBy = ada, role = "Tester", brief = "Test it." })))["id"]!.GetValue<string>());
         var refused = await Assert.ThrowsAsync<ModelCallException>(() => CallAsync(null, capped));
         Assert.Equal(ModelFailure.BudgetExhausted, refused.Failure);
-        Assert.Contains("employee:Ada", refused.Message, StringComparison.Ordinal);
+        // Said as people read it: the briefer's own limit by name, never "employee:Ada" (round three).
+        Assert.Contains("Ada's monthly limit has", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

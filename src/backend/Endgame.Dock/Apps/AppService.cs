@@ -81,7 +81,7 @@ public sealed class AppService(
             if (existing is not null && !current)
             {
                 await StopContainerAsync(runtime, name, cancellationToken);
-                await docker.Containers.RemoveContainerAsync(name, new ContainerRemoveParameters { Force = true }, cancellationToken);
+                await docker.Containers.RemoveContainerAsync(name, new ContainerRemoveParameters { Force = true, RemoveVolumes = true }, cancellationToken);
                 existing = null;
             }
 
@@ -224,7 +224,7 @@ public sealed class AppService(
     {
         try
         {
-            await docker.Containers.RemoveContainerAsync(name, new ContainerRemoveParameters { Force = true }, cancellationToken);
+            await docker.Containers.RemoveContainerAsync(name, new ContainerRemoveParameters { Force = true, RemoveVolumes = true }, cancellationToken);
         }
         catch (Exception e) when (EngineErrors.IsNotFound(e))
         {

@@ -8,7 +8,7 @@ namespace Endgame.Tests.Hosting;
 /// test assembly never loads the Docker client (ArchitectureTests) and every command is one a
 /// person could rerun by hand.
 /// </summary>
-public static class DockerCli
+public static partial class DockerCli
 {
     /// <summary>
     /// This test run's own id. Two test runs on one machine never share a name, a Dock instance label or a
@@ -108,7 +108,9 @@ public static class DockerCli
     public static Task<string> CheckedAsync(params string[] arguments) => CheckedAsync(TimeSpan.FromMinutes(2), arguments);
 
     /// <summary>The names of every resource of a kind whose name starts with <see cref="Prefix"/>.</summary>
-    public static async Task<IReadOnlyList<string>> OursAsync(string kind)
+    public static Task<IReadOnlyList<string>> OursAsync(string kind) => OursAsync(kind, Prefix);
+
+    private static async Task<IReadOnlyList<string>> OursAsync(string kind, string prefix)
     {
         string[] list = kind switch
         {
@@ -120,29 +122,51 @@ public static class DockerCli
         };
         var output = await CheckedAsync(list);
         return output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(n => n.StartsWith(Prefix, StringComparison.Ordinal))
+            .Where(n => n.StartsWith(prefix, StringComparison.Ordinal))
             .ToList();
     }
 
-    /// <summary>Removes every container, network, volume and image the tests (or the Dock under test) made.</summary>
-    public static async Task RemoveEverythingOursAsync()
+    /// <summary>
+    /// Removes everything of earlier runs whose test host is gone (R3-3): a run is known by a container it started itself,
+    /// labelled with its owner (<see cref="Fixtures.TestContainers"/>); all its prefix's containers (with their volumes),
+    /// networks, volumes and images go. A run still going on this machine is left alone, as are the shared images.
+    /// </summary>
+    public static async Task RemoveStaleRunsAsync()
     {
-        foreach (var container in await OursAsync("container"))
+        foreach (var name in await Fixtures.TestContainers.RemoveStaleAsync())
+        {
+            var run = Stale().Match(name);
+            if (run.Success && run.Value != Prefix)
+            {
+                await RemoveEverythingOursAsync(run.Value);
+            }
+        }
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^test-endgame-(?!shared-)[0-9a-f]+-")]
+    private static partial System.Text.RegularExpressions.Regex Stale();
+
+    /// <summary>Removes every container, network, volume and image the tests (or the Dock under test) made.</summary>
+    public static Task RemoveEverythingOursAsync() => RemoveEverythingOursAsync(Prefix);
+
+    private static async Task RemoveEverythingOursAsync(string prefix)
+    {
+        foreach (var container in await OursAsync("container", prefix))
         {
             await RunAsync(TimeSpan.FromMinutes(1), "rm", "-f", "-v", container);
         }
 
-        foreach (var network in await OursAsync("network"))
+        foreach (var network in await OursAsync("network", prefix))
         {
             await RunAsync(TimeSpan.FromMinutes(1), "network", "rm", network);
         }
 
-        foreach (var volume in await OursAsync("volume"))
+        foreach (var volume in await OursAsync("volume", prefix))
         {
             await RunAsync(TimeSpan.FromMinutes(1), "volume", "rm", "-f", volume);
         }
 
-        foreach (var image in await OursAsync("image"))
+        foreach (var image in await OursAsync("image", prefix))
         {
             await RunAsync(TimeSpan.FromMinutes(1), "image", "rm", "-f", image);
         }
