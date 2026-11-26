@@ -6,6 +6,7 @@ using Endgame.Domain.Access;
 using Endgame.Domain.Tree;
 using Endgame.Infrastructure.Persistence;
 using Endgame.Infrastructure.Persistence.Records;
+using Endgame.Infrastructure.Platform;
 using Endgame.Infrastructure.Tenancy;
 using Endgame.Infrastructure.Tree;
 using Microsoft.AspNetCore.Identity;
@@ -27,7 +28,7 @@ public sealed record Invitation(MemberView Member, string? InvitationCode, DateT
 /// person (who creates the first organisation and becomes its Owner), by someone holding an invitation
 /// code, or by a signed-in person adding a passkey to their own account.
 /// </summary>
-public sealed class AccountService(EndgameDbContext db, TenantSession session, UserManager<EndgameUser> users, TreeService tree, TimeProvider clock)
+public sealed class AccountService(EndgameDbContext db, TenantSession session, UserManager<EndgameUser> users, TreeService tree, EdgeNotifier edge, TimeProvider clock)
 {
     public static readonly TimeSpan InvitationLifetime = TimeSpan.FromDays(7);
 
@@ -340,6 +341,8 @@ public sealed class AccountService(EndgameDbContext db, TenantSession session, U
                     && !db.Set<IdentityUserPasskey<Guid>>().Any(p => p.UserId == u.Id))
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.InvitationCodeHash, (string?)null).SetProperty(x => x.InvitationExpiresAt, (DateTimeOffset?)null), cancellationToken) > 0;
         session.UseOrganisation(membership.OrganisationId);
+        // An access answer Edge reuses must not keep an app open to someone whose role just went.
+        await edge.AccessEndedAsync(cancellationToken);
         return new RoleRevoked(membership.Id, cancelled);
     }
 }

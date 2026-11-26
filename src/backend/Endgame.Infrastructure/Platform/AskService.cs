@@ -61,6 +61,12 @@ public sealed class AskService(
     /// <summary>Writing the query, one repair, and the answer.</summary>
     public const int MaxCalls = 3;
 
+    /// <summary>
+    /// The room one answer has: a query and a chart, or a few plain sentences, with a reasoning model's thinking first.
+    /// An answer cut off at it is asked for once more with twice the room, never charged (R2-6).
+    /// </summary>
+    public const int MaxTokens = 3000;
+
     /// <summary>The query-writing system prompt: the views from the catalog, then the reply format.</summary>
     public async Task<string> WritingPromptAsync(CancellationToken cancellationToken) =>
         "You write one PostgreSQL query that answers an owner's question about their app.\n" + AskViewCatalog.Prompt(await catalog.ViewsAsync(cancellationToken)) +
@@ -111,7 +117,7 @@ public sealed class AskService(
     private AskEstimate Estimate(string question, string prompt)
     {
         var route = Route();
-        var perCall = ModelGateway.Prepare(routes, credits, new ChatRequest { TaskType = options.Value.TaskType, Messages = WriteMessages(prompt, question, null) }, route, stream: false).ReservedCredits;
+        var perCall = ModelGateway.Prepare(routes, credits, new ChatRequest { TaskType = options.Value.TaskType, Messages = WriteMessages(prompt, question, null), Limits = new ChatLimits { MaxTokens = MaxTokens } }, route, stream: false).ReservedCredits;
         var total = Math.Ceiling(perCall * MaxCalls * 100m) / 100m;
         return new AskEstimate(total,
             $"Up to {MaxCalls.ToString(CultureInfo.InvariantCulture)} model calls (writing the query, one repair that is never charged, and the answer), each priced at the most it could cost. It is charged at what it actually costs.");
@@ -371,17 +377,37 @@ public sealed class AskService(
     private async Task<Called> CallAsync(ResolvedScope app, JsonArray messages, bool repair, CancellationToken cancellationToken)
     {
         _ = Route();
-        var result = await gateway.CompleteAsync(new ChatRequest
+        var charged = 0m;
+        for (var room = MaxTokens; ; room *= 2)
         {
-            TaskType = options.Value.TaskType,
-            Scope = app.Path.ToString(),
-            Messages = messages,
-            ResponseFormat = new JsonObject { ["type"] = "json_object" },
-            Temperature = 0,
-            Repair = repair,
-        }, cancellationToken);
-        var content = JsonObjectOf(result.Body)?["choices"]?[0]?["message"]?["content"] is JsonValue c && c.GetValueKind() == JsonValueKind.String ? c.GetValue<string>() : "";
-        return new Called(content, result.Settlement.Billable ? result.Settlement.SettledCredits : 0m);
+            var result = await gateway.CompleteAsync(new ChatRequest
+            {
+                TaskType = options.Value.TaskType,
+                Scope = app.Path.ToString(),
+                Messages = messages,
+                ResponseFormat = new JsonObject { ["type"] = "json_object" },
+                Limits = new ChatLimits { MaxTokens = room },
+                Temperature = 0,
+                // The retry of an answer cut at the platform's own limit is never charged.
+                Repair = repair || room > MaxTokens,
+            }, cancellationToken);
+            charged += result.Settlement.Billable ? result.Settlement.SettledCredits : 0m;
+            var body = JsonObjectOf(result.Body);
+            if (StructuredReplies.FinishReason(body) != StructuredReplies.CutOff)
+            {
+                var content = body?["choices"]?[0]?["message"]?["content"] is JsonValue c && c.GetValueKind() == JsonValueKind.String ? c.GetValue<string>() : "";
+                return new Called(content, charged);
+            }
+
+            if (room > MaxTokens)
+            {
+                // Cut off twice: said plainly, never as a question the app cannot answer (R2-6).
+                var problem = new EndgameProblem(422, "ask_too_long", "The answer was too long to finish",
+                    "Working out the answer took more room than one answer has, even when asked again with twice as much. Ask a narrower question, such as one thing or a shorter period.");
+                problem.Extensions["credits"] = decimal.Round(charged, 6);
+                throw problem;
+            }
+        }
     }
 
     private static Plan ParsePlan(string content)

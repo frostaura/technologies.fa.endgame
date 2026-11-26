@@ -46,6 +46,8 @@ public sealed class AgentFactory(RunnerOptions options)
         SystemPrompt = RunnerResources.Prompt("planner", new Dictionary<string, string> { ["root"] = root, ["skills"] = SkillLibrary.Index(run.Skills, BuilderSkills) }),
         Tools = new ToolRegistry([new ReadFileTool(), new ListFilesTool(), new SearchTool(), new GitDiffTool(), new LoadSkillTool(), new NotesTool(), new ProposePlanTool(idea)]),
         Permissions = Policy(run, "plan", []).WithMode(AgentMode.Plan),
+        // propose_plan is read by code: a call cut off at the output limit is asked for again with twice the room (R2-6).
+        StructuredAnswer = true,
         Title = "Drew up the plan",
         Progress = new ProgressReports("planner", "Still planning", "Still reading the app and deciding the parts of the plan"),
         AutoAcceptPlan = false,
@@ -71,8 +73,10 @@ public sealed class AgentFactory(RunnerOptions options)
         Permissions = Policy(run, "evaluate", ["run"], deny: ["edit_file", "write_file", "commit"]),
         Progress = new ProgressReports("evaluator", "Still checking", "Still checking this part in the running app"),
         StopHooks = [],
+        // Its verdict is a JSON object code reads (R2-6); 8,000 tokens leaves a reasoning model room, and twice that for the one retry.
+        StructuredAnswer = true,
         // Reading the change, two checks and every requirement in the running app: a live evaluator of a five-requirement item ran out at 30.
-        Limits = new AgentLimits { MaxSteps = 50 },
+        Limits = new AgentLimits { MaxSteps = 50, MaxOutputTokens = 8000 },
     };
 
     public AgentDefinition SecurityReviewer(RunContext run, string root) => Base(run, "security-reviewer", options.ReviewTaskType) with
@@ -81,7 +85,8 @@ public sealed class AgentFactory(RunnerOptions options)
         Tools = new ToolRegistry([new ReadFileTool(), new ListFilesTool(), new SearchTool(), new GitDiffTool(), new LoadSkillTool(), new NotesTool()]),
         Permissions = Policy(run, "review", []).WithMode(AgentMode.Plan),
         StopHooks = [],
-        Limits = new AgentLimits { MaxSteps = 40 },
+        StructuredAnswer = true,
+        Limits = new AgentLimits { MaxSteps = 40, MaxOutputTokens = 8000 },
     };
 
     /// <summary>A research contractor or the judge: no workspace, the research route's server-side web search, no tools of its own beyond notes.</summary>
@@ -91,9 +96,17 @@ public sealed class AgentFactory(RunnerOptions options)
         Tools = new ToolRegistry([new NotesTool()]),
         Permissions = Policy(run, "research", []).WithMode(AgentMode.Plan),
         StopHooks = [],
+        // Every research agent replies with a JSON object that code reads (R2-6).
+        StructuredAnswer = true,
         // No web search unless a workflow gives this agent a search budget of its own.
         Limits = new AgentLimits { MaxSteps = 8, MaxOutputTokens = 8000, MaxSearchesPerCall = 0 },
     };
+
+    /// <summary>
+    /// A researcher whose whole job is one JSON answer — a screen, a verdict, a memory review, suggestions: no tools at all,
+    /// so the gateway can ask the model for a JSON object outright (R2-6).
+    /// </summary>
+    public AgentDefinition Answerer(RunContext run, string id, string prompt) => Researcher(run, id, prompt) with { Tools = new ToolRegistry([]) };
 
     public AgentDefinition Conversation(RunContext run, IEnumerable<ITool> tools) => Base(run, "assistant", options.ChatTaskType) with
     {

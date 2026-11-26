@@ -24,7 +24,7 @@ namespace Endgame.Edge.Access;
 /// A <c>returnTo</c> outside the app's own two addresses is replaced by the app's home, so these
 /// pages can never send anyone elsewhere.
 /// </summary>
-public sealed class AuthPages(IHttpClientFactory http, IOptions<EdgeOptions> options, IConfiguration configuration, ILogger<AuthPages> logger)
+public sealed class AuthPages(IHttpClientFactory http, AccessGate access, IOptions<EdgeOptions> options, IConfiguration configuration, ILogger<AuthPages> logger)
 {
     public const string SignIn = "sign-in";
     public const string SignUp = "sign-up";
@@ -179,8 +179,10 @@ public sealed class AuthPages(IHttpClientFactory http, IOptions<EdgeOptions> opt
             logger.LogWarning("Signing out of app {AppId} failed: {Message}", app.AppId, e.Message);
         }
 
-        // An app session on this host is cleared here too, whatever the control plane answered.
+        // An app session on this host is cleared here too, whatever the control plane answered, and no
+        // access answer given for it is reused.
         context.Response.Cookies.Delete(PlatformCookies.AppSession(app.AppId), new CookieOptions { Path = "/" });
+        access.Forget();
     }
 
     // The console serves the mark on the platform's host; on a subdomain that path is the app's.

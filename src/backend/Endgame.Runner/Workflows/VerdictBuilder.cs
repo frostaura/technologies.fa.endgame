@@ -203,6 +203,12 @@ public static class VerdictBuilder
             return "It could not reach Endgame's AI models, so it found nothing.";
         }
 
+        if (result.CutOff)
+        {
+            // Not its form either: the report did not fit in the room it had (R2-6).
+            return "Its report was too long to finish, so its work is not counted.";
+        }
+
         if (report is null)
         {
             return "It did not report back in the agreed form, so its work is not counted.";

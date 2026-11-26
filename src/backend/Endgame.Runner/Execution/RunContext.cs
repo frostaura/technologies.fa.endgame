@@ -5,6 +5,7 @@ using Endgame.Harness.Kernel;
 using Endgame.Harness.Model;
 using Endgame.Harness.Platform;
 using Endgame.Harness.Skills;
+using Endgame.Hosting.Contracts;
 using Endgame.Runner.Platform;
 
 namespace Endgame.Runner.Execution;
@@ -147,6 +148,9 @@ public sealed class RunContext
         (Context["settings"] as JsonArray ?? []).OfType<JsonObject>().FirstOrDefault(s => Json.Str(s, "key") == key)?["value"];
 
     /// <summary>The owner's first message on the run: the idea, the request, the question.</summary>
+    /// <summary>Where this run's work starts when it has none of its own yet: the attempt it tries again, if any (R2-4).</summary>
+    public string? StartFrom() => Guid.TryParse(Json.Str(OwnerMessage(), "retryOf"), out var earlier) ? RunBranches.Of(earlier) : null;
+
     public JsonObject? OwnerMessage() =>
         History.FirstOrDefault(e => e.Type == HarnessEvents.Message && Json.Str(e.Payload, "from") == "owner")?.Payload;
 

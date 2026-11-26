@@ -45,10 +45,22 @@ gateway is not built yet; this is the design it must follow.
     prepares the call exactly as every call is prepared (`ModelGateway.Prepare`: the route's models,
     ceiling, `max_price` and limits) and sends it through the same provider adapter, but reserves in no
     ledger: the reported cost is written to `platform_costs` (append-only) with what the call was for.
-    The screening asks for `response_format: json_object` with 2000 tokens of room (the `classify`
+    The screening asks for `response_format: json_object` with 3000 tokens of room (the `classify`
     route's models reason first; at 400 they spent the budget thinking and the answer was cut off),
     reads the first whole JSON object in the answer — bare, fenced or after prose — and asks once more
-    when it cannot; two unreadable answers leave only the operator's screening by hand.
+    when it cannot (with twice the room when the first was cut off); two unreadable answers leave only
+    the operator's screening by hand.
+13. **Every answer code reads as JSON is guarded against being cut off (R2-6).** Reasoning models spend
+    output tokens thinking before they answer, so a structured answer can stop at `max_tokens` mid-object
+    (`finish_reason: length`; the memory review stopped at exactly 2,000 of 2,000). Each such call asks for
+    a cap sized for its largest realistic answer, and the routes they use leave room for twice that
+    (`classify` 8,000, `summarise` and `research` and `evaluate` 16,000, `plan` 32,000, `ask` 6,000). A
+    cut-off answer is never read as a malformed one: it is asked for once more with twice the room and
+    `repair` set, so the owner never pays for the platform's limit, and a second cut is reported as "too
+    long to finish". In the harness this is `AgentDefinition.StructuredAnswer` (every researcher, the
+    judge, screens, memory review, suggestions, the evaluator, the security reviewer and the planner's
+    `propose_plan`); with no tools on the call it also sets `preferJson`, which the gateway turns into
+    `response_format: json_object` wherever every model on the route takes one — never a refusal.
 
 ## Routing table shape
 

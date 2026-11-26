@@ -67,6 +67,16 @@ One image serves both the path form and the organisation subdomain:
 separated between apps. The kit must not trust origin-scoped storage, and an app that needs
 isolation is served in subdomain form. This is the accepted cost recorded in the spec.
 
+## Who may open an app
+
+An app is **private until a person makes it public** on its page (CLAUDE.md rule 10). Edge asks the control plane
+about every request: a private app admits only signed-in members with rights to it, a shared app also the people it
+was shared with once they register, a public app everyone. Nothing makes one path of a private or shared app public;
+the only exception is a declared webhook (`POST hooks/<name>`), whose signature the app kit verifies. So an app built
+for people who do not sign in ("open a trip link with no account") is built to work signed out and works for them
+once its owner makes it public. The factory plans and checks it that way (ARCH-006, *Checking the work*): its check is
+made signed out on the private preview, which `check_preview` reaches on the app's own network, behind Edge.
+
 ## Reaching the outside
 
 An app on its internal network reaches only the shared database and the egress proxy. Three gaps

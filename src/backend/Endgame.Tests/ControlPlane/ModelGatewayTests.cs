@@ -61,6 +61,24 @@ public sealed class ModelGatewayTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public void A_caller_that_reads_json_gets_a_json_response_format_where_the_models_take_one_and_never_alongside_tools()
+    {
+        // R2-6: the harness's JSON-answering agents ask for a JSON object outright, not only in words.
+        var options = app.Services.GetRequiredService<ModelGatewayOptions>();
+        var credits = app.Services.GetRequiredService<Endgame.Infrastructure.Credits.PricingService>().Credits();
+        JsonObject Body(bool preferJson, JsonArray? tools) => ModelGateway.Prepare(options, credits, new ChatRequest
+        {
+            TaskType = "summarise",
+            Messages = [new JsonObject { ["role"] = "user", ["content"] = "Review it." }],
+            Tools = tools,
+            PreferJson = preferJson,
+        }, options.Routes["summarise"], stream: false).Body;
+        Assert.Equal("json_object", Body(true, null)["response_format"]!["type"]!.GetValue<string>());
+        Assert.Null(Body(false, null)["response_format"]);
+        Assert.Null(Body(true, [new JsonObject { ["type"] = "function", ["function"] = new JsonObject { ["name"] = "notes", ["parameters"] = new JsonObject { ["type"] = "object" } } }])["response_format"]);
+    }
+
+    [Fact]
     public async Task Routes_reserves_sends_the_ceiling_and_settles_from_the_replys_own_cost()
     {
         openRouter.Chat = FakeOpenRouter.Completion(0.00042m, toolCallId: "call_Ab3:xyz/opaque-ID");

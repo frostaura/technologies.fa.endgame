@@ -234,9 +234,9 @@ public sealed class SentEmailsTool(ControlPlaneClient controlPlane, Guid appId) 
 }
 
 /// <summary><c>check_preview</c>: the evaluator's view of the running app.</summary>
-public sealed class CheckPreviewTool(IPreviewProbe probe, Guid appId) : ITool
+public sealed partial class CheckPreviewTool(IPreviewProbe probe, Guid appId) : ITool
 {
-    public string Name => "check_preview";
+    public string Name => ToolName;
 
     public string Description => "Send one HTTP request to the app's running private preview and get the status and body back. Paths are relative to the app's address, for example 'api/notes' or '' for the home page.";
 
@@ -259,13 +259,34 @@ public sealed class CheckPreviewTool(IPreviewProbe probe, Guid appId) : ITool
         try
         {
             var answer = await probe.SendAsync(appId, method, path, Json.Str(call.Arguments, "body"), cancellationToken);
-            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {answer.Status} {answer.ContentType}\n\n{OutputText.Truncate(answer.Body, 8000)}"));
+            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {answer.Status} {answer.ContentType} — {method.ToUpperInvariant()} {path} {SignedOut}\n\n{OutputText.Truncate(answer.Body, 8000)}"));
         }
         catch (Exception e) when (e is ServiceProblemException or HttpRequestException)
         {
             return ToolOutcome.Error($"The preview could not be reached: {e.Message}. Count this check as failed.", "preview_unreachable");
         }
     }
+
+    public const string ToolName = "check_preview";
+
+    /// <summary>How a result's first line says the call was made: as a visitor who is not signed in.</summary>
+    public const string SignedOut = "signed out";
+
+    /// <summary>
+    /// The calls the agent made signed out that the preview answered, as <c>"GET api/books"</c> (query dropped): what shows a
+    /// requirement that needs no sign-in working (R2-11).
+    /// </summary>
+    public static IReadOnlyList<string> CallsIn(IEnumerable<RunEvent> log, string agentId) =>
+        log.Where(e => e.Type == HarnessEvents.ToolResult && Json.Str(e.Payload, HarnessEvents.AgentField) == agentId
+                && Json.Str(e.Payload, "name") == ToolName && Json.Bool(e.Payload, "isError") != true)
+            .Select(e => CallLine().Match((Json.Str(e.Payload, "content") ?? "").Split('\n')[0]))
+            .Where(m => m.Success)
+            .Select(m => $"{m.Groups[1].Value} {m.Groups[2].Value.Split('?')[0]}")
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^HTTP \d{3} .*? — (GET|POST|PUT|PATCH|DELETE) (\S*) signed out$")]
+    private static partial System.Text.RegularExpressions.Regex CallLine();
 }
 
 /// <summary>
@@ -362,29 +383,7 @@ public sealed partial class AdjustSettingTool(ControlPlaneClient controlPlane, s
     {
         ArgumentNullException.ThrowIfNull(names);
         ArgumentNullException.ThrowIfNull(scope);
-        var raw = (value ?? "").Trim().Trim('"').Trim().ToLowerInvariant();
-        bool? on = raw switch { "true" or "on" or "yes" => true, "false" or "off" or "no" => false, _ => null };
-        var place = names.Name(scope);
-        var apps = names.Apps(scope);
-        var Apps = char.ToUpperInvariant(apps[0]) + apps[1..];
-        var number = int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0 ? n : (int?)null;
-        string Checkpoint(string label) => on is true ? $"Turn on the “{label}” checkpoint in {place}" : $"Turn off the “{label}” checkpoint in {place}";
-        string CheckpointDone(string label) => on is true ? $"The “{label}” checkpoint is now on in {place}." : $"The “{label}” checkpoint is now off in {place}.";
-        return key switch
-        {
-            Endgame.Domain.Cascade.Autonomy.Key when raw == "checkpoints" => ($"Stop for your sign-off at checkpoints in {place}", $"{place} now stops for your sign-off at the checkpoints that are on."),
-            Endgame.Domain.Cascade.Autonomy.Key when raw == "auto" => ($"Switch {place} to auto-mode", $"{place} now works in auto-mode."),
-            Endgame.Domain.Cascade.Autonomy.CheckpointStart when on is not null => (Checkpoint("Before work starts"), CheckpointDone("Before work starts")),
-            Endgame.Domain.Cascade.Autonomy.CheckpointPlan when on is not null => (Checkpoint("Before the plan is carried out"), CheckpointDone("Before the plan is carried out")),
-            Endgame.Domain.Cascade.Autonomy.CheckpointHire when on is not null => (Checkpoint("Before anyone is hired"), CheckpointDone("Before anyone is hired")),
-            Endgame.Domain.Cascade.CascadeKeys.SleepMode when raw == "always_on" => ($"Keep {apps} always on", $"{Apps} now stay on, even when nobody is using them."),
-            Endgame.Domain.Cascade.CascadeKeys.SleepMode when raw == "auto" => ($"Let {apps} sleep when nobody is using them", $"{Apps} now sleep when nobody is using them."),
-            Endgame.Domain.Cascade.CascadeKeys.SleepIdleMinutes when number is { } minutes => ($"Let {apps} sleep after {Count(minutes, "idle minute")}", $"{Apps} now sleep after {Count(minutes, "idle minute")}."),
-            Endgame.Domain.Cascade.AgentSettings.WorkforceIdleDays when number is { } days => ($"Flag employees in {place} who have had no work for {Count(days, "day")}", $"Employees in {place} who have had no work for {Count(days, "day")} are now flagged."),
-            _ => null,
-        };
-
-        static string Count(int n, string one) => n == 1 ? $"1 {one}" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{n} {one}s");
+        return Endgame.Domain.Cascade.SettingWords.Describe(key, value, names.Name(scope), names.Apps(scope));
     }
 
     private static JsonNode? Parsed(string? raw)

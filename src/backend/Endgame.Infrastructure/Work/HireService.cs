@@ -1,6 +1,7 @@
 using Endgame.Application.Common;
 using Endgame.Domain.Cascade;
 using Endgame.Domain.Runs;
+using Endgame.Domain.Tree;
 using Endgame.Domain.Workforce;
 using Endgame.Infrastructure.Cascade;
 using Endgame.Infrastructure.Credits;
@@ -433,6 +434,71 @@ public sealed class HireService(
             employee.JobDescription, employee.ReportsTo, 0m, true, 0m, null, "runner", null, null, covering.Id, covering.CreatedAt);
         return new HireRaised(hire, false, employee);
     }
+
+    /// <summary>
+    /// The sweep's repair of open proposals the live rules would never have left waiting (R2-3) — rows from before those
+    /// rules existed, or raised just before the work ended: a factory need someone up the chain now covers is withdrawn
+    /// ("Withdrawn: {name} already does this work here."), and a hire raised by a build that ended unpublished, with nothing
+    /// built, is withdrawn with the build's reason (D81). Idempotent: only proposals still open are touched, and each is
+    /// declined by the platform with no person deciding. Runs as the platform, across organisations. Returns how many.
+    /// </summary>
+    public async Task<int> TidyOpenProposalsAsync(CancellationToken cancellationToken)
+    {
+        session.UseSystem();
+        var open = await db.HireProposals.AsNoTracking()
+            .Where(h => h.Status == HireStatuses.Proposed && h.RaisedByUserId == null
+                && (h.Trigger == HireTriggers.Stage || h.Trigger == HireTriggers.Division || h.Trigger == HireTriggers.Recurring))
+            .OrderBy(h => h.CreatedAt).ThenBy(h => h.Id)
+            .ToListAsync(cancellationToken);
+        var runIds = open.Select(h => h.RaisedByRunId).OfType<Guid>().Distinct().ToList();
+        var builds = await db.Runs.AsNoTracking()
+            .Where(r => runIds.Contains(r.Id) && r.Kind == RunKinds.Build && (r.Status == RunStatuses.Failed || r.Status == RunStatuses.Cancelled))
+            .Select(r => new { r.Id, r.Status, r.AppId }).ToListAsync(cancellationToken);
+        var appIds = builds.Select(b => b.AppId).OfType<Guid>().ToList();
+        var apps = await db.Apps.AsNoTracking().Where(a => appIds.Contains(a.Id)).Select(a => new { a.Id, a.Name, a.PublishedAt }).ToDictionaryAsync(a => a.Id, cancellationToken);
+        var tidied = 0;
+        foreach (var hire in open)
+        {
+            string? note = null;
+            if (builds.FirstOrDefault(b => b.Id == hire.RaisedByRunId) is { } build
+                && (build.AppId is not { } placed || !apps.TryGetValue(placed, out var app) || app.PublishedAt is null))
+            {
+                note = Runs.RunService.WithdrawnReason(build.Status, build.AppId is { } a && apps.TryGetValue(a, out var named) ? named.Name : null);
+            }
+            else if (await ScopeOfAsync(hire, cancellationToken) is { } scope && await CoveringAsync(scope, hire.Role, cancellationToken) is { } covering && covering.Id != hire.EmployeeId)
+            {
+                note = $"Withdrawn: {covering.Name} already does this work here.";
+            }
+
+            if (note is null)
+            {
+                continue;
+            }
+
+            var now = clock.GetUtcNow();
+            session.UseOrganisation(hire.OrganisationId);
+            tidied += await db.HireProposals
+                .Where(h => h.OrganisationId == hire.OrganisationId && h.Id == hire.Id && h.Status == HireStatuses.Proposed)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(h => h.Status, HireStatuses.Declined)
+                    .SetProperty(h => h.DecidedVia, IdeaDecisions.ByAutoMode)
+                    .SetProperty(h => h.DecidedBy, (Guid?)null)
+                    .SetProperty(h => h.DecidedAt, now)
+                    .SetProperty(h => h.DecisionNote, note)
+                    .SetProperty(h => h.UpdatedAt, now), cancellationToken);
+            session.UseSystem();
+        }
+
+        session.Clear();
+        return tidied;
+    }
+
+    /// <summary>The narrowest level a proposal is for, or null for one at the organisation itself.</summary>
+    private async Task<ResolvedScope?> ScopeOfAsync(HireProposalRecord hire, CancellationToken cancellationToken) =>
+        hire.AppId is { } app ? await scopes.FindNodeAsync(NodeLevel.App, app, cancellationToken)
+        : hire.ProjectId is { } project ? await scopes.FindNodeAsync(NodeLevel.Project, project, cancellationToken)
+        : hire.DivisionId is { } division ? await scopes.FindNodeAsync(NodeLevel.Division, division, cancellationToken)
+        : null;
 
     /// <summary>The status a raise answers with when someone already covers the need; never stored.</summary>
     public const string HireCovered = "covered";

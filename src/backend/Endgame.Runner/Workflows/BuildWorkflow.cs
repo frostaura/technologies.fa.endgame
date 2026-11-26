@@ -72,14 +72,22 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var screen = run.Journal.Get("screen");
         if (screen is null)
         {
-            var screener = await WorkflowSupport.RunAgentAsync(run, run.Agents.Researcher(run, "red-line-screen", RunnerResources.Prompt("change-screen", new Dictionary<string, string> { ["request"] = request })) with
+            var screener = await WorkflowSupport.RunAgentAsync(run, run.Agents.Answerer(run, "red-line-screen", RunnerResources.Prompt("change-screen", new Dictionary<string, string> { ["request"] = request })) with
             {
                 TaskType = run.Options.SummaryTaskType,
-                Limits = new AgentLimits { MaxSteps = 2, MaxOutputTokens = 1500, MaxSearchesPerCall = 0 },
+                // Room for a reasoning model to think and still answer (R2-6).
+                Limits = new AgentLimits { MaxSteps = 2, MaxOutputTokens = 4000, MaxSearchesPerCall = 0 },
             }, NoWorkspace.Instance, "Screen the change now and reply with the JSON object.", cancellationToken);
             if (WorkflowOutcome.FromAgent(screener) is { } stopped)
             {
                 return stopped;
+            }
+
+            if (screener.CutOff)
+            {
+                return WorkflowOutcome.Failure("The red-line screen's answer was too long to finish, so nothing was changed.")
+                    with
+                { ForOwner = "The check against FrostAura's red lines gave an answer too long to finish, so nothing was changed. “Try again” checks it again." };
             }
 
             // An unreadable screen has not cleared anything: the change is not made on a guess.
@@ -114,7 +122,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var placement = job.Placement;
         var appId = Guid.Parse(Json.Str(placement, "appId")!);
         var crew = await StaffAsync(run, placement, cancellationToken);
-        var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), cancellationToken);
+        var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), run.StartFrom(), cancellationToken);
         var root = workspace.Root;
 
         // The plan: a contract, proposed in plan mode, accepted only once it is valid.
@@ -401,7 +409,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             ? "This starts again from the plan; nothing the earlier attempt did needed undoing."
             : kept.Count == 0
                 ? "This picks up where the earlier attempt stopped: the plan agreed then is kept, and building starts again from its first part."
-                : $"This picks up where the earlier attempt stopped: {kept.Count} of {plan.Items.Count} parts were already built and checked, so they are kept, not rebuilt or charged again.";
+                : $"This picks up where the earlier attempt stopped: {kept.Count} of {plan.Items.Count} parts {(kept.Count == 1 ? "was" : "were")} already built and checked, so {(kept.Count == 1 ? "it is" : "they are")} kept, not rebuilt or charged again.";
         await Workforce.SayAsync(run, "runner", "Carrying on", text, cancellationToken, "carried");
     }
 
@@ -722,7 +730,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         {
             try
             {
-                var image = await dock.BuildAsync(appId, null, cancellationToken);
+                // The preview is of this run's own work, which is on its branch until it is published (R2-4).
+                var image = await dock.BuildRunAsync(appId, run.Run.Id, run.StartFrom(), cancellationToken);
                 // The preview's own token: what it e-mails is held, never sent, and the live app's token is left alone.
                 var token = await run.ControlPlane.MintAppTokenAsync(appId, cancellationToken, preview: true);
                 await dock.StartPreviewAsync(appId, new StartAppRequest(run.OrganisationId, image.Image, token, null, null), cancellationToken);
@@ -752,7 +761,12 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
 
         var answer = WorkflowSupport.JsonAnswer(result.FinalText);
-        if (answer is null || Json.Bool(answer, "passed") is null)
+        if (result.CutOff)
+        {
+            // Not a verdict in the wrong form: it did not fit (R2-6). Unchecked, and checked again.
+            answer = new JsonObject { ["passed"] = false, ["evidence"] = "The check's answer was too long to finish.", ["faults"] = Json.Array(["The evaluator's answer was too long to finish; treat the item as unchecked and check it again."]) };
+        }
+        else if (answer is null || Json.Bool(answer, "passed") is null)
         {
             // An evaluator that gives no verdict has not passed anything.
             answer = new JsonObject { ["passed"] = false, ["evidence"] = OutputText.Truncate(result.FinalText ?? "", 2000), ["faults"] = Json.Array(["The evaluator gave no verdict; treat the item as unchecked and check it again."]) };
@@ -760,8 +774,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
         // Code's gate: every requirement the item delivers is shown working in the running app, signed in, and every test id the
         // plan promised is on the app's screens, or the item fails.
-        var calls = CallAppTool.CallsIn(await run.LogReader.ReadAllAsync(cancellationToken), evaluatorId);
-        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken));
+        var log = await run.LogReader.ReadAllAsync(cancellationToken);
+        var calls = CallAppTool.CallsIn(log, evaluatorId);
+        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken), CheckPreviewTool.CallsIn(log, evaluatorId));
     }
 
     /// <summary>The item's promised test ids that no file under <c>web/src</c> writes as <c>data-testid="…"</c>.</summary>
@@ -814,8 +829,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                     return stopped;
                 }
 
-                findings = WorkflowSupport.JsonAnswer(reviewer.FinalText)
-                    ?? new JsonObject { ["passed"] = false, ["findings"] = new JsonArray(new JsonObject { ["problem"] = "The review gave no report, so the app is not cleared." }) };
+                findings = (reviewer.CutOff ? null : WorkflowSupport.JsonAnswer(reviewer.FinalText))
+                    ?? new JsonObject { ["passed"] = false, ["findings"] = new JsonArray(new JsonObject { ["problem"] = reviewer.CutOff ? "The review's report was too long to finish, so the app is not cleared." : "The review gave no report, so the app is not cleared." }) };
                 await run.Journal.RecordAsync(key, findings, cancellationToken);
                 await run.AppendAsync(HarnessEvents.Message, new JsonObject
                 {
@@ -883,7 +898,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
         try
         {
-            var image = await dock.BuildAsync(appId, null, cancellationToken);
+            // The run's work becomes the app's next version only now, as one version titled with what was asked for (R2-4).
+            var version = await dock.PublishRunAsync(appId, run.Run.Id, new PublishRunRequest(VersionTitle(run), "Endgame factory", $"factory@{run.Options.AuthorDomain}"), cancellationToken);
+            var image = await dock.BuildAsync(appId, version.Id, cancellationToken);
             var token = await run.ControlPlane.MintAppTokenAsync(appId, cancellationToken);
             var status = await dock.StartAsync(appId, new StartAppRequest(run.OrganisationId, image.Image, token, null, null), cancellationToken);
             return new JsonObject { ["started"] = status.State == AppRuntimeState.Running, ["image"] = image.Image, ["commit"] = image.Commit, ["state"] = status.State, ["visibility"] = "private" };
@@ -892,6 +909,22 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         {
             return new JsonObject { ["started"] = false, ["detail"] = OutputText.Truncate(e.Message, 500) };
         }
+    }
+
+    /// <summary>A published version's title: the run's own, without its kind — what the person asked for (R2-4).</summary>
+    public static string VersionTitle(RunContext run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        var title = run.Run.Title.Trim();
+        foreach (var prefix in new[] { "Change: ", "Build: " })
+        {
+            if (title.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                title = title[prefix.Length..].Trim();
+            }
+        }
+
+        return OutputText.Truncate(title.Length > 0 ? title : "A new version", 400);
     }
 
     /// <summary>Placement: from research's verdict when it proposed one, otherwise from the idea's own words.</summary>
@@ -939,7 +972,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var left = plan.LeftOut.Count == 0
             ? $"All {plan.Requirements.Count} things the idea asks for are covered."
             : "Left out: " + string.Join(" ", plan.LeftOut.Select(l => $"{plan.Requirements.FirstOrDefault(r => r.Id == l.Requirement)?.Text.TrimEnd('.') ?? l.Requirement}, because {l.Reason.TrimEnd('.')}."));
-        return Sentences.Join([plan.Summary, built, left]);
+        // A part for people who do not sign in works for them once the owner makes the app public, which only a person does (R2-11).
+        var publicOnly = plan.Requirements.Any(r => PlanRequirement.NeedsNoSignIn(r.Text) && !plan.LeftOut.Any(l => l.Requirement == r.Id)) ? PlanRequirement.PublicOnlyNote : null;
+        return Sentences.Join([plan.Summary, built, left, publicOnly]);
     }
 
     /// <summary>The test ids an item's screens must carry, for the builder's task.</summary>

@@ -331,6 +331,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   5. The credit balance is refreshed.
 - **Variations and refusals:**
   - The model declines, because the app does not record what is asked: the alert shows the model's own plain reason.
+  - An answer cut off at its length limit is asked for once more with twice the room, not charged; cut off again: 422 `ask_too_long`, "The answer was too long to finish" — "Working out the answer took more room than one answer has, even when asked again with twice as much. Ask a narrower question, such as one thing or a shorter period."
   - It still fails after the repair: the control plane's own words, "It could not be worked out from what this app records. Try asking it another way, or about its visits, requests, errors, events or measurements." (The console says "That question could not be answered from what the app records. Try asking it another way." only when no reason comes back.)
   - It times out: "That question took too long to answer. Try a narrower one, such as a shorter period."
   - No route configured: "Questions about apps cannot be answered on this installation yet."
@@ -450,9 +451,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - With no versions: "No versions yet" with "The first version appears here once it is built."
   - A failed read: "The history could not be loaded" with a retry.
   - Technical mode lists every saved step with its raw message, "Live now" where the server marks it, the first 12 characters of the commit id and the rest of the message.
-- **Where:** `History.tsx`, `appModel.ts`; `GET /api/apps/{id}/versions?limit` (Viewer)
+  - Only versions that were live are listed — each build or change that published, each restore — never a failed or cancelled change's work, which stays on that run's own branch for "Try again". Each carries `title` (what the person asked for, or "Brought back an earlier version"), `message` (the raw commit message, for technical mode), `runId`, `live` and `current` (the newest).
+- **Where:** `History.tsx`, `appModel.ts`; `GET /api/apps/{id}/versions?limit` (Viewer); `AppVersionService.ListAsync`
 - **Reachable from:** UI; API; MCP `app_versions`
-- **Covered by tests:** `AppBreadth.test.tsx` ("lists versions with who made each…", "records a failed read and an empty history distinctly", "names a version by its first line…", "names a restore for what it is, not by its commit id"); `VersionsAndExportTests.The_history_names_…`; `tests-e2e/breadth.spec.ts` "history names who made each version…"
+- **Covered by tests:** `AppBreadth.test.tsx` ("lists versions with who made each…", "records a failed read and an empty history distinctly", "names a version by its first line…", "names a restore for what it is, not by its commit id"); `VersionsAndExportTests.The_history_names_…`, `VersionsAndExportTests.History_lists_only_what_was_live_…`; `tests-e2e/breadth.spec.ts` "history names who made each version…"
 
 ### VER-02 Bring an earlier version back
 - **Who:** Builder or above, or an operator

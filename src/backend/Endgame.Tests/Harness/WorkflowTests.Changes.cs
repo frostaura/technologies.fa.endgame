@@ -65,6 +65,10 @@ public sealed partial class WorkflowTests
         Assert.Equal(["ratings", BuildWorkflow.KeepItem], cp.Events.Where(e => e.Type == "evaluation.passed").Select(e => e.Payload["item"]!.GetValue<string>()));
         Assert.DoesNotContain(cp.Events, e => e.Payload["agent"]?.GetValue<string>() == $"builder-{BuildWorkflow.KeepItem}-0");
         Assert.Equal(2, dock.Previews.Count);
+        // R2-4: previews are of the run's own branch; the work reaches the app's line once, at publish, titled with what was asked.
+        Assert.All(dock.Builds.Take(2), b => Assert.Equal(Endgame.Hosting.Contracts.RunBranches.Of(cp.RunId), b));
+        Assert.Equal("c0020000", dock.Builds[^1]);
+        Assert.Equal(cp.Run["title"]!.GetValue<string>().Replace("Change: ", "", StringComparison.Ordinal), Assert.Single(dock.Published)["title"]!.GetValue<string>());
         // Reviewed, then the new version is built and the app restarted.
         Assert.Equal(1, factory.Reviews);
         Assert.Single(dock.Starts);
@@ -160,7 +164,7 @@ public sealed partial class WorkflowTests
         // The finished part is neither built nor checked again, so it is not billed twice.
         Assert.DoesNotContain(again.Events, e => e.Payload["agent"]?.GetValue<string>()?.StartsWith("builder-recipes-api", StringComparison.Ordinal) == true);
         Assert.Equal(["recipes-page"], again.Events.Where(e => e.Type == "evaluation.passed").Select(e => e.Payload["item"]!.GetValue<string>()));
-        Assert.Contains("1 of 2 parts were already built and checked", again.Events.Single(e => e.Payload["title"]?.GetValue<string>() == "Carrying on").Payload["text"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("1 of 2 parts was already built and checked, so it is kept", again.Events.Single(e => e.Payload["title"]?.GetValue<string>() == "Carrying on").Payload["text"]!.GetValue<string>(), StringComparison.Ordinal);
         // Not priced again as if nothing were built: the try's own estimate stands.
         Assert.DoesNotContain(again.Events, e => e.Type == "estimate.made" && e.Payload["basis"]?.GetValue<string>() == "plan");
     }

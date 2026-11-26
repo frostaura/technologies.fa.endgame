@@ -23,6 +23,9 @@ public sealed class AgentLoop
     /// <summary>What a tool result may carry into the context.</summary>
     public const int MaxResultChars = RunTool.MaxOutput + 500;
 
+    /// <summary>What an agent whose structured answer was cut off twice reports (R2-6): plainly, never "not in the agreed form".</summary>
+    public const string CutOffText = "The answer was too long to finish: it stopped at its output limit, and again when asked once more with twice the room.";
+
     private static readonly Regex TextToolCall = new(@"<tool_call>|<function=|<\|tool|""name""\s*:\s*""[a-z_]+""\s*,\s*""(arguments|parameters)""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly AgentDefinition agent;
@@ -118,7 +121,7 @@ public sealed class AgentLoop
                 });
             }
 
-            if (state.Steps >= agent.Limits.MaxSteps)
+            if (state.Steps - state.CutOffs >= agent.Limits.MaxSteps)
             {
                 return await StopAsync(state, StopReasons.MaxSteps, $"Stopped after {state.Steps} steps without finishing.", cancellationToken);
             }
@@ -171,6 +174,34 @@ public sealed class AgentLoop
             }
 
             var accounting = Accounting(reply);
+            if (agent.StructuredAnswer && reply.FinishReason == FinishReasons.Length)
+            {
+                // A reply read by code and cut at its output limit is not an answer in the wrong form: it did not fit (R2-6).
+                var cutText = message["content"] is JsonValue cv && cv.TryGetValue<string>(out var cs) ? cs : "";
+                var retrying = !state.RetryingCutOff;
+                await events.WriteAsync(HarnessEvents.Message, new JsonObject
+                {
+                    ["kind"] = MessageKinds.ReplyCutOff,
+                    ["reply"] = OutputText.Truncate(cutText, 2000),
+                    ["toolCalls"] = toolCalls?.Count ?? 0,
+                    ["retry"] = retrying,
+                    ["accounting"] = accounting,
+                }, cancellationToken);
+                // The step and its accounting were counted when the call was made; replay counts them from this event.
+                state.CutOffs++;
+                state.RetryingCutOff = retrying;
+                if (retrying)
+                {
+                    continue;
+                }
+
+                if (toolCalls is null)
+                {
+                    return await StopAsync(state, StopReasons.AnswerCutOff, CutOffText, cancellationToken);
+                }
+            }
+
+            state.RetryingCutOff = false;
             if (toolCalls is null)
             {
                 var text = message["content"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
@@ -443,11 +474,13 @@ public sealed class AgentLoop
             agent.EmployeeId,
             ModelTraits.WithCacheMarks(state.Messages, state.LastModel),
             schemas.Count > 0 ? schemas : null,
-            agent.Limits.MaxOutputTokens,
-            agent.Repair,
+            state.RetryingCutOff ? agent.Limits.MaxOutputTokens * 2 : agent.Limits.MaxOutputTokens,
+            // The retry of a reply cut at the platform's output limit is the platform's to pay for, never the owner's.
+            agent.Repair || state.RetryingCutOff,
             state.PinnedProvider is { } p ? [p] : null,
             $"{agent.RunId}:{agent.Id}:{step}:{attempt}:{services.SessionNonce}",
-            MaxSearches: state.SearchAllowed == false ? 0 : agent.Limits.MaxSearchesPerCall), cancellationToken), cancellationToken);
+            MaxSearches: state.SearchAllowed == false ? 0 : agent.Limits.MaxSearchesPerCall,
+            PreferJson: agent.StructuredAnswer && schemas.Count == 0), cancellationToken), cancellationToken);
         Replay.ApplyAccounting(state, Accounting(reply));
         return reply;
     }
@@ -678,14 +711,75 @@ public static class WebSearch
     /// <summary>The call id of the one decision a session makes about it, in <c>tool.permitted</c> or <c>tool.denied</c>.</summary>
     public const string CallId = "capability:web_search";
 
-    /// <summary>The approval's title: what approving does, in plain words, for the step it belongs to.</summary>
+    /// <summary>
+    /// The approval's title: what approving does, in plain words, for the step it belongs to — named as what it is doing
+    /// ("…: looking for what they leave undone?"), never by its past-tense heading (R2-9).
+    /// </summary>
     public static string ApprovalTitle(string? step) =>
-        OutputText.Truncate(string.IsNullOrWhiteSpace(step) ? "Let this step search the web?" : $"Let this step search the web: {step.Trim().TrimEnd('.', '?')}?", 300);
+        OutputText.Truncate(string.IsNullOrWhiteSpace(step) ? "Let this step search the web?" : $"Let this step search the web: {Doing(step.Trim().TrimEnd('.', '?'))}?", 300);
+
+    private static readonly Dictionary<string, string> Irregular = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["drew"] = "drawing",
+        ["wrote"] = "writing",
+        ["built"] = "building",
+        ["found"] = "finding",
+        ["made"] = "making",
+        ["read"] = "reading",
+        ["ran"] = "running",
+        ["took"] = "taking",
+        ["gave"] = "giving",
+        ["chose"] = "choosing",
+        ["set"] = "setting",
+        ["put"] = "putting",
+        ["planned"] = "planning",
+        ["shipped"] = "shipping",
+        ["stopped"] = "stopping",
+        ["priced"] = "pricing",
+        ["placed"] = "placing",
+        ["used"] = "using",
+    };
+
+    /// <summary>A step's past-tense heading as what it is doing: "Looked for existing products" → "looking for existing products".</summary>
+    public static string Doing(string heading)
+    {
+        var text = (heading ?? "").Trim();
+        var and = text.IndexOf(" and ", StringComparison.Ordinal);
+        if (and > 0 && FirstVerbIsPast(text[(and + 5)..]))
+        {
+            // "Weighed the evidence and wrote the verdict" → "weighing the evidence and writing the verdict".
+            return Doing(text[..and]) + " and " + Doing(text[(and + 5)..]);
+        }
+
+        var space = text.IndexOf(' ', StringComparison.Ordinal);
+        var verb = space < 0 ? text : text[..space];
+        var rest = space < 0 ? "" : text[space..];
+        var doing = Irregular.TryGetValue(verb, out var known) ? known
+            : verb.Length > 4 && verb.EndsWith("ed", StringComparison.OrdinalIgnoreCase) ? verb[..^2].ToLowerInvariant() + "ing"
+            : verb.Length > 0 ? char.ToLowerInvariant(verb[0]) + verb[1..] : verb;
+        return doing + rest;
+    }
+
+    private static bool FirstVerbIsPast(string clause)
+    {
+        var verb = clause.Split(' ', 2)[0];
+        return Irregular.ContainsKey(verb) || (verb.Length > 4 && verb.EndsWith("ed", StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 /// <summary>The <c>kind</c> of the harness's <c>message</c> events.</summary>
+/// <summary>OpenRouter's <c>finish_reason</c> values the harness acts on.</summary>
+public static class FinishReasons
+{
+    /// <summary>The reply stopped at its output limit: whatever it was writing is incomplete.</summary>
+    public const string Length = "length";
+}
+
 public static class MessageKinds
 {
+    /// <summary>A structured reply cut off at its output limit (R2-6): recorded, never added to the conversation, and asked for again once.</summary>
+    public const string ReplyCutOff = "agent.reply.cut_off";
+
     public const string AgentStart = "agent.start";
     public const string AgentReply = "agent.reply";
     public const string AgentStopped = "agent.stopped";
