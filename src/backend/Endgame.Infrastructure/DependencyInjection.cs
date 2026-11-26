@@ -18,6 +18,7 @@ using Endgame.Infrastructure.Work;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -35,9 +36,19 @@ public static class DependencyInjection
         services.AddScoped<TenantSession>();
         services.AddScoped<TenantConnectionInterceptor>();
         services.AddScoped<TenantCommandInterceptor>();
+        // A query that limits rows with no order answers differently from run to run (D26). Tests set
+        // Database:StrictQueries, so such a query fails there instead of only warning in a log.
+        var strict = configuration.GetValue<bool>("Database:StrictQueries");
         services.AddDbContext<EndgameDbContext>((sp, options) => options
             .UseNpgsql(connection)
-            .AddInterceptors(sp.GetRequiredService<TenantConnectionInterceptor>(), sp.GetRequiredService<TenantCommandInterceptor>()));
+            .AddInterceptors(sp.GetRequiredService<TenantConnectionInterceptor>(), sp.GetRequiredService<TenantCommandInterceptor>())
+            .ConfigureWarnings(w =>
+            {
+                if (strict)
+                {
+                    w.Throw(CoreEventId.RowLimitingOperationWithoutOrderByWarning, CoreEventId.FirstWithoutOrderByAndFilterWarning, CoreEventId.DistinctAfterOrderByWithoutRowLimitingOperatorWarning);
+                }
+            }));
 
         // The key ring lives in the platform database, so cookies and vault entries survive restarts.
         services.AddDataProtection().SetApplicationName("endgame-control-plane").PersistKeysToDbContext<EndgameDbContext>();

@@ -50,6 +50,8 @@ public sealed class ControlPlaneApp : IAsyncDisposable
             builder.UseEnvironment(environment);
             builder.UseSetting("ConnectionStrings:Endgame", connection);
             builder.UseSetting("Database:AutoMigrateOnStartup", "true");
+            // A row-limiting query with no order fails a test instead of warning (D26).
+            builder.UseSetting("Database:StrictQueries", "true");
             builder.UseSetting("Sweeps:Enabled", "false");
             builder.UseSetting("Runs:EventPollMilliseconds", "50");
             builder.UseSetting("ENDGAME_SERVICE_TOKEN", ServiceToken);
