@@ -9,7 +9,7 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "text": "Something went wrong inside it.",
+        "text": "Something went wrong inside it, and its owner has been told.",
         "note": "“This app has stopped for a moment” (503, Retry-After 15): no wake is tried for 15 seconds."
       }
     },
@@ -34,6 +34,13 @@
     {
       "step": 4,
       "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Show every saved step"
+          }
+        }
+      ],
       "highlight": {
         "text": "Bring back",
         "note": "Its last good version can be brought back (VER-02), or it can be rebuilt (APP-15)."

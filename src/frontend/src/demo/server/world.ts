@@ -146,7 +146,10 @@ export interface DemoApproval {
   id: string;
   runId: string;
   title: string;
+  /** The plain sentence the owner reads. */
   detail: string;
+  /** The tool line behind it, for technical mode (`approval.requested`'s `technical`). */
+  technical?: string;
   answer: "approved" | "rejected" | null;
   /** What approving it does, by name; read by the run engine. */
   onApprove:
@@ -197,8 +200,14 @@ export interface DemoTopUp {
   idempotencyKey: string;
 }
 
-export interface DemoNotification extends NotificationItem {
+/**
+ * A notification as the world keeps it. `resolved` is not kept: like `NotificationService.AnsweredAsync`, the feed
+ * derives it on read from the subject as it is now (`noticeAsNow`), so a notice can never ask what was settled. A
+ * seeded notice whose subject the world does not hold may say it is answered with `answered`.
+ */
+export interface DemoNotification extends Omit<NotificationItem, "resolved"> {
   organisation: string;
+  answered?: boolean;
 }
 
 export interface DemoOperatorAction extends OperatorAction {

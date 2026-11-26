@@ -28,6 +28,16 @@ describe("a failure in normal mode (rule 12)", () => {
 
   it("retells a path in a sentence as words, and keeps a quoted value", () => {
     expect(describeError(failed(409, "'acme/tools/ledger' still has children, work or credit history attached."))).toBe("This still has children, work or credit history attached.");
+  });
+
+  it("retells the delete refusal plainly and drops a bracketed wire hint (D79)", () => {
+    expect(describeError(failed(409, "'acme/tools/ledger/web' still has children, work or credit history attached. Archive it instead (status: archived)."))).toBe(
+      "It still has things beneath it, work or credit history. Archive it instead: it keeps everything and can be brought back.",
+    );
+    expect(describeError(failed(400, "Set it another way (status: paused)."))).toBe("Set it another way.");
+    expect(describeError(failed(409, "'acme/tools/ledger/web' still has children, work or credit history attached. Archive it instead (status: archived)."), "technical")).toBe(
+      "'acme/tools/ledger/web' still has children, work or credit history attached. Archive it instead (status: archived). (409)",
+    );
     expect(describeError(failed(400, "'x' is not a model tier"))).toBe("'x' is not a model tier.");
   });
 });

@@ -6,8 +6,8 @@ import { startRun } from "../mutations";
 import { gitBundle, gzip, tar } from "../archive";
 import { createIdea } from "./work";
 import { memberView, parseRole } from "./tree";
-import { creditsView } from "../views";
-import { charge, newId, node, organisation, orgOf, uuidFor, within, type DemoApp, type World } from "../world";
+import { creditsView, noticeAsNow } from "../views";
+import { charge, newId, node, organisation, orgOf, uuidFor, within, type DemoApp, type DemoNotification, type World } from "../world";
 
 /** `BreadthEndpoints.cs`: tokens, asking about an app, the dashboard, versions and export, roles, top-up requests, the overdraft, notifications, suggestions. */
 
@@ -399,14 +399,16 @@ area("BreadthEndpoints", {
     if (!named) throw new Refusal(problem(409, "no_organisation", "No organisation yet", "Notifications belong to an organisation."));
     if (named.includes("/")) throw invalid("Pass the organisation's slug.");
     const held = requireRole(world, scopeOf(world, named), "viewer");
+    const feed = (rows: DemoNotification[], limit: number) => {
+      const now = rows.map((n) => noticeAsNow(world, n, u));
+      return ok({ organisation: named, unread: now.filter((n) => !n.read).length, notifications: now.slice(0, limit) });
+    };
     if (!atLeast(held.role, "admin")) {
       const grants = world.memberships.filter((m) => m.userId === u.id && m.role === "admin" && orgOf(m.path) === named);
       if (grants.length === 0) return ok({ organisation: named, unread: 0, notifications: [] });
-      const mine = world.notifications.filter((n) => n.organisation === named && grants.some((g) => within(n.scope, g.path)));
-      return ok({ organisation: named, unread: mine.filter((n) => !n.read).length, notifications: mine.slice(0, 50).map((n) => omit(n, "organisation")) });
+      return feed(world.notifications.filter((n) => n.organisation === named && grants.some((g) => within(n.scope, g.path))), 50);
     }
-    const list = world.notifications.filter((n) => n.organisation === named);
-    return ok({ organisation: named, unread: list.filter((n) => !n.read).length, notifications: list.slice(0, Number(req.query.get("limit") ?? 50)).map((n) => omit(n, "organisation")) });
+    return feed(world.notifications.filter((n) => n.organisation === named), Number(req.query.get("limit") ?? 50));
   },
 
   "POST notifications/{id}/read": (req, { world }) => {

@@ -58,6 +58,15 @@ describe("RunView", () => {
     expect(alert.textContent).toContain("This work could not be found");
   });
 
+  it("missing work is an answer: no 'Nothing here is known', and a way back instead of Try again", async () => {
+    base({ "GET /api/runs/r1": problem(404, "Run not found") });
+    renderWithStore(<RunView runId="r1" />);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).not.toContain("Nothing here is known until it loads.");
+    expect(within(alert).getByRole("link", { name: "Back to the org chart" }).getAttribute("href")).toBe("/");
+    expect(within(alert).queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
   it("waits for the first step, then shows the run as finished", async () => {
     base();
     renderWithStore(<RunView runId="r1" />);

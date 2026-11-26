@@ -57,7 +57,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - The divisions cannot be read: "The divisions could not be loaded, so for now it can only go to the whole organisation."
   - What happens next cannot be read: "What happens next could not be worked out" with **"Try again"**.
   - "Research did not start: … Nothing was charged." on a refusal.
-  - Less to spend here than the estimate (the organisation's balance and overdraft room, less what is held for work in flight, under the tightest cap on the way up): beside the estimate, "You have {room} to spend here, and this needs about {credits}. It starts, then waits for a top-up before it spends anything." with **"See credits"**. The button still works; the run waits for budget (RUN-09).
+  - Less to spend here than the estimate (the organisation's balance and overdraft room, less what is held for work in flight, under the tightest cap on the way up): beside the estimate, "You have {room} to spend here, and this needs about {credits}. It starts, then waits for a top-up before it spends anything." with **"See credits"**. An organisation FrostAura has never topped up (`neverToppedUp`) reads instead "This organisation has not been given credits yet: FrostAura adds them when you ask. Until then, work starts and then waits before it spends anything." with **"Ask for a top-up"**, which opens the credits page. The button still works; the run waits for budget (RUN-09).
 - **Where:** `StartView.tsx`, `startModel.ts` (`roomFor`, `shortfall`); `POST /api/ideas/estimate {scope}`, `POST /api/ideas {scope}`, `GET /api/autonomy?scope=`, `GET /api/credits?scope=`.
 - **Reachable from:** UI.
 - **Covered by tests:** `StartView.test.tsx` (including "sends the chosen division with both the estimate and the idea…", "tells someone below Builder why…", "what happens next"); `tests-e2e/manage.spec.ts` ("the estimate and the idea name the division chosen", "a Viewer is told why…"); `IdeasAndConversationsTests.An_idea_queues_research…`.
@@ -258,7 +258,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   2. Above the verdict sits "Research by {Iris} · {spent} credits, estimated {estimate}". In technical mode the idea id, run id, status, scope and red line are added.
   3. While research runs, the page checks every 5 seconds and shows **"Research in progress"**, "The verdict is being worked out.", "The case against the idea is argued first. You can watch every step as it happens." and **"Watch the research"**.
 - **You know it worked when:** the dark verdict banner shows "Verdict · build", "Verdict · change" or "Verdict · do not build".
-- **Variations and refusals:** a missing idea shows "This idea could not be found". A failed read shows "The verdict could not be loaded" with a retry. An answer in the wrong shape becomes a failed read naming the field.
+- **Variations and refusals:** a missing idea shows "This idea could not be found" — with "This was not found, or you cannot see it." and "Back to the org chart" in place of "Try again" (a not-found is an answer, so it does not say "Nothing here is known until it loads."). A failed read shows "The verdict could not be loaded" with a retry. An answer in the wrong shape becomes a failed read naming the field.
 - **Where:** `features/verdict/VerdictView.tsx`; `GET /api/ideas/{id}`.
 - **Reachable from:** UI; MCP `idea_get`.
 - **Covered by tests:** `VerdictView.test.tsx` ("shows a skeleton…", "records a failed read", "says research is still running…").
@@ -472,7 +472,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **You know it worked when:** "Live" shows and new steps appear without reloading.
 - **Variations and refusals:**
   - Six failed reconnects: "The live connection to this work could not be kept open. What is shown is everything received so far." with **"Reconnect"**.
-  - A missing run: "This work could not be found". A failed read: "This work could not be loaded" with a retry.
+  - A missing run: "This work could not be found" — with "This was not found, or you cannot see it." and "Back to the org chart" in place of "Try again" (a not-found is an answer, so it does not say "Nothing here is known until it loads."). A failed read: "This work could not be loaded" with a retry.
   - A finished run with no steps: "This work recorded no steps."
 - **Where:** `RunView.tsx`, `useRunStream.ts`; `GET /api/runs/{id}`, `GET /api/runs/{id}/events?after=`.
 - **Reachable from:** UI; MCP `run_get`, `run_events`.
@@ -570,7 +570,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Core. **Learn first:** RUN-01, AUTO-03.
 - **What you learn:** a checkpoint pauses the work for your word, your note goes back to the work, and declining is told truthfully.
 - **Steps:**
-  1. The card shows the badge **"Needs you"** and what will happen if you approve, in plain words. In technical mode the detail is added.
+  1. The card shows the badge **"Needs you"**, what will happen if you approve, in plain words, and under it why it asks ("Your rules for this stage ask for your sign-off before this is done. …", "This waits for your sign-off before it is done. …", "{h} credits are left in the budget."). In technical mode the tool line is added ("change_app: … Checkpoint: change_app.").
   2. Optionally type into **"Add a note (optional)"**.
   3. Under the buttons: "Declining skips only this step; the work goes on without it." or, for the start and plan checkpoints, "Declining stops this work."
   4. Press **"Approve"** or **"Decline"**. The card reads "Approved. Sending…" or "Declined. Sending…", then "Approved. The work carries on from here.", "Declined. It was not done; the work continues without it." or "Declined. It was not done, so the work has stopped."
@@ -1069,7 +1069,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **What you learn:** the conversation asks for the change on your word, and the change then runs as in CHG-01.
 - **Steps:**
   1. Describe the change, for example "Let members reset a counter back to zero."
-  2. The assistant calls `change_app`. In the conversation a card asks **"Change the app: {your words}?"** with **"Approve"** / **"Decline"** and **"Add a note (optional)"** (TALK-17).
+  2. The assistant calls `change_app`. In the conversation a card asks **"Change {app name}: {your words}?"** with **"Approve"** / **"Decline"** and **"Add a note (optional)"** (TALK-17).
   3. Approve. The change's run starts with its estimate first; the assistant replies that it has started.
 - **You know it worked when:** a "Change: …" run appears and the reply says so.
 - **Variations and refusals:** declined: "Declined. It was not done; the work continues without it." and the assistant says it was not done. An app outside the conversation's scope is refused by the tool. The refusals of CHG-01 come back as "The change could not be started (409): …".

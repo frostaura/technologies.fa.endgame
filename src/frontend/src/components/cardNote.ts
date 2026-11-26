@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useState } from "react";
 
 /**
- * The app page's side panel says one thing at a time (D37): what the last card did. A card's note is replaced by its
+ * A panel of cards says one thing at a time (D37) — the app page's side panel, a node's panel on /tree: what the last card did. A card's note is replaced by its
  * next action, and cleared when another card acts, so saved and removed messages never pile up. A card drawn outside
  * the panel keeps its own note.
  */

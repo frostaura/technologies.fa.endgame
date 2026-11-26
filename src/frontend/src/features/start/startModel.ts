@@ -63,6 +63,9 @@ export function roomFor(credits: Pick<Credits, "available" | "heldCredits" | "bu
  * Said beside the estimate before research is asked for (D63): when there is less to spend than it needs, research
  * still starts, and waits for a top-up (IDEA-04). Null when there is room.
  */
+/** An organisation FrostAura has not topped up yet (D63): said plainly wherever credits are, with where to ask. */
+export const NEVER_TOPPED_UP = "This organisation has not been given credits yet: FrostAura adds them when you ask. Until then, work starts and then waits before it spends anything.";
+
 export function shortfall(room: number, estimate: number): string | null {
   if (room >= estimate) return null;
   return `You have ${formatCredits(room)} to spend here, and this needs about ${formatCredits(estimate)}. It starts, then waits for a top-up before it spends anything.`;

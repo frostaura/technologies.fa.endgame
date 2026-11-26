@@ -44,7 +44,7 @@
       "step": 3,
       "kind": "demo",
       "clock": {
-        "seek": "build:part-1"
+        "seek": "build:part-1-built"
       },
       "act": [
         {

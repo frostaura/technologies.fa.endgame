@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCardNote } from "@/components/cardNote";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { isValidSlug, slugify } from "@/lib/format";
@@ -29,7 +30,8 @@ const word = (level: ScopeLevel) => LEVEL_NAME[level].toLowerCase();
 export function RenameNode({ level, id, name, slug, tree, onDone }: { level: ManagedLevel | "organisation"; id: string; name: string; slug: string; tree: TreeArg; onDone?: () => void }) {
   const [update, state] = useUpdateNodeMutation();
   const [value, setValue] = useState(name);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  // One message per card (D37): within a CardNotesProvider the panel shows only the last card's.
+  const [result, setResult] = useCardNote<{ ok: boolean; text: string }>(`rename:${id}`);
   const fieldId = useId();
   const typed = value.trim();
   const problem = typed.length === 0 ? "A name cannot be empty." : typed.length > NAME_LIMIT ? `A name is at most ${NAME_LIMIT} characters.` : null;
@@ -65,7 +67,7 @@ export function RenameNode({ level, id, name, slug, tree, onDone }: { level: Man
 export function ArchiveNode({ level, id, name, archived, published, tree, onArchived }: { level: ManagedLevel; id: string; name: string; archived: boolean; published: boolean; tree: TreeArg; onArchived?: () => void }) {
   const [update, state] = useUpdateNodeMutation();
   const [confirming, setConfirming] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [result, setResult] = useCardNote<{ ok: boolean; text: string }>(`archive:${id}`);
 
   const change = async (to: string) => {
     setConfirming(false);
@@ -104,33 +106,32 @@ export function ArchiveNode({ level, id, name, archived, published, tree, onArch
 
 /**
  * Deletes a node with nothing attached. The control plane refuses one with children, work or credit
- * history (409) and says so; the refusal is shown as it came, with archiving offered instead.
+ * history (409) and says so, in plain words in normal mode, with archiving offered instead.
  */
 export function DeleteNode({ level, id, name, tree, onDeleted }: { level: ManagedLevel; id: string; name: string; tree: TreeArg; onDeleted: () => void }) {
   const [remove, state] = useDeleteNodeMutation();
   const [update, archiving] = useUpdateNodeMutation();
   const [confirming, setConfirming] = useState(false);
-  const [refusal, setRefusal] = useState<{ text: string; archivable: boolean } | null>(null);
-  const [archived, setArchived] = useState<string | null>(null);
+  // The refusal, or what archiving instead did: one note, never both (D37).
+  const [note, setNote] = useCardNote<{ ok: boolean; text: string; archivable: boolean }>(`delete:${id}`);
 
   const confirm = async () => {
     setConfirming(false);
-    setRefusal(null);
+    setNote(null);
     try {
       await remove({ level, id }).unwrap();
       onDeleted();
     } catch (e) {
-      setRefusal({ text: `${name} was not deleted: ${describeError(e as never)}`, archivable: errorStatus(e as never) === 409 });
+      setNote({ ok: false, text: `${name} was not deleted: ${describeError(e as never)}`, archivable: errorStatus(e as never) === 409 });
     }
   };
 
   const archiveInstead = async () => {
     try {
       await update({ level, id, status: "archived", tree }).unwrap();
-      setRefusal(null);
-      setArchived(`${name} is archived instead. Nothing in it was deleted.`);
+      setNote({ ok: true, text: `${name} is archived instead. Nothing in it was deleted.`, archivable: false });
     } catch (e) {
-      setRefusal({ text: `${name} was not archived either: ${describeError(e as never)}`, archivable: false });
+      setNote({ ok: false, text: `${name} was not archived either: ${describeError(e as never)}`, archivable: false });
     }
   };
 
@@ -150,17 +151,17 @@ export function DeleteNode({ level, id, name, tree, onDeleted }: { level: Manage
           Delete {name}
         </Button>
       )}
-      {refusal && (
+      {note && !note.ok && (
         <div role="alert" className="flex flex-col gap-2 rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
-          <span>{refusal.text}</span>
-          {refusal.archivable && (
+          <span>{note.text}</span>
+          {note.archivable && (
             <Button size="sm" variant="outline" className="self-start" disabled={archiving.isLoading} onClick={() => void archiveInstead()}>
               Archive it instead
             </Button>
           )}
         </div>
       )}
-      {archived && <Outcome ok>{archived}</Outcome>}
+      {note?.ok && <Outcome ok>{note.text}</Outcome>}
     </div>
   );
 }

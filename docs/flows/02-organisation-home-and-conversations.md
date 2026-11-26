@@ -228,7 +228,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   1. The card shows its name (a selection button) and "Manage".
   2. A stage chip appears unless the project is live with apps. The stages the server sends are "Researching", "Reviewing", "Building", "Planning", "Live" and "Paused".
   3. The card shows "{credits} this month" and an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all.
-  4. If work is under way: "{stage}, step {x} of {y}", then "{spent} of an estimated {estimate}" (or "{spent} so far" when there is no estimate), a moving progress bar, and the link "Watch the work", which goes to `/runs/{id}`.
+  4. If work is under way: "{stage}, step {x} of {y}" (just "{stage}" until there is a plan to count, with no bar), then "{spent} of an estimated {estimate}" (or "{spent} so far" when there is no estimate), a moving progress bar once there is a plan, and the link "Watch the work", which goes to `/runs/{id}`.
   5. Below that: its apps (ORG-10) and its people (ORG-11).
 - **You know it worked when:** "Watch the work" opens the live run.
 - **Variations and refusals:**
@@ -248,7 +248,8 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - the app's name with an app icon (a link);
      - a health chip: "Healthy", "Struggling", "Down" or "Health unknown";
      - a running chip: "Always on", "Awake", "Asleep", "Waking" or "Paused";
-     - an app that was never built (nothing measured, still starting) shows the single chip "Not built yet" in place of these;
+     - an app that was never built (a draft, or its first build under way) shows the single chip "Not built yet" in place of these; one whose build stopped before anything was published (`notBuilt`) shows "Not built", with the control plane's line beneath it ("Not built — the build was cancelled."), and its project's stage reads "Not built" with the same line;
+     - an app paused behind Edge's holding page (health `paused`) shows "Paused" in place of its health, with the reason beneath it ("Paused: a monthly budget above it is spent. …");
      - an access chip: "Public", "Shared with {n}", "Shared" or "Private";
      - "{n} visits today" (or "{time ago} last visit", or "Not measured yet" when nothing has been measured);
      - "{n} credits this month".
@@ -270,7 +271,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - "Nothing to do" (idle past `workforce.idle_days`).
 
      Hovering shows the activity.
-  2. Under the chips, working employees get a typing line, "{Name}: {activity}".
+  2. Under the chips, working employees get a typing line, "{Name}: {activity}", worded as the dock words it ("Theo is making a change: {request}").
   3. Contractors appear as one dashed spinning line: "{n} contractor(s) · {activity}". On the organisation band a contractor is named by its role, "{Role} · contractor", with the step it is doing after it ("— Looked for evidence people will pay"); so is its node in "Who works on what".
   4. Selecting an employee chip scopes the conversation to that employee (TALK-05).
 - **You know it worked when:** a working employee shows animated dots and their activity.
@@ -576,7 +577,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   2. Press **"Yes, delete {name}"** ("Keep it" cancels). The node leaves the outline and its parent is chosen.
 - **You know it worked when:** the node is gone from the outline and the chart.
 - **Variations and refusals:**
-  - Children, runs or credit entries: the server's 409 is shown as it came — "{name} was not deleted: '{path}' still has children, work or credit history attached. Archive it instead (status: archived). (409)" — with the button **"Archive it instead"**, which archives it: "{name} is archived instead. Nothing in it was deleted."
+  - Children, runs or credit entries: in normal mode the 409 reads "{name} was not deleted: It still has things beneath it, work or credit history. Archive it instead: it keeps everything and can be brought back." (technical mode shows the server's own words and "(409)") — with the button **"Archive it instead"**, which archives it: "{name} is archived instead. Nothing in it was deleted."
   - Below Admin, no button: "An Admin or above deletes a division with nothing in it." (or "a project", "an app"). The API answers 403 "This needs the admin role at '{path}'; you are a builder there (set at {path})."
   - MCP `node_delete` is held to the same Admin check and gives the same 409 for a node with history; an organisation is refused (400 "An organisation is not deleted; delete a division, project or app.").
 - **Where:** `NodeControls.tsx` (`DeleteNode`); `TreeService.DeleteAsync`.
@@ -798,10 +799,10 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   1. The dock shows a square avatar and "Talking to {org}", with the hint "Select a division, project or employee to narrow this."
   2. The history loads: a skeleton, screen-reader text "Loading what was said before" (TALK-11).
   3. If nothing has been said yet: "Ask what needs you, or tell it what to change. It answers for {org} and everything beneath it."
-  4. Below the log: label "Message {org}", input placeholder "Ask, or tell it what to change", the button "Send" (disabled while the input is blank or the cost is being worked out), and under it "A message here costs at most {ceiling} credits, usually about {credits} credits; it is charged at what it actually costs." ("Working out what a message costs…" while it loads).
+  4. Below the log: label "Message {org}", input placeholder "Ask, or tell it what to change", the button "Send" (disabled while the input is blank or the cost is being worked out), and under it "A message here costs at most {ceiling} credits, usually about {credits} credits; it is charged at what it actually costs." (a usual figure under 0.1 reads "usually less than 0.1 credits"; when the ceiling is more than 20 times the usual figure the line reads "Usually well under 1 credit. It can never cost more than {ceiling}, the most its steps could cost; it is charged at what it actually costs.", or "Usually about {credits} credits. …" from 1 credit up) ("Working out what a message costs…" while it loads).
   5. The person types a question (for example "what is over budget?") and presses "Send". Their bubble, headed "You", appears right away, faded while it sends (`POST /api/conversations {scope}`). Typing dots and "Working on it" show.
   6. The Runner answers using `read_organisation`. The reply streams in as a grey bubble headed "Endgame", drawn from its markdown: bold, italics, lists, inline code and links read as formatting, never as asterisks or backticks, and nothing in it is ever run as HTML. The runner's closing word is not printed beside a reply, so each thing is said once; a notice with a reason of its own (the budget ran out) stays, in the attention colour. When the run did tool work, the link "See how it got there" appears (TALK-12).
-  7. Up to two lines under the log show employees working anywhere in the tree: "{Name} is {activity}".
+  7. Up to two lines under the log show employees working anywhere in the tree: "{Name} is {activity}" as a sentence: a run's title becomes what they are doing — "Theo is making a change: {request}", "Theo is building: {name}", "Iris is researching: {idea}" — an activity in "-ing" keeps "is", and anything else reads "{Name}: {activity}".
 - **You know it worked when:** a grey reply bubble appears under your message.
 - **Variations and refusals:** see TALK-13 to TALK-15. If the cost cannot be worked out: "What a message costs could not be worked out: {reason} Its cost is still held before each step and shown with the reply." and Send stays available.
 - **Where:** `ConversationDock.tsx`; `POST /api/conversations/estimate`, `POST`/`GET /api/conversations` (`WorkEndpoints`); `FactoryEstimates.ConversationAsync`; `Runner/Workflows/ConversationWorkflow.cs`; `Runner/Agents/RunnerTools.cs` (`ReadOrganisationTool`); `GET /api/runs/{id}/events`.
@@ -1013,7 +1014,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   1. Under the input, before sending: "A message here costs at most {ceiling} credits, usually about {credits} credits; it is charged at what it actually costs."
   2. Sending still succeeds: the run is queued.
   3. When the model call is refused for budget, a notice appears in the dock instead of a reply: "The credit budget ran out before a reply could be written, so nothing was answered and nothing more was charged. Top up or raise the budget, then ask again." with **"See credits"**. It is kept in the conversation's history.
-  4. If the AI models cannot be reached (no key, a key refused, the provider down), the reply reads "I could not reach Endgame's AI models, so I could not answer that, and nothing was charged. Please ask again; if it keeps happening, tell FrostAura."
+  4. If the AI models cannot be reached (no key, a key refused, the provider down), the reply reads "I could not reach Endgame's AI models, so I could not answer that, and nothing was charged. Please ask again; if it keeps happening, tell FrostAura." When the work instead stops with no reply at all, the dock shows the stop notice in plain words ("Endgame could not reach its AI models, so the work stopped before it was finished. …") with **"Try again"**, which sends the same message again; what the gateway said is in technical mode only.
   5. If the assistant cannot complete for another reason, the reply reads "I could not finish answering that. Please ask again."
 - **You know it worked when:** (a refusal) the notice with "See credits" shows in the conversation.
 - **Variations and refusals:** a chat is answered in a lane of its own in the Runner, so it never waits behind long builds or research (and chats never hold builds up).
@@ -1130,13 +1131,14 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
      - the title as a link;
      - one line of detail;
      - "Mark read" when unread;
+     - "Answered" (green) in place of "New" and "Mark read" when what it asked is already answered; its badge is quiet and its title plain;
      - "Also e-mailed" when it was;
      - in technical mode, the raw kind.
 
      Unread urgent rows are tinted amber; other unread rows are tinted blue.
   5. An aside "What you are told about" lists: "A verdict waiting for your call", "An approval the work is waiting on", "A hire proposed", "A budget at 80% and at its cap", "Credits at zero, halfway to the overdraft limit, and at it", "An app that stopped working", "A security review that found a problem", "For FrostAura’s operators: an Owner asking for a top-up". It adds: "Owners and Admins are told about what their grant covers; others see an empty feed."
 - **You know it worked when:** the page lists your notices, newest first.
-- **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …" — and it no longer counts as unread.
+- **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …" — and it no longer counts as unread. Such a row reads "Answered", with no "New" and no "Mark read", here and in the bell's popover.
 - **Where:** `notifications/NotificationsView.tsx`, `NotificationFeed.tsx`, `notificationModel.ts`; `NotificationService.FeedAsync` (`resolved`).
 - **Reachable from:** UI.
 - **Covered by tests:** `Notifications.test.tsx`: "lists each with a short title, one line and where it leads…".
@@ -1401,7 +1403,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Foundation · **Learn first:** ORG-04 · **What you learn:** a failed read is never shown as an empty organisation.
 - **Steps:**
   1. While loading, skeletons.
-  2. On failure: "The organisation could not be loaded", "{reason} Nothing here is known until it loads." and "Try again". There is no conversation while failed. The reason is the server's own text where it gives one, for example "The organisation 'x' was not found, or you cannot see it. (404)", or "Endgame could not be reached.", "Endgame did not answer in time.", etc.
+  2. On failure: "The organisation could not be loaded", "{reason} Nothing here is known until it loads." and "Try again". A refusal (401, 403) or a not-found (404) is an answer: it drops "Nothing here is known until it loads.", and a not-found offers "Back to the org chart" instead of "Try again". The same holds for every failed first load in the console. There is no conversation while failed. The reason is the server's own text where it gives one, for example "The organisation 'x' was not found, or you cannot see it. (404)", or "Endgame could not be reached.", "Endgame did not answer in time.", etc.
   3. "Try again" reads it again; once it can be read, the chart appears.
 - **You know it worked when:** after "Try again", the chart appears.
 - **Variations and refusals:** an answer in an unexpected shape fails the same way, with "Endgame sent the organisation in a shape this screen does not understand: {field}."

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { platformHost, useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetCreditsQuery, useGetMeQuery } from "@/store/api";
 import type { Autonomy, IdeaEstimate, MemberRole } from "@/store/types";
 import { isArchived } from "../tree/treeManage";
-import { nextSteps, researchPromise, roomFor, shortfall } from "./startModel";
+import { NEVER_TOPPED_UP, nextSteps, researchPromise, roomFor, shortfall } from "./startModel";
 import { AppShell } from "../shell/AppShell";
 
 /** Things an idea commonly has to respect, offered as one-tap constraints. They are the owner's words, sent as text. */
@@ -268,9 +268,11 @@ function EstimatePanel({ state, scope, firstRun }: { state: EstimateState; scope
       ? null
       : firstRun
         ? `A new organisation starts with no credits, and this needs about ${formatCredits(state.estimate.credits)}. Research starts, then waits for a top-up before it spends anything.`
-        : scope && credits.data
-          ? shortfall(roomFor(credits.data, scope), state.estimate.credits)
-          : null;
+        : scope && credits.data?.neverToppedUp
+          ? NEVER_TOPPED_UP
+          : scope && credits.data
+            ? shortfall(roomFor(credits.data, scope), state.estimate.credits)
+            : null;
   return (
     <section aria-label="Research estimate" aria-live="polite" className={cn("flex flex-col gap-2.5 rounded-md border border-primary-line bg-primary-tint px-5 py-4", RISE, stagger(4))}>
       <div className="flex flex-wrap justify-between gap-2">
@@ -297,11 +299,16 @@ function EstimatePanel({ state, scope, firstRun }: { state: EstimateState; scope
       {short && (
         <p data-testid="estimate-shortfall" className="flex flex-col gap-1 rounded-xs border border-attention-line bg-surface px-3 py-2 text-ink">
           {short}
-          {!firstRun && (
-            <Link href={paths.credits()} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
-              See credits
-            </Link>
-          )}
+          {!firstRun &&
+            (credits.data?.neverToppedUp ? (
+              <Link href={paths.credits()} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+                Ask for a top-up
+              </Link>
+            ) : (
+              <Link href={paths.credits()} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+                See credits
+              </Link>
+            ))}
         </p>
       )}
     </section>
@@ -323,7 +330,7 @@ function NextSteps({ scope, division }: { scope: string | null; division: string
           <Skeleton className="h-12" />
         </Loading>
       )}
-      {scope && view.kind === "failed" && <Failed title="What happens next could not be worked out" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {scope && view.kind === "failed" && <Failed title="What happens next could not be worked out" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {(!scope || view.kind === "loaded") && (
         <ol className="flex flex-col gap-5">
           {nextSteps(autonomy, division).map(([title, text], i) => (

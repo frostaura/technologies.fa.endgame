@@ -29,7 +29,22 @@ export function Loading({ label, children, className }: { label: string; childre
  * an answer rather than a read that broke, so its reason is the whole message; a not-found offers the
  * way back instead of a retry that would only answer the same.
  */
-export function Failed({ title, reason, onRetry, status, className }: { title: string; reason: string; onRetry?: () => void; status?: number | null; className?: string }) {
+export function Failed({
+  title,
+  reason,
+  onRetry,
+  status,
+  unknown = "Nothing here is known until it loads.",
+  className,
+}: {
+  title: string;
+  reason: string;
+  onRetry?: () => void;
+  status?: number | null;
+  /** What a failed read leaves unknown; said only when the failure is not an answer (401, 403, 404). */
+  unknown?: string;
+  className?: string;
+}) {
   const notFound = status === 404;
   const answered = notFound || status === 401 || status === 403;
   return (
@@ -38,7 +53,7 @@ export function Failed({ title, reason, onRetry, status, className }: { title: s
         <Icon name="verdict" className="mt-0.5 text-attention-text" />
         <div className="flex flex-col gap-1">
           <p className="font-semibold text-attention-text">{title}</p>
-          <p className="text-sm text-ink">{answered ? reason : `${reason} Nothing here is known until it loads.`}</p>
+          <p className="text-sm text-ink">{answered ? reason : `${reason} ${unknown}`}</p>
         </div>
       </div>
       {notFound ? (

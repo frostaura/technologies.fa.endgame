@@ -148,7 +148,7 @@ Shared vocabulary used below:
   - The same need raised again returns the existing open or accepted proposal (200), not a second one. Simultaneous raises also end as one proposal.
   - A need the factory raises that an employee above already covers (same role, working at that level or above it) proposes nobody: the answer is 200 with `hire.status` `covered`, `hire.employeeId` and `coveredBy` naming that employee, and an open proposal for the same need is withdrawn ("Withdrawn: {Name} already does this work here."). A person's own proposal and a recurring-role promotion are never held back.
   - The expected monthly cost is never more than the proposal's own budget, when it has one (raised or edited).
-  - A withdrawn proposal is `declined` with `withdrawn: true`, decided by "Endgame"; its notice reads "Hiring {Name} as {role} was withdrawn".
+  - A withdrawn proposal is `declined` with `withdrawn: true`, decided by "Endgame"; its notice reads "Hiring {Name} as {role} was withdrawn". On `/hires` it is listed under "Decided" with the badge "Withdrawn" and its reason; its page reads "This proposal was withdrawn on {date}: nobody needs to answer it." with the reason beneath, and offers no decision.
 - **Where:** `HireService.RaiseAsync`, `CoveringAsync`. `POST /internal/hires`. `POST /api/hires`. `NotificationService` (hire).
 - **Reachable from:** system (Runner). People reach it by API, MCP `hire_raise` or HIRE-07.
 - **Covered by tests:** `WorkforceTests.A_need_within_budget_is_hired_at_once_in_auto_mode_and_the_same_need_is_one_proposal`; `WalkTwoServerTests.A_need_someone_above_already_covers…`, `A_proposals_expected_monthly_cost_is_held_to_its_own_budget`.
@@ -168,7 +168,7 @@ Shared vocabulary used below:
 - **Variations and refusals:**
   - Empty name: "Give the new employee a name."
   - Below Admin the button is replaced by "An Admin or the Owner proposes it as a hire."
-  - **One need, one proposal:** the screen sends the role as `contractorRole` and the control plane makes the need key the system uses itself (`promotion:<node>:<role>`), so proposing a role the system already proposed returns that proposal.
+  - **One need, one proposal:** the screen sends the role as `contractorRole` and the control plane makes the need key the system uses itself (`promotion:<node>:<role>`), so proposing a role the system already proposed returns that proposal. While a proposal for the role waits, the button is replaced by "Already proposed — open it", which opens that proposal.
   - Server refusal: "The hire was not proposed: <reason>". Empty list: "No contractor role recurs here yet." Failed read: "Recurring roles could not be loaded".
 - **Where:** `HiresView.tsx` (RecurringRow). `GET /api/employees/recurring-roles?scope=`. `POST /api/hires` (trigger promotion). `HireService.PromotionNeedKey`.
 - **Reachable from:** UI.
@@ -228,10 +228,10 @@ Shared vocabulary used below:
   4. The track record shows four tiles:
      - "Work accepted": "<a> of <b>" or "No work judged yet". Detail "<n> pieces sent back" / "Nothing sent back", plus " · <n> judgements of others’ work".
      - "Repairs not charged": "<n> repairs of its own mistakes, never billed" or "No repairs of its own work".
-     - "Cost so far": "Budget <n> a month, <n> used", or "<n> this month; no budget of its own, the one above holds". Both figures count the contractors it briefs, as its budget does (`trackRecord.cost`; its own share is `ownToDateCredits` / `ownMonthCredits`).
+     - "Cost so far": "Budget <n> a month, <n> used this month", or "<n> this month; no budget of its own, the one above holds"; when contractors spent some of it, ", including the contractors it briefs; <n> of its own" follows the figure. Both figures count the contractors it briefs, as its budget does (`trackRecord.cost`; its own share is `ownToDateCredits` / `ownMonthCredits`).
      - "Estimates": a headline, or "None scored yet" / "Scored once its first estimated work finishes". Detail "Across <n> pieces of work. The largest miss was <n>%." A run nobody owns is scored to whoever its model calls were mostly charged to, a contractor's calls counting as its briefer's — so a researcher is scored on the research it led.
   5. "Job description" lists Mandate, Works at, May use, Services, Budget ("… a month, including the contractors it briefs") and Thinking power. Technical mode adds "Identifier".
-  6. "Recent work" shows run chips ("Now: <title>", "Its last piece of work") and the runs it led (`recentRuns`, newest first, up to 12: its own, ones it held a task in, ones charged to it, ones it briefed contractors for), and up to 12 tasks with status ("To do", "In progress", "Blocked", "Done", "Did not succeed", "Cancelled") and "Estimated <n>, cost <n>" or "No estimate".
+  6. "Recent work" shows run chips ("Now: <title>", "Its last piece of work") and the runs it led (`recentRuns`, newest first, up to 12: its own, ones it held a task in, ones charged to it, ones it briefed contractors for), and up to 12 tasks with status — with no tasks, the runs it led are listed as "Work it led" (title, "Finished", "Did not succeed", "Working"…, and when), and an employee with finished work but nothing listed reads "{Name} has finished {n} pieces of work here, none of it split into tasks (research is not)." — ("To do", "In progress", "Blocked", "Done", "Did not succeed", "Cancelled") and "Estimated <n>, cost <n>" or "No estimate".
   7. "Contractors it has briefed" (EMP-07) and "Talk to <Name>" (EMP-08) follow. The memory sits in the aside (MEM-01).
 - **You know it worked when:** the four track-record tiles and the job description are shown.
 - **Variations and refusals:**
@@ -563,7 +563,8 @@ Shared vocabulary used below:
 - **Starts at:** the credits pill in the header ("<n> credits left", turning to the warning colour at or below zero), which opens `/credits`. Also "See credits" on a run, or a budget, credits or overdraft notification.
 - **Needs:** a named organisation.
 - **Steps:**
-  1. The banner reads "Credits left" (or "Below zero"), with the balance and a pace line:
+  1. While the organisation has never been topped up (`neverToppedUp`), a note above the banner reads "This organisation has not been given credits yet: FrostAura adds them when you ask. Until then, work starts and then waits before it spends anything." with **"Ask for a top-up"**, which goes to "Asking for more".
+  2. The banner reads "Credits left" (or "Below zero"), with the balance and a pace line:
      - "At this month’s pace, about <n> months."
      - "At this month’s pace, it runs out within the month."
      - "Nothing spent yet this month, so there is no pace to project."
@@ -571,7 +572,7 @@ Shared vocabulary used below:
      - at exactly 0, with none: "Nothing is left to spend, and there is no overdraft, so work waits for a top-up."
      - "You are below zero. <n> credits more can be spent before work stops; the next top-up settles the debt first."
      - "You are below zero, at your limit. Work is paused until a top-up settles the debt."
-  2. Three figures follow: "Spent this month", "On AI work", "On hosting".
+  3. Three figures follow: "Spent this month", "On AI work", "On hosting".
 - **You know it worked when:** the balance and the three figures are shown.
 - **Variations and refusals:**
   - No organisation: "There are no credits to show until your organisation is named." with a "Start" link.

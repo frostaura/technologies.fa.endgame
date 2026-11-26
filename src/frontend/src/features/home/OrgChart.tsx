@@ -15,7 +15,7 @@ import type { Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/t
 import type { Selection } from "@/store/uiSlice";
 import { TypingDots } from "./ConversationDock";
 import { isArchived } from "../tree/treeManage";
-import { appChips, contractorsLabel, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
+import { activityLine, appChips, appNote, contractorsLabel, progressLine, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
 
 /** Each division takes the next hue in turn, as the design draws Technologies blue and Labs violet. */
 const DIVISION_TONES = [
@@ -217,26 +217,19 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
         </div>
       </div>
 
-      {project.note && <p className={atVerdict ? "text-attention-deep" : "text-ink-body"}>{project.note}</p>}
+      {(project.note ?? project.notBuilt?.note) && <p className={atVerdict ? "text-attention-deep" : "text-ink-body"}>{project.note ?? project.notBuilt?.note}</p>}
 
       {project.progress && (
         <div className="relative flex flex-col gap-2">
           <div className="flex flex-wrap justify-between gap-2">
-            <span className="font-medium">
-              {project.progress.label}, step {project.progress.step} of {project.progress.of}
-            </span>
+            <span className="font-medium">{progressLine(project.progress)}</span>
             <span className="text-ink-muted">
               {project.progress.estimatedCredits !== null
                 ? `${formatNumber(project.progress.spentCredits)} of an estimated ${formatCredits(project.progress.estimatedCredits)}`
                 : `${formatCredits(project.progress.spentCredits)} so far`}
             </span>
           </div>
-          <Bar
-            live
-            className="h-2.5"
-            value={percent(project.progress.step, project.progress.of)}
-            label={`${project.progress.label}: step ${project.progress.step} of ${project.progress.of}`}
-          />
+          {project.progress.of > 0 && <Bar live className="h-2.5" value={percent(project.progress.step, project.progress.of)} label={progressLine(project.progress)} />}
           <Link href={paths.run(project.progress.runId)} className="relative z-10 self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
             Watch the work
           </Link>
@@ -274,6 +267,7 @@ function AppRow({ app }: { app: TreeApp }) {
         </Link>
         <ChipRow chips={chips} />
       </div>
+      {!archived && appNote(app) && <p className="text-sm text-ink-body">{appNote(app)}</p>}
       <div className="flex flex-wrap gap-6">
         {/* Null visits means nothing has been measured yet: unknown, never zero. */}
         <Figure
@@ -320,7 +314,7 @@ export function Workers({ workers, scope, trail, selection, onSelect }: { worker
       {busy.map((w) => (
         <span key={w.id} className="flex items-center gap-2 text-sm text-ink-muted">
           <TypingDots />
-          {w.name}: {w.activity}
+          {activityLine(w.name, w.activity ?? "")}
         </span>
       ))}
     </div>

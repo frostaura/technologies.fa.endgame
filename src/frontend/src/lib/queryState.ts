@@ -64,6 +64,10 @@ function whoMay(required: MemberRole): string {
 const ROLE_REFUSAL = /^This needs the (\w+) role at '[^']*'; (?:you are an? (\w+) there \(set at [^)]*\)|this access token acts as an? (\w+) at most)\.?$/;
 /** `EndgameProblem.NotFound`: "The scope 'acme/tools' was not found, or you cannot see it." */
 const NOT_FOUND = /^The [\w ]+ '[^']*' was not found, or you cannot see it\.?$/;
+/** `TreeService.DeleteAsync`'s refusal (D79): a scope with things beneath it, work or credit history is archived, never deleted. */
+const DELETE_REFUSAL = /^'[^']*' still has children, work or credit history attached\. Archive it instead\b.*$/;
+/** A wire hint in brackets, "(status: archived)": the field to send, which a person never types. */
+const WIRE_HINT = /\s*\((?:status|kind|role|stage|state|choice|decision): [\w.-]+\)/gi;
 /** A quoted slug path (`'acme/tools'`), which plain words never carry. */
 const QUOTED_PATH = /'[a-z0-9][\w.-]*(\/[\w.-]+)+'/gi;
 
@@ -107,7 +111,8 @@ function plainProblem(problem: string | null, status: number): string {
   const refusal = plainRoleRefusal(problem);
   if (refusal) return refusal;
   if (NOT_FOUND.test(problem)) return plainForStatus(404);
-  const words = withoutPaths(problem);
+  if (DELETE_REFUSAL.test(problem)) return "It still has things beneath it, work or credit history. Archive it instead: it keeps everything and can be brought back.";
+  const words = withoutPaths(problem.replace(WIRE_HINT, ""));
   if (!isPlain(words)) return plainForStatus(status);
   return /[.!?]$/.test(words) ? words : `${words}.`;
 }

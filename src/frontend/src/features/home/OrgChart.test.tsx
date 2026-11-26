@@ -5,7 +5,7 @@ import { ME, json, renderWithStore, stubApi } from "@/test/harness";
 import { OrgChart } from "./OrgChart";
 import { tidyFigures } from "./needsYouModel";
 import { nodeName } from "./ontologyModel";
-import { appChips, workerActivity, workerLabel } from "./treeModel";
+import { activityLine, appChips, appNote, progressLine, stageChip, workerActivity, workerLabel } from "./treeModel";
 
 const app = { id: "a1", slug: "web", name: "Ledger web", health: "healthy", running: "awake", access: "private", sharedWith: 0, visitsToday: 1, lastVisitAt: null, spend: { monthCredits: 1 }, workers: [], status: "archived" };
 const TREE = {
@@ -53,8 +53,62 @@ describe("OrgChart", () => {
   });
 });
 
+describe("activity as sentences (D82)", () => {
+  it("reads a run's title as what the person is doing", () => {
+    expect(activityLine("Theo", "Change: Show how many books each member has read")).toBe("Theo is making a change: Show how many books each member has read");
+    expect(activityLine("Theo", "Build: Club Reading List")).toBe("Theo is building: Club Reading List");
+    expect(activityLine("Iris", "Research: A shared equipment log")).toBe("Iris is researching: A shared equipment log");
+    expect(activityLine("Iris", "Looking for competitors")).toBe("Iris is looking for competitors");
+    expect(activityLine("Lena", "Paused")).toBe("Lena: Paused");
+  });
+
+  it("never prints step 0 of 0, and draws no bar until there is a plan", () => {
+    expect(progressLine({ label: "Change: Show how many", step: 0, of: 0 })).toBe("Change: Show how many");
+    expect(progressLine({ label: "Build: Ledger", step: 1, of: 4 })).toBe("Build: Ledger, step 1 of 4");
+    stubApi({ "GET /api/me": json(ME) });
+    const tools = TREE.divisions[0] as Tree["divisions"][number];
+    const project = { ...tools.projects[0], stage: "building", progress: { runId: "r1", label: "Change: Show how many", step: 0, of: 0, spentCredits: 2, estimatedCredits: null }, workers: [{ id: "e1", name: "Theo", role: "Software engineer", kind: "employee", activity: "Change: Show how many", status: "working" }] };
+    const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
+    const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    expect(container.textContent).not.toContain("step 0 of 0");
+    expect(container.textContent).toContain("Theo is making a change: Show how many");
+    expect(screen.getByRole("link", { name: "Watch the work" })).toBeTruthy();
+  });
+});
+
 describe("the chart after the real-stack walk", () => {
   // D30: an app that was never built is one quiet chip, not "Waking" and "Health unknown".
+  it("reads the control plane's paused and not-built answers: chips and the note beside the app (D66, D81)", () => {
+    expect(appChips({ health: "paused", running: "paused", access: "private", sharedWith: 0, visitsToday: 3, lastVisitAt: "t", paused: { reason: "budget_exhausted", note: "Paused: a monthly budget above it is spent." } }).map((c) => c.label)).toEqual(["Paused", "Private"]);
+    const cancelled = { health: "unknown", running: "starting", access: "private", sharedWith: 0, visitsToday: null, lastVisitAt: null, status: "draft", notBuilt: { reason: "cancelled", note: "Not built — the build was cancelled.", runId: "b1", ideaId: null } } as const;
+    expect(appChips(cancelled).map((c) => c.label)).toEqual(["Not built"]);
+    expect(appNote(cancelled)).toBe("Not built — the build was cancelled.");
+    expect(appChips({ ...cancelled, notBuilt: null }).map((c) => c.label)).toEqual(["Not built yet"]);
+    expect(stageChip("not-built").label).toBe("Not built");
+    stubApi({ "GET /api/me": json(ME) });
+    const tools = TREE.divisions[0] as Tree["divisions"][number];
+    const project = { ...tools.projects[0], stage: "not-built", note: null, notBuilt: cancelled.notBuilt, apps: [{ ...app, status: "draft", archived: false, health: "unknown", running: "starting", visitsToday: null, notBuilt: cancelled.notBuilt }] };
+    const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
+    const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    expect(container.textContent).toContain("Not built — the build was cancelled.");
+    expect(container.textContent).not.toContain("Planning");
+  });
+
+  it("shows a project whose build attached at placement with its progress and Watch the work (D80)", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const tools = TREE.divisions[0] as Tree["divisions"][number];
+    const project = { ...tools.projects[0], stage: "building", progress: { runId: "b9", label: "Build: Dive Trip Ready", step: 1, of: 4, spentCredits: 23, estimatedCredits: 120 } };
+    const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
+    const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    expect(container.textContent).toContain("Build: Dive Trip Ready, step 1 of 4");
+    expect(screen.getByRole("link", { name: "Watch the work" }).getAttribute("href")).toBe("/runs/b9");
+  });
+
+  it("shows a paused app as Paused, with no Healthy chip beside it (D66)", () => {
+    const paused = { health: "healthy", running: "paused", access: "private", sharedWith: 0, visitsToday: 3, lastVisitAt: "t" } as const;
+    expect(appChips(paused).map((c) => c.label)).toEqual(["Paused", "Private"]);
+  });
+
   it("shows a draft app as not built yet", () => {
     const draft = { health: "unknown", running: "starting", access: "private", sharedWith: 0, visitsToday: null, lastVisitAt: null } as const;
     expect(appChips(draft).map((c) => c.label)).toEqual(["Not built yet"]);

@@ -1,6 +1,7 @@
 import type { BadgeTone } from "@/components/ui/badge";
+import { formatNumber } from "@/lib/format";
 import type { Mode } from "@/features/runs/runModel";
-import type { EmployeePatch, EmployeeStatus, HireEdit, HireTrigger, JobDescription, MemoryChange, MemoryEntry, MemoryKind, PersonRef, Tree } from "@/store/types";
+import type { EmployeePatch, EmployeeStatus, Hire, HireEdit, HireTrigger, JobDescription, MemoryChange, MemoryEntry, MemoryKind, PersonRef, RecurringRole, TrackRecord, Tree } from "@/store/types";
 
 /**
  * The workforce in plain words. Normal mode never names a model, a tool's internal name or the
@@ -314,4 +315,44 @@ export function hireEditFrom(before: JobDraftShape, after: JobDraftShape, extra:
   if (p.reportsTo !== undefined) edit.reportsTo = p.reportsTo;
   if (p.clearReportsTo) edit.clearReportsTo = true;
   return edit;
+}
+
+/**
+ * The proposal already waiting for a recurring role, if one is: the control plane raises one need per role and place
+ * (`HireService.PromotionNeedKey`), so proposing again only returns it (D78).
+ */
+export function waitingProposal(hires: Hire[] | undefined, role: RecurringRole): Hire | null {
+  const named = role.role.trim().toLowerCase();
+  return (
+    hires?.find(
+      (h) =>
+        h.status === "proposed" &&
+        h.scope === role.scope &&
+        ((h.needKey?.startsWith("promotion:") === true && h.needKey.endsWith(`:${named}`)) || h.contractorRole?.trim().toLowerCase() === named || h.role.trim().toLowerCase() === named),
+    ) ?? null
+  );
+}
+
+/**
+ * What an employee has cost (D74). `cost` already counts the contractors it briefs, as its budget does; `own…` is its
+ * share alone (`trackRecordGuard` makes an older control plane's figures read the same way).
+ */
+export function employeeCosts(record: Pick<TrackRecord, "cost">): { toDate: number; month: number; ownMonth: number } {
+  return { toDate: record.cost.toDateCredits, month: record.cost.monthCredits, ownMonth: record.cost.ownMonthCredits ?? record.cost.monthCredits };
+}
+
+/** The line under "Cost so far": this month against the budget, including the contractors it briefs, and its own share. */
+export function costLine(costs: { month: number; ownMonth: number }, monthlyLimit: number | null): string {
+  const theirs = costs.ownMonth < costs.month ? `, including the contractors it briefs; ${formatNumber(costs.ownMonth)} of its own` : "";
+  return monthlyLimit !== null
+    ? `Budget ${formatNumber(monthlyLimit)} a month, ${formatNumber(costs.month)} used this month${theirs}`
+    : `${formatNumber(costs.month)} this month${theirs}; no budget of its own, the one above holds`;
+}
+
+/** A proposal's state as a badge. One the platform closed itself (`withdrawn`) reads as withdrawn, not as a person's no. */
+export function hireBadge(hire: Pick<Hire, "status" | "withdrawn">, proposed = "Hire proposed"): { label: string; tone: BadgeTone } {
+  if (hire.withdrawn) return { label: "Withdrawn", tone: "quiet" };
+  if (hire.status === "accepted") return { label: "Hired", tone: "success" };
+  if (hire.status === "declined") return { label: "Declined", tone: "quiet" };
+  return { label: proposed, tone: "violet" };
 }

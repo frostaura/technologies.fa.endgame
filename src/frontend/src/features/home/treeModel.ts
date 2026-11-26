@@ -16,6 +16,8 @@ export function healthChip(health: AppHealth): Chip {
       return { label: "Healthy", tone: "success", icon: "health" };
     case "degraded":
       return { label: "Struggling", tone: "attention", icon: "health" };
+    case "paused":
+      return { label: "Paused", tone: "attention", icon: "asleep" };
     case "down":
       return { label: "Down", tone: "attention-strong", icon: "health" };
     default:
@@ -27,9 +29,30 @@ export function healthChip(health: AppHealth): Chip {
  * An app's chips on the chart. One the tree reports as starting with nothing ever measured has never been built (a
  * draft, or its first build under way): it is "Not built yet", not "Waking" and "Health unknown" (D30).
  */
-export function appChips(app: Pick<TreeApp, "health" | "running" | "access" | "sharedWith" | "visitsToday" | "lastVisitAt">): Chip[] {
-  if (app.running === "starting" && app.health === "unknown" && app.visitsToday === null && app.lastVisitAt === null) return [{ label: "Not built yet", tone: "quiet", icon: "build" }];
+export function appChips(app: Pick<TreeApp, "health" | "running" | "access" | "sharedWith" | "visitsToday" | "lastVisitAt"> & Partial<Pick<TreeApp, "paused" | "notBuilt" | "status">>): Chip[] {
+  // Its build stopped before anything was published (D81): "Not built", with the reason said beside it (`notBuilt.note`).
+  if (app.notBuilt) return [{ label: "Not built", tone: "quiet", icon: "build" }];
+  const neverBuilt = app.status ? app.status === "draft" || app.status === "building" : app.running === "starting" && app.health === "unknown" && app.visitsToday === null && app.lastVisitAt === null;
+  if (neverBuilt) return [{ label: "Not built yet", tone: "quiet", icon: "build" }];
+  // Paused for budget or the overdraft, it serves nobody: "Healthy" beside it would be untrue (D66). A crashed app is
+  // also not running, and stays "Down".
+  if (isPaused(app)) return [runningChip("paused"), accessChip(app.access, app.sharedWith)];
   return [healthChip(app.health), runningChip(app.running), accessChip(app.access, app.sharedWith)];
+}
+
+/** Paused behind Edge's holding page: the control plane says so (`health: paused`, `paused`); an older one only by `running`. */
+function isPaused(app: { health: AppHealth; running: AppRunning; paused?: unknown }): boolean {
+  return app.health === "paused" || !!app.paused || (app.running === "paused" && app.health !== "down" && app.health !== "unknown");
+}
+
+/** An app's health as its page says it: paused outranks whatever it measured before it was paused (D66). */
+export function appHealthChip(health: AppHealth, running: AppRunning, paused?: unknown): Chip {
+  return isPaused({ health, running, paused }) ? runningChip("paused") : healthChip(health);
+}
+
+/** The line under an app on the chart: why it is paused, or why it was never built — the control plane's own words. */
+export function appNote(app: Partial<Pick<TreeApp, "paused" | "notBuilt">>): string | null {
+  return app.notBuilt?.note ?? app.paused?.note ?? null;
 }
 
 export function runningChip(running: AppRunning): Chip {
@@ -65,13 +88,14 @@ const STAGE_LABEL: Record<ProjectStage, string> = {
   live: "Live",
   paused: "Paused",
   dropped: "Dropped",
+  "not-built": "Not built",
 };
 
 export function stageChip(stage: ProjectStage): Chip {
   const label = STAGE_LABEL[stage];
   if (stage === "verdict") return { label, tone: "attention-strong", icon: "verdict" };
   if (stage === "live") return { label, tone: "success", icon: "publish" };
-  if (stage === "paused" || stage === "dropped") return { label, tone: "quiet" };
+  if (stage === "paused" || stage === "dropped" || stage === "not-built") return { label, tone: "quiet" };
   if (stage === "researching" || stage === "idea") return { label, tone: "teal", icon: "research" };
   return { label, tone: "solid", icon: "build" };
 }
@@ -210,4 +234,26 @@ function isContractor(w: { name: string; kind?: Worker["kind"] }): boolean {
 export function workerActivity(w: { name: string; activity: string | null; kind?: Worker["kind"] }): string | null {
   if (w.activity) return w.activity;
   return isContractor(w) ? w.name.replace(/\s*\(contractor\)\s*$/i, "").trim() || null : null;
+}
+
+/** A run's title prefix ("Change: …") as what a person is doing with it. */
+const DOING: Record<string, string> = { build: "building", change: "making a change", research: "researching", "memory review": "reviewing what it remembers" };
+
+/**
+ * A worker's activity as a sentence (D82). An activity is usually a run's title ("Change: Show how many books…"), which
+ * is no verb: "Theo is change: …" read wrongly. A known prefix becomes what they are doing, a gerund keeps "is", and
+ * anything else follows the name ("Theo: …").
+ */
+export function activityLine(name: string, activity: string): string {
+  const text = activity.trim();
+  const prefixed = /^([A-Za-z][A-Za-z ]*?):\s+(.+)$/.exec(text);
+  const doing = prefixed ? DOING[(prefixed[1] ?? "").toLowerCase()] : undefined;
+  if (prefixed && doing) return `${name} is ${doing}: ${prefixed[2]}`;
+  if (/^[A-Za-z]+ing\b/.test(text) && !/^(nothing|something|everything|thing)\b/i.test(text)) return `${name} is ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+  return `${name}: ${text}`;
+}
+
+/** A project's work under way: its title, and its step only once there is a plan to count ("step 0 of 0" never, D82). */
+export function progressLine(progress: { label: string; step: number; of: number }): string {
+  return progress.of > 0 ? `${progress.label}, step ${progress.step} of ${progress.of}` : progress.label;
 }

@@ -178,7 +178,7 @@ test("managing the tree, your account, choosing where an idea goes, and switchin
   await page.getByRole("button", { name: /^Delete Events/ }).click();
   const confirm = page.getByRole("button", { name: /^(Yes, delete|Delete it)/ });
   if (await confirm.count()) await confirm.first().click();
-  await expect(page.getByText(/still has children, work or credit history attached/).first()).toBeVisible();
+  await expect(page.getByText(/It still has things beneath it, work or credit history/).first()).toBeVisible();
   await page.getByRole("button", { name: /^Operations/ }).first().click();
   await page.getByRole("button", { name: "Add a project" }).click();
   await page.getByLabel(/^Name/).last().fill("Lost Property");

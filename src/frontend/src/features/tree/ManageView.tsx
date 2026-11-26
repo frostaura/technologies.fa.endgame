@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
 import { useGetAppQuery, useGetMeQuery, type TreeArg } from "@/store/api";
 import type { ManagedLevel, MemberRole } from "@/store/types";
+import { CardNotesProvider } from "@/components/CardNotes";
 import { AppShell } from "../shell/AppShell";
 import { ContextPanel } from "./ContextPanel";
 import { ArchiveNode, CreateChild, DeleteNode, RenameNode } from "./NodeControls";
@@ -125,90 +126,93 @@ function NodePanel({ node, nodes, role, tree, onSelect, startAdding }: { node: M
   const children = nodes.filter((n) => n.parent === node.scope);
   const parentName = node.parent ? (nodeAt(nodes, node.parent)?.name ?? node.parent) : null;
 
+  // One message at a time in the panel (D37): renaming, archiving and deleting replace each other's note.
   return (
-    <section aria-label={`${LEVEL_NAME[node.level]}: ${node.name}`} className="flex flex-col gap-5 rounded-md border bg-surface px-5 py-5 shadow-card lg:col-span-2">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-eyebrow font-semibold uppercase text-ink-muted">
-            {LEVEL_NAME[node.level]}
-            {parentName ? ` in ${parentName}` : ""}
-          </span>
-          <h2 className="break-words font-display text-2xl font-semibold">{node.name}</h2>
-          <span className="break-all text-sm text-ink-muted">Its address: {node.scope}</span>
-          {technical && <code className="break-all font-mono text-xs text-ink-muted">{node.id}</code>}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {node.archived ? <Badge tone="quiet">Archived</Badge> : <Badge tone="success">Active</Badge>}
-          {node.level === "app" && (
-            <Link href={paths.app(node.id)} className="rounded-xs font-semibold text-primary-link hover:text-primary-hover">
-              The app&rsquo;s page
-            </Link>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <h3 className="font-display text-base font-semibold">Its name</h3>
-          {may("rename", node.level, role) ? (
-            <RenameNode level={managed ?? "organisation"} id={node.id} name={node.name} slug={node.slug} tree={tree} />
-          ) : (
-            <p className="text-sm text-ink-muted">{capital(whoMay("rename", node.level))} renames {node.level === "organisation" ? "the organisation" : `${article(node.level)} ${node.level}`}.</p>
-          )}
-        </div>
-
-        {child && (
-          <div className="flex flex-col gap-2">
-            <h3 className="font-display text-base font-semibold">What is in it</h3>
-            {children.length === 0 ? (
-              <p data-state="empty" className="text-sm text-ink-muted">
-                No {plural(child)} in {node.name} yet.
-              </p>
-            ) : (
-              <ul aria-label={`In ${node.name}`} className="flex flex-wrap gap-2">
-                {children.map((c) => (
-                  <li key={c.scope}>
-                    <Button size="sm" variant="soft" onClick={() => onSelect(c.scope)}>
-                      {c.name}
-                      {c.archived && <Badge tone="quiet">Archived</Badge>}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+    <CardNotesProvider>
+      <section aria-label={`${LEVEL_NAME[node.level]}: ${node.name}`} className="flex flex-col gap-5 rounded-md border bg-surface px-5 py-5 shadow-card lg:col-span-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-eyebrow font-semibold uppercase text-ink-muted">
+              {LEVEL_NAME[node.level]}
+              {parentName ? ` in ${parentName}` : ""}
+            </span>
+            <h2 className="break-words font-display text-2xl font-semibold">{node.name}</h2>
+            <span className="break-all text-sm text-ink-muted">Its address: {node.scope}</span>
+            {technical && <code className="break-all font-mono text-xs text-ink-muted">{node.id}</code>}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {node.archived ? <Badge tone="quiet">Archived</Badge> : <Badge tone="success">Active</Badge>}
+            {node.level === "app" && (
+              <Link href={paths.app(node.id)} className="rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+                The app&rsquo;s page
+              </Link>
             )}
-            {may("create", node.level, role) ? (
-              adding ? (
-                <CreateChild level={child} parent={node.scope} parentName={node.name} onCancel={() => setAdding(false)} onCreated={(made) => onSelect(made.path)} />
-              ) : (
-                <Button size="sm" variant="outline" className="self-start" onClick={() => setAdding(true)}>
-                  Add {article(child)} {child}
-                </Button>
-              )
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <h3 className="font-display text-base font-semibold">Its name</h3>
+            {may("rename", node.level, role) ? (
+              <RenameNode level={managed ?? "organisation"} id={node.id} name={node.name} slug={node.slug} tree={tree} />
             ) : (
-              <p className="text-sm text-ink-muted">
-                {capital(whoMay("create", node.level))} adds {article(child)} {child} here.
-              </p>
+              <p className="text-sm text-ink-muted">{capital(whoMay("rename", node.level))} renames {node.level === "organisation" ? "the organisation" : `${article(node.level)} ${node.level}`}.</p>
+            )}
+          </div>
+
+          {child && (
+            <div className="flex flex-col gap-2">
+              <h3 className="font-display text-base font-semibold">What is in it</h3>
+              {children.length === 0 ? (
+                <p data-state="empty" className="text-sm text-ink-muted">
+                  No {plural(child)} in {node.name} yet.
+                </p>
+              ) : (
+                <ul aria-label={`In ${node.name}`} className="flex flex-wrap gap-2">
+                  {children.map((c) => (
+                    <li key={c.scope}>
+                      <Button size="sm" variant="soft" onClick={() => onSelect(c.scope)}>
+                        {c.name}
+                        {c.archived && <Badge tone="quiet">Archived</Badge>}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {may("create", node.level, role) ? (
+                adding ? (
+                  <CreateChild level={child} parent={node.scope} parentName={node.name} onCancel={() => setAdding(false)} onCreated={(made) => onSelect(made.path)} />
+                ) : (
+                  <Button size="sm" variant="outline" className="self-start" onClick={() => setAdding(true)}>
+                    Add {article(child)} {child}
+                  </Button>
+                )
+              ) : (
+                <p className="text-sm text-ink-muted">
+                  {capital(whoMay("create", node.level))} adds {article(child)} {child} here.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {managed && (
+          <div className="flex flex-col gap-3 border-t pt-4">
+            <h3 className="font-display text-base font-semibold">Archive or delete</h3>
+            {may("archive", node.level, role) ? (
+              <ArchiveNode level={managed} id={node.id} name={node.name} archived={node.archived} published={published} tree={tree} />
+            ) : (
+              <p className="text-sm text-ink-muted">{capital(whoMay("archive", node.level))} archives {article(node.level)} {node.level}.</p>
+            )}
+            {may("delete", node.level, role) ? (
+              <DeleteNode level={managed} id={node.id} name={node.name} tree={tree} onDeleted={() => onSelect(node.parent ?? node.scope)} />
+            ) : (
+              <p className="text-sm text-ink-muted">{capital(whoMay("delete", node.level))} deletes {article(node.level)} {node.level} with nothing in it.</p>
             )}
           </div>
         )}
-      </div>
-
-      {managed && (
-        <div className="flex flex-col gap-3 border-t pt-4">
-          <h3 className="font-display text-base font-semibold">Archive or delete</h3>
-          {may("archive", node.level, role) ? (
-            <ArchiveNode level={managed} id={node.id} name={node.name} archived={node.archived} published={published} tree={tree} />
-          ) : (
-            <p className="text-sm text-ink-muted">{capital(whoMay("archive", node.level))} archives {article(node.level)} {node.level}.</p>
-          )}
-          {may("delete", node.level, role) ? (
-            <DeleteNode level={managed} id={node.id} name={node.name} tree={tree} onDeleted={() => onSelect(node.parent ?? node.scope)} />
-          ) : (
-            <p className="text-sm text-ink-muted">{capital(whoMay("delete", node.level))} deletes {article(node.level)} {node.level} with nothing in it.</p>
-          )}
-        </div>
-      )}
-    </section>
+      </section>
+    </CardNotesProvider>
   );
 }
 

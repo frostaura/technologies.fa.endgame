@@ -129,10 +129,31 @@ describe("ManageView", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Delete Ledger" }));
     expect(screen.getByText(/^This cannot be undone\. Only a project with nothing in it/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Yes, delete Ledger" }));
-    expect(await screen.findByText(/still has children, work or credit history attached/)).toBeTruthy();
+    // D79: in normal mode the refusal is a plain sentence: no path, no wire hint, no status code.
+    const refusal = await screen.findByRole("alert");
+    expect(refusal.textContent).toContain("Ledger was not deleted: It still has things beneath it, work or credit history. Archive it instead");
+    expect(refusal.textContent).not.toMatch(/acme\/|\(409\)|status: archived|children/);
     fireEvent.click(screen.getByRole("button", { name: "Archive it instead" }));
     expect(await screen.findByText("Ledger is archived instead. Nothing in it was deleted.")).toBeTruthy();
+    // One note at a time: the refusal is gone once archiving instead has answered (D37).
+    expect(screen.queryByText(/was not deleted/)).toBeNull();
     expect(api.calls.find((c) => c.method === "PATCH")?.body).toEqual({ status: "archived" });
+  });
+
+  it("says one thing at a time in a node's panel: a later action replaces the earlier note (D37)", async () => {
+    window.history.replaceState(null, "", "/tree?scope=acme/tools/ledger");
+    stub({
+      "PATCH /api/projects/p1": json({ id: "p1", level: "project", slug: "ledger", name: "Ledger books", path: "acme/tools/ledger", status: "active", createdAt: "t" }),
+      "DELETE /api/projects/p1": problem(409, "'acme/tools/ledger' still has children, work or credit history attached. Archive it instead (status: archived)."),
+    });
+    renderWithStore(<ManageView />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Name" }), { target: { value: "Ledger books" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the name" }));
+    expect(await screen.findByText("It is called Ledger books now.")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: /^Delete Ledger/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Yes, delete Ledger/ }));
+    expect(await screen.findByText(/was not deleted/)).toBeTruthy();
+    expect(screen.queryByText("It is called Ledger books now.")).toBeNull();
   });
 
   it("asks before deleting an app in plain English: an app, not a app", async () => {

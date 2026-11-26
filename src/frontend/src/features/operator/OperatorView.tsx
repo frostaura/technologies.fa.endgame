@@ -687,10 +687,12 @@ function ProvisionAside() {
             {made.name} is set up for {made.ownerEmail}. {made.invitationEmailed ? "The code was e-mailed to them too." : "E-mail is not set up here, so give them this code yourself."} They use it to make their passkey
             {made.invitationExpiresAt ? ` before ${formatDate(made.invitationExpiresAt)}` : ""}.{made.nameCheck?.note ? ` ${made.nameCheck.note}` : ""}
             {screeningLine(made)}
+            {made.creditsNote ? ` ${made.creditsNote}` : ""}
           </OneTime>
         ) : (
           <p role="status" className="rounded-sm border border-success-text bg-success-tint px-4 py-3">
             {made.name} is set up. {made.ownerEmail} already has a passkey, so they can sign in as its Owner now.{screeningLine(made)}
+            {made.creditsNote ? ` ${made.creditsNote}` : ""}
           </p>
         ))}
       {problem && (

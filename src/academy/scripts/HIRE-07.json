@@ -2,7 +2,7 @@
   "$schema": "../schema/step-script.schema.json",
   "flow": "HIRE-07",
   "persona": "owner",
-  "scenario": "quiet",
+  "scenario": "s4-recurring-unproposed",
   "start": "/hires?scope=northwind/technologies",
   "steps": [
     {
@@ -59,7 +59,7 @@
     {
       "title": "The new employee needs a name",
       "persona": "owner",
-      "scenario": "quiet",
+      "scenario": "s4-recurring-unproposed",
       "start": "/hires?scope=northwind/technologies",
       "steps": [
         {
@@ -90,7 +90,7 @@
     {
       "title": "Below Admin, the role is read but not proposed",
       "persona": "builder",
-      "scenario": "quiet",
+      "scenario": "s4-recurring-unproposed",
       "start": "/hires?scope=northwind/technologies",
       "steps": [
         {
@@ -99,6 +99,32 @@
           "highlight": {
             "text": "An Admin or the Owner proposes it as a hire.",
             "note": "Lena is a Builder: she sees the role, not the button."
+          }
+        }
+      ]
+    },
+    {
+      "title": "A proposal for the role already waits",
+      "persona": "owner",
+      "scenario": "quiet",
+      "start": "/hires?scope=northwind/technologies",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "click": {
+                "text": "Already proposed — open it"
+              }
+            },
+            {
+              "wait": 800
+            }
+          ],
+          "highlight": {
+            "text": "Lark, Data analyst",
+            "note": "With a proposal for the role already waiting, the aside opens it instead of proposing the role again."
           }
         }
       ]

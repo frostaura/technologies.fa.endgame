@@ -5,7 +5,6 @@ import { Link } from "@/components/Link";
 import { Markdown } from "@/components/Markdown";
 import { Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { formatCredits } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths, useLocation } from "@/lib/router";
 import { cn } from "@/lib/utils";
@@ -16,8 +15,8 @@ import { conversationKey, messageQueued, messageSettled, type ChatMessage, type 
 import { ApprovalCard } from "../runs/ApprovalCard";
 import { deriveRun, isTerminal } from "../runs/runModel";
 import { useRunStream } from "../runs/useRunStream";
-import { distinctReplies, noticesToShow, withoutClosingRepeats } from "./conversationModel";
-import { activeWork } from "./treeModel";
+import { distinctReplies, messageCostLine, noticesToShow, withoutClosingRepeats } from "./conversationModel";
+import { activeWork, activityLine } from "./treeModel";
 
 /**
  * The one conversation, docked beside the org chart and scoped to whatever is selected. What was
@@ -132,7 +131,7 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
         {busy.slice(0, 2).map((w) => (
           <div key={w.name} className="flex items-center gap-2.5 text-sm text-ink-muted">
             <TypingDots />
-            {w.name} is {lowerFirst(w.activity)}
+            {activityLine(w.name, w.activity)}
           </div>
         ))}
       </div>
@@ -156,10 +155,7 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
         </div>
         <p data-testid="message-estimate" className="text-xs text-ink-muted" aria-live="polite">
           {estimate.kind === "loading" && "Working out what a message costs…"}
-          {estimate.kind === "loaded" &&
-            (estimate.data.ceiling !== null
-              ? `A message here costs at most ${formatCredits(estimate.data.ceiling)}, usually about ${formatCredits(estimate.data.credits)}; it is charged at what it actually costs.`
-              : `A message here is estimated at ${formatCredits(estimate.data.credits)}.`)}
+          {estimate.kind === "loaded" && messageCostLine(estimate.data.credits, estimate.data.ceiling)}
           {estimate.kind === "failed" && `What a message costs could not be worked out: ${estimate.reason} Its cost is still held before each step and shown with the reply.`}
         </p>
       </form>
@@ -249,10 +245,6 @@ function Notice({ text, budget, finished = false }: { text: string; budget: bool
   );
 }
 
-function lowerFirst(s: string): string {
-  return s.charAt(0).toLowerCase() + s.slice(1);
-}
-
 export function TypingDots({ label }: { label?: string }) {
   return (
     <span aria-hidden={label ? undefined : true} role={label ? "status" : undefined} aria-label={label} className="flex gap-1">
@@ -278,12 +270,12 @@ function Exchange({ message, onRetry, answerer }: { message: ChatMessage; onRetr
           </button>
         </div>
       )}
-      {message.runId && <Replies runId={message.runId} answerer={answerer} />}
+      {message.runId && <Replies runId={message.runId} answerer={answerer} onRetry={onRetry} />}
     </>
   );
 }
 
-function Replies({ runId, answerer }: { runId: string; answerer: string | null }) {
+function Replies({ runId, answerer, onRetry }: { runId: string; answerer: string | null; onRetry?: () => void }) {
   const [retry, setRetry] = useState(0);
   const log = useRunStream(runId, retry);
   const run = deriveRun(log.events);
@@ -310,6 +302,12 @@ function Replies({ runId, answerer }: { runId: string; answerer: string | null }
       {notices.map((m) => (
         <Notice key={m.seq} text={m.text} budget={budget} finished={run.status === "finished" && !m.code} />
       ))}
+      {/* Stopped with no reply (no AI model could be reached, a fault): the message can be sent again as it was. */}
+      {onRetry && run.status === "failed" && !budget && replies.length === 0 && (
+        <Button size="sm" variant="outline" className="self-start" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
       {/* The conversation's own checkpoints are answered here, in the conversation (TALK-07). */}
       {pending.map((a) => (
         <ApprovalCard key={a.id} runId={runId} approval={a} compact />

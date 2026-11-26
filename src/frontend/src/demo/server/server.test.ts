@@ -6,6 +6,7 @@ import { match } from "./http";
 import { consoleCalls } from "./consoleEndpoints";
 import { clock, seek, tick } from "./engine";
 import { answerApproval } from "./routes/work";
+import { MODELS_UNREACHABLE } from "./scripts";
 import { buildWorld } from "../world/scenarios";
 import "../world/scenarios.s4";
 import { IDS, ORG, PEOPLE } from "../world/default";
@@ -277,6 +278,19 @@ describe("live work", () => {
     expect(w.notifications.some((n) => n.kind === "verdict" && n.subject?.id === IDS.ideaTides)).toBe(true);
   });
 
+  it("with no AI model reachable, research stops at once, plainly, with nothing charged and the detail kept technical (D64)", () => {
+    const w = as("owner");
+    w.modelsOffline = true;
+    expect(seek(w, "research:models-unreachable", () => undefined)).toBe(true);
+    const r = w.runs.find((x) => x.run.ideaId === IDS.ideaTides);
+    expect(r?.run.status).toBe("failed");
+    expect(r?.run.summary).toBe(MODELS_UNREACHABLE);
+    const finished = r?.events.find((e) => e.type === "run.finished");
+    expect(finished?.payload).toMatchObject({ outcome: "failed", summary: MODELS_UNREACHABLE });
+    expect(String(finished?.payload.detail)).toContain("503");
+    expect(r?.events.some((e) => e.type === "subagent.started")).toBe(false);
+  });
+
   it("builds to a private app, repairs a sent-back part at no charge, and fixes the security finding", () => {
     const w = as("owner");
     const before = w.notCharged[ORG]?.repairs ?? 0;
@@ -395,5 +409,74 @@ describe("the workforce, credits and God mode as the academy shows them (S4)", (
     const r = await call(as("operator", "god-mode"), "POST", "organisations", { name: "Endgame", slug: "endgame", ownerEmail: "ana@harbour.example", description: "Tide tables for a harbour." });
     expect(r.status).toBe(409);
     expect(detail(r)).toBe("'endgame' cannot name an organisation: it is one of Endgame's own names.");
+  });
+});
+
+describe("answered notices (D40, NotificationService.AnsweredAsync)", () => {
+  type Feed = { unread: number; notifications: { id: string; kind: string; title: string; read: boolean; resolved: boolean; subject: { id: string } | null }[] };
+  const feed = async (w: World) => (await call(w, "GET", `notifications?organisation=${ORG}`)).body as Feed;
+
+  it("a decided verdict and an accepted hire come back resolved, read, in the past tense, and not counted", async () => {
+    const w = as("owner");
+    const before = await feed(w);
+    const verdict = before.notifications.find((n) => n.subject?.id === IDS.ideaAllergen);
+    expect(verdict?.resolved).toBe(false);
+    expect(verdict?.title.startsWith("A verdict is waiting")).toBe(true);
+    await call(w, "POST", `ideas/${IDS.ideaAllergen}/decision`, { choice: "build" });
+    await call(w, "POST", `hires/${w.hires.find((h) => h.name === "Lark")?.id}/accept`, {});
+    const after = await feed(w);
+    const decided = after.notifications.find((n) => n.subject?.id === IDS.ideaAllergen);
+    expect(decided).toMatchObject({ resolved: true, read: true });
+    expect(decided?.title).toMatch(/^You chose to build: Allergen labels/);
+    const hired = after.notifications.find((n) => n.kind === "hire");
+    expect(hired).toMatchObject({ resolved: true, read: true, title: "Lark was hired as Data analyst" });
+    expect(after.unread).toBe(before.unread - 2);
+  });
+
+  it("an approval answered long ago reads as answered", async () => {
+    const old = (await feed(as("owner"))).notifications.find((n) => n.kind === "approval");
+    expect(old).toMatchObject({ resolved: true, read: true, title: "You approved “Agree the plan for Shift Rota?”" });
+  });
+});
+
+describe("removing a grant (D8, AccountService.RevokeAsync)", () => {
+  it("answers { revoked, invitationCancelled }, and a last grant of someone who never signed in cancels their code", async () => {
+    const w = as("owner");
+    const invited = w.users.find((u) => u.id === PEOPLE.invited.id);
+    const grant = w.memberships.find((m) => m.userId === PEOPLE.invited.id);
+    expect(invited?.invitation).not.toBeNull();
+    const r = await call(w, "DELETE", `members/${grant?.id}`);
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ revoked: grant?.id, invitationCancelled: !w.memberships.some((m) => m.userId === PEOPLE.invited.id) });
+    expect((r.body as { invitationCancelled: boolean }).invitationCancelled).toBe(true);
+    expect(invited?.invitation).toBeNull();
+  });
+
+  it("does not cancel anything for someone who has signed in", async () => {
+    const w = as("owner");
+    const grant = w.memberships.find((m) => m.role !== "owner" && (w.users.find((u) => u.id === m.userId)?.passkeys ?? 0) > 0);
+    const r = await call(w, "DELETE", `members/${grant?.id}`);
+    expect(r.body).toMatchObject({ revoked: grant?.id, invitationCancelled: false });
+  });
+});
+
+describe("the second round of server fields (BE-3)", () => {
+  it("a paused app reads health paused with Edge's reason on the chart and its page", async () => {
+    const w = as("owner");
+    const tree = (await call(w, "GET", `tree?organisation=${ORG}`)).body as { divisions: { projects: { apps: { id: string; health: string; paused: { reason: string; note: string } | null; status: string }[] }[] }[] };
+    const stock = tree.divisions.flatMap((d) => d.projects.flatMap((p) => p.apps)).find((a) => a.id === IDS.stockCounter);
+    expect(stock).toMatchObject({ health: "paused", paused: { reason: "budget_exhausted" }, status: "stopped" });
+    const page = (await call(w, "GET", `apps/${IDS.stockCounter}`)).body as { health: { state: string }; paused: { note: string } };
+    expect(page.health.state).toBe("paused");
+    expect(page.paused.note).toMatch(/^Paused: a monthly budget above it is spent/);
+  });
+
+  it("a new organisation is told it has no credits, and its credits say it was never topped up", async () => {
+    const w = as("first-run");
+    const made = (await call(w, "POST", "organisations", { name: "Harbour Tutors", slug: "harbour-tutors" })).body as { balance?: number; creditsNote?: string; slug?: string };
+    expect(made.balance).toBe(0);
+    expect(made.creditsNote).toBe("Harbour Tutors has no credits until FrostAura tops it up: its first piece of work waits for budget until then.");
+    const credits = (await call(w, "GET", "credits?scope=harbour-tutors")).body as { neverToppedUp: boolean };
+    expect(credits.neverToppedUp).toBe(true);
   });
 });

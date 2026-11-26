@@ -139,6 +139,8 @@ describe("God mode", () => {
           invitationEmailed: true,
           nameCheck: { slug: "beta-works", source: "built-in", note: null },
           screening: { method: "model", result: "clear", reason: "It makes garden tools." },
+          balance: 0,
+          creditsNote: "Beta Works has no credits until you top it up: its first piece of work waits for budget until then.",
         },
         201,
       ),
@@ -156,6 +158,7 @@ describe("God mode", () => {
     expect(within(code).getByText("owner-code-xyz")).toBeTruthy();
     expect(code.textContent).toContain("The code was e-mailed to them too.");
     expect(code.textContent).toContain("It was screened against the red lines and crosses none: It makes garden tools.");
+    expect(code.textContent).toContain("Beta Works has no credits until you top it up: its first piece of work waits for budget until then.");
     expect(api.calls.find((c) => c.path === "/api/organisations")?.body).toEqual({ name: "Beta Works", slug: "beta-works", ownerEmail: "b@example.test", description: "Makes and sells garden tools." });
     expect(JSON.stringify(store.getState())).not.toContain("owner-code-xyz");
   });

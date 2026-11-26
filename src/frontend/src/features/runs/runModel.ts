@@ -77,8 +77,13 @@ export interface DerivedTask {
 export interface DerivedApproval {
   id: string;
   question: string;
+  /** The plain sentence of what approving does; the owner reads it. */
   detail: string | null;
+  /** The tool line behind it (`change_app: …`), for technical mode only. Older runs wrote it as `detail`. */
+  technical: string | null;
   answer: string | null;
+  /** The note given with the answer, if any. */
+  note: string | null;
   seq: number;
   /** What declining does: the step is skipped and the work goes on, or the work stops. */
   onDecline: "continues" | "stops";
@@ -169,6 +174,10 @@ export interface DerivedRun {
   toolCalls: number;
   toolDenials: number;
   finishedSummary: string | null;
+  /** Why it finished, when the runner says (`declined_at_start`). */
+  finishedReason: string | null;
+  /** `run.finished`'s technical detail (what the gateway said, a fault): technical mode only. */
+  finishedDetail: string | null;
 }
 
 export function deriveRun(events: readonly RunEvent[]): DerivedRun {
@@ -189,6 +198,8 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
     toolCalls: 0,
     toolDenials: 0,
     finishedSummary: null,
+    finishedReason: null,
+    finishedDetail: null,
   };
   const tasks = new Map<string, DerivedTask>();
   const approvals = new Map<string, DerivedApproval>();
@@ -210,6 +221,8 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         run.outcome = outcome;
         run.status = outcome === "failed" ? "failed" : outcome === "cancelled" ? "cancelled" : "finished";
         run.finishedSummary = str(p, "summary");
+        run.finishedReason = str(p, "reason");
+        run.finishedDetail = str(p, "detail");
         openReservations.clear();
         anonymousReservation = 0;
         break;
@@ -275,14 +288,30 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         break;
       case "approval.requested": {
         const id = str(p, "approvalId") ?? `approval-${e.seq}`;
-        approvals.set(id, { id, question: str(p, "title") ?? str(p, "question") ?? "Your approval is needed.", detail: str(p, "detail"), answer: null, seq: e.seq, onDecline: str(p, "onDecline") === "stops" ? "stops" : "continues" });
+        const detail = str(p, "detail");
+        const technicalLine = str(p, "technical");
+        // An older run kept the tool line ("change_app: …") in `detail`: then it is technical, never the owner's sentence.
+        const legacy = technicalLine === null && detail !== null && (TOOL_LINE.test(detail) || !isPlain(detail));
+        approvals.set(id, {
+          id,
+          question: str(p, "title") ?? str(p, "question") ?? "Your approval is needed.",
+          detail: legacy ? null : detail,
+          technical: technicalLine ?? (legacy ? detail : null),
+          answer: null,
+          note: null,
+          seq: e.seq,
+          onDecline: str(p, "onDecline") === "stops" ? "stops" : "continues",
+        });
         run.status = "waiting";
         break;
       }
       case "approval.answered": {
         const id = str(p, "approvalId") ?? "";
         const existing = approvals.get(id);
-        if (existing) existing.answer = str(p, "answer") ?? "answered";
+        if (existing) {
+          existing.answer = str(p, "answer") ?? "answered";
+          existing.note = str(p, "comment") ?? str(p, "note");
+        }
         if ([...approvals.values()].every((a) => a.answer !== null) && run.status === "waiting") run.status = "running";
         break;
       }
@@ -387,9 +416,10 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     case "run.finished": {
       const outcome = str(p, "outcome");
       const totals = obj(p, "totals");
-      const declined = outcome === "failed" && isStartDeclined(str(p, "summary"));
+      const declined = isStartDeclined(str(p, "summary"), str(p, "reason"));
       const title = declined ? "Not started: you declined it" : outcome === "failed" ? "Stopped: it did not succeed" : outcome === "cancelled" ? "Cancelled" : "Finished";
-      return { ...base, tone: declined ? "quiet" : outcome === "failed" ? "attention" : "money", icon: "health", title, detail: str(p, "summary"), credits: totals ? credits(num(totals, "credits")) : null };
+      const detail = technical ? [str(p, "summary"), str(p, "detail")].filter(Boolean).join("\n\n") || null : str(p, "summary");
+      return { ...base, tone: declined ? "quiet" : outcome === "failed" ? "attention" : "money", icon: "health", title, detail, credits: totals ? credits(num(totals, "credits")) : null };
     }
     case "plan.proposed":
       return { ...base, tone: "factory", icon: "plan", title: "Proposed the plan", detail: str(p, "summary") };
@@ -397,8 +427,13 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
       return { ...base, tone: "factory", icon: "plan", title: "The plan was agreed", detail: str(p, "summary") };
     case "task.created":
       return { ...base, tone: "structure", icon: "plan", title: `New task: ${str(p, "title") ?? str(p, "summary") ?? "untitled"}` };
-    case "task.claimed":
-      return { ...base, tone: "people", icon: "employee", title: `${str(p, "holder") ?? "Someone"} took on a task`, detail: str(p, "summary") };
+    case "task.claimed": {
+      // Who took it on and what it is, both named (`TaskService.ClaimAsync`): never "Someone took on a task".
+      const holder = str(p, "holder");
+      const summary = str(p, "summary");
+      const title = holder ? (summary ? `${holder} took on: ${summary}` : `${holder} took on a task`) : summary ? `Taken on: ${summary}` : "A task was taken on";
+      return { ...base, tone: "people", icon: "employee", title, detail: null };
+    }
     case "task.done":
       return { ...base, tone: "money", icon: "health", title: "Task done", detail: str(p, "summary") };
     case "task.failed":
@@ -437,7 +472,7 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     case "subagent.finished":
       return { ...base, tone: "people", icon: "contractors", title: str(p, "title") ? `Reported back: ${str(p, "title")}` : "A contractor reported back", detail: str(p, "summary") };
     case "approval.requested":
-      return { ...base, tone: "attention", icon: "verdict", title: "Asked for your approval", detail: str(p, "title") ?? str(p, "question") };
+      return { ...base, tone: "attention", icon: "verdict", title: "Asked for your approval", detail: [str(p, "title") ?? str(p, "question"), technical ? (str(p, "technical") ?? null) : null].filter(Boolean).join("\n") || null };
     case "approval.answered":
       return { ...base, tone: "attention", icon: "verdict", title: `You answered: ${answerWord(str(p, "answer"))}`, detail: str(p, "comment") ?? str(p, "note") };
     case "evaluation.passed":
@@ -471,8 +506,18 @@ export function answerWord(answer: string | null): string {
   return answer ?? "answered";
 }
 
-/** Work the owner declined at its start checkpoint: it never began, so it neither failed nor has an estimate to score. */
-export function isStartDeclined(summary: string | null | undefined): boolean {
+/** A tool's line as the harness writes it for technical mode: `change_app: …`, `adjust_setting: …`. */
+const TOOL_LINE = /^[a-z]+(_[a-z]+)*(:\s|\.\s)/;
+
+/** `run.finished`'s reason for work the owner declined at its start (`WorkflowOutcome.DeclinedReason`). */
+export const DECLINED_AT_START = "declined_at_start";
+
+/**
+ * Work the owner declined at its start checkpoint: it never began, so it neither failed nor has an estimate to score.
+ * Keyed on `run.finished`'s reason; older runs (which finished `failed`) are known by their summary.
+ */
+export function isStartDeclined(summary: string | null | undefined, reason?: string | null): boolean {
+  if (reason === DECLINED_AT_START) return true;
   return !!summary && /^(The owner declined to start|You declined to start)/.test(summary);
 }
 

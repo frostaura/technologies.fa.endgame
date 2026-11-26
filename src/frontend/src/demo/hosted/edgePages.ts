@@ -119,7 +119,7 @@ export type Unavailable = "Crashed" | "Paused" | "BudgetSpent" | "Busy" | "NotRe
 export const UNAVAILABLE_COPY: Record<Unavailable, { title: string; message: string }> = {
   Crashed: {
     title: "This app has stopped for a moment",
-    message: "Something went wrong inside it. It will be started again shortly — please try again in a moment.",
+    message: "Something went wrong inside it, and its owner has been told. Please try again in a minute: the next visit starts it again.",
   },
   Paused: {
     title: "This app is paused",

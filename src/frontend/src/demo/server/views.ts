@@ -1,7 +1,7 @@
-import type { AppDetail, BudgetLine, Credits, Idea, Me, Membership, NeedsYou, OperatorOrganisation, Pricing, RunningCost, Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
+import type { AppDetail, AppHealth, AppPaused, BudgetLine, Credits, Idea, Me, Membership, NeedsYou, NotBuilt, NotificationItem, OperatorOrganisation, Pricing, RunningCost, Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import { highestIn, homeOrganisation, roleAt } from "./access";
 import { ideaState } from "./tryAgain";
-import { DEFAULT_PRICING, appAt, chain, levelOf, node, orgOf, organisation, spentBelow, within, type DemoApp, type DemoUser, type World } from "./world";
+import { DEFAULT_PRICING, appAt, chain, levelOf, node, orgOf, organisation, spentBelow, within, type DemoApp, type DemoNotification, type DemoUser, type World } from "./world";
 
 /**
  * The control plane's views, built from the world: what `ConsoleViews.cs` and the endpoint files
@@ -59,13 +59,38 @@ function roleOf(world: World, userId: string, path: string) {
   return roleAt(world, userId, path)?.role ?? null;
 }
 
+/** `PausedView`: why Edge serves the holding page, as the routing table says it (D66). */
+function pausedOf(a: DemoApp): AppPaused | null {
+  if (a.running !== "paused" || !a.pausedReason) return null;
+  return a.pausedReason === "overdraft"
+    ? { reason: "overdraft_limit", note: "Paused: the organisation reached its overdraft limit. A top-up restores it at once." }
+    : { reason: "budget_exhausted", note: "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it." };
+}
+
+/** `ReadModels.NotBuilt`: an app never published whose latest build stopped (D81). */
+function notBuiltOf(world: World, a: DemoApp): NotBuilt | null {
+  if (a.publishedAt || (a.status !== "draft" && a.status !== "building")) return null;
+  const project = a.path.split("/").slice(0, 3).join("/");
+  const build = world.runs.filter((x) => x.run.kind === "build" && (x.run.scope === project || x.run.scope === a.path)).sort((x, y) => y.run.createdAt.localeCompare(x.run.createdAt))[0];
+  if (!build || (build.run.status !== "failed" && build.run.status !== "cancelled")) return null;
+  const reason = build.run.status === "cancelled" ? "cancelled" : build.run.budgetExhausted ? "budget" : build.run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
+  const notes: Record<string, string> = { cancelled: "Not built — the build was cancelled.", budget: "Not built — the build stopped when the budget ran out.", "plan-declined": "Not built — the plan was declined." };
+  const note = notes[reason] ?? "Not built — the build stopped before it finished.";
+  return { reason, note, runId: build.run.id, ideaId: build.run.ideaId };
+}
+
+/** An app's health as the control plane reads it: `paused` while Edge serves its holding page. */
+function healthOf(a: DemoApp): AppHealth {
+  return pausedOf(a) ? "paused" : a.health;
+}
+
 function treeApp(world: World, a: DemoApp, userId: string): TreeApp {
   const n = node(world, a.path);
   return {
     id: a.id,
     slug: n?.slug ?? a.path.split("/").pop() ?? "",
     name: a.name,
-    health: a.health,
+    health: healthOf(a),
     running: a.running,
     access: a.access,
     sharedWith: world.shares.filter((s) => s.appId === a.id).length,
@@ -75,7 +100,17 @@ function treeApp(world: World, a: DemoApp, userId: string): TreeApp {
     workers: workersAt(world, a.path),
     role: roleOf(world, userId, a.path),
     archived: a.status === "archived",
+    paused: pausedOf(a),
+    notBuilt: notBuiltOf(world, a),
+    status: a.status,
   };
+}
+
+/** A project whose apps were never published and whose latest build stopped: its stage is "not-built" (D81). */
+function projectNotBuilt(world: World, projectPath: string): NotBuilt | null {
+  const apps = world.apps.filter((a) => a.path.startsWith(`${projectPath}/`));
+  if (apps.length === 0 || apps.some((a) => a.publishedAt || (a.status !== "draft" && a.status !== "building"))) return null;
+  return apps.map((a) => notBuiltOf(world, a)).find((x) => x !== null) ?? null;
 }
 
 function total(world: World, path: string): number {
@@ -129,9 +164,10 @@ export function treeView(world: World, userId: string, org: string): Tree {
           slug: p.slug,
           name: p.name,
           // ReadModels.ProjectStage: an archived project is "paused", with the note "Archived.".
-          stage: p.status === "archived" ? "paused" : (p.stage ?? "live"),
+          stage: p.status === "archived" ? "paused" : projectNotBuilt(world, p.path) ? "not-built" : (p.stage ?? "live"),
           ideaId: p.ideaId,
-          note: p.status === "archived" ? "Archived." : p.note,
+          note: p.status === "archived" ? "Archived." : (projectNotBuilt(world, p.path)?.note ?? p.note),
+          notBuilt: projectNotBuilt(world, p.path),
           progress: progressOf(world, p.path),
           spend: { monthCredits: total(world, p.path) },
           workers: workersAt(world, p.path),
@@ -152,7 +188,7 @@ export function treeView(world: World, userId: string, org: string): Tree {
   return {
     generatedAt: now,
     viewerRole,
-    organisation: { id: o.id, slug: o.slug, name: o.name, summary, spend: { monthCredits: held ? total(world, org) : divisions.reduce((n, d) => n + d.spend.monthCredits, 0) }, workers: held ? workersAt(world, org) : [], role: roleOf(world, userId, org) },
+    organisation: { id: o.id, slug: o.slug, name: o.name, summary, spend: { monthCredits: held ? total(world, org) : divisions.reduce((n, d) => n + d.spend.monthCredits, 0) }, workers: held ? workersAt(world, org) : [], role: roleOf(world, userId, org), neverToppedUp: neverToppedUp(world, org) },
     divisions,
     needsYou: needsYou(world, org).filter((n) => covered(needScope(world, n))),
     firstRun: false,
@@ -176,7 +212,7 @@ function needsYou(world: World, org: string): NeedsYou[] {
   for (const a of world.approvals) {
     const r = world.runs.find((x) => x.run.id === a.runId);
     if (a.answer || !r || orgOf(r.run.scope) !== org) continue;
-    out.push({ kind: "approval", id: a.id, runId: a.runId, approvalId: a.id, title: a.title, detail: a.detail });
+    out.push({ kind: "approval", id: a.id, runId: a.runId, approvalId: a.id, title: a.title, detail: a.detail, technical: a.technical ?? null });
   }
   for (const h of world.hires) {
     if (h.status !== "proposed" || orgOf(h.scope) !== org) continue;
@@ -220,7 +256,7 @@ export function appView(world: World, a: DemoApp): AppDetail {
     id: a.id,
     name: a.name,
     scope: a.path,
-    health: { state: a.health, summary: a.healthSummary },
+    health: { state: healthOf(a), summary: notBuiltOf(world, a)?.note ?? a.healthSummary },
     running: a.running,
     addresses: { path: `https://endgame.example/${a.path}/`, subdomain: `https://${org}.endgame.example/${rest.join("/")}/` },
     telemetry: a.telemetry,
@@ -233,6 +269,8 @@ export function appView(world: World, a: DemoApp): AppDetail {
     version: a.version,
     publishedAt: a.publishedAt,
     idleMinutes: a.idleMinutes,
+    paused: pausedOf(a),
+    notBuilt: notBuiltOf(world, a),
   };
 }
 
@@ -309,7 +347,13 @@ export function creditsView(world: World, scope: string): Credits {
     topUps: world.topUps.filter((t) => t.organisation === org).map((t) => ({ at: t.at, credits: t.credits, note: t.note })),
     heldCredits: round(held),
     available: round(balance + limit),
+    neverToppedUp: neverToppedUp(world, org),
   };
+}
+
+/** The organisation has never been topped up (`CreditsView.NeverToppedUp`, D63). */
+export function neverToppedUp(world: World, org: string): boolean {
+  return !world.topUps.some((t) => t.organisation === org) && (organisation(world, org)?.balance ?? 0) <= 0;
 }
 
 export function operatorOrganisationView(world: World, slug: string): OperatorOrganisation {
@@ -335,4 +379,35 @@ export function operatorOrganisationView(world: World, slug: string): OperatorOr
 /** The nodes on a path's chain, for breadcrumbs and messages. */
 export function namesOn(world: World, path: string): string[] {
   return chain(path).map((p) => node(world, p)?.name ?? p);
+}
+
+/**
+ * A notification as the feed sends it (`NotificationService.AnsweredAsync`): a verdict decided or a hire answered
+ * comes back resolved and read, titled with what happened, and is not counted unread.
+ */
+export function noticeAsNow(world: World, n: DemoNotification, viewer: DemoUser): NotificationItem {
+  const { organisation: _organisation, answered, ...rest } = n;
+  void _organisation;
+  const outcome = noticeOutcome(world, n, viewer);
+  if (outcome !== null) return { ...rest, title: outcome, read: true, resolved: true };
+  return { ...rest, read: n.read || answered === true, resolved: answered === true };
+}
+
+function noticeOutcome(world: World, n: DemoNotification, viewer: DemoUser): string | null {
+  const id = n.subject?.id;
+  if (!id) return null;
+  if (n.kind === "verdict" && n.subject?.kind === "idea") {
+    const i = world.ideas.find((x) => x.id === id);
+    if (!i || i.status === "verdict") return null;
+    const who = i.decision?.via === "person" ? (i.decision.by === viewer.displayName ? "You" : i.decision.by) : "Someone";
+    if (i.status === "decided" && i.decision?.choice === "build") return `${who} chose to build: ${i.title}`;
+    if (i.status === "decided" && i.decision?.choice === "drop") return `${who} dropped: ${i.title}`;
+    return `Being researched again: ${i.title}`;
+  }
+  if (n.kind === "hire" && n.subject?.kind === "hire") {
+    const h = world.hires.find((x) => x.id === id);
+    if (!h || h.status === "proposed") return null;
+    return h.status === "accepted" ? `${h.name} was hired as ${h.role}` : `${h.name} was not hired as ${h.role}`;
+  }
+  return null;
 }

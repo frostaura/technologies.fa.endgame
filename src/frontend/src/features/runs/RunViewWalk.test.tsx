@@ -1,5 +1,6 @@
 import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { modeSet } from "@/store/uiSlice";
 import { FakeEventSource, ME, json, renderWithStore, stubApi } from "@/test/harness";
 import { RunView } from "./RunView";
 import { flushRunStreams } from "./useRunStream";
@@ -16,6 +17,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // Technical mode is remembered between visits; each test starts in normal mode.
+  localStorage.clear();
 });
 
 function base(run: Record<string, unknown> | (() => Record<string, unknown>) = RUN) {
@@ -136,6 +139,67 @@ describe("RunView after the real-stack walk", () => {
     expect(screen.getByText("Not this month")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("try-again").textContent).toContain("You declined to start this at its estimate"));
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("a declined start now finishes cancelled with reason declined_at_start: declined, never cancelled or failed, and unscored", async () => {
+    let reads = 0;
+    const build = { ...RUN, kind: "build", title: "Build: Pager" };
+    await open(() => {
+      reads += 1;
+      return reads === 1 ? build : { ...build, status: "cancelled", summary: "Declined at the start checkpoint.", canTryAgain: true };
+    });
+    feed([
+      ["estimate.made", { credits: 12 }],
+      ["approval.requested", { approvalId: "a1", title: "Start this work? Estimated 12 credits.", detail: "4 credits are left in the budget.", onDecline: "stops" }],
+      ["approval.answered", { approvalId: "a1", answer: "rejected", comment: "Not this month" }],
+      ["message", { from: "runner", title: "You declined", milestone: "finished", text: "You declined to start this work at its estimate, so nothing was done and nothing was charged." }],
+      ["run.finished", { outcome: "cancelled", reason: "declined_at_start", summary: "Declined at the start checkpoint." }],
+    ]);
+    expect(screen.getByText("You declined to start this")).toBeTruthy();
+    expect(screen.queryByText("Cancelled")).toBeNull();
+    expect(screen.queryByText("Did not succeed")).toBeNull();
+    expect(screen.queryByText("Estimate against actual")).toBeNull();
+    expect(screen.getByText("You answered: declined")).toBeTruthy();
+    expect(screen.getByText("Not this month")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("try-again").textContent).toContain("You declined to start this at its estimate"));
+  });
+
+  it("no AI model reachable: the plain outcome with Try again; run.finished's detail in technical mode only", async () => {
+    let reads = 0;
+    const SAID = "Endgame could not reach its AI models, so no research was done and nothing was charged. Try again; if it keeps happening, tell FrostAura.";
+    const store = (await (async () => {
+      const api = base(() => {
+        reads += 1;
+        return reads === 1 ? RUN : { ...RUN, status: "failed", summary: SAID, canTryAgain: true };
+      });
+      const r = renderWithStore(<RunView runId="r1" />);
+      await screen.findByRole("heading", { level: 1 });
+      void api;
+      return r.store;
+    })());
+    feed([
+      ["message", { from: "runner", title: "Stopped", milestone: "finished", text: SAID }],
+      ["run.finished", { outcome: "failed", summary: SAID, detail: "OpenRouter answered 401: No auth credentials found" }],
+    ]);
+    expect(screen.getAllByText(SAID).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/OpenRouter answered 401/)).toBeNull();
+    expect(await screen.findByRole("button", { name: "Try again" })).toBeTruthy();
+    act(() => void store.dispatch(modeSet("technical")));
+    expect(screen.getAllByText(/OpenRouter answered 401: No auth credentials found/).length).toBeGreaterThan(0);
+  });
+
+  it("an approval's plain detail is the owner's sentence; its tool line is technical mode's", async () => {
+    const r = base();
+    void r;
+    const { store } = renderWithStore(<RunView runId="r1" />);
+    await screen.findByRole("heading", { level: 1 });
+    feed([["approval.requested", { approvalId: "a1", title: "Let this step search the web: Looked for competitors?", detail: "Your rules for this stage ask before the web is searched. If you decline, this step works without searching.", technical: "web_search. Asks you first at research. Checkpoint: web_search.", onDecline: "continues" }]]);
+    const card = await screen.findByTestId("approval-card");
+    expect(card.textContent).toContain("Let this step search the web: Looked for competitors?");
+    expect(card.textContent).toContain("Your rules for this stage ask before the web is searched.");
+    expect(card.textContent).not.toContain("web_search");
+    act(() => void store.dispatch(modeSet("technical")));
+    expect(screen.getByTestId("approval-card").textContent).toContain("web_search. Asks you first at research.");
   });
 
   it("D56: a pause's reason code is said in words in normal mode", async () => {

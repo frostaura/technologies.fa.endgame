@@ -39,15 +39,19 @@ export function canTryAgain(world: World, r: DemoRun): boolean {
 }
 
 function why(r: DemoRun): TryAgainOffer["why"] {
+  // A declined start finishes cancelled (declined_at_start): it is said as declined, not as a cancel.
+  if (r.run.summary?.startsWith("The owner declined to start")) return "start-declined";
   if (r.run.status === "cancelled") return "cancelled";
   if (r.run.budgetExhausted) return "budget";
-  if (r.run.summary?.startsWith("The owner declined to start")) return "start-declined";
   return r.run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
 }
 
 /** The run as the control plane answers it, with whether it can be tried again. */
 export function runView(world: World, r: DemoRun): Run {
-  return { ...r.run, canTryAgain: canTryAgain(world, r) };
+  // `PublicRun`: `reason` and `detail` come from its `run.finished`.
+  const finished = [...r.events].reverse().find((e) => e.type === "run.finished")?.payload ?? {};
+  const text = (v: unknown) => (typeof v === "string" ? v : null);
+  return { ...r.run, canTryAgain: canTryAgain(world, r), reason: text(finished.reason), detail: text(finished.detail) };
 }
 
 /** The idea as `ReadModels.IdeaAsync` reads it: research that stopped reads "failed", with the offer to try again. */

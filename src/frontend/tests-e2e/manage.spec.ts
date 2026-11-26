@@ -59,7 +59,7 @@ test.describe("managing the tree", () => {
     await page.goto("/tree?scope=northwind/research");
     await page.getByRole("button", { name: "Delete Research" }).click();
     await page.getByRole("button", { name: "Yes, delete Research" }).click();
-    await expect(page.getByRole("alert")).toContainText("still has children, work or credit history attached");
+    await expect(page.getByRole("alert")).toContainText("It still has things beneath it, work or credit history");
     await page.getByRole("button", { name: "Archive it instead" }).click();
     await expect(page.getByText("Research is archived instead. Nothing in it was deleted.")).toBeVisible();
   });

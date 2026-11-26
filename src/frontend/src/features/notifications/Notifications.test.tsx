@@ -1,6 +1,8 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { modeSet } from "@/store/uiSlice";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NotificationItem } from "@/store/types";
+import { notificationsGuard } from "@/store/guards";
 import { NOTIFICATIONS } from "@/test/breadth";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { AppShell } from "../shell/AppShell";
@@ -88,6 +90,60 @@ describe("NotificationsView", () => {
   });
 });
 
+describe("an answered notice (D40)", () => {
+  const ANSWERED = {
+    organisation: "acme",
+    unread: 1,
+    notifications: [
+      { id: "h1", kind: "hire", severity: "info", title: "Theo was hired as Software engineer", detail: "Builds keep briefing a contractor.", scope: "acme", subject: { kind: "hire", id: "x1" }, createdAt: "2026-11-25T02:08:25Z", read: true, emailedAt: null, resolved: true },
+      { id: "a1", kind: "approval", severity: "info", title: "Approval needed: Publish the new version?", detail: "", scope: "acme", subject: { kind: "run", id: "r1" }, createdAt: "2026-11-25T02:00:00Z", read: false, emailedAt: null, resolved: false },
+    ],
+  };
+
+  it("reads as answered on /notifications: no New, nothing to mark, a quiet Answered", async () => {
+    stub(json(ANSWERED));
+    renderWithStore(<NotificationsView />);
+    const main = await screen.findByRole("main");
+    const list = await within(main).findByRole("list", { name: "Notifications" });
+    const hire = list.querySelector('[data-notification="h1"]') as HTMLElement;
+    expect(hire.getAttribute("data-resolved")).toBe("true");
+    expect(within(hire).getByText("Answered")).toBeTruthy();
+    expect(within(hire).queryByText("New")).toBeNull();
+    expect(within(hire).queryByRole("button", { name: "Mark read" })).toBeNull();
+    const open = list.querySelector('[data-notification="a1"]') as HTMLElement;
+    expect(within(open).getByText("New")).toBeTruthy();
+    expect(within(open).queryByText("Answered")).toBeNull();
+  });
+
+  it("reads as answered in the bell's popover too", async () => {
+    stub(json(ANSWERED));
+    renderWithStore(
+      <AppShell crumbs={[{ label: "Home" }]}>
+        <p>Page</p>
+      </AppShell>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Notifications, 1 unread" }));
+    const panel = screen.getByRole("dialog", { name: "Notifications" });
+    const hire = panel.querySelector('[data-notification="h1"]') as HTMLElement;
+    expect(within(hire).getByText("Answered")).toBeTruthy();
+    expect(within(hire).queryByRole("button", { name: "Mark read" })).toBeNull();
+  });
+
+  it("shows an approval's tool line in technical mode only", async () => {
+    stub(json({ ...ANSWERED, notifications: [{ ...ANSWERED.notifications[1], technical: "change_app: acme/tools/ledger/web: Add star ratings." }] }));
+    const { store } = renderWithStore(<NotificationsView />);
+    const main = await screen.findByRole("main");
+    await within(main).findByRole("list", { name: "Notifications" });
+    expect(main.textContent).not.toContain("change_app");
+    act(() => void store.dispatch(modeSet("technical")));
+    expect(main.textContent).toContain("change_app: acme/tools/ledger/web: Add star ratings.");
+  });
+
+  it("an item from an older server with no resolved field is an open one", () => {
+    expect(notificationsGuard({ organisation: "acme", unread: 0, notifications: [{ ...ANSWERED.notifications[1], resolved: undefined }] }, "$").notifications[0]?.resolved).toBe(false);
+  });
+});
+
 describe("notification model", () => {
   it("leads each kind to what needs the person", () => {
     const [security, verdict, budget] = NOTIFICATIONS.notifications as unknown as [NotificationItem, NotificationItem, NotificationItem];
@@ -100,7 +156,7 @@ describe("notification model", () => {
 
 describe("a top-up request, for operators", () => {
   it("is labelled as one and leads to where it is answered", () => {
-    const item: NotificationItem = { id: "n9", kind: "topup.requested", severity: "info", title: "Acme asks for 250 credits", detail: "Launch week.", scope: "frostaura", subject: { kind: "topup_request", id: "q1" }, createdAt: "2026-11-25T01:00:00Z", read: false, emailedAt: null };
+    const item: NotificationItem = { id: "n9", kind: "topup.requested", severity: "info", title: "Acme asks for 250 credits", detail: "Launch week.", scope: "frostaura", subject: { kind: "topup_request", id: "q1" }, createdAt: "2026-11-25T01:00:00Z", read: false, emailedAt: null, resolved: false };
     expect(notificationLines(item).kind).toBe("Top-up request");
     expect(notificationHref(item)).toBe("/operator");
   });

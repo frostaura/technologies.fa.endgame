@@ -54,6 +54,16 @@ describe("HireView", () => {
     expect(document.body.textContent).not.toContain("build-t1");
   });
 
+  it("shows a proposal the platform withdrew as closed, with why, and no decision to make", async () => {
+    stub(json(hireFixture({ status: "declined", withdrawn: true, decision: { via: "platform", by: "Endgame", at: "2026-11-26T10:00:00Z", note: "The build it was for was cancelled before anything was built." } })));
+    renderWithStore(<HireView hireId="h1" />);
+    expect(await screen.findByText("Withdrawn")).toBeTruthy();
+    expect(screen.getByText(/This proposal was withdrawn on .*: nobody needs to answer it\./)).toBeTruthy();
+    expect(screen.getByText("The build it was for was cancelled before anything was built.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Hire / })).toBeNull();
+    expect(screen.queryByText("This hire was declined")).toBeNull();
+  });
+
   it("accepts after confirming, with a note", async () => {
     const api = stub(json(hireFixture()), { "POST /api/hires/h1/accept": json(hireFixture({ status: "accepted", employeeId: "e7", decision: { via: "person", by: "Owner", at: "2026-11-24T10:00:00Z", note: "Go" } })) });
     renderWithStore(<HireView hireId="h1" />);
@@ -115,6 +125,22 @@ describe("HiresView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Propose the hire" }));
     await waitFor(() => expect(window.location.pathname).toBe("/hires/h9"));
     expect(api.calls.find((c) => c.method === "POST")?.body).toMatchObject({ scope: "acme/tools", name: "Sam", role: "Competitor sweep", trigger: "promotion", expectedMonthlyCredits: 90 });
+  });
+
+  // D78: with a proposal for the role already waiting, the aside leads to it instead of proposing again.
+  it("leads a recurring role whose proposal already waits to that proposal", async () => {
+    window.history.replaceState(null, "", "/hires?scope=acme");
+    stubApi({
+      "GET /api/me": json(ME),
+      "GET /api/credits": json(CREDITS),
+      "GET /api/tree": json(TREE),
+      "GET /api/hires": json([hireFixture({ id: "h7", scope: "acme/tools", role: "Competitor sweep", trigger: "promotion", contractorRole: "Competitor sweep" })]),
+      "GET /api/employees/recurring-roles": json([{ scope: "acme/tools", role: "Competitor sweep", contractors: 3, windowDays: 30, costCredits: 90, lastBriefedBy: "e1", lastBrief: "Sweep the competitors." }]),
+    });
+    renderWithStore(<HiresView />);
+    const open = await screen.findByRole("link", { name: "Already proposed — open it" });
+    expect(open.getAttribute("href")).toBe("/hires/h7");
+    expect(screen.queryByRole("button", { name: "Propose as a permanent hire" })).toBeNull();
   });
 
   it("shows nothing proposed as an empty state, and a failed read as a failure", async () => {

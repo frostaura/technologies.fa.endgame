@@ -443,7 +443,9 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   note("security:tb", "security.finding", "urgent", "The security review found 1 problem", 'In "Build: Court booking for the club". Publishing waits until they are fixed.', `${ORG}/technologies/court-booking`, null, 40 * day, true);
   note("credits.zero:old", "credits.zero", "urgent", "Credits have run out", "The balance is -3.2 credits. Work goes on into the overdraft of up to 800 credits; ask FrostAura for a top-up.", ORG, null, 19 * day, true);
   note("overdraft.half:old", "overdraft.half", "urgent", "Halfway to the overdraft limit", "The balance is -402 credits, of an overdraft limit of 800. At the limit, work stops and apps pause until a top-up.", ORG, null, 18.5 * day, true);
-  note("approval:old", "approval", "info", "Approval needed: Agree the plan for Shift Rota?", "3 parts, about 90 credits.", `${ORG}/operations/shift-rota`, null, 20 * day, true);
+  note("approval:old", "approval", "info", "You approved “Agree the plan for Shift Rota?”", "3 parts, about 90 credits.", `${ORG}/operations/shift-rota`, null, 20 * day, true);
+  // Answered long ago: the plan was approved, so the feed shows it as answered (D40).
+  for (const n of w.notifications) if (n.id === uuidFor("notification:approval:old")) n.answered = true;
   w.notifications.unshift({ id: uuidFor("notification:topup.requested:north"), kind: "topup.requested", severity: "info", title: "Northfield Tutors asks for 1,500 credits", detail: "Term starts Monday; the homework planner must be back up.", scope: "frostaura", subject: { kind: "topup_request", id: uuidFor("tur:1") }, createdAt: a(5 * 60), read: false, emailedAt: null, organisation: "frostaura" });
   note("overdraft.limit:north", "overdraft.limit", "urgent", "The overdraft limit is reached: work has stopped and apps are paused", "The balance is -300 credits. Nothing is deleted; a top-up restores everything at once.", "northfield", null, 26 * 60, false);
 

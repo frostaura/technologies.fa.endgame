@@ -192,7 +192,7 @@ function apply(world: World, r: DemoRun, step: Step): boolean {
   if (approval) {
     const id = newId(world, "approval");
     world.approvals.push({ id, runId: r.run.id, answer: null, ...approval });
-    append(world, r, "approval.requested", { approvalId: id, title: approval.title, question: approval.title, detail: approval.detail, onDecline: approval.onDecline ?? "continues" });
+    append(world, r, "approval.requested", { approvalId: id, title: approval.title, question: approval.title, detail: approval.detail, ...(approval.technical ? { technical: approval.technical } : {}), onDecline: approval.onDecline ?? "continues" });
     r.run.status = "waiting";
     world.changed.push("Tree", "Run", "Notifications");
     return false;

@@ -20,13 +20,13 @@ import { effectiveRole, roleRank } from "@/lib/roles";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { useAppSelector } from "@/store";
 import { AppShell, type Crumb } from "../shell/AppShell";
-import { healthChip, namesFor } from "../home/treeModel";
+import { appHealthChip, namesFor } from "../home/treeModel";
 import { ItIsYours, TechnicalDetails, WhatItUses } from "./AppAside";
 import { AppItself, AppSpending, IdleMinutes, RebuildAndRestart } from "./AppManage";
 import { capNote } from "./appModel";
 import { AskPanel, Dashboard } from "./AskPanel";
-import { useCardNote } from "./cardNote";
-import { CardNotesProvider } from "./CardNotes";
+import { useCardNote } from "@/components/cardNote";
+import { CardNotesProvider } from "@/components/CardNotes";
 import { ChangeRequest } from "./ChangeRequest";
 import { History } from "./History";
 import { AppConversation } from "../home/ConversationDock";
@@ -64,7 +64,7 @@ export function AppView({ appId }: { appId: string }) {
           </div>
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title={view.status === 404 ? "This app could not be found" : "The app could not be loaded"} reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title={view.status === 404 ? "This app could not be found" : "The app could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -124,7 +124,7 @@ function AppAsideColumn({ app, orgName }: { app: AppDetail; orgName: string }) {
 }
 
 function AppBody({ app }: { app: AppDetail }) {
-  const health = healthChip(app.health.state);
+  const health = appHealthChip(app.health.state, app.running, app.paused);
   const { builder, admin } = useAppRole(app);
   const budgets = useGetCascadeQuery({ scope: app.scope, kind: "budget" });
   const nameOf = useNameOf();
@@ -155,7 +155,7 @@ function AppBody({ app }: { app: AppDetail }) {
       </div>
 
       <section aria-label="Today" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <Tile index={1} label="Health" value={health.label} valueClass={healthText[health.tone] ?? "text-ink"} note={healthNote(app, technical)} pulse={app.health.state === "healthy"} />
+        <Tile index={1} label="Health" value={health.label} valueClass={healthText[health.tone] ?? "text-ink"} note={healthNote(app, technical)} pulse={health.label === "Healthy"} />
         {t ? (
           <>
             <Tile
@@ -226,6 +226,10 @@ function AppBody({ app }: { app: AppDetail }) {
 /** The health line: in normal mode a version is "the latest version", never its id. */
 function healthNote(app: AppDetail, technical: boolean): string {
   if (technical) return app.health.summary;
+  // Paused: the control plane's sentence says why and what restores it ("Paused: a monthly budget above it is spent. …").
+  if (app.notBuilt) return app.notBuilt.note;
+  if (app.paused) return app.paused.note;
+  if (app.health.state === "paused" || (app.running === "paused" && app.health.state !== "down")) return plainOrNull(app.health.summary) ?? "Paused: it serves nobody until it is restored.";
   if (app.health.state === "healthy" && app.telemetry) return app.telemetry.errorsToday === 0 ? "No errors today" : `${plural(app.telemetry.errorsToday, "error")} today`;
   return plainOrNull(app.health.summary) ?? (app.publishedAt ? `Running the version from ${formatDate(app.publishedAt)}` : "Not published yet");
 }
@@ -322,7 +326,7 @@ function Sharing({ app }: { app: AppDetail }) {
           <Skeleton className="h-12 rounded-sm" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="Who it is shared with could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="Who it is shared with could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
@@ -456,7 +460,7 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
           <Skeleton className="h-8 rounded-xs" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The secrets could not be loaded" reason={view.reason} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed title="The secrets could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" &&
         (view.data.effective.length === 0 ? (
           <p data-state="empty" className="text-ink-muted">

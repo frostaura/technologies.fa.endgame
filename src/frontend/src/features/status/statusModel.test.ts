@@ -10,6 +10,7 @@ describe("toViewState", () => {
     expect(toViewState({ isLoading: false, isError: true, error: { status: 500, data: null } })).toEqual({
       kind: "failed",
       reason: "The control plane answered 500.",
+      status: 500,
     });
   });
 

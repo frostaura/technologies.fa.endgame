@@ -31,7 +31,7 @@ import {
   useReviewMemoryMutation,
   useUpdateEmployeeMutation,
 } from "@/store/api";
-import type { Employee, EmployeeDetail, MemoryChange, MemoryEntry, MemoryKind, TaskItem, Tree } from "@/store/types";
+import type { Employee, EmployeeDetail, MemoryChange, MemoryEntry, MemoryKind, LedRun, TaskItem, TrackRecord, Tree } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { ConversationDock } from "../home/ConversationDock";
 import { namesFor } from "../home/treeModel";
@@ -42,8 +42,10 @@ import {
   MEMORY_KINDS,
   STATUS,
   acceptedLine,
+  costLine,
   draftOf,
   draftProblem,
+  employeeCosts,
   employeePatchFrom,
   entryOrigin,
   lastReview,
@@ -120,6 +122,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
   const can = useCan(tree, detail.employee.scope);
   const mode = useAppSelector((s) => s.ui.mode);
   const { employee, trackRecord } = detail;
+  const costs = employeeCosts(trackRecord);
   const job = employee.jobDescription;
   const released = employee.status === "released";
   const contractor = employee.kind === "contractor";
@@ -164,10 +167,8 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
         <Stat label="Repairs not charged" value={formatCredits(trackRecord.repairsNotCharged.credits)}>
           {trackRecord.repairsNotCharged.calls > 0 ? `${plural(trackRecord.repairsNotCharged.calls, "repair")} of its own mistakes, never billed` : "No repairs of its own work"}
         </Stat>
-        <Stat label="Cost so far" value={formatCredits(trackRecord.cost.toDateCredits)}>
-          {job.monthlyCreditLimit !== null
-            ? `Budget ${formatNumber(job.monthlyCreditLimit)} a month, ${formatNumber(trackRecord.cost.monthCredits)} used`
-            : `${formatNumber(trackRecord.cost.monthCredits)} this month; no budget of its own, the one above holds`}
+        <Stat label="Cost so far" value={formatCredits(costs.toDate)}>
+          {costLine(costs, job.monthlyCreditLimit)}
         </Stat>
         <Stat label="Estimates" value={trackRecord.estimates && trackRecord.estimates.pieces > 0 ? estimateHeadline(trackRecord.estimates) : "None scored yet"}>
           {trackRecord.estimates && trackRecord.estimates.pieces > 0
@@ -200,7 +201,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
       </section>
 
       <ErrorBoundary name="Recent work">
-        <RecentWork employee={employee} />
+        <RecentWork employee={employee} runs={trackRecord.runs} led={detail.recentRuns ?? []} />
       </ErrorBoundary>
 
       <ContractorsBriefed detail={detail} />
@@ -578,7 +579,20 @@ const TASK_STATUS: Record<TaskItem["status"], string> = {
   cancelled: "Cancelled",
 };
 
-function RecentWork({ employee }: { employee: Employee }) {
+/** A run's status as a person reads it on the employee's page. */
+const LED_STATUS: Record<string, string> = {
+  queued: "Waiting to start",
+  running: "Working",
+  waiting_approval: "Waiting for you",
+  waiting: "Waiting for you",
+  finished: "Finished",
+  paused: "Paused",
+  succeeded: "Finished",
+  failed: "Did not succeed",
+  cancelled: "Cancelled",
+};
+
+function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs: TrackRecord["runs"]; led: LedRun[] }) {
   // The tasks it claimed — a factory build's items, checks and reviews included — kept as its work once they are done.
   const query = useGetTasksQuery({ scope: employee.scope, limit: 50, employeeId: employee.id });
   const view = viewOf(query);
@@ -612,9 +626,26 @@ function RecentWork({ employee }: { employee: Employee }) {
       {view.kind === "failed" && <Failed title="Recent work could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && view.stale && <Stale reason={view.stale.reason} />}
       {view.kind === "loaded" &&
-        (tasks.length === 0 ? (
+        (tasks.length === 0 && led.length > 0 ? (
+          // Research and reviews are not split into tasks: the runs it led are its work (D75).
+          <div className="overflow-hidden rounded-md border bg-surface shadow-card">
+            <ul aria-label="Work it led" className="flex flex-col divide-y">
+              {led.map((r) => (
+                <li key={r.id} className="grid grid-cols-1 gap-x-5 gap-y-1 px-5 py-3.5 sm:grid-cols-4">
+                  <Link href={paths.run(r.id)} className="rounded-xs font-medium text-primary-link hover:text-primary-hover sm:col-span-2">
+                    {r.title}
+                  </Link>
+                  <span className="text-ink-body">{LED_STATUS[r.status] ?? r.status}</span>
+                  <span className="text-ink-body sm:text-right">{r.finishedAt ? `Finished ${timeAgo(r.finishedAt)}` : `Started ${timeAgo(r.startedAt)}`}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : tasks.length === 0 ? (
           <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
-            {employee.name} has not taken on any tasks here yet.
+            {worked.finished > 0
+              ? `${employee.name} has finished ${plural(worked.finished, "piece")} of work here, none of it split into tasks (research is not).${employee.lastRunId ? " Its last piece of work is linked above." : ""}`
+              : `${employee.name} has not taken on any work here yet.`}
           </p>
         ) : (
           <div className="overflow-hidden rounded-md border bg-surface shadow-card">

@@ -1,6 +1,6 @@
 import type { Member, MemberRole } from "@/store/types";
 import { homeOrganisation, me, operatorVisit, requireRole, roleAt, scopeOf } from "../access";
-import { area, conflict, created, forbidden, invalid, isEmail, noContent, notFound, num, ok, problem, Refusal, str } from "../http";
+import { area, conflict, created, forbidden, invalid, isEmail, notFound, num, ok, problem, Refusal, str } from "../http";
 import { creditsView, treeView } from "../views";
 import { newId, orgOf, organisation, uuidFor, within, type DemoMembership, type World } from "../world";
 import { redLineOf } from "../../world/story";
@@ -142,6 +142,9 @@ area("TreeEndpoints", {
       invitationEmailed: false,
       nameCheck: { slug, source: "built-in", note: "No ops service is configured, so FrostAura's own subdomains were checked against the built-in list only." },
       screening: screened ? { method: screened.method, result: "clear", reason: screened.reason } : null,
+      // `OrganisationCreated.NoCreditsYet`: no starter credits (D63).
+      balance: 0,
+      creditsNote: screened ? `${name} has no credits until you top it up: its first piece of work waits for budget until then.` : `${name} has no credits until FrostAura tops it up: its first piece of work waits for budget until then.`,
     });
   },
 
@@ -191,8 +194,12 @@ area("TreeEndpoints", {
     requireRole(world, m.path, m.role === "admin" ? "owner" : "admin");
     if (m.role === "owner") throw forbidden("The Owner's role cannot be revoked.");
     world.memberships = world.memberships.filter((x) => x.id !== m.id);
+    // `AccountService.RevokeAsync`: a last grant of someone with no passkey cancels their unused invitation code (D8).
+    const u = world.users.find((x) => x.id === m.userId);
+    const invitationCancelled = !!u && u.passkeys === 0 && u.invitation !== null && !world.memberships.some((x) => x.userId === m.userId);
+    if (invitationCancelled && u) u.invitation = null;
     world.changed.push("Members", "Tree");
-    return noContent();
+    return ok({ revoked: m.id, invitationCancelled });
   },
 
   "GET credits": (req, { world }) => {

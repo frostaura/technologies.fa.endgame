@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Tree } from "@/store/types";
 import { FakeEventSource, ME, json, renderWithStore, stubApi } from "@/test/harness";
 import { ConversationDock } from "./ConversationDock";
+import { messageCostLine } from "./conversationModel";
 
 const TREE: Tree = {
   generatedAt: "2026-11-24T10:00:00Z",
@@ -109,5 +110,15 @@ describe("ConversationDock", () => {
     renderWithStore(<ConversationDock tree={TREE} selection={{ scope: "acme", kind: "organisation", trail: ["Acme"] }} />);
     expect(await screen.findByText("was not")).toBeTruthy();
     expect(screen.getAllByText(/Understood\./)).toHaveLength(1);
+  });
+});
+
+describe("what a message costs (D77)", () => {
+  it("never says 'about 0', and says a far ceiling as its own sentence", () => {
+    expect(messageCostLine(0, 169)).toBe("Usually well under 1 credit. It can never cost more than 169, the most its steps could cost; it is charged at what it actually costs.");
+    expect(messageCostLine(0.05, 0.9)).toBe("A message here costs at most 0.9 credits, usually less than 0.1 credits; it is charged at what it actually costs.");
+    expect(messageCostLine(0.5, 1.38)).toBe("A message here costs at most 1.4 credits, usually about 0.5 credits; it is charged at what it actually costs.");
+    expect(messageCostLine(4, 120)).toBe("Usually about 4 credits. It can never cost more than 120, the most its steps could cost; it is charged at what it actually costs.");
+    expect(messageCostLine(0.5, null)).toBe("A message here is estimated at 0.5 credits.");
   });
 });

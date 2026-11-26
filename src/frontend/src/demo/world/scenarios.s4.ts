@@ -439,7 +439,15 @@ function operatorLogEmpty(w: World) {
  * Registered by one import in `host.ts` (not `scenarios.ts`: this file calls its `defineScenario`, so
  * it must run after it); the names carry `s4-` so another file's scenarios never collide.
  */
+/** A recurring contractor role with no proposal waiting for it, so proposing it is the next step (HIRE-07). */
+function recurringUnproposed(w: World) {
+  quiet(w);
+  w.hires = w.hires.filter((h) => h.id !== id.lark);
+  w.notifications = w.notifications.filter((n) => n.subject?.id !== id.lark);
+}
+
 const SCENARIOS_S4: [Scenario, ...string[]][] = [
+  [{ name: "s4-recurring-unproposed", title: "A contractor role that keeps coming back, with nobody proposed for it yet", apply: recurringUnproposed, route: `/hires?scope=${TECH}`, featured: FEATURED }],
   [{ name: "s4-hiring", title: "Hiring with a history: one waiting, one hired by auto-mode, one declined", apply: hiring, route: `/hires?scope=${TECH}`, featured: { ...FEATURED, hire: id.solHire, employee: id.sol } }],
   [{ name: "s4-hires-all-decided", title: "Hiring with every proposal decided", apply: hiresAllDecided, route: `/hires?scope=${TECH}`, featured: { ...FEATURED, hire: id.lark } }],
   [{ name: "s4-hire-manager-gone", title: "A hire drafted to report to someone since let go", apply: hireManagerGone, route: "/hires/{hire}", featured: FEATURED }],

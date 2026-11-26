@@ -94,12 +94,22 @@ describe("PeopleView", () => {
 
   it("asks before removing someone and removes them", async () => {
     const own = { ...MEMBERS[1], scope: "acme" };
-    const api = stub(json([MEMBERS[0], own]), { "DELETE /api/members/ms2": json(null, 204) });
+    const api = stub(json([MEMBERS[0], own]), { "DELETE /api/members/ms2": json({ revoked: "ms2", invitationCancelled: false }) });
     renderWithStore(<PeopleView />);
     fireEvent.click(await screen.findByRole("button", { name: "Remove Kit" }));
     fireEvent.click(within(screen.getByRole("group", { name: "Confirm removing Kit" })).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(screen.queryByText("kit@example.test")).toBeNull());
     expect(api.calls.some((c) => c.method === "DELETE" && c.path === "/api/members/ms2")).toBe(true);
+    expect((await screen.findByRole("status")).textContent).toBe("Kit no longer has a role in Acme.");
+  });
+
+  it("says when removing someone who never signed in also cancelled their invitation code (D8)", async () => {
+    const own = { ...MEMBERS[1], scope: "acme", hasPasskey: false };
+    stub(json([MEMBERS[0], own]), { "DELETE /api/members/ms2": json({ revoked: "ms2", invitationCancelled: true }) });
+    renderWithStore(<PeopleView />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Kit" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm removing Kit" })).getByRole("button", { name: "Remove" }));
+    expect((await screen.findByRole("status")).textContent).toBe("Kit no longer has a role in Acme, and the invitation code they were sent no longer works.");
   });
 
   it("below the organisation, shows the Owner and grants from above as set there", async () => {

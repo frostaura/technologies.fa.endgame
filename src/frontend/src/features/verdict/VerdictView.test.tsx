@@ -168,6 +168,16 @@ describe("VerdictView", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("The verdict could not be loaded");
   });
 
+  it("a missing idea is an answer: no 'Nothing here is known', and a way back instead of Try again", async () => {
+    stub(problem(404, "Idea not found"));
+    renderWithStore(<VerdictView ideaId="i1" />);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).not.toContain("Nothing here is known until it loads.");
+    expect(within(alert).getByRole("link", { name: "Back to the org chart" }).getAttribute("href")).toBe("/");
+    expect(within(alert).queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(alert.textContent).toContain("This idea could not be found");
+  });
+
   it("records an answer in a shape it does not understand as a failed read naming the field — never a blank page", async () => {
     stub(json(ideaFixture({ verdict: { ...RESEARCH_VERDICT, outcome: 7 } })));
     renderWithStore(<VerdictView ideaId="i1" />);

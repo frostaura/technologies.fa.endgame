@@ -17,7 +17,7 @@ import { appAt, chain, newId, node, orgOf, organisation, setting, spentBelow, uu
  * Named moments (`clock { seek }`): research:started, research:strand-*, research:judging,
  * research:verdict, research:decided, research:finished, research:failed, research:budget-stopped;
  * build:placed, build:hired, build:plan, build:waiting-on-plan, build:waiting-for-budget,
- * build:carried, build:part-1…n, build:sent-back, build:repaired, build:budget-stopped,
+ * build:carried, build:part-1…n, build:part-1-built…n-built (its builder reported back), build:sent-back, build:repaired, build:budget-stopped,
  * build:security-review, build:security-finding, build:security-passed, build:published,
  * build:finished, build:failed; change:screened, change:red-line, change:plan,
  * change:waiting-on-plan, change:carried, change:part-1…n, change:sent-back, change:repaired,
@@ -148,7 +148,7 @@ function cycle(
   s.ask((w, r) => {
     const d = decide(w, r.run.scope, stage, tool.name, target, false);
     if (d.verdict !== "ask") return null;
-    return { title: askTitle(tool.name), detail: `${tool.name}: ${target}. ${d.reason} Checkpoint: ${d.checkpoint ?? d.rule}.`, onApprove: { kind: "continue" }, onDecline: "continues", key };
+    return { title: askTitle(tool.name), detail: RULES_ASK, technical: `${tool.name}: ${target}. ${d.reason} Checkpoint: ${d.checkpoint ?? d.rule}.`, onApprove: { kind: "continue" }, onDecline: "continues", key };
   });
   s.wait(250 + (call % 4) * 120);
   s.effect((w, r) => {
@@ -190,9 +190,26 @@ function gate(s: Script, run: DemoRun, expected: number, prefix: string) {
   s.effect((w, r) => {
     const asked = w.approvals.filter((a) => a.runId === r.run.id && a.key === key).pop();
     if (asked?.answer !== "rejected") return;
-    stop(w, r, "You declined to start this work at its estimate, so nothing was done and nothing was charged.", "The owner declined to start this work at its estimate.");
+    declinedStop(w, r);
     return ["Run", "Tree"];
   });
+}
+
+/**
+ * The owner declined to start at the estimate (`WorkflowOutcome.Declined`): the run finishes cancelled with the reason
+ * declined_at_start, and nothing is scored, since no work was done (D19).
+ */
+function declinedStop(w: World, r: DemoRun) {
+  append(w, r, "message", { from: "runner", title: "You declined", text: "You declined to start this work at its estimate, so nothing was done and nothing was charged.", milestone: "finished" });
+  append(w, r, "run.finished", { outcome: "cancelled", reason: "declined_at_start", summary: "The owner declined to start this work at its estimate.", totals: { credits: 0 } });
+}
+
+/** What research says when no AI model could be reached (`ResearchWorkflow`); the gateway's answer is technical detail. */
+export const MODELS_UNREACHABLE = "Endgame could not reach its AI models, so no research was done and nothing was charged. Try again; if it keeps happening, tell FrostAura.";
+
+function modelsUnreachable(w: World, r: DemoRun) {
+  append(w, r, "message", { from: "runner", title: "Stopped", text: MODELS_UNREACHABLE, milestone: "finished" });
+  append(w, r, "run.finished", { outcome: "failed", summary: MODELS_UNREACHABLE, detail: "The model gateway answered 503: no route to a model is configured for 'research'.", totals: { credits: 0, nonBillableCredits: 0, modelCalls: 0 } });
 }
 
 /** The run ends without finishing: Endgame says why in plain words (`RunExecutor.FinishAsync`). */
@@ -253,6 +270,12 @@ defineScript("research", (world, run) => {
   if (researcher?.id === uuidFor(`employee:${researcherKey}`) && hiredBy(world, researcher.id, run.run.id)) researcher = undefined;
   s.event("run.started", { holder: "runner-demo-1" });
   gate(s, run, run.run.estimateCredits ?? 12, "research");
+  // No AI model can be reached: the run stops at once, plainly, with nothing charged (`StopReasons.ModelUnreachable`, D64).
+  s.effect((w, r) => {
+    if (!w.modelsOffline) return;
+    modelsUnreachable(w, r);
+    return ["Run", "Tree", "Idea"];
+  }, "research:models-unreachable");
   s.wait(400).event("message", { data: { autonomy: setting(world, run.run.scope, "autonomy")?.value ?? "auto", estimate: run.run.estimateCredits, headroom: headroomAt(world, run.run.scope) }, kind: "workflow.step", step: "estimate.gate", agent: "workflow" });
   if (!researcher) {
     const name = "Wren";
@@ -573,7 +596,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       s.wait(500);
       cycle(s, run, { agent: builder, employeeId: eng.id, taskType: "build", credits: 0.036, tool: { name: "run", args: { command: "make test" }, result: "Vitest 17 passed · xUnit 14 passed\nexit code 0", command: "make test" }, scope: projectPath, stage: "build" });
       cycle(s, run, { agent: builder, employeeId: eng.id, taskType: "build", credits: 0.028, tool: { name: "git_commit", args: { message: `${item.id}: ${item.text.slice(0, 50)}` }, result: `Committed ${uuidFor(`${run.run.id}:${item.id}`).slice(0, 7)}.` }, scope: projectPath, stage: "build" });
-      s.event("message", { kind: "agent.reply", agent: builder, final: true, reply: `Done — the ${item.id} item is built, verified and committed.` });
+      s.event("message", { kind: "agent.reply", agent: builder, final: true, reply: `Done — the ${item.id} item is built, verified and committed.` }, `${prefix}:part-${index + 1}-built`);
     } else {
       s.wait(600).event("task.claimed", { taskId, holder: qa.name, summary: item.text }, `${prefix}:part-${index + 1}`);
       s.effect((w) => {
@@ -627,7 +650,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
           if (t) t.status = "failed";
           setStage(w, projectPath, prefix === "change" ? "live" : "paused", prefix === "change" ? null : "The build stopped: one part did not pass its check after a repair.");
           const a = appAt(w, appPath);
-          if (a && prefix === "build") Object.assign(a, { status: "draft", running: "paused", health: "unknown", healthSummary: "Never published: the build did not succeed." });
+          if (a && prefix === "build") Object.assign(a, { status: "draft", running: "starting", health: "unknown", healthSummary: "Never published: the build did not succeed." });
           const what = item.text.replace(/\.$/, "");
           stop(w, r, `"${what}" still did not work after 3 rounds of repair, each on a stronger model, so the app was not ${prefix === "change" ? "changed" : "published"}. Its work so far is saved and the repairs were not charged; “Try again” carries on from it.`, `'${item.detail.slice(0, 80)}' still failed its check after 3 repair rounds: ${fault.fault}`);
           return ["Tasks", "Tree", "App", "Run", "Idea"];
@@ -1025,7 +1048,7 @@ defineScript("conversation", (world, run) => {
     if (!stopped) said([`Nothing in ${node(world, scope)?.name ?? scope} has stopped that can be tried again: every piece of work here finished or is still under way.`]);
     else {
       said([`"${stopped.run.title}" stopped before it finished. Trying it again carries on from where it stopped, with its estimate shown first; it needs your yes.`]);
-      s.approval({ title: `Try again: ${stopped.run.title}?`, detail: `try_again: ${stopped.run.id}. No rule allows try_again here. Checkpoint: try_again.`, onApprove: { kind: "try-again", runId: stopped.run.id, scope }, onDecline: "continues" }, "conversation:approval");
+      s.approval({ title: `Try again: ${stopped.run.title}?`, detail: SIGN_OFF, technical: `try_again: ${stopped.run.id}. No rule allows try_again here. Checkpoint: try_again.`, onApprove: { kind: "try-again", runId: stopped.run.id, scope }, onDecline: "continues" }, "conversation:approval");
       s.wait(400).effect(() => undefined);
       if (p.answer === "rejected") said(["Understood — I have not started it again. Say the word if you change your mind."]);
       else if (p.answer === "approved") said(["It has started again, carrying on from where it stopped; its estimate is the first thing in its own work."]);
@@ -1034,7 +1057,8 @@ defineScript("conversation", (world, run) => {
     const request = text.replace(/^(please|can you|could you|could we)\s+/i, "").trim();
     const target = atApp ? scope : (world.apps.find((a) => a.path.startsWith(`${scope}/`) && lower.includes(a.name.toLowerCase()))?.path ?? scope);
     said([`I can ask the factory to change ${appAt(world, target)?.name ?? "the app"}: a plan for it first, then each part built and checked in the running app, and everything it does now checked again before the new version goes out. It needs your yes.`]);
-    s.approval({ title: `Change the app: ${clip(request)}?`, detail: `change_app: ${target}: ${request}. No rule allows change_app here. Checkpoint: change_app.`, onApprove: { kind: "change-app", scope: target, request }, onDecline: "continues" }, "conversation:approval");
+    // `ChangeAppTool.ApprovalTitle`: the app by name and the request without its closing mark.
+    s.approval({ title: `Change ${appAt(world, target)?.name ?? node(world, target)?.name ?? "the app"}: ${clip(request.replace(/[.?!]+$/, ""))}?`, detail: SIGN_OFF, technical: `change_app: ${target}: ${request}. No rule allows change_app here. Checkpoint: change_app.`, onApprove: { kind: "change-app", scope: target, request }, onDecline: "continues" }, "conversation:approval");
     s.wait(400).effect(() => undefined);
     if (p.answer === "rejected") said(["Understood — I have not asked for the change. Nothing about the app has changed."]);
     else if (p.answer === "approved") said(["The change has started. Its estimate is shown first in its own work, then the plan, each part as it is built and checked, and the new version."]);
@@ -1044,7 +1068,8 @@ defineScript("conversation", (world, run) => {
     s.approval(
       {
         title: `Start researching an idea: ${clip(ideaText)}?`,
-        detail: `start_idea: ${ideaText}. No rule allows start_idea here. Checkpoint: start_idea.`,
+        detail: SIGN_OFF,
+        technical: `start_idea: ${ideaText}. No rule allows start_idea here. Checkpoint: start_idea.`,
         onApprove: { kind: "start-idea", text: ideaText.charAt(0).toUpperCase() + ideaText.slice(1), scope: scope.split("/").slice(0, 2).join("/") },
         onDecline: "continues",
       },
@@ -1055,7 +1080,7 @@ defineScript("conversation", (world, run) => {
     else if (p.answer === "approved") said(["Research has started. You will see it on the org chart, and the verdict will wait for you there."]);
   } else if (asked) {
     said([`I can change that for ${node(world, scope)?.name ?? scope}. A setting changes only with your yes, and applies here and to everything beneath it that does not set its own.`]);
-    s.approval({ title: settingTitle(asked.key, asked.value), detail: `adjust_setting: ${asked.key}=${asked.value}. No rule allows adjust_setting here. Checkpoint: adjust_setting.`, onApprove: { kind: "setting", key: asked.key, value: asked.value, scope }, onDecline: "continues" }, "conversation:approval");
+    s.approval({ title: settingTitle(asked.key, asked.value), detail: SIGN_OFF, technical: `adjust_setting: ${asked.key}=${asked.value}. No rule allows adjust_setting here. Checkpoint: adjust_setting.`, onApprove: { kind: "setting", key: asked.key, value: asked.value, scope }, onDecline: "continues" }, "conversation:approval");
     s.wait(400).effect(() => undefined);
     if (p.answer === "rejected") said(["Left as it was."]);
     else if (p.answer === "approved") said(["Done. The change applies here and to everything beneath it that does not set its own."]);
@@ -1065,6 +1090,10 @@ defineScript("conversation", (world, run) => {
   s.wait(300).event("run.finished", { totals: {}, outcome: "succeeded", summary: "Replied." }, "conversation:replied");
   return patchTotals(s, run);
 });
+
+/** `ApprovalDetail.For`: why an approval asked, in the owner's words; the tool line goes in `technical`. */
+const RULES_ASK = "Your rules for this stage ask for your sign-off before this is done. If you decline, it is not done and the work carries on without it.";
+const SIGN_OFF = "This waits for your sign-off before it is done. If you decline, it is not done and nothing changes.";
 
 function clip(t: string) {
   return t.length > 300 ? `${t.slice(0, 148)} … ${t.slice(-148)}` : t;

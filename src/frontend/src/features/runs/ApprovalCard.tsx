@@ -37,7 +37,8 @@ export function ApprovalCard({ runId, approval, compact = false }: { runId: stri
         Needs you
       </Badge>
       <p className="text-base font-semibold">{approval.question}</p>
-      {technical && approval.detail && <p className="break-words font-mono text-xs text-attention-deep">{approval.detail}</p>}
+      {approval.detail && <p className="break-words text-sm text-attention-deep">{approval.detail}</p>}
+      {technical && approval.technical && <p className="break-words font-mono text-xs text-attention-deep">{approval.technical}</p>}
       {optimistic ? (
         <p role="status" className="font-medium text-ink">
           {state.isLoading ? `${optimistic === "approve" ? "Approved." : "Declined."} Sending…` : answeredText(optimistic, approval.onDecline)}

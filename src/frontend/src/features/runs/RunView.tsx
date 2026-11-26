@@ -62,7 +62,7 @@ export function RunView({ runId }: { runId: string }) {
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: title }]} aside={view.kind === "loaded" ? <RunAside runId={runId} /> : undefined}>
       {view.kind === "loading" && <RunSkeleton />}
       {view.kind === "failed" && (
-        <Failed title={view.status === 404 ? "This work could not be found" : "This work could not be loaded"} reason={view.reason} onRetry={() => void query.refetch()} />
+        <Failed title={view.status === 404 ? "This work could not be found" : "This work could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />
       )}
       {view.kind === "loaded" && (
         <>
@@ -107,12 +107,13 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
   useEffect(() => {
     if (logEnded && !isTerminal(run.status)) refetch();
   }, [logEnded, run.status, refetch]);
-  const declined = status === "failed" && (isStartDeclined(derived.finishedSummary) || isStartDeclined(run.summary));
+  // A declined start finishes cancelled with reason declined_at_start (older runs: failed, known by the summary).
+  const declined = (status === "failed" || status === "cancelled") && (isStartDeclined(derived.finishedSummary, derived.finishedReason) || isStartDeclined(run.summary, run.reason));
   // run.finished's summary may be technical (ARCH-004); normal mode says the closing message instead. A conversation's
   // outcome is its reply, as written (D13).
   const reply = run.kind === "conversation" ? (distinctReplies(derived.messages).at(-1)?.text ?? null) : null;
   const lastPlain = [...derived.messages].reverse().find((m) => m.from !== "owner" && plainOrNull(m.text))?.text ?? null;
-  const outcome = mode === "technical" ? derived.finishedSummary : (reply ?? plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null));
+  const outcome = mode === "technical" ? [derived.finishedSummary, derived.finishedDetail ?? run.detail].filter(Boolean).join("\n\n") || null : (reply ?? plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null));
   const badge = declined ? DECLINED : STATUS[status];
   const estimate = derived.estimateCredits ?? run.estimateCredits;
   // One figure, from one source: the log's billable settlements, as the ledger counts them, so it is the run's own
@@ -248,7 +249,7 @@ function StreamBadge({ stream, terminal }: { stream: StreamStatus; terminal: boo
  * credits; stopped research, a build or a change offers "Try again", which carries on from where it stopped.
  */
 function StoppedPanel({ run, derived, declined }: { run: Run; derived: DerivedRun; declined: boolean }) {
-  const why = run.budgetExhausted ? "budget" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : declined ? "start-declined" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
+  const why = run.budgetExhausted ? "budget" : declined ? "start-declined" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
   if (run.canTryAgain) return <TryAgain runId={run.id} ideaId={run.ideaId} why={why} showCredits={run.budgetExhausted} />;
   return (
     <section aria-label="Stopped for budget" className="flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint px-5 py-4">

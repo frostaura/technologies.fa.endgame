@@ -88,6 +88,44 @@ describe("EmployeeView", () => {
     expect(calls.some((c) => c.method === "GET" && c.path.startsWith("/api/tasks?") && c.path.includes("employeeId=e1"))).toBe(true);
   });
 
+  // D74 + D75: a researcher's cost counts the contractors its budget includes, and research it did is not "no work".
+  it("counts the contractors it briefs in its cost, and says research it finished is work", async () => {
+    const trackRecord = {
+      ...employeeDetailFixture().trackRecord,
+      runs: { finished: 7, succeeded: 6, failed: 1, cancelled: 0 },
+      cost: { toDateCredits: 1.3, monthCredits: 1.3 },
+      contractors: { engaged: 21, working: 0, toDateCredits: 67, monthCredits: 67 },
+    };
+    stub(json({ ...employeeDetailFixture({ lastRunId: "r7", jobDescription: { ...employeeDetailFixture().employee.jobDescription, monthlyCreditLimit: 400 } }), trackRecord }), { "GET /api/tasks": json([]) });
+    renderWithStore(<EmployeeView employeeId="e1" />);
+    const record = await screen.findByRole("region", { name: "Track record" });
+    // An older control plane's own-only figures read as the whole, as the cap counts it.
+    expect(record.textContent).toContain("68 credits");
+    expect(record.textContent).toContain("Budget 400 a month, 68 used this month, including the contractors it briefs; 1.3 of its own");
+    expect(await screen.findByText(/has finished 7 pieces of work here, none of it split into tasks/)).toBeTruthy();
+    expect(screen.queryByText(/has not taken on any/)).toBeNull();
+  });
+
+  it("reads the control plane's totals and own share as they are, and lists the runs it led under Recent work", async () => {
+    const trackRecord = {
+      ...employeeDetailFixture().trackRecord,
+      runs: { finished: 2, succeeded: 2, failed: 0, cancelled: 0 },
+      cost: { toDateCredits: 68.3, monthCredits: 68.3, ownToDateCredits: 1.3, ownMonthCredits: 1.3 },
+      contractors: { engaged: 21, working: 0, toDateCredits: 67, monthCredits: 67 },
+    };
+    const recentRuns = [
+      { id: "r2", title: "Research: A club gear log", kind: "research", status: "succeeded", startedAt: "2026-11-25T10:00:00Z", finishedAt: "2026-11-25T10:20:00Z" },
+      { id: "r1", title: "Research: Dive trips", kind: "research", status: "failed", startedAt: "2026-11-24T10:00:00Z", finishedAt: "2026-11-24T10:05:00Z" },
+    ];
+    stub(json({ ...employeeDetailFixture({ jobDescription: { ...employeeDetailFixture().employee.jobDescription, monthlyCreditLimit: 400 } }), trackRecord, recentRuns }), { "GET /api/tasks": json([]) });
+    renderWithStore(<EmployeeView employeeId="e1" />);
+    const record = await screen.findByRole("region", { name: "Track record" });
+    expect(record.textContent).toContain("Budget 400 a month, 68 used this month, including the contractors it briefs; 1.3 of its own");
+    const led = await screen.findByRole("list", { name: "Work it led" });
+    expect(within(led).getByRole("link", { name: "Research: A club gear log" }).getAttribute("href")).toBe("/runs/r2");
+    expect(led.textContent).toContain("Did not succeed");
+  });
+
   it("technical mode names the tools and the tier", async () => {
     stub(json(employeeDetailFixture()));
     const { store } = renderWithStore(<EmployeeView employeeId="e1" />);

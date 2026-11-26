@@ -83,6 +83,14 @@ describe("SystemStatusView", () => {
     expect(screen.queryByText("All services healthy")).toBeNull();
   });
 
+  it("a refusal is an answer: it does not say nothing is known (403)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ title: "Forbidden" }, 403)));
+    renderView();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("System status could not be loaded");
+    expect(alert.textContent).not.toContain("Nothing below is known");
+  });
+
   it("says so when the control plane cannot be reached at all", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))));
     renderView();

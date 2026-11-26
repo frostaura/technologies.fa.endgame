@@ -17,7 +17,7 @@ import { api, useDecideHireMutation, useEditHireMutation, useGetEmployeesQuery, 
 import type { Hire, Tree } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { JobFields } from "./JobFields";
-import { TRIGGER, draftOf, draftProblem, expectedMonthly, hireEditFrom, nameWithRole, possibleManagers, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
+import { TRIGGER, draftOf, draftProblem, expectedMonthly, hireBadge, hireEditFrom, nameWithRole, possibleManagers, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
 
 /** One hire proposal: the drafted job, what it costs a month, and the owner's call. */
 export function HireView({ hireId }: { hireId: string }) {
@@ -52,7 +52,6 @@ export function HireView({ hireId }: { hireId: string }) {
   );
 }
 
-const STATUS = { proposed: { label: "Hire proposed", tone: "violet" }, accepted: { label: "Hired", tone: "success" }, declined: { label: "Declined", tone: "quiet" } } as const;
 
 function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
   const mode = useAppSelector((s) => s.ui.mode);
@@ -66,8 +65,8 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
     <>
       <section className={cn("relative flex flex-col gap-3 overflow-hidden rounded-lg bg-violet px-6 py-7 text-primary-ink sm:px-8", RISE)}>
         <div aria-hidden className="absolute -right-16 -top-28 size-aura animate-drift rounded-full bg-primary opacity-60 blur-aura motion-reduce:animate-none" />
-        <Badge tone={STATUS[hire.status].tone} className="relative self-start bg-surface">
-          {STATUS[hire.status].label}
+        <Badge tone={hireBadge(hire).tone} className="relative self-start bg-surface">
+          {hireBadge(hire).label}
         </Badge>
         <h1 className="relative text-3xl font-semibold sm:text-4xl">
           {nameWithRole(hire.name, hire.role)}
@@ -190,11 +189,20 @@ function Decided({ hire }: { hire: Hire }) {
   const d = hire.decision;
   return (
     <section role="status" className="flex flex-col gap-2 rounded-md border bg-surface px-6 py-5">
-      <p className="text-base font-semibold">
-        {hire.status === "accepted" ? `${hire.name} was hired` : "This hire was declined"}
-        {d ? ` ${d.via === "auto-mode" ? "by auto-mode, inside the budget," : `by ${d.by}`} on ${formatDate(d.at)}.` : "."}
-      </p>
-      {d?.note && <p className="text-ink-body">“{d.note}”</p>}
+      {hire.withdrawn ? (
+        <>
+          <p className="text-base font-semibold">This proposal was withdrawn{d ? ` on ${formatDate(d.at)}` : ""}: nobody needs to answer it.</p>
+          {d?.note && <p className="text-ink-body">{d.note}</p>}
+        </>
+      ) : (
+        <>
+          <p className="text-base font-semibold">
+            {hire.status === "accepted" ? `${hire.name} was hired` : "This hire was declined"}
+            {d ? ` ${d.via === "auto-mode" ? "by auto-mode, inside the budget," : `by ${d.by}`} on ${formatDate(d.at)}.` : "."}
+          </p>
+          {d?.note && <p className="text-ink-body">“{d.note}”</p>}
+        </>
+      )}
       {hire.employeeId && (
         <Link href={paths.employee(hire.employeeId)} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
           See {hire.name}’s record

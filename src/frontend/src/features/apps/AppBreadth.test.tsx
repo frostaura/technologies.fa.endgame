@@ -291,10 +291,10 @@ describe("after the real-stack walk", () => {
     expect(isBookkeeping(v("Fix ownership check on book status update"))).toBe(false);
   });
 
-  // D35: an app built on the kit has a database of its own, so it uses Data; a draft uses nothing yet.
-  it("counts Data among what a built app uses", async () => {
-    expect(servicesOf({ id: "a1", status: "running", version: "1" }, ONTOLOGY_APP)).toEqual(["data", "telemetry", "identity"]);
-    expect(servicesOf({ id: "a1", status: "draft", version: null }, { nodes: [], edges: [] })).toEqual([]);
+  // D35: the graph names service:data for an app that has run or stores data; nothing is guessed beyond its edges.
+  it("counts Data among what an app uses when the graph says so, and nothing it does not", async () => {
+    expect(servicesOf({ id: "a1" }, ONTOLOGY_APP)).toEqual(["telemetry", "identity", "data"]);
+    expect(servicesOf({ id: "a1" }, { nodes: [], edges: [] })).toEqual([]);
     stub();
     renderWithStore(<AppView appId="a1" />);
     expect(within(await screen.findByRole("list", { name: "What it uses" })).getByText("Data")).toBeTruthy();
@@ -356,5 +356,24 @@ describe("after the real-stack walk", () => {
     fireEvent.click(within(screen.getAllByRole("form", { name: /^Set its/ })[0] as HTMLElement).getByRole("button", { name: "Save" }));
     expect(await screen.findByText(/may spend 50 credits a month here/)).toBeTruthy();
     expect(screen.queryByText("It sleeps after 30 idle minutes now.")).toBeNull();
+  });
+
+  // D37 + D79: "The app itself" says one thing at a time, and a refused delete is a plain sentence.
+  it("replaces the rename note with the delete refusal, worded plainly", async () => {
+    stub({
+      "PATCH /api/apps/a1": json({ id: "a1", level: "app", slug: "web", name: "Ledger site", path: APP.scope, status: "active", createdAt: "t" }),
+      "DELETE /api/apps/a1": problem(409, `'${APP.scope}' still has children, work or credit history attached. Archive it instead (status: archived).`),
+    });
+    renderWithStore(<AppView appId="a1" />);
+    const itself = await screen.findByRole("form", { name: "Rename the app" });
+    fireEvent.change(within(itself).getByRole("textbox", { name: "Name" }), { target: { value: "Ledger site" } });
+    fireEvent.click(within(itself).getByRole("button", { name: "Save the name" }));
+    expect(await screen.findByText("It is called Ledger site now.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Delete Ledger/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Yes, delete Ledger/ }));
+    const refusal = await screen.findByText(/was not deleted/);
+    expect(refusal.textContent).toContain("It still has things beneath it, work or credit history. Archive it instead");
+    expect(refusal.textContent).not.toMatch(/\(409\)|status: archived|\//);
+    expect(screen.queryByText("It is called Ledger site now.")).toBeNull();
   });
 });

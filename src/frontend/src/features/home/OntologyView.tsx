@@ -42,7 +42,7 @@ export function OntologyView({ scope, view }: { scope: string; view: "org-chart"
         <Skeleton className="h-96 rounded-md" />
       </Loading>
     );
-  if (state.kind === "failed") return <Failed title="The organisation graph could not be loaded" reason={state.reason} onRetry={() => void query.refetch()} />;
+  if (state.kind === "failed") return <Failed title="The organisation graph could not be loaded" reason={state.reason} status={state.status} onRetry={() => void query.refetch()} />;
   const graph = state.data;
   const shown = view === "org-chart" ? graph.edges.filter((e) => e.type !== "depends-on" && e.type !== "data-flows-to") : graph.edges.filter((e) => e.type === "depends-on" || e.type === "data-flows-to");
   const linked = new Set(shown.flatMap((e) => [e.from, e.to]));
