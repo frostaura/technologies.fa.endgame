@@ -12,17 +12,8 @@ import { useAppSelector } from "@/store";
 import { platformOrigin, useGetOntologyQuery, useGetSecretsQuery } from "@/store/api";
 import { downloadExport } from "@/store/sensitive";
 import type { AppDetail } from "@/store/types";
-
-/** The platform services an app can lean on, as the owner reads them. */
-const SERVICE: Record<string, { label: string; icon: IconName }> = {
-  identity: { label: "Sign-in", icon: "employee" },
-  data: { label: "Data", icon: "project" },
-  models: { label: "AI", icon: "research" },
-  email: { label: "E-mail", icon: "email" },
-  webhooks: { label: "Incoming data", icon: "incoming-data" },
-  schedules: { label: "Schedules", icon: "schedules" },
-  telemetry: { label: "Visits and errors measured", icon: "health" },
-};
+import { SERVICE, servicesOf } from "./appModel";
+import { useCardNote } from "./cardNote";
 
 function Chip({ icon, children }: { icon: IconName; children: ReactNode }) {
   return (
@@ -45,10 +36,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
   const secrets = useGetSecretsQuery(app.scope, { skip: !canSeeSecrets });
   const graphView = viewOf(graph);
   const secretsView = viewOf(secrets);
-  const services =
-    graphView.kind === "loaded"
-      ? [...new Set(graphView.data.edges.filter((e) => e.type === "depends-on" && e.from === `app:${app.id}`).map((e) => graphView.data.nodes.find((n) => n.id === e.to)).filter((n) => n?.type === "service").map((n) => n?.name ?? ""))]
-      : [];
+  const services = graphView.kind === "loaded" ? servicesOf(app, graphView.data) : [];
   const mcp = `${platformOrigin()}/mcp/apps/${app.id}`;
   return (
     <section aria-labelledby="uses-title" className="flex flex-col gap-2.5">
@@ -97,12 +85,17 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
 
 /** "It is yours": the Owner downloads the code, its whole history and the app's data, at no cost. */
 export function ItIsYours({ app, isOwner }: { app: AppDetail; isOwner: boolean }) {
-  const [state, setState] = useState<{ kind: "idle" } | { kind: "working" } | { kind: "done"; name: string } | { kind: "failed"; reason: string }>({ kind: "idle" });
+  const [working, setWorking] = useState(false);
+  // What the download did is this card's one note in the side panel (D37).
+  const [said, setSaid] = useCardNote<{ kind: "done"; name: string } | { kind: "failed"; reason: string }>("download");
+  const state = working ? { kind: "working" as const } : (said ?? { kind: "idle" as const });
   const slug = app.scope.split("/").pop() ?? "app";
   const download = async () => {
-    setState({ kind: "working" });
+    setSaid(null);
+    setWorking(true);
     const outcome = await downloadExport(app.id, `${slug}-export.tar.gz`);
-    setState(outcome.ok ? { kind: "done", name: outcome.data.fileName } : { kind: "failed", reason: outcome.reason });
+    setWorking(false);
+    setSaid(outcome.ok ? { kind: "done", name: outcome.data.fileName } : { kind: "failed", reason: outcome.reason });
   };
   return (
     <section aria-labelledby="yours-title" className="flex flex-col gap-2.5">

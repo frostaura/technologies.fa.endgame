@@ -126,9 +126,17 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
             <span className="font-semibold">At most {formatCredits(estimated.credits)}.</span> <span className="text-ink-body">{estimated.basis}</span>
           </p>
           {canAsk ? (
-            <Button className="self-start" onClick={() => void ask()} disabled={asking.isLoading}>
-              {asking.isLoading ? "Asking…" : "Ask it"}
-            </Button>
+            <>
+              <Button className="self-start" onClick={() => void ask()} disabled={asking.isLoading}>
+                {asking.isLoading ? "Asking…" : "Ask it"}
+              </Button>
+              {/* One call does both, so neither is claimed as under way on its own (D39). */}
+              {asking.isLoading && (
+                <p role="status" data-testid="ask-progress" className="text-sm text-ink-body">
+                  Writing the query, then reading the records. It usually takes up to half a minute.
+                </p>
+              )}
+            </>
           ) : (
             <p className="text-sm text-ink-muted">Asking spends credits, so it needs the Builder role here. You can read the dashboard below.</p>
           )}

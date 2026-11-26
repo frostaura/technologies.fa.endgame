@@ -25,6 +25,8 @@ import { ItIsYours, TechnicalDetails, WhatItUses } from "./AppAside";
 import { AppItself, AppSpending, IdleMinutes, RebuildAndRestart } from "./AppManage";
 import { capNote } from "./appModel";
 import { AskPanel, Dashboard } from "./AskPanel";
+import { useCardNote } from "./cardNote";
+import { CardNotesProvider } from "./CardNotes";
 import { ChangeRequest } from "./ChangeRequest";
 import { History } from "./History";
 import { AppConversation } from "../home/ConversationDock";
@@ -98,8 +100,9 @@ function AppAsideColumn({ app, orgName }: { app: AppDetail; orgName: string }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const { owner, builder, admin } = useAppRole(app);
   const nameOf = useNameOf();
+  // The side panel says one thing at a time: what the last card did (D37).
   return (
-    <>
+    <CardNotesProvider>
       <ErrorBoundary name="The app's settings">
         <Settings app={app} orgName={orgName} canRun={builder} canChooseWho={admin} />
       </ErrorBoundary>
@@ -116,7 +119,7 @@ function AppAsideColumn({ app, orgName }: { app: AppDetail; orgName: string }) {
         <ItIsYours app={app} isOwner={owner} />
       </ErrorBoundary>
       {technical && <TechnicalDetails app={app} />}
-    </>
+    </CardNotesProvider>
   );
 }
 
@@ -488,7 +491,7 @@ function Tile({ index, label, value, note, valueClass, pulse = false }: { index:
 
 function Settings({ app, orgName, canRun, canChooseWho }: { app: AppDetail; orgName: string; canRun: boolean; canChooseWho: boolean }) {
   const [update] = useUpdateAppSettingsMutation();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useCardNote<string>("settings");
   const [confirmPublic, setConfirmPublic] = useState(false);
   const runName = useId();
   const whoName = useId();

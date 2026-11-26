@@ -3,16 +3,23 @@ import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDate, timeAgo } from "@/lib/format";
+import { formatDate, formatNumber, timeAgo } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { useAppSelector } from "@/store";
 import { useGetVersionsQuery, useRestoreVersionMutation } from "@/store/api";
 import type { AppDetail, AppVersion, RestoreResult } from "@/store/types";
 import { RebuildAndRestart } from "./AppManage";
-import { versionTitle } from "./appModel";
+import { isBookkeeping, versionTitle } from "./appModel";
 
 const PAGE = 10;
+
+/** The versions a person reads: every one in technical mode or on request, otherwise the changes without the factory's bookkeeping — or, when there is nothing else yet, the newest saved step. */
+function shownVersions(versions: AppVersion[], every: boolean): AppVersion[] {
+  if (every) return versions;
+  const changes = versions.filter((v) => !isBookkeeping(v));
+  return changes.length > 0 ? changes : versions.slice(0, 1);
+}
 
 function Author({ v }: { v: AppVersion }) {
   if (v.author.kind === "employee" && v.author.id) {
@@ -38,6 +45,7 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
   const [result, setResult] = useState<RestoreResult | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [restore, restoring] = useRestoreVersionMutation();
+  const [everyStep, setEveryStep] = useState(false);
 
   const bringBack = async (v: AppVersion) => {
     setConfirm(null);
@@ -81,7 +89,7 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
             </Empty>
           ) : (
             <ol aria-label="Versions" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-              {view.data.versions.map((v) => (
+              {shownVersions(view.data.versions, technical || everyStep).map((v) => (
                 <li key={v.commit} data-version={v.commit} className="flex flex-col gap-2 border-b px-5 py-3 last:border-b-0">
                   <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                     <span className="min-w-0 flex-1 basis-full break-words font-medium sm:basis-0">{versionTitle(v, technical)}</span>
@@ -105,6 +113,11 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
                 </li>
               ))}
             </ol>
+          )}
+          {!technical && view.data.versions.some(isBookkeeping) && (
+            <Button variant="ghost" className="self-start" aria-expanded={everyStep} onClick={() => setEveryStep((x) => !x)}>
+              {everyStep ? "Show only the changes" : `Show every saved step (${formatNumber(view.data.versions.filter(isBookkeeping).length)} more)`}
+            </Button>
           )}
           {view.data.hasMore && (
             <Button variant="ghost" className="self-start" onClick={() => setLimit((n) => n + PAGE)} disabled={query.isFetching}>

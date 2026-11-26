@@ -14,12 +14,15 @@ import { effectiveRole, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { useDismissSuggestionMutation, useEstimateIdeaMutation, useEstimateSuggestionsMutation, useGetMeQuery, useGetSuggestionsQuery, useStartSuggestionsMutation, useTakeSuggestionMutation } from "@/store/api";
+import { useDismissSuggestionMutation, useEstimateIdeaMutation, useEstimateSuggestionsMutation, useGetMeQuery, useGetRunQuery, useGetSuggestionsQuery, useStartSuggestionsMutation, useTakeSuggestionMutation } from "@/store/api";
 import type { AskEstimate, Run, Suggestion } from "@/store/types";
 import { AppShell } from "../shell/AppShell";
 import { placements, scopeName } from "../workforce/workforceModel";
+import { reuseLabel } from "../apps/appModel";
+import { suggestingState } from "./suggestionsModel";
 
 const POLL_WHILE_SUGGESTING_MS = 10_000;
+
 
 /**
  * Ideas from your portfolio (UC-120): ask for suggestions — the most it can cost first — read each
@@ -37,6 +40,8 @@ export function SuggestionsView() {
   // A refusal to set one aside is said here: the card itself has gone and come back by then.
   const [pageProblem, setPageProblem] = useState<string | null>(null);
   const query = useGetSuggestionsQuery(scope, { skip: !scope, pollingInterval: started ? POLL_WHILE_SUGGESTING_MS : 0 });
+  const startedRun = useGetRunQuery(started?.id ?? "", { skip: !started, pollingInterval: started ? POLL_WHILE_SUGGESTING_MS : 0 });
+  const suggesting = started ? suggestingState(startedRun.data?.status ?? started.status) : null;
   const view = viewOf(query);
   const builder = roleRank(effectiveRole(tree.data, me.data, scope)) >= roleRank("builder");
   const here = scopeName(tree.data, scope);
@@ -46,7 +51,7 @@ export function SuggestionsView() {
   return (
     <AppShell
       crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), ...(scope.includes("/") ? [{ label: here }] : []), { label: "Ideas from your portfolio" }]}
-      aside={scope ? <AskForIdeas scope={scope} here={here} canAsk={builder} started={started} onStarted={setStarted} /> : undefined}
+      aside={scope ? <AskForIdeas scope={scope} here={here} canAsk={builder} started={started} suggesting={suggesting} onStarted={setStarted} /> : undefined}
     >
       <header className={cn("flex flex-wrap items-end justify-between gap-4", RISE)}>
         <div className="flex flex-col gap-1.5">
@@ -79,8 +84,18 @@ export function SuggestionsView() {
             <>
               {view.stale && <Stale reason={view.stale.reason} />}
               {open.length === 0 ? (
-                <Empty icon="research" title={started ? "The suggestions are being worked out" : "No suggestions waiting"}>
-                  {started ? "They appear here as soon as they are ready; you can watch the work meanwhile." : "Ask for ideas and Endgame looks at what you already hold for gaps worth filling."}
+                <Empty
+                  icon="research"
+                  title={suggesting?.title ?? "No suggestions waiting"}
+                  action={
+                    suggesting && started ? (
+                      <Link href={paths.run(started.id)} className="rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+                        {suggesting.link}
+                      </Link>
+                    ) : undefined
+                  }
+                >
+                  {suggesting?.text ?? "Ask for ideas and Endgame looks at what you already hold for gaps worth filling."}
                 </Empty>
               ) : (
                 <ul aria-label="Suggested ideas" className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -139,7 +154,7 @@ function DivisionPicker({ scope }: { scope: string }) {
   );
 }
 
-function AskForIdeas({ scope, here, canAsk, started, onStarted }: { scope: string; here: string; canAsk: boolean; started: Run | null; onStarted: (r: Run) => void }) {
+function AskForIdeas({ scope, here, canAsk, started, suggesting, onStarted }: { scope: string; here: string; canAsk: boolean; started: Run | null; suggesting: ReturnType<typeof suggestingState>; onStarted: (r: Run) => void }) {
   const [estimate, estimating] = useEstimateSuggestionsMutation();
   const [start, starting] = useStartSuggestionsMutation();
   const [cost, setCost] = useState<AskEstimate | null>(null);
@@ -170,18 +185,18 @@ function AskForIdeas({ scope, here, canAsk, started, onStarted }: { scope: strin
         Ask for ideas
       </h2>
       <p className="text-ink-body">Endgame reads what {here} holds — its apps, projects and the ideas it has researched — and suggests up to five products that fill a gap.</p>
-      {started ? (
+      {started && suggesting ? (
         <div role="status" className="flex flex-col gap-2 rounded-sm bg-primary-tint px-4 py-3">
-          <span className="font-semibold">Working out the suggestions.</span>
-          <span className="text-ink-body">They appear on this page as soon as they are ready.</span>
+          <span className="font-semibold">{suggesting.title}.</span>
+          <span className="text-ink-body">{suggesting.text}</span>
           <Link href={paths.run(started.id)} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
-            Watch it work
+            {suggesting.link}
           </Link>
         </div>
       ) : cost ? (
         <div role="status" className="flex flex-col gap-3 rounded-sm bg-primary-tint px-4 py-3">
           <p>
-            <span className="font-semibold">At most {formatCredits(cost.credits)}.</span> <span className="text-ink-body">{cost.basis}</span>
+            <span className="font-semibold">About {formatCredits(cost.credits)}.</span> <span className="text-ink-body">{cost.basis}</span>
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void go()} disabled={starting.isLoading}>
@@ -265,7 +280,7 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
             <dd className="m-0 flex flex-wrap gap-1.5">
               {suggestion.reuses.map((r) => (
                 <Badge key={r} tone="primary">
-                  {r}
+                  {technical ? r : reuseLabel(r)}
                 </Badge>
               ))}
             </dd>
@@ -281,7 +296,7 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
         (cost ? (
           <div role="status" className="flex flex-col gap-2 rounded-sm bg-primary-tint px-4 py-3">
             <p>
-              <span className="font-semibold">Researching it costs at most {formatCredits(cost.credits)}.</span> <span className="text-ink-body">{cost.basis}</span>
+              <span className="font-semibold">Researching it costs about {formatCredits(cost.credits)}.</span> <span className="text-ink-body">{cost.basis}</span>
             </p>
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => void confirm()} disabled={taking.isLoading}>
