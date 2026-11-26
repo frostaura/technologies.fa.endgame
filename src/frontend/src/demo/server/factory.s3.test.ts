@@ -43,7 +43,11 @@ describe("trying stopped work again", () => {
     expect(r?.events.find((e) => e.payload.title === "Carrying on")?.payload.text).toBe("This picks up where the earlier attempt stopped: 1 of 3 parts was already built and checked, so it is kept, not rebuilt or charged again.");
     seek(w, "build:finished", () => undefined);
     expect(r?.run.status).toBe("finished");
-    expect(r?.events.filter((e) => e.type === "task.claimed")).toHaveLength(2);
+    // Only the two parts left are built; each is then checked as the QA engineer's own task (`BuildWorkflow.JudgeAsync`).
+    const claimed = r?.events.filter((e) => e.type === "task.claimed") ?? [];
+    expect(claimed.filter((e) => !String(e.payload.summary).startsWith("Check: "))).toHaveLength(2);
+    // Three checks: the screens are sent back once and checked again after their repair, the documents pass at once.
+    expect(claimed.filter((e) => String(e.payload.summary).startsWith("Check: "))).toHaveLength(3);
   });
 
   it("refuses work that has not stopped, and research that already reached a verdict", async () => {

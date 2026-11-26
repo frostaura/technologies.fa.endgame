@@ -172,11 +172,15 @@ function overdraftReason(world: World, scope: string, needed: number): string | 
   return `The organisation has ${round(available)} credits available including its overdraft of ${limit}; this call needs up to ${needed}.`;
 }
 
+/** `ModelGateway.ForAgent`: what an agent or client is told to do with a refused budget. */
+const FOR_AGENT = "This is terminal for the run: do not retry it.";
+
 function budgetReason(world: World, scope: string, needed: number): string | null {
   for (const b of world.budgets) {
     if (!within(scope, b.path)) continue;
     const spent = world.spend.filter((s) => within(s.path, b.path)).reduce((n, s) => n + s.ai + s.hosting, 0);
-    if (b.cap - spent < needed) return `The monthly budget at ${b.path} has ${round(Math.max(0, b.cap - spent))} credits left; this call needs up to ${needed}.`;
+    // `BudgetLine.Said`: the level by its name, never its path (people read it, in normal mode too).
+    if (b.cap - spent < needed) return `The monthly budget for ${node(world, b.path)?.name ?? "this level"} has ${round(Math.max(0, b.cap - spent))} credits left; this call needs up to ${needed}.`;
   }
   return null;
 }
@@ -247,9 +251,10 @@ area("BreadthEndpoints", {
     const q = question(req.body);
     requireAskRoute(world);
     const budget = budgetReason(world, a.path, 0.42);
-    if (budget) throw new Refusal(problem(402, "budget_exhausted", "The budget is exhausted", `${budget} This is terminal for the run: do not retry it.`, { terminal: true, bindingScope: a.path, headroomCredits: 0, neededCredits: 0.42 }));
+    // `ModelGateway.BudgetExhausted`: `detail` is what people read; what a client is told to do is `forAgent`, never shown.
+    if (budget) throw new Refusal(problem(402, "budget_exhausted", "The budget is exhausted", `${budget} Work stops until the budget is raised or a new month begins.`, { forAgent: FOR_AGENT, terminal: true, bindingScope: a.path, headroomCredits: 0, neededCredits: 0.42 }));
     const over = overdraftReason(world, a.path, 0.42);
-    if (over) throw new Refusal(problem(402, "overdraft_limit", "The overdraft limit is reached", `${over} Work stops until the organisation is topped up; do not retry it.`, { terminal: true, bindingScope: orgOf(a.path), headroomCredits: 0, neededCredits: 0.42 }));
+    if (over) throw new Refusal(problem(402, "overdraft_limit", "The overdraft limit is reached", `${over} Work stops until the organisation is topped up.`, { forAgent: FOR_AGENT, terminal: true, bindingScope: orgOf(a.path), headroomCredits: 0, neededCredits: 0.42 }));
     const answer = answerFor(a, q);
     charge(world, a.path, 0.13);
     world.changed.push("Credits");

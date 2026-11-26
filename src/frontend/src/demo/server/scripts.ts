@@ -397,7 +397,7 @@ function autoDecide(w: World, r: DemoRun, ideaId: string, outcome: string, sugge
     return;
   }
   if ((setting(w, scope, "autonomy")?.value ?? "auto") === "checkpoints") {
-    append(w, r, "message", { from: "runner", title: "Waiting for your decision", text: `The verdict waits for you: build it, change it or drop it. Autonomy at ${scope} is 'checkpoints', so the owner decides on the verdict.`, milestone: "decided" });
+    append(w, r, "message", { from: "runner", title: "Waiting for your decision", text: `The verdict waits for you: build it, change it or drop it. Checkpoints are on for ${node(w, scope)?.name ?? "this level"}, so the owner decides on the verdict.`, milestone: "decided" });
     return;
   }
   const at = new Date().toISOString();
@@ -444,6 +444,60 @@ function round(n: number) {
 // ---------------------------------------------------------------------------------------------
 // Build and change: the plan, each part built and checked, review, publish
 // ---------------------------------------------------------------------------------------------
+
+/** `PlanRequirement.IsAboutScreen`, as the demo's stories word it: how a screen presents something, shown by its own test. */
+const ABOUT_SCREEN = /\b(phone|screen|page|on one screen)\b/i;
+
+/**
+ * A check's judgement on each requirement a part delivers (`EvaluationGate.Apply`): met with what the checker saw, or — for
+ * the one sent back — not met, quoted. A requirement about a screen, once met, is shown by the screen's own test, which
+ * code ran and saw pass (`tests`).
+ */
+function judged(o: Pick<Pipeline, "requirements">, item: Part, unmet: { id: string; evidence: string } | null) {
+  return o.requirements
+    .filter((r) => item.covers.includes(r.id))
+    .map((r) => {
+      const words = r.text.replace(/[.!?]+$/, "");
+      if (unmet?.id === r.id) return { id: r.id, text: r.text, met: false, evidence: unmet.evidence, calls: [] };
+      const screen = ABOUT_SCREEN.test(r.text);
+      return {
+        id: r.id,
+        text: r.text,
+        met: true,
+        evidence: screen ? `The screen's own test "${words.toLowerCase()}" passes.` : `${words}: called in the running app, signed in, and it answered as the plan says.`,
+        calls: screen ? [] : ["GET api/items"],
+        ...(screen ? { tests: [`web/src/App.test.tsx > ${words.toLowerCase()}`] } : {}),
+      };
+    });
+}
+
+/** `BuildWorkflow.CheckDone`: a check task's own line says only that it is finished; the judgement beside it says how. */
+function checkDone(item: Part, passed: boolean, round: number, last: boolean): string {
+  const of = `The check of “${item.text.replace(/\.$/, "")}”${round === 0 ? "" : ` after repair ${round}`} is finished`;
+  return passed ? `${of}: it works.` : last ? `${of}: it still does not work, and no repair follows.` : `${of}: it goes back for repair, at no charge.`;
+}
+
+/** Each round's check is the QA engineer's own task (`BuildWorkflow.JudgeAsync`): created, claimed, then finished with its line. */
+function checkTask(s: Script, run: DemoRun, projectPath: string, qa: Pipeline["qa"], item: Part, round: number) {
+  const id = uuidFor(`task:${run.run.id}:check:${item.id}:${round}`);
+  const title = `Check: ${item.text}`;
+  s.effect((w) => {
+    if (w.tasks.some((t) => t.id === id)) return ["Tasks"];
+    const at = new Date().toISOString();
+    w.tasks.unshift({ id, scope: projectPath, runId: run.run.id, parentTaskId: null, title, description: `Round ${round}. Checked by: ${item.check}`, status: "in_progress", holderRunId: run.run.id, holderEmployeeId: qa.id, employeeId: qa.id, claimedAt: at, estimateCredits: null, actualCredits: null, dependsOn: [], createdAt: at, updatedAt: at });
+    return ["Tasks"];
+  });
+  s.event("task.created", { taskId: id, title });
+  s.event("task.claimed", { taskId: id, holder: qa.name, summary: title });
+  return (passed: boolean, last = false) => {
+    s.event("task.done", { taskId: id, summary: checkDone(item, passed, round, last) });
+    s.effect((w) => {
+      const t = w.tasks.find((x) => x.id === id);
+      if (t) Object.assign(t, { status: "done", holderRunId: null, holderEmployeeId: null, updatedAt: new Date().toISOString() });
+      return ["Tasks"];
+    });
+  };
+}
 
 interface Part extends PlanItemStory {
   /** A change's last part: nothing is built; what the app did before is checked again. */
@@ -613,7 +667,8 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
     }
 
     const evaluator = `evaluator-${item.id}-0`;
-    s.wait(600).event("message", { kind: "agent.start", task: item.keep ? "Evaluate the item now (round 0, built on build): nothing new was built for it; check again, in the running app, each part the app had before." : "Evaluate the item now (round 0, built on build).", agent: evaluator, taskType: "evaluate" });
+    const finishCheck = checkTask(s.wait(600), run, projectPath, qa, item, 0);
+    s.event("message", { kind: "agent.start", task: item.keep ? "Evaluate the item now (round 0, built on build): nothing new was built for it; check again, in the running app, each part the app had before." : "Evaluate the item now (round 0, built on build).", agent: evaluator, taskType: "evaluate" });
     s.effect((w) => working(w, qa.id, run));
     s.wait(400);
     cycle(s, run, { agent: evaluator, employeeId: qa.id, taskType: "evaluate", credits: 0.05, tool: { name: "git_diff", args: {}, result: `${Math.max(1, files.length)} files changed` }, scope: projectPath });
@@ -622,8 +677,12 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
     const failsHere = (o.sentBack && o.sentBack.item === item.id) || (o.fail && index === o.items.length - 1);
     if (failsHere) {
       const fault = o.sentBack?.item === item.id ? o.sentBack : { item: item.id, fault: "The check named in the plan does not pass.", evidence: "make test fails: 2 of 17 Vitest tests fail on the empty state." };
+      // The requirement it was sent back for: the last it delivers, quoted with what the checker saw.
+      const unmetId = item.covers[item.covers.length - 1] ?? null;
+      const unmet = unmetId ? { id: unmetId, evidence: fault.evidence } : null;
       cycle(s, run, { agent: evaluator, employeeId: qa.id, taskType: "evaluate", credits: 0.07, tool: { name: "check_preview", args: { path: "" }, result: fault.evidence }, scope: projectPath });
-      s.event("evaluation.failed", { item: item.id, text: item.text, tier: "build", round: 0, faults: [fault.fault], evidence: fault.evidence, summary: `Sent back for repair, at no charge: ${item.text.replace(/\.$/, "")} (${Math.max(0, covered - 1)} of ${covered} of your requirements shown working in the running app).` }, `${prefix}:sent-back`);
+      s.event("evaluation.failed", { item: item.id, text: item.text, tier: "build", round: 0, requirements: judged(o, item, unmet), failing: unmetId ? [`${unmetId}:not-met`] : ["item:faults"], faults: [fault.fault], evidence: fault.evidence, repairCharged: false, summary: `Sent back for repair, at no charge: ${item.text.replace(/\.$/, "")} (${Math.max(0, covered - 1)} of ${covered} of your requirements shown working in the running app).` }, `${prefix}:sent-back`);
+      finishCheck(false);
       s.event("message", { data: { faults: [fault.fault], passed: false, evidence: fault.evidence }, kind: "workflow.step", step: `item:${item.id}:round:0`, agent: "workflow" });
       s.event("message", { kind: "agent.reply", agent: evaluator, final: true, reply: JSON.stringify({ passed: false, faults: [fault.fault] }) });
       s.event("message", { from: "evaluator", text: `${qa.name} sent part ${index + 1} back: ${fault.fault} It is being repaired on a stronger model, at no charge.`, title: "Sent back" });
@@ -648,8 +707,10 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       });
       if (o.fail) {
         s.wait(800);
+        const finishRecheck = checkTask(s, run, projectPath, qa, item, 1);
         cycle(s, run, { agent: `evaluator-${item.id}-1`, employeeId: qa.id, taskType: "evaluate", credits: 0.06, tool: { name: "run", args: { command: "make test" }, result: "exit code 1" }, scope: projectPath });
-        s.event("evaluation.failed", { item: item.id, text: item.text, tier: "build-t1", round: 1, faults: [fault.fault], evidence: "The repair did not pass either: the same 2 tests fail.", summary: `Sent back for repair again, at no charge: ${item.text.replace(/\.$/, "")}.` });
+        s.event("evaluation.failed", { item: item.id, text: item.text, tier: "build-t1", round: 1, requirements: judged(o, item, unmet && { ...unmet, evidence: "The repair did not pass either: the same 2 tests fail." }), failing: unmetId ? [`${unmetId}:not-met`] : ["item:faults"], faults: [fault.fault], evidence: "The repair did not pass either: the same 2 tests fail.", final: true, summary: `Sent back for repair again, at no charge: ${item.text.replace(/\.$/, "")}.` });
+        finishRecheck(false, true);
         s.event("task.failed", { taskId, reason: "Still did not work after 3 rounds of repair, each on a stronger model; the repairs were not charged." });
         s.effect((w, r) => {
           const t = w.tasks.find((x) => x.id === taskId);
@@ -664,17 +725,21 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
         failed = true;
         return;
       }
-      s.wait(600).event("message", { kind: "agent.start", task: "Evaluate the item now (round 1, built on build-t1).", agent: `evaluator-${item.id}-1`, taskType: "evaluate" });
+      const finishRecheck = checkTask(s.wait(600), run, projectPath, qa, item, 1);
+      s.event("message", { kind: "agent.start", task: "Evaluate the item now (round 1, built on build-t1).", agent: `evaluator-${item.id}-1`, taskType: "evaluate" });
       cycle(s, run, { agent: `evaluator-${item.id}-1`, employeeId: qa.id, taskType: "evaluate", credits: 0.06, tool: { name: "run", args: { command: "make test" }, result: "exit code 0" }, scope: projectPath });
       s.event("message", { kind: "agent.reply", agent: `evaluator-${item.id}-1`, final: true, reply: JSON.stringify({ passed: true }) });
-      s.event("evaluation.passed", { item: item.id, text: item.text, tier: "build-t1", round: 1, faults: [], evidence: `Re-checked after the repair: ${fault.fault.replace(/\.$/, "")} no longer happens; make test and make lint pass.`, summary: `Checked and working: ${item.text.replace(/\.$/, "")} (${covered} of ${covered} of your requirements shown working in the running app).` }, `${prefix}:repaired`);
+      s.event("evaluation.passed", { item: item.id, text: item.text, tier: "build-t1", round: 1, requirements: judged(o, item, null), failing: [], faults: [], evidence: `Re-checked after the repair: ${fault.fault.replace(/\.$/, "")} no longer happens; make test and make lint pass.`, summary: `Checked and working: ${item.text.replace(/\.$/, "")} (${covered} of ${covered} of your requirements shown working in the running app).` }, `${prefix}:repaired`);
+      finishRecheck(true);
     } else {
       s.wait(500);
       s.event("message", { kind: "agent.reply", agent: evaluator, final: true, reply: JSON.stringify({ passed: true }) });
-      s.event("evaluation.passed", { item: item.id, text: item.text, tier: "build", round: 0, faults: [], evidence: `${item.check} — confirmed: make test and make lint exit 0.`, summary: `Checked and working: ${item.text.replace(/\.$/, "")} (${covered} of ${covered} of your requirements shown working in the running app).` });
+      s.event("evaluation.passed", { item: item.id, text: item.text, tier: "build", round: 0, requirements: judged(o, item, null), failing: [], faults: [], evidence: `${item.check} — confirmed: make test and make lint exit 0.`, summary: `Checked and working: ${item.text.replace(/\.$/, "")} (${covered} of ${covered} of your requirements shown working in the running app).` });
+      finishCheck(true);
     }
     s.event("message", { data: { passed: true }, kind: "workflow.step", step: `item:${item.id}`, agent: "workflow" });
-    s.event("task.done", { taskId, summary: `Checked and working: ${item.text.replace(/\.$/, "")}.` });
+    // The part's own task says what was built; its check task already said the check is finished (each task once, in its own words).
+    s.event("task.done", { taskId, summary: item.keep ? `Still works after the change: ${item.text.replace(/\.$/, "")}.` : `Built and handed over: ${item.text.replace(/\.$/, "")}.` });
     s.effect((w) => {
       const t = w.tasks.find((x) => x.id === taskId);
       if (t) Object.assign(t, { status: "done", holderRunId: null, holderEmployeeId: null, actualCredits: 4.2, updatedAt: new Date().toISOString() });

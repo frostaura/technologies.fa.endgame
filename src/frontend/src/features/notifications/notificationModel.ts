@@ -46,5 +46,25 @@ const KIND: Record<string, string> = {
 /** A notification as the owner reads it: a short title, one line, what kind of thing it is, and its technical line. */
 export function notificationLines(n: NotificationItem): { kind: string; title: string; line: string | null; technical: string | null } {
   const { detail, technical } = plainDetail(n.detail, n.technical);
-  return { kind: KIND[n.kind] ?? "Update", title: shortTitle(n.title, 90), line: meaningfulLine(detail, 140), technical };
+  return { kind: KIND[n.kind] ?? "Update", title: noticeTitle(n.title), line: meaningfulLine(detail, 140), technical };
+}
+
+/** An expired approval's title (R3-2): the question is what is cut when it is long, never why it stopped waiting. */
+const EXPIRED_TITLE = /^(No longer waiting: “)(.*)(” — the work ended before it was answered)$/;
+
+function noticeTitle(title: string): string {
+  const expired = EXPIRED_TITLE.exec(title);
+  if (expired) return `${expired[1]}${shortTitle(expired[2] ?? "", 60)}${expired[3]}`;
+  return shortTitle(title, 90);
+}
+
+/** The server's title for an approval its run closed before anyone answered it (`NotificationService`, R3-2). */
+const NO_LONGER_WAITING = /^No longer waiting: /;
+
+/**
+ * What a settled notice is marked: "Answered", or "Closed" for an approval nobody answered because the work ended first —
+ * it reads as settled, quietly, without claiming that anyone answered it.
+ */
+export function settledLabel(n: NotificationItem): string {
+  return n.kind === "approval" && NO_LONGER_WAITING.test(n.title) ? "Closed" : "Answered";
 }

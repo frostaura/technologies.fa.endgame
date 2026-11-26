@@ -115,7 +115,9 @@ export function describeError(error: AnyError, mode: Mode = errorMode): string {
   if ("status" in error) {
     if (typeof error.status === "number") {
       const problem = problemText(error.data);
-      if (mode === "technical") return problem ? `${problem} (${error.status})` : `Endgame answered ${error.status}.`;
+      // A refusal's `scope` (the path behind a checkpoints 409) is technical mode's: normal mode names the level in words.
+      const scope = error.data && typeof error.data === "object" && typeof (error.data as { scope?: unknown }).scope === "string" ? (error.data as { scope: string }).scope : null;
+      if (mode === "technical") return problem ? `${problem} (${error.status}${scope ? `, scope ${scope}` : ""})` : `Endgame answered ${error.status}.`;
       return plainProblem(problem, error.status);
     }
     if (error.status === "FETCH_ERROR") return "Endgame could not be reached.";

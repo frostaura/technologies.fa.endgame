@@ -1,7 +1,7 @@
 import { formatNumber, plural } from "@/lib/format";
 import { isPlain, plainOrNull } from "@/lib/plain";
 import type { RunEvent } from "@/store/types";
-import { describeEvent, formatCredits, num, str, type Mode, type StepTone, type TraceStep } from "./runModel";
+import { describeEvent, evaluationDetail, formatCredits, num, str, type Mode, type StepTone, type TraceStep } from "./runModel";
 
 /**
  * The run log as a person reads it. Normal mode speaks plainly: messages as written, each sub-agent
@@ -590,6 +590,8 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
     if (!step) continue;
     // The outcome is shown once, above the steps.
     if (e.type === "run.finished") step.detail = null;
+    // A part's passing sentence is the plan card's line for it: said there once, not again here (only what it adds).
+    if (e.type === "evaluation.passed" && planItem(str(p, "item") ?? "") !== null) step.detail = evaluationDetail(p, "normal", false);
     if (step.detail) said.add(step.detail);
     push(owner, step);
   }

@@ -19,16 +19,34 @@
         }
       ],
       "highlight": {
-        "text": "Checked:",
-        "note": "A separate checker proves the part in a private preview."
+        "text": "Checked and working",
+        "note": "The plan card says it once: “Checked and working”, with how many of your requirements were shown working."
       }
     },
     {
       "step": 2,
       "kind": "demo",
+      "clock": {
+        "seek": "build:repaired"
+      },
+      "act": [
+        {
+          "wait": {
+            "text": "Shown by the screen's own test"
+          }
+        }
+      ],
       "highlight": {
-        "text": "Checked and working",
-        "note": "“Checked and working”, with how many of your requirements were shown working."
+        "text": "Shown by the screen's own test",
+        "note": "How a screen presents something is shown by the screen’s own test, which Endgame ran itself and saw pass."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "is finished: it works.",
+        "note": "Each check is the QA engineer’s own task, finished with its own line."
       }
     }
   ]

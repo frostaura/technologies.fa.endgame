@@ -417,7 +417,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **You know it worked when:** the idea page shows "Auto-mode chose to build it…".
 - **Variations and refusals:**
   - Do-not-build: no call is made; the idea waits for you.
-  - Checkpoints mode: 409; "Endgame · Waiting for your decision": "The verdict waits for you: build it, change it or drop it. Autonomy at … is 'checkpoints'…".
+  - Checkpoints mode: 409, whose `detail` names the level ("Checkpoints are on for {level}, so the owner decides on the verdict.") and whose `scope` keeps its path; "Endgame · Waiting for your decision": "The verdict waits for you: build it, change it or drop it. Checkpoints are on for {level}, so the owner decides on the verdict."
   - Red line: "It will not be built".
   - The start screen says what auto-mode will do at the place chosen (IDEA-02).
 - **Where:** `ResearchWorkflow.cs`; `FactoryEndpoints` `DecideIdeaAutomatically`; `IdeaService.DecideAutomaticallyAsync`.
@@ -579,11 +579,11 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **You know it worked when:** the card disappears from the list and the badge leaves "Waiting for you".
 - **Variations and refusals:**
   - A failed answer: "Your answer was not recorded: {reason}" and the buttons come back. A second answer gives 409. A note is at most 2000 characters.
-  - When the run ends — finished, failed or cancelled — before anyone answers, every approval it still waits on is closed with it (status `expired`, the note "The work ended before this was answered."), in the same transaction; it leaves "Needs you" and its notice reads "No longer waiting: …". Answering one then gives 409: "The work ended before this was answered, so there is nothing left to approve." The sweep closes any left open from before (R3-2).
+  - When the run ends — finished, failed or cancelled — before anyone answers, every approval it still waits on is closed with it (status `expired`, the note "The work ended before this was answered."), in the same transaction; it leaves "Needs you" and its notice reads "No longer waiting: … — the work ended before it was answered", marked "Closed" (NOTE-01). On the run page it moves to a section "No longer waiting": a quiet card with the badge **"No longer waiting"**, the question and "The work ended before this was answered.", and no buttons. Answering one then gives 409, and the card says "Your answer was not recorded: The work ended before this was answered, so there is nothing left to approve." The sweep closes any left open from before (R3-2).
   - What each approval means: RUN-08 (start), BLD-04 (plan), TALK-07/TALK-17 (conversation), AUTO-05 (an "Asks you first" rule).
 - **Where:** `runs/ApprovalCard.tsx`, `runModel.answeredText`; `POST /api/runs/{id}/approvals/{approvalId} {decision, note}`; `ApprovalService` (`onDecline`, `comment`); `AgentLoop.AskAsync`.
 - **Reachable from:** UI; MCP `approval_answer` (with `note`).
-- **Covered by tests:** `RunView.test.tsx` ("streams… an inline approval", "rolls an approval back…"); `TryAgainAndChanges.test.tsx` ("tells the truth after a decline"); `PermissionTests.An_asks_you_first_rule_raises_an_approval_even_unattended_and_a_decline_carries_the_note`; `RunsAndTasksTests.A_run_waits_on_an_approval…`; `RoundThreeServerTests.Approvals_of_a_run_that_ended_stop_waiting_and_the_sweep_closes_ones_left_open`; `console.spec.ts`.
+- **Covered by tests:** `RunView.test.tsx` ("streams… an inline approval", "rolls an approval back…"); `RoundThree.test.tsx` ("shows on the run page closed…", "says the server's sentence when an answer arrives after the work ended"); `roundThree.test.ts` (the demo); `TryAgainAndChanges.test.tsx` ("tells the truth after a decline"); `PermissionTests.An_asks_you_first_rule_raises_an_approval_even_unattended_and_a_decline_carries_the_note`; `RunsAndTasksTests.A_run_waits_on_an_approval…`; `RoundThreeServerTests.Approvals_of_a_run_that_ended_stop_waiting_and_the_sweep_closes_ones_left_open`; `console.spec.ts`.
 
 ### RUN-08 Approve the estimate before work starts
 - **Who:** Builder.
@@ -831,7 +831,10 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Level:** Core. **Learn first:** BLD-06.
 - **What you learn:** a separate checker proves each requirement in a private preview with its own data.
 - **Steps:**
-  1. The step "Checked and passed: {part}" reads "Checked and working: {part} ({x} of {y} of your requirements shown working in the running app).", or the step "Checked and failed: {part}" reads "Sent back for repair, at no charge: …".
+  1. The plan card's part reads "Checked and working: {part} ({x} of {y} of your requirements shown working in the running app)." beside "Passed its check"; the step "Checked and passed: {part}" does not say it again. The step "Checked and failed: {part}" reads "Sent back for repair, at no charge: …", and under it each requirement that was not shown working, quoted, with how it failed and what the checker saw, in its plain sentences: "“{requirement}”: it does not work yet. What the checker saw: “…”" (or "the checker said it works, but nothing it gave shows it in the running app", or "it was not checked in the running app"). A sentence of what the checker saw that names files or calls is left to technical mode; the requirement and how it failed are always said.
+  2. A requirement shown by the screen's own test says so beneath the step: "Shown by the screen's own test: “{test title}”." A second look reads "Checked again by a second checker, at no charge." In technical mode the step lists the evidence, each test by file and title ("Test (r4): … > …"), and the failing list ("Failing: r4:unshown").
+  3. Each round's check is the QA engineer's own task "Check: {part}" in the Tasks list, finished with its own line: "The check of “{part}” is finished: it works." (after a repair: "… after repair {n} is finished: …"; sent back: "…: it goes back for repair, at no charge."; the last: "…: it still does not work, and no repair follows."). The part's own task says "Built and handed over: {part}." (a change's re-check: "Still works after the change: {part}.").
+  4. The preview and its test data are destroyed afterwards. Any e-mail the preview sent was held, never delivered (KIT-12): a check never reaches a real inbox.
   2. The preview and its test data are destroyed afterwards. Any e-mail the preview sent was held, never delivered (KIT-12): a check never reaches a real inbox.
 - **You know it worked when:** "Checked and passed".
 - **Variations and refusals:**
@@ -843,7 +846,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   - Each check's own task line says only that the check is finished ("The check of “{part}” is finished: it works."); the result is said once, in the step above.
 - **Where:** `BuildWorkflow.EvaluateAsync`, `EvaluationGate.cs`, `ScreenTests.cs`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.The_evaluator_works_on_a_preview…`; `WorkflowTests.A_part_for_people_who_do_not_sign_in_passes_on_signed_out_calls_cited_with_placeholders`, `A_plan_part_for_people_who_do_not_sign_in_must_be_checked_signed_out`; `…Part_three_passes_on_the_evidence_it_really_gave_once_code_runs_the_screens_test`, `…A_screen_claim_code_cannot_verify_still_fails`, `…A_check_that_cannot_verify_how_it_was_shown_is_looked_at_again_not_sent_to_the_builder`, `…A_check_reports_its_result_once_not_again_as_its_task`.
+- **Covered by tests:** `RoundThree.test.tsx` ("quotes, under “Sent back for repair”…", "says a second look, an early stop and a screen's own test plainly…", "says a part's passing sentence once…"); `plainLanguage.test.ts`; `roundThree.test.ts` ("a check is the QA engineer's own task"); `WorkflowTests.The_evaluator_works_on_a_preview…`; `WorkflowTests.A_part_for_people_who_do_not_sign_in_passes_on_signed_out_calls_cited_with_placeholders`, `A_plan_part_for_people_who_do_not_sign_in_must_be_checked_signed_out`; `…Part_three_passes_on_the_evidence_it_really_gave_once_code_runs_the_screens_test`, `…A_screen_claim_code_cannot_verify_still_fails`, `…A_check_that_cannot_verify_how_it_was_shown_is_looked_at_again_not_sent_to_the_builder`, `…A_check_reports_its_result_once_not_again_as_its_task`.
 
 ### BLD-08 See a failed part repaired, free, on a stronger model
 - **Who:** Viewer or above.
@@ -856,7 +859,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   2. Then "Checked: …" runs again.
   3. At most 3 repair rounds.
 - **You know it worked when:** "Checked and passed" follows a "Sent back".
-- **Variations and refusals:** still failing after 3 rounds, the run fails and the app is not published (RUN-11). Failing three checks running for the same reason, it stops before the last round, with that said plainly (RUN-11). The repair is told which requirement failed and what the checker saw, quoted, and what earlier rounds did; after two checks failing the same way, it is told to change its approach. The fault is kept as a "lesson" in the engineer's memory.
+- **Variations and refusals:** still failing after 3 rounds, the run fails and the app is not published (RUN-11). Failing three checks running for the same reason, it stops before the last round, with that said plainly (RUN-11); the last check's step adds "Stopped early: the same requirement failed the same way three times." The repair is told which requirement failed and what the checker saw, quoted, and what earlier rounds did; after two checks failing the same way, it is told to change its approach. The fault is kept as a "lesson" in the engineer's memory.
 - **Where:** `BuildItemAsync`, `BuildWorkflow.RepairBrief`.
 - **Reachable from:** internal.
 - **Covered by tests:** `WorkflowTests.A_failed_evaluation_is_repaired_not_billed…`, `…Repair_rounds_are_capped…`, `…The_repair_brief_quotes_the_failed_requirement_what_the_checker_saw_and_what_earlier_rounds_did`, `…A_part_that_fails_the_same_way_three_times_stops_before_a_fourth_round`.

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { describeError } from "@/lib/queryState";
 import { useAppSelector } from "@/store";
 import { useAnswerApprovalMutation } from "@/store/api";
-import { answeredText, type DerivedApproval } from "./runModel";
+import { answeredText, EXPIRED, type DerivedApproval } from "./runModel";
 
 /**
  * One checkpoint a run is waiting on: what will happen if it is approved, in plain words (the tool and its arguments are
@@ -12,6 +12,24 @@ import { answeredText, type DerivedApproval } from "./runModel";
  * Used on the run page and inline in the conversation.
  */
 export function ApprovalCard({ runId, approval, compact = false }: { runId: string; approval: DerivedApproval; compact?: boolean }) {
+  if (approval.answer === EXPIRED) return <ClosedApproval approval={approval} compact={compact} />;
+  return <OpenApproval runId={runId} approval={approval} compact={compact} />;
+}
+
+/** An approval the work's end closed before anyone answered it (R3-2): nothing is left to decide, so nothing is offered. */
+function ClosedApproval({ approval, compact }: { approval: DerivedApproval; compact: boolean }) {
+  return (
+    <div data-testid="approval-card" data-state="expired" className={compact ? "flex flex-col gap-2 rounded-md border bg-surface px-4 py-3" : "flex flex-col gap-2 rounded-md border bg-surface px-5 py-4"}>
+      <Badge tone="quiet" className="self-start">
+        No longer waiting
+      </Badge>
+      <p className="text-base font-medium text-ink-body">{approval.question}</p>
+      <p className="text-sm text-ink-muted">{approval.note}</p>
+    </div>
+  );
+}
+
+function OpenApproval({ runId, approval, compact }: { runId: string; approval: DerivedApproval; compact: boolean }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const [answer, state] = useAnswerApprovalMutation();
   const [optimistic, setOptimistic] = useState<"approve" | "reject" | null>(null);

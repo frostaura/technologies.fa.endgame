@@ -25,9 +25,11 @@ function ideaScope(world: World, i: Idea): string {
 export function answerApproval(world: World, approvalId: string, decision: "approve" | "reject", by: string, note: string | null = null) {
   const a = world.approvals.find((x) => x.id === approvalId);
   if (!a) throw notFound("The approval");
+  if (a.answer === "expired") throw conflict("The work ended before this was answered, so there is nothing left to approve.");
   if (a.answer) throw conflict(`This approval was already ${a.answer}.`);
   const r = runRecord(world, a.runId);
   a.answer = decision === "approve" ? "approved" : "rejected";
+  a.answeredBy = by;
   if (r) {
     append(world, r, "approval.answered", { approvalId: a.id, answer: a.answer, comment: note, by });
     if (!world.approvals.some((x) => x.runId === r.run.id && x.answer === null) && r.run.status === "waiting") r.run.status = "running";
@@ -202,8 +204,8 @@ area("WorkEndpoints", {
         break;
       case "cancel":
         if (terminal) throw conflict(`The run has already ${r.run.status}.`);
+        // Its open approvals expire with it, in the same step (the engine's run.finished).
         append(world, r, "run.finished", { outcome: "cancelled", by: u.displayName, reason: "Cancelled by a person.", summary: "Cancelled." });
-        for (const a of world.approvals) if (a.runId === r.run.id && !a.answer) a.answer = "rejected";
         break;
       default:
         throw new Refusal(problem(404, "not_found", "Not found", "There is nothing at this address."));

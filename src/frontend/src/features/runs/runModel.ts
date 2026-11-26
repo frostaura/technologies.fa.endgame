@@ -84,13 +84,23 @@ export interface DerivedApproval {
   detail: string | null;
   /** The tool line behind it (`change_app: …`), for technical mode only. Older runs wrote it as `detail`. */
   technical: string | null;
+  /**
+   * `approved`, `rejected`, or `expired` — closed by the platform because the run ended before anyone answered it (R3-2);
+   * null while it waits.
+   */
   answer: string | null;
-  /** The note given with the answer, if any. */
+  /** The note given with the answer, if any; an expired approval's is {@link EXPIRED_NOTE}. */
   note: string | null;
   seq: number;
   /** What declining does: the step is skipped and the work goes on, or the work stops. */
   onDecline: "continues" | "stops";
 }
+
+/** An approval the platform closed because its run ended first (`ApprovalStatuses.Expired`). */
+export const EXPIRED = "expired";
+
+/** What an expired approval says, in the words people read (`ApprovalStatuses.ExpiredNote`). */
+export const EXPIRED_NOTE = "The work ended before this was answered.";
 
 /**
  * One item of a plan. The planner writes `text` for the owner and `detail` for technical mode
@@ -235,6 +245,12 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
       case "run.finished": {
         const outcome = str(p, "outcome");
         run.outcome = outcome;
+        // The run's end closes every approval it still waits on, in the same step (`RunService.ExpireOpenApprovalsAsync`).
+        for (const a of approvals.values()) {
+          if (a.answer !== null) continue;
+          a.answer = EXPIRED;
+          a.note = EXPIRED_NOTE;
+        }
         run.status = outcome === "failed" ? "failed" : outcome === "cancelled" ? "cancelled" : "finished";
         run.finishedSummary = str(p, "summary");
         run.finishedReason = str(p, "reason");
@@ -498,9 +514,9 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     case "approval.answered":
       return { ...base, tone: "attention", icon: "verdict", title: `You answered: ${answerWord(str(p, "answer"))}`, detail: str(p, "comment") ?? str(p, "note") };
     case "evaluation.passed":
-      return { ...base, tone: "money", icon: "evaluate", title: `Checked and passed: ${itemName(p, planItem, mode)}`, detail: technical ? str(p, "evidence") : plainOrNull(str(p, "summary")) };
+      return { ...base, tone: "money", icon: "evaluate", title: `Checked and passed: ${itemName(p, planItem, mode)}`, detail: evaluationDetail(p, mode) };
     case "evaluation.failed":
-      return { ...base, tone: "attention", icon: "evaluate", title: `Checked and failed: ${itemName(p, planItem, mode)}`, detail: technical ? str(p, "evidence") : plainOrNull(str(p, "summary")) };
+      return { ...base, tone: "attention", icon: "evaluate", title: `Checked and failed: ${itemName(p, planItem, mode)}`, detail: evaluationDetail(p, mode) };
     case "estimate.made":
       return { ...base, tone: "money", icon: "credits", title: str(p, "stage") === "plan" ? "Estimated the cost again, from the plan" : "Estimated the cost", credits: credits(num(p, "credits")) };
     case "estimate.scored": {
@@ -519,6 +535,87 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
       if (!technical) return null;
       return { ...base, tone: "quiet", icon: "plan", title: e.type };
   }
+}
+
+/** The plain lines a check's judgement adds beneath its sentence (R3-1): a second look, a screen's own test, an early stop. */
+export const CHECK_LINES = {
+  rechecked: "Checked again by a second checker, at no charge.",
+  stoppedEarly: "Stopped early: the same requirement failed the same way three times.",
+  shownByTest: (title: string | null) => (title ? `Shown by the screen's own test: “${title}”.` : "Shown by the screen's own test."),
+} as const;
+
+/** How a requirement failed (`EvaluationGate`'s `failing`: `r4:unshown`), in the owner's words. */
+const FAILED_HOW: Record<string, string> = {
+  "not-met": "it does not work yet.",
+  unshown: "the checker said it works, but nothing it gave shows it in the running app.",
+  unchecked: "it was not checked in the running app.",
+};
+
+function strings(payload: Record<string, unknown>, key: string): string[] {
+  const v = payload[key];
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length > 0) : [];
+}
+
+/** The sentences of a text that read as plain language, kept whole: a technical sentence is left out, never cut. */
+export function plainSentences(text: string | null): string | null {
+  if (!text) return null;
+  const kept = text
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => sentence && isPlain(sentence));
+  return kept.length > 0 ? kept.join(" ") : null;
+}
+
+/** A screen test as the gate names it, `file > title`: its title, which is what a person reads. */
+function testTitle(test: string): string {
+  const at = test.lastIndexOf(" > ");
+  return at >= 0 ? test.slice(at + 3) : test;
+}
+
+/**
+ * What a check's judgement says beneath its title. Normal mode: the owner's sentence (left out with `withSummary: false`,
+ * when the plan card already says it), then each requirement that was not shown working, quoted with how it failed and
+ * what the checker saw, in its plain sentences; a screen requirement shown by the screen's own test; a second look; an
+ * early stop. Technical mode: the evidence, the tests by name, the failing list.
+ */
+export function evaluationDetail(p: Record<string, unknown>, mode: Mode, withSummary = true): string | null {
+  const requirements = list(p, "requirements");
+  const failing = strings(p, "failing");
+  if (mode === "technical") {
+    const tests = requirements.flatMap((r) => strings(r, "tests").map((t) => `Test (${str(r, "id") ?? "?"}): ${t}`));
+    const lines = [
+      str(p, "evidence"),
+      ...tests,
+      failing.length > 0 ? `Failing: ${failing.join(", ")}` : null,
+      p.rechecked === true ? "Rechecked: a second evaluator looked at the same build, not billed." : null,
+      p.stoppedEarly === true ? "Stopped early: the same failure three checks running, so no further repair round." : null,
+    ];
+    return lines.filter(Boolean).join("\n") || null;
+  }
+  const lines: string[] = [];
+  const summary = plainOrNull(str(p, "summary"));
+  if (withSummary && summary) lines.push(summary);
+  if (p.rechecked === true) lines.push(CHECK_LINES.rechecked);
+  const unmet = requirements.filter((r) => r.met !== true);
+  for (const r of unmet) {
+    const id = str(r, "id") ?? "";
+    const how = failing.find((f) => f.startsWith(`${id}:`))?.split(":")[1] ?? (r.met === false && str(r, "evidence") ? "not-met" : "unchecked");
+    const text = (str(r, "text") ?? "").replace(/[.!?]+$/, "");
+    const saw = plainSentences(str(r, "evidence"));
+    const quoted = text && isPlain(text) ? `“${text}”: ` : "A requirement: ";
+    lines.push(`${quoted}${FAILED_HOW[how] ?? FAILED_HOW.unchecked}${saw ? ` What the checker saw: “${saw}”` : ""}`);
+  }
+  // An older judgement, or one with no requirements, carries only its faults: the plain ones are what the checker saw.
+  if (unmet.length === 0 && requirements.length === 0) {
+    for (const fault of strings(p, "faults")) {
+      const saw = plainSentences(fault);
+      if (saw) lines.push(`What the checker saw: “${saw}”`);
+    }
+  }
+  for (const r of requirements) if (r.met === true) for (const t of strings(r, "tests")) lines.push(CHECK_LINES.shownByTest(plainOrNull(testTitle(t))));
+  if (p.stoppedEarly === true) lines.push(CHECK_LINES.stoppedEarly);
+  return lines.join("\n") || null;
 }
 
 /** The owner's answer as they would say it: a rejection is a decline (D19). */

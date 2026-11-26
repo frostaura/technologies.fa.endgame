@@ -13,7 +13,7 @@ import { paths } from "@/lib/router";
 import { useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { useGetMeQuery } from "@/store/api";
+import { useGetIdeaQuery, useGetMeQuery } from "@/store/api";
 import type { NeedsYou, Tree } from "@/store/types";
 import { selected, type Selection } from "@/store/uiSlice";
 import { AppShell, type Crumb } from "../shell/AppShell";
@@ -272,6 +272,9 @@ const NEED_STYLE: Record<NeedsYou["kind"], { badge: string; tone: "white" | "vio
   idle: { badge: "Nothing to do", tone: "quiet", card: "border-border-strong bg-surface", detail: "text-ink-body" },
 };
 
+/** A verdict research refused over a red line: not waiting for a call, so not marked as one. */
+const RED_LINE_STYLE = { badge: "Refused", tone: "white" as const, card: "border-attention-line bg-attention-tint", detail: "text-attention-deep" };
+
 function needHref(item: NeedsYou): string {
   switch (item.kind) {
     case "verdict":
@@ -297,25 +300,38 @@ function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
   }
   return (
     <section aria-label="Needs you" className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3", RISE, stagger(1))}>
-      {items.map((item) => {
-        const style = NEED_STYLE[item.kind];
-        const lines = needLines(item);
-        return (
-          <Link
-            key={item.id}
-            href={needHref(item)}
-            className={cn("flex flex-col gap-1.5 rounded-md border px-5 py-4 text-ink transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0", style.card)}
-          >
-            <Badge tone={style.tone} className="self-start bg-surface">
-              {style.badge}
-            </Badge>
-            <span className="line-clamp-2 break-words text-base font-semibold">{lines.headline}</span>
-            <span className={cn("line-clamp-1 break-words", style.detail)}>{lines.line}</span>
-            {technical && lines.technical && <code className="break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
-          </Link>
-        );
-      })}
+      {items.map((item) =>
+        item.kind === "verdict" && item.verdict === "do-not-build" ? <RefusableVerdictCard key={item.id} item={item} technical={technical} /> : <NeedCard key={item.id} item={item} technical={technical} redLine={null} />,
+      )}
     </section>
+  );
+}
+
+/**
+ * A do-not-build verdict may be a red-line refusal, which no one can overrule: only dropping or changing the idea is left
+ * (VERD-06). The idea says which; until it is read, the card reads as any do-not-build verdict.
+ */
+function RefusableVerdictCard({ item, technical }: { item: Extract<NeedsYou, { kind: "verdict" }>; technical: boolean }) {
+  const idea = useGetIdeaQuery(item.ideaId).data;
+  return <NeedCard item={item} technical={technical} redLine={idea?.redLine ?? null} />;
+}
+
+function NeedCard({ item, technical, redLine }: { item: NeedsYou; technical: boolean; redLine: string | null }) {
+  const style = redLine ? RED_LINE_STYLE : NEED_STYLE[item.kind];
+  const lines = needLines(item, redLine);
+  return (
+    <Link
+      href={needHref(item)}
+      data-need={item.kind}
+      className={cn("flex flex-col gap-1.5 rounded-md border px-5 py-4 text-ink transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0", style.card)}
+    >
+      <Badge tone={style.tone} className="self-start bg-surface">
+        {style.badge}
+      </Badge>
+      <span className="line-clamp-2 break-words text-base font-semibold">{lines.headline}</span>
+      <span className={cn("line-clamp-1 break-words", style.detail)}>{lines.line}</span>
+      {technical && lines.technical && <code className="break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
+    </Link>
   );
 }
 

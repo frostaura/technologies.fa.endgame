@@ -387,20 +387,30 @@ export function namesOn(world: World, path: string): string[] {
  * comes back resolved and read, titled with what happened, and is not counted unread.
  */
 export function noticeAsNow(world: World, n: DemoNotification, viewer: DemoUser): NotificationItem {
-  const { organisation: _organisation, answered, ...rest } = n;
+  const { organisation: _organisation, answered, approvalId: _approvalId, ...rest } = n;
   void _organisation;
+  void _approvalId;
   const outcome = noticeOutcome(world, n, viewer);
   if (outcome !== null) return { ...rest, title: outcome, read: true, resolved: true };
   return { ...rest, read: n.read || answered === true, resolved: answered === true };
 }
 
 function noticeOutcome(world: World, n: DemoNotification, viewer: DemoUser): string | null {
+  if (n.kind === "approval" && n.approvalId) {
+    const a = world.approvals.find((x) => x.id === n.approvalId);
+    if (!a || a.answer === null) return null;
+    const who = a.answeredBy && a.answeredBy !== viewer.displayName ? a.answeredBy : a.answeredBy ? "You" : "Someone";
+    if (a.answer === "approved") return `${who} approved “${a.title}”`;
+    if (a.answer === "rejected") return `${who} declined “${a.title}”`;
+    return `No longer waiting: “${a.title}” — the work ended before it was answered`;
+  }
   const id = n.subject?.id;
   if (!id) return null;
   if (n.kind === "verdict" && n.subject?.kind === "idea") {
     const i = world.ideas.find((x) => x.id === id);
     if (!i || i.status === "verdict") return null;
-    const who = i.decision?.via === "person" ? (i.decision.by === viewer.displayName ? "You" : i.decision.by) : "Someone";
+    // A verdict auto-mode acted on has no person as its decider: it says so (`NotificationService`, "Auto-mode chose to build").
+    const who = i.decision?.via === "person" ? (i.decision.by === viewer.displayName ? "You" : i.decision.by) : i.decision?.via === "auto-mode" ? "Auto-mode" : "Someone";
     if (i.status === "decided" && i.decision?.choice === "build") return `${who} chose to build: ${i.title}`;
     if (i.status === "decided" && i.decision?.choice === "drop") return `${who} dropped: ${i.title}`;
     return `Being researched again: ${i.title}`;

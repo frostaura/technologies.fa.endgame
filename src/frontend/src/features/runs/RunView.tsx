@@ -17,7 +17,7 @@ import { useControlRunMutation, useGetRunQuery } from "@/store/api";
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
-import { accuracy, deriveRun, estimateName, isStartDeclined, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
+import { accuracy, deriveRun, estimateName, EXPIRED, isStartDeclined, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
 import { distinctReplies } from "../home/conversationModel";
 import { actionCount, buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
 import { useRunStream } from "./useRunStream";
@@ -308,15 +308,30 @@ function Stat({ label, value, note, extra = null, bar = null }: { label: string;
   );
 }
 
+/**
+ * The approvals the work waits on, each answerable; and those its end closed before anyone answered (R3-2), shown closed
+ * with that said, so a question nobody answered is never left looking like one still waiting.
+ */
 function Approvals({ runId, approvals }: { runId: string; approvals: DerivedApproval[] }) {
   const pending = approvals.filter((a) => a.answer === null);
-  if (pending.length === 0) return null;
+  const expired = approvals.filter((a) => a.answer === EXPIRED);
   return (
-    <section aria-label="Waiting for your approval" className="flex flex-col gap-3">
-      {pending.map((a) => (
-        <ApprovalCard key={a.id} runId={runId} approval={a} />
-      ))}
-    </section>
+    <>
+      {pending.length > 0 && (
+        <section aria-label="Waiting for your approval" className="flex flex-col gap-3">
+          {pending.map((a) => (
+            <ApprovalCard key={a.id} runId={runId} approval={a} />
+          ))}
+        </section>
+      )}
+      {expired.length > 0 && (
+        <section aria-label="No longer waiting" className="flex flex-col gap-3">
+          {expired.map((a) => (
+            <ApprovalCard key={a.id} runId={runId} approval={a} />
+          ))}
+        </section>
+      )}
+    </>
   );
 }
 
