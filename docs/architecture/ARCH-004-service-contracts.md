@@ -371,6 +371,16 @@ posts straight to the container instead.
 `GET /internal/apps` and `…/{id}`, `DELETE …/{id}`; `POST /internal/usage/flush`. Shapes are in
 `Endgame.Hosting.Contracts`.
 
+**A run's work stays on its own branch until it is published (R2-4).** `POST …/commit` takes a workspace's
+commits onto `runs/<run id, 32 hex>`, never the app's line (`main`); a new workspace starts from its run's own
+branch, else from the `ref` asked for (an earlier attempt's branch, for "Try again"), else from `main`.
+`POST /internal/repos/{appId}/runs/{runId}/publish { title, authorName, authorEmail }` → `CommitInfo` makes the
+run's work the next version: one commit on `main` whose tree is the run's newest, whose message is the title
+(what the person asked for) with an `Endgame-Run: <run id>` trailer, and whose second parent is the run's own
+commits; `409` when `main` moved since the run began. `…/log` is first-parent, so `main`'s history is exactly the
+versions that were published (and restores). A failed or cancelled run leaves `main` untouched. Previews build
+`runs/<run id>`; publishing builds the published commit.
+
 `POST /internal/apps/{id}/preview` (`StartAppRequest`) → `AppStatus` with `target: http://app-<id:N>-pv:8080` — the
 evaluator's preview: the image on the app's own network beside the app, replacing any earlier preview, with a database
 made afresh (`p_…`, owned by the app's role, `ENDGAME_TELEMETRY_EXPORT=false`), labelled `endgame.kind=app-preview` so

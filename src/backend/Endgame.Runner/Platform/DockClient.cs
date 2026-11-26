@@ -89,6 +89,30 @@ public sealed class DockClient(HttpClient http)
         return await ReadAsync<BuildResult>(response, cancellationToken);
     }
 
+    /// <summary>
+    /// The run's work as the app's next version (R2-4): one commit on the app's line titled with what the person asked
+    /// for. Until this, a run's commits live on its own branch only, so a failed or cancelled run leaves the app's history
+    /// as it was.
+    /// </summary>
+    public async Task<CommitInfo> PublishRunAsync(Guid appId, Guid runId, PublishRunRequest request, CancellationToken cancellationToken)
+    {
+        using var response = await Http.PostAsJsonAsync($"/internal/repos/{appId:D}/runs/{runId:D}/publish", request, Json.Web, cancellationToken);
+        return await ReadAsync<CommitInfo>(response, cancellationToken);
+    }
+
+    /// <summary>The run's own newest work, built for its preview: its branch, or where it started when it has committed nothing yet.</summary>
+    public async Task<BuildResult> BuildRunAsync(Guid appId, Guid runId, string? startedFrom, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await BuildAsync(appId, RunBranches.Of(runId), cancellationToken);
+        }
+        catch (WorkspaceException e) when (e.Code == DockProblemCodes.NotFound)
+        {
+            return await BuildAsync(appId, startedFrom, cancellationToken);
+        }
+    }
+
     /// <summary>Starts the app privately: Dock never makes an app public; going public is a human act in the console.</summary>
     public async Task<AppStatus> StartAsync(Guid appId, StartAppRequest request, CancellationToken cancellationToken)
     {
@@ -137,8 +161,11 @@ public sealed class DockClient(HttpClient http)
 /// <summary>Where a run's workspace comes from. Production: Dock; tests: an in-memory fake.</summary>
 public interface IWorkspaceProvider
 {
-    /// <summary>The run's workspace: the one Dock still holds for it, or a fresh one at the app's head.</summary>
-    Task<(IWorkspace Workspace, bool Recreated)> EnsureAsync(Guid runId, Guid appId, DateTimeOffset leaseExpiresAt, CancellationToken cancellationToken);
+    /// <summary>
+    /// The run's workspace: the one Dock still holds for it, or a fresh one at the run's own newest work, else at
+    /// <paramref name="startFrom"/> (an earlier attempt's branch, for "Try again"), else at the app's published line.
+    /// </summary>
+    Task<(IWorkspace Workspace, bool Recreated)> EnsureAsync(Guid runId, Guid appId, DateTimeOffset leaseExpiresAt, string? startFrom, CancellationToken cancellationToken);
 
     Task RenewAsync(Guid runId, DateTimeOffset leaseExpiresAt, CancellationToken cancellationToken);
 
@@ -147,7 +174,7 @@ public interface IWorkspaceProvider
 
 public sealed class DockWorkspaceProvider(DockClient dock) : IWorkspaceProvider
 {
-    public async Task<(IWorkspace Workspace, bool Recreated)> EnsureAsync(Guid runId, Guid appId, DateTimeOffset leaseExpiresAt, CancellationToken cancellationToken)
+    public async Task<(IWorkspace Workspace, bool Recreated)> EnsureAsync(Guid runId, Guid appId, DateTimeOffset leaseExpiresAt, string? startFrom, CancellationToken cancellationToken)
     {
         if (await dock.GetWorkspaceAsync(runId, cancellationToken) is { } existing)
         {
@@ -156,7 +183,7 @@ public sealed class DockWorkspaceProvider(DockClient dock) : IWorkspaceProvider
         }
 
         await dock.EnsureRepositoryAsync(appId, cancellationToken);
-        var created = await dock.CreateWorkspaceAsync(new CreateWorkspaceRequest(runId, appId, null, leaseExpiresAt, null, null), cancellationToken);
+        var created = await dock.CreateWorkspaceAsync(new CreateWorkspaceRequest(runId, appId, startFrom, leaseExpiresAt, null, null), cancellationToken);
         return (new DockWorkspace(dock.Http, runId, created.Root), true);
     }
 

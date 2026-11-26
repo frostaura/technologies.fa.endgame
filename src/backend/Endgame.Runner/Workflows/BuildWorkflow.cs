@@ -122,7 +122,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var placement = job.Placement;
         var appId = Guid.Parse(Json.Str(placement, "appId")!);
         var crew = await StaffAsync(run, placement, cancellationToken);
-        var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), cancellationToken);
+        var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), run.StartFrom(), cancellationToken);
         var root = workspace.Root;
 
         // The plan: a contract, proposed in plan mode, accepted only once it is valid.
@@ -730,7 +730,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         {
             try
             {
-                var image = await dock.BuildAsync(appId, null, cancellationToken);
+                // The preview is of this run's own work, which is on its branch until it is published (R2-4).
+                var image = await dock.BuildRunAsync(appId, run.Run.Id, run.StartFrom(), cancellationToken);
                 // The preview's own token: what it e-mails is held, never sent, and the live app's token is left alone.
                 var token = await run.ControlPlane.MintAppTokenAsync(appId, cancellationToken, preview: true);
                 await dock.StartPreviewAsync(appId, new StartAppRequest(run.OrganisationId, image.Image, token, null, null), cancellationToken);
@@ -896,7 +897,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
         try
         {
-            var image = await dock.BuildAsync(appId, null, cancellationToken);
+            // The run's work becomes the app's next version only now, as one version titled with what was asked for (R2-4).
+            var version = await dock.PublishRunAsync(appId, run.Run.Id, new PublishRunRequest(VersionTitle(run), "Endgame factory", $"factory@{run.Options.AuthorDomain}"), cancellationToken);
+            var image = await dock.BuildAsync(appId, version.Id, cancellationToken);
             var token = await run.ControlPlane.MintAppTokenAsync(appId, cancellationToken);
             var status = await dock.StartAsync(appId, new StartAppRequest(run.OrganisationId, image.Image, token, null, null), cancellationToken);
             return new JsonObject { ["started"] = status.State == AppRuntimeState.Running, ["image"] = image.Image, ["commit"] = image.Commit, ["state"] = status.State, ["visibility"] = "private" };
@@ -905,6 +908,22 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         {
             return new JsonObject { ["started"] = false, ["detail"] = OutputText.Truncate(e.Message, 500) };
         }
+    }
+
+    /// <summary>A published version's title: the run's own, without its kind — what the person asked for (R2-4).</summary>
+    public static string VersionTitle(RunContext run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        var title = run.Run.Title.Trim();
+        foreach (var prefix in new[] { "Change: ", "Build: " })
+        {
+            if (title.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                title = title[prefix.Length..].Trim();
+            }
+        }
+
+        return OutputText.Truncate(title.Length > 0 ? title : "A new version", 400);
     }
 
     /// <summary>Placement: from research's verdict when it proposed one, otherwise from the idea's own words.</summary>

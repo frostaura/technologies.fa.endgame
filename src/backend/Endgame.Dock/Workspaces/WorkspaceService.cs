@@ -46,6 +46,33 @@ public sealed class WorkspaceService(
 
     private readonly StateFile<LeaseState> leases = new(Path.Combine(options.Value.DataDirectory, "state", "leases.json"));
 
+    /// <summary>
+    /// Where a run's workspace starts (R2-4): the run's own branch when it has committed before (a workspace recreated after
+    /// a lost lease), otherwise the reference asked for — an earlier attempt's branch, for "Try again" — when it exists,
+    /// otherwise the app's published line. A change never starts from another run's unpublished work unless it asks to.
+    /// </summary>
+    private async Task<string> BaseOfAsync(CreateWorkspaceRequest request, CancellationToken cancellationToken)
+    {
+        if (await repositories.RunHeadAsync(request.AppId, request.RunId, cancellationToken) is { } own)
+        {
+            return own;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Ref))
+        {
+            try
+            {
+                return await repositories.ResolveAsync(request.AppId, request.Ref, cancellationToken);
+            }
+            catch (DockProblem problem) when (problem.Status == StatusCodes.Status404NotFound)
+            {
+                // An earlier attempt that never committed has no branch: start from the line.
+            }
+        }
+
+        return await repositories.ResolveAsync(request.AppId, null, cancellationToken);
+    }
+
     public async Task<WorkspaceInfo> CreateAsync(CreateWorkspaceRequest request, CancellationToken cancellationToken)
     {
         if (request.RunId == Guid.Empty || request.AppId == Guid.Empty)
@@ -59,7 +86,7 @@ public sealed class WorkspaceService(
         }
 
         var workspaceImage = image.Require();
-        var commit = await repositories.ResolveAsync(request.AppId, request.Ref, cancellationToken);
+        var commit = await BaseOfAsync(request, cancellationToken);
         var allowed = EgressRules.NormaliseAll(request.AllowedHosts, out var rejected);
         if (rejected.Count > 0)
         {
@@ -292,7 +319,7 @@ public sealed class WorkspaceService(
         }
 
         var head = (await exec.RunCheckedAsync(container.ID, [.. git, "rev-parse", "HEAD"], User, cancellationToken: cancellationToken)).Trim();
-        var repositoryHead = (await repositories.InfoAsync(appId, cancellationToken)).Head;
+        var repositoryHead = await repositories.RunHeadAsync(appId, runId, cancellationToken);
         if (head == repositoryHead || head == baseCommit)
         {
             return new WorkspaceCommitResult(head, false);

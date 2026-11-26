@@ -353,7 +353,7 @@ public sealed class RunnerIntegrationTests(PostgresServer postgres) : IAsyncLife
     /// <summary>One workspace that outlives a Runner process, as Dock's does.</summary>
     private sealed class SharedWorkspace(IWorkspace workspace) : IWorkspaceProvider
     {
-        public Task<(IWorkspace Workspace, bool Recreated)> EnsureAsync(Guid runId, Guid appId, DateTimeOffset leaseExpiresAt, CancellationToken cancellationToken) =>
+        public Task<(IWorkspace Workspace, bool Recreated)> EnsureAsync(Guid runId, Guid appId, DateTimeOffset leaseExpiresAt, string? startFrom, CancellationToken cancellationToken) =>
             Task.FromResult((workspace, false));
 
         public Task RenewAsync(Guid runId, DateTimeOffset leaseExpiresAt, CancellationToken cancellationToken) => Task.CompletedTask;

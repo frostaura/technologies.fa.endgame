@@ -23,11 +23,11 @@ public sealed class DockWorkspaceTests(HostingEnvironment env)
         var app = Guid.NewGuid();
         var run = Guid.NewGuid();
         await dock.EnsureRepositoryAsync(app, CancellationToken.None);
-        var (workspace, recreated) = await provider.EnsureAsync(run, app, DateTimeOffset.UtcNow.AddMinutes(10), CancellationToken.None);
+        var (workspace, recreated) = await provider.EnsureAsync(run, app, DateTimeOffset.UtcNow.AddMinutes(10), null, CancellationToken.None);
         try
         {
             Assert.True(recreated);
-            Assert.False((await provider.EnsureAsync(run, app, DateTimeOffset.UtcNow.AddMinutes(10), CancellationToken.None)).Recreated);
+            Assert.False((await provider.EnsureAsync(run, app, DateTimeOffset.UtcNow.AddMinutes(10), null, CancellationToken.None)).Recreated);
 
             // A Windows-line-ending file, edited with Unix line endings: matched, and its own endings kept, byte for byte.
             await workspace.WriteBytesAsync("/workspace/notes/crlf.txt", Encoding.UTF8.GetBytes("alpha\r\nbeta\r\ngamma\r\n"), CancellationToken.None);

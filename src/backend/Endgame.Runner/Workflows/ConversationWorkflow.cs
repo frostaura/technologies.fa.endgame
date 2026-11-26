@@ -258,7 +258,7 @@ public sealed class ReviewWorkflow : IWorkflow
             return WorkflowOutcome.Failure("A review is of an app, and this run's scope names none.");
         }
 
-        var (workspace, _) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), cancellationToken);
+        var (workspace, _) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), null, cancellationToken);
         var reviewer = await Workforce.StandingReviewerAsync(run, cancellationToken);
         var agent = AgentFactory.As(run, run.Agents.SecurityReviewer(run, workspace.Root), reviewer, await Workforce.MemoryBlockAsync(run, reviewer, run.Run.Scope, cancellationToken), canRemember: true);
         var result = await WorkflowSupport.RunAgentAsync(run, agent, workspace, "Review the app now against your checklist, then reply with the JSON object.", cancellationToken);
