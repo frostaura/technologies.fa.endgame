@@ -770,6 +770,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Variations and refusals:**
   - A plan that never validates fails the run (RUN-11).
   - **The plan cannot be edited by a person.** There is only approve or reject, and only with the checkpoint on (BLD-04).
+  - Something people do without signing in ("open a trip link with no account") is planned and built, and the plan message ends: "People can use it without signing in only once you make the app public, which only you can do on its page." A private app admits only signed-in members until then (ARCH-005).
 - **Where:** `RunView.tsx` `PlanPanel`; `BuildWorkflow` (planner, `plan.accepted`).
 - **Reachable from:** UI.
 - **Covered by tests:** `RunView.test.tsx` ("shows each plan item in plain words…"); `WorkflowTests.Build_places_plans_builds…`.
@@ -834,10 +835,10 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Variations and refusals:**
   - An image that does not build is a failed check.
   - No signed-in caller, or no verdict from the evaluator, means a failed check.
-  - Code fails the part unless every requirement has evidence from a real call and every promised test id is present.
+  - Code fails the part unless every requirement has evidence from a real call and every promised test id is present. A part for people who do not sign in is shown with calls made signed out on the preview; a requirement for people with no account is shown only that way.
 - **Where:** `BuildWorkflow.EvaluateAsync`, `EvaluationGate.cs`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.The_evaluator_works_on_a_preview…`.
+- **Covered by tests:** `WorkflowTests.The_evaluator_works_on_a_preview…`; `WorkflowTests.A_part_for_people_who_do_not_sign_in_passes_on_signed_out_calls_cited_with_placeholders`, `A_plan_part_for_people_who_do_not_sign_in_must_be_checked_signed_out`.
 
 ### BLD-08 See a failed part repaired, free, on a stronger model
 - **Who:** Viewer or above.

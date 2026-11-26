@@ -774,8 +774,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
         // Code's gate: every requirement the item delivers is shown working in the running app, signed in, and every test id the
         // plan promised is on the app's screens, or the item fails.
-        var calls = CallAppTool.CallsIn(await run.LogReader.ReadAllAsync(cancellationToken), evaluatorId);
-        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken));
+        var log = await run.LogReader.ReadAllAsync(cancellationToken);
+        var calls = CallAppTool.CallsIn(log, evaluatorId);
+        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken), CheckPreviewTool.CallsIn(log, evaluatorId));
     }
 
     /// <summary>The item's promised test ids that no file under <c>web/src</c> writes as <c>data-testid="…"</c>.</summary>
@@ -971,7 +972,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var left = plan.LeftOut.Count == 0
             ? $"All {plan.Requirements.Count} things the idea asks for are covered."
             : "Left out: " + string.Join(" ", plan.LeftOut.Select(l => $"{plan.Requirements.FirstOrDefault(r => r.Id == l.Requirement)?.Text.TrimEnd('.') ?? l.Requirement}, because {l.Reason.TrimEnd('.')}."));
-        return Sentences.Join([plan.Summary, built, left]);
+        // A part for people who do not sign in works for them once the owner makes the app public, which only a person does (R2-11).
+        var publicOnly = plan.Requirements.Any(r => PlanRequirement.NeedsNoSignIn(r.Text) && !plan.LeftOut.Any(l => l.Requirement == r.Id)) ? PlanRequirement.PublicOnlyNote : null;
+        return Sentences.Join([plan.Summary, built, left, publicOnly]);
     }
 
     /// <summary>The test ids an item's screens must carry, for the builder's task.</summary>

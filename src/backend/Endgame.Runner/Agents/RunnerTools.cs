@@ -234,9 +234,9 @@ public sealed class SentEmailsTool(ControlPlaneClient controlPlane, Guid appId) 
 }
 
 /// <summary><c>check_preview</c>: the evaluator's view of the running app.</summary>
-public sealed class CheckPreviewTool(IPreviewProbe probe, Guid appId) : ITool
+public sealed partial class CheckPreviewTool(IPreviewProbe probe, Guid appId) : ITool
 {
-    public string Name => "check_preview";
+    public string Name => ToolName;
 
     public string Description => "Send one HTTP request to the app's running private preview and get the status and body back. Paths are relative to the app's address, for example 'api/notes' or '' for the home page.";
 
@@ -259,13 +259,34 @@ public sealed class CheckPreviewTool(IPreviewProbe probe, Guid appId) : ITool
         try
         {
             var answer = await probe.SendAsync(appId, method, path, Json.Str(call.Arguments, "body"), cancellationToken);
-            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {answer.Status} {answer.ContentType}\n\n{OutputText.Truncate(answer.Body, 8000)}"));
+            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {answer.Status} {answer.ContentType} — {method.ToUpperInvariant()} {path} {SignedOut}\n\n{OutputText.Truncate(answer.Body, 8000)}"));
         }
         catch (Exception e) when (e is ServiceProblemException or HttpRequestException)
         {
             return ToolOutcome.Error($"The preview could not be reached: {e.Message}. Count this check as failed.", "preview_unreachable");
         }
     }
+
+    public const string ToolName = "check_preview";
+
+    /// <summary>How a result's first line says the call was made: as a visitor who is not signed in.</summary>
+    public const string SignedOut = "signed out";
+
+    /// <summary>
+    /// The calls the agent made signed out that the preview answered, as <c>"GET api/books"</c> (query dropped): what shows a
+    /// requirement that needs no sign-in working (R2-11).
+    /// </summary>
+    public static IReadOnlyList<string> CallsIn(IEnumerable<RunEvent> log, string agentId) =>
+        log.Where(e => e.Type == HarnessEvents.ToolResult && Json.Str(e.Payload, HarnessEvents.AgentField) == agentId
+                && Json.Str(e.Payload, "name") == ToolName && Json.Bool(e.Payload, "isError") != true)
+            .Select(e => CallLine().Match((Json.Str(e.Payload, "content") ?? "").Split('\n')[0]))
+            .Where(m => m.Success)
+            .Select(m => $"{m.Groups[1].Value} {m.Groups[2].Value.Split('?')[0]}")
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^HTTP \d{3} .*? — (GET|POST|PUT|PATCH|DELETE) (\S*) signed out$")]
+    private static partial System.Text.RegularExpressions.Regex CallLine();
 }
 
 /// <summary>

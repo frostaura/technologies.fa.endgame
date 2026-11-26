@@ -73,6 +73,20 @@ public sealed partial record PlanRequirement(string Id, string Text)
         return t.Length == 0 ? t : char.ToUpperInvariant(t[0]) + t[1..];
     }
 
+    /// <summary>
+    /// Whether the words ask for something people do without signing in ("all without signing in", "with no account"). The
+    /// platform's rule (ARCH-005): Edge admits only signed-in people with rights to a private or shared app, and making an app
+    /// public is a person's act on its page; so such a requirement works only once the owner makes the app public, and is
+    /// checked on the preview signed out (check_preview), never with a signed-in call (R2-11).
+    /// </summary>
+    public static bool NeedsNoSignIn(string? text) => NoSignIn().IsMatch(text ?? "");
+
+    /// <summary>What the owner is told when a plan builds something for people who do not sign in (R2-11).</summary>
+    public const string PublicOnlyNote = "People can use it without signing in only once you make the app public, which only you can do on its page.";
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(without (signing|logging) (in|on|up)|without (an? |any )?(account|login|sign[- ]?in|registering|registration)|with no (account|login|sign[- ]?in)|no (account|login|sign[- ]?in) (needed|required)|(don't|do not|doesn't|does not|never) (need to |have to )?(sign|log) in|not signed in|signed[- ]out|anonymous(ly)?)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex NoSignIn();
+
     /// <summary>An example or a qualifier cut off from the statement it belongs to ("as a line above the list", "for example …").</summary>
     public static bool IsFragment(string text) => Qualifier().IsMatch((text ?? "").Trim());
 
@@ -304,6 +318,14 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
                 faults.Add($"Item '{item.Id}' builds something on screen but names no test ids: list in testIds every data-testid its screens carry, by the kit's convention (page-<view>, nav-<view>, <entity>-list, <entity>-item, new-<entity>, open-<entity>, <entity>-<field>, save-<entity>, set-<field>-<value>).");
             }
 
+            // Something people do without signing in is checked as they would do it: signed out, on the preview (R2-11). A check
+            // that names only signed-in calls can never show it, and fails every repair round.
+            var signedOut = item.Covers.Select(c => Requirements.FirstOrDefault(r => r.Id == c)).Any(r => r is not null && PlanRequirement.NeedsNoSignIn(r.Text));
+            if (signedOut && !SignedOutCheck().IsMatch(item.Check ?? ""))
+            {
+                faults.Add($"Item '{item.Id}' delivers something people do without signing in, so its check must be made signed out: say in check which calls are made with check_preview (signed out) and what they answer. A private app admits only people who are signed in; this works for others once the owner makes the app public, which only a person can do.");
+            }
+
             if (OwnerText.Technical(item.Text) is { Count: > 0 } technical)
             {
                 faults.Add($"Item '{item.Id}' text names technical detail ({string.Join(", ", technical.Take(4))}): say in plain words what the owner gets, and put files, endpoints and entities in detail.");
@@ -341,6 +363,9 @@ public sealed partial record PlanContract(string Summary, IReadOnlyList<PlanItem
 
         return faults;
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"check_preview|signed[- ]out", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex SignedOutCheck();
 
     public string Render()
     {
