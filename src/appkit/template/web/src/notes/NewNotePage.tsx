@@ -2,10 +2,12 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { api, ApiError, NotSignedInError, signInUrl, signUpUrl, useCurrentUser, ValidationError } from "@endgame/appkit";
 import { Button, Card, CardContent, CardHeader, CardTitle, FailedState, FieldError, Input, Label, LoadingState, Textarea } from "@endgame/appkit/ui";
+import { usePageTitle } from "../usePageTitle";
 import type { NoteDetail } from "./types";
 
 /** Writing needs a signed-in person; everyone else is offered the platform's sign-in. */
 export default function NewNotePage() {
+  usePageTitle("New note");
   return (
     <section data-testid="page-new-note">
       <NewNoteContent />
@@ -65,34 +67,53 @@ function NewNoteForm() {
   }
 
   const titleError = fieldErrors.Title?.[0];
+  // A desktop uses its width: the form, and beside it the note as it will read. A phone has the form alone.
   return (
-    <Card className="max-w-2xl">
-      <CardHeader>
-        <CardTitle>New note</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="title">Title</Label>
-            <Input
-              id="title"
-              name="title"
-              data-testid="note-title"
-              value={title} onChange={(e) => setTitle(e.target.value)} invalid={!!titleError} aria-describedby="title-error" maxLength={200} />
-            <FieldError id="title-error">{titleError}</FieldError>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="body">Body</Label>
-            <Textarea id="body" name="body" data-testid="note-body" value={body} onChange={(e) => setBody(e.target.value)} />
-          </div>
-          {failure && <FailedState title="The note was not saved" error={failure} />}
-          <div>
-            <Button type="submit" disabled={saving} data-testid="save-note">
-              {saving ? "Saving…" : "Save note"}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle>New note</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                name="title"
+                data-testid="note-title"
+                autoComplete="off"
+                enterKeyHint="next"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                invalid={!!titleError}
+                aria-describedby="title-error"
+                maxLength={200}
+              />
+              <FieldError id="title-error">{titleError}</FieldError>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="body">Body</Label>
+              <Textarea id="body" name="body" data-testid="note-body" value={body} onChange={(e) => setBody(e.target.value)} />
+            </div>
+            {failure && <FailedState title="The note was not saved" error={failure} />}
+            <div>
+              <Button type="submit" disabled={saving} data-testid="save-note" className="max-sm:w-full">
+                {saving ? "Saving…" : "Save note"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+      <Card className="hidden lg:block" aria-label="How it will read">
+        <CardHeader>
+          <p className="text-sm font-semibold text-ink-muted">How it will read</p>
+          <CardTitle className="break-words">{title.trim() || "Untitled"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {body.trim() ? <p className="whitespace-pre-wrap break-words">{body}</p> : <p className="text-ink-muted">No body.</p>}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

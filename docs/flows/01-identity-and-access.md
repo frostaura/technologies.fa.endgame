@@ -982,12 +982,13 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
   1. **"Endgame home"** (the mark) goes to `/`.
   2. The breadcrumb "Where you are" shows links for earlier steps and the current page as plain text. On the home screen the earlier steps re-select a level in place.
   3. Labels longer than 48 characters are cut, with the full text on hover.
-  4. On a phone only the last two steps show, after "…", and the header uses at most two rows: mark, location and sign-out first, then the mode toggle and the balance.
+  4. On a tablet the header is the bar (mark, mode, balance, bell, account, sign out) with "Where you are" on a row beneath; where a screen has a conversation, **"Talk"** sits beside the bell and brings it into view, ready to type.
+  5. On a phone (under 640 px wide, or a phone on its side) the header is one row: **"Up to {level}"** (a chevron) or, at the top, the mark; then where you are — the page's name in full, up to two lines, with the levels above it in small type; then **"Your account"**. Tapping where you are opens the sheet **"Where you are"**, listing every level, each one tap away. The mode toggle, the organisation switcher and "Sign out" move under **More** in the bottom bar (SHL-07).
 - **You know it worked when:** clicking a step lands on that level.
 - **Variations and refusals:** none found.
-- **Where:** `AppShell.tsx` (`Breadcrumb`), `HomeView.tsx` (`crumbsFor`).
+- **Where:** `AppShell.tsx` (`Breadcrumb`), `PhoneShell.tsx` (`PhoneHeader`), `HomeView.tsx` (`crumbsFor`).
 - **Reachable from:** UI
-- **Covered by tests:** `console.spec.ts` "shows the tree from the API, and selection scopes the breadcrumb…" and "the header is at most two rows…".
+- **Covered by tests:** `console.spec.ts` "shows the tree from the API, and selection scopes the breadcrumb…"; `components/phone.test.tsx` "names where you are in full with the way up…", "lists every level above in a sheet…"; `tests-demo/phone.spec.ts`.
 
 ### SHL-04 Skip to the content
 - **Who:** keyboard and screen-reader users
@@ -1037,6 +1038,24 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Where:** `App.tsx` (`NotFound`, `ErrorBoundary`).
 - **Reachable from:** UI
 - **Covered by tests:** `App.test.tsx` "answers an unknown address plainly".
+
+### SHL-07 Use the console on a phone
+- **Who:** any signed-in person, on a phone (or in any window under 640 px wide, or under 500 px tall and under 1024 px wide — the academy's frame on a phone included).
+- **Starts at:** any console screen.
+- **Needs:** signed in.
+- **Level:** Foundation
+- **Learn first:** SHL-03
+- **What you learn:** the five places a thumb goes most are always at the foot of the screen, and every long page opens folded to what matters.
+- **Steps:**
+  1. The bottom bar shows **Home** (the org chart), **Talk** (this page's conversation), **Alerts** (the notifications page, with the unread count), the balance itself (to Credits) and **More**. The current one is marked. It sits above the home indicator.
+  2. **Talk** opens the conversation of the page you are on — the level selected on the org chart, the app, the employee — in a full-screen sheet: what was said scrolls, the message box stays at the foot above the keyboard, approvals are answered inside it, and a reply streams in without the page moving. Closing it keeps the reply streaming and the draft. On a page with no conversation, Talk opens the org chart's.
+  3. **More** opens a sheet: Manage the organisation, Hiring, Autonomy, Ideas from your portfolio, People and Secrets (Admins and the Owner), AI assistants, Operator access (the Owner), God mode (operators), System status (technical mode); then "Your account", the organisation switcher, the mode and "Sign out".
+  4. Long pages open folded on a phone: each section is a named row with a line about it, one tap to open (an app's "Change it", "Ask about it", "Dashboard", "History", "Sharing", "Its secrets", "Running and who can open it", "What it may spend", "What it uses", "The app itself"; a run's plan and tasks; the budget tree; the operator's prices). A run's steps show the latest first, twelve at a time, and an approval scrolled out of sight leaves a bar pinned at the top until it is answered.
+- **You know it worked when:** every screen is one column, nothing scrolls sideways, and Home, Talk, Alerts, the balance and More are one tap away from anywhere.
+- **Variations and refusals:** a tablet (640–1023 px) keeps the full header and the page's own columns, with the side panel's cards two by two under the page; nothing folds.
+- **Where:** `features/shell/AppShell.tsx`, `PhoneShell.tsx`, `talk.tsx`; `components/Sheet.tsx`, `BottomNav.tsx`, `Fold.tsx`; `lib/useViewport.ts`, the breakpoints in `lib/tokens.ts`.
+- **Reachable from:** UI
+- **Covered by tests:** `components/phone.test.tsx`; `tests-demo/phone.spec.ts` (every screen at 375 × 812 with touch).
 
 ---
 

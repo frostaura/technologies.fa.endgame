@@ -17,6 +17,7 @@ import { deriveRun, isTerminal } from "../runs/runModel";
 import { useRunStream } from "../runs/useRunStream";
 import { distinctReplies, messageCostLine, noticesToShow, withoutClosingRepeats } from "./conversationModel";
 import { activeWork, activityLine } from "./treeModel";
+import { useInSheet } from "../shell/talkContext";
 
 /**
  * The one conversation, docked beside the org chart and scoped to whatever is selected. What was
@@ -46,6 +47,8 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
   const busy = activeWork(tree).filter((w) => !selection.employeeId || w.id === selection.employeeId);
   const logRef = useRef<HTMLDivElement>(null);
   const onEmployeePage = useLocation().pathname.startsWith("/employees/");
+  // In the phone's sheet the dock fills it: what was said scrolls, the text box stays at the foot, above the keyboard.
+  const inSheet = useInSheet();
 
   useEffect(() => {
     const el = logRef.current;
@@ -72,8 +75,8 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
   };
 
   return (
-    <section aria-label="Conversation" className={cn("flex flex-col gap-0", fill && "min-h-full")}>
-      <div className="flex items-center gap-3.5 border-b pb-5">
+    <section aria-label="Conversation" data-in-sheet={inSheet || undefined} className={cn("flex flex-col gap-0", inSheet ? "h-full min-h-0 px-4 pt-3" : fill && "min-h-full")}>
+      <div className={cn("flex items-center gap-3.5 border-b pb-5", inSheet && "pb-3 pr-12")}>
         <Avatar name={name} seed={selection.employeeId ?? selection.scope} size="md" shape={selection.kind === "employee" ? "round" : "square"} />
         <div className="flex min-w-0 flex-col">
           <h2 className="truncate font-sans text-base font-semibold tracking-normal">Talking to {name}</h2>
@@ -94,7 +97,7 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
         </div>
       </div>
 
-      <div ref={logRef} role="log" aria-live="polite" aria-label={`Conversation with ${name}`} className="flex flex-1 flex-col gap-3.5 overflow-y-auto py-5 lg:max-h-screen">
+      <div ref={logRef} role="log" aria-live="polite" aria-label={`Conversation with ${name}`} className={cn("flex flex-1 flex-col gap-3.5 overflow-y-auto py-5", inSheet ? "min-h-0 overscroll-contain py-4" : "lg:max-h-screen")}>
         {history.kind === "loading" && (
           <div role="status" aria-busy="true" data-state="loading" className="flex flex-col gap-3.5">
             <span className="sr-only">Loading what was said before</span>
@@ -136,7 +139,7 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
         ))}
       </div>
 
-      <form onSubmit={submit} className="flex flex-col gap-2 border-t pt-4">
+      <form onSubmit={submit} className={cn("flex flex-col gap-2 border-t pt-4", inSheet && "shrink-0 pb-3 pt-3")}>
         <label htmlFor={inputId} className="text-xs text-ink-muted">
           Message {name}
         </label>
@@ -147,6 +150,7 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Ask, or tell it what to change"
             autoComplete="off"
+            enterKeyHint="send"
             className="min-h-12 min-w-0 flex-1 rounded-sm border border-border-strong bg-surface px-4"
           />
           <Button type="submit" className="min-h-12 px-5" disabled={draft.trim().length === 0 || estimate.kind === "loading"}>

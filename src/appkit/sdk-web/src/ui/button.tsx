@@ -12,7 +12,8 @@ const buttonVariants = cva(
         outline: "border bg-surface text-ink hover:bg-ground",
         ghost: "text-ink hover:bg-ground",
       },
-      size: { sm: "h-9 px-3", md: "h-11 px-4" },
+      // `sm` is compact where a pointer is precise; on a phone every button is a 44px target.
+      size: { sm: "h-11 px-3 sm:h-9", md: "h-11 px-4" },
     },
     defaultVariants: { variant: "primary", size: "md" },
   },

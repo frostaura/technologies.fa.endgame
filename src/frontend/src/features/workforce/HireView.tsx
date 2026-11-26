@@ -15,6 +15,7 @@ import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisatio
 import { useAppDispatch, useAppSelector } from "@/store";
 import { api, useDecideHireMutation, useEditHireMutation, useGetEmployeesQuery, useGetHireQuery, useGetMeQuery } from "@/store/api";
 import type { Hire, Tree } from "@/store/types";
+import { Fold } from "@/components/Fold";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { JobFields } from "./JobFields";
 import { TRIGGER, draftOf, draftProblem, expectedMonthly, hireBadge, hireEditFrom, nameWithRole, possibleManagers, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
@@ -80,6 +81,7 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
       {editing ? (
         <EditHire hire={hire} onDone={() => setEditing(false)} onError={setEditError} />
       ) : (
+        <Fold title="The drafted job description" summary={`${job.monthlyCreditLimit !== null ? `${formatCredits(job.monthlyCreditLimit)} a month` : "No cap of its own"} · reports to ${hire.reportsTo?.name ?? "you"}`}>
         <section aria-labelledby="jd-title" className={cn("flex flex-col gap-3.5", RISE, stagger(1))}>
           <h2 id="jd-title" className="text-lg font-semibold">
             The drafted job description
@@ -100,6 +102,7 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
             {hire.contractorRole && <Row label="Replaces">The recurring contractor role “{hire.contractorRole}”</Row>}
           </dl>
         </section>
+        </Fold>
       )}
 
       {decisionError && (
@@ -148,7 +151,7 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
 
   return (
     <section aria-label="Your decision" className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 max-sm:flex-col">
         <Button size="lg" onClick={() => setConfirming("accept")} disabled={state.isLoading} aria-expanded={confirming === "accept"}>
           Hire {hire.name}
         </Button>

@@ -4,11 +4,11 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 
 **Read from the code, not from the other docs.** On 2026-11-25 five readers each took one area and read the screens, the endpoints, the assistant tools, the edge, the app kit and the Makefile end to end. Where a flow could not be settled from code it says *not verified from code*. Nothing was run to produce it, so a flow's steps are what the code does, not a recording of a session.
 
-**327 flows** in five files:
+**328 flows** in five files:
 
 | File | Covers | Flows |
 | --- | --- | --- |
-| [Identity and access](01-identity-and-access.md) | Signing in, people and roles, AI-assistant keys and MCP, opening apps as a member or end user, the shell. | 48 |
+| [Identity and access](01-identity-and-access.md) | Signing in, people and roles, AI-assistant keys and MCP, opening apps as a member or end user, the shell. | 49 |
 | [The organisation, home and conversations](02-organisation-home-and-conversations.md) | The home screen, the tree of divisions, projects and apps, the two graph views, conversations, notifications, system status. | 77 |
 | [The factory](03-the-factory.md) | From an idea to a running app: ideas, research and the verdict, runs, plan, build, check, review, publish, autonomy and rule sets, changing an app. | 62 |
 | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) | Hiring, employees and contractors, employee memory, credits, budgets and the overdraft, the operator's screens. | 46 |
@@ -35,7 +35,7 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 
 Five tracks, each in the order the files give them. A lesson can only teach what has a screen, so each track lists the flows a learner can do in the console and counts the rest separately. The **Operator** track is FrostAura's own handbook and is not for clients.
 
-### Foundation — 77 flows, 75 with a screen
+### Foundation — 78 flows, 76 with a screen
 
 What every person needs on day one: signing in, reading the home screen, starting an idea, reading a verdict, opening an app.
 
@@ -62,6 +62,7 @@ What every person needs on day one: signing in, reading the home screen, startin
 | SHL-03 | Use the header and breadcrumbs | Screen | [Identity and access](01-identity-and-access.md) |
 | SHL-04 | Skip to the content | Screen | [Identity and access](01-identity-and-access.md) |
 | SHL-06 | Arrive at an unknown console address | Screen | [Identity and access](01-identity-and-access.md) |
+| SHL-07 | Use the console on a phone | Screen | [Identity and access](01-identity-and-access.md) |
 | ORG-01 | Arrive with no organisation (first run) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ORG-02 | Name the first organisation, together with the first idea | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ORG-03 | Arrive with no organisation once one already exists (refused self-sign-up) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -408,7 +409,7 @@ Flows that do not exist yet or are purely automatic.
 
 | Reached by | Flows |
 | --- | --- |
-| Screen | 252 |
+| Screen | 253 |
 | API or assistant only | 24 |
 | Command line | 30 |
 | Automatic | 19 |

@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 import plugin from "tailwindcss/plugin";
-import { blur, cssVariables, layout, motion, radius, surfaces, tailwindColors, typography } from "./src/lib/tokens";
+import { blur, cssVariables, layout, motion, radius, screens, shortQuery, surfaces, tailwindColors, typography } from "./src/lib/tokens";
 
 /**
  * The Tailwind theme. It holds no values: every colour, radius, shadow, typeface and motion comes
@@ -14,6 +14,7 @@ const config: Config = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   future: { hoverOnlyWhenSupported: true },
   theme: {
+    screens,
     extend: {
       colors: tailwindColors(),
       borderColor: { DEFAULT: "rgb(var(--color-border) / <alpha-value>)" },
@@ -28,9 +29,21 @@ const config: Config = {
       maxWidth: layout.width,
       width: layout.width,
       maxHeight: layout.height,
-      spacing: { aura: layout.width.aura },
+      spacing: {
+        aura: layout.width.aura,
+        nav: layout.nav,
+        bar: layout.bar,
+        "nav-safe": layout.navSafe,
+        "sheet-gap": layout.sheetGap,
+        "safe-t": layout.safe.top,
+        "safe-b": layout.safe.bottom,
+        "safe-l": layout.safe.left,
+        "safe-r": layout.safe.right,
+        "visible-top": layout.visible.top,
+      },
+      height: { visible: layout.visible.height },
       gridTemplateColumns: layout.columns,
-      minHeight: { touch: layout.touch },
+      minHeight: { touch: layout.touch, nav: layout.nav, bar: layout.bar },
       minWidth: { touch: layout.touch, field: layout.field },
       margin: { wire: layout.wireInset },
       keyframes: motion.keyframes,
@@ -44,6 +57,10 @@ const config: Config = {
   },
   plugins: [
     tokenVariables,
+    // `short:` — a phone on its side: little height, so headers and bars draw slimmer.
+    plugin(({ addVariant }) => {
+      addVariant("short", `@media ${shortQuery}`);
+    }),
     // `delay-*` for animations, read from the same stagger scale.
     plugin(({ matchUtilities, theme }) => {
       matchUtilities({ "animate-delay": (value: string) => ({ animationDelay: value }) }, { values: theme("animationDelay") });

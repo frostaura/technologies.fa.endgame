@@ -17,7 +17,10 @@ public static class PageChrome
             --font-display: "Space Grotesk Variable", "Space Grotesk", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
           }
           * { box-sizing: border-box; }
-          body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: calc(var(--space) * 1.5);
+          body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center;
+                 padding: max(calc(var(--space) * 1.5), env(safe-area-inset-top)) max(calc(var(--space) * 1.5), env(safe-area-inset-right))
+                          max(calc(var(--space) * 1.5), env(safe-area-inset-bottom)) max(calc(var(--space) * 1.5), env(safe-area-inset-left));
+                 -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
                  background: var(--ground); color: var(--ink); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
           main { width: 100%; max-width: var(--measure); background: var(--surface); border: 1px solid var(--border);
                  border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: calc(var(--space) * 2.5); }
@@ -44,5 +47,16 @@ public static class PageChrome
           .note { margin-top: var(--space); font-size: 0.875rem; }
           .error { margin-top: var(--space); padding: calc(var(--space) * 0.75); border-radius: var(--radius); background: var(--danger-tint); color: var(--danger); font-size: 0.9rem; }
           [hidden] { display: none !important; }
+          /* A phone: the card keeps its edge but gives its room to the words; every action is a full-width tap target. */
+          @media (max-width: 30rem) {
+            body { place-items: start center; padding: max(var(--space), env(safe-area-inset-top)) max(calc(var(--space) * 0.75), env(safe-area-inset-right))
+                   max(var(--space), env(safe-area-inset-bottom)) max(calc(var(--space) * 0.75), env(safe-area-inset-left)); }
+            main { padding: calc(var(--space) * 1.5) calc(var(--space) * 1.25); border-radius: var(--radius); }
+            h1 { font-size: 1.375rem; }
+            .actions { flex-direction: column; }
+            .actions > button, .actions > .button { width: 100%; }
+            section { margin-top: calc(var(--space) * 1.25); padding-top: calc(var(--space) * 1.25); }
+            .note a { display: inline-flex; align-items: center; min-height: 44px; }
+          }
         """;
 }

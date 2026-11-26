@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
 import { useClearAutonomyMutation, useClearRuleSetMutation, useGetAutonomyQuery, useGetMeQuery, useSetAutonomyMutation, useSetRuleSetMutation } from "@/store/api";
 import type { Autonomy, RuleSet, Tree } from "@/store/types";
+import { Fold } from "@/components/Fold";
+import { formatNumber, plural } from "@/lib/format";
 import { AppShell } from "../shell/AppShell";
 import { KNOWN_TOOLS, placements, scopeName, toolLabel } from "../workforce/workforceModel";
 
@@ -230,11 +232,13 @@ function RuleSets({ autonomy, tree, admin }: { autonomy: Autonomy; tree: Tree | 
         </h2>
         <p className="text-ink-body">What the workforce may not do, what needs your sign-off first, and what it may do freely. A stage's own rules add to those for every stage.</p>
       </div>
-      <ul className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
-        {autonomy.stages.map((stage) => (
-          <StageRules key={stage} stage={stage} rule={autonomy.ruleSets.find((r) => r.stage === stage) ?? null} scope={autonomy.scope} tree={tree} admin={admin} />
-        ))}
-      </ul>
+      <Fold title="The stages" summary={`${plural(autonomy.stages.length, "stage")}, ${formatNumber(autonomy.ruleSets.length)} with rules of their own`}>
+        <ul className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+          {autonomy.stages.map((stage) => (
+            <StageRules key={stage} stage={stage} rule={autonomy.ruleSets.find((r) => r.stage === stage) ?? null} scope={autonomy.scope} tree={tree} admin={admin} />
+          ))}
+        </ul>
+      </Fold>
     </section>
   );
 }

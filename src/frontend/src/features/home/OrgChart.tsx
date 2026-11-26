@@ -1,10 +1,13 @@
+import { useEffect, useId, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
+import { useViewport } from "@/lib/useViewport";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Bar } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { formatCredits, formatNumber, headlineCredits, headlineNumber, percent, timeAgo } from "@/lib/format";
+import { formatCredits, formatNumber, headlineCredits, headlineNumber, percent, plural, timeAgo } from "@/lib/format";
 import { effectiveRole, roleRank } from "@/lib/roles";
 import { useGetMeQuery } from "@/store/api";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
@@ -101,12 +104,27 @@ function DivisionColumn({
   const trail = [orgName, division.name];
   const selected = selection?.scope === scope && !selection.employeeId;
   const archived = isArchived(division);
+  // A phone folds each division to its header, the first one open: the whole organisation reads in a screen or two.
+  const phone = useViewport() === "phone";
+  const [open, setOpen] = useState(index === 0);
+  const folded = phone && !open;
+  const bodyId = useId();
+  const body = useRef<HTMLDivElement>(null);
+  // Something inside asked to be shown (the academy pointing at a project in a folded division): open.
+  useEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    const reveal = () => setOpen(true);
+    el.addEventListener("endgame:reveal", reveal);
+    return () => el.removeEventListener("endgame:reveal", reveal);
+  }, []);
+  const apps = division.projects.reduce((n, p) => n + p.apps.length, 0);
   return (
     <div className={cn("flex min-w-0 flex-col", RISE, stagger(index + 2))}>
       <div
         data-archived={archived || undefined}
         className={cn(
-          "relative flex items-center justify-between gap-3 rounded-md border bg-surface px-5 py-4 shadow-card",
+          "relative flex items-center justify-between gap-3 rounded-md border bg-surface px-5 py-4 shadow-card max-sm:flex-wrap max-sm:gap-y-2 max-sm:px-4 max-sm:py-3",
           archived && "border-dashed bg-ground shadow-none",
           selected && "ring-2 ring-primary",
         )}
@@ -124,11 +142,11 @@ function DivisionColumn({
             {division.name.trim()[0]?.toUpperCase()}
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="text-xs text-ink-muted">Division</span>
-            <span className="truncate font-display text-lg font-semibold">{division.name}</span>
+            <span className="text-xs text-ink-muted">Division{phone && ` · ${plural(division.projects.length, "project")}, ${plural(apps, "app")}`}</span>
+            <span className="truncate font-display text-lg font-semibold max-sm:whitespace-normal max-sm:break-words">{division.name}</span>
           </span>
         </button>
-        <div className="relative z-10 flex flex-wrap items-center justify-end gap-2">
+        <div className="relative z-10 flex flex-wrap items-center justify-end gap-2 max-sm:w-full max-sm:justify-start">
           {archived && <Badge tone="quiet">Archived</Badge>}
           <Badge tone={archived ? "quiet" : tone.chip} className="px-3 py-1 text-sm">
             {formatCredits(division.spend.monthCredits)}
@@ -138,14 +156,27 @@ function DivisionColumn({
               Manage
             </Link>
           )}
+          {phone && (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={bodyId}
+              aria-label={open ? `Fold ${division.name}` : `Show what is in ${division.name}`}
+              onClick={() => setOpen((x) => !x)}
+              className="ml-auto flex min-h-touch min-w-touch items-center justify-center rounded-xs text-ink-muted hover:bg-ground"
+            >
+              <ChevronDown aria-hidden className={cn("size-5 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+            </button>
+          )}
         </div>
       </div>
+      <div id={bodyId} ref={body} data-fold-body="" className={folded ? "hidden" : "contents"}>
       {division.workers.length > 0 && (
-        <div className="ml-wire border-l-2 border-transparent pl-6 pt-3">
+        <div className="ml-wire border-l-2 border-transparent pl-6 pt-3 max-sm:ml-4 max-sm:pl-3">
           <Workers workers={division.workers} scope={scope} trail={trail} selection={selection} onSelect={onSelect} />
         </div>
       )}
-      <div className={cn("relative ml-wire gap-3.5 border-l-2 pl-6 pt-4", wide ? "grid grid-cols-1 items-start lg:grid-cols-2 2xl:grid-cols-3" : "flex flex-col", tone.wire)}>
+      <div className={cn("relative ml-wire gap-3.5 border-l-2 pl-6 pt-4 max-sm:ml-4 max-sm:pl-3 max-sm:pt-3", wide ? "grid grid-cols-1 items-start lg:grid-cols-2 2xl:grid-cols-3" : "flex flex-col", tone.wire)}>
         {isActive(division) && (
           <span aria-hidden className={cn("absolute -left-1.5 size-2.5 animate-travel rounded-full ring-4 motion-reduce:hidden", tone.signal)} />
         )}
@@ -156,6 +187,7 @@ function DivisionColumn({
             <ProjectCard key={project.id} project={project} scope={`${scope}/${project.slug}`} trail={[...trail, project.name]} selection={selection} onSelect={onSelect} manage={manage} />
           ))
         )}
+      </div>
       </div>
     </div>
   );
@@ -186,7 +218,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
     <article
       aria-label={project.name}
       className={cn(
-        "relative flex flex-col gap-3 rounded-md px-5 py-4 transition duration-200 motion-reduce:transition-none",
+        "relative flex flex-col gap-3 rounded-md px-5 py-4 transition duration-200 motion-reduce:transition-none max-sm:px-4",
         atVerdict
           ? "border-2 border-dashed border-attention-dash bg-attention-wash"
           : archived
@@ -260,7 +292,7 @@ function AppRow({ app }: { app: TreeApp }) {
   const archived = isArchived(app);
   const chips: Chip[] = archived ? [{ label: "Archived", tone: "quiet" }] : appChips(app);
   return (
-    <li className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3">
+    <li className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3 max-sm:px-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href={paths.app(app.id)} className="relative z-10 flex items-center gap-2 rounded-xs font-semibold text-ink hover:text-primary-hover">
           <Icon name="app" tinted className="size-4" />

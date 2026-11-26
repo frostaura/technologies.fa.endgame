@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { expectNoSidewaysScroll, isPhone, mockRequests, useScenario } from "./support.ts";
+import { expect } from "@playwright/test";
+import { balanceLink, closeSheet, conversation, expectNoSidewaysScroll, isPhone, isPhoneLayout, mockRequests, needsYou, setMode, useScenario, test } from "./support.ts";
 
 /**
  * The console's main flows, end to end in a real browser, against the TEST-ONLY mock control
@@ -49,39 +49,47 @@ test.describe("home — the living org chart", () => {
     await page.goto("/");
     const chart = page.getByRole("region", { name: "Organisation chart" });
     await expect(chart.getByRole("article", { name: "Booking" }).getByText("Always on")).toBeVisible();
-    await expect(page.getByRole("region", { name: "Needs you" }).getByRole("link")).toHaveCount(4);
-    await expect(page.getByRole("heading", { name: "Talking to Northwind" })).toBeVisible();
+    await expect((await needsYou(page)).getByRole("link")).toHaveCount(4);
+    await closeSheet(page);
+    await expect((await conversation(page)).getByRole("heading", { name: "Talking to Northwind" })).toBeVisible();
+    await closeSheet(page);
 
     await chart.getByRole("button", { name: /Research/ }).first().click();
-    await expect(page.getByRole("navigation", { name: "Where you are" })).toHaveText("Northwind/Research");
-    await expect(page.getByRole("heading", { name: "Talking to Research" })).toBeVisible();
+    // A phone names the level in its header, with the levels above in small type (SHL-03).
+    if (isPhoneLayout(page)) await expect(page.getByRole("button", { name: "Where you are: Northwind, then Research" })).toBeVisible();
+    else await expect(page.getByRole("navigation", { name: "Where you are" })).toHaveText("Northwind/Research");
+    const talk = await conversation(page);
+    await expect(talk.getByRole("heading", { name: "Talking to Research" })).toBeVisible();
 
-    await page.getByLabel("Message Research").fill("What needs me today?");
-    await page.getByRole("button", { name: "Send" }).click();
-    await expect(page.getByText("About “What needs me today?”: one verdict is waiting and one approval.")).toBeVisible();
+    await talk.getByLabel("Message Research").fill("What needs me today?");
+    await talk.getByRole("button", { name: "Send" }).click();
+    await expect(talk.getByText("About “What needs me today?”: one verdict is waiting and one approval.")).toBeVisible();
     const sent = (await mockRequests()).find((r) => r.path === "/api/conversations");
     expect(sent?.body).toEqual({ scope: "northwind/research", message: "What needs me today?" });
+    await closeSheet(page);
 
     await chart.getByRole("button", { name: /Ada · Product researcher/ }).click();
-    await expect(page.getByRole("heading", { name: "Talking to Ada" })).toBeVisible();
+    await expect((await conversation(page)).getByRole("heading", { name: "Talking to Ada" })).toBeVisible();
     await expectNoSidewaysScroll(page);
   });
 
   test("the conversation survives a reload: earlier turns are read back, new ones appended once", async ({ page }) => {
     await useScenario("populated");
     await page.goto("/");
-    const log = page.getByRole("log", { name: "Conversation with Northwind" });
+    const talk = await conversation(page);
+    const log = talk.getByRole("log", { name: "Conversation with Northwind" });
     await expect(log.getByText("Is anything over budget?")).toBeVisible();
     await expect(log.getByText("Nothing is over budget. Booking desk is at 310 of its 500 credit cap.")).toBeVisible();
 
-    await page.getByLabel("Message Northwind").fill("Anything to approve?");
-    await page.getByRole("button", { name: "Send" }).click();
+    await talk.getByLabel("Message Northwind").fill("Anything to approve?");
+    await talk.getByRole("button", { name: "Send" }).click();
     const reply = "About “Anything to approve?”: one verdict is waiting and one approval.";
     await expect(log.getByText(reply)).toBeVisible();
     // The owner's own message is in the run's log too; it is drawn once, as theirs.
     await expect(log.getByText("Anything to approve?", { exact: true })).toHaveCount(1);
 
     await page.reload();
+    await conversation(page);
     await expect(log.getByText(reply)).toBeVisible();
     await expect(log.getByText("Anything to approve?", { exact: true })).toHaveCount(1);
     const texts = await log.locator("p").allTextContents();
@@ -93,9 +101,25 @@ test.describe("home — the living org chart", () => {
     await useScenario("populated");
     await page.goto("/apps/app1");
     await expect(page.getByRole("heading", { name: "Booking desk", exact: true })).toBeVisible();
-    const phone = isPhone(page);
-    // The narrowest phone in common use as well as the project's own.
-    for (const [mode, width] of phone ? ([["Normal", 0], ["Technical", 0], ["Normal", 375], ["Technical", 375]] as const) : ([["Normal", 0], ["Technical", 0]] as const)) {
+    if (isPhone(page)) {
+      // A phone (SHL-07): one header row; the balance in the bottom bar; the mode and signing out under More.
+      for (const width of [0, 375]) {
+        if (width) await page.setViewportSize({ width, height: 812 });
+        const banner = page.getByRole("banner");
+        const rows = await banner.evaluate((el) => new Set([...(el.firstElementChild as HTMLElement).children].map((c) => Math.round(c.getBoundingClientRect().top))).size);
+        expect(rows, `one header row${width ? ` at ${width}px` : ""}`).toBe(1);
+        const bar = page.getByRole("navigation", { name: "Main" });
+        await expect(bar.getByRole("link", { name: /^Credits: .* left$/ })).toBeVisible();
+        await bar.getByRole("button", { name: /^More/ }).click();
+        const more = page.getByRole("dialog", { name: "More" });
+        for (const mode of ["Technical", "Normal"]) await more.getByRole("group", { name: "Mode" }).getByRole("button", { name: mode }).click();
+        await expect(more.getByRole("button", { name: "Sign out" })).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expectNoSidewaysScroll(page);
+      }
+      return;
+    }
+    for (const [mode, width] of [["Normal", 0], ["Technical", 0]] as const) {
       if (width) await page.setViewportSize({ width, height: 812 });
       await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: mode }).click();
       const banner = page.getByRole("banner");
@@ -113,7 +137,7 @@ test.describe("home — the living org chart", () => {
         }
         return count;
       });
-      expect(rows, `${mode} mode${width ? ` at ${width}px` : ""}`).toBeLessThanOrEqual(phone ? 2 : 1);
+      expect(rows, `${mode} mode`).toBeLessThanOrEqual(1);
       await expectNoSidewaysScroll(page);
     }
     await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Normal" }).click();
@@ -127,6 +151,14 @@ test.describe("home — the living org chart", () => {
     for (const width of [390, 600, 680, 760, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       const banner = page.getByRole("banner");
+      // Under 640 px the header is the phone's one row (SHL-03, SHL-07): the way up, where you are in full, your account.
+      if (width < 640) {
+        await expect(banner.getByRole("link", { name: /^Up to / })).toBeVisible();
+        await expect(banner.getByRole("button", { name: /^Where you are: .*Booking desk$/ })).toBeVisible();
+        await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+        await expectNoSidewaysScroll(page);
+        continue;
+      }
       await expect(banner.getByRole("navigation", { name: "Where you are" })).toBeVisible();
       const layout = await banner.evaluate((el) => {
         const box = (e: Element | null) => e?.getBoundingClientRect() ?? null;
@@ -216,13 +248,23 @@ test.describe("from idea to verdict", () => {
     await approval.getByRole("button", { name: "Approve" }).click();
     await expect(page.getByRole("link", { name: /The verdict is ready/ })).toBeVisible({ timeout: 15_000 });
 
-    await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" }).click();
+    await setMode(page, "Technical");
+    // A phone draws the latest steps first, twelve at a time (RUN-01): every step, for this check.
+    if (isPhoneLayout(page)) for (let more = page.getByRole("button", { name: /^Show \d+ earlier step/ }); await more.isVisible(); ) await more.click();
     await expect(steps).toContainText("Denied: run");
     await expect(steps).toContainText("Rule: protected floor: no shell in research");
     await expect(steps).toContainText("Model replied: fixture/model-small");
     await page.reload();
-    await expect(page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("link", { name: "System" })).toBeVisible();
+    if (isPhoneLayout(page)) {
+      // On a phone the mode and System status are under More.
+      await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /^More/ }).click();
+      const more = page.getByRole("dialog", { name: "More" });
+      await expect(more.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" })).toHaveAttribute("aria-pressed", "true");
+      await expect(more.getByRole("link", { name: /System status/ })).toBeVisible();
+    } else {
+      await expect(page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("link", { name: "System" })).toBeVisible();
+    }
   });
 
   test("a run is paused and resumed from the trace", async ({ page }) => {
@@ -319,7 +361,7 @@ test.describe("app and credits", () => {
   test("credits show the balance, the cascade of budgets, and a failed read as a failure", async ({ page }) => {
     await useScenario("populated");
     await page.goto("/");
-    await page.getByRole("link", { name: /credits left/ }).click();
+    await balanceLink(page).click();
     await expect(page.getByRole("heading", { name: "9,548" })).toBeVisible();
     await expect(page.getByRole("list", { name: "Budgets" }).getByRole("listitem")).toHaveCount(5);
     await expect(page.getByText("Usually 12% under the estimate")).toBeVisible();
@@ -327,7 +369,9 @@ test.describe("app and credits", () => {
     await useScenario("credits-fail");
     await page.reload();
     await expect(page.getByRole("alert").filter({ hasText: "Credits could not be loaded" })).toBeVisible();
-    await expect(page.getByText("Balance unavailable")).toBeVisible();
+    // A phone's bottom bar says it in the balance's place (SHL-07).
+    if (isPhoneLayout(page)) await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Credits: the balance could not be read" })).toBeVisible();
+    else await expect(page.getByText("Balance unavailable")).toBeVisible();
   });
 });
 
@@ -416,8 +460,12 @@ test.describe("every screen, every width", () => {
     test(`${name} never scrolls sideways and every control is reachable`, async ({ page }) => {
       await useScenario(scenario);
       await page.goto(path);
+      // On a phone a conversation is in its sheet, one tap away (SHL-07).
+      const where = /^Talk(ing)? to /.test(heading) && isPhoneLayout(page) ? await conversation(page) : page;
       // Exact: an app page also heads its "Change {app}" panel and its conversation with the app's name.
-      await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+      // (The conversation's sheet is named by the same words, for a screen reader: the page's own heading is the last.)
+      await expect(where.getByRole("heading", { name: heading, exact: true }).last()).toBeVisible();
+      await closeSheet(page);
       await expectNoSidewaysScroll(page);
       // Every button and link has a name a screen reader can read out.
       const unnamed = await page.locator("button, a[href]").evaluateAll((els) => els.filter((el) => !(el.textContent ?? "").trim() && !el.getAttribute("aria-label")).length);

@@ -47,7 +47,13 @@ The example feature is **Notes**; replace it with the real product, keeping its 
   in; API calls get 401 with `signInUrl`. Take `EndgameUser?` where signing in is optional.
 - **Front end:** primitives from `@endgame/appkit/ui`; classes from the token layer only
   (`bg-surface`, `text-ink-muted`, `text-primary`). No hex colours, no `p-[13px]`, no fonts or
-  scripts from other hosts. Light, calm, one accent. Use the width on large screens.
+  scripts from other hosts. Light, calm, one accent. Use the width on large screens (columns, a
+  side panel — never one narrow centred column), and make every page whole on a phone: one column
+  under `sm`, nothing wider than the screen, buttons and links at least 44px tall (`min-h-11`),
+  labels above fields, the main action full width (`max-sm:w-full`), `pt-safe-t`/`pb-safe-b` where a
+  page meets the screen's edge, `min-h-dvh` rather than `min-h-screen`.
+- **The app's name** is written once, in `web/src/appName.ts` (and `web/index.html`'s `<title>`). Each
+  page names itself with `usePageTitle("All notes")`, which titles the tab "All notes · Notes".
 - **Errors in the UI:** `api()` throws `ValidationError` (show `errors` by field),
   `NotSignedInError` (go to `signInUrl`), `NotFoundError`, `BudgetExhaustedError`.
 - **Reads stay current by themselves:** after any successful write through `api()` (POST, PUT,

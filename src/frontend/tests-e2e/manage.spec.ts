@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { expectNoSidewaysScroll, isPhone, mockRequests, useScenario } from "./support.ts";
+import { expect } from "@playwright/test";
+import { expectNoSidewaysScroll, isPhone, isPhoneLayout, mockRequests, useScenario, test } from "./support.ts";
 
 /**
  * Managing the organisation, caps and limits, the app page by role, starting an idea where it
@@ -25,7 +25,10 @@ test.describe("managing the tree", () => {
     await form.getByRole("button", { name: "Add the division" }).click();
     await expect(page).toHaveURL(/scope=northwind%2Ffield-ops/);
     const outline = page.getByRole("navigation", { name: "Every part of the organisation" });
+    // A phone takes Manage in two steps (SHL-07): the part chosen, and the outline one step back.
+    if (isPhoneLayout(page)) await page.getByRole("link", { name: "Every part of the organisation" }).click();
     await expect(outline.getByRole("button", { name: "Field Operations" })).toBeVisible();
+    if (isPhoneLayout(page)) await outline.getByRole("button", { name: "Field Operations" }).click();
 
     // What it is: inherited from the organisation, then said here.
     const what = page.getByRole("list", { name: "What Field Operations is" });
@@ -54,6 +57,7 @@ test.describe("managing the tree", () => {
     await page.getByRole("textbox", { name: "Name" }).fill("Court booking");
     await page.getByRole("button", { name: "Save the name" }).click();
     await expect(page.getByText("It is called Court booking now.")).toBeVisible();
+    if (isPhoneLayout(page)) await page.getByRole("link", { name: "Every part of the organisation" }).click();
     await expect(page.getByRole("navigation", { name: "Every part of the organisation" }).getByRole("button", { name: "Court booking" })).toBeVisible();
 
     await page.goto("/tree?scope=northwind/research");

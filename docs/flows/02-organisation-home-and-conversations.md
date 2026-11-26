@@ -140,6 +140,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   2. The person selects a card and is taken to that page (other areas).
 - **You know it worked when:** the card's subject page opens.
 - **Variations and refusals:**
+  - On a phone the strip is one row, "{n} things need you", naming the kinds waiting; it opens the sheet "Needs you" with every card.
   - With nothing waiting, the strip shows "Nothing needs you right now: no verdict, approval or hire is waiting, and no one is idle." — exactly the four kinds it checks. Budgets are told in notifications (NOTE).
   - Someone with a role on only part of the tree sees only items on the nodes they can see.
   - A do-not-build verdict reads its idea (`GET /api/ideas/{id}`) to learn whether research refused it over a red line; until that answers, it reads as any do-not-build verdict.
@@ -191,7 +192,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **You know it worked when:** the breadcrumb's last step and the conversation heading "Talking to {name}" both show what you selected.
 - **Variations and refusals:**
   - **An app cannot be selected.** App rows are links to the app page (ORG-10), so the conversation is never scoped to an app from home. **Spec mismatch:** the spec says the conversation can be scoped to "an app" and that "Selecting a node opens it". Selecting a division or project only re-scopes; each has its "Manage" link instead (TREE-13).
-  - On a phone, the breadcrumb shows only its last two steps after "…".
+  - On a phone the header names the level selected, with the levels above it in small type; **"Up to {level}"** selects the level above, and tapping the name lists every level (SHL-03). Each division on the chart opens folded, the first one open: its header says how many projects and apps it holds, and its chevron shows or folds them.
   - A selection that no longer exists in the tree resets to where home starts.
   - An employee chip shown on a project card can belong to one of its apps, but the selection made is the project plus that employee.
 - **Where:** `HomeView.tsx` (`crumbsFor`), `OrgChart.tsx`, `shell/AppShell.tsx` (`Breadcrumb`), `store/uiSlice.ts` (`selected`).
@@ -718,12 +719,13 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 
 ### ONT-04 Read either graph on a phone or with a screen reader
 - **Who:** any member.
-- **Starts at:** as ONT-02 / ONT-03, below md width (or any width, for a screen reader).
+- **Starts at:** as ONT-02 / ONT-03, below md width (or any width, for a screen reader). On a phone the three view tabs read "Organisation", "Who works" and "Data flow" (their full names are read out).
 - **Needs:** —
 - **Level:** Foundation · **Learn first:** ONT-01 · **What you learn:** the graph is also a plain list.
 - **Steps:**
   1. Below md width the drawing is hidden, and a list takes its place; a screen reader reads the list at any width.
   2. Each card in the list shows a node that has outgoing edges: its type, its name (a link for employees, contractors and apps), and lines like "works on {Name} ({label})".
+  3. On a phone the list is grouped by kind — "Organisations · 1", "Employees · 12", "Projects · 8"… — each group a row naming its first few, the first group open, the rest one tap away.
 - **You know it worked when:** you see a list of cards under the tabs instead of a drawing.
 - **Variations and refusals:** none further.
 - **Where:** `OntologyView.tsx`.
@@ -807,7 +809,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   6. The Runner answers using `read_organisation`. The reply streams in as a grey bubble headed "Endgame", drawn from its markdown: bold, italics, lists, inline code and links read as formatting, never as asterisks or backticks, and nothing in it is ever run as HTML. The runner's closing word is not printed beside a reply, so each thing is said once; a notice with a reason of its own (the budget ran out) stays, in the attention colour. When the run did tool work, the link "See how it got there" appears (TALK-12).
   7. Up to two lines under the log show employees working anywhere in the tree: "{Name} is {activity}" as a sentence: a run's title becomes what they are doing — "Theo is making a change: {request}", "Theo is building: {name}", "Iris is researching: {idea}" — an activity in "-ing" keeps "is", and anything else reads "{Name}: {activity}".
 - **You know it worked when:** a grey reply bubble appears under your message.
-- **Variations and refusals:** see TALK-13 to TALK-15. If the cost cannot be worked out: "What a message costs could not be worked out: {reason} Its cost is still held before each step and shown with the reply." and Send stays available.
+- **Variations and refusals:** see TALK-13 to TALK-15. On a phone the conversation is in a full-screen sheet opened by **Talk** in the bottom bar (SHL-07); on a tablet it is under the chart, and **"Talk"** in the header brings it into view. If the cost cannot be worked out: "What a message costs could not be worked out: {reason} Its cost is still held before each step and shown with the reply." and Send stays available.
 - **Where:** `ConversationDock.tsx`; `POST /api/conversations/estimate`, `POST`/`GET /api/conversations` (`WorkEndpoints`); `FactoryEstimates.ConversationAsync`; `Runner/Workflows/ConversationWorkflow.cs`; `Runner/Agents/RunnerTools.cs` (`ReadOrganisationTool`); `GET /api/runs/{id}/events`.
 - **Reachable from:** UI.
 - **Covered by tests:**
@@ -1113,14 +1115,14 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   2. Escape, or a click outside, closes it.
   3. Following an item, or "See all", also closes it and goes there.
 - **You know it worked when:** the panel lists your latest notices.
-- **Variations and refusals:** a crash in the panel shows "Your notifications stopped working." (SYS-08). On a phone the bell is a link to the full feed instead.
+- **Variations and refusals:** a crash in the panel shows "Your notifications stopped working." (SYS-08). On a phone there is no bell: **Alerts** in the bottom bar, with the unread count, opens the full feed (SHL-07).
 - **Where:** `NotificationsBell.tsx`.
 - **Reachable from:** UI.
 - **Covered by tests:** `Notifications.test.tsx` (the bell).
 
 ### NOTE-03 Read the full feed
 - **Who:** any member.
-- **Starts at:** `/notifications`, reached by the bell on a phone (a link), "See all", or a direct address.
+- **Starts at:** `/notifications`, reached by **Alerts** in a phone's bottom bar, "See all", or a direct address.
 - **Needs:** —
 - **Level:** Foundation · **Learn first:** NOTE-01 · **What you learn:** what you are told about, and that urgent ones are e-mailed.
 - **Steps:**

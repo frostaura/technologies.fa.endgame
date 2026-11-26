@@ -475,6 +475,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - Six failed reconnects: "The live connection to this work could not be kept open. What is shown is everything received so far." with **"Reconnect"**.
   - A missing run: "This work could not be found" — with "This was not found, or you cannot see it." and "Back to the org chart" in place of "Try again" (a not-found is an answer, so it does not say "Nothing here is known until it loads."). A failed read: "This work could not be loaded" with a retry.
   - A finished run with no steps: "This work recorded no steps."
+  - On a phone the title is cut to two lines with **"Show all of it"**; an approval waiting comes straight under it, and once scrolled out of sight leaves the bar "Waiting for your approval" pinned at the top, whose **"Answer"** scrolls back to it. The cost tiles are two by two; "The plan" and "Tasks" are folded rows saying how far they got; "Step by step" shows the latest step first, twelve at a time, with **"Show 12 earlier steps"** at the foot.
 - **Where:** `RunView.tsx`, `useRunStream.ts`; `GET /api/runs/{id}`, `GET /api/runs/{id}/events?after=`.
 - **Reachable from:** UI; MCP `run_get`, `run_events`.
 - **Covered by tests:** `RunView.test.tsx` (including "draws a long build promptly, folding its earlier steps…"); `useRunStream.test.ts`; `RunsAndTasksTests.The_event_stream_is_server_sent_events_resumable…`.

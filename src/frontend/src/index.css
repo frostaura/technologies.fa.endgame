@@ -10,16 +10,32 @@
   html {
     @apply bg-ground text-ink antialiased;
     font-feature-settings: "cv11", "ss01";
+    /* A phone keeps the type the person chose; it does not inflate it on its own when turned. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A sheet is open: the page behind it stays where it was. */
+  html[data-sheet-open] {
+    overflow: hidden;
   }
 
   body {
-    @apply min-h-screen bg-ground font-sans text-sm text-ink;
+    @apply min-h-dvh bg-ground font-sans text-sm text-ink;
   }
 
   h1,
   h2,
   h3 {
     @apply font-display tracking-tight;
+  }
+
+  /* A phone zooms into a text box set smaller than 16px when it takes the focus: on a phone, boxes are 16px. */
+  input,
+  select,
+  textarea {
+    @apply max-sm:text-base;
   }
 
   :focus-visible {
@@ -36,5 +52,15 @@
       transition: none !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+@layer utilities {
+  /* A row that scrolls sideways on a phone (chips, tabs) shows no bar of its own: its cut-off edge says it scrolls. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }

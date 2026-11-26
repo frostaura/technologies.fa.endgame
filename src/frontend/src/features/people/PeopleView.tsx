@@ -17,6 +17,7 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { useChangeRoleMutation, useGetMeQuery, useGetMembersQuery, useRemoveMemberMutation } from "@/store/api";
 import { inviteMember, reissueInvitation } from "@/store/sensitive";
 import type { Member, MemberInvitation, MemberRole, Tree } from "@/store/types";
+import { Fold } from "@/components/Fold";
 import { AppShell } from "../shell/AppShell";
 import { placements, scopeName } from "../workforce/workforceModel";
 
@@ -48,7 +49,12 @@ export function PeopleView() {
   const [outcome, setOutcome] = useState<{ done: boolean; text: string } | null>(null);
 
   return (
-    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), ...(scope.includes("/") ? [{ label: here }] : []), { label: "People" }]} aside={<RolesAside />}>
+    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), ...(scope.includes("/") ? [{ label: here }] : []), { label: "People" }]} aside={
+        <Fold title="What each role may do" summary="Owner, Admin, Builder and Viewer">
+          <RolesAside />
+        </Fold>
+      }
+    >
       <header className={cn("flex flex-wrap items-end justify-between gap-4", RISE)}>
         <div className="flex flex-col gap-1.5">
           <h1 className="flex items-center gap-3 text-3xl font-semibold">

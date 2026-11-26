@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { expectNoSidewaysScroll, isPhone, mockRequests, useScenario } from "./support.ts";
+import { expect } from "@playwright/test";
+import { closeSheet, conversation, expectNoSidewaysScroll, isPhone, isPhoneLayout, mockRequests, needsYou, setMode, useScenario, test } from "./support.ts";
 
 /**
  * The verdict, the workforce, hiring and autonomy, end to end in a real browser against the
@@ -66,13 +66,16 @@ test.describe("home — the workforce on the chart", () => {
     const chart = page.getByRole("region", { name: "Organisation chart" });
     await expect(chart.getByText("Lin: Building Field notes").first()).toBeVisible();
     await expect(chart.getByText("2 contractors · competitor sweep")).toBeVisible();
-    const needs = page.getByRole("region", { name: "Needs you" });
+    const needs = await needsYou(page);
     await expect(needs.getByText("Hire proposed")).toBeVisible();
     await expect(needs.getByText("About 300 credits a month.", { exact: false })).toBeVisible();
     await expect(needs.getByText("Ruth has had nothing to do for 14 days")).toBeVisible();
+    await closeSheet(page);
 
     await page.getByRole("tab", { name: "Who works on what" }).click();
-    const list = page.getByRole("list", { name: "Who works on what" });
+    // A phone groups the list by kind (ONT-04).
+    const kind = isPhoneLayout(page) ? "group" : "list";
+    const list = page.getByRole(kind, { name: "Who works on what" });
     if (isPhone(page)) {
       await expect(list.getByRole("link", { name: "Lin · Engineer" })).toBeVisible();
       await expect(list).toContainText("works on Field notes (now on Building Field notes)");
@@ -80,8 +83,8 @@ test.describe("home — the workforce on the chart", () => {
       await expect(page.getByRole("region", { name: "Who works on what, drawn" })).toBeVisible();
     }
     await page.getByRole("tab", { name: "How data flows" }).click();
-    await expect(page.getByRole("list", { name: "How data flows" })).toContainText("sends data to AI inside apps");
-    await expect(page.getByRole("list", { name: "How data flows" })).not.toContainText("models");
+    await expect(page.getByRole(kind, { name: "How data flows" })).toContainText("sends data to AI inside apps");
+    await expect(page.getByRole(kind, { name: "How data flows" })).not.toContainText("models");
     await expectNoSidewaysScroll(page);
   });
 
@@ -89,11 +92,12 @@ test.describe("home — the workforce on the chart", () => {
     await useScenario("populated");
     await page.goto("/");
     await page.getByRole("region", { name: "Organisation chart" }).getByRole("button", { name: /Ada · Product researcher/ }).click();
-    await expect(page.getByRole("heading", { name: "Talking to Ada" })).toBeVisible();
-    await page.getByLabel("Message Ada").fill("What did you learn this week?");
-    await page.getByRole("button", { name: "Send" }).click();
-    expect((await mockRequests()).find((r) => r.path === "/api/conversations" && r.method === "POST")?.body).toEqual({ scope: "northwind/research/recipes", message: "What did you learn this week?", employeeId: "e1" });
-    await page.getByRole("link", { name: "See Ada’s job, record and memory" }).click();
+    const talk = await conversation(page);
+    await expect(talk.getByRole("heading", { name: "Talking to Ada" })).toBeVisible();
+    await talk.getByLabel("Message Ada").fill("What did you learn this week?");
+    await talk.getByRole("button", { name: "Send" }).click();
+    await expect.poll(async () => (await mockRequests()).find((r) => r.path === "/api/conversations" && r.method === "POST")?.body).toEqual({ scope: "northwind/research/recipes", message: "What did you learn this week?", employeeId: "e1" });
+    await talk.getByRole("link", { name: "See Ada’s job, record and memory" }).click();
     await expect(page.getByRole("heading", { name: "Ada", exact: true })).toBeVisible();
   });
 });
@@ -109,9 +113,9 @@ test.describe("the employee screen", () => {
     await expect(page.getByText("Sweep the competitors of Recipe box.")).toBeVisible();
     await expect(page.getByRole("list", { name: "Memory entries" }).getByRole("listitem")).toHaveCount(3);
     await expect(page.getByText(/1 note merged, 1 removed as out of date, 1 habit corrected/)).toBeVisible();
-    await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" }).click();
+    await setMode(page, "Technical");
     await expect(page.getByText("Standard, for reading and judging (research)")).toBeVisible();
-    await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Normal" }).click();
+    await setMode(page, "Normal");
     await expectNoSidewaysScroll(page);
   });
 
@@ -178,7 +182,7 @@ test.describe("hiring", () => {
   test("a proposal is read from needs you and accepted, with a note", async ({ page }) => {
     await useScenario("populated");
     await page.goto("/");
-    await page.getByRole("region", { name: "Needs you" }).getByRole("link", { name: /A support writer for Software/ }).click();
+    await (await needsYou(page)).getByRole("link", { name: /A support writer for Software/ }).click();
     await expect(page.getByRole("heading", { name: "Noor, Support writer" })).toBeVisible();
     await expect(page.getByText("Light, for quick answers")).toBeVisible();
     await expect(page.getByText("Fits the budget")).toBeVisible();
@@ -245,9 +249,9 @@ test.describe("autonomy and rule sets", () => {
     await research.getByRole("button", { name: "Remove here" }).click();
     await expect(research.getByText("No rules set for this stage")).toBeVisible();
 
-    await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" }).click();
+    await setMode(page, "Technical");
     await expect(page.locator('[data-stage="all"]').getByText("run(rm -rf *)")).toBeVisible();
-    await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Normal" }).click();
+    await setMode(page, "Normal");
     await expectNoSidewaysScroll(page);
   });
 

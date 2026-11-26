@@ -44,7 +44,6 @@ record, estimate accuracy, hosting cost) were fixed and seen fixed on the real s
 - Six steps point at a brief busy word (ASK-01 to ASK-03, IDEA-01, PPL-03, SEC-03); they depend
   on how long the fake server takes and are not covered by the same-moment check, which holds
   only the `ID-` flows.
-- On a phone the console header cuts the organisation name very short beside a long last crumb.
 - Two pictures keep a caption close to its target (HOST-06 variation 1, PPL-08 step 4).
 
 **Product gaps recorded as flows, by decision or still open**
@@ -54,6 +53,12 @@ record, estimate accuracy, hosting cost) were fixed and seen fixed on the real s
   marks, top-up requests, the operator log or the dashboard.
 - The ops rehearsal uses a fixed compose project name; the ops container logs "Cannot load
   library libgssapi_krb5.so.2" at start; CI tears down with `make docker-down`.
+
+**Console tests — owed**
+- The mock-API console suite (`src/frontend/tests-e2e`, run by hand with `CI=1 PW_PORT=… npx
+  playwright test`; not in CI or the Makefile) has 16 failing tests at c43d767 and after the phone
+  lane alike — breadth history, people, assistants, ideas; a refused secret; the hire proposal
+  screen; the workforce chart; the employee's pause and budget — on both its projects.
 
 **Environment**
 - A lane once ran `npm` from the home folder, which holds the founder's own `package.json`

@@ -1,5 +1,5 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
-import { expectNoSidewaysScroll, isPhone, mockRequests, useScenario } from "./support.ts";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { expectNoSidewaysScroll, isPhone, isPhoneLayout, mockRequests, needsYou, setMode, useScenario, test } from "./support.ts";
 
 /**
  * The console's breadth, end to end against the TEST-ONLY mock control plane: the app page's asking,
@@ -21,14 +21,14 @@ async function stepLines(page: Page): Promise<string[]> {
 }
 
 async function technicalMode(page: Page) {
-  await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: "Technical" }).click();
+  await setMode(page, "Technical");
 }
 
 test.describe("plain language", () => {
   test("a needs-you card is a headline and one line", async ({ page }) => {
     await useScenario("populated");
     await page.goto("/");
-    const card = page.getByRole("region", { name: "Needs you" }).getByRole("link", { name: /Court ladder/ });
+    const card = (await needsYou(page)).getByRole("link", { name: /Court ladder/ });
     await expect(card).toContainText("Research says do not build “Court ladder.");
     await expect(card).toContainText("Three club apps already run ladders for free");
     await expect(card).not.toContainText("Commercially it is worse");
@@ -170,7 +170,8 @@ test.describe("notifications", () => {
   test("the bell counts the unread, leads to the feed, and everything can be marked read", async ({ page }) => {
     await useScenario("populated");
     await page.goto("/");
-    const bell = page.getByRole(isPhone(page) ? "link" : "button", { name: "Notifications, 2 unread" });
+    // A phone has Alerts in its bottom bar (SHL-07); a tablet a link; a desktop the bell's panel.
+    const bell = isPhoneLayout(page) ? page.getByRole("link", { name: "Alerts: 2 unread notifications" }) : page.getByRole(isPhone(page) ? "link" : "button", { name: "Notifications, 2 unread" });
     await expect(bell).toBeVisible();
     if (isPhone(page)) await bell.click();
     else {
@@ -182,7 +183,7 @@ test.describe("notifications", () => {
     await expect(feed.getByRole("link", { name: "The security review found 1 problem" })).toHaveAttribute("href", "/runs/run-build");
     await page.locator("main").getByRole("button", { name: "Mark all read" }).click();
     await expect(page.locator("main").getByText("Nothing unread.")).toBeVisible();
-    await expect(page.getByRole(isPhone(page) ? "link" : "button", { name: "Notifications, none unread" })).toBeVisible();
+    await expect(isPhoneLayout(page) ? page.getByRole("link", { name: "Alerts: notifications" }) : page.getByRole(isPhone(page) ? "link" : "button", { name: "Notifications, none unread" })).toBeVisible();
     await expectNoSidewaysScroll(page);
   });
 });

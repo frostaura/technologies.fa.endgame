@@ -173,9 +173,9 @@ Envelope, both ways: `{ source: "endgame-academy" | "endgame-demo", id: string, 
 The demo accepts only `source: "endgame-academy"` and, embedded, only from its parent window. Every
 reply echoes the request's `id`. An `act` is acknowledged at once (`op: "act"`) and finished by
 `{ op: "step-done", args: { id } }`; any failure is `{ op: "error", id, args: { message } }`.
-Unprompted, the demo emits `{ op: "ready", args: { embed } }` once and `{ op: "route", args: { route } }`
+Unprompted, the demo emits `{ op: "ready", args: { embed, viewport } }` once and `{ op: "route", args: { route } }`
 on every change of address. The same operations are `window.endgameDemo.goto | highlight | act |
-clock | reset` for tests.
+clock | layout | reset` for tests.
 
 | op | args | Does |
 | --- | --- | --- |
@@ -183,6 +183,7 @@ clock | reset` for tests.
 | `highlight` | `{ selector? \| testId? \| text? \| label?, note? }`; `{}` clears | Clears the ring and note already shown, waits (up to 4 s) until nothing on screen is still loading — no skeleton, no busy region — then scrolls the control into view (a control taller than the view at its top, its heading kept in view) and rings it, with the note beside it; waits up to 5 s for it. The ring stands off the control into the gap around it, never over a neighbour's words; the note goes below, above or beside the ring, wherever it covers least of the page and never the ring. |
 | `act` | `{ actions: Action[], instant? }` | Clears the step before's ring and note, then performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. `press: "Tab"` moves the focus to the next control, as the browser does; `hover` rests the pointer on a target, so what the page shows on hover appears. A `wait` approves an open (or opening) device sheet; a `wait` for a time then lasts until the control plane has answered what the step started, played or instant alike. |
 | `clock` | `{ play?, pause?, speed?, seek? }` | Plays, pauses, sets the speed, or jumps (a moment's name or milliseconds). |
+| `layout` | `{}` | Replies `{ op: "layout", args: { viewport, width, height, breakpoints, top, bottom } }`: the layout the console draws in this frame (`phone`, `tablet` or `desktop`), the frame's size, the widths it changes at (`lib/tokens.ts` `breakpoints`), and how much of the frame its own header takes at the top and its bottom bar at the foot, so an overlay drawn outside the frame can keep clear of them. Asking never changes anything. |
 | `reset` | `{}` | Rebuilds the scenario's world from scratch and opens its route, as a first visit: every key the console keeps in the tab's storage (all named `endgame.…` — the mode, the organisation chosen, the one entered, the address kept across a sign-in) is removed, and so is what the demo holds for the page's life (an open device sheet, a half-way passkey ceremony, the hosted apps' device and reading lists) — `demo/pristine.ts`. A `goto` to another scenario does the same. |
 
 A highlight that finds nothing replies `{ op: "highlight", args: { found: false } }` and draws
@@ -199,6 +200,19 @@ A step is one moment however it is reached. For the identity flows (`SAME_MOMENT
 the script a second time, catching up step by step as a link straight to a step does, and fails
 when a step's state (`endgameDemo.state()`: the address, who is signed in, the device sheet, the
 heading, once the control plane has answered) differs from the state the step-by-step play left.
+
+**At phone width.** The console's layout depends only on the width (and, on its side, the height)
+of its own viewport — inside the academy's frame, the frame's — so a frame under 640 px wide, or
+under 500 px tall and under 1024 px wide, shows the phone layout and a wider one the tablet
+(640–1023 px) or desktop layout, with no parameter or message: a phone's academy and a desktop's
+play the same scripts. The academy's desktop stage (about 800 px) is the tablet layout, which keeps
+every desktop hook — the conversation stays in the page. On a phone a step can name something the
+page holds but does not show: a section folded to its row (`[data-fold-body]`), a folded division,
+or the conversation in its closed sheet (`[data-talk-target]`). `highlight` and `act` then ask the
+place that holds it to show itself (an `endgame:reveal` event, which the fold and the shell answer by
+opening) and find it once shown, so a lesson written at desktop size needs no phone variant. The
+ring, the cursor and the note are fixed to the frame's viewport above every sheet and the bottom
+bar (`z-50`), so they stay on screen and legible when the target is inside a sheet or the bar.
 
 A target is a CSS `selector`, a `testId`, or visible `text` / accessible `label`, matched in that
 order of preference: buttons, links and other controls by accessible name (exact, then prefix,
@@ -220,7 +234,7 @@ control it did not name, or matched only part of a word ("Mon" inside "month").
   "properties": {
     "source": { "enum": ["endgame-academy", "endgame-demo"] },
     "id": { "type": "string" },
-    "op": { "enum": ["goto", "highlight", "act", "clock", "reset", "ready", "route", "step-done", "error"] },
+    "op": { "enum": ["goto", "highlight", "act", "clock", "layout", "reset", "ready", "route", "step-done", "error"] },
     "args": { "type": "object" }
   },
   "allOf": [
@@ -229,6 +243,8 @@ control it did not name, or matched only part of a word ("Mon" inside "month").
     { "if": { "properties": { "op": { "const": "act" } } }, "then": { "properties": { "args": { "type": "object", "required": ["actions"], "properties": { "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } }, "instant": { "type": "boolean" } } } } } },
     { "if": { "properties": { "op": { "const": "clock" } } }, "then": { "properties": { "args": { "$ref": "#/$defs/clock" } } } },
     { "if": { "properties": { "op": { "const": "step-done" } } }, "then": { "properties": { "args": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } } } } },
+    { "if": { "properties": { "op": { "const": "ready" } } }, "then": { "properties": { "args": { "type": "object", "properties": { "embed": { "type": "boolean" }, "viewport": { "enum": ["phone", "tablet", "desktop"] } } } } } },
+    { "if": { "properties": { "op": { "const": "layout" } } }, "then": { "properties": { "args": { "type": "object", "properties": { "viewport": { "enum": ["phone", "tablet", "desktop"] }, "width": { "type": "number" }, "height": { "type": "number" }, "breakpoints": { "type": "object" }, "top": { "type": "number" }, "bottom": { "type": "number" } } } } } },
     { "if": { "properties": { "op": { "const": "route" } } }, "then": { "properties": { "args": { "type": "object", "required": ["route"], "properties": { "route": { "type": "string" } } } } } },
     { "if": { "properties": { "op": { "const": "error" } } }, "then": { "properties": { "args": { "type": "object", "required": ["message"], "properties": { "message": { "type": "string" } } } } } }
   ],

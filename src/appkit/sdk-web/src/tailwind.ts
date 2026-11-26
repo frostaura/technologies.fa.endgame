@@ -26,6 +26,9 @@ export const endgamePreset: Partial<Config> = {
       },
       maxWidth: layout.width,
       width: { aside: layout.width.aside },
+      spacing: { "safe-t": layout.safe.top, "safe-b": layout.safe.bottom, "safe-l": layout.safe.left, "safe-r": layout.safe.right },
+      minHeight: { touch: layout.touch },
+      minWidth: { touch: layout.touch },
     },
   },
   plugins: [
