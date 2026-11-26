@@ -1,6 +1,6 @@
 ---
 name: technologies-fa-endgame-state
-description: "Whole product merged on main, every gate green; CI fails only at the Docker Hub login. The academy (327 flows, live demo, two PDFs) is on GitHub Pages. Nothing deployed, no users."
+description: "Whole product merged on main, every gate green, CI green; seven multi-arch images published to Docker Hub. The academy (327 flows, live demo, two PDFs) is on GitHub Pages. Nothing deployed, no users."
 type: state
 last_verified: 2026-11-26
 ---
@@ -18,9 +18,10 @@ against [`../docs/specs/endgame-build-plan.md`](../docs/specs/endgame-build-plan
 - **Gates on `main` (run locally, 2026-11-26):** `lint build test demo-check academy-lint
   academy-test site academy-e2e demo-e2e`, all passing with zero warnings. `demo-e2e` plays every
   academy step script and variation against the demo with an empty allow-list.
-- **CI on GitHub:** every job passes except the fourteen Docker Hub publish jobs, which fail at
-  the login until the founder adds the secrets (`ARCH-008`). The Portainer redeploy job is off
-  behind `DEPLOY_ENABLED`. No scheduled workflow exists.
+- **CI on GitHub:** every job passes (2026-11-26, commit 4a027d2), including the fourteen publish
+  jobs and seven multi-arch tags: `frostaura/technologies.fa.endgame-<service>` on Docker Hub,
+  `latest` and `sha-<commit>`, amd64 and arm64. The Portainer redeploy job is off behind
+  `DEPLOY_ENABLED`. No scheduled workflow exists.
 - **The academy is published:** `https://frostaura.github.io/technologies.fa.endgame/` — 327 flows
   (291 for clients, 36 for operators) in five tracks from `docs/flows/`, each step either live in a demo build of the real console
   (an in-browser fake control plane on mock data) or pictured, with search, a free-play demo, a
@@ -44,5 +45,5 @@ services under every app, and ideas from one's own portfolio. Demand is moderate
 layer and weak for the "AI employees" framing. The evidence is in the spec.
 
 **Next gate:** the founder's review of [`../docs/assumptions-log.md`](../docs/assumptions-log.md),
-then the first deployment: Docker Hub and Portainer secrets, the stack on the Mac mini, the
+then the first deployment: the Portainer stack and its secrets, the stack on the Mac mini, the
 operators list, and FrostAura as tenant zero on it.

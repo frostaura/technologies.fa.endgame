@@ -1,13 +1,13 @@
 ---
 name: technologies-fa-endgame-questions
-description: "Founder-owned: Docker Hub and Portainer secrets for the first deploy; when the public, unlicensed repository goes private; who sends email; the first three invited organisations; margin and hosting rates; the operators list."
+description: "Founder-owned: the Portainer stack and secrets for the first deploy; when the public, unlicensed repository goes private; who sends email; the first three invited organisations; margin and hosting rates; the operators list."
 type: question
 last_verified: 2026-11-26
 ---
 
 # Open questions — founder-owned
 
-1. **The first deployment.** CI publishes nothing until the Docker Hub secrets exist, and the
+1. **The first deployment.** CI publishes the images to Docker Hub (secrets added 2026-11-26). The
    redeploy job stays off until the Portainer stack and its four secrets do. The steps, every
    setting and where each value comes from are in `docs/architecture/ARCH-008-deploying-on-portainer.md`.
 2. **Who is an operator?** God mode comes only from the `ENDGAME_OPERATORS` list. On the local

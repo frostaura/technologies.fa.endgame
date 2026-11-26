@@ -18,7 +18,8 @@ record, estimate accuracy, hosting cost) were fixed and seen fixed on the real s
   refusal was seen there; the screens were walked in the demo and by tests.
 - HTTPS, the Cloudflare tunnel, and anything applied to a real Cloudflare account.
 - A real SMTP server. Mail only ever reached the local catcher.
-- The Docker Hub publish and the Portainer redeploy: the jobs exist and have never succeeded.
+- The Portainer redeploy: the job exists and has never run. The published images have never
+  been pulled and started anywhere.
 - More than a handful of apps on the real stack, and waking after the host restarts.
 - Shared apps with invitation codes end to end on the real stack (covered by the acceptance
   test's replay and by tests, not walked by the orchestrator).
