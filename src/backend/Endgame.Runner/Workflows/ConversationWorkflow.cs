@@ -29,13 +29,14 @@ public sealed class ConversationWorkflow : IWorkflow
         var question = Json.Str(run.OwnerMessage(), "text") ?? run.Run.Title;
         var earlier = await EarlierTurnsAsync(run, cancellationToken);
         var scope = run.Run.Scope;
+        var places = PlaceNames.Of(run);
         ITool[] tools =
         [
             new ReadOrganisationTool(run.ControlPlane, scope),
             new StartIdeaTool(run.ControlPlane, scope),
-            new ChangeAppTool(run.ControlPlane, scope),
+            new ChangeAppTool(run.ControlPlane, scope, places),
             new TryAgainTool(run.ControlPlane, scope),
-            new AdjustSettingTool(run.ControlPlane, scope),
+            new AdjustSettingTool(run.ControlPlane, scope, places),
         ];
         var agent = run.Agents.Conversation(run, tools);
         string? speaker = null;
@@ -66,12 +67,15 @@ public sealed class ConversationWorkflow : IWorkflow
             await run.Journal.RecordAsync("answered", new JsonObject { ["budget"] = true }, cancellationToken);
         }
 
-        if (WorkflowOutcome.FromAgent(result) is { } stopped)
+        if (!result.Unreachable && WorkflowOutcome.FromAgent(result) is { } stopped)
         {
             return stopped;
         }
 
-        var answer = result.Completed ? result.FinalText ?? "" : "I could not finish answering that. Please ask again.";
+        // Why there is no answer is said truthfully: models that could not be reached are not a question left unanswered (D64).
+        var answer = result.Completed ? result.FinalText ?? ""
+            : result.Unreachable ? UnreachableAnswer
+            : "I could not finish answering that. Please ask again.";
         if (!run.Journal.Done("answered"))
         {
             var said = new JsonObject { ["from"] = "assistant", ["text"] = answer };
@@ -85,8 +89,12 @@ public sealed class ConversationWorkflow : IWorkflow
             await run.Journal.RecordAsync("answered", new JsonObject(), cancellationToken);
         }
 
-        return result.Completed ? WorkflowOutcome.Success(OutputText.Truncate(answer, 500)) : WorkflowOutcome.Failure(answer);
+        return result.Completed ? WorkflowOutcome.Success(OutputText.Truncate(answer, 500))
+            : result.Unreachable ? WorkflowOutcome.Unreachable(answer, result.FinalText) with { Announced = true }
+            : WorkflowOutcome.Failure(answer);
     }
+
+    public const string UnreachableAnswer = "I could not reach Endgame's AI models, so I could not answer that, and nothing was charged. Please ask again; if it keeps happening, tell FrostAura.";
 
     private static async Task<JsonObject?> EmployeeAsync(RunContext run, Guid employeeId, CancellationToken cancellationToken)
     {

@@ -89,10 +89,10 @@ public sealed class EstimateTests
 
     [Theory]
     [InlineData(true, "succeeded")]
-    [InlineData(false, "failed")]
+    [InlineData(false, "cancelled")]
     public async Task With_a_start_checkpoint_the_owner_approves_the_estimate_first(bool approve, string status)
     {
-        var cp = new FakeControlPlane(Scope, "task", "x") { Headroom = 100m, AnswerApproval = _ => approve };
+        var cp = new FakeControlPlane(Scope, "task", "x") { Headroom = 100m, AnswerApproval = _ => approve, ApprovalNote = approve ? null : "Too dear this month." };
         cp.Setting("autonomy", JsonValue.Create("checkpoints")!);
         cp.Setting("checkpoint.start", JsonValue.Create(true)!);
         var model = new ScriptedModel();
@@ -104,8 +104,37 @@ public sealed class EstimateTests
         Assert.Equal("stops", cp.ApprovalsAsked.Single()["onDecline"]!.GetValue<string>());
         if (!approve)
         {
-            Assert.Contains("You declined to start this work", cp.Events.Last(e => e.Type == "message" && e.Payload["title"]?.GetValue<string>() == "Stopped").Payload["text"]!.GetValue<string>(), StringComparison.Ordinal);
+            // D19: a decline is not a failure and is not scored; it is told with the owner's own note.
+            var said = cp.Events.Last(e => e.Type == "message" && e.Payload["title"]?.GetValue<string>() == "You declined").Payload["text"]!.GetValue<string>();
+            Assert.Contains("You declined to start this work", said, StringComparison.Ordinal);
+            Assert.Contains("Too dear this month.", said, StringComparison.Ordinal);
+            Assert.DoesNotContain("estimate.scored", cp.Types);
+            Assert.Equal("declined_at_start", cp.Payload("run.finished")!["reason"]!.GetValue<string>());
         }
+        else
+        {
+            Assert.Contains("estimate.scored", cp.Types);
+        }
+    }
+
+    [Fact]
+    public async Task A_conversation_is_never_held_at_the_start_checkpoint_but_still_waits_for_budget()
+    {
+        // D43: with "Before work starts" on, a chat message is answered without asking to start it first.
+        var cp = new FakeControlPlane(Scope, "conversation", "How many apps do we have?") { Headroom = 100m };
+        cp.Setting("autonomy", JsonValue.Create("checkpoints")!);
+        cp.Setting("checkpoint.start", JsonValue.Create(true)!);
+        var model = new ScriptedModel().ThenText("You have one app.");
+        await Executor(cp, model, workflows: [new ConversationWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
+        Assert.Empty(cp.Approvals);
+        Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
+
+        // The budget still holds: an estimate over the headroom pauses it before anything is asked of a model.
+        var poor = new FakeControlPlane(Scope, "conversation", "How many apps do we have?") { Headroom = 0.1m };
+        var none = new ScriptedModel();
+        await Executor(poor, none, workflows: [new ConversationWorkflow()]).ExecuteAsync(poor.Info(), "runner-test", () => false, CancellationToken.None);
+        Assert.Equal("paused", poor.Run["status"]!.GetValue<string>());
+        Assert.Empty(none.Calls);
     }
 
     [Fact]

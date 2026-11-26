@@ -111,7 +111,10 @@ public sealed class PermissionTests
         Assert.Single(gate.Asked);
         // The owner reads the title in plain words; the tool and its file are the detail (technical mode).
         Assert.Equal("Let the agent change part of the app?", gate.Asked[0]);
-        Assert.Contains("write_file: infra/main.tf", gate.Details[0], StringComparison.Ordinal);
+        // D71: the detail the owner reads is a plain sentence; the tool line is kept apart, for technical mode.
+        Assert.True(Endgame.Harness.Events.OwnerText.IsPlain(gate.Details[0]), gate.Details[0]);
+        Assert.DoesNotContain("write_file", gate.Details[0], StringComparison.Ordinal);
+        Assert.Contains("write_file: infra/main.tf", gate.Technical[0], StringComparison.Ordinal);
         var decision = log.Events.Single(e => e.Type is "tool.permitted" or "tool.denied");
         Assert.Equal(type, decision.Type);
         Assert.Equal(rule, decision.Payload["rule"]!.GetValue<string>());
@@ -174,6 +177,14 @@ public sealed class PermissionTests
         {
             Consequences.Add(onDecline);
             return new ApprovalAnswer(await RequestAsync(title, detail, cancellationToken), Note);
+        }
+
+        public List<string?> Technical { get; } = [];
+
+        public Task<ApprovalAnswer> AskAsync(string title, string detail, string onDecline, string? technical, CancellationToken cancellationToken)
+        {
+            Technical.Add(technical);
+            return AskAsync(title, detail, onDecline, cancellationToken);
         }
 
         public List<string> Asked { get; } = [];

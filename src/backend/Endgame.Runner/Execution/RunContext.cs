@@ -20,6 +20,13 @@ public enum WorkflowEnd
 
     /// <summary>The owner cancelled; the control plane has already finished the run.</summary>
     Cancelled,
+
+    /// <summary>
+    /// The owner declined to start the work at its estimate (D19): not a failure, nothing done and nothing scored. The run
+    /// finishes as <c>cancelled</c> with the reason <see cref="WorkflowOutcome.DeclinedReason"/>, until the control plane
+    /// has an outcome of its own for it.
+    /// </summary>
+    Declined,
 }
 
 public sealed record WorkflowOutcome(WorkflowEnd End, string Summary)
@@ -29,6 +36,24 @@ public sealed record WorkflowOutcome(WorkflowEnd End, string Summary)
 
     /// <summary>How the ending reads to the owner, in plain words, when <see cref="Summary"/> carries technical detail (it stays in <c>run.finished</c>).</summary>
     public string? ForOwner { get; init; }
+
+    /// <summary>
+    /// Technical detail of the ending — faults, refusals, what the gateway said — for technical mode only: written as
+    /// <c>run.finished</c>'s <c>detail</c>, never in its summary, which normal mode shows as the outcome (D64).
+    /// </summary>
+    public string? Detail { get; init; }
+
+    /// <summary>The reason a declined run's <c>run.finished</c> carries, so the console tells it from a cancel.</summary>
+    public const string DeclinedReason = "declined_at_start";
+
+    /// <summary>What the owner reads when no AI model could be reached.</summary>
+    public const string UnreachableForOwner = "Endgame could not reach its AI models, so the work stopped before it was finished. What was done is kept; try again, and if it keeps happening, tell FrostAura.";
+
+    public static WorkflowOutcome Declined(string forOwner) => new(WorkflowEnd.Declined, forOwner) { ForOwner = forOwner };
+
+    /// <summary>No model could be reached: said plainly, with what the gateway answered kept for technical mode.</summary>
+    public static WorkflowOutcome Unreachable(string forOwner, string? detail) =>
+        new(WorkflowEnd.Failed, forOwner) { ForOwner = forOwner, Detail = detail };
 
     public static WorkflowOutcome Success(string summary) => new(WorkflowEnd.Succeeded, summary);
 
@@ -45,6 +70,7 @@ public sealed record WorkflowOutcome(WorkflowEnd End, string Summary)
             StopReasons.Paused or StopReasons.LeaseLost => Suspend(result.StopReason),
             StopReasons.Cancelled or StopReasons.RunClosed => new WorkflowOutcome(WorkflowEnd.Cancelled, result.StopReason),
             StopReasons.BudgetExhausted => Failure("The credit budget ran out, so the work stopped. Top up or raise the budget, then try it again; what was finished is kept."),
+            StopReasons.ModelUnreachable => Unreachable(UnreachableForOwner, result.FinalText),
             _ => null,
         };
     }

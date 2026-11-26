@@ -7,6 +7,7 @@ using Endgame.Harness.Model;
 using Endgame.Harness.Permissions;
 using Endgame.Harness.Platform;
 using Endgame.Harness.Tools;
+using Endgame.Runner.Execution;
 
 namespace Endgame.Runner.Agents;
 
@@ -80,7 +81,7 @@ public sealed class EdgeAppCaller(HttpClient edgeControl, ControlPlaneClient con
         // Edge's own refusals (the app is paused, cannot be woken, the path is the platform's) are not the app's answer.
         if (response.Headers.TryGetValues(Endgame.Hosting.Contracts.HostingConventions.RefusalHeader, out var refusal))
         {
-            throw new ServiceProblemException(response.StatusCode, refusal.First(), Json.Str(JsonNode.Parse(text) as JsonObject, "title") ?? text);
+            throw new ServiceProblemException(response.StatusCode, refusal.First(), Json.Str(Json.ParseTolerant(text) as JsonObject, "title") ?? (string.IsNullOrWhiteSpace(text) ? refusal.First() : OutputText.Truncate(text, 500)));
         }
 
         return new AppCallAnswer((int)response.StatusCode, type, text.Length > MaxBody ? text[..MaxBody] : text);
@@ -346,61 +347,118 @@ public sealed class StartIdeaTool(ControlPlaneClient controlPlane, string scope)
     }
 }
 
-public sealed class AdjustSettingTool(ControlPlaneClient controlPlane, string scope) : ITool, IApprovalTitle
+/// <summary>
+/// <c>adjust_setting</c>: one of the settings an agent may change (<see cref="Endgame.Domain.Cascade.AgentSettings"/>), the
+/// owner confirming first. A key it does not take, or a value that key cannot hold, is refused before anyone is asked, so
+/// one request raises one approval, titled with exactly what will change (D45); the result is composed here, with the
+/// place's name, so the reply never shows a path (D46).
+/// </summary>
+public sealed partial class AdjustSettingTool(ControlPlaneClient controlPlane, string scope, PlaceNames? places = null) : ITool, IApprovalTitle
 {
-    /// <summary>What approving the change does, in the words the autonomy and app screens use; never the setting's key.</summary>
-    public string ApprovalTitle(JsonObject arguments)
+    private readonly PlaceNames names = places ?? new PlaceNames([]);
+
+    /// <summary>What approving does, and what is true once it is done, in the words the autonomy and app screens use; never the key.</summary>
+    public static (string Title, string Done)? Describe(string? key, string? value, PlaceNames names, string scope)
     {
-        var raw = (Json.Str(arguments, "value") ?? "").Trim().Trim('"');
-        var on = raw is "true" or "on";
-        var where = "here";
-        return Json.Str(arguments, "key") switch
+        ArgumentNullException.ThrowIfNull(names);
+        ArgumentNullException.ThrowIfNull(scope);
+        var raw = (value ?? "").Trim().Trim('"').Trim().ToLowerInvariant();
+        bool? on = raw switch { "true" or "on" or "yes" => true, "false" or "off" or "no" => false, _ => null };
+        var place = names.Name(scope);
+        var apps = names.Apps(scope);
+        var Apps = char.ToUpperInvariant(apps[0]) + apps[1..];
+        var number = int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0 ? n : (int?)null;
+        string Checkpoint(string label) => on is true ? $"Turn on the “{label}” checkpoint in {place}" : $"Turn off the “{label}” checkpoint in {place}";
+        string CheckpointDone(string label) => on is true ? $"The “{label}” checkpoint is now on in {place}." : $"The “{label}” checkpoint is now off in {place}.";
+        return key switch
         {
-            "autonomy" => raw == "checkpoints" ? $"Stop for your sign-off at checkpoints {where}" : $"Switch {where} to auto-mode",
-            "checkpoint.start" => $"Turn {(on ? "on" : "off")} the “Before work starts” checkpoint {where}",
-            "checkpoint.plan" => $"Turn {(on ? "on" : "off")} the “Before the plan is carried out” checkpoint {where}",
-            "checkpoint.hire" => $"Turn {(on ? "on" : "off")} the “Before anyone is hired” checkpoint {where}",
-            "sleep.mode" => raw == "always_on" ? $"Keep the apps {where} always on" : $"Let the apps {where} sleep when nobody is using them",
-            "sleep.idle_minutes" => $"Let the apps {where} sleep after {raw} minutes without a visitor",
-            "workforce.idle_days" => $"Flag employees {where} who have had no work for {raw} days",
-            _ => $"Change a setting {where}",
+            Endgame.Domain.Cascade.Autonomy.Key when raw == "checkpoints" => ($"Stop for your sign-off at checkpoints in {place}", $"{place} now stops for your sign-off at the checkpoints that are on."),
+            Endgame.Domain.Cascade.Autonomy.Key when raw == "auto" => ($"Switch {place} to auto-mode", $"{place} now works in auto-mode."),
+            Endgame.Domain.Cascade.Autonomy.CheckpointStart when on is not null => (Checkpoint("Before work starts"), CheckpointDone("Before work starts")),
+            Endgame.Domain.Cascade.Autonomy.CheckpointPlan when on is not null => (Checkpoint("Before the plan is carried out"), CheckpointDone("Before the plan is carried out")),
+            Endgame.Domain.Cascade.Autonomy.CheckpointHire when on is not null => (Checkpoint("Before anyone is hired"), CheckpointDone("Before anyone is hired")),
+            Endgame.Domain.Cascade.CascadeKeys.SleepMode when raw == "always_on" => ($"Keep {apps} always on", $"{Apps} now stay on, even when nobody is using them."),
+            Endgame.Domain.Cascade.CascadeKeys.SleepMode when raw == "auto" => ($"Let {apps} sleep when nobody is using them", $"{Apps} now sleep when nobody is using them."),
+            Endgame.Domain.Cascade.CascadeKeys.SleepIdleMinutes when number is { } minutes => ($"Let {apps} sleep after {Count(minutes, "idle minute")}", $"{Apps} now sleep after {Count(minutes, "idle minute")}."),
+            Endgame.Domain.Cascade.AgentSettings.WorkforceIdleDays when number is { } days => ($"Flag employees in {place} who have had no work for {Count(days, "day")}", $"Employees in {place} who have had no work for {Count(days, "day")} are now flagged."),
+            _ => null,
         };
+
+        static string Count(int n, string one) => n == 1 ? $"1 {one}" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{n} {one}s");
     }
+
+    private static JsonNode? Parsed(string? raw)
+    {
+        return Json.ParseTolerant(raw) ?? (raw is null ? null : JsonValue.Create(raw));
+    }
+
+    /// <summary>The values each key takes, as the owner would say them, for a refusal.</summary>
+    public static string Expected(string key) => key switch
+    {
+        Endgame.Domain.Cascade.Autonomy.Key => "\"auto\" or \"checkpoints\"",
+        Endgame.Domain.Cascade.CascadeKeys.SleepMode => "\"auto\" or \"always_on\"",
+        Endgame.Domain.Cascade.CascadeKeys.SleepIdleMinutes or Endgame.Domain.Cascade.AgentSettings.WorkforceIdleDays => "a whole number above 0",
+        _ => "true or false",
+    };
+
+    public string ApprovalTitle(JsonObject arguments) =>
+        Describe(Json.Str(arguments, "key"), Json.Str(arguments, "value"), names, scope)?.Title ?? "Change a setting";
 
     public string Name => "adjust_setting";
 
-    public string Description => "Change a setting at the scope being discussed (for example sleep after idle, autonomy, checkpoints). The owner is asked to confirm first.";
+    public string Description => "Change one setting at the scope being discussed: autonomy (\"auto\" or \"checkpoints\"), checkpoint.start, checkpoint.plan or checkpoint.hire (true or false), sleep.mode (\"auto\" or \"always_on\"), sleep.idle_minutes (minutes) or workforce.idle_days (days). The owner is asked to confirm first. Nothing else can be changed here: who may open an app, credits and overdraft are a person's to change on their own screens.";
 
     public JsonObject Parameters => Schema.Object(new JsonObject
     {
-        ["key"] = Schema.Str("The setting's key."),
+        ["key"] = Schema.Enum("The setting's key.", [.. Endgame.Domain.Cascade.AgentSettings.Allowed]),
         ["value"] = Schema.Str("The new value, as JSON (a string in quotes, a number, true or false)."),
     }, "key", "value");
 
     public ToolEffect Effect => ToolEffect.External;
 
-    public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root) =>
-        string.IsNullOrWhiteSpace(Json.Str(arguments, "key")) ? (ToolTargets.None, "adjust_setting needs a key.") : (new ToolTargets([], $"{Json.Str(arguments, "key")}={Json.Str(arguments, "value")}"), null);
+    public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root)
+    {
+        var key = Json.Str(arguments, "key")?.Trim();
+        if (string.IsNullOrEmpty(key))
+        {
+            return (ToolTargets.None, "adjust_setting needs a key.");
+        }
+
+        // Refused before anyone is asked: an approval for a change that cannot be made is a second approval later (D45).
+        if (!Endgame.Domain.Cascade.AgentSettings.Allowed.Contains(key, StringComparer.Ordinal))
+        {
+            return (ToolTargets.None, $"'{key}' is not a setting you can change. The keys are {string.Join(", ", Endgame.Domain.Cascade.AgentSettings.Allowed)}. Who may open an app, credits and the overdraft are changed by a person on their own screens: tell the owner where, and change nothing.");
+        }
+
+        if (Describe(key, Json.Str(arguments, "value"), names, scope) is null)
+        {
+            return (ToolTargets.None, $"'{Json.Str(arguments, "value")}' is not a value {key} takes: it takes {Expected(key)}. Send the call again with one.");
+        }
+
+        return (new ToolTargets([], $"{key}={Json.Str(arguments, "value")}"), null);
+    }
 
     public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(call);
-        JsonNode? value;
-        try
+        var key = (Json.Str(call.Arguments, "key") ?? "").Trim();
+        var raw = Json.Str(call.Arguments, "value");
+        var described = Describe(key, raw, names, scope);
+        // A call that never passed Target (over MCP, or a test of the control plane's own allow-list) is sent as given, and the
+        // control plane refuses what it must; a described one is sent in the type its key holds.
+        JsonNode? value = described is null ? Parsed(raw) : key switch
         {
-            value = JsonNode.Parse(Json.Str(call.Arguments, "value") ?? "null");
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            value = JsonValue.Create(Json.Str(call.Arguments, "value"));
-        }
+            Endgame.Domain.Cascade.CascadeKeys.SleepIdleMinutes or Endgame.Domain.Cascade.AgentSettings.WorkforceIdleDays => JsonValue.Create(int.Parse((raw ?? "").Trim().Trim('"'), System.Globalization.CultureInfo.InvariantCulture)),
+            Endgame.Domain.Cascade.Autonomy.Key or Endgame.Domain.Cascade.CascadeKeys.SleepMode => JsonValue.Create((raw ?? "").Trim().Trim('"').Trim().ToLowerInvariant()),
+            _ => JsonValue.Create((raw ?? "").Trim().Trim('"').Trim().ToLowerInvariant() is "true" or "on" or "yes"),
+        };
 
-        var body = new JsonObject { ["scope"] = scope, ["kind"] = "setting", ["key"] = Json.Str(call.Arguments, "key"), ["value"] = value };
+        var body = new JsonObject { ["scope"] = scope, ["kind"] = "setting", ["key"] = key, ["value"] = value };
         using var response = await controlPlane.Http.PutAsync("/internal/cascade", new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"), cancellationToken);
         var text = await response.Content.ReadAsStringAsync(cancellationToken);
         return response.IsSuccessStatusCode
-            ? new ToolOutcome($"Setting changed: {OutputText.Truncate(text, 1000)}")
-            : ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The setting could not be changed ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}"), "tool_error");
+            ? new ToolOutcome(described is { } d ? $"Done. Tell the owner, in these words: {d.Done}" : $"Setting changed in {names.Name(scope)}.")
+            : ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The setting could not be changed ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it was not changed, naming the place as {names.Name(scope)}."), "tool_error");
     }
 }
 
@@ -409,11 +467,47 @@ public sealed class AdjustSettingTool(ControlPlaneClient controlPlane, string sc
 /// <c>POST /internal/apps/changes</c> — the estimate is shown first in the change's own run, then a plan, the build, the checks
 /// and the new version. The owner confirms first.
 /// </summary>
-public sealed class ChangeAppTool(ControlPlaneClient controlPlane, string scope) : ITool, IApprovalTitle
+public sealed partial class ChangeAppTool(ControlPlaneClient controlPlane, string scope, PlaceNames? places = null) : ITool, IApprovalTitle
 {
+    private readonly PlaceNames names = places ?? new PlaceNames([]);
+
+    /// <summary>
+    /// A request that is not a change to what the app does, but something only a person does on a screen (D48): who may open
+    /// the app, credits and the overdraft, or taking the app away. Null when the request is a change the factory may make.
+    /// </summary>
+    public static string? PersonsAct(string? request)
+    {
+        var text = (request ?? "").ToLowerInvariant();
+        if (WhoMayOpen().IsMatch(text))
+        {
+            return "Who may open an app — public, private, or shared with chosen people — is a person's decision, never a change the factory makes. The owner sets it on the app's page, under “Who can open it”.";
+        }
+
+        if (Money().IsMatch(text))
+        {
+            return "Credits, top-ups and the organisation's overdraft are a person's to change, never a change to an app. The owner does it on the Credits page.";
+        }
+
+        if (TakeAway().IsMatch(text))
+        {
+            return "Downloading or exporting an app is a person's act, never a change the factory makes. The owner does it on the app's page.";
+        }
+
+        return null;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(make|set|turn|switch|put|change|open)\b[^.]{0,60}\b(public|private|publicly)\b|\bgo(es|ing)? public\b|\bpublic(ly)? (available|accessible|visible|open)\b|\b(open|available|visible) to (everyone|anyone|the public|the world)\b|\bwho (can|may|is allowed to|gets to) (open|see|use|access)\b|\b(share|sharing) (the|this|that|my|our) app\b|\bvisibility\b|\b(unpublish|publish) (the|this|that|my|our)? ?app\b")]
+    private static partial System.Text.RegularExpressions.Regex WhoMayOpen();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\btop[- ]?ups?\b|\btop (it|us|the balance) up\b|\boverdraft\b|\b(add|buy|give|grant|more)\b[^.]{0,20}\bcredits?\b|\bcredit (limit|balance)\b")]
+    private static partial System.Text.RegularExpressions.Regex Money();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(export|download)\b[^.]{0,40}\b(app|code|it|everything|source)\b")]
+    private static partial System.Text.RegularExpressions.Regex TakeAway();
+
     public string Name => "change_app";
 
-    public string Description => "Ask the factory to change an app that is already built: a plan for the change, the change built and checked in the running app, everything it did before checked again, then the new version published. The owner is asked to confirm first.";
+    public string Description => "Ask the factory to change what an app that is already built does: a plan for the change, the change built and checked in the running app, everything it did before checked again, then the new version published. The owner is asked to confirm first. Never for who may open the app (public, private, shared), credits, the overdraft or exporting it: those are a person's acts on their own screens.";
 
     public JsonObject Parameters => Schema.Object(new JsonObject
     {
@@ -423,13 +517,20 @@ public sealed class ChangeAppTool(ControlPlaneClient controlPlane, string scope)
 
     public ToolEffect Effect => ToolEffect.External;
 
-    public string ApprovalTitle(JsonObject arguments) => $"Change the app: {Json.Str(arguments, "request")}";
+    public string ApprovalTitle(JsonObject arguments) =>
+        $"Change {names.Name(Json.Str(arguments, "app") is { Length: > 0 } a ? a : scope)}: {Json.Str(arguments, "request")?.Trim().TrimEnd('.', '?', '!')}";
 
     public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root)
     {
         if (string.IsNullOrWhiteSpace(Json.Str(arguments, "request")))
         {
             return (ToolTargets.None, "change_app needs the change, in the owner's words.");
+        }
+
+        // Refused before anyone is asked: a person's act is never routed into a build (D48).
+        if (PersonsAct(Json.Str(arguments, "request")) is { } act)
+        {
+            return (ToolTargets.None, $"Not a change to the app, so nothing was started and nobody was asked: {act} Tell the owner exactly that, in plain words.");
         }
 
         var app = Json.Str(arguments, "app") is { Length: > 0 } a ? a : scope;
@@ -445,7 +546,7 @@ public sealed class ChangeAppTool(ControlPlaneClient controlPlane, string scope)
         using var response = await controlPlane.Http.PostAsJsonAsync("/internal/apps/changes", new { scope = app, request = Json.Str(call.Arguments, "request") }, Json.Web, cancellationToken);
         var text = await response.Content.ReadAsStringAsync(cancellationToken);
         return response.IsSuccessStatusCode
-            ? new ToolOutcome($"The change has started; its estimate is shown first in its own work: {OutputText.Truncate(text, 2000)}")
+            ? new ToolOutcome($"The change to {names.Name(app)} has started; its estimate is shown first in its own work (name it as {names.Name(app)}, never by its path): {OutputText.Truncate(text, 2000)}")
             : ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The change could not be started ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it did not start."), "tool_error");
     }
 }

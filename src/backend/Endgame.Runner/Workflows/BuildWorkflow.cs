@@ -213,13 +213,21 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         return WorkflowOutcome.Success($"{name} is built and running privately.") with { Announced = true };
     }
 
+    /// <summary>
+    /// How the planner treats what an agreed change replaces (D31): the change wins, and the idea's words it replaces are
+    /// listed as left out, replaced, so the owner's list of requirements never keeps both.
+    /// </summary>
+    public const string ChangeWins = "Where an agreed change replaces something the idea says (for example the idea says members sign in, and the change says they open a link with no account), the change wins: list the idea's words it replaces as a requirement in leftOut, with the reason \"replaced by the change agreed after research\", and build only the change.";
+
     /// <summary>The idea, then each change agreed after research, so the planner holds the app to both.</summary>
     public static string WithAgreedChanges(string idea, IReadOnlyList<string> changes)
     {
         ArgumentNullException.ThrowIfNull(idea);
         ArgumentNullException.ThrowIfNull(changes);
         var agreed = changes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct(StringComparer.Ordinal).ToList();
-        return agreed.Count == 0 ? idea : $"{idea}\n\nAgreed after research, and part of what is built:\n{string.Join("\n", agreed.Select(c => $"- {c}"))}";
+        return agreed.Count == 0
+            ? idea
+            : $"{idea}\n\nAgreed after research, and part of what is built:\n{string.Join("\n", agreed.Select(c => $"- {c}"))}\n\n{ChangeWins}";
     }
 
     /// <summary>The existing app a change is made to, from the run's own scope: nothing is created.</summary>
@@ -262,10 +270,20 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             }
         }
 
-        // A builder's own note: its first line, and the indented lines that continue it.
+        // A builder's own note: its first line, and the indented lines that continue it. Only what it says was built: a line
+        // under a heading of what is still to do, or one that says it is not done, is not a part the app has (the real
+        // change run of 2026-11-26 checked a to-do line against the running app, and repaired it twice for nothing).
+        var todo = false;
         for (var i = 0; i < lines.Count && parts.Count < PlanContract.MaxRequirements - 10; i++)
         {
-            if (BuilderLine().Match(lines[i].Trim()) is not { Success: true } m || plain.Any(p => p.EndsWith(m.Groups[1].Value, StringComparison.Ordinal)))
+            if (lines[i].TrimStart().StartsWith('#'))
+            {
+                todo = ToDoHeading().IsMatch(lines[i]);
+                continue;
+            }
+
+            if (todo || BuilderLine().Match(lines[i].Trim()) is not { Success: true } m || plain.Any(p => p.EndsWith(m.Groups[1].Value, StringComparison.Ordinal))
+                || NotDone().IsMatch(m.Groups[2].Value))
             {
                 continue;
             }
@@ -315,6 +333,14 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
     [System.Text.RegularExpressions.GeneratedRegex(@"^- \*\*([a-z0-9][a-z0-9-]*)\*\* — (.+)$")]
     private static partial System.Text.RegularExpressions.Regex BuilderLine();
+
+    /// <summary>A heading over what is not built yet: to do, next, later, planned, remaining, backlog, known issues, ideas.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*#+\s*(to[ -]?do|todo|next|later|planned|plans?|remaining|not (yet )?(done|built)|pending|backlog|open|known (issues|gaps)|ideas|future|wish ?list|follow[ -]?ups?)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ToDoHeading();
+
+    /// <summary>A note that says its part is not there: TODO, not yet, still to, planned, later, pending, not implemented.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(todo|to do|not yet|not done|not built|not implemented|still (to|needs?)|planned|pending|later|next step|stub(bed)?|placeholder|wip)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex NotDone();
 
     /// <summary>
     /// Trying again (CHG-03): a new run picks up what the earlier attempt finished and agreed — where the app lives, the plan the
@@ -546,7 +572,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
 
         await run.Journal.RecordAsync($"item:{item.Id}", new JsonObject { ["passed"] = true }, cancellationToken);
-        await FinishTaskAsync(run, taskId, "done", Json.Str(lastEvaluation, "summary") ?? $"Checked and working: {item.Text.TrimEnd('.')}.", cancellationToken);
+        // The build task says what was built; its check task already said "Checked and working" (each finished task once, in its own words).
+        await FinishTaskAsync(run, taskId, "done", checkFirst ? $"Still works after the change: {item.Text.TrimEnd('.')}." : $"Built and handed over: {item.Text.TrimEnd('.')}.", cancellationToken);
         return null;
     }
 

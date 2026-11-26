@@ -121,9 +121,13 @@ public sealed class ControlPlaneClient(HttpClient http)
         return await ReadAsync<JsonObject>(response, cancellationToken);
     }
 
-    public async Task<Guid> RaiseApprovalAsync(Guid runId, string title, string detail, CancellationToken cancellationToken, string? onDecline = null)
+    /// <summary>
+    /// Raises an approval. <paramref name="detail"/> is the plain sentence the owner reads; <paramref name="technical"/> (the
+    /// tool, its arguments, the rule that asked) travels beside it for technical mode, never in its place (D71).
+    /// </summary>
+    public async Task<Guid> RaiseApprovalAsync(Guid runId, string title, string detail, CancellationToken cancellationToken, string? onDecline = null, string? technical = null)
     {
-        using var response = await Http.PostAsJsonAsync("/internal/approvals", new { runId, title, detail, onDecline }, Json.Web, cancellationToken);
+        using var response = await Http.PostAsJsonAsync("/internal/approvals", new { runId, title, detail, onDecline, technical }, Json.Web, cancellationToken);
         var approval = await ReadAsync<JsonObject>(response, cancellationToken);
         return Guid.Parse(Json.Str(approval, "id")!);
     }
@@ -401,9 +405,13 @@ public sealed class ControlPlaneApprovals(ControlPlaneClient client, Guid runId,
         (await AskAsync(title, detail, ApprovalConsequence.Continues, cancellationToken)).Approved;
 
     /// <summary>Raises the approval, saying what a decline does, and waits for the answer and the note that came with it.</summary>
-    public async Task<ApprovalAnswer> AskAsync(string title, string detail, string onDecline, CancellationToken cancellationToken)
+    public Task<ApprovalAnswer> AskAsync(string title, string detail, string onDecline, CancellationToken cancellationToken) =>
+        AskAsync(title, detail, onDecline, null, cancellationToken);
+
+    /// <summary>The same, with the technical detail kept apart from the plain one.</summary>
+    public async Task<ApprovalAnswer> AskAsync(string title, string detail, string onDecline, string? technical, CancellationToken cancellationToken)
     {
-        var approvalId = await client.RaiseApprovalAsync(runId, title, detail, cancellationToken, onDecline);
+        var approvalId = await client.RaiseApprovalAsync(runId, title, detail, cancellationToken, onDecline, technical);
         long after = 0;
         while (true)
         {

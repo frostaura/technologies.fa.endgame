@@ -30,6 +30,9 @@ public sealed class AgentLoop
     private readonly IWorkspace workspace;
     private readonly AgentEventWriter events;
 
+    /// <summary>The actions since the last progress report (D29).</summary>
+    private readonly List<string> sinceReport = [];
+
     public AgentLoop(AgentDefinition agent, AgentServices services, IWorkspace workspace, IEventSink sink)
     {
         ArgumentNullException.ThrowIfNull(agent);
@@ -52,6 +55,7 @@ public sealed class AgentLoop
         await events.WriteAsync(HarnessEvents.Message, new JsonObject
         {
             ["kind"] = MessageKinds.AgentStart,
+            ["title"] = agent.Title,
             ["taskType"] = agent.TaskType,
             ["system"] = agent.SystemPrompt,
             ["task"] = task,
@@ -133,6 +137,11 @@ public sealed class AgentLoop
                 }
             }
 
+            if (state.SearchAllowed is null && agent.Limits.MaxSearchesPerCall is not 0)
+            {
+                await DecideSearchAsync(state, cancellationToken);
+            }
+
             ModelReply reply;
             try
             {
@@ -146,6 +155,7 @@ public sealed class AgentLoop
                     ModelFailure.BudgetExhausted => StopReasons.BudgetExhausted,
                     ModelFailure.RunClosed => StopReasons.RunClosed,
                     ModelFailure.CeilingUnreachable => StopReasons.CeilingUnreachable,
+                    _ when e.Unreachable => StopReasons.ModelUnreachable,
                     _ => StopReasons.ModelError,
                 };
                 return await StopAsync(state, reason, e.Message, cancellationToken);
@@ -239,7 +249,139 @@ public sealed class AgentLoop
             {
                 return await StopAsync(state, StopReasons.RepeatedFailure, $"The same call failed the same way {state.RepeatedFailures} times in a row.", cancellationToken);
             }
+
+            await ReportProgressAsync(state, requests, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Web search is the model's own capability, not a tool call, so the permission check is made for it here, before the
+    /// session's first call (D18): a "may not" rule means the route's search is not offered at all; an "asks you first"
+    /// rule raises one approval for the step, and a decline runs the step without search. The decision is an event, so a
+    /// resumed session neither asks again nor searches after a refusal.
+    /// </summary>
+    private async Task DecideSearchAsync(AgentState state, CancellationToken cancellationToken)
+    {
+        var decision = agent.Permissions.Decide(WebSearch.Name, ToolEffect.ReadOnly, ToolTargets.None, hasPlan: true);
+        if (decision.Verdict == PermissionVerdict.Allow)
+        {
+            state.SearchAllowed = true;
+            return;
+        }
+
+        if (decision.Verdict == PermissionVerdict.Ask)
+        {
+            if (services.Approvals is null || decision.Checkpoint is null)
+            {
+                decision = decision with { Verdict = PermissionVerdict.Deny, Rule = $"unattended:{decision.Rule}" };
+            }
+            else
+            {
+                var answer = await services.Approvals.AskAsync(
+                    WebSearch.ApprovalTitle(agent.Title),
+                    "Your rules for this stage ask before the web is searched. If you decline, this step works without searching.",
+                    ApprovalConsequence.Continues,
+                    $"{WebSearch.Name}. {decision.Reason} Checkpoint: {decision.Checkpoint}.",
+                    cancellationToken);
+                var note = string.IsNullOrWhiteSpace(answer.Note) ? "" : $" Their note: \"{OutputText.Truncate(answer.Note.Trim(), 1000)}\"";
+                decision = answer.Approved
+                    ? new PermissionDecision(PermissionVerdict.Allow, $"checkpoint:{decision.Checkpoint}:approved", $"The owner approved web search for this step.{note}")
+                    : new PermissionDecision(PermissionVerdict.Deny, $"checkpoint:{decision.Checkpoint}:rejected", $"The owner declined web search for this step.{note}");
+            }
+        }
+
+        var allowed = decision.Verdict == PermissionVerdict.Allow;
+        await events.WriteAsync(allowed ? HarnessEvents.ToolPermitted : HarnessEvents.ToolDenied, new JsonObject
+        {
+            ["callId"] = WebSearch.CallId,
+            ["name"] = WebSearch.Name,
+            ["rule"] = decision.Rule,
+            ["reason"] = decision.Reason,
+        }, cancellationToken);
+        state.SearchAllowed = allowed;
+        if (!allowed)
+        {
+            var nudge = $"Web search is not available for this step: {decision.Reason} Do not search and do not cite addresses you have not seen; work from what you already know, say plainly that nothing was searched, and still reply in the agreed form.";
+            await events.WriteAsync(HarnessEvents.Message, new JsonObject { ["kind"] = MessageKinds.Nudge, ["nudge"] = nudge, ["source"] = WebSearch.CallId }, cancellationToken);
+            Replay.ApplyNudge(state, WebSearch.CallId, nudge);
+        }
+    }
+
+    /// <summary>
+    /// During a long step, a plain report every so many actions (D29), so the owner sees the step move: what it has been
+    /// doing, counted from the calls it actually made — never invented, and never naming a file.
+    /// </summary>
+    private async Task ReportProgressAsync(AgentState state, IReadOnlyList<JsonObject> requests, CancellationToken cancellationToken)
+    {
+        if (agent.Progress is not { Every: > 0 } progress)
+        {
+            return;
+        }
+
+        var before = state.ToolCalls - requests.Count;
+        sinceReport.AddRange(requests.Select(r => Json.Str(r, "name") ?? ""));
+        if (state.ToolCalls / progress.Every == before / progress.Every)
+        {
+            return;
+        }
+
+        var text = ProgressText(progress.Lead, sinceReport, state.ToolCalls);
+        sinceReport.Clear();
+        await events.WriteAsync(HarnessEvents.Message, new JsonObject { ["from"] = progress.From, ["title"] = progress.Title, ["text"] = text, ["progress"] = state.ToolCalls }, cancellationToken);
+    }
+
+    /// <summary>A progress report's text from the actions since the last one, in plain words.</summary>
+    public static string ProgressText(string lead, IReadOnlyCollection<string> actions, int total)
+    {
+        ArgumentNullException.ThrowIfNull(lead);
+        ArgumentNullException.ThrowIfNull(actions);
+        int Count(params string[] names) => actions.Count(a => names.Contains(a, StringComparer.Ordinal));
+        static string Times(int n, string one, string many) => n == 1 ? one : string.Create(CultureInfo.InvariantCulture, $"{n} {many}");
+        var parts = new List<string>();
+        var read = Count("read_file", "list_files", "git_diff", "load_skill");
+        var searched = Count("search");
+        var changed = Count("edit_file", "write_file");
+        var checks = Count("run", "call_app", "check_preview", "call_webhook", "sent_emails");
+        var saved = Count("commit");
+        if (read > 0)
+        {
+            parts.Add($"read {Times(read, "one part of the app", "parts of the app")}");
+        }
+
+        if (searched > 0)
+        {
+            parts.Add($"searched it {Times(searched, "once", "times")}");
+        }
+
+        if (changed > 0)
+        {
+            parts.Add($"made {Times(changed, "one change", "changes")}");
+        }
+
+        if (checks > 0)
+        {
+            parts.Add($"ran {Times(checks, "one check", "checks")}");
+        }
+
+        if (saved > 0)
+        {
+            parts.Add($"saved {Times(saved, "one version", "versions")}");
+        }
+
+        var other = actions.Count - read - searched - changed - checks - saved;
+        if (other > 0)
+        {
+            parts.Add($"took {Times(other, "one other step", "other steps")}");
+        }
+
+        var did = parts.Count switch
+        {
+            0 => "",
+            1 => parts[0],
+            _ => $"{string.Join(", ", parts.Take(parts.Count - 1))} and {parts[^1]}",
+        };
+        var lead1 = lead.TrimEnd().TrimEnd('.') + ".";
+        return string.Create(CultureInfo.InvariantCulture, $"{lead1} Since the last update it {did}; {total} actions so far.");
     }
 
     /// <summary>A turn of two or more <c>spawn</c> calls whose sub-agents only read, within the fan-out cap: independent, so they may run at once.</summary>
@@ -305,7 +447,7 @@ public sealed class AgentLoop
             agent.Repair,
             state.PinnedProvider is { } p ? [p] : null,
             $"{agent.RunId}:{agent.Id}:{step}:{attempt}:{services.SessionNonce}",
-            MaxSearches: agent.Limits.MaxSearchesPerCall), cancellationToken), cancellationToken);
+            MaxSearches: state.SearchAllowed == false ? 0 : agent.Limits.MaxSearchesPerCall), cancellationToken), cancellationToken);
         Replay.ApplyAccounting(state, Accounting(reply));
         return reply;
     }
@@ -406,8 +548,9 @@ public sealed class AgentLoop
         };
         var answer = await services.Approvals.AskAsync(
             OutputText.Truncate($"{title.TrimEnd('.', '?')}?", 300),
-            $"{name}{(what.Length > 0 ? $": {what}" : "")}. {asked.Reason} Checkpoint: {asked.Checkpoint}.",
+            ApprovalDetail.For(asked),
             ApprovalConsequence.Continues,
+            OutputText.Truncate($"{name}{(what.Length > 0 ? $": {what}" : "")}. {asked.Reason} Checkpoint: {asked.Checkpoint}.", 2000),
             cancellationToken);
         var note = string.IsNullOrWhiteSpace(answer.Note) ? "" : $" Their note: \"{OutputText.Truncate(answer.Note.Trim(), 1000)}\"";
         return answer.Approved
@@ -524,6 +667,20 @@ public sealed class AgentLoop
         var text = $"{name}\n{(arguments is JsonValue v && v.TryGetValue<string>(out var s) ? s : arguments?.ToJsonString())}\n{content}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16].ToLower(CultureInfo.InvariantCulture);
     }
+}
+
+/// <summary>The route's server-side web search, which the permission check covers as if it were a tool (D18).</summary>
+public static class WebSearch
+{
+    /// <summary>The name a rule uses for it ("Search the web" in the console).</summary>
+    public const string Name = "web_search";
+
+    /// <summary>The call id of the one decision a session makes about it, in <c>tool.permitted</c> or <c>tool.denied</c>.</summary>
+    public const string CallId = "capability:web_search";
+
+    /// <summary>The approval's title: what approving does, in plain words, for the step it belongs to.</summary>
+    public static string ApprovalTitle(string? step) =>
+        OutputText.Truncate(string.IsNullOrWhiteSpace(step) ? "Let this step search the web?" : $"Let this step search the web: {step.Trim().TrimEnd('.', '?')}?", 300);
 }
 
 /// <summary>The <c>kind</c> of the harness's <c>message</c> events.</summary>
