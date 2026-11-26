@@ -43,6 +43,11 @@
           }
         },
         {
+          "clock": {
+            "pause": true
+          }
+        },
+        {
           "click": {
             "text": "Send"
           }
@@ -62,6 +67,7 @@
       "step": 3,
       "kind": "demo",
       "clock": {
+        "play": true,
         "seek": 3000
       },
       "act": [

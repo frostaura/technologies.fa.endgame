@@ -1,6 +1,6 @@
 ---
 name: technologies-fa-endgame-state
-description: "Whole product merged on main with every gate green; CI fails only at the Docker Hub login. The academy (327 flows, live demo, two PDFs) is published on GitHub Pages. Nothing is deployed and there are no users."
+description: "Whole product merged on main, every gate green; CI fails only at the Docker Hub login. The academy (327 flows, live demo, two PDFs) is on GitHub Pages. Nothing deployed, no users."
 type: state
 last_verified: 2026-11-26
 ---
@@ -22,7 +22,7 @@ against [`../docs/specs/endgame-build-plan.md`](../docs/specs/endgame-build-plan
   the login until the founder adds the secrets (`ARCH-008`). The Portainer redeploy job is off
   behind `DEPLOY_ENABLED`. No scheduled workflow exists.
 - **The academy is published:** `https://frostaura.github.io/technologies.fa.endgame/` — 327 flows
-  in five tracks from `docs/flows/`, each step either live in a demo build of the real console
+  (291 for clients, 36 for operators) in five tracks from `docs/flows/`, each step either live in a demo build of the real console
   (an in-browser fake control plane on mock data) or pictured, with search, a free-play demo, a
   QR code and two PDFs (clients; operators). The Pages workflow republishes it on every push.
 - **Walked by the orchestrator in Chrome (2026-11-25/26):** the real stack at its gateway — home,
