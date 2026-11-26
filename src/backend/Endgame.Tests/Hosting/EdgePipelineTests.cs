@@ -1,11 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Net.Sockets;
 using System.Text.Json;
 using Endgame.Edge;
 using Endgame.Edge.Runtime;
 using Endgame.Hosting.Contracts;
+using Endgame.Tests.Fixtures;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -772,12 +772,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         return (app, new Uri(address));
     }
 
-    private static int FreePort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
-    }
+    private static int FreePort() => TestPorts.Free();
 
     private static async Task WaitForAsync(Func<Task<bool>> condition)
     {

@@ -1,8 +1,6 @@
 using System.Diagnostics;
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Endgame.Hosting.Contracts;
@@ -344,12 +342,7 @@ public sealed class HostingEnvironment : IAsyncLifetime
         return stat.StandardOutput.ReadToEnd().Trim();
     }
 
-    private static int FreePort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
-    }
+    private static int FreePort() => TestPorts.Free();
 
     private static string FindRepositoryRoot()
     {

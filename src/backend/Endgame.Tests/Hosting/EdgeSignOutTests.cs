@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Net.Sockets;
 using Endgame.Edge;
 using Endgame.Edge.Access;
 using Endgame.Edge.Runtime;
@@ -173,10 +172,5 @@ public sealed class EdgeSignOutTests(PostgresServer postgres) : IAsyncLifetime
         return (app, new Uri(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First()));
     }
 
-    private static int FreePort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
-    }
+    private static int FreePort() => TestPorts.Free();
 }
