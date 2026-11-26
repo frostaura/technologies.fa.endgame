@@ -14,8 +14,9 @@ public interface IPlatformCosts
     Task RecordAsync(PlatformCost cost, CancellationToken cancellationToken);
 }
 
-/// <summary>A platform call's answer: the assistant's text, the model that gave it, and the cost in dollars.</summary>
-public sealed record PlatformReply(string Content, string? Model, string? GenerationId, decimal CostUsd);
+/// <summary>A platform call's answer: the assistant's text, the model that gave it, the cost in dollars, and why it stopped.</summary>
+/// <param name="FinishReason">OpenRouter's <c>finish_reason</c>: <c>stop</c>, or <c>length</c> when the answer was cut at the token limit.</param>
+public sealed record PlatformReply(string Content, string? Model, string? GenerationId, decimal CostUsd, string? FinishReason = null);
 
 /// <summary>
 /// The model gateway's path for work FrostAura does for itself, before any organisation exists to pay
@@ -76,12 +77,14 @@ public sealed class PlatformModelCalls(ModelGatewayOptions options, CreditOption
             body = null;
         }
 
-        var content = body?["choices"]?[0]?["message"]?["content"]?.ToString() ?? "";
+        var choice = body?["choices"]?[0];
+        var content = choice?["message"]?["content"]?.ToString() ?? "";
+        var finish = choice?["finish_reason"]?.ToString();
         var model = body?["model"]?.ToString();
         var generation = body?["id"]?.ToString();
         var cost = body?["usage"]?["cost"] is JsonValue value && value.TryGetValue<decimal>(out var reported) ? reported
             : generation is not null ? await provider.GetGenerationCostAsync(generation, cancellationToken) ?? 0m : 0m;
         await costs.RecordAsync(new PlatformCost(purpose, model, generation, cost, by, detail), cancellationToken);
-        return new PlatformReply(content, model, generation, cost);
+        return new PlatformReply(content, model, generation, cost, finish);
     }
 }
