@@ -250,6 +250,25 @@ public sealed class WalkTwoServerTests(PostgresServer postgres) : IAsyncLifetime
         Assert.DoesNotContain((await ControlPlaneApp.Ok(owner.GetAsync("/api/tree")))["needsYou"]!.AsArray(), n => n!["kind"]!.GetValue<string>() == "hire");
     }
 
+    // ---------------------------------------------------------------- R2-8
+
+    [Fact]
+    public async Task A_run_keeps_the_estimate_shown_before_the_work_and_the_re_estimate_from_the_plan_apart()
+    {
+        var build = await RunAsync(Division, "build", "Build Squash");
+        await runner.LeaseAsync(build, "runner-test", 120, CancellationToken.None);
+        var before = await ControlPlaneApp.Ok(owner.GetAsync($"/api/runs/{build}"));
+        Assert.Null(before["firstEstimateCredits"]);
+        await AppendAsync(build, "estimate.made", new JsonObject { ["credits"] = 10m, ["basis"] = "start", ["stage"] = "start" });
+        var started = await ControlPlaneApp.Ok(owner.GetAsync($"/api/runs/{build}"));
+        Assert.Equal(10m, started["firstEstimateCredits"]!.GetValue<decimal>());
+        Assert.Null(started["planEstimateCredits"]);
+
+        await AppendAsync(build, "estimate.made", new JsonObject { ["credits"] = 4.8m, ["basis"] = "the plan", ["stage"] = "plan" });
+        var planned = await ControlPlaneApp.Ok(owner.GetAsync($"/api/runs/{build}"));
+        Assert.Equal((10m, 4.8m, 4.8m), (planned["firstEstimateCredits"]!.GetValue<decimal>(), planned["planEstimateCredits"]!.GetValue<decimal>(), planned["estimateCredits"]!.GetValue<decimal>()));
+    }
+
     // ---------------------------------------------------------------- D66
 
     [Fact]

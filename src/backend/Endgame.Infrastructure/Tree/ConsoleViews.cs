@@ -104,6 +104,9 @@ public sealed record TreeView(DateTimeOffset GeneratedAt, string ViewerRole, Org
 /// <summary>A run as the console reads it. Status words: queued, running, waiting, paused, finished, failed, cancelled.</summary>
 /// <param name="Detail">How it ended, technically (the faults), from its <c>run.finished</c>; for technical mode. Null while it runs or when none was given.</param>
 /// <param name="Reason">Why it ended when that is more than its outcome, for example <c>declined_at_start</c>; null otherwise.</param>
+/// <param name="EstimateCredits">The latest estimate: the re-estimate from the plan once there is one.</param>
+/// <param name="FirstEstimateCredits">The estimate shown before the work began (the run's first <c>estimate.made</c>); null when none was made (R2-8).</param>
+/// <param name="PlanEstimateCredits">The re-estimate from the plan (<c>estimate.made</c> with stage <c>plan</c>), null until the plan is priced (R2-8).</param>
 public sealed record PublicRunView(
     Guid Id,
     string Kind,
@@ -124,7 +127,9 @@ public sealed record PublicRunView(
     DateTimeOffset CreatedAt,
     bool CanTryAgain = false,
     string? Detail = null,
-    string? Reason = null);
+    string? Reason = null,
+    decimal? FirstEstimateCredits = null,
+    decimal? PlanEstimateCredits = null);
 
 public sealed record ResearchView(decimal EstimatedCredits, decimal SpentCredits, string? By);
 

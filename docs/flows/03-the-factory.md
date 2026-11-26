@@ -677,7 +677,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Core. **Learn first:** RUN-01.
 - **What you learn:** an estimate is shown first and scored against what the work really cost.
 - **Steps:**
-  1. **"Estimate"** shows "Not yet made" or the figure, with "Shown before the work began".
+  1. **"Estimate"** shows "Not yet made" or the figure, with "Shown before the work began". The server gives the figure shown before the work (`firstEstimateCredits`) and the re-estimate from the plan (`planEstimateCredits`) apart, so a re-estimated run can say both ("Estimated 10 before the work began; 4.8 once planned").
   2. **"Spent so far"** shows what the work was charged, a bar and "{p}% of the estimate". It is the run's own cost: the billable settlements in its log, counted as the ledger counts them, so a free repair is not in it and the figure matches "cost {y}" once scored. The percentage is the true one ("130% of the estimate"); the bar stops at full and turns to the attention colour above 100%. A small amount is never rounded to 0: it keeps two decimals ("0.05 credits") or reads "less than 0.01 credits".
   3. While running, **"Held for calls in flight"** shows "Reserved before each call, released when it settles".
   4. When finished, **"Estimate against actual"** shows "on the estimate", "{n}% over" or "{n}% under", with "Estimated {x}, cost {y}", and **"Not charged"** shows the credits the work used repairing its own mistakes, "Repairs of the work’s own mistakes, never billed".

@@ -48,6 +48,7 @@ public static class RunEventTypes
     public const string TaskDone = "task.done";
     public const string TaskFailed = "task.failed";
     public const string Message = "message";
+    public const string EstimateMade = "estimate.made";
 
     public static readonly IReadOnlyList<string> All =
     [
