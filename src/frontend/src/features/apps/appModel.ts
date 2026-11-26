@@ -23,7 +23,9 @@ export function isBookkeeping(v: AppVersion): boolean {
   if (v.live) return false;
   if (v.author.kind === "factory") return true;
   const first = (v.message.split("\n")[0] ?? "").trim();
-  return /^(record|document|docs?\b|chore\b|wip\b)/i.test(first) || /\brepair round\b/i.test(first) || /\bverification\b/i.test(first);
+  // The factory's check-and-repair notes ("Repair [item] evidence: …", "Verify … (r2)") name its plan items in brackets
+  // and its rounds as r1, r2 (R2-4).
+  return /^(record|document|docs?\b|chore\b|wip\b|repair\b|verify\b)/i.test(first) || /\brepair round\b/i.test(first) || /\bverification\b/i.test(first) || /\[[a-z0-9]+(?:-[a-z0-9]+)*\]/.test(first) || /\(r\d+\)$/.test(first);
 }
 
 /**
@@ -61,10 +63,46 @@ export function versionTitle(v: AppVersion, technical: boolean): string {
   if (technical) return first || "A change";
   if (v.author.kind === "factory") return "The factory recorded its progress";
   // A restore's own line (`Restore the version <commit>`) names a commit id: say what it is instead.
-  if (/^Restore the version [0-9a-f]{7,40}$/i.test(first)) return "An earlier version, brought back";
+  if (/^Restore the version [0-9a-f]{7,40}$/i.test(first)) return "Brought back an earlier version";
   const stripped = first.replace(/^[a-z0-9]+(?:-[a-z0-9]+)*:\s+/, "");
   const sentence = stripped ? `${stripped.charAt(0).toUpperCase()}${stripped.slice(1)}` : "";
   return plainOrNull(sentence) ?? `A change by ${v.author.name}`;
+}
+
+/** The server's plain title: a string, null for a saved step with none, undefined when the server sends no such field. */
+export function plainTitleOf(v: AppVersion): string | null | undefined {
+  const raw = v.title !== undefined ? v.title : v.plainTitle;
+  if (raw === undefined) return undefined;
+  return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : null;
+}
+
+export interface HistoryRow {
+  version: AppVersion;
+  title: string;
+  /** "Live now": in normal mode, the newest published change at or below what is running, never a bookkeeping step. */
+  live: boolean;
+}
+
+/**
+ * The rows History shows (R2-4). Technical mode, or "Show every saved step": every version, its raw first line, the
+ * badge where the server puts it. Normal mode: the versions with a plain title the server sent — or, from an older
+ * server with none, the changes the D38 rule keeps — and nothing never published; every other saved step is folded,
+ * and `folded` counts them. "Live now" moves down from a folded step to the newest change shown beneath it.
+ */
+export function historyRows(versions: AppVersion[], technical: boolean, every: boolean): { rows: HistoryRow[]; folded: number } {
+  const raw = (v: AppVersion) => ({ version: v, title: versionTitle(v, technical), live: v.live });
+  if (technical) return { rows: versions.map(raw), folded: 0 };
+  const titled = versions.some((v) => plainTitleOf(v) !== undefined);
+  // From an older server the live version is a change unless it is itself a bookkeeping step (R2-4).
+  const isChange = (v: AppVersion) => v.published !== false && (titled ? Boolean(plainTitleOf(v)) : !isBookkeeping({ ...v, live: false }));
+  const titleOf = (v: AppVersion) => plainTitleOf(v) ?? versionTitle(v, false);
+  const changes = versions.filter(isChange);
+  const liveAt = versions.findIndex((v) => v.live);
+  const liveChange = liveAt < 0 ? undefined : versions.slice(liveAt).find(isChange);
+  if (every) return { rows: versions.map((v) => ({ version: v, title: titleOf(v), live: v === liveChange })), folded: 0 };
+  // Nothing but saved steps yet: the newest one stands for them, so the history is never an empty list.
+  const shown = changes.length > 0 ? changes : versions.slice(0, 1);
+  return { rows: shown.map((v) => ({ version: v, title: titleOf(v), live: changes.length > 0 ? v === liveChange : v.live })), folded: versions.length - shown.length };
 }
 
 export const CAP_KEY = "monthly_credits";

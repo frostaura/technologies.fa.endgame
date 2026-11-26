@@ -44,6 +44,9 @@ function askProblem(e: unknown): AskFailure {
       return { words: CANNOT_ANSWER, technical: technical ?? (typeof data.detail === "string" ? { sql: null, error: data.detail } : null) };
     case "query_timeout":
       return { words: "That question took too long to answer. Try a narrower one, such as a shorter period.", technical };
+    case "ask_too_long":
+      // The model's answer was cut off twice at its limit (R2-6): a fact about the answer's size, said plainly.
+      return { words: "The answer was too long to finish. Ask something shorter or narrower, such as one thing or a shorter period.", technical: null };
     case "ask_unavailable":
       return { words: "Questions about apps cannot be answered on this installation yet.", technical: null };
     default:
@@ -241,7 +244,7 @@ export function Dashboard({ appId, canChange }: { appId: string; canChange: bool
           <Skeleton className="h-48 rounded-md" />
         </Loading>
       )}
-      {view.kind === "failed" && <Failed title="The dashboard could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
+      {view.kind === "failed" && <Failed back={false} title="The dashboard could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {problem && (
         <p role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
           {problem}

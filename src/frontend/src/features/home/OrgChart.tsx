@@ -4,7 +4,7 @@ import { Link } from "@/components/Link";
 import { Bar } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { formatCredits, formatNumber, percent, timeAgo } from "@/lib/format";
+import { formatCredits, formatNumber, headlineCredits, headlineNumber, percent, timeAgo } from "@/lib/format";
 import { effectiveRole, roleRank } from "@/lib/roles";
 import { useGetMeQuery } from "@/store/api";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
@@ -208,7 +208,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
         </button>
         <div className="relative z-10 flex flex-wrap items-center gap-1.5">
           {archived ? <Badge tone="quiet">Archived</Badge> : showStage && <ChipRow chips={[stageChip(project.stage)]} />}
-          <span className="text-sm text-ink-muted">{formatCredits(project.spend.monthCredits)} this month</span>
+          <span className="text-sm text-ink-muted">{headlineCredits(project.spend.monthCredits)} this month</span>
           {project.role !== null && (
             <Link href={manage(scope)} aria-label={`Manage ${project.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
               Manage
@@ -224,12 +224,13 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
           <div className="flex flex-wrap justify-between gap-2">
             <span className="font-medium">{progressLine(project.progress)}</span>
             <span className="text-ink-muted">
-              {project.progress.estimatedCredits !== null
+              {/* Never "0 of an estimated 0" (R2-9): no estimate yet reads as what has been spent. */}
+              {project.progress.estimatedCredits !== null && project.progress.estimatedCredits > 0
                 ? `${formatNumber(project.progress.spentCredits)} of an estimated ${formatCredits(project.progress.estimatedCredits)}`
                 : `${formatCredits(project.progress.spentCredits)} so far`}
             </span>
           </div>
-          {project.progress.of > 0 && <Bar live className="h-2.5" value={percent(project.progress.step, project.progress.of)} label={progressLine(project.progress)} />}
+          {project.progress.of > 0 && <Bar live className="h-2.5" value={percent(project.progress.done ?? project.progress.step, project.progress.of)} label={progressLine(project.progress)} />}
           <Link href={paths.run(project.progress.runId)} className="relative z-10 self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
             Watch the work
           </Link>
@@ -275,7 +276,7 @@ function AppRow({ app }: { app: TreeApp }) {
           label={app.visitsToday !== null || !app.lastVisitAt ? "visits today" : "last visit"}
           muted={app.visitsToday === null && !app.lastVisitAt}
         />
-        <Figure value={formatNumber(app.spend.monthCredits)} label="credits this month" />
+        <Figure value={headlineNumber(app.spend.monthCredits)} label="credits this month" />
       </div>
     </li>
   );

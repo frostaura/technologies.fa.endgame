@@ -19,8 +19,16 @@ describe("a failed read", () => {
     expect(screen.getByRole("link", { name: "Back to the org chart" }).getAttribute("href")).toBe("/");
   });
 
-  it("that was refused is the whole message", () => {
-    render(<Failed title="You cannot see the secrets here" reason="Only an Admin or the Owner can do this here. You are a Builder here." status={403} />);
+  it("that was refused is the whole message, with the way back and never a retry (R2-1)", () => {
+    render(<Failed title="You cannot see the secrets here" reason="Only an Admin or the Owner can do this here. You are a Builder here." status={403} onRetry={() => {}} />);
     expect(screen.getByRole("alert").textContent).not.toContain("Nothing here is known");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to the org chart" }).getAttribute("href")).toBe("/");
+  });
+
+  it("that was refused where the page's own navigation serves offers nothing", () => {
+    render(<Failed back={false} title="The organisation could not be loaded" reason="You are not signed in." status={401} onRetry={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

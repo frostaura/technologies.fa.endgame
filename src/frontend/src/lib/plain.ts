@@ -37,6 +37,33 @@ export function plainOrNull(text: string | null | undefined): string | null {
   return text && isPlain(text) ? text : null;
 }
 
+/** A quoted slug path (`'acme/tools'`), which plain words never carry. */
+const QUOTED_PATH = /'[a-z0-9][\w.-]*(\/[\w.-]+)+'/gi;
+
+/**
+ * A sentence's scope paths retold as words: "at 'acme/tools'" and "at acme/tools" are "here", a leading quoted path is
+ * "This", any other quoted path "this part". Normal mode never prints a scope path in a sentence.
+ */
+export function withoutPaths(text: string): string {
+  return text
+    .replace(/ at '[a-z0-9][\w./-]*'/gi, " here")
+    .replace(/ at [a-z0-9][\w.-]*(\/[a-z0-9][\w.-]*)+(?=[\s,.;:!?)]|$)/gi, " here")
+    .replace(/^'[a-z0-9][\w.-]*(\/[\w.-]+)+'/i, "This")
+    .replace(QUOTED_PATH, "this part");
+}
+
+/** A raw tool line an older notice kept as its detail: "adjust_setting: hire_checkpoint=false.", "try_again: 075ba848-…". */
+const RAW_TOOL_LINE = /^[a-z_]+: /;
+
+/**
+ * A notice's or approval's detail and its technical line (R2-5). One raised before the plain-detail fix kept the raw
+ * tool line as its detail and has no `technical` field: that line is technical, shown in technical mode only.
+ */
+export function plainDetail(detail: string | null, technical: string | null | undefined): { detail: string | null; technical: string | null } {
+  if ((technical === null || technical === undefined) && detail && RAW_TOOL_LINE.test(detail.trim())) return { detail: null, technical: detail };
+  return { detail, technical: technical ?? null };
+}
+
 /** The first sentence of a text, at most `max` characters, ending in an ellipsis when cut. */
 export function firstSentence(text: string, max = 160): string {
   const clean = text.replace(/\s+/g, " ").trim();

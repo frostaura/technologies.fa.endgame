@@ -17,11 +17,12 @@ import { useControlRunMutation, useGetRunQuery } from "@/store/api";
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
-import { accuracy, deriveRun, isStartDeclined, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
+import { accuracy, deriveRun, estimateName, isStartDeclined, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type StepTone } from "./runModel";
 import { distinctReplies } from "../home/conversationModel";
 import { actionCount, buildTimeline, groupCredits, type TimelineGroup, type TimelineItem } from "./timeline";
 import { useRunStream } from "./useRunStream";
 import { ApprovalCard } from "./ApprovalCard";
+import { ANSWER_CUT_OFF } from "./retryModel";
 import { TryAgain } from "./TryAgain";
 
 const STATUS: Record<RunStatus, { label: string; tone: BadgeTone }> = {
@@ -115,7 +116,11 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
   const lastPlain = [...derived.messages].reverse().find((m) => m.from !== "owner" && plainOrNull(m.text))?.text ?? null;
   const outcome = mode === "technical" ? [derived.finishedSummary, derived.finishedDetail ?? run.detail].filter(Boolean).join("\n\n") || null : (reply ?? plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null));
   const badge = declined ? DECLINED : STATUS[status];
-  const estimate = derived.estimateCredits ?? run.estimateCredits;
+  // The figure shown before the work began, and the plan's re-estimate beside it (R2-8); a log with no estimate yet
+  // leaves the run's own single figure standing in.
+  // The server gives both (firstEstimateCredits, planEstimateCredits); an older one only the latest, so the log is read.
+  const estimate = run.firstEstimateCredits ?? derived.firstEstimateCredits ?? run.estimateCredits;
+  const planned = run.planEstimateCredits !== undefined ? run.planEstimateCredits : derived.plannedEstimateCredits;
   // One figure, from one source: the log's billable settlements, as the ledger counts them, so it is the run's own
   // cost (spentCredits); the run's figure stands in only until the log's first events arrive.
   const spent = log.events.length > 0 ? derived.settledCredits : run.spentCredits;
@@ -212,11 +217,11 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
         <StoppedPanel run={run} derived={derived} declined={declined} />
       )}
 
-      <CostPanel estimate={estimate} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} declined={declined} />
+      <CostPanel estimate={estimate} planned={planned} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} declined={declined} />
 
       <Approvals runId={run.id} approvals={derived.approvals} />
 
-      {derived.plan && <PlanPanel plan={derived.plan} mode={mode} />}
+      {derived.plan && <PlanPanel plan={derived.plan} mode={mode} publicOnlyNote={derived.publicOnlyNote} />}
 
       {outcome && (
         <section className="rounded-md border bg-surface p-5 shadow-card">
@@ -249,7 +254,8 @@ function StreamBadge({ stream, terminal }: { stream: StreamStatus; terminal: boo
  * credits; stopped research, a build or a change offers "Try again", which carries on from where it stopped.
  */
 function StoppedPanel({ run, derived, declined }: { run: Run; derived: DerivedRun; declined: boolean }) {
-  const why = run.budgetExhausted ? "budget" : declined ? "start-declined" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
+  const cutOff = (derived.finishedReason ?? run.reason) === ANSWER_CUT_OFF;
+  const why = run.budgetExhausted ? "budget" : declined ? "start-declined" : cutOff ? "cut-off" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
   if (run.canTryAgain) return <TryAgain runId={run.id} ideaId={run.ideaId} why={why} showCredits={run.budgetExhausted} />;
   return (
     <section aria-label="Stopped for budget" className="flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
@@ -261,22 +267,26 @@ function StoppedPanel({ run, derived, declined }: { run: Run; derived: DerivedRu
   );
 }
 
-function CostPanel({ estimate, spent, reserved, scored, notCharged, declined }: { estimate: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number; declined: boolean }) {
+function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, declined }: { estimate: number | null; planned: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number; declined: boolean }) {
+  const replanned = planned !== null && estimate !== null && Math.abs(planned - estimate) >= 0.005 ? planned : null;
+  // Spending is held against the latest figure: the plan's, once there is one.
+  const against = replanned ?? estimate;
+  const estimateTile = <Stat label="Estimate" value={estimate !== null ? formatCredits(estimate) : "Not yet made"} note="Shown before the work began" extra={replanned !== null ? `${formatNumber(replanned)} once planned` : null} />;
   // Work declined at its start never began: there is nothing to score its estimate against (D19).
   if (declined)
     return (
       <section aria-label="Cost" className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Stat label="Estimate" value={estimate !== null ? formatCredits(estimate) : "Not yet made"} note="Shown before the work began" />
+        {estimateTile}
         <Stat label="Charged" value={formatCredits(spent)} note="You declined to start it, so nothing was done." />
       </section>
     );
   return (
     <section aria-label="Cost" className={cn("grid grid-cols-1 gap-4", scored ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3")}>
-      <Stat label="Estimate" value={estimate !== null ? formatCredits(estimate) : "Not yet made"} note="Shown before the work began" />
-      <Stat label="Spent so far" value={formatCredits(spent)} note={estimate ? `${share(spent, estimate)}% of the estimate` : "Settled from each call’s own cost"} bar={estimate ? share(spent, estimate) : null} />
+      {estimateTile}
+      <Stat label="Spent so far" value={formatCredits(spent)} note={against ? `${share(spent, against)}% of ${estimateName(against, estimate, replanned)}` : "Settled from each call’s own cost"} bar={against ? share(spent, against) : null} />
       {scored ? (
         <>
-          <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual)} note={`Estimated ${formatNumber(scored.estimated)}, cost ${formatNumber(scored.actual)}`} />
+          <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual)} note={`Against ${estimateName(scored.estimated, estimate, replanned)}: cost ${formatNumber(scored.actual)}`} />
           <Stat label="Not charged" value={formatCredits(notCharged)} note="Repairs of the work’s own mistakes, never billed" />
         </>
       ) : (
@@ -286,13 +296,14 @@ function CostPanel({ estimate, spent, reserved, scored, notCharged, declined }: 
   );
 }
 
-function Stat({ label, value, note, bar = null }: { label: string; value: string; note: string; bar?: number | null }) {
+function Stat({ label, value, note, extra = null, bar = null }: { label: string; value: string; note: string; extra?: string | null; bar?: number | null }) {
   return (
     <div className="flex flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card">
       <span className="text-ink-muted">{label}</span>
       <span className="font-display text-2xl font-semibold">{value}</span>
       {bar !== null && <Bar value={percent(bar, 100)} label={`${bar}% of the estimate spent`} tone={bar > 100 ? "attention" : "primary"} className="my-1" />}
       <span className="text-sm text-ink-body">{note}</span>
+      {extra && <span className="text-sm text-ink-body">{extra}</span>}
     </div>
   );
 }
@@ -313,7 +324,7 @@ function Approvals({ runId, approvals }: { runId: string; approvals: DerivedAppr
  * The plan as a contract: each item in the owner's words, with whether it passed its check. The
  * files, endpoints and test commands behind each item are technical detail, shown in technical mode.
  */
-function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
+function PlanPanel({ plan, mode, publicOnlyNote }: { plan: DerivedPlan; mode: Mode; publicOnlyNote: string | null }) {
   const technical = mode === "technical";
   const passed = plan.items.filter((i) => i.result === "passed").length;
   // A change's last part re-checks what the app already did: those are not things the owner just asked for.
@@ -333,6 +344,12 @@ function PlanPanel({ plan, mode }: { plan: DerivedPlan; mode: Mode }) {
         </span>
       </div>
       {(technical ? plan.summary : plainOrNull(plan.summary)) && <p className="text-ink-body">{plan.summary}</p>}
+      {publicOnlyNote && (
+        <p data-testid="plan-public-only" className="flex items-start gap-2 rounded-xs bg-primary-tint px-3 py-2 text-ink-body">
+          <Icon name="employee" className="mt-0.5 shrink-0 text-primary-link" />
+          {publicOnlyNote}
+        </p>
+      )}
       {asked.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <h3 className="font-display text-base font-semibold">What you asked for</h3>

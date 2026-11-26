@@ -76,6 +76,58 @@ describe("RunView after the real-stack walk", () => {
     expect(stat("Spent so far").textContent).toContain("130% of the estimate");
   });
 
+  it("R2-8: the estimate shown before the work began stands, with the plan's re-estimate beside it, and each share names its figure", async () => {
+    await open({ ...RUN, kind: "build", estimateCredits: 4.8 });
+    feed([
+      ["estimate.made", { credits: 10, stage: "start" }],
+      ["estimate.made", { credits: 4.8, stage: "plan" }],
+      ["model.replied", { settledCredits: 2.4 }],
+    ]);
+    const tile = stat("Estimate");
+    expect(tile.textContent).toContain("10 credits");
+    expect(tile.textContent).toContain("Shown before the work began");
+    expect(tile.textContent).toContain("4.8 once planned");
+    expect(stat("Spent so far").textContent).toContain("50% of the 4.8 estimated once planned");
+    cleanup();
+    FakeEventSource.instances = [];
+    await open({ ...RUN, kind: "build", estimateCredits: 4.8 });
+    feed([
+      ["estimate.made", { credits: 10, stage: "start" }],
+      ["estimate.made", { credits: 4.8, stage: "plan" }],
+      ["model.replied", { settledCredits: 5.4 }],
+      ["estimate.scored", { expectedCredits: 4.8, actualCredits: 5.4 }],
+    ]);
+    expect(stat("Estimate against actual").textContent).toContain("Against the 4.8 estimated once planned: cost 5.4");
+  });
+
+  it("R2-8: the server's two figures stand over the log", async () => {
+    await open({ ...RUN, kind: "build", estimateCredits: 4.8, firstEstimateCredits: 10, planEstimateCredits: 4.8 });
+    feed([["model.replied", { settledCredits: 2.4 }]]);
+    expect(stat("Estimate").textContent).toContain("10 credits");
+    expect(stat("Estimate").textContent).toContain("4.8 once planned");
+    expect(stat("Spent so far").textContent).toContain("50% of the 4.8 estimated once planned");
+  });
+
+  it("R2-8: a run with one estimate (or the old single field) reads as before", async () => {
+    await open({ ...RUN, estimateCredits: 12 });
+    feed([["model.replied", { settledCredits: 6 }]]);
+    expect(stat("Estimate").textContent).toContain("12 credits");
+    expect(stat("Estimate").textContent).not.toContain("once planned");
+    expect(stat("Spent so far").textContent).toContain("50% of the estimate shown before the work began");
+  });
+
+  it("R2-6: a run stopped because an answer was too long to finish says so, and offers Try again", async () => {
+    let reads = 0;
+    const build = { ...RUN, kind: "build", title: "Build: Pager" };
+    await open(() => {
+      reads += 1;
+      return reads === 1 ? build : { ...build, status: "failed", reason: "answer_cut_off", canTryAgain: true };
+    });
+    feed([["run.finished", { outcome: "failed", reason: "answer_cut_off", summary: "The answer was too long to finish: it stopped at its output limit, and again when asked once more with twice the room." }]]);
+    await waitFor(() => expect(screen.getByTestId("try-again").textContent).toContain("too long to finish, even when asked again with twice the room"));
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
   it("D15: work under way is in the present tense", async () => {
     await open();
     feed([
@@ -213,5 +265,23 @@ describe("RunView after the real-stack walk", () => {
     await open({ ...RUN, kind: "build" });
     feed([["plan.proposed", { summary: "Kit lists", items: [], requirements: [{ id: "R1", text: "tick off their own kit for a trip" }] }]]);
     expect(screen.getByText("Tick off their own kit for a trip")).toBeTruthy();
+  });
+
+  it("R2-11: the plan panel says a part for people who do not sign in works once the app is public", async () => {
+    await open({ ...RUN, kind: "build" });
+    feed([
+      ["plan.proposed", { summary: "Packing lists", items: [{ id: "i1", text: "A shared trip link", check: "check_preview signed out" }], requirements: [{ id: "R1", text: "packers tick off kit, all without signing in" }] }],
+      ["message", { from: "builder", title: "The plan", milestone: "planned", text: "Packing lists. 1 part, each built, then checked in the running app against what you asked for. All 1 things the idea asks for are covered. People can use it without signing in only once you make the app public, which only you can do on its page." }],
+    ]);
+    expect(screen.getByTestId("plan-public-only").textContent).toBe("People can use it without signing in only once you make the app public, which only you can do on its page.");
+  });
+
+  it("R2-11: a plan with nothing for signed-out people carries no such note", async () => {
+    await open({ ...RUN, kind: "build" });
+    feed([
+      ["plan.proposed", { summary: "Kit lists", items: [], requirements: [{ id: "R1", text: "tick off their own kit" }] }],
+      ["message", { from: "builder", title: "The plan", milestone: "planned", text: "Kit lists. 0 parts. All 1 things the idea asks for are covered." }],
+    ]);
+    expect(screen.queryByTestId("plan-public-only")).toBeNull();
   });
 });

@@ -26,8 +26,10 @@ export function Loading({ label, children, className }: { label: string; childre
  * list, and never only as a toast.
  *
  * `status` is the read's HTTP status, when it had one. A refusal (401, 403) or a not-found (404) is
- * an answer rather than a read that broke, so its reason is the whole message; a not-found offers the
- * way back instead of a retry that would only answer the same.
+ * an answer rather than a read that broke, so its reason is the whole message and it never offers a
+ * retry that would only answer the same (R2-1): it offers the way back to the org chart instead, or
+ * nothing where the page's own navigation already serves (`back={false}`: the org chart itself, a
+ * panel inside a page).
  */
 export function Failed({
   title,
@@ -35,6 +37,7 @@ export function Failed({
   onRetry,
   status,
   unknown = "Nothing here is known until it loads.",
+  back = true,
   className,
 }: {
   title: string;
@@ -43,10 +46,11 @@ export function Failed({
   status?: number | null;
   /** What a failed read leaves unknown; said only when the failure is not an answer (401, 403, 404). */
   unknown?: string;
+  /** Whether an answered failure offers "Back to the org chart"; false where the page's own navigation serves. */
+  back?: boolean;
   className?: string;
 }) {
-  const notFound = status === 404;
-  const answered = notFound || status === 401 || status === 403;
+  const answered = status === 404 || status === 401 || status === 403;
   return (
     <div role="alert" data-state="failed" className={cn("flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint p-5", className)}>
       <div className="flex items-start gap-3">
@@ -56,8 +60,8 @@ export function Failed({
           <p className="text-sm text-ink">{answered ? reason : `${reason} ${unknown}`}</p>
         </div>
       </div>
-      {notFound ? (
-        <Link href={paths.home()} className={cn(buttonVariants({ size: "sm" }), "self-start")}>
+      {answered ? (
+        back && <Link href={paths.home()} className={cn(buttonVariants({ size: "sm" }), "self-start")}>
           Back to the org chart
         </Link>
       ) : (

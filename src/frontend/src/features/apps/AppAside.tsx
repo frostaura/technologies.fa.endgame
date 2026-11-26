@@ -49,7 +49,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
           <Skeleton className="h-10 w-20 rounded-full" />
         </Loading>
       )}
-      {graphView.kind === "failed" && <Failed title="What it uses could not be loaded" reason={graphView.reason} status={graphView.status} onRetry={() => void graph.refetch()} />}
+      {graphView.kind === "failed" && <Failed back={false} title="What it uses could not be loaded" reason={graphView.reason} status={graphView.status} onRetry={() => void graph.refetch()} />}
       {graphView.kind === "loaded" && (
         <ul aria-label="What it uses" className="flex flex-wrap gap-2">
           {services.map((s) => (

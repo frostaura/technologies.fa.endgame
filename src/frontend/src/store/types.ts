@@ -123,6 +123,8 @@ export interface ProjectProgress {
   of: number;
   spentCredits: number;
   estimatedCredits: number | null;
+  /** The steps finished, which fill the bar; `step` is the one under way. Absent from an older control plane. */
+  done?: number;
 }
 
 export interface TreeProject {
@@ -352,6 +354,10 @@ export interface Run {
   reason?: string | null;
   /** `run.finished`'s technical detail: technical mode only. */
   detail?: string | null;
+  /** The estimate shown before the work began (R2-8); absent from an older control plane, null when none was made. */
+  firstEstimateCredits?: number | null;
+  /** The re-estimate from the plan, null until the plan is made (R2-8). `estimateCredits` is the latest of the two. */
+  planEstimateCredits?: number | null;
 }
 
 export interface RunEvent {
@@ -943,6 +949,18 @@ export interface AppVersion {
   at: string;
   author: { kind: "employee" | "person" | "factory"; id: string | null; name: string };
   live: boolean;
+  /**
+   * The version's plain title, for normal mode (R2-4): null for a saved step that is not a change a person would look
+   * for. Absent from an older control plane, which sends only the raw message; `plainTitle` is read as the same field.
+   */
+  title?: string | null;
+  plainTitle?: string | null;
+  /** Whether this version was ever published; absent from an older control plane. */
+  published?: boolean;
+  /** The build or change that published it. */
+  runId?: string | null;
+  /** The app's newest version. */
+  current?: boolean;
 }
 
 export interface AppVersions {

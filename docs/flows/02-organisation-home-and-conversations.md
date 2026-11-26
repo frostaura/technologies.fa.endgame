@@ -227,8 +227,8 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Steps:**
   1. The card shows its name (a selection button) and "Manage".
   2. A stage chip appears unless the project is live with apps. The stages the server sends are "Researching", "Reviewing", "Building", "Planning", "Live" and "Paused".
-  3. The card shows "{credits} this month" and an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all.
-  4. If work is under way: "{stage}, step {x} of {y}" — {x} the step under way, counted from 1 (`progress.step`; `progress.done` counts the finished ones) — (just "{stage}" until there is a plan to count, with no bar), then "{spent} of an estimated {estimate}" (or "{spent} so far" when there is no estimate), a moving progress bar once there is a plan, and the link "Watch the work", which goes to `/runs/{id}`.
+  3. The card shows "{credits} this month" (an amount below 0.1 reads "0 credits this month") and an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all.
+  4. If work is under way: "{stage}, step {x} of {y}" — {x} the step under way, counted from 1 (`progress.step`) — (just "{stage}" until a step of the plan has begun: never "step 0 of {y}"), then "{spent} of an estimated {estimate}" (or "{spent} so far" when there is no estimate, or an estimate of 0), a moving progress bar once there is a plan, filled by the finished steps (`progress.done`), and the link "Watch the work", which goes to `/runs/{id}`.
   5. Below that: its apps (ORG-10) and its people (ORG-11).
 - **You know it worked when:** "Watch the work" opens the live run.
 - **Variations and refusals:**
@@ -252,7 +252,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - an app paused behind Edge's holding page (health `paused`) shows "Paused" in place of its health, with the reason beneath it ("Paused: a monthly budget above it is spent. …");
      - an access chip: "Public", "Shared with {n}", "Shared" or "Private";
      - "{n} visits today" (or "{time ago} last visit", or "Not measured yet" when nothing has been measured);
-     - "{n} credits this month".
+     - "{n} credits this month" — a headline figure, so an amount that rounds below 0.1 reads "0" ("less than 0.01" is kept for sentences and cost detail lines).
   2. Selecting the name opens `/apps/{id}` (APP-01).
 - **You know it worked when:** the app page opens.
 - **Variations and refusals:** an app paused by overdraft or an exhausted budget shows "Paused" and "Health unknown". An archived app shows the single chip "Archived" (TREE-08).
@@ -1129,7 +1129,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
      - "New" when unread;
      - how long ago;
      - the title as a link;
-     - one line of detail;
+     - one line of detail — a notice raised before details were written plainly, whose detail is a raw tool line ("adjust_setting: …", "try_again: …") with no technical line beside it, shows no detail in normal mode; technical mode shows that line;
      - "Mark read" when unread;
      - "Answered" (green) in place of "New" and "Mark read" when what it asked is already answered; its badge is quiet and its title plain;
      - "Also e-mailed" when it was;
@@ -1403,7 +1403,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Foundation · **Learn first:** ORG-04 · **What you learn:** a failed read is never shown as an empty organisation.
 - **Steps:**
   1. While loading, skeletons.
-  2. On failure: "The organisation could not be loaded", "{reason} Nothing here is known until it loads." and "Try again". A refusal (401, 403) or a not-found (404) is an answer: it drops "Nothing here is known until it loads.", and a not-found offers "Back to the org chart" instead of "Try again". The same holds for every failed first load in the console. There is no conversation while failed. The reason is the server's own text where it gives one, for example "The organisation 'x' was not found, or you cannot see it. (404)", or "Endgame could not be reached.", "Endgame did not answer in time.", etc.
+  2. On failure: "The organisation could not be loaded", "{reason} Nothing here is known until it loads." and "Try again". A refusal (401, 403) or a not-found (404) is an answer: it drops "Nothing here is known until it loads." and never offers "Try again"; it offers "Back to the org chart" instead, or nothing inside a panel of a page whose own navigation serves. The same holds for every failed first load in the console. There is no conversation while failed. The reason is the server's own text where it gives one, for example "The organisation 'x' was not found, or you cannot see it. (404)", or "Endgame could not be reached.", "Endgame did not answer in time.", etc.
   3. "Try again" reads it again; once it can be read, the chart appears.
 - **You know it worked when:** after "Try again", the chart appears.
 - **Variations and refusals:** an answer in an unexpected shape fails the same way, with "Endgame sent the organisation in a shape this screen does not understand: {field}."

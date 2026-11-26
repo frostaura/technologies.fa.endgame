@@ -1,5 +1,5 @@
 import { formatCredits, formatNumber, tidyCreditAmounts } from "@/lib/format";
-import { firstSentence, shortTitle } from "@/lib/plain";
+import { firstSentence, plainDetail, shortTitle } from "@/lib/plain";
 import type { NeedsYou, VerdictOutcome } from "@/store/types";
 
 const SAYS: Record<VerdictOutcome, string> = { build: "build", change: "change", "do-not-build": "do not build" };
@@ -24,7 +24,13 @@ export function meaningfulLine(detail: string | null, max = 150): string | null 
  * What a "needs you" card says: one headline and one line, never more. A verdict's whole summary
  * belongs on the verdict page; the card only says what research concluded and why, in a line.
  */
-export function needLines(item: NeedsYou): { headline: string; line: string } {
+export function needLines(item: NeedsYou): { headline: string; line: string; technical: string | null } {
+  // A card raised before the plain-detail fix may carry a raw tool line as its detail: technical mode only (R2-5).
+  const { detail, technical } = plainDetail(item.detail, item.kind === "approval" ? item.technical : null);
+  return { ...cardLines({ ...item, detail } as NeedsYou), technical };
+}
+
+function cardLines(item: NeedsYou): { headline: string; line: string } {
   switch (item.kind) {
     case "verdict": {
       const headline = /^research says/i.test(item.title) ? shortTitle(item.title, 90) : `Research says ${SAYS[item.verdict]} “${shortTitle(item.title.replace(/^a verdict is waiting:\s*/i, ""), 60)}”`;

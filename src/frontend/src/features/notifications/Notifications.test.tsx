@@ -154,6 +154,29 @@ describe("notification model", () => {
   });
 });
 
+describe("a notice raised before the plain-detail fix (R2-5)", () => {
+  const old = (detail: string, technical?: string | null): NotificationItem => ({ id: "n7", kind: "approval", severity: "info", title: "Change a setting here?", detail, ...(technical === undefined ? {} : { technical }), scope: "acme", subject: { kind: "approval", id: "a1" }, createdAt: "2026-11-25T01:00:00Z", read: false, emailedAt: null, resolved: false }) as NotificationItem;
+
+  it("keeps its raw tool line out of normal mode and gives it to technical mode", () => {
+    expect(notificationLines(old("adjust_setting: hire_checkpoint=false."))).toMatchObject({ line: null, technical: "adjust_setting: hire_checkpoint=false." });
+    expect(notificationLines(old("try_again: 075ba848-…"))).toMatchObject({ line: null, technical: "try_again: 075ba848-…" });
+  });
+
+  it("leaves a plain detail, and a detail beside its own technical line, as they are", () => {
+    expect(notificationLines(old("Hires here would no longer wait for you."))).toMatchObject({ line: "Hires here would no longer wait for you.", technical: null });
+    expect(notificationLines(old("note: kept as written", "adjust_setting: x"))).toMatchObject({ line: "note: kept as written", technical: "adjust_setting: x" });
+  });
+
+  it("is drawn without the tool line in normal mode", async () => {
+    stub(json({ organisation: "acme", unread: 1, notifications: [old("adjust_setting: hire_checkpoint=false.")] }));
+    const { store } = renderWithStore(<NotificationsView />);
+    expect((await screen.findAllByText("Change a setting here?")).length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain("adjust_setting");
+    act(() => void store.dispatch(modeSet("technical")));
+    expect(screen.getAllByText("adjust_setting: hire_checkpoint=false.").length).toBeGreaterThan(0);
+  });
+});
+
 describe("a top-up request, for operators", () => {
   it("is labelled as one and leads to where it is answered", () => {
     const item: NotificationItem = { id: "n9", kind: "topup.requested", severity: "info", title: "Acme asks for 250 credits", detail: "Launch week.", scope: "frostaura", subject: { kind: "topup_request", id: "q1" }, createdAt: "2026-11-25T01:00:00Z", read: false, emailedAt: null, resolved: false };

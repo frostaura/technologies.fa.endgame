@@ -5,7 +5,7 @@ import type { AppDetail } from "@/store/types";
 import { ASK_ANSWER, ASK_ESTIMATE, ONTOLOGY_APP, SAVED, VERSIONS } from "@/test/breadth";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { AppView } from "./AppView";
-import { isBookkeeping, reuseLabel, servicesOf, versionTitle } from "./appModel";
+import { historyRows, isBookkeeping, reuseLabel, servicesOf, versionTitle } from "./appModel";
 import { AskChartView } from "./AskChart";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
@@ -102,6 +102,13 @@ describe("asking about an app", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Ask it" }));
     return { ...rendered, alert: await within(askPanel()).findByRole("alert") };
   }
+
+  it("says an answer too long to finish plainly, with what to ask instead (R2-6)", async () => {
+    const { alert } = await askAndFail({ title: "The answer was too long to finish", detail: "Working out the answer took more room than one answer has, even when asked again with twice as much.", status: 422, code: "ask_too_long", credits: 0.04 });
+    expect(alert.textContent).toContain("The answer was too long to finish.");
+    expect(alert.textContent).toContain("Ask something shorter or narrower");
+    expect(alert.textContent).not.toMatch(/ask_too_long|422/);
+  });
 
   it("says a query that could not run in plain words in normal mode, never the database's message", async () => {
     const { alert } = await askAndFail({ title: "The query could not run", detail: 'column "id" does not exist', status: 422, code: "query_failed" });
@@ -227,6 +234,51 @@ describe("history", () => {
     expect(await screen.findByText("No versions yet")).toBeTruthy();
   });
 
+  // R2-4: the server's plain title per version; every saved step without one folded; "Live now" on a published change.
+  const V = (commit: string, message: string, extra: Record<string, unknown> = {}) => ({ commit: commit.repeat(40).slice(0, 40), message, at: "2026-11-26T10:00:00Z", author: { kind: "employee", id: "e1", name: "Theo" }, live: false, ...extra });
+  const TITLED = {
+    appId: "a1",
+    live: "a".repeat(40),
+    versions: [
+      V("a", "Record progress: book-count-line is built and checked", { author: { kind: "factory", id: null, name: "The factory" }, live: true, title: null }),
+      V("b", "Repair [book-count-line] evidence: connect call_app calls to r1/r2/r3", { title: null }),
+      V("c", "Verify book-count line is above the list (r2)", { title: null }),
+      V("d", "book-count-line: show how many books the home page lists", { title: "Show how many books the home page lists" }),
+      V("e", "Give the book count its own single-book test", { title: null, published: false }),
+      V("f", "Start from the app kit", { title: "The first version" }),
+    ],
+    hasMore: false,
+  };
+
+  it("R2-4: normal mode lists the plain titles only, folds every other step, and marks the published change live", async () => {
+    stub({ "GET /api/apps/a1/versions": json(TITLED) });
+    const { store } = renderWithStore(<AppView appId="a1" />);
+    const list = await screen.findByRole("list", { name: "Versions" });
+    expect(within(list).getAllByRole("listitem").map((li) => li.querySelector("span")?.textContent)).toEqual(["Show how many books the home page lists", "The first version"]);
+    expect(list.textContent).not.toMatch(/Repair \[|r1\/r2\/r3|Verify book-count|recorded its progress/);
+    const live = list.querySelector(`[data-version="${"d".repeat(40)}"]`) as HTMLElement;
+    expect(within(live).getByText("Live now")).toBeTruthy();
+    expect(within(live).queryByRole("button", { name: /^Bring back/ })).toBeNull();
+    expect(within(list).getAllByText("Live now")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Show every saved step (4 more)" }));
+    expect(within(screen.getByRole("list", { name: "Versions" })).getAllByText("Live now")).toHaveLength(1);
+    // Technical mode: everything, raw, the badge where the server put it.
+    act(() => void store.dispatch(modeSet("technical")));
+    const all = screen.getByRole("list", { name: "Versions" });
+    expect(within(all).getAllByRole("listitem")).toHaveLength(6);
+    expect(within(all).getByText("Repair [book-count-line] evidence: connect call_app calls to r1/r2/r3")).toBeTruthy();
+    expect(within(all.querySelector(`[data-version="${"a".repeat(40)}"]`) as HTMLElement).getByText("Live now")).toBeTruthy();
+  });
+
+  it("R2-4: from an older server, a live bookkeeping step hands its badge to the change beneath it; plainTitle is read too", () => {
+    const old = TITLED.versions.map((v: Record<string, unknown>) => Object.fromEntries(Object.entries(v).filter(([k]) => k !== "title" && k !== "published"))) as never[];
+    const rows = historyRows(old, false, false).rows;
+    expect(rows.map((r) => r.title)).toEqual(["Show how many books the home page lists", "Give the book count its own single-book test", "Start from the app kit"]);
+    expect(rows.find((r) => r.live)?.title).toBe("Show how many books the home page lists");
+    const aliased = [V("a", "x", { plainTitle: "A plain change", live: true }), V("b", "y", { plainTitle: null })] as never[];
+    expect(historyRows(aliased, false, false)).toMatchObject({ rows: [{ title: "A plain change", live: true }], folded: 1 });
+  });
+
   it("names a version by its first line, its id only in technical mode", () => {
     expect(versionTitle(VERSIONS.versions[2] as never, false)).toBe("Replace the Notes screens with the Books screens");
     expect(versionTitle(VERSIONS.versions[2] as never, true)).toBe("frontend-books: replace the Notes screens with the Books screens");
@@ -234,7 +286,7 @@ describe("history", () => {
 
   it("names a restore for what it is, not by its commit id", () => {
     const restore = { commit: "c".repeat(40), message: "Restore the version 8433c60166e2", at: "t", author: { kind: "person", id: "u1", name: "Ada Lovelace" }, live: true };
-    expect(versionTitle(restore as never, false)).toBe("An earlier version, brought back");
+    expect(versionTitle(restore as never, false)).toBe("Brought back an earlier version");
     expect(versionTitle(restore as never, true)).toBe("Restore the version 8433c60166e2");
   });
 });
@@ -289,6 +341,8 @@ describe("after the real-stack walk", () => {
     expect(isBookkeeping(v("Anything", "factory"))).toBe(true);
     expect(isBookkeeping(v("Anything", "factory", true))).toBe(false);
     expect(isBookkeeping(v("Fix ownership check on book status update"))).toBe(false);
+    expect(isBookkeeping(v("Repair [book-count-line] evidence: connect call_app calls to r1/r2/r3"))).toBe(true);
+    expect(isBookkeeping(v("Verify book-count line is above the list (r2)"))).toBe(true);
   });
 
   // D35: the graph names service:data for an app that has run or stores data; nothing is guessed beyond its edges.

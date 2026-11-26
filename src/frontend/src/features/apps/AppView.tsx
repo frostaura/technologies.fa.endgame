@@ -5,7 +5,7 @@ import { Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
-import { formatCredits, formatDate, formatDuration, formatNumber, plural, timeAgo } from "@/lib/format";
+import { formatCredits, formatDate, formatDuration, formatNumber, headlineNumber, plural, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -177,7 +177,7 @@ function AppBody({ app }: { app: AppDetail }) {
             <Tile index={3} label="Typical response" value={NOT_MEASURED} valueClass="text-ink-muted" note="Measured once it has visitors." />
           </>
         )}
-        <Tile index={4} label="Cost this month" value={formatNumber(app.cost.monthCredits)} note={capNote(app, budgets.data, nameOf)} />
+        <Tile index={4} label="Cost this month" value={headlineNumber(app.cost.monthCredits)} note={capNote(app, budgets.data, nameOf)} />
       </section>
 
       {stopped && builder && (

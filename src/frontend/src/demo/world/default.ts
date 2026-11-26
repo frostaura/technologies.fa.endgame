@@ -372,11 +372,13 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   for (const x of w.apps) w.runs.push(historicBuild(x, a(Number(new Date(T).getTime() - new Date(x.publishedAt ?? a(0)).getTime()) / 60000 + 25), x.publishedAt ?? a(0)));
 
   // Versions for Court booking and Shift Rota -----------------------------------------------
-  const versions = (appId: string, list: [string, number, "employee" | "person" | "factory", string][]) => {
-    w.versions[appId] = list.map(([message, mins, kind, name], i) => ({ commit: uuidFor(`commit:${appId}:${i}`).replace(/-/g, "").slice(0, 40), message, at: a(mins), author: { kind, id: kind === "employee" ? kasper.id : kind === "person" ? PEOPLE.owner.id : null, name }, live: i === 0 }));
+  // As the control plane lists them (`AppVersionService.ListAsync`, R2-4): only versions that were live, each with its
+  // plain title (what was asked for) and the raw commit message beside it; the newest is live and current.
+  const versions = (appId: string, list: [string, number, "employee" | "person" | "factory", string, string?][]) => {
+    w.versions[appId] = list.map(([title, mins, kind, name, message], i) => ({ commit: uuidFor(`commit:${appId}:${i}`).replace(/-/g, "").slice(0, 40), message: message ?? title, at: a(mins), author: { kind, id: kind === "employee" ? kasper.id : kind === "person" ? PEOPLE.owner.id : null, name }, live: i === 0, current: i === 0, title, runId: null }));
   };
   versions(IDS.tableBookings, [
-    ["League block bookings", 2 * day, "employee", "Kasper"],
+    ["League block bookings", 2 * day, "employee", "Kasper", "league-blocks: book a court for a league night every week"],
     ["Reminder texts in the club's local time", 9 * day, "employee", "Kasper"],
     ["Shorter booking confirmations", 19 * day, "employee", "Kasper"],
     ["Waiting list when every court is taken", 27 * day, "employee", "Kasper"],

@@ -1,4 +1,4 @@
-import { arr, bool, dict, nullable, num, obj, oneOf, record, str, unknownValue, withDefault, type Guard } from "@/lib/guards";
+import { arr, bool, dict, nullable, num, obj, oneOf, optional, record, str, unknownValue, withDefault, type Guard } from "@/lib/guards";
 import { normaliseVerdict } from "@/features/verdict/verdictModel";
 import type {
   AppPaused,
@@ -131,7 +131,7 @@ const treeProject = obj<TreeProject>({
   stage,
   ideaId: ns,
   note: ns,
-  progress: nullable(obj<NonNullable<TreeProject["progress"]>>({ runId: s, label: s, step: num, of: num, spentCredits: num, estimatedCredits: nn })),
+  progress: nullable(obj<NonNullable<TreeProject["progress"]>>({ runId: s, label: s, step: num, of: num, spentCredits: num, estimatedCredits: nn, done: optional(num) })),
   spend,
   workers,
   apps: arr(treeApp),
@@ -282,6 +282,8 @@ export const runGuard: Guard<Run> = obj<Run>({
   canTryAgain: withDefault(bool, false),
   reason: withDefault(ns, null),
   detail: withDefault(ns, null),
+  firstEstimateCredits: optional(nn),
+  planEstimateCredits: optional(nn),
 });
 
 export const runEventGuard: Guard<RunEvent> = obj<RunEvent>({ seq: num, type: s, at: s, payload: withDefault(record, {}) });
@@ -592,6 +594,11 @@ const appVersion = obj<AppVersion>({
   at: s,
   author: obj<AppVersion["author"]>({ kind: oneOf(["employee", "person", "factory"] as const), id: ns, name: s }),
   live: bool,
+  title: optional(ns),
+  plainTitle: optional(ns),
+  published: optional(bool),
+  runId: optional(ns),
+  current: optional(bool),
 });
 export const versionsGuard: Guard<AppVersions> = obj<AppVersions>({ appId: s, live: ns, versions: arr(appVersion), hasMore: withDefault(bool, false) });
 export const restoreGuard: Guard<RestoreResult> = obj<RestoreResult>({ version: appVersion, published: bool, madePrivate: bool, publishError: ns });

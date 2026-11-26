@@ -29,7 +29,7 @@
         }
       ],
       "highlight": {
-        "text": "of its 3 parts are already built and checked",
+        "text": "of its 3 parts is already built and checked",
         "note": "“Try again”: what is kept, and the estimate for what is left."
       }
     },
@@ -141,7 +141,7 @@
             }
           ],
           "highlight": {
-            "text": "1 of its 2 parts are already built and checked",
+            "text": "1 of its 2 parts is already built and checked",
             "note": "Tried again, only the check of what worked before is left."
           }
         }

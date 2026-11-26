@@ -1,4 +1,7 @@
-import { isPlain, plainOrNull } from "@/lib/plain";
+import { formatNumber } from "@/lib/format";
+import { isPlain, plainOrNull, withoutPaths } from "@/lib/plain";
+
+const withoutPathsOrNull = (text: string | null) => (text === null ? null : withoutPaths(text));
 import type { RunEvent, RunStatus } from "@/store/types";
 
 /**
@@ -156,12 +159,22 @@ export interface DerivedRun {
   tasks: DerivedTask[];
   approvals: DerivedApproval[];
   messages: { seq: number; text: string; from: string | null; at: string; code: string | null; title: string | null }[];
+  /** The latest estimate in the log. */
   estimateCredits: number | null;
+  /** The estimate shown before the work began: the log's first (R2-8). */
+  firstEstimateCredits: number | null;
+  /** The re-estimate from the plan (`estimate.made` with stage "plan"), when one followed the first. */
+  plannedEstimateCredits: number | null;
   scored: { estimated: number; actual: number } | null;
   /** Credits the work used that were not charged: an agent repairing its own failed work. */
   notCharged: number;
   /** Parts an earlier attempt built and checked, kept by this one (a try again). */
   carried: string[];
+  /**
+   * The plan's word that something is for people who do not sign in, so it works for them once the owner makes the app
+   * public (R2-11): the sentence from the builder's "The plan" message, or null.
+   */
+  publicOnlyNote: string | null;
   /**
    * Credits charged for finished model calls: the billable settlements, counted as the ledger counts
    * them, so it is the same figure as the run's own cost (`spentCredits`). A repair of the work's own
@@ -189,9 +202,12 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
     approvals: [],
     messages: [],
     estimateCredits: null,
+    firstEstimateCredits: null,
+    plannedEstimateCredits: null,
     scored: null,
     notCharged: 0,
     carried: [],
+    publicOnlyNote: null,
     settledCredits: 0,
     reservedCredits: 0,
     modelCalls: 0,
@@ -326,9 +342,14 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         }
         break;
       }
-      case "estimate.made":
-        run.estimateCredits = num(p, "credits");
+      case "estimate.made": {
+        const credits = num(p, "credits");
+        run.estimateCredits = credits;
+        if (credits === null) break;
+        if (run.firstEstimateCredits === null) run.firstEstimateCredits = credits;
+        else if (str(p, "stage") === "plan") run.plannedEstimateCredits = credits;
         break;
+      }
       case "estimate.scored": {
         const scored = readScored(p);
         if (scored) run.scored = scored;
@@ -348,6 +369,7 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         }
         // A message as written, for a person: harness bookkeeping (`kind`: agent.start, nudge…) is not one.
         const text = str(p, "text");
+        if (text && str(p, "milestone") === "planned") run.publicOnlyNote = PUBLIC_ONLY.exec(text)?.[0].trim() ?? run.publicOnlyNote;
         if (text && !str(p, "kind")) run.messages.push({ seq: e.seq, text, from: str(p, "from"), at: e.at, code: str(p, "code"), title: str(p, "title") });
         break;
       }
@@ -492,7 +514,7 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
       };
     }
     case "message":
-      return { ...base, tone: "structure", icon: "employee", title: str(p, "from") ?? "Update", detail: str(p, "text") };
+      return { ...base, tone: "structure", icon: "employee", title: str(p, "from") ?? "Update", detail: technical ? str(p, "text") : withoutPathsOrNull(str(p, "text")) };
     default:
       if (!technical) return null;
       return { ...base, tone: "quiet", icon: "plan", title: e.type };
@@ -548,6 +570,20 @@ function itemName(p: Record<string, unknown>, planItem: (id: string) => string |
   if (!item) return text ?? "a part of the plan";
   return planItem(item) ?? text ?? (mode === "technical" ? item : "a part of the plan");
 }
+
+/**
+ * Which estimate a figure is compared with, said with it (R2-8): the first, shown before the work began, or the
+ * re-estimate once the plan was made.
+ */
+export function estimateName(figure: number, first: number | null, planned: number | null): string {
+  const near = (a: number | null) => a !== null && Math.abs(a - figure) < 0.005;
+  if (planned !== null && near(planned)) return `the ${formatNumber(figure)} estimated once planned`;
+  if (near(first)) return planned !== null ? `the ${formatNumber(figure)} shown before the work began` : "the estimate shown before the work began";
+  return `an estimate of ${formatNumber(figure)}`;
+}
+
+/** `PlanRequirement.PublicOnlyNote`'s sentence inside the plan message. */
+const PUBLIC_ONLY = /[^.!?]*\bonce you make the app public\b[^.!?]*[.!?]/i;
 
 export function accuracy(estimated: number, actual: number): string {
   if (estimated <= 0) return "no estimate";
