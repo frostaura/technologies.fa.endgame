@@ -2,6 +2,8 @@ import { clock } from "./server/engine";
 import { answering, getSession, getWorld, goto, reset, seekTo } from "./host";
 import { approveWhileWaiting, deviceAsking } from "./device";
 import { currentAddress } from "@/lib/router";
+import { breakpoints } from "@/lib/tokens";
+import { currentViewport } from "@/lib/useViewport";
 import { clearSpotlight, moveCursor, pageRect, showSpotlight } from "./overlay";
 
 /**
@@ -237,6 +239,27 @@ export function inspect(target: Target | string): { found: boolean; tag?: string
   };
 }
 
+/**
+ * On a phone, a section can be folded away (`[data-fold-body]`) or the conversation can sit in its
+ * closed sheet (`[data-talk-target]`): what a step names may be in the page but not on screen. Each
+ * such place that holds it is asked to show itself (`endgame:reveal`, which the fold and the shell
+ * listen for), so a lesson written at desktop size plays the same in a phone-width frame.
+ */
+export function revealHidden(target: Target | string): boolean {
+  const t: Target = typeof target === "string" ? { text: target } : target;
+  const want = compact(t.text ?? t.label);
+  let asked = false;
+  for (const box of document.querySelectorAll<HTMLElement>("[data-fold-body], [data-talk-target]")) {
+    // Shown already (a `display: contents` box has no box of its own; its parent says whether it shows).
+    if (box.getClientRects().length > 0 || (box.parentElement?.getClientRects().length ?? 0) > 0 && getComputedStyle(box).display !== "none" && !box.closest("[hidden]")) continue;
+    const holds = t.selector ? !!box.querySelector(t.selector) : t.testId ? !!box.querySelector(`[data-testid="${CSS.escape(t.testId)}"]`) : !!want && compact(box.textContent).includes(want);
+    if (!holds) continue;
+    box.dispatchEvent(new CustomEvent("endgame:reveal", { bubbles: true }));
+    asked = true;
+  }
+  return asked;
+}
+
 async function waitFor(target: Target | string, field = false, ms = 6000, preferControls = false, show = false): Promise<HTMLElement> {
   const until = performance.now() + ms;
   // What a step acts on is a control: while one may still be loading, plain text that happens to
@@ -245,8 +268,9 @@ async function waitFor(target: Target | string, field = false, ms = 6000, prefer
   for (;;) {
     const el = find(target, field, performance.now() < patient, show);
     if (el) return el;
+    const asked = revealHidden(target);
     if (performance.now() > until) throw new Error(`Nothing on the screen matches ${JSON.stringify(target)}.`);
-    await sleep(100);
+    await sleep(asked ? 60 : 100);
   }
 }
 
@@ -511,6 +535,23 @@ export const endgameDemo = {
     }
   },
   clock: runClock,
+  /**
+   * The console's layout in this frame: which one it draws (`phone`, `tablet`, `desktop` — decided by
+   * the frame's own width, never by a parameter), the widths it changes at, and the room its own
+   * bars take at the top and the foot, which an overlay outside the frame can keep clear of.
+   */
+  layout() {
+    const bar = document.querySelector<HTMLElement>("[data-bottom-nav]");
+    const header = document.querySelector<HTMLElement>("header");
+    return {
+      viewport: currentViewport(),
+      width: window.innerWidth,
+      height: window.innerHeight,
+      breakpoints: { ...breakpoints },
+      top: header ? Math.round(header.getBoundingClientRect().bottom) : 0,
+      bottom: bar ? Math.round(window.innerHeight - bar.getBoundingClientRect().top) : 0,
+    };
+  },
   inspect,
   state,
   /** Resolves once nothing on the screen is still loading (at most `ms`). */
@@ -580,6 +621,9 @@ async function handle(m: Envelope) {
         runClock(args as ClockArgs);
         post({ id: m.id, op: "clock" });
         break;
+      case "layout":
+        post({ id: m.id, op: "layout", args: { ...endgameDemo.layout() } });
+        break;
       case "reset":
         endgameDemo.reset();
         await sleep(50);
@@ -594,7 +638,7 @@ async function handle(m: Envelope) {
 }
 
 export function announceReady(embedded: boolean) {
-  post({ id: "ready", op: "ready", args: { embed: embedded } });
+  post({ id: "ready", op: "ready", args: { embed: embedded, viewport: currentViewport() } });
 }
 
 export function announceRoute(route: string) {
