@@ -78,6 +78,9 @@ public enum ModelFailure
 
     /// <summary>The run is finished or not ours any more; the gateway will not admit calls for it.</summary>
     RunClosed,
+
+    /// <summary>No model can be reached at all: no provider is configured, or the provider refused the platform's key. Not retried.</summary>
+    Unavailable,
 }
 
 public sealed class ModelCallException(ModelFailure failure, string message, decimal settledCredits = 0m) : Exception(message)
@@ -90,6 +93,12 @@ public sealed class ModelCallException(ModelFailure failure, string message, dec
     public bool Retryable => Failure is ModelFailure.RateLimited or ModelFailure.ServerError or ModelFailure.Timeout or ModelFailure.EmptyReply;
 
     public bool Terminal => Failure is ModelFailure.BudgetExhausted or ModelFailure.RunClosed;
+
+    /// <summary>
+    /// The models could not be reached or refused the call (D64): nothing was answered, so nothing can be "in the wrong
+    /// form". Distinct from a model that answered badly (<see cref="ModelFailure.EmptyReply"/>), a refused budget or ceiling.
+    /// </summary>
+    public bool Unreachable => Failure is ModelFailure.Unavailable or ModelFailure.ServerError or ModelFailure.Timeout or ModelFailure.RateLimited or ModelFailure.BadRequest;
 }
 
 /// <summary>The only way the harness reaches a model. Production: the control plane's gateway.</summary>

@@ -8,7 +8,11 @@ idea asked for has failed, however good the rest is.
 1. Read the idea word by word and list its requirements: every distinct thing it asks for — each thing a
    person can do or see, each rule, each thing that happens on its own (an e-mail sent, an incoming call
    answered). Quote each one in the idea's own words (r1, r2, …). Do not merge two into one, do not
-   paraphrase, and do not add anything the idea does not say. If the idea says people "see what everyone
+   paraphrase, and do not add anything the idea does not say. A requirement is a whole statement:
+   split on sentences, list items and clauses that each ask for something, never on a comma that only
+   adds a qualifier or an example. "Show how many books are on the list, as a line above the list, for
+   example "3 books"" is ONE requirement, quoted whole; "as a line above the list" and "for example …"
+   are never requirements of their own. Begin each with a capital letter. If the idea says people "see what everyone
    is reading now", that is a requirement of its own, even if another item shows the same data a
    different way.
 2. Explore briefly — AGENTS.md, PROGRESS.md if it exists, docs/, and the example feature's files (about ten

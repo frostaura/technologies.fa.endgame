@@ -18,11 +18,18 @@ public sealed partial class WorkflowTests
 
     // ---- research ------------------------------------------------------------------------------------
 
-    private static ScriptedModel Researchers(JsonObject verdict, bool demandFound = true) => new()
+    private static bool IsScreen(ChatCall call) => System(call).StartsWith("You screen a product idea", StringComparison.Ordinal);
+
+    private static ScriptedModel Researchers(JsonObject verdict, bool demandFound = true, string screen = "clear", string? line = null) => new()
     {
         Fallback = call =>
         {
             var system = System(call);
+            if (IsScreen(call))
+            {
+                return ScriptedModel.Text(new JsonObject { ["screen"] = screen, ["line"] = line, ["reasoning"] = "Screened." }.ToJsonString());
+            }
+
             if (system.Contains("market researcher", StringComparison.Ordinal))
             {
                 var demand = system.Contains("Demand:", StringComparison.Ordinal);
@@ -63,8 +70,10 @@ public sealed partial class WorkflowTests
         var model = Researchers(Verdict());
         await EstimateTests.Executor(cp, model, workflows: [new ResearchWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
         Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
-        Assert.Equal(4, model.Calls.Count);
-        Assert.All(model.Calls, c => Assert.Equal("research", c.TaskType));
+        Assert.Equal(5, model.Calls.Count);
+        // One cheap red-line screen first (D58), then the research itself.
+        Assert.Equal("summarise", Assert.Single(model.Calls, IsScreen).TaskType);
+        Assert.All(model.Calls.Where(c => !IsScreen(c)), c => Assert.Equal("research", c.TaskType));
 
         // The document is exactly ARCH-004's (the fake checks it with the control plane's own code).
         var verdict = cp.Verdict!;
@@ -161,7 +170,8 @@ public sealed partial class WorkflowTests
         await EstimateTests.Executor(twice, Researchers(Verdict()), workflows: [new ResearchWorkflow()]).ExecuteAsync(twice.Info(), "runner-test", () => false, CancellationToken.None);
         Assert.Equal("failed", twice.Run["status"]!.GetValue<string>());
         Assert.Null(twice.Verdict);
-        Assert.Contains("headline: required", twice.Run["summary"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("headline: required", twice.Payload("run.finished")!["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.DoesNotContain("headline: required", twice.Run["summary"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -178,11 +188,17 @@ public sealed partial class WorkflowTests
     public async Task A_judge_without_a_verdict_document_fails_the_research_rather_than_guessing()
     {
         var cp = new FakeControlPlane("frostaura/technologies", "research", "An idea.", Idea) { Headroom = 100m };
-        var model = new ScriptedModel { Fallback = c => ScriptedModel.Text(System(c).Contains("market researcher", StringComparison.Ordinal) ? "{\"findings\":[]}" : "I think it is fine.") };
+        var model = new ScriptedModel { Fallback = c => ScriptedModel.Text(IsScreen(c) ? "{\"screen\":\"clear\"}" : System(c).Contains("market researcher", StringComparison.Ordinal) ? "{\"findings\":[]}" : "I think it is fine.") };
         await EstimateTests.Executor(cp, model, workflows: [new ResearchWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
         Assert.Equal("failed", cp.Run["status"]!.GetValue<string>());
         Assert.Null(cp.Verdict);
-        Assert.Equal(5, model.Calls.Count);
+        Assert.Equal(6, model.Calls.Count);
+        // D64: the owner's outcome never carries an instruction meant for the model; that stays in the technical detail.
+        var finished = cp.Payload("run.finished")!;
+        Assert.DoesNotContain("Reply with only", finished["summary"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("Reply with only the JSON object", finished["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+        // The second attempt is named in plain words on the run page.
+        Assert.Contains(cp.Events, e => e.Payload["kind"]?.GetValue<string>() == "agent.start" && e.Payload["title"]?.GetValue<string>() == "Asked for the verdict again");
     }
 
     /// <summary>ARCH-004: a message without a kind is for the owner — who, a heading, one plain paragraph, never JSON; bookkeeping messages carry no text.</summary>

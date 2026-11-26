@@ -110,6 +110,7 @@ public sealed class RunExecutor(
                 return;
             case WorkflowEnd.Cancelled:
                 await keeper.StopAsync();
+                await CloseContractorsAsync(run, log);
                 return;
         }
 
@@ -151,7 +152,7 @@ public sealed class RunExecutor(
         if (headroom is { } room && expected > room)
         {
             // The budget is the limit that is always on: in every autonomy mode, work that would break it waits (IDEA-04).
-            var text = string.Create(CultureInfo.InvariantCulture, $"This work is estimated at {expected} credits, more than the {room} left in its budget, so it has not started. Raise the budget or top up, then resume it.");
+            var text = string.Create(CultureInfo.InvariantCulture, $"This work is estimated at {CreditText.Format(expected ?? 0m)} credits, more than the {CreditText.Format(room)} left in its budget, so it has not started. Raise the budget or top up, then resume it.");
             await ctx.Sink.AppendAsync(
             [
                 new RunEvent(HarnessEvents.Message, new JsonObject { ["from"] = "runner", ["title"] = "Waiting for budget", ["code"] = "estimate_over_budget", ["text"] = text, ["estimate"] = expected, ["headroom"] = room }),
@@ -160,18 +161,20 @@ public sealed class RunExecutor(
             return WorkflowOutcome.Suspend("estimate over budget");
         }
 
-        if (autonomy == "checkpoints" && ctx.Setting("checkpoint.start")?.GetValueKind() == System.Text.Json.JsonValueKind.True)
+        // A conversation is not "work" to sign off (D43): asking "Start this work?" before every chat reply only gets in the
+        // way. The budget pause above still applies to it, and every action a conversation takes asks on its own.
+        if (ctx.Run.Kind != RunKinds.Conversation && autonomy == "checkpoints" && ctx.Setting("checkpoint.start")?.GetValueKind() == System.Text.Json.JsonValueKind.True)
         {
             var answer = await new ControlPlaneApprovals(ctx.ControlPlane, ctx.Run.Id).AskAsync(
-                string.Create(CultureInfo.InvariantCulture, $"Start this work? Estimated {expected} credits."),
-                headroom is { } h ? string.Create(CultureInfo.InvariantCulture, $"{h} credits are left in the budget.") : "The budget's headroom is not known.",
+                string.Create(CultureInfo.InvariantCulture, $"Start this work? Estimated {CreditText.Format(expected ?? 0m)} credits."),
+                headroom is { } h ? string.Create(CultureInfo.InvariantCulture, $"{CreditText.Format(h)} credits are left in the budget.") : "The budget's headroom is not known.",
                 ApprovalConsequence.Stops,
                 cancellationToken);
             if (!answer.Approved)
             {
-                return WorkflowOutcome.Failure("The owner declined to start this work at its estimate.")
-                    with
-                { ForOwner = "You declined to start this work at its estimate, so nothing was done and nothing was charged." };
+                // Not a failure, and nothing to score: the owner chose not to start (D19).
+                var note = string.IsNullOrWhiteSpace(answer.Note) ? "" : $" Your note: “{OutputText.Truncate(answer.Note.Trim(), 300)}”";
+                return WorkflowOutcome.Declined("The owner declined to start this work at its estimate.", $"You declined to start this work at its estimate, so nothing was done and nothing was charged.{note}");
             }
         }
 
@@ -186,15 +189,22 @@ public sealed class RunExecutor(
             var all = await log.ReadAllAsync(cancellationToken);
             var actual = Estimator.Score(all);
             var expected = Estimator.Latest(all) ?? 0m;
-            var status = outcome.End == WorkflowEnd.Succeeded ? RunStatuses.Succeeded : RunStatuses.Failed;
-            List<RunEvent> closing = [new RunEvent(HarnessEvents.EstimateScored, Estimator.Scored(expected, actual))];
+            var declined = outcome.End == WorkflowEnd.Declined;
+            var status = outcome.End switch
+            {
+                WorkflowEnd.Succeeded => RunStatuses.Succeeded,
+                WorkflowEnd.Declined => RunStatuses.Cancelled,
+                _ => RunStatuses.Failed,
+            };
+            // A declined start did no work, so there is nothing to score the estimate against (D19).
+            List<RunEvent> closing = declined ? [] : [new RunEvent(HarnessEvents.EstimateScored, Estimator.Scored(expected, actual))];
             if (!outcome.Announced)
             {
                 // Said once: a workflow that announced its own ending (a verdict, a published app) is not repeated here.
                 closing.Add(new RunEvent(HarnessEvents.Message, new JsonObject
                 {
                     ["from"] = "runner",
-                    ["title"] = status == RunStatuses.Succeeded ? "Finished" : "Stopped",
+                    ["title"] = declined ? "You declined" : status == RunStatuses.Succeeded ? "Finished" : "Stopped",
                     ["text"] = Workflows.WorkflowSupport.ForPeople(outcome.ForOwner ?? (OwnerText.IsPlain(outcome.Summary)
                         ? outcome.Summary
                         : status == RunStatuses.Succeeded ? "The work is finished; technical mode has the details." : "The work stopped before it was finished; technical mode says exactly why.")),
@@ -202,16 +212,23 @@ public sealed class RunExecutor(
                 }));
             }
 
-            await log.AppendAsync(
-            [
-                .. closing,
-                new RunEvent(RunEventTypes.RunFinished, new JsonObject
-                {
-                    ["outcome"] = status,
-                    ["summary"] = OutputText.Truncate(outcome.Summary, 2000),
-                    ["totals"] = new JsonObject { ["credits"] = actual.Billable, ["nonBillableCredits"] = actual.NonBillable, ["modelCalls"] = actual.Calls },
-                }),
-            ], cancellationToken);
+            var finished = new JsonObject
+            {
+                ["outcome"] = status,
+                ["summary"] = OutputText.Truncate(outcome.Summary, 2000),
+                ["totals"] = new JsonObject { ["credits"] = actual.Billable, ["nonBillableCredits"] = actual.NonBillable, ["modelCalls"] = actual.Calls },
+            };
+            if (declined)
+            {
+                finished["reason"] = WorkflowOutcome.DeclinedReason;
+            }
+
+            if (outcome.Detail is { Length: > 0 } detail)
+            {
+                finished["detail"] = OutputText.Truncate(detail, 4000);
+            }
+
+            await log.AppendAsync([.. closing, new RunEvent(RunEventTypes.RunFinished, finished)], cancellationToken);
             logger.LogInformation("Run {RunId} {Outcome}: {Summary}", run.Id, status, OutputText.Truncate(outcome.Summary, 200));
         }
         catch (ServiceProblemException e) when (e.Status == HttpStatusCode.Conflict)
@@ -221,6 +238,7 @@ public sealed class RunExecutor(
         finally
         {
             await keeper.StopAsync();
+            await CloseContractorsAsync(run, log);
             try
             {
                 await workspaces.ReleaseAsync(run.Id, CancellationToken.None);
@@ -230,6 +248,46 @@ public sealed class RunExecutor(
                 logger.LogWarning(e, "Run {RunId}'s workspace could not be released; Dock destroys it when the lease lapses.", run.Id);
             }
         }
+    }
+
+    /// <summary>
+    /// When a run ends, however it ends (finished, failed, cancelled, declined, out of budget), every contractor it briefed
+    /// and did not finish is finished now (D73): a contractor whose run is over is not "working", on any page.
+    /// </summary>
+    private async Task CloseContractorsAsync(RunInfo run, ControlPlaneRunLog log)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var all = await log.ReadAllAsync(timeout.Token);
+            foreach (var id in OpenContractors(all))
+            {
+                try
+                {
+                    await controlPlane.FinishContractorAsync(id, run.Id, [], timeout.Token);
+                }
+                catch (Exception e) when (e is ServiceProblemException or HttpRequestException)
+                {
+                    logger.LogWarning("Contractor {ContractorId} of run {RunId} could not be closed: {Error}", id, run.Id, e.Message);
+                }
+            }
+        }
+        catch (Exception e) when (e is ServiceProblemException or HttpRequestException or OperationCanceledException)
+        {
+            logger.LogWarning("Run {RunId}'s contractors could not be read to close them: {Error}", run.Id, e.Message);
+        }
+    }
+
+    /// <summary>The contractors a log shows briefed (<c>subagent.started</c> with a <c>contractorId</c>) and never finished.</summary>
+    public static IReadOnlyList<Guid> OpenContractors(IReadOnlyList<RunEvent> log)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        var finished = log.Where(e => e.Type == HarnessEvents.SubagentFinished).Select(e => Json.Str(e.Payload, "subagent")).ToHashSet(StringComparer.Ordinal);
+        return log.Where(e => e.Type == HarnessEvents.SubagentStarted && !finished.Contains(Json.Str(e.Payload, "subagent")))
+            .Select(e => Guid.TryParse(Json.Str(e.Payload, "contractorId"), out var id) ? id : (Guid?)null)
+            .OfType<Guid>()
+            .Distinct()
+            .ToList();
     }
 
     /// <summary>The lease keeper, plus the Runner's own shutdown: a stopping Runner suspends its runs at a step boundary.</summary>

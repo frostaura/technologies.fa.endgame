@@ -113,6 +113,9 @@ public static class Replay
                 case HarnessEvents.SubagentStarted:
                     state.SubagentsStarted++;
                     break;
+                case HarnessEvents.ToolPermitted or HarnessEvents.ToolDenied when Json.Str(p, "callId") == WebSearch.CallId:
+                    state.SearchAllowed = e.Type == HarnessEvents.ToolPermitted;
+                    break;
             }
         }
 

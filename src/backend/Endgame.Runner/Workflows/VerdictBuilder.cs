@@ -196,6 +196,13 @@ public static class VerdictBuilder
     /// <summary>One plain sentence of what a strand found, for the owner.</summary>
     public static string StrandSummary(string strand, JsonObject? report, AgentResult result)
     {
+        ArgumentNullException.ThrowIfNull(result);
+        if (result.Unreachable)
+        {
+            // Not its form: the models were not reached, so it had nothing to report (D64).
+            return "It could not reach Endgame's AI models, so it found nothing.";
+        }
+
         if (report is null)
         {
             return "It did not report back in the agreed form, so its work is not counted.";
