@@ -11,6 +11,7 @@ using Endgame.Infrastructure.Sweeps;
 using Endgame.Infrastructure.Tree;
 using Endgame.Tests.Fixtures;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Endgame.Tests.ControlPlane;
@@ -205,6 +206,48 @@ public sealed class WalkTwoServerTests(PostgresServer postgres) : IAsyncLifetime
             runId = again,
         }));
         Assert.NotEqual(hire, reraised["hire"]!["id"]!.GetValue<string>());
+    }
+
+    // ---------------------------------------------------------------- R2-3
+
+    [Fact]
+    public async Task The_sweep_withdraws_open_hires_from_before_the_tidy_rules_covered_or_raised_by_a_build_that_ended_unbuilt()
+    {
+        // Rows as they were left before the live rules: a proposal for a need Iris now covers from the organisation, and two
+        // a build raised that ended without the rule ever running (its run marked cancelled behind the platform's back).
+        object Hire(string scope, string key, string name, string role, Guid? run) => new
+        {
+            scope, trigger = "stage", needKey = key, reason = "The work reached this level.", name, role,
+            jobDescription = new { mandate = "Do it.", modelTier = "build" }, expectedMonthlyCredits = 400m, runId = run,
+        };
+        var research = (await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/hires", Hire(Division, $"stage:research:{Division}", "Iris", "Market researcher", null))))["hire"]!["id"]!.GetValue<string>();
+        var build = await RunAsync(Division, "build", "Build Squash");
+        await runner.LeaseAsync(build, "runner-test", 120, CancellationToken.None);
+        await AppendAsync(build, "message", Placement(appId));
+        var theo = (await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/hires", Hire(Project, $"stage:build:{Project}", "Theo", "Software engineer", build))))["hire"]!["id"]!.GetValue<string>();
+        var nadia = (await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/hires", Hire(Project, $"stage:evaluate:{Project}", "Nadia", "QA engineer", build))))["hire"]!["id"]!.GetValue<string>();
+        await HireAsync("frostaura", "Iris", "Market researcher");
+        await using (var scope = app.Scope())
+        {
+            scope.ServiceProvider.GetRequiredService<Endgame.Infrastructure.Tenancy.TenantSession>().UseSystem();
+            var db = scope.ServiceProvider.GetRequiredService<Endgame.Infrastructure.Persistence.EndgameDbContext>();
+            await db.Runs.Where(r => r.Id == build).ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, "cancelled").SetProperty(r => r.FinishedAt, DateTimeOffset.UtcNow).SetProperty(r => r.LeaseHolder, (string?)null).SetProperty(r => r.LeaseExpiresAt, (DateTimeOffset?)null));
+        }
+
+        var sweep = app.Services.GetRequiredService<LeaseSweep>();
+        Assert.Equal(3, (await sweep.SweepOnceAsync(CancellationToken.None)).HiresWithdrawn);
+        Assert.Equal(0, (await sweep.SweepOnceAsync(CancellationToken.None)).HiresWithdrawn);
+        var covered = await ControlPlaneApp.Ok(owner.GetAsync($"/api/hires/{research}"));
+        Assert.True(covered["withdrawn"]!.GetValue<bool>());
+        Assert.Equal("Withdrawn: Iris already does this work here.", covered["decision"]!["note"]!.GetValue<string>());
+        foreach (var hire in new[] { theo, nadia })
+        {
+            var row = await ControlPlaneApp.Ok(owner.GetAsync($"/api/hires/{hire}"));
+            Assert.True(row["withdrawn"]!.GetValue<bool>());
+            Assert.Contains("was cancelled before anything was built", row["decision"]!["note"]!.GetValue<string>(), StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain((await ControlPlaneApp.Ok(owner.GetAsync("/api/tree")))["needsYou"]!.AsArray(), n => n!["kind"]!.GetValue<string>() == "hire");
     }
 
     // ---------------------------------------------------------------- D66
