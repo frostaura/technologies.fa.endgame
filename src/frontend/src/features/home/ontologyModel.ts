@@ -1,5 +1,6 @@
 import type { Mode } from "@/features/runs/runModel";
 import type { OntologyEdge, OntologyNode } from "@/store/types";
+import { capitalise } from "@/lib/format";
 import { serviceLabel } from "../workforce/workforceModel";
 
 /**
@@ -160,7 +161,9 @@ export function nodeType(node: OntologyNode): string {
 export function nodeName(node: OntologyNode, mode: Mode): string {
   if (node.type === "service") return serviceLabel(node.name, mode);
   const role = node.attributes && typeof node.attributes.role === "string" ? node.attributes.role : null;
-  if ((node.type === "employee" || node.type === "contractor") && role) return `${node.name} · ${role}`;
+  // A contractor is named after its step by the runner; it reads as its role (D51).
+  if (node.type === "contractor" || /\(contractor\)\s*$/i.test(node.name)) return `${role ? capitalise(role) : "Contractor"} · contractor`;
+  if (node.type === "employee" && role) return `${node.name} · ${role}`;
   return node.name;
 }
 

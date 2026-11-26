@@ -1,4 +1,4 @@
-import { formatCredits } from "@/lib/format";
+import { formatCredits, formatNumber } from "@/lib/format";
 import { firstSentence, shortTitle } from "@/lib/plain";
 import type { NeedsYou, VerdictOutcome } from "@/store/types";
 
@@ -7,10 +7,15 @@ const SAYS: Record<VerdictOutcome, string> = { build: "build", change: "change",
 /** Opening phrases research writes before the substance; they say nothing on their own. */
 const PREAMBLE = /^(the case against(,)? (argued )?first\.?|verdict:\s*)/i;
 
+/** A figure written to six places ("277.323824 credits") read the way the console writes figures ("277 credits") (D44). */
+export function tidyFigures(text: string): string {
+  return text.replace(/(?<![\d.])\d+\.\d{3,}(?![\d.])/g, (n) => formatNumber(Number(n)));
+}
+
 /** The first sentence that says something, skipping research's own preamble. */
 export function meaningfulLine(detail: string | null, max = 150): string | null {
   if (!detail) return null;
-  let rest = detail.replace(/\s+/g, " ").trim();
+  let rest = tidyFigures(detail).replace(/\s+/g, " ").trim();
   for (let i = 0; i < 3 && PREAMBLE.test(rest); i++) rest = rest.replace(PREAMBLE, "").trim();
   return rest ? firstSentence(rest, max) : null;
 }
@@ -28,7 +33,7 @@ export function needLines(item: NeedsYou): { headline: string; line: string } {
     case "hire":
       return { headline: shortTitle(item.title, 90), line: `About ${formatCredits(item.expectedMonthlyCredits)} a month.${item.detail ? ` ${meaningfulLine(item.detail, 110) ?? ""}` : ""}`.trim() };
     case "approval":
-      return { headline: shortTitle(item.title, 90), line: meaningfulLine(item.detail) ?? "It waits until you answer." };
+      return { headline: shortTitle(tidyFigures(item.title), 90), line: meaningfulLine(item.detail) ?? "It waits until you answer." };
     case "idle":
       return { headline: shortTitle(item.title, 90), line: meaningfulLine(item.detail) ?? "Let it go, or give it work." };
   }

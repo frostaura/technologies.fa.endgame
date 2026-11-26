@@ -15,7 +15,7 @@ import type { Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/t
 import type { Selection } from "@/store/uiSlice";
 import { TypingDots } from "./ConversationDock";
 import { isArchived } from "../tree/treeManage";
-import { accessChip, contractorsLabel, healthChip, runningChip, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
+import { appChips, contractorsLabel, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
 
 /** Each division takes the next hue in turn, as the design draws Technologies blue and Labs violet. */
 const DIVISION_TONES = [
@@ -264,7 +264,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
 
 function AppRow({ app }: { app: TreeApp }) {
   const archived = isArchived(app);
-  const chips: Chip[] = archived ? [{ label: "Archived", tone: "quiet" }] : [healthChip(app.health), runningChip(app.running), accessChip(app.access, app.sharedWith)];
+  const chips: Chip[] = archived ? [{ label: "Archived", tone: "quiet" }] : appChips(app);
   return (
     <li className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">

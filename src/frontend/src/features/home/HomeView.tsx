@@ -21,7 +21,7 @@ import { ConversationDock } from "./ConversationDock";
 import { OrgChart } from "./OrgChart";
 import { OntologyView } from "./OntologyView";
 import { needLines } from "./needsYouModel";
-import { countTree, orgFigures, organisationSelection, workerLabel } from "./treeModel";
+import { countTree, orgFigures, organisationSelection, workerActivity, workerLabel } from "./treeModel";
 
 /** How often the org chart refreshes. Status, spend and who is working are live, not a snapshot. */
 export const TREE_POLL_MS = 15_000;
@@ -167,7 +167,7 @@ function Organisation({
                 >
                   <Avatar name={w.name} seed={w.id} size="xs" />
                   {workerLabel(w)}
-                  {w.activity && <span className="text-primary-tint">— {w.activity}</span>}
+                  {workerActivity(w) && <span className="text-primary-tint">— {workerActivity(w)}</span>}
                 </button>
               ))}
             </span>
