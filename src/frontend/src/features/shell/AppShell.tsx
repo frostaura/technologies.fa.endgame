@@ -27,7 +27,7 @@ export interface Crumb {
 
 /** The conversation a screen holds beside it on a desktop, and in a sheet on a phone or a tablet. */
 export interface ShellConversation {
-  /** What the button that opens it says: "Talk to Northwind". */
+  /** What the button that opens it says: "Talk to {the level}". */
   label: string;
   content: ReactNode;
 }

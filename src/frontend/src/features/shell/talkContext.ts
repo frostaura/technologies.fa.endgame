@@ -14,7 +14,7 @@ export interface ShellTalk {
   /** The element inside the sheet the conversation is drawn into, once it exists. */
   target: HTMLElement | null;
   open: () => void;
-  /** A page says it has a conversation, and what to call it ("Talk to Northwind"). */
+  /** A page says it has a conversation, and what to call it ("Talk to {the level}"). */
   register: (label: string) => () => void;
 }
 
