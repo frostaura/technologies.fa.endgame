@@ -81,7 +81,7 @@ public sealed class FactoryEstimates(FactoryEstimateOptions factory, ModelGatewa
 
         var share = Math.Max(1, remaining) / (decimal)items;
         var left = Math.Ceiling(whole.Credits * share * 100m) / 100m;
-        return new Estimate(left, $"{whole.Basis} Only {remaining.ToString(CultureInfo.InvariantCulture)} of its {items.ToString(CultureInfo.InvariantCulture)} parts are left to build, so it is priced for those; the parts already built and checked are not built or charged again.");
+        return new Estimate(left, $"{whole.Basis} Only {remaining.ToString(CultureInfo.InvariantCulture)} of its {items.ToString(CultureInfo.InvariantCulture)} parts {(remaining == 1 ? "is" : "are")} left to build, so it is priced for those; the parts already built and checked are not built or charged again.");
     }
 
     private async Task<Estimate> ExpectedAsync(Guid organisationId, string kind, decimal startingFigure, CancellationToken cancellationToken, string? name = null)

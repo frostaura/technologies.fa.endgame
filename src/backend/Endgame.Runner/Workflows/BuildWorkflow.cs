@@ -409,7 +409,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             ? "This starts again from the plan; nothing the earlier attempt did needed undoing."
             : kept.Count == 0
                 ? "This picks up where the earlier attempt stopped: the plan agreed then is kept, and building starts again from its first part."
-                : $"This picks up where the earlier attempt stopped: {kept.Count} of {plan.Items.Count} parts were already built and checked, so they are kept, not rebuilt or charged again.";
+                : $"This picks up where the earlier attempt stopped: {kept.Count} of {plan.Items.Count} parts {(kept.Count == 1 ? "was" : "were")} already built and checked, so {(kept.Count == 1 ? "it is" : "they are")} kept, not rebuilt or charged again.";
         await Workforce.SayAsync(run, "runner", "Carrying on", text, cancellationToken, "carried");
     }
 

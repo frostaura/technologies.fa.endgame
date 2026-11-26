@@ -118,7 +118,7 @@ public sealed class TryAgainAndChangesTests(PostgresServer postgres) : IAsyncLif
         var estimate = await ControlPlaneApp.Ok(owner.PostAsync($"/api/runs/{build}/retry/estimate", null));
         Assert.Equal((1, 2), (estimate["partsDone"]!.GetValue<int>(), estimate["parts"]!.GetValue<int>()));
         Assert.Equal(10m, estimate["credits"]!.GetValue<decimal>());
-        Assert.Contains("Only 1 of its 2 parts are left to build", estimate["basis"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("Only 1 of its 2 parts is left to build", estimate["basis"]!.GetValue<string>(), StringComparison.Ordinal);
 
         var again = await ControlPlaneApp.Created(owner.PostAsync($"/api/runs/{build}/retry", null));
         Assert.Equal("build", again["kind"]!.GetValue<string>());

@@ -53,7 +53,7 @@ public sealed class ConsoleContractTests(PostgresServer postgres) : IAsyncLifeti
         var project = division["projects"]![0]!;
         HasKeys(project, "id", "slug", "name", "stage", "ideaId", "note", "progress", "spend", "workers", "apps");
         Assert.Equal("building", project["stage"]!.GetValue<string>());
-        HasKeys(project["progress"], "runId", "label", "step", "of", "spentCredits", "estimatedCredits");
+        HasKeys(project["progress"], "runId", "label", "step", "of", "spentCredits", "estimatedCredits", "done");
         HasKeys(project["workers"]![0], "id", "name", "role", "kind", "activity");
         HasKeys(project["apps"]![0], "id", "slug", "name", "health", "running", "access", "sharedWith", "visitsToday", "lastVisitAt", "spend", "workers");
         HasKeys(tree["needsYou"]![0], "kind", "id", "runId", "approvalId", "title", "detail");

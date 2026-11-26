@@ -28,7 +28,13 @@ public sealed record OrganisationNodeView(Guid Id, string Slug, string Name, str
 public sealed record DivisionNodeView(Guid Id, string Slug, string Name, SpendView Spend, IReadOnlyList<WorkerView> Workers, IReadOnlyList<ProjectNodeView> Projects,
     string? Role = null, bool Archived = false);
 
-public sealed record ProgressView(Guid RunId, string Label, int Step, int Of, decimal SpentCredits, decimal? EstimatedCredits);
+/// <param name="Step">The step under way, counted from 1 (R2-9: never "step 0"); <paramref name="Of"/> when every step is done; 0 only when the run has no steps.</param>
+/// <param name="Done">The steps finished, for a progress bar.</param>
+public sealed record ProgressView(Guid RunId, string Label, int Step, int Of, decimal SpentCredits, decimal? EstimatedCredits, int Done = 0)
+{
+    /// <summary>The progress of a run with <paramref name="done"/> of <paramref name="of"/> steps finished.</summary>
+    public static (int Step, int Done) Counting(int done, int of) => (of <= 0 ? 0 : Math.Min(done + 1, of), Math.Max(0, done));
+}
 
 /// <summary>
 /// An app (or the project holding it) whose build ended without anything ever being published (D81): kept, not deleted, so

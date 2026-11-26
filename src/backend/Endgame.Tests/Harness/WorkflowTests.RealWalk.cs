@@ -57,7 +57,7 @@ public sealed partial class WorkflowTests
 
         Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
         Assert.Equal(
-            ["Let this step search the web: Looked for evidence people will pay?", "Let this step search the web: Looked for existing products?", "Let this step search the web: Looked for what they leave undone?"],
+            ["Let this step search the web: looking for evidence people will pay?", "Let this step search the web: looking for existing products?", "Let this step search the web: looking for what they leave undone?"],
             cp.Approvals.Order(StringComparer.Ordinal));
         Assert.All(cp.ApprovalsAsked, a =>
         {

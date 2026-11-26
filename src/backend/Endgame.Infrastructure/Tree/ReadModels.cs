@@ -264,8 +264,9 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                 if (active is not null)
                 {
                     var runTasks = tasks.Where(t => t.RunId == active.Id).ToList();
-                    progress = new ProgressView(active.Id, active.Title, runTasks.Count(t => t.Status == TaskStatuses.Done), runTasks.Count,
-                        runSpend.GetValueOrDefault(active.Id), estimates.TryGetValue(active.Id, out var estimate) ? estimate : null);
+                    var (step, done) = ProgressView.Counting(runTasks.Count(t => t.Status == TaskStatuses.Done), runTasks.Count);
+                    progress = new ProgressView(active.Id, active.Title, step, runTasks.Count,
+                        runSpend.GetValueOrDefault(active.Id), estimates.TryGetValue(active.Id, out var estimate) ? estimate : null, done);
                 }
 
                 projectViews.Add(new ProjectNodeView(p.Id, p.Slug, p.Name, stage, (active ?? last)?.IdeaId ?? projectNotBuilt?.IdeaId, note, progress,

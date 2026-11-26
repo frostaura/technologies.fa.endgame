@@ -164,7 +164,7 @@ public sealed partial class WorkflowTests
         // The finished part is neither built nor checked again, so it is not billed twice.
         Assert.DoesNotContain(again.Events, e => e.Payload["agent"]?.GetValue<string>()?.StartsWith("builder-recipes-api", StringComparison.Ordinal) == true);
         Assert.Equal(["recipes-page"], again.Events.Where(e => e.Type == "evaluation.passed").Select(e => e.Payload["item"]!.GetValue<string>()));
-        Assert.Contains("1 of 2 parts were already built and checked", again.Events.Single(e => e.Payload["title"]?.GetValue<string>() == "Carrying on").Payload["text"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("1 of 2 parts was already built and checked, so it is kept", again.Events.Single(e => e.Payload["title"]?.GetValue<string>() == "Carrying on").Payload["text"]!.GetValue<string>(), StringComparison.Ordinal);
         // Not priced again as if nothing were built: the try's own estimate stands.
         Assert.DoesNotContain(again.Events, e => e.Type == "estimate.made" && e.Payload["basis"]?.GetValue<string>() == "plan");
     }

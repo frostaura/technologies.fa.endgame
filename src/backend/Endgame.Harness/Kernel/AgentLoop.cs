@@ -711,9 +711,45 @@ public static class WebSearch
     /// <summary>The call id of the one decision a session makes about it, in <c>tool.permitted</c> or <c>tool.denied</c>.</summary>
     public const string CallId = "capability:web_search";
 
-    /// <summary>The approval's title: what approving does, in plain words, for the step it belongs to.</summary>
+    /// <summary>
+    /// The approval's title: what approving does, in plain words, for the step it belongs to — named as what it is doing
+    /// ("…: looking for what they leave undone?"), never by its past-tense heading (R2-9).
+    /// </summary>
     public static string ApprovalTitle(string? step) =>
-        OutputText.Truncate(string.IsNullOrWhiteSpace(step) ? "Let this step search the web?" : $"Let this step search the web: {step.Trim().TrimEnd('.', '?')}?", 300);
+        OutputText.Truncate(string.IsNullOrWhiteSpace(step) ? "Let this step search the web?" : $"Let this step search the web: {Doing(step.Trim().TrimEnd('.', '?'))}?", 300);
+
+    private static readonly Dictionary<string, string> Irregular = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["drew"] = "drawing", ["wrote"] = "writing", ["built"] = "building", ["found"] = "finding", ["made"] = "making", ["read"] = "reading",
+        ["ran"] = "running", ["took"] = "taking", ["gave"] = "giving", ["chose"] = "choosing", ["set"] = "setting", ["put"] = "putting",
+        ["planned"] = "planning", ["shipped"] = "shipping", ["stopped"] = "stopping", ["priced"] = "pricing", ["placed"] = "placing", ["used"] = "using",
+    };
+
+    /// <summary>A step's past-tense heading as what it is doing: "Looked for existing products" → "looking for existing products".</summary>
+    public static string Doing(string heading)
+    {
+        var text = (heading ?? "").Trim();
+        var and = text.IndexOf(" and ", StringComparison.Ordinal);
+        if (and > 0 && FirstVerbIsPast(text[(and + 5)..]))
+        {
+            // "Weighed the evidence and wrote the verdict" → "weighing the evidence and writing the verdict".
+            return Doing(text[..and]) + " and " + Doing(text[(and + 5)..]);
+        }
+
+        var space = text.IndexOf(' ', StringComparison.Ordinal);
+        var verb = space < 0 ? text : text[..space];
+        var rest = space < 0 ? "" : text[space..];
+        var doing = Irregular.TryGetValue(verb, out var known) ? known
+            : verb.Length > 4 && verb.EndsWith("ed", StringComparison.OrdinalIgnoreCase) ? verb[..^2].ToLowerInvariant() + "ing"
+            : verb.Length > 0 ? char.ToLowerInvariant(verb[0]) + verb[1..] : verb;
+        return doing + rest;
+    }
+
+    private static bool FirstVerbIsPast(string clause)
+    {
+        var verb = clause.Split(' ', 2)[0];
+        return Irregular.ContainsKey(verb) || (verb.Length > 4 && verb.EndsWith("ed", StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 /// <summary>The <c>kind</c> of the harness's <c>message</c> events.</summary>
