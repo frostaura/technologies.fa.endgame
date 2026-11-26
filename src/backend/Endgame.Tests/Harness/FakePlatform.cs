@@ -312,7 +312,7 @@ public sealed class FakeControlPlane : HttpMessageHandler
         var title = body["title"]!.GetValue<string>();
         Approvals.Add(title);
         ApprovalsAsked.Add(body.DeepClone().AsObject());
-        Append("approval.requested", new JsonObject { ["approvalId"] = id, ["title"] = title, ["detail"] = body["detail"]?.DeepClone(), ["onDecline"] = body["onDecline"]?.DeepClone() });
+        Append("approval.requested", new JsonObject { ["approvalId"] = id, ["title"] = title, ["detail"] = body["detail"]?.DeepClone(), ["onDecline"] = body["onDecline"]?.DeepClone(), ["technical"] = body["technical"]?.DeepClone() });
         if (AnswerApproval(title) is { } answer)
         {
             Append("approval.answered", new JsonObject { ["approvalId"] = id, ["answer"] = answer ? "approved" : "rejected", ["comment"] = ApprovalNote });

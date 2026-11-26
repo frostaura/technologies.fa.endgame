@@ -83,13 +83,19 @@ public sealed class LeaseKeeper : IRunControl, IAsyncDisposable
 
             return true;
         }
-        catch (ServiceProblemException e) when (e.Status == HttpStatusCode.Conflict)
+        catch (ServiceProblemException e) when (e.Status is HttpStatusCode.Conflict or HttpStatusCode.NotFound)
         {
-            // Terminal ("has cancelled") or held by another Runner.
-            if (e.Detail.Contains("has ", StringComparison.Ordinal) && !e.Detail.Contains("held by", StringComparison.Ordinal))
+            // A run that has finished (or was cancelled) refuses its lease: that is the normal end of the work, not a fault.
+            // Its status is read from the refusal itself, and from the wording when an older control plane gives none.
+            var finished = e.RunStatus is { } said && RunStatuses.IsTerminal(said) ? said
+                : e.Detail.Contains("has ", StringComparison.Ordinal) && !e.Detail.Contains("held by", StringComparison.Ordinal)
+                    ? e.Detail.Contains(RunStatuses.Cancelled, StringComparison.Ordinal) ? RunStatuses.Cancelled
+                    : e.Detail.Contains(RunStatuses.Failed, StringComparison.Ordinal) ? RunStatuses.Failed : RunStatuses.Succeeded
+                    : null;
+            if (finished is not null)
             {
-                status = e.Detail.Contains(RunStatuses.Cancelled, StringComparison.Ordinal) ? RunStatuses.Cancelled
-                    : e.Detail.Contains(RunStatuses.Failed, StringComparison.Ordinal) ? RunStatuses.Failed : RunStatuses.Succeeded;
+                status = finished;
+                logger.LogInformation("Run {RunId} has {Status}; its lease is no longer renewed.", runId, finished);
             }
             else
             {
@@ -98,8 +104,10 @@ public sealed class LeaseKeeper : IRunControl, IAsyncDisposable
 
             return false;
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
+            // Anything else — the network, a refusal of another kind, an answer that could not be read — is retried until
+            // the lease would lapse; it never takes the run down with it.
             logger.LogWarning(e, "Run {RunId}'s lease could not be renewed; retrying until it lapses at {Expiry}.", runId, expiresAt);
             return clock.GetUtcNow() < expiresAt;
         }
@@ -113,9 +121,10 @@ public sealed class LeaseKeeper : IRunControl, IAsyncDisposable
         {
             await controlPlane.LeaseAsync(runId, holder, 1, CancellationToken.None);
         }
-        catch (Exception e) when (e is ServiceProblemException or HttpRequestException)
+        catch (Exception e) when (e is not OperationCanceledException)
         {
-            // Finished, cancelled or already lapsed: nothing is held.
+            // Finished, cancelled or already lapsed: nothing is held, and releasing it is never a fault.
+            logger.LogDebug(e, "Run {RunId}'s lease was not released: it is no longer held.", runId);
         }
     }
 
@@ -145,7 +154,15 @@ public sealed class LeaseKeeper : IRunControl, IAsyncDisposable
         var interval = TimeSpan.FromTicks(Math.Max(TimeSpan.FromMilliseconds(200).Ticks, lease.Ticks / 3));
         while (!cancellationToken.IsCancellationRequested)
         {
-            await Task.Delay(interval, clock, cancellationToken);
+            try
+            {
+                await Task.Delay(interval, clock, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
             if (!await RenewAsync(cancellationToken) && (lost || RunStatuses.IsTerminal(status)))
             {
                 return;

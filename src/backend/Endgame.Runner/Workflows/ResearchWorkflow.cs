@@ -52,6 +52,44 @@ public sealed class ResearchWorkflow : IWorkflow
             run.Options.ResearchTaskType, ["notes", "remember"], run.Options.MonthlyCredits.GetValueOrDefault("researcher", 400m),
             "Research has reached this part of the organisation, and every idea is researched before anything is built."), cancellationToken);
 
+        // The red lines first, with one cheap call (D58): an idea that plainly crosses one is refused at once, before three
+        // researchers spend credits and searches on it. Unclear cases get the full research, whose judge screens again.
+        var screen = run.Journal.Get("screen");
+        if (screen is null)
+        {
+            var screener = await WorkflowSupport.RunAgentAsync(run, run.Agents.Researcher(run, "red-line-screen", RunnerResources.Prompt("idea-screen", new Dictionary<string, string> { ["idea"] = idea, ["constraints"] = constraints })) with
+            {
+                Title = "Checked the idea against FrostAura's red lines",
+                TaskType = run.Options.SummaryTaskType,
+                Limits = new AgentLimits { MaxSteps = 2, MaxOutputTokens = 1500, MaxSearchesPerCall = 0 },
+            }, NoWorkspace.Instance, "Screen the idea now and reply with the JSON object.", cancellationToken);
+            if (screener.Unreachable)
+            {
+                return NotReached(screener);
+            }
+
+            if (WorkflowOutcome.FromAgent(screener) is { } screenStopped)
+            {
+                return screenStopped;
+            }
+
+            var answer = WorkflowSupport.JsonAnswer(screener.FinalText);
+            var screened = (Json.Str(answer, "screen") ?? "").Trim().ToLowerInvariant();
+            var line = VerdictBuilder.RedLine(Json.Str(answer, "line"));
+            // Only a clear breach with a named line skips research; anything unreadable is researched in full.
+            screen = await run.Journal.RecordAsync("screen", new JsonObject
+            {
+                ["screen"] = screened == "breach" && line is not null ? "breach" : screened is "clear" ? "clear" : "unclear",
+                ["line"] = line,
+                ["reasoning"] = OutputText.Truncate(Json.Str(answer, "reasoning") ?? "", 1000),
+            }, cancellationToken);
+        }
+
+        if (Json.Str(screen, "screen") == "breach")
+        {
+            return await RedLineVerdictAsync(run, ideaId, idea, screen, researcher, cancellationToken);
+        }
+
         // The search budget, sized from the most research may cost (the estimate's ceiling; the estimate itself when it
         // states none). Never from the expected cost: that is calibrated from past actuals, which the budget itself
         // drives, so sizing from it would shrink every run's searches a little more than the last.
@@ -68,12 +106,18 @@ public sealed class ResearchWorkflow : IWorkflow
         // The contractors, in parallel, each with its own context; their sources go into one pool.
         var pool = new SourcePool();
         var reports = await Task.WhenAll(strands.Select(strand => StrandAsync(run, strand, idea, constraints, researcher, searches, slice, pool, cancellationToken)));
-        foreach (var report in reports)
+        foreach (var report in reports.Where(r => !r.Result.Unreachable))
         {
             if (WorkflowOutcome.FromAgent(report.Result) is { } stopped)
             {
                 return stopped;
             }
+        }
+
+        // Not one researcher reached a model: there is nothing to judge, and no correction round would help (D64).
+        if (reports.All(r => r.Result.Unreachable))
+        {
+            return NotReached(reports[0].Result, reports.Sum(r => r.Result.State.SettledCredits));
         }
 
         var research = new JsonObject();
@@ -103,9 +147,16 @@ public sealed class ResearchWorkflow : IWorkflow
                 : $"Your last verdict could not be recorded. Fix exactly these faults and reply with the whole JSON object again:\n- {string.Join("\n- ", faults)}";
             var judgeAgent = AgentFactory.As(run, run.Agents.Researcher(run, attempt == 0 ? "judge" : "judge-corrected", judgePrompt) with
             {
+                Title = attempt == 0 ? "Weighed the evidence and wrote the verdict" : "Asked for the verdict again",
                 Limits = new AgentLimits { MaxSteps = 4, MaxOutputTokens = 8000, MaxSearchesPerCall = 0 },
             }, researcher, memory, canRemember: false);
             var judge = await WorkflowSupport.RunAgentAsync(run, judgeAgent, NoWorkspace.Instance, task, cancellationToken);
+            if (judge.Unreachable)
+            {
+                // The model was not reached: that is not a verdict in the wrong form, so it is not sent back to be corrected.
+                return NotReached(judge, reports.Sum(r => r.Result.State.SettledCredits) + judge.State.SettledCredits, researched: true);
+            }
+
             if (WorkflowOutcome.FromAgent(judge) is { } judgeStopped)
             {
                 return judgeStopped;
@@ -142,7 +193,9 @@ public sealed class ResearchWorkflow : IWorkflow
 
         if (verdict is null)
         {
-            return WorkflowOutcome.Failure(Sentences.Join(["The research could not reach a verdict in the agreed form, so none was recorded and nothing will be built", $"What was wrong: {string.Join("; ", faults.Take(3))}"]));
+            // The faults are instructions to the judge, for technical mode only; the owner reads what happened (D64).
+            const string plain = "The research could not reach a verdict it could record, so none was recorded and nothing will be built. Try again to research it afresh.";
+            return WorkflowOutcome.Failure(plain) with { ForOwner = plain, Detail = $"What was wrong: {string.Join("; ", faults.Take(5))}" };
         }
 
         // Kept for the build to read its placement.
@@ -156,6 +209,8 @@ public sealed class ResearchWorkflow : IWorkflow
         var headline = Json.Str(verdict, "headline") ?? "";
         var (title, said) = outcome switch
         {
+            Verdicts.DoNotBuild when verdict["redLines"]?["breached"]?.GetValueKind() == System.Text.Json.JsonValueKind.True =>
+                ("Verdict: do not build", Sentences.Join([headline, "It crosses one of FrostAura's red lines, so it is never built, and no one can overrule that"])),
             Verdicts.DoNotBuild => ("Verdict: do not build", Sentences.Join([headline, "Nothing will be built unless you overrule it"])),
             Verdicts.Change => ("Verdict: build it, changed", Sentences.Join([headline, $"The change: {Json.Str(verdict, "suggestedChange")}"])),
             _ => ("Verdict: build", headline),
@@ -196,7 +251,9 @@ public sealed class ResearchWorkflow : IWorkflow
                 {
                     // One role per strand: three strands in one burst are not a recurring job (the control plane proposes a
                     // promotion for a role briefed three times), while the same strand across ideas is.
-                    contractor = await run.ControlPlane.StartContractorAsync(run.Run.Scope, briefer, Role(strand.Id), $"{strand.Title} (contractor)", strand.Strand, run.Run.Id, cancellationToken);
+                    // Named by its role (D60): no name is sent, so the control plane names it "{role} (contractor)"; the step's
+                    // title stays its activity.
+                    contractor = await run.ControlPlane.StartContractorAsync(run.Run.Scope, briefer, Role(strand.Id), null, strand.Strand, run.Run.Id, cancellationToken);
                 }
                 catch (ServiceProblemException)
                 {
@@ -226,6 +283,7 @@ public sealed class ResearchWorkflow : IWorkflow
         });
         var agent = run.Agents.Researcher(run, agentId, prompt) with
         {
+            Title = strand.Title,
             EmployeeId = contractor ?? run.Run.EmployeeId,
             Limits = new AgentLimits { MaxSteps = 4, MaxOutputTokens = 8000, MaxSearchesPerCall = searches, CreditBudget = slice },
         };
@@ -265,6 +323,84 @@ public sealed class ResearchWorkflow : IWorkflow
 
         return new StrandReport(strand.Id, result, report, info);
     }
+
+    /// <summary>The models could not be reached: said plainly, with no correction rounds, and what the gateway said kept for technical mode (D64).</summary>
+    private static WorkflowOutcome NotReached(AgentResult result, decimal spent = 0m, bool researched = false)
+    {
+        var charged = spent > 0m
+            ? string.Create(CultureInfo.InvariantCulture, $"only the {decimal.Round(spent, 2)} credits already spent were charged")
+            : "nothing was charged";
+        var text = researched
+            ? $"Endgame could not reach its AI models to weigh the research, so no verdict was recorded and {charged}. Try again; if it keeps happening, tell FrostAura."
+            : $"Endgame could not reach its AI models, so no research was done and {charged}. Try again; if it keeps happening, tell FrostAura.";
+        return WorkflowOutcome.Unreachable(text, result.FinalText);
+    }
+
+    /// <summary>
+    /// The verdict for an idea the screen found plainly over a red line (D58): recorded at once, from the screen alone, in
+    /// the same document every verdict is — saying plainly that no market research was done, because none was needed.
+    /// </summary>
+    private static async Task<WorkflowOutcome> RedLineVerdictAsync(RunContext run, Guid ideaId, string idea, JsonObject screen, Guid? researcher, CancellationToken cancellationToken)
+    {
+        var line = Json.Str(screen, "line") ?? "surveillance";
+        var reasoning = Json.Str(screen, "reasoning") is { Length: > 0 } r ? r : "The idea, as described, is on the wrong side of this line.";
+        const string notResearched = "Not researched: the idea crosses a red line, so no market research was done.";
+        var judge = new JsonObject
+        {
+            ["outcome"] = Verdicts.DoNotBuild,
+            ["headline"] = $"This idea crosses FrostAura's {LineName(line)} red line, so it will not be built.",
+            ["summary"] = Sentences.Join([reasoning, "FrostAura never builds a product on the wrong side of a red line, whatever the market says, so the idea was not researched further"]),
+            ["against"] = reasoning,
+            ["existing"] = new JsonObject { ["evidence"] = notResearched, ["products"] = new JsonArray() },
+            ["gap"] = new JsonObject { ["evidence"] = notResearched },
+            ["demand"] = new JsonObject { ["evidence"] = notResearched, ["signals"] = new JsonArray() },
+            ["wouldChange"] = "Nothing the market could show: only an idea whose purpose is clear of the red line could be researched.",
+            ["redLines"] = new JsonObject { ["breached"] = true, ["line"] = line, ["reasoning"] = reasoning },
+            ["confidence"] = "high",
+        };
+        var strand = new StrandInfo("red-lines", "Checked the idea against FrostAura's red lines", 0, 0, "high", null);
+        var (document, faults) = VerdictBuilder.Build(judge, new VerdictContext(idea, [strand], [], run.Run.Scope));
+        if (document is null || faults.Count > 0)
+        {
+            const string plain = "The idea looked like it crosses a red line, but the verdict could not be recorded, so nothing will be built. Try again to check it afresh.";
+            return WorkflowOutcome.Failure(plain) with { ForOwner = plain, Detail = string.Join("; ", faults.Take(5)) };
+        }
+
+        if (!run.Journal.Done("verdict.recorded"))
+        {
+            try
+            {
+                await run.ControlPlane.RecordVerdictAsync(ideaId, document, cancellationToken);
+            }
+            catch (ServiceProblemException conflict) when (conflict.Status == System.Net.HttpStatusCode.Conflict)
+            {
+                // Recorded before a crash: the verdict stands.
+            }
+            catch (VerdictRefusedException refused)
+            {
+                const string plain = "The idea looked like it crosses a red line, but the verdict could not be recorded, so nothing will be built. Try again to check it afresh.";
+                return WorkflowOutcome.Failure(plain) with { ForOwner = plain, Detail = string.Join("; ", refused.Errors.Take(5)) };
+            }
+
+            await run.Journal.RecordAsync("verdict.recorded", new JsonObject(), cancellationToken);
+        }
+
+        await run.Journal.OnceAsync("verdict", () => Task.FromResult(document.DeepClone().AsObject()), cancellationToken);
+        await Workforce.RememberAsync(run, researcher, [new MemoryNote(OutputText.Truncate($"Refused: {VerdictBuilder.Title(idea)}", 120), Sentences.Plain($"It crosses the {LineName(line)} red line: {reasoning}", 1000), "fact")], cancellationToken);
+        await Workforce.SayAsync(run, "researcher", "Verdict: do not build",
+            Sentences.Join([Json.Str(document, "headline"), "It was refused before any research was done, so no searches were made, and no one can overrule a red line"]),
+            cancellationToken, "verdict");
+        return WorkflowOutcome.Success("Research stopped at the red lines; the idea will not be built.") with { Announced = true };
+    }
+
+    /// <summary>A red line's name as the owner reads it.</summary>
+    public static string LineName(string line) => line switch
+    {
+        "tobacco-gambling-finance" => "tobacco, gambling and predatory finance",
+        "weapons" => "weapons",
+        "animal-harm" => "animal harm",
+        _ => "surveillance",
+    };
 
     public static string Role(string strand) => strand switch
     {

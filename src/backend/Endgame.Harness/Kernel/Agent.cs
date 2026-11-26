@@ -40,6 +40,13 @@ public sealed record AgentLimits
     public int? MaxSearchesPerCall { get; init; }
 }
 
+/// <summary>How an agent reports progress to the owner during a long step (D29).</summary>
+/// <param name="From">Who speaks (the console's speaker key: planner, builder, evaluator).</param>
+/// <param name="Title">The heading of each report, in plain words.</param>
+/// <param name="Lead">The first sentence of each report: what the step is doing.</param>
+/// <param name="Every">A report after every this many actions.</param>
+public sealed record ProgressReports(string From, string Title, string Lead, int Every = 8);
+
 /// <summary>Everything that defines one agent in a run. A resumed run is rebuilt from the same definition plus its log.</summary>
 public sealed record AgentDefinition
 {
@@ -56,6 +63,12 @@ public sealed record AgentDefinition
     public Guid? EmployeeId { get; init; }
 
     public required string SystemPrompt { get; init; }
+
+    /// <summary>What this agent's step is, in the owner's words ("Asked for the verdict again"): its heading on the run page.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>When set, the agent tells the owner how it is getting on every so many actions (D29): honest counts, no file names.</summary>
+    public ProgressReports? Progress { get; init; }
 
     public required ToolRegistry Tools { get; init; }
 
@@ -132,6 +145,12 @@ public sealed class AgentState
 
     /// <summary>The addresses its replies cited, each once, in order.</summary>
     public List<string> Citations { get; } = [];
+
+    /// <summary>
+    /// Whether this session may use the route's web search, once the rules were asked (null: not yet). A "may not" rule or
+    /// a declined approval makes it false; it is replayed from the decision's event, so a resumed agent never asks twice.
+    /// </summary>
+    public bool? SearchAllowed { get; set; }
 
     /// <summary>The provider that served the run's first reply; every later call asks for it first (ARCH-006).</summary>
     public string? PinnedProvider { get; set; }
@@ -216,6 +235,9 @@ public sealed record AgentServices
 public sealed record AgentResult(string StopReason, string? FinalText, AgentState State)
 {
     public bool Completed => StopReason is StopReasons.Completed or StopReasons.CompletedNoEdits;
+
+    /// <summary>No model could be reached: the agent's silence says nothing about its work.</summary>
+    public bool Unreachable => StopReason == StopReasons.ModelUnreachable;
 }
 
 /// <summary>Every way an agent's session can end.</summary>
@@ -229,6 +251,9 @@ public static class StopReasons
     public const string BudgetSliceSpent = "budget_slice_spent";
     public const string CeilingUnreachable = "ceiling_unreachable";
     public const string ModelError = "model_error";
+
+    /// <summary>The models could not be reached, or refused the call, after the retries ARCH-006 allows: no answer at all came back.</summary>
+    public const string ModelUnreachable = "model_unreachable";
     public const string RunClosed = "run_closed";
     public const string Paused = "paused";
     public const string Cancelled = "cancelled";

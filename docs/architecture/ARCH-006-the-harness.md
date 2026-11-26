@@ -54,6 +54,20 @@ routes by task type itself (`ARCH-003`).
   weak model looping.
 - Retry only rate limits, server errors, timeouts and empty replies. Never retry a bad request or a
   refused payment.
+- **"Could not reach a model" is not "answered in the wrong form".** A call that no model answered — no provider
+  configured (`model_provider_unconfigured`, `ModelFailure.Unavailable`, not retried), the provider refusing the
+  platform's key (502 with `upstreamStatus` 401/402/403, also `Unavailable`), or server errors, timeouts, rate limits and
+  refusals once the retries are spent — stops the agent as `model_unreachable` (`AgentResult.Unreachable`), never
+  `model_error`. Workflows stop the run there with a plain outcome and run no correction rounds; what the gateway said
+  goes into `run.finished`'s `detail`, never its `summary`, which normal mode shows.
+- **Reading a refusal never fails.** Every body from another service is read with `Json.ParseTolerant` /
+  `ProblemBody.Read`: empty, non-JSON, non-object and duplicate-key bodies (the lease refusal carries `status` twice: the
+  problem's number and the run's status) all give a usable `ServiceProblemException`, with the run's status in
+  `RunStatus`. A lease refused because the run has finished is the normal end, not a fault; the lease keeper retries
+  anything else until the lease would lapse and never takes the run down.
+- **Progress during a long step.** An agent with `ProgressReports` (the planner, builders, evaluators) writes a plain
+  message every eight actions — what it did since the last one, counted from its real calls, never a file name — so the
+  owner's timeline moves during a five-minute plan.
 - **Send only the parameters a model lists as supported.** A parameter it lacks makes the call fail.
 - Return the assistant's message to the model exactly as it came, reasoning details included.
 - **Pin the provider order for a run.** Calls otherwise spread across providers, which weakens
@@ -75,7 +89,14 @@ routes by task type itself (`ARCH-003`).
 - **Memory is context.** An employee's curated memory follows its rules, framed as notes that never outrank them; `remember`
   keeps a note. A contractor keeps none: what it learned goes to its briefer.
 - **Search budgets.** `AgentLimits.MaxSearchesPerCall` is sent as the call's `limits.maxSearches`; the reply's `searches` and
-  url citations are counted into the agent's state (and replayed from `accounting`).
+  url citations are counted into the agent's state (and replayed from `accounting`). A researcher has none (0) unless its
+  workflow gives it a budget.
+- **Web search is permission-checked like a tool.** It is the route's own capability, not a tool call, so before a session's
+  first model call the loop asks the policy about `web_search` (read-only, the agent's stage). Allowed: nothing is logged.
+  "May not": `tool.denied` (call id `capability:web_search`), the session's calls carry `maxSearches: 0`, and a nudge tells
+  the model it may not search. "Asks you first": one approval for the step ("Let this step search the web: {title}?",
+  `continues`); declined, the same as "may not". The decision is replayed from its event, so a resumed session never asks
+  again.
 - **Bookkeeping is not for people.** The loop's own `message` events carry a `kind` and no `text` (`reply`, `detail`,
   `nudge`, `note` instead); sub-agent events carry a `title`, a plain `brief` and a one-sentence `summary`, the raw report in
   `report` (ARCH-004, *Run log*).
@@ -138,7 +159,14 @@ item's tests click through it with the kit's `renderApp`. The factory's browser 
   the default — a tool no rule allows — is still denied when nobody is watching.
 - **The approval says what will happen, in words.** A tool that knows its own plain wording implements `IApprovalTitle`
   (`start_idea`, `change_app`, `try_again`, `adjust_setting` — the last names the setting as the autonomy and app screens
-  do, never its key); the rest get the loop's generic sentence. The tool, its arguments and the rule stay in `detail`.
+  do, never its key, and names the place by its name); the rest get the loop's generic sentence. Under the title is a plain
+  sentence of why it asks (`ApprovalDetail.For`); the tool, its arguments and the rule travel as the approval's separate
+  `technical` field, never in `detail`.
+- **One request, one approval.** A tool refuses arguments it cannot act on in `Target`, before the permission check, so
+  nobody is asked about a change that would then be refused: `adjust_setting` takes only `AgentSettings.Allowed` with a
+  value each key holds (its title and its reply are one pure function of key, value and place), and `change_app` refuses a
+  request about who may open the app, credits, the overdraft or exporting it (`ChangeAppTool.PersonsAct`) — a person's act,
+  on its own screen, never a build.
 - **The answer comes back with its note.** `IApprovalGate.AskAsync(title, detail, onDecline)` returns the answer and the
   person's note; the tool result says it was approved or declined and quotes the note, and a declined call tells the agent
   to carry on without it or say plainly it was not done. `onDecline` is `continues` for a tool call and `stops` for the
@@ -151,7 +179,33 @@ from `GET /internal/employees/{id}` are added to the prompt, its curated memory 
 model tier (thinking power) and may `remember` (`AgentFactory.As`). The answer carries `by` (the employee's name). The
 conversation's tools are `read_organisation`, `start_idea`, `change_app`, `try_again` and `adjust_setting`; every one
 that acts is a checkpoint the person answers in the conversation itself. A turn the budget stops writes Endgame's own
-notice into the conversation (`from: runner`, `code: budget_exhausted`) instead of leaving it silent.
+notice into the conversation (`from: runner`, `code: budget_exhausted`) instead of leaving it silent; a turn that could
+not reach a model says so in its reply. Its prompt is given the places' names (and must use them, never paths) and the
+acts only a person can do, with where each is done. A conversation is never held at the start checkpoint (the budget
+pause still applies), and the Runner answers conversations in a lane of their own (`RunLanes`, `ConversationConcurrency`,
+default 2, beside `Concurrency` for every other kind), so chats and long runs never wait on each other.
+
+## Research
+
+Research begins with one red-line screen of the idea on the summary route (`Prompts/idea-screen.md`, `{ screen: clear |
+unclear | breach, line, reasoning }`). A clear breach with a named line records the do-not-build verdict at once, from the
+screen alone ("Not researched: …"), with no contractor and no search; anything else, including an unreadable answer, is
+researched in full and the judge screens again. Contractors are named by their role ("Demand researcher"); the step's
+title is their activity. Whenever a run ends — finished, failed, cancelled, declined or out of budget — the Runner
+finishes every contractor the log shows briefed and not finished (`RunExecutor.OpenContractors`).
+
+## The start checkpoint and a decline
+
+Declining "Start this work?" is not a failure: the run finishes `cancelled` with `reason: declined_at_start`, the
+closing message "You declined" quotes the person's note, and the estimate is not scored.
+
+## Requirements are whole statements
+
+A plan's requirements quote the idea, one whole statement each: `PlanContract.Faults` refuses a requirement that is an
+example or a qualifier cut off its statement ("as a line above the list", "for example …"), and a quoted clause is read as
+a statement of its own (a leading "and" dropped, the first letter capitalised). When a build carries a change agreed after
+research, the planner is told the change wins: what it replaces goes to `leftOut`, "replaced by the change agreed after
+research", never beside it as a second requirement.
 
 ## Trying again
 
@@ -173,7 +227,8 @@ the build's own stages, not a fork of them:
 2. **Placement** is the app itself, from the run's scope; nothing is created.
 3. **The plan** is the same contract as a build's, faithful to the request's words (`ProposePlanTool(request)`), with the
    plan checkpoint honoured. Code then adds its own last item, `keep` — "Everything the app did before still works" —
-   whose requirements are the parts `PROGRESS.md` lists (`k1…`).
+   whose requirements are the parts `PROGRESS.md` lists (`k1…`). A builder's own note under a to-do heading (to do, next,
+   later, planned, …) or saying it is not done is not a part the app has, and is not checked.
 4. **Each part** is built, committed and checked by the separate evaluator on a preview with its own data; `keep` has
    nothing to build, so it is checked first and repaired, unbilled and one tier up, only if the check finds something
    broken. A change's parts are recorded in `PROGRESS.md` keyed by the run (`<run>-<item>`), never hiding the build's.

@@ -87,6 +87,93 @@ public static class Json
     };
 
     public static JsonArray Array(IEnumerable<string> values) => new(values.Select(v => (JsonNode)JsonValue.Create(v)!).ToArray());
+
+    /// <summary>
+    /// Text read as JSON without ever throwing: null for an empty or non-JSON body, and an object that names a key twice
+    /// keeps its last value. <see cref="JsonNode.Parse(string, JsonNodeOptions?, JsonDocumentOptions)"/> accepts such a
+    /// body and then throws when a key is first read (a live run died reading a refusal that carried <c>status</c> twice),
+    /// so a body from another service is always read through here.
+    /// </summary>
+    public static JsonNode? ParseTolerant(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(text, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip, MaxDepth = 64 });
+            return Node(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static JsonNode? Node(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var o = new JsonObject();
+                foreach (var property in element.EnumerateObject())
+                {
+                    o[property.Name] = Node(property.Value);
+                }
+
+                return o;
+            case JsonValueKind.Array:
+                return new JsonArray(element.EnumerateArray().Select(Node).ToArray());
+            case JsonValueKind.Null or JsonValueKind.Undefined:
+                return null;
+            default:
+                return JsonValue.Create(element.Clone());
+        }
+    }
+}
+
+/// <summary>
+/// A refusal's body (RFC 9457 problem details, or anything else a service sent), read so that reading it can never fail:
+/// empty, non-JSON, non-object and duplicate-key bodies all give a usable answer.
+/// </summary>
+public sealed record ProblemBody(string? Code, string? Title, string? Detail, int? UpstreamStatus, string? RunStatus, JsonObject? Body)
+{
+    public static ProblemBody Read(string? text)
+    {
+        var body = Json.ParseTolerant(text) as JsonObject;
+        string? runStatus = null;
+        int? upstream = null;
+        if (body is not null && !string.IsNullOrWhiteSpace(text))
+        {
+            // Every value of a repeated key is seen here: the control plane's lease refusal carries the problem's numeric
+            // status and the run's own status under the same name.
+            try
+            {
+                using var document = JsonDocument.Parse(text, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip, MaxDepth = 64 });
+                foreach (var property in document.RootElement.EnumerateObject())
+                {
+                    if (property.Name is "status" or "runStatus" && property.Value.ValueKind == JsonValueKind.String)
+                    {
+                        runStatus = property.Value.GetString();
+                    }
+                    else if (property.Name == "upstreamStatus" && property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt32(out var u))
+                    {
+                        upstream = u;
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // ParseTolerant read it, so this cannot happen; a body that cannot be read twice still has its first reading.
+            }
+        }
+
+        return new ProblemBody(Clean(Json.Str(body, "code")), Clean(Json.Str(body, "title")), Clean(Json.Str(body, "detail")), upstream, runStatus, body);
+
+        static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+    }
 }
 
 /// <summary>Text the model sees: bounded, colour-free, keeping the head and the tail.</summary>

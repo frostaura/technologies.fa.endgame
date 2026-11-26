@@ -906,16 +906,16 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Advanced · **Learn first:** TALK-07 · **What you learn:** a setting changed at a level applies beneath it; the assistant may only touch an allow-list, and only after you approve.
 - **Steps:**
   1. The person asks, for example, "switch this division to checkpoints", "keep apps awake", "let apps sleep after 30 minutes" or "flag idle employees after 14 days".
-  2. The assistant calls `adjust_setting {key, value}`. A card in the dock asks what will change, in the screens' own words, for example "Stop for your sign-off at checkpoints here?", "Switch here to auto-mode?", "Turn on the “Before the plan is carried out” checkpoint here?", "Keep the apps here always on?", "Let the apps here sleep after 30 minutes without a visitor?" or "Flag employees here who have had no work for 14 days?" (TALK-17).
+  2. The assistant calls `adjust_setting {key, value}`. One card in the dock asks what will change, in the screens' own words and naming the place, for example "Stop for your sign-off at checkpoints in Community?", "Switch Community to auto-mode?", "Turn off the “Before anyone is hired” checkpoint in Community?", "Keep apps in Community always on?", "Let apps in Community sleep after 30 idle minutes?" or "Flag employees in Community who have had no work for 14 days?" (TALK-17). One request raises exactly one card: a key or value the tool does not take is refused before anyone is asked.
   3. Once approved, `PUT /internal/cascade` sets the value at this level, marked as set by an agent. For `sleep.*` keys, the edge's routes are refreshed.
-  4. The assistant replies. The change shows wherever that setting is read, for example "Autonomy for …" (autonomy reader) or the app's running chip.
+  4. The assistant replies in the place's name, never its path, for example "Apps in Community now sleep after 30 idle minutes." The change shows wherever that setting is read, for example "Autonomy for …" (autonomy reader) or the app's running chip.
 - **You know it worked when:** the reply confirms it, and the relevant screen shows the value "set at" this level.
 - **Variations and refusals:**
   - Any key off the allow-list is refused with 403 "An agent may not change that": "Agents may change only these settings, each confirmed by the owner first: … Everything else, including who may open an app, is done by a person in the console."
   - The raw key and value are in the detail line, shown in technical mode only.
 - **Where:** `RunnerTools.AdjustSettingTool`; `FactoryEndpoints` `PUT /internal/cascade`; `Domain/Cascade/Autonomy.cs` (`AgentSettings.Allowed`).
 - **Reachable from:** UI (approval in the conversation, or on the run page).
-- **Covered by tests:** `RunnerContractTests.The_conversation_starts_an_idea_and_changes_only_the_settings_an_agent_may`.
+- **Covered by tests:** `RunnerContractTests.The_conversation_starts_an_idea_and_changes_only_the_settings_an_agent_may`; `WorkflowTests.Every_setting_the_tool_takes_has_a_plain_title_and_reply_naming_the_place`, `…A_setting_asked_for_in_chat_raises_exactly_one_approval_and_the_reply_names_the_place`.
 
 ### TALK-09 Decline what the conversation proposed
 - **Who:** the approver.
@@ -934,12 +934,12 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Starts at:** any dock.
 - **Needs:** —
 - **Level:** Core · **Learn first:** TALK-01 · **What you learn:** the conversation can read, start ideas, ask for a change to an app, try stopped work again and change a few settings, and nothing else.
-- **Steps:** the person asks, for example, to make an app public, create or rename a division, set a budget, set a secret, or hire someone. The assistant has no tool for these. Its prompt says "Never claim to have done something a tool did not do." It should answer that it cannot, and may point to the screen. For an off-list setting, it gets the 403 in TALK-08.
+- **Steps:** the person asks, for example, to make an app public, top up credits, change the organisation's overdraft, export an app, create or rename a division, set a budget, set a secret, or hire someone. The assistant has no tool for these, and its prompt lists them with where a person does each: who may open an app on the app's page under "Who can open it", top-ups and the overdraft on the Credits page, exporting on the app's page, divisions in the tree, budgets on the Credits page, secrets on the Secrets page, hiring on the Hiring page. It answers that it cannot, and names the place. It never offers "Change the app" for these: a change request about who may open the app, credits, the overdraft or exporting is refused by `change_app` itself before anyone is asked. For an off-list setting, it gets the refusal in TALK-08.
 - **You know it worked when:** the reply says it cannot, and nothing changes.
-- **Variations and refusals:** the wording of the reply is the model's own (not fixed in code).
-- **Where:** `Runner/Prompts/conversation.md`; `ConversationWorkflow`.
+- **Variations and refusals:** the wording of the reply is the model's own; the refusal of `change_app` is code's.
+- **Where:** `Runner/Prompts/conversation.md`; `ConversationWorkflow`; `RunnerTools.ChangeAppTool.PersonsAct`.
 - **Reachable from:** UI.
-- **Covered by tests:** `RunnerContractTests` (refused settings).
+- **Covered by tests:** `RunnerContractTests` (refused settings); `WorkflowTests.Asked_to_make_an_app_public_the_conversation_asks_nobody_and_starts_no_change`, `…A_request_about_who_may_open_the_app_credits_or_export_is_a_persons_act`.
 
 ### TALK-11 Read what was said before, after a reload or a return visit
 - **Who:** Viewer or above at the level.
@@ -1013,12 +1013,13 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   1. Under the input, before sending: "A message here costs at most {ceiling} credits, usually about {credits} credits; it is charged at what it actually costs."
   2. Sending still succeeds: the run is queued.
   3. When the model call is refused for budget, a notice appears in the dock instead of a reply: "The credit budget ran out before a reply could be written, so nothing was answered and nothing more was charged. Top up or raise the budget, then ask again." with **"See credits"**. It is kept in the conversation's history.
-  4. If the assistant cannot complete for another reason, the reply reads "I could not finish answering that. Please ask again."
+  4. If the AI models cannot be reached (no key, a key refused, the provider down), the reply reads "I could not reach Endgame's AI models, so I could not answer that, and nothing was charged. Please ask again; if it keeps happening, tell FrostAura."
+  5. If the assistant cannot complete for another reason, the reply reads "I could not finish answering that. Please ask again."
 - **You know it worked when:** (a refusal) the notice with "See credits" shows in the conversation.
-- **Variations and refusals:** **Not verified from code:** whether a missing or invalid model key ends as "I could not finish…" or as a failed run with no message.
+- **Variations and refusals:** a chat is answered in a lane of its own in the Runner, so it never waits behind long builds or research (and chats never hold builds up).
 - **Where:** `ConversationWorkflow` (the `budget_exhausted` notice); `ConversationDock.tsx` (`Notice`); `Runner/Execution/RunContext.cs` (`WorkflowOutcome.FromAgent`).
 - **Reachable from:** UI.
-- **Covered by tests:** `WorkflowTests.A_conversation_the_budget_stops_says_so_in_the_conversation`; `TryAgainAndChangesTests.A_message_shows_what_it_can_cost_first_and_the_conversation_names_who_said_what`; `TryAgainAndChanges.test.tsx`.
+- **Covered by tests:** `WorkflowTests.A_conversation_the_budget_stops_says_so_in_the_conversation`, `…A_conversation_that_cannot_reach_a_model_says_so`, `…Conversations_are_claimed_in_their_own_lane_and_neither_lane_starves_the_other`; `TryAgainAndChangesTests.A_message_shows_what_it_can_cost_first_and_the_conversation_names_who_said_what`; `TryAgainAndChanges.test.tsx`.
 
 ### TALK-16 Talk over MCP or the API
 - **Who:** an AI assistant with a token (Builder or above), or a developer.
@@ -1038,11 +1039,11 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Needs:** the assistant asked for a checkpoint (`start_idea`, `change_app`, `try_again`, `adjust_setting`).
 - **Level:** Core · **Learn first:** TALK-07 · **What you learn:** you answer where you asked, and the answer says truthfully what happens next.
 - **Steps:**
-  1. The card shows **"Needs you"**, the title of what will happen ("Start researching an idea: …?", "Change the app: …?", "Try again: …?", a setting in plain words), **"Add a note (optional)"**, **"Approve"** / **"Decline"**, and "Declining skips only this step; the work goes on without it." The typing line reads "Waiting for your answer".
+  1. The card shows **"Needs you"**, the title of what will happen ("Start researching an idea: …?", "Change {app}: …?", "Try again: …?", a setting in plain words), a plain sentence saying why it asks, **"Add a note (optional)"**, **"Approve"** / **"Decline"**, and "Declining skips only this step; the work goes on without it." The typing line reads "Waiting for your answer".
   2. Optionally type a note; press **"Approve"** or **"Decline"**.
   3. The card reads "Approved. The work carries on from here." or "Declined. It was not done; the work continues without it."; the assistant receives the answer and the note and replies.
 - **You know it worked when:** the card is answered and the reply follows.
-- **Variations and refusals:** a failed answer: "Your answer was not recorded: {reason}". In technical mode the detail (tool, arguments, rule) is shown under the title.
+- **Variations and refusals:** a failed answer: "Your answer was not recorded: {reason}". The tool, its arguments and the rule are sent as the approval's separate `technical` field, for technical mode, never as the sentence under the title.
 - **Where:** `ConversationDock.tsx` (`Replies`), `runs/ApprovalCard.tsx`; `POST /api/runs/{id}/approvals/{approvalId}`.
 - **Reachable from:** UI; MCP `approval_answer`.
 - **Covered by tests:** `TryAgainAndChanges.test.tsx` ("the conversation… answers its own approval inline with a note…").

@@ -194,17 +194,20 @@ public sealed class GatewayModelClient(HttpClient http, bool stream = true) : IM
 
     internal static async Task<ModelCallException> RefusalAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        var text = await response.Content.ReadAsStringAsync(cancellationToken);
-        var problem = TryParse(text) as JsonObject;
-        var code = problem?["code"]?.GetValue<string>() ?? "";
-        var detail = problem?["detail"]?.GetValue<string>() ?? problem?["title"]?.GetValue<string>() ?? text;
+        var text = await ReadBodyAsync(response, cancellationToken);
+        var problem = ProblemBody.Read(text);
+        var code = problem.Code ?? "";
+        var detail = problem.Detail ?? problem.Title ?? OutputText.Truncate(text, 500);
         var status = (int)response.StatusCode;
-        var upstream = problem?["upstreamStatus"] is JsonValue v && v.TryGetValue<int>(out var u) ? u : 0;
+        var upstream = problem.UpstreamStatus ?? 0;
         var failure = (status, code) switch
         {
             (402, _) or (_, "budget_exhausted") => ModelFailure.BudgetExhausted,
             (422, _) or (_, "ceiling_unreachable") => ModelFailure.CeilingUnreachable,
             (409, _) => ModelFailure.RunClosed,
+            // No provider configured, or the provider refused the platform's own key: no retry will reach a model.
+            (_, "model_provider_unconfigured") => ModelFailure.Unavailable,
+            (502, _) when upstream is 401 or 402 or 403 => ModelFailure.Unavailable,
             (429, _) => ModelFailure.RateLimited,
             (504, _) => ModelFailure.Timeout,
             (502, _) when upstream == 429 => ModelFailure.RateLimited,
@@ -213,23 +216,27 @@ public sealed class GatewayModelClient(HttpClient http, bool stream = true) : IM
             (408, _) => ModelFailure.Timeout,
             _ => ModelFailure.BadRequest,
         };
-        return new ModelCallException(failure, $"{(int)response.StatusCode} {code}: {detail}");
+        return new ModelCallException(failure, $"{status} {code}: {detail}");
+    }
+
+    /// <summary>A refusal's body as text; a body that cannot be read is an empty one, never a second failure.</summary>
+    internal static async Task<string> ReadBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or InvalidOperationException)
+        {
+            return "";
+        }
     }
 
     private static decimal Header(HttpResponseMessage response, string name) =>
         response.Headers.TryGetValues(name, out var values) && decimal.TryParse(values.FirstOrDefault(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : 0m;
 
-    public static JsonNode? TryParse(string text)
-    {
-        try
-        {
-            return string.IsNullOrWhiteSpace(text) ? null : JsonNode.Parse(text);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
+    /// <summary>Text as JSON, or null; never throws, and a key named twice keeps its last value (<see cref="Json.ParseTolerant"/>).</summary>
+    public static JsonNode? TryParse(string text) => Json.ParseTolerant(text);
 
     internal static long Long(JsonNode? node) => node is JsonValue v && v.TryGetValue<long>(out var l) ? l : 0;
 }
@@ -466,13 +473,22 @@ public sealed class ServiceProblemException(HttpStatusCode status, string code, 
 
     public string Detail { get; } = detail;
 
+    /// <summary>The run's status, when the refusal says it (a lease refused because the run has finished).</summary>
+    public string? RunStatus { get; init; }
+
+    /// <summary>The refusal's body as read, or null when it was not a JSON object.</summary>
+    public JsonObject? Body { get; init; }
+
+    /// <summary>
+    /// The refusal a response carries. Reading it never throws a different error: an empty body, a body that is not JSON
+    /// and a problem that names a key twice all give a refusal with the response's own status.
+    /// </summary>
     public static async Task<ServiceProblemException> FromAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(response);
-        var text = await response.Content.ReadAsStringAsync(cancellationToken);
-        var problem = GatewayModelClient.TryParse(text) as JsonObject;
-        var code = problem?["code"]?.GetValue<string>() ?? response.StatusCode.ToString();
-        var detail = problem?["detail"]?.GetValue<string>() ?? problem?["title"]?.GetValue<string>() ?? OutputText.Truncate(text, 500);
-        return new ServiceProblemException(response.StatusCode, code, detail);
+        var text = await GatewayModelClient.ReadBodyAsync(response, cancellationToken);
+        var problem = ProblemBody.Read(text);
+        var detail = problem.Detail ?? problem.Title ?? (string.IsNullOrWhiteSpace(text) ? $"{(int)response.StatusCode} {response.ReasonPhrase}".Trim() : OutputText.Truncate(text, 500));
+        return new ServiceProblemException(response.StatusCode, problem.Code ?? response.StatusCode.ToString(), detail) { RunStatus = problem.RunStatus, Body = problem.Body };
     }
 }

@@ -224,19 +224,24 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Steps:**
   1. Under "Step by step" you see "Estimated the cost" with its credits, then "Work started".
   2. "Endgame · Hired Iris" (or "Iris is proposed") appears the first time research reaches this scope (BLD-02).
-  3. "Research · Research started" says "3 researchers are looking, at the same time… with up to {n} web searches each."
-  4. Three contractor groups appear, each with a "Working" badge: "Looked for existing products", "Looked for what they leave undone", "Looked for evidence people will pay". Each can be opened with "Show its {n} steps" and shows search counts and credits. When done, the badge reads "Done" (or "Stopped") with a one-line result, for example "Found 4 existing products, among them …".
-  5. The group "Weighed the evidence and wrote the verdict" follows.
-  6. "Research · Verdict: build", "Verdict: build it, changed" or "Verdict: do not build" appears.
-  7. In auto-mode, "Endgame · Building has started" follows (VERD-11). Otherwise "Endgame · Waiting for your decision".
-  8. The run finishes, and the panel **"The verdict is ready"** with **"Read it"** appears.
+  3. The group "Checked the idea against FrostAura's red lines" runs first: one quick check, with no web search. An idea that plainly crosses a red line stops here (VERD-10); one that is clear, or not plainly either way, is researched in full.
+  4. "Research · Research started" says "3 researchers are looking, at the same time… with up to {n} web searches each."
+  5. Three contractor groups appear, each with a "Working" badge: "Looked for existing products", "Looked for what they leave undone", "Looked for evidence people will pay". Each can be opened with "Show its {n} steps" and shows search counts and credits. When done, the badge reads "Done" (or "Stopped") with a one-line result, for example "Found 4 existing products, among them …".
+  6. The group "Weighed the evidence and wrote the verdict" follows.
+  7. "Research · Verdict: build", "Verdict: build it, changed" or "Verdict: do not build" appears.
+  8. In auto-mode, "Endgame · Building has started" follows (VERD-11). Otherwise "Endgame · Waiting for your decision".
+  9. The run finishes, and the panel **"The verdict is ready"** with **"Read it"** appears.
 - **You know it worked when:** the badge reads "Finished" and "The verdict is ready / Read it" shows.
 - **Variations and refusals:**
-  - If the judge's document is refused once, it is sent back to the judge to fix. If it fails again, the run fails with "The research could not reach a verdict in the agreed form…" (VERD-12).
+  - If the judge's document is refused once, it is sent back to the judge to fix, in a group named "Asked for the verdict again". If it fails again, the run fails with "The research could not reach a verdict it could record, so none was recorded and nothing will be built. Try again to research it afresh." (VERD-12); what was wrong is in technical mode only.
   - A contractor that returns no usable report is counted as "It did not report back in the agreed form, so its work is not counted."
+  - With no connection to the AI models (no key, a key refused, the provider down), the run stops at once: "Endgame could not reach its AI models, so no research was done and nothing was charged. Try again; if it keeps happening, tell FrostAura." No step is corrected or sent back; a contractor that could not reach a model says "It could not reach Endgame's AI models, so it found nothing."
+  - With a rule on web search at the research stage (AUTO-05): "May not" means the researchers are not given web search at all, and each says so; "Asks you first" raises one approval per researcher before its first search, titled "Let this step search the web: {step}?"; declined, that researcher works without searching.
+  - Whenever the run ends — finished, failed, cancelled or out of budget — its contractors are finished with it, so none stays "Working".
+  - Each contractor is named by its role ("Demand researcher (contractor)"); the step's title ("Looked for evidence people will pay") is what it did.
 - **Where:** `RunView.tsx`, `timeline.ts`; `ResearchWorkflow.cs`, `VerdictBuilder.cs`.
 - **Reachable from:** UI; MCP `run_events`.
-- **Covered by tests:** `WorkflowTests.Research_fans_out_registered_contractors…`, `…The_search_budget_is_sized_from_the_estimate…`, `…A_verdict_the_control_plane_refuses_goes_back_to_the_judge_once…`; `RunView.test.tsx` ("links a finished research run to its verdict"); `factory.spec.ts` step 2.
+- **Covered by tests:** `WorkflowTests.Research_fans_out_registered_contractors…`, `…The_search_budget_is_sized_from_the_estimate…`, `…A_verdict_the_control_plane_refuses_goes_back_to_the_judge_once…`, `…With_no_model_connection_research_stops_plainly_without_correction_rounds`, `…Under_may_not_the_researchers_are_not_offered_web_search…`, `…Under_asks_you_first_each_step_raises_one_plain_approval…`, `…Contractors_of_a_run_that_ended_part_way_are_closed_with_it`; `RunView.test.tsx` ("links a finished research run to its verdict"); `factory.spec.ts` step 2.
 
 ### VERD-02 Open an idea's verdict page
 - **Who:** Viewer or above.
@@ -386,7 +391,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Foundation. **Learn first:** VERD-03.
 - **What you learn:** a red line is absolute, and no one can overrule it.
 - **Steps:**
-  1. The verdict is always "do not build", because code forces it.
+  1. The verdict is always "do not build", because code forces it. An idea that plainly crosses a line is refused by the first check, before any researcher starts or any search is made: the run says "Research · Verdict: do not build" with "It was refused before any research was done, so no searches were made, and no one can overrule a red line.", and the verdict says it was not researched. An idea that only might cross one is researched in full and judged.
   2. The alert reads "This idea crosses a red line: {line}", then "FrostAura never builds it, and no one can overrule that — not research, not auto-mode, not you. You can change the idea and have it researched again, or drop it.", then the reasoning.
   3. Only **"Change the idea"** and **"Drop the idea"** are offered, with "Overruling is not offered: no one may build over a red line."
 - **You know it worked when:** no build or overrule button is present.
@@ -396,7 +401,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - The rules list shows "The idea crosses a red line (…), and FrostAura never builds it."
 - **Where:** `VerdictView.tsx`, `verdictModel.redLineBreached`; `VerdictBuilder` (red line forces do-not-build); `IdeaService.DecideAsync` (403).
 - **Reachable from:** UI; API; MCP.
-- **Covered by tests:** `WorkflowTests.A_red_line_is_do_not_build_whatever_the_market_says`; `VerdictView.test.tsx` ("offers neither build nor overrule…", "over a breached red line offers no overrule…").
+- **Covered by tests:** `WorkflowTests.A_red_line_is_do_not_build_whatever_the_market_says`, `…An_idea_plainly_over_a_red_line_is_refused_at_once_without_researchers_or_searches`, `…An_idea_the_screen_is_unsure_of_is_researched_in_full`; `VerdictView.test.tsx` ("offers neither build nor overrule…", "over a breached red line offers no overrule…").
 
 ### VERD-11 Let auto-mode decide after the verdict
 - **Who:** nobody acts; auto-mode decides.
@@ -583,14 +588,14 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Advanced. **Learn first:** RUN-07, AUTO-03.
 - **What you learn:** with the start checkpoint on, you approve the cost before anything begins.
 - **Steps:**
-  1. The card asks "Start this work? Estimated {n} credits." The detail (technical mode) reads "{h} credits are left in the budget."
+  1. The card asks "Start this work? Estimated {n} credits." The detail reads "{h} credits are left in the budget." Both figures are shown with at most two decimals ("277.32").
   2. Press **"Approve"** to start.
-  3. Press **"Decline"** to end the run. The card says "Declined. It was not done, so the work has stopped." The badge reads "You declined to start this" (not a failure), the outcome "You declined to start this work at its estimate, so nothing was done and nothing was charged.", the cost reads "Charged" with no estimate score, and **"Try again"** is offered under "You declined to start this at its estimate, so nothing was done and nothing was charged."
+  3. Press **"Decline"** (optionally with a note) to end the run. The card says "Declined. It was not done, so the work has stopped." The badge reads "You declined to start this" (not a failure), the outcome "You declined to start this work at its estimate, so nothing was done and nothing was charged." with your note, the cost reads "Charged" with no estimate score, and **"Try again"** is offered. In technical mode the run ends as cancelled with the reason `declined_at_start`.
 - **You know it worked when:** after approving, "Work started" and the work appear.
-- **Variations and refusals:** this applies to every run kind the Runner gates, including research, build, suggest and conversation runs.
+- **Variations and refusals:** this applies to research, build, change, task and suggest runs. A conversation is never held here: a chat message is answered without "Start this work?" (the budget still pauses it, IDEA-04, and each action it takes asks on its own).
 - **Where:** `RunExecutor.GateAsync`.
 - **Reachable from:** UI.
-- **Covered by tests:** `EstimateTests.With_a_start_checkpoint_the_owner_approves_the_estimate_first`.
+- **Covered by tests:** `EstimateTests.With_a_start_checkpoint_the_owner_approves_the_estimate_first`, `…A_conversation_is_never_held_at_the_start_checkpoint_but_still_waits_for_budget`.
 
 ### RUN-09 See a run waiting for budget, and get it moving
 - **Who:** Viewer reads; Builder resumes; Admin or Owner raises budgets.
@@ -985,7 +990,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **What it changes:** every agent's permission check at that stage. "May not" is refused whatever else applies. "May do" is allowed.
 - **Variations and refusals:**
   - Refused: "The rules were not saved: {reason} They are as they were." (400 for a malformed rule or stage).
-  - **"Asks you first" asks.** A matching call raises an approval (RUN-07) and the work waits for your answer, even though nobody watches the run; declined, the step is not taken and the work goes on without it. The rule set's separate `checkpoints` list is kept as it was ("Also stops for you at: …") and is API/MCP only.
+  - **"Asks you first" asks.** A matching call raises an approval (RUN-07) and the work waits for your answer, even though nobody watches the run; declined, the step is not taken and the work goes on without it. **"Search the web"** (`web_search`) is the AI model's own ability, and the same rules hold for it: under "May not" it is not offered at all, and under "Asks you first" each step asks once before its first search and works without searching if declined. The rule set's separate `checkpoints` list is kept as it was ("Also stops for you at: …") and is API/MCP only.
   - Empty list labels: "Nothing extra is refused", "Nothing waits for you", "Only what the job allows".
 - **Where:** `AutonomyView.tsx` `StageRules`; `PUT /api/autonomy/rule-sets`; `PermissionPolicy.Decide`.
 - **Reachable from:** UI (deny, ask, allow); API/MCP `rule_set_set` (adds `checkpoints`).
