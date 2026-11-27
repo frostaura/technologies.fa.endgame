@@ -60,8 +60,8 @@ function AccountBody({ me }: { me: Me }) {
 
       <StatRow cols={3} label="Your account at a glance" className={cn(RISE, stagger(1))}>
         <Stat label="Passkeys" value={formatNumber(me.passkeys)} caption={me.passkeys === 0 ? "None yet: add one below" : me.passkeys === 1 ? "One device signs you in" : "Any of them signs you in"} />
-        <Stat label="Organisations" value={formatNumber(organisations.length)} caption={organisations.length > 1 ? "The console shows one at a time" : organisations.length === 1 ? (organisations[0]?.name ?? "") : "None yet"} />
-        <Stat label="Roles" value={formatNumber(me.memberships.length)} caption={me.memberships.length === 1 ? "One grant, where it was set" : "Each holds where it was set and beneath"} />
+        <Stat label="Organisations" value={formatNumber(organisations.length)} caption={organisations.length > 0 ? organisations.map((o) => o.name).join(", ") : "None yet"} />
+        <Stat className="max-sm:col-span-2" label="Roles" value={formatNumber(me.memberships.length)} caption={me.memberships.length === 1 ? "One grant, where it was set" : "Each holds where it was set and beneath"} />
       </StatRow>
 
       {/* Two across from a desktop's width: what signs you in, and what you may do where. */}
@@ -107,7 +107,7 @@ function AccountBody({ me }: { me: Me }) {
                       ))}
                     </ul>
                     {grants.some((g) => roleRank(g.role) >= roleRank("admin")) && (
-                      <div className="border-t px-5 py-1 max-sm:px-4">
+                      <div className="border-t px-5 py-1.5 max-sm:px-4">
                         <Link href={paths.people(org.slug)} className={cn("inline-flex items-center rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover", TAP)}>
                           People in {org.name}
                         </Link>

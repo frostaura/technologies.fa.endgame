@@ -594,7 +594,7 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
 }
 
 /** An action inside the group: a button in the row on a tablet or a desktop, a full-width row of the menu on a phone. */
-const MENU_ITEM = "max-sm:w-full max-sm:justify-start";
+const MENU_ITEM = "max-sm:w-full max-sm:justify-start max-sm:border-transparent max-sm:hover:bg-ground";
 
 /**
  * The header's actions: one row from a tablet up; on a phone, the first action beside "More", which
