@@ -1,4 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
+import { TAP } from "@/lib/touch";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -121,7 +122,7 @@ export function StartView() {
           <p className="text-base text-ink-body">
             An idea lives in an organisation, and you hold no role in one yet. FrostAura sets one up for each person it invites; if someone already works here, ask them to give you a role.
           </p>
-          <Link href={paths.home()} className="rounded-xs text-primary-link hover:text-primary-hover">
+          <Link href={paths.home()} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
             Back to the org chart
           </Link>
         </section>
@@ -131,7 +132,7 @@ export function StartView() {
           <p className="text-base text-ink-body">
             {active.role ? `You are ${article(active.role)} ${ROLE_NAME[active.role]} in ${org.name}` : `You hold no role over the whole of ${org.name}`}, and no division gives you more. An Admin or the Owner can make you a Builder; until then, you can follow everything that is being built.
           </p>
-          <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className="rounded-xs text-primary-link hover:text-primary-hover">
+          <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
             Back to the org chart
           </Link>
         </section>
@@ -246,7 +247,7 @@ export function StartView() {
           <span className="text-ink-muted">Takes a few minutes. You can leave and come back.</span>
         </div>
         {org && (
-          <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className="self-start rounded-xs text-primary-link hover:text-primary-hover">
+          <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn("self-start rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
             Back to the org chart
           </Link>
         )}

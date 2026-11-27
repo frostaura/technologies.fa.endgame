@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import { TAP } from "@/lib/touch";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +19,7 @@ const PAGE = 10;
 function Author({ v }: { v: AppVersion }) {
   if (v.author.kind === "employee" && v.author.id) {
     return (
-      <Link href={paths.employee(v.author.id)} className="rounded-xs text-primary-link hover:text-primary-hover">
+      <Link href={paths.employee(v.author.id)} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
         {v.author.name}
       </Link>
     );

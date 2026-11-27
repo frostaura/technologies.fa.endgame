@@ -33,7 +33,7 @@ export function Fold({
   const viewport = useViewport();
   if (!on.includes(viewport)) return <>{children}</>;
   return (
-    <Disclosure title={title} summary={summary} icon={icon} defaultOpen={defaultOpen} tone={tone}>
+    <Disclosure title={title} summary={summary} icon={icon} defaultOpen={defaultOpen} tone={tone} titleOnce>
       {children}
     </Disclosure>
   );
@@ -48,6 +48,7 @@ export function Disclosure({
   tone = "plain",
   children,
   className,
+  titleOnce = false,
 }: {
   title: string;
   summary?: ReactNode;
@@ -56,10 +57,18 @@ export function Disclosure({
   tone?: "plain" | "attention";
   children: ReactNode;
   className?: string;
+  /**
+   * Open, the title is said once: when what it holds starts with a heading of the same words (a
+   * section's own "Dashboard" under the row "Dashboard"), that heading is not drawn and the row
+   * becomes the section's heading, at the same level.
+   */
+  titleOnce?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const bodyId = useId();
   const root = useRef<HTMLElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const echo = useEcho(body, titleOnce && open, title);
 
   // Something asked to be shown that sits inside (the academy pointing at it, a link to it): open.
   useEffect(() => {
@@ -72,8 +81,7 @@ export function Disclosure({
 
   // Closed, it is a card naming what it holds; open, that line becomes a quiet bar above what it holds,
   // which keeps its own card and heading — never a card inside a card.
-  return (
-    <section ref={root} aria-label={title} data-fold="" data-open={open || undefined} className={cn("flex flex-col gap-2", className)}>
+  const toggle = (
       <button
         type="button"
         aria-expanded={open}
@@ -87,16 +95,61 @@ export function Disclosure({
       >
         {icon && <span className="flex shrink-0">{icon}</span>}
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className={cn("font-display font-semibold", open ? "text-sm" : "text-base text-ink")}>{title}</span>
+          <span className={cn("font-display font-semibold", echo ? "text-lg text-ink" : open ? "text-sm" : "text-base text-ink")}>{title}</span>
           {summary && !open && <span className="text-sm text-ink-muted">{summary}</span>}
         </span>
         <ChevronDown aria-hidden className={cn("size-5 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />
       </button>
-      <div id={bodyId} data-fold-body="" hidden={!open} className={open ? "flex flex-col gap-4" : "hidden"}>
+  );
+  const Heading = echo ? (`h${echo}` as "h2") : null;
+
+  return (
+    <section ref={root} aria-label={title} data-fold="" data-open={open || undefined} className={cn("flex flex-col gap-2", className)}>
+      {Heading ? <Heading className="flex">{toggle}</Heading> : toggle}
+      <div ref={body} id={bodyId} data-fold-body="" hidden={!open} className={open ? "flex flex-col gap-4 [&_[data-fold-echo]]:hidden" : "hidden"}>
         {children}
       </div>
     </section>
   );
+}
+
+const HEADINGS = "h1, h2, h3, h4";
+
+/**
+ * The level (1–4) of the first heading inside `body` when its words are `title`'s, marked
+ * `data-fold-echo` so the body leaves it undrawn; null when there is none. Watched while `on`,
+ * since what a section holds may draw its heading only once it has loaded.
+ */
+function useEcho(body: RefObject<HTMLDivElement | null>, on: boolean, title: string): number | null {
+  const [level, setLevel] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = body.current;
+    if (!el || !on) return;
+    const want = words(title);
+    const mark = () => {
+      const first = el.querySelector<HTMLElement>(HEADINGS);
+      for (const h of el.querySelectorAll<HTMLElement>("[data-fold-echo]")) if (h !== first) delete h.dataset.foldEcho;
+      if (first && words(first.textContent) === want) {
+        first.dataset.foldEcho = "";
+        setLevel(Number(first.tagName.slice(1)));
+      } else {
+        if (first) delete first.dataset.foldEcho;
+        setLevel(null);
+      }
+    };
+    mark();
+    const watch = new MutationObserver(mark);
+    watch.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => {
+      watch.disconnect();
+      for (const h of el.querySelectorAll<HTMLElement>("[data-fold-echo]")) delete h.dataset.foldEcho;
+    };
+  }, [body, on, title]);
+  return on ? level : null;
+}
+
+function words(s: string | null | undefined): string {
+  return (s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 /**

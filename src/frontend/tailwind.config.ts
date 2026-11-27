@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 import plugin from "tailwindcss/plugin";
-import { blur, cssVariables, layout, motion, radius, screens, shortQuery, surfaces, tailwindColors, typography } from "./src/lib/tokens";
+import { blur, cssVariables, layout, motion, radius, screens, shortQuery, surfaces, tailwindColors, typography, viewportQueries } from "./src/lib/tokens";
 
 /**
  * The Tailwind theme. It holds no values: every colour, radius, shadow, typeface and motion comes
@@ -44,6 +44,8 @@ const config: Config = {
       height: { visible: layout.visible.height },
       gridTemplateColumns: layout.columns,
       minHeight: { touch: layout.touch, nav: layout.nav, bar: layout.bar },
+      lineHeight: { touch: layout.touch },
+      borderWidth: { touch: layout.touchPad },
       minWidth: { touch: layout.touch, field: layout.field },
       margin: { wire: layout.wireInset },
       keyframes: motion.keyframes,
@@ -60,6 +62,10 @@ const config: Config = {
     // `short:` — a phone on its side: little height, so headers and bars draw slimmer.
     plugin(({ addVariant }) => {
       addVariant("short", `@media ${shortQuery}`);
+    }),
+    // `phone:` — exactly where the console draws its phone layout (`useViewport`), upright or on its side.
+    plugin(({ addVariant }) => {
+      addVariant("phone", `@media ${viewportQueries.phone}`);
     }),
     // `delay-*` for animations, read from the same stagger scale.
     plugin(({ matchUtilities, theme }) => {

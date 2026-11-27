@@ -161,6 +161,34 @@ describe("a fold", () => {
   });
 });
 
+describe("a fold's title, said once", () => {
+  it("opened, draws its section's same-named heading once — as the row, at the heading's level", () => {
+    render(
+      <Disclosure title="Dashboard" titleOnce>
+        <section>
+          <h2>Dashboard</h2>
+          <p>Questions kept on it</p>
+        </section>
+      </Disclosure>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Dashboard/ }));
+    const echo = document.querySelector("[data-fold-echo]");
+    expect(echo?.textContent).toBe("Dashboard");
+    const heading = screen.getAllByRole("heading", { level: 2 }).find((h) => !h.hasAttribute("data-fold-echo"));
+    expect(heading?.querySelector("button")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("leaves a heading of other words alone", () => {
+    render(
+      <Disclosure title="Sharing" titleOnce defaultOpen>
+        <h2>Shared with</h2>
+      </Disclosure>,
+    );
+    expect(document.querySelector("[data-fold-echo]")).toBeNull();
+    expect(screen.getAllByRole("heading")).toHaveLength(1);
+  });
+});
+
 describe("a clamped heading", () => {
   it("keeps every word in the heading, and offers no control while nothing is cut", () => {
     render(<ClampedHeading>Build: a members’ locker booking app for the club</ClampedHeading>);

@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
+import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
@@ -134,7 +135,7 @@ function SecretsBody({ list, tree, where, notice, onNotice }: { list: SecretList
             {list.setBelow.map((b) => (
               <li key={`${b.setAtPath}#${b.name}`} className="flex flex-wrap items-center justify-between gap-2">
                 <code className="break-all font-mono text-sm">{b.name}</code>
-                <Link href={paths.secrets(b.setAtPath)} className="rounded-xs text-sm text-primary-link hover:text-primary-hover">
+                <Link href={paths.secrets(b.setAtPath)} className={cn("rounded-xs text-sm text-primary-link hover:text-primary-hover", TAP)}>
                   {nameOf(b.setAtPath)}
                 </Link>
               </li>

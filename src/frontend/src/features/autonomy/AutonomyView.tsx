@@ -215,7 +215,7 @@ function Switch({ label, on, disabled, onChange }: { label: string; on: boolean;
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className={cn("relative inline-flex h-8 w-14 min-w-touch shrink-0 items-center rounded-full p-1 transition-colors disabled:opacity-60", on ? "bg-primary" : "bg-border-strong")}
+      className={cn("relative inline-flex h-8 w-14 min-w-touch shrink-0 items-center rounded-full bg-clip-padding p-1 transition-colors disabled:opacity-60 phone:h-auto phone:min-h-touch phone:border-y-touch phone:border-transparent", on ? "bg-primary" : "bg-border-strong")}
     >
       <span aria-hidden className={cn("size-6 rounded-full bg-surface shadow-toggle transition-transform motion-reduce:transition-none", on ? "translate-x-6" : "translate-x-0")} />
       <span className="sr-only">{on ? "On" : "Off"}</span>

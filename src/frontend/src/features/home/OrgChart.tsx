@@ -294,7 +294,7 @@ function AppRow({ app }: { app: TreeApp }) {
   return (
     <li className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3 max-sm:px-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={paths.app(app.id)} className="relative z-10 flex items-center gap-2 rounded-xs font-semibold text-ink hover:text-primary-hover">
+        <Link href={paths.app(app.id)} className="relative z-10 flex items-center gap-2 rounded-xs font-semibold text-ink hover:text-primary-hover phone:min-h-touch">
           <Icon name="app" tinted className="size-4" />
           {app.name}
         </Link>

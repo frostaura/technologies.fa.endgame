@@ -7,7 +7,7 @@ import { NOTIFICATIONS } from "@/test/breadth";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { AppShell } from "../shell/AppShell";
 import { NotificationsView } from "./NotificationsView";
-import { notificationHref, notificationLines } from "./notificationModel";
+import { notificationHref, notificationLines, phoneShown } from "./notificationModel";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 
@@ -202,5 +202,15 @@ describe("a top-up request, for operators", () => {
     const item: NotificationItem = { id: "n9", kind: "topup.requested", severity: "info", title: "Acme asks for 250 credits", detail: "Launch week.", scope: "frostaura", subject: { kind: "topup_request", id: "q1" }, createdAt: "2026-11-25T01:00:00Z", read: false, emailedAt: null, resolved: false };
     expect(notificationLines(item).kind).toBe("Top-up request");
     expect(notificationHref(item)).toBe("/operator");
+  });
+});
+
+describe("the feed on a phone", () => {
+  it("shows every unread notice and the newest ten, then ten more for each step older", () => {
+    const items = Array.from({ length: 30 }, (_, i) => ({ id: `n${i}`, read: i < 25 ? true : false, resolved: i === 29 }));
+    const first = phoneShown(items, 0).map((n) => n.id);
+    expect(first).toEqual([...Array.from({ length: 10 }, (_, i) => `n${i}`), "n25", "n26", "n27", "n28"]);
+    expect(phoneShown(items, 10)).toHaveLength(24);
+    expect(phoneShown(items, 20)).toHaveLength(30);
   });
 });

@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { Fold } from "@/components/Fold";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
@@ -11,6 +12,7 @@ import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { navigate, paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
+import { useViewport } from "@/lib/useViewport";
 import { useAppSelector } from "@/store";
 import { api, useDecideIdeaMutation, useGetIdeaQuery } from "@/store/api";
 import type { DecisionChoice, ExistingProduct, Idea, Verdict, VerdictOutcome } from "@/store/types";
@@ -37,6 +39,8 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   const active = useActiveOrganisation();
   const idea = view.kind === "loaded" ? view.data : null;
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
+  // A phone reads the research record among the verdict's folded evidence, not in a side panel under it.
+  const phone = useViewport() === "phone";
 
   const crumbs: Crumb[] = [];
   const org = active.organisation;
@@ -48,7 +52,7 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
     <AppShell
       crumbs={crumbs}
       aside={
-        idea ? (
+        idea && !phone ? (
           <ErrorBoundary name="The research record">
             <RecordAside idea={idea} />
           </ErrorBoundary>
@@ -140,6 +144,17 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
   const redLine = redLineBreached(verdict, idea.redLine);
   const short = verdict.summary ? shortSummary(verdict.summary) : null;
   const [reasoning, setReasoning] = useState(false);
+  // On a phone the decision comes straight under the verdict (and a red line's card), and the evidence
+  // follows as folded rows, the case against open; wider screens keep the evidence before the decision.
+  const phone = useViewport() === "phone";
+  const decision = (
+    <>
+      <ErrorBoundary name="Your decision">
+        <Decisions idea={idea} verdict={verdict} redLine={redLine} />
+      </ErrorBoundary>
+      {!idea.decision && <DecisionHistory idea={idea} />}
+    </>
+  );
   return (
     <>
       <section className={cn("relative flex flex-col gap-3.5 overflow-hidden rounded-lg bg-night px-6 py-7 text-primary-ink sm:px-8", RISE)}>
@@ -179,7 +194,10 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
         </section>
       )}
 
+      {phone && decision}
+
       {verdict.against.length > 0 && (
+        <Fold title="The case against, argued first" summary={plural(verdict.against.length, "point")} defaultOpen>
         <section aria-labelledby="against-title" className={cn("flex flex-col gap-3 rounded-md border bg-surface p-5 shadow-card", RISE)}>
           <h2 id="against-title" className="text-lg font-semibold">
             The case against, argued first
@@ -192,12 +210,16 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
             ))}
           </ol>
         </section>
+        </Fold>
       )}
 
       <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-3">
+        <Fold title="Who already does this" summary={verdict.existing.products.length ? plural(verdict.existing.products.length, "product") : "Nothing found already sold"}>
         <Evidence title="Who already does this" index={1}>
           <ExistingProducts products={verdict.existing.products} evidence={verdict.existing.evidence} />
         </Evidence>
+        </Fold>
+        <Fold title="What gap is left">
         <Evidence title="What gap is left" index={2}>
           {verdict.gap.paragraphs.length === 0 ? (
             <p data-state="empty" className="text-ink-muted">
@@ -211,6 +233,8 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
             ))
           )}
         </Evidence>
+        </Fold>
+        <Fold title="Who would want it" summary={verdict.demand.evidenceFound ? undefined : "No evidence of demand was found"}>
         <Evidence title="Who would want it" index={3}>
           {verdict.demand.paragraphs.map((d, i) => (
             <p key={i} className="text-ink-body">
@@ -229,18 +253,22 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
           )}
           {!verdict.demand.evidenceFound && <p className="rounded-sm bg-attention-tint px-3 py-2.5 font-medium text-attention-strong">No evidence of demand was found. That counts against building.</p>}
         </Evidence>
+        </Fold>
       </div>
 
       {verdict.suggestedChange && (
+        <Fold title="What to change">
         <section aria-labelledby="suggested-title" className="flex flex-col gap-2.5 rounded-md border-2 border-primary bg-surface px-6 py-5">
           <h2 id="suggested-title" className="text-lg font-semibold">
             What to change
           </h2>
           <p className="text-ink-body">{verdict.suggestedChange}</p>
         </section>
+        </Fold>
       )}
 
       {verdict.wouldChange && (
+        <Fold title="What would change the verdict">
         <section className="flex flex-col gap-2.5 rounded-md border border-primary bg-primary-tint px-6 py-5">
           <h2 className="text-lg font-semibold">What would change the verdict</h2>
           {verdict.wouldChange.text.split(/\n\s*\n/).map((p, i) => (
@@ -250,9 +278,11 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
           ))}
           {verdict.wouldChange.estimateCredits !== null && <p className="font-medium">Estimated {formatCredits(verdict.wouldChange.estimateCredits)}</p>}
         </section>
+        </Fold>
       )}
 
       {!redLine && verdict.redLines && (
+        <Fold title="No red line is crossed">
         <section aria-label="Red-line screen" className="flex flex-col gap-1.5 rounded-md border bg-surface px-6 py-4">
           <h2 className="flex items-center gap-2 text-base font-semibold">
             <Icon name="health" tinted />
@@ -260,12 +290,16 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
           </h2>
           {verdict.redLines.reasoning && <p className="text-ink-body">{verdict.redLines.reasoning}</p>}
         </section>
+        </Fold>
       )}
 
-      <ErrorBoundary name="Your decision">
-        <Decisions idea={idea} verdict={verdict} redLine={redLine} />
-      </ErrorBoundary>
-      {!idea.decision && <DecisionHistory idea={idea} />}
+      {phone ? (
+        <ErrorBoundary name="The research record">
+          <RecordAside idea={idea} />
+        </ErrorBoundary>
+      ) : (
+        decision
+      )}
     </>
   );
 }
@@ -385,15 +419,15 @@ function Decisions({ idea, verdict, redLine }: { idea: Idea; verdict: Verdict; r
   const options = decisionOptions(verdict, redLine);
   return (
     <section aria-label="Your decision" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 phone:flex-col phone:items-stretch">
         {options.map((o) =>
           confirming === o.choice && o.choice !== "change" ? (
-            <span key={o.choice} role="group" aria-label="Confirm" className="flex flex-wrap items-center gap-2 rounded-sm bg-attention-tint px-3 py-1.5">
-              <span className="text-sm text-attention-text">{o.choice === "drop" ? "Drop this idea?" : "Build it against the verdict? This is recorded as an overrule."}</span>
-              <Button size="sm" variant="outline" onClick={() => void submit(o.choice)}>
+            <span key={o.choice} role="group" aria-label="Confirm" className="flex flex-wrap items-center gap-2 rounded-sm bg-attention-tint px-3 py-1.5 phone:py-3">
+              <span className="text-sm text-attention-text phone:w-full">{o.choice === "drop" ? "Drop this idea?" : "Build it against the verdict? This is recorded as an overrule."}</span>
+              <Button size="sm" variant="outline" className="phone:flex-1" onClick={() => void submit(o.choice)}>
                 Yes
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+              <Button size="sm" variant="ghost" className="phone:flex-1" onClick={() => setConfirming(null)}>
                 No
               </Button>
             </span>
@@ -462,6 +496,7 @@ function RecordAside({ idea }: { idea: Idea }) {
   const method = idea.verdict?.method;
   return (
     <>
+      <Fold title="How often research says no" summary={r.total === 0 ? "The first verdict here" : `${formatNumber(r.doNotBuild)} of ${formatNumber(r.total)} verdicts said do not build`}>
       <section className={cn("flex flex-col gap-3.5", RISE)}>
         <h2 className="text-lg font-semibold">How often research says no</h2>
         <p className="text-ink-body">Research that never refuses is worthless, so Endgame shows you its record.</p>
@@ -486,6 +521,8 @@ function RecordAside({ idea }: { idea: Idea }) {
           </div>
         )}
       </section>
+      </Fold>
+      <Fold title="When you overruled" summary={r.overruled.length === 0 ? "Not yet" : plural(r.overruled.length, "idea")}>
       <section className="flex flex-col gap-2.5">
         <h2 className="text-lg font-semibold">When you overruled</h2>
         {r.overruled.length === 0 ? (
@@ -503,7 +540,9 @@ function RecordAside({ idea }: { idea: Idea }) {
           ))
         )}
       </section>
+      </Fold>
       {method && (
+        <Fold title="How this was researched">
         <section aria-labelledby="method-title" className="flex flex-col gap-2.5">
           <h2 id="method-title" className="flex items-center gap-2 text-lg font-semibold">
             <Icon name="research" tinted />
@@ -565,6 +604,7 @@ function RecordAside({ idea }: { idea: Idea }) {
             See every step
           </Link>
         </section>
+        </Fold>
       )}
     </>
   );

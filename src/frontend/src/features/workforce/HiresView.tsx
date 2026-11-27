@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { TAP } from "@/lib/touch";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
@@ -214,7 +215,7 @@ function RecurringRow({ role, tree, isAdmin, waiting }: { role: RecurringRole; t
       </span>
       {role.lastBrief && <span className="text-sm text-ink-muted">Last brief: {role.lastBrief}</span>}
       {waiting ? (
-        <Link href={paths.hire(waiting.id)} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+        <Link href={paths.hire(waiting.id)} className={cn("self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
           Already proposed — open it
         </Link>
       ) : open ? (

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import type { IconName } from "@/components/iconNames";
 import { Link } from "@/components/Link";
@@ -66,7 +67,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
       {secretsView.kind === "loaded" && secretsView.data.effective.length > 0 && (
         <p className="text-sm text-ink-body">
           Secrets it can read: {secretsView.data.effective.map((x) => x.name).join(", ")}.{" "}
-          <Link href={paths.secrets(app.scope)} className="rounded-xs text-primary-link hover:text-primary-hover">
+          <Link href={paths.secrets(app.scope)} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
             Manage them
           </Link>
         </p>
@@ -74,7 +75,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
       {canSeeSecrets && secretsView.kind === "failed" && <p className="text-sm text-attention-text">Its secrets could not be read: {secretsView.reason}</p>}
       <p className="text-sm text-ink-body">
         An AI assistant you let in can use this app the way a person does.{" "}
-        <Link href={paths.assistants()} className="rounded-xs text-primary-link hover:text-primary-hover">
+        <Link href={paths.assistants()} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
           Let an assistant in
         </Link>
       </p>

@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
+import { ArrowDown } from "lucide-react";
 import { useActiveTree } from "@/lib/useActiveOrganisation";
 import { Avatar } from "@/components/Avatar";
 import { Link } from "@/components/Link";
@@ -7,6 +8,8 @@ import { Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths, useLocation } from "@/lib/router";
+import { TAP } from "@/lib/touch";
+import { useFollowLatest } from "@/lib/useFollowLatest";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useEstimateMessageQuery, useGetConversationQuery, useGetMeQuery, useStartConversationMutation } from "@/store/api";
@@ -50,13 +53,12 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
   // In the phone's sheet the dock fills it: what was said scrolls, the text box stays at the foot, above the keyboard.
   const inSheet = useInSheet();
 
-  useEffect(() => {
-    const el = logRef.current;
-    if (el && typeof el.scrollTo === "function") el.scrollTo({ top: el.scrollHeight });
-  }, [messages.length, earlier.length]);
+  // It opens at the latest message and follows the reply as it arrives, unless the person scrolled up to read.
+  const { behind, toLatest } = useFollowLatest(logRef);
 
   const send = async (text: string) => {
     const id = newMessageId();
+    toLatest();
     dispatch(messageQueued({ key, message: { id, text, state: "sending", runId: null, error: null } }));
     try {
       const run = await start({ scope: selection.scope, message: text, ...(selection.employeeId ? { employeeId: selection.employeeId } : {}) }).unwrap();
@@ -90,7 +92,7 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
                   : "Select the organisation band to talk to everything again."}
           </span>
           {selection.kind === "employee" && selection.employeeId && !onEmployeePage && (
-            <Link href={paths.employee(selection.employeeId)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+            <Link href={paths.employee(selection.employeeId)} className={cn("self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover", TAP)}>
               See {name}’s job, record and memory
             </Link>
           )}
@@ -138,6 +140,15 @@ export function ConversationDock({ tree, selection, fill = true }: { tree: Tree;
           </div>
         ))}
       </div>
+      {behind && (
+        // Over the foot of the log, outside it, so it is not read out as part of the conversation.
+        <div className="relative h-0">
+          <Button size="sm" variant="soft" onClick={toLatest} className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full font-semibold text-ink shadow-raised">
+            <ArrowDown aria-hidden className="size-4" />
+            New reply
+          </Button>
+        </div>
+      )}
 
       <form onSubmit={submit} className={cn("flex flex-col gap-2 border-t pt-4", inSheet && "shrink-0 pb-3 pt-3")}>
         <label htmlFor={inputId} className="text-xs text-ink-muted">
@@ -259,6 +270,16 @@ export function TypingDots({ label }: { label?: string }) {
   );
 }
 
+/** The answer is on its way: shown from the moment a message is sent until the work that answers it ends. */
+function Working({ text }: { text: string }) {
+  return (
+    <div data-working="" className="flex items-center gap-2.5 text-sm text-ink-muted">
+      <TypingDots />
+      {text}
+    </div>
+  );
+}
+
 function Exchange({ message, onRetry, answerer }: { message: ChatMessage; onRetry: () => void; answerer: string | null }) {
   return (
     <>
@@ -266,6 +287,8 @@ function Exchange({ message, onRetry, answerer }: { message: ChatMessage; onRetr
         <Sender name="You" mine />
         <p className={cn("max-w-bubble rounded-md rounded-br-xs bg-primary px-4 py-2.5 text-primary-ink", message.state === "sending" && "opacity-70")}>{message.text}</p>
       </div>
+      {/* From the moment it is sent, before the work that answers it has started ("Working on it" then takes over). */}
+      {message.state === "sending" && <Working text="Sending…" />}
       {message.state === "failed" && (
         <div role="alert" className="flex flex-col gap-2 self-end rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           Not sent: {message.error}
@@ -316,12 +339,7 @@ function Replies({ runId, answerer, onRetry }: { runId: string; answerer: string
       {pending.map((a) => (
         <ApprovalCard key={a.id} runId={runId} approval={a} compact />
       ))}
-      {!done && log.stream !== "failed" && (
-        <div className="flex items-center gap-2.5 text-sm text-ink-muted">
-          <TypingDots />
-          {log.stream === "reconnecting" ? "Reconnecting…" : pending.length > 0 ? "Waiting for your answer" : "Working on it"}
-        </div>
-      )}
+      {!done && log.stream !== "failed" && <Working text={log.stream === "reconnecting" ? "Reconnecting…" : pending.length > 0 ? "Waiting for your answer" : "Working on it"} />}
       {log.stream === "failed" && (
         <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           {log.streamError} The reply is still being written.
@@ -331,7 +349,7 @@ function Replies({ runId, answerer, onRetry }: { runId: string; answerer: string
         </div>
       )}
       {(run.toolCalls > 0 || run.tasks.length > 0) && (
-        <Link href={paths.run(runId)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+        <Link href={paths.run(runId)} className={cn("self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover", TAP)}>
           See how it got there
         </Link>
       )}

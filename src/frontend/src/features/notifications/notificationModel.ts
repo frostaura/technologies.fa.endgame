@@ -68,3 +68,12 @@ const NO_LONGER_WAITING = /^No longer waiting: /;
 export function settledLabel(n: NotificationItem): string {
   return n.kind === "approval" && NO_LONGER_WAITING.test(n.title) ? "Closed" : "Answered";
 }
+
+/** How many notifications a phone shows at first beside every unread one, and how many more each "Show older" adds. */
+export const PHONE_PAGE = 10;
+
+/** What a phone shows, newest first: every unread notice, and the newest {@link PHONE_PAGE} plus `older` more. */
+export function phoneShown<T extends { read: boolean; resolved: boolean }>(items: T[], older: number): T[] {
+  const newest = PHONE_PAGE + older;
+  return items.filter((n, i) => i < newest || (!n.read && !n.resolved));
+}
