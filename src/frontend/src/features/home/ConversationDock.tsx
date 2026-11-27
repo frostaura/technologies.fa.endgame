@@ -344,7 +344,7 @@ function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo, full
       <div className={cn("flex w-full min-w-0 items-center gap-3", full && "mx-auto max-w-prose")}>
       <Avatar name={name} seed={selection.employeeId ?? selection.scope} size="md" shape={selection.kind === "employee" ? "round" : "square"} className="low:hidden" />
       <div className="flex min-w-0 flex-1 flex-col low:flex-row low:items-center low:gap-2">
-        <nav aria-label="What this conversation is about" className="flex min-w-0 items-center gap-1 text-xs text-ink-muted low:order-last low:shrink-0" data-level="">
+        <nav aria-label="What this conversation is about" className="flex min-w-0 items-center gap-1 text-xs text-ink-muted low:hidden" data-level="">
           <span className="shrink-0 text-eyebrow font-semibold uppercase low:hidden">{LEVEL[selection.kind]}</span>
           {above.length > 0 && (
             <ol className="flex min-w-0 items-center gap-1 truncate low:hidden">
@@ -374,8 +374,8 @@ function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo, full
             <IdCard aria-hidden className="size-4" />
           </Link>
         )}
-        {dock && !dock.full && dock.canWiden && (
-          <HeaderButton label={dock.wide ? "Make the pane narrower" : "Make the pane wider"} onClick={() => dock.setWide(!dock.wide)} pressed={dock.wide}>
+        {dock && !dock.full && (
+          <HeaderButton label={dock.wide || dock.overlay ? "Make the pane narrower" : "Make the pane wider"} onClick={() => dock.setWide(!(dock.wide || dock.overlay))} pressed={dock.wide || dock.overlay}>
             <MoveHorizontal aria-hidden className="size-4" />
           </HeaderButton>
         )}
@@ -822,10 +822,10 @@ function Exchange({ message, onRetry, answerer }: { message: ChatMessage; onRetr
     <>
       <OwnBubble who="You" text={message.text} attachments={message.attachments ?? []} sending={message.state === "sending"}>
         {message.state === "failed" && (
-          <div role="alert" className="flex max-w-bubble flex-wrap items-center justify-end gap-x-2 self-end text-right text-xs text-attention-text">
-            <TriangleAlert aria-hidden className="size-3.5 shrink-0" />
-            Not sent: {message.error}
-            <button type="button" onClick={onRetry} className="flex min-h-touch items-center gap-1 rounded-xs font-semibold underline">
+          <div role="alert" className="max-w-bubble self-end text-right text-xs text-attention-text">
+            <TriangleAlert aria-hidden className="mr-1 inline size-3.5 align-text-bottom" />
+            Not sent: {message.error}{" "}
+            <button type="button" onClick={onRetry} className="inline-flex min-h-touch items-center rounded-xs font-semibold underline">
               Send again
             </button>
           </div>

@@ -142,7 +142,7 @@ function inline(nodes: Inline[]): ReactNode {
       case "code":
         return (
           // A path breaks only after a "/", never mid-word, with no space inside the box (real-stack 11).
-          <code key={i} className="whitespace-normal break-normal rounded-xs border bg-surface px-1 py-0.5 font-mono text-sm box-decoration-clone">
+          <code key={i} className="whitespace-normal break-words rounded-xs border bg-surface px-1 py-0.5 font-mono text-sm box-decoration-clone">
             {n.text.split("/").map((part, j, all) => (
               <Fragment key={j}>
                 {part}
@@ -177,7 +177,7 @@ function inline(nodes: Inline[]): ReactNode {
             href={n.href}
             data-chip={chip.kind.toLowerCase()}
             title={chip.kind}
-            className="mx-0.5 inline rounded-full border border-primary-line bg-primary-tint py-0.5 pl-1.5 pr-2.5 text-sm font-semibold text-primary-hover box-decoration-clone hover:bg-surface"
+            className="mx-0.5 inline whitespace-nowrap rounded-full border border-primary-line bg-primary-tint py-0.5 pl-1.5 pr-2.5 text-sm font-semibold text-primary-hover hover:bg-surface"
           >
             <Icon name={chip.icon} className="mr-1 inline size-3.5 align-text-bottom" />
             {inline(n.children)}

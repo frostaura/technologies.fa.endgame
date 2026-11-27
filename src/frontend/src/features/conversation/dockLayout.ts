@@ -8,8 +8,10 @@ import { createContext, useCallback, useContext, useState, useSyncExternalStore 
 export interface DockLayout {
   /** Wide, as drawn: a stored choice of wide holds only where the window is wide enough for it ({@link WIDER_FROM}). */
   wide: boolean;
-  /** Whether "wider" is offered here: below {@link WIDER_FROM} a wide pane would crush the page, so it is not. */
+  /** Whether "wider" pushes the page aside here; below {@link WIDER_FROM} the wide pane would crush the page, so it lies over it instead. */
   canWiden: boolean;
+  /** Wide, over the page as a drawer (below {@link WIDER_FROM}), rather than beside it. */
+  overlay: boolean;
   collapsed: boolean;
   /** Across the whole width, the page hidden behind it; not remembered, so the page is never lost. */
   full: boolean;
@@ -113,5 +115,5 @@ export function useDockState(person: string | null): DockLayout {
     [update],
   );
   const canWiden = useCanWiden();
-  return { wide: stored.wide && canWiden, canWiden, collapsed: stored.collapsed, full, setWide, setCollapsed, setFull };
+  return { wide: stored.wide && canWiden, canWiden, overlay: stored.wide && !canWiden && !stored.collapsed && !full, collapsed: stored.collapsed, full, setWide, setCollapsed, setFull };
 }

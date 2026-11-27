@@ -178,12 +178,14 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
               <aside
                 aria-label="Conversation pane"
                 data-dock={dock.full ? "full" : dock.collapsed ? "collapsed" : dock.wide ? "wide" : "narrow"}
+                data-overlay={dock.overlay || undefined}
                 className={cn(
-                  "sticky top-chrome flex h-dock shrink-0 flex-col self-start border-l bg-surface",
+                  "sticky top-chrome z-20 flex h-dock shrink-0 flex-col self-start border-l bg-surface",
                   dock.full ? "flex-1" : dock.collapsed ? "w-dock-rail" : dock.wide ? "w-dock-wide" : "w-dock",
                 )}
               >
-                {talk.content}
+                {/* Wider on a window under 1,500 px: a drawer over the page's edge, so the page keeps its width. */}
+                {dock.overlay ? <div className="absolute inset-y-0 right-0 flex w-dock-wide flex-col border-l bg-surface shadow-raised">{talk.content}</div> : talk.content}
               </aside>
             </DockLayoutContext.Provider>
           )}

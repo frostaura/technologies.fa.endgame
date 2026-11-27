@@ -194,7 +194,8 @@ function Timing({ from, to, waitedMs, waitingSince }: { from: string | null; to:
   const waitingNow = waitingSince ? Math.max(0, end - Date.parse(waitingSince)) : 0;
   const waited = waitedMs + (Number.isFinite(waitingNow) ? waitingNow : 0);
   const worked = Math.max(0, end - Date.parse(from) - waited);
-  if (!Number.isFinite(worked)) return null;
+  // A figure that says nothing (a card restored with every step at one moment) is left out.
+  if (!Number.isFinite(worked) || (to && worked < 1000 && waited < 1000)) return null;
   return (
     <span className="flex items-center gap-1 tabular-nums" data-timing="">
       <Clock aria-hidden className="size-3.5 shrink-0" />
