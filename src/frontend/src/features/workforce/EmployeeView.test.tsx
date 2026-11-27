@@ -51,6 +51,8 @@ describe("EmployeeView", () => {
     expect(record.textContent).toContain("19 of 22");
     expect(record.textContent).toContain("3 pieces sent back");
     expect(record.textContent).toContain("Usually 18% under the estimate");
+    // The figure says how far; its caption stays short enough never to be cut.
+    expect(record.textContent).toContain("Against estimates");
     expect(screen.getByText("Standard, for reading and judging")).toBeTruthy();
     expect(screen.getByText("Read files, Search the web, Brief contractors")).toBeTruthy();
     expect(document.body.textContent).not.toContain("web_search");

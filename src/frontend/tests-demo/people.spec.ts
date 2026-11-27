@@ -60,13 +60,54 @@ test.describe("the people pages on a wide desktop", () => {
     expect(problems).toEqual([]);
   });
 
-  test("hiring: every proposal a row with its state at the same place, no orphan card", async ({ page }) => {
+  test("hiring: every proposal a row with its state at the same place, no orphan card, no repeated pill", async ({ page }) => {
     await open(page, "s4-hiring");
     // The one table: every proposal's state in the same column.
     const tags = page.locator("[data-table] .tbl-row > [data-kind='status']");
     await expect(tags).toHaveCount(3);
-    const rights = await tags.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().right)));
+    const rights = await tags.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
     expect(new Set(rights).size).toBe(1);
+    // A waiting proposal says whether it fits the budget, not "Waiting for you" again under that heading (real-stack 47).
+    const waiting = page.getByRole("region", { name: "Waiting for you" });
+    await expect(waiting.getByText("Waiting for you", { exact: true })).toHaveCount(0);
+    await expect(waiting.getByText("More than the budget has room for")).toBeVisible();
+    // The recurring role is a row of its card, never a card inside a card.
+    const recurring = page.getByRole("list", { name: "Recurring roles" }).locator("li").first();
+    expect(await recurring.evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("0px");
+  });
+
+  test("a hire proposal: the decision beside the proposal, in the side card under its cost, never floating under the job", async ({ page }) => {
+    const problems = await open(page, "hire-pending");
+    const card = page.getByTestId("hire-decision");
+    const hire = card.getByRole("button", { name: "Hire Lark" });
+    await expect(hire).toBeVisible();
+    const jd = await page.locator("section[aria-labelledby='jd-title']").boundingBox();
+    const box = await hire.boundingBox();
+    expect(box?.x ?? 0).toBeGreaterThan((jd?.x ?? 0) + (jd?.width ?? 0));
+    // Every side card is named.
+    await expect(page.getByRole("heading", { name: "If it has nothing to do" })).toBeVisible();
+    await hire.click();
+    await expect(card.getByText("Hire Lark at about 300 credits a month?")).toBeVisible();
+    expect(problems).toEqual([]);
+  });
+
+  test("an employee: the work beside the memory, the memory's upkeep under the work, no column ending on empty space", async ({ page }) => {
+    await open(page, "s4-employee-record");
+    const work = await page.locator("section[aria-labelledby='work-title']").boundingBox();
+    const upkeep = await page.locator("section[aria-labelledby='upkeep-title']").boundingBox();
+    const memory = await page.locator("section[aria-label='Memory']").boundingBox();
+    expect(Math.abs((upkeep?.x ?? 0) - (work?.x ?? 99))).toBeLessThanOrEqual(1);
+    const left = (upkeep?.y ?? 0) + (upkeep?.height ?? 0);
+    const right = (memory?.y ?? 0) + (memory?.height ?? 0);
+    expect(Math.abs(left - right)).toBeLessThan(400);
+    // The last piece of work is linked from who it is, not floating over the table.
+    await expect(page.locator("header").getByRole("link", { name: "Its last piece of work" })).toBeVisible();
+    await expect(page.locator("section[aria-labelledby='work-title']").getByRole("link", { name: "Its last piece of work" })).toHaveCount(0);
+    // "Let go" is a live red-edged control, not a greyed one.
+    const letGo = page.getByRole("group", { name: "Actions" }).getByRole("button", { name: "Let go" });
+    await expect(letGo).toBeEnabled();
+    // No caption cut short on the track record.
+    for (const caption of await page.locator("section[aria-label='Track record'] span.truncate").all()) expect(await caption.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   });
 
   test("People: a table whose headings sit over their columns, dates on one line", async ({ page }) => {
@@ -79,13 +120,25 @@ test.describe("the people pages on a wide desktop", () => {
     for (const since of await list.getByText(/^Since /).all()) expect((await since.boundingBox())?.height ?? 99).toBeLessThan(26);
     const roles = await list.locator("li[data-member] select, li[data-member] span.min-h-touch").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
     expect(new Set(roles).size).toBe(1);
+    // A role that is not changed here starts its word where a field's word starts (console-desktop 44).
+    const words = await list.locator("li[data-member] select, li[data-member] span.min-h-touch").evaluateAll((els) =>
+      els.map((e) => Math.round(e.getBoundingClientRect().left + parseFloat(getComputedStyle(e).paddingLeft) + parseFloat(getComputedStyle(e).borderLeftWidth))),
+    );
+    expect(new Set(words).size).toBe(1);
   });
 
-  test("your account uses the width: passkeys beside the roles, tops aligned", async ({ page }) => {
+  test("your account uses the width: each part a row, its words beside it, nothing stranded", async ({ page }) => {
     await open(page, "account");
-    expect(Math.abs((await top(page, "section[aria-labelledby='passkeys-title']")) - (await top(page, "section[aria-labelledby='roles-title']")))).toBeLessThanOrEqual(2);
-    const passkeys = await page.locator("section[aria-labelledby='passkeys-title']").boundingBox();
-    expect(passkeys?.width ?? 0).toBeGreaterThan(500);
+    const main = await page.locator("main").boundingBox();
+    for (const id of ["passkeys-title", "roles-title"]) {
+      const section = await page.locator(`section[aria-labelledby='${id}']`).boundingBox();
+      // Each part runs the page's width (console-desktop 45): no two unequal cards side by side.
+      expect(section?.width ?? 0).toBeGreaterThan((main?.width ?? 0) * 0.85);
+    }
+    // Its words and the part itself share a row: the card's top within a line of the heading's.
+    const heading = await page.locator("#passkeys-title").boundingBox();
+    const button = await page.getByRole("button", { name: "Add another passkey" }).boundingBox();
+    expect(button?.x ?? 0).toBeGreaterThan((heading?.x ?? 0) + 400);
   });
 });
 
@@ -127,5 +180,15 @@ test.describe("the people pages on a phone", () => {
     expect(await sideways(page)).toBeLessThanOrEqual(0);
     await open(page, "s4-hiring");
     expect(await sideways(page)).toBeLessThanOrEqual(0);
+  });
+});
+
+test.describe("the people pages on a portrait tablet", () => {
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true });
+
+  test("on a portrait tablet, what each role may do is the page's width, two across", async ({ page }) => {
+    await open(page, "default", "/people?scope=northwind");
+    const terms = await page.locator("section[aria-labelledby='roles-title'] dt").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+    expect(new Set(terms).size).toBe(2);
   });
 });

@@ -166,7 +166,7 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
     trackRecord.work.judged > 0 ? `It also made ${plural(trackRecord.work.judged, "judgement")} of others’ work.` : null,
     costNote(costs),
     estimates
-      ? `Estimates scored across ${plural(estimates.pieces, "piece")} of work; the largest miss was ${formatNumber(estimates.largestMissPercent)}%.`
+      ? `${estimateHeadline(estimates)}, scored across ${plural(estimates.pieces, "piece")} of work; the largest miss was ${formatNumber(estimates.largestMissPercent)}%.`
       : "Estimates are scored once its first estimated work finishes.",
   ].filter((n): n is string => n !== null);
 
@@ -196,10 +196,16 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
                   {scopeName(tree, employee.scope)}
                 </Link>
               </span>
-              {employee.currentRun && (
+              {employee.currentRun ? (
                 <Link href={paths.run(employee.currentRun.id)} className={cn(LINK, "min-w-0")}>
                   Working now: {employee.currentRun.title}
                 </Link>
+              ) : (
+                employee.lastRunId && (
+                  <Link href={paths.run(employee.lastRunId)} className={LINK}>
+                    Its last piece of work
+                  </Link>
+                )
               )}
             </span>
           </div>
@@ -220,11 +226,11 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
         <Stat
           label="Repairs not charged"
           value={headlineCredits(trackRecord.repairsNotCharged.credits)}
-          caption={trackRecord.repairsNotCharged.calls > 0 ? `${plural(trackRecord.repairsNotCharged.calls, "repair")}, never billed` : "No repairs of its own work"}
+          caption={trackRecord.repairsNotCharged.calls > 0 ? plural(trackRecord.repairsNotCharged.calls, "repair") : "No repairs of its own work"}
         />
         <Stat label="Cost so far" value={headlineCredits(costs.toDate)} caption={costLine(costs, job.monthlyCreditLimit)} />
         {estimates ? (
-          <Stat label="Estimates" value={estimateFigure(estimates)} caption={estimateHeadline(estimates)} />
+          <Stat label="Estimates" value={estimateFigure(estimates)} caption={estimates.typically ? "Against estimates" : estimateHeadline(estimates)} />
         ) : (
           <Stat label="Estimates" value={NO_VALUE} tone="muted" caption="None scored yet" />
         )}
@@ -242,12 +248,22 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
           <RecentWork employee={employee} runs={trackRecord.runs} led={detail.recentRuns ?? []} />
         </ErrorBoundary>
         <div className="min-w-0 3xl:col-start-2 3xl:row-span-2 3xl:row-start-1">
-          <Fold title={`What ${employee.name} remembers`} summary="Its curated memory, and what changed in it">
+          <Fold title={`What ${employee.name} remembers`} summary="Its curated memory">
             <ErrorBoundary name="The memory">
               <MemoryPanel employee={employee} tree={tree} />
             </ErrorBoundary>
           </Fold>
         </div>
+        {/* Its last review and what changed in its memory: under the work, so the shorter column is not left on empty space. */}
+        {employee.kind === "employee" && (
+          <div className="min-w-0 3xl:col-start-1 3xl:row-start-2">
+            <Fold title={`How ${possessive(employee.name)} memory is kept`} summary="Its last review, and what changed in it">
+              <ErrorBoundary name="What changed in the memory">
+                <MemoryUpkeep employee={employee} tree={tree} />
+              </ErrorBoundary>
+            </Fold>
+          </div>
+        )}
         {/* A phone or a tablet: the button that opens this employee's conversation, near the top on a phone. */}
         {employee.kind === "employee" && !released && <TalkLauncher className="max-sm:-order-1" />}
       </div>
@@ -736,10 +752,11 @@ function ledRow(r: LedRun): WorkRow {
 
 /** Recent work's columns: the work takes the room; credits only where its work is split into tasks. */
 const WORK_COLUMNS: Column[] = [
-  { key: "work", header: "Work", kind: "grow" },
+  // The work takes the flexible room (console-desktop 37): its title wraps to two lines before anything else does.
+  { key: "work", header: "Work", kind: "grow", track: "minmax(0, 3fr)" },
   { key: "status", header: "Status", kind: "status" },
   { key: "when", header: "When", kind: "date" },
-  { key: "credits", header: "Credits", kind: "figure", track: "minmax(8rem, 0.9fr)" },
+  { key: "credits", header: "Credits", kind: "figure", track: "minmax(8rem, 0.8fr)" },
 ];
 
 /**
@@ -758,21 +775,14 @@ function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs:
   const byTasks = tasks.length > 0;
   const rows = byTasks ? tasks.map(taskRow) : led.map(ledRow);
   const list = useShowAll(rows, 10, "pieces of work");
-  // Its last piece of work is linked from the heading only where the table does not already hold it.
-  const last = (byTasks || rows.length === 0) && employee.lastRunId && employee.lastRunId !== employee.currentRun?.id ? employee.lastRunId : null;
+  // Credits only where some piece of work carries them: never a column of dashes (real-stack 45).
+  const withCredits = byTasks && rows.some((r) => r.credits !== null);
 
   return (
     <section aria-labelledby="work-title" className="flex min-w-0 flex-col gap-3.5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id="work-title" className={SECTION}>
-          Recent work
-        </h2>
-        {last && (
-          <Link href={paths.run(last)} className={cn(LINK, "text-sm")}>
-            Its last piece of work
-          </Link>
-        )}
-      </div>
+      <h2 id="work-title" className={SECTION}>
+        Recent work
+      </h2>
       {view.kind === "loading" && (
         <Loading label="Loading recent work" className="flex flex-col gap-2">
           <Skeleton className="h-12 rounded-sm" />
@@ -785,12 +795,12 @@ function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs:
         (rows.length === 0 ? (
           <p data-state="empty" className="max-w-prose text-ink-muted">
             {worked.finished > 0
-              ? `${employee.name} has finished ${plural(worked.finished, "piece")} of work here, none of it split into tasks (research is not).${employee.lastRunId ? " Its last piece of work is linked above." : ""}`
+              ? `${employee.name} has finished ${plural(worked.finished, "piece")} of work here, none of it split into tasks (research is not).${employee.lastRunId ? " Its last piece of work is linked at the top of the page." : ""}`
               : `${employee.name} has not taken on any work here yet.`}
           </p>
         ) : (
           <>
-            <Table label={byTasks ? "Tasks" : "Work it led"} columns={byTasks ? WORK_COLUMNS : WORK_COLUMNS.slice(0, 3)} at="medium">
+            <Table label={byTasks ? "Tasks" : "Work it led"} columns={withCredits ? WORK_COLUMNS : WORK_COLUMNS.slice(0, 3)} at="narrow">
               {list.shown.map((r) => {
                 const s = workStatus(r.status);
                 return (
@@ -812,7 +822,7 @@ function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs:
                     <Cell col="when">
                       <span className="text-sm text-ink-body">{r.when}</span>
                     </Cell>
-                    {byTasks && (
+                    {withCredits && (
                       <Cell col="credits">
                         <span className="text-sm text-ink-body">{r.credits ?? NO_VALUE}</span>
                       </Cell>
@@ -1006,9 +1016,26 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
           </Button>
         ))}
 
-      {employee.kind === "employee" && <ReviewPanel employee={employee} changes={changeView} onRetry={() => void changes.refetch()} editable={editable} />}
+    </section>
+  );
+}
 
-      {employee.kind === "employee" && <MemoryHistory changes={changeView} entries={all} onRetry={() => void changes.refetch()} />}
+/** Its last review (and starting one) and every change to its memory, newest first (MEM-01). */
+function MemoryUpkeep({ employee, tree }: { employee: Employee; tree: Tree | undefined }) {
+  const includeArchived = employee.status === "released";
+  const memory = useGetMemoryQuery({ id: employee.id, includeArchived });
+  const changes = useGetMemoryChangesQuery(employee.id);
+  const changeView = viewOf(changes);
+  const can = useCan(tree, employee.scope);
+  const editable = can.build && !includeArchived && employee.kind === "employee";
+  const entries = memory.data ?? [];
+  return (
+    <section aria-labelledby="upkeep-title" className="flex min-w-0 flex-col gap-4">
+      <h2 id="upkeep-title" className={SECTION}>
+        How {possessive(employee.name)} memory is kept
+      </h2>
+      <ReviewPanel employee={employee} changes={changeView} onRetry={() => void changes.refetch()} editable={editable} />
+      <MemoryHistory changes={changeView} entries={entries} onRetry={() => void changes.refetch()} />
     </section>
   );
 }
@@ -1039,22 +1066,28 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
 
   return (
     <li data-memory={entry.id} className={cn("flex flex-col gap-1 px-5 py-4 max-sm:px-4", pending && "opacity-70")}>
-      <span className="font-semibold">{entry.title}</span>
-      <span className="max-w-prose whitespace-pre-line text-ink-body">{entry.body}</span>
-      <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <span className="text-xs text-ink-muted">
-          {MEMORY_KIND[entry.kind]} · About {scopeName(tree, entry.scope || employee.scope)} · {pending ? "Saving…" : entryOrigin(entry, changes)}
-          {entry.sourceRunId && (
-            <>
-              {" · "}
-              <Link href={paths.run(entry.sourceRunId)} className={LINK}>
-                the task
-              </Link>
-            </>
-          )}
-        </span>
+      {/*
+        Its actions sit beside its title at the row's right edge where the row has the room, never a gap away under
+        the text (console-desktop 35); in a narrow column they wrap under the entry rather than squeeze its words.
+      */}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+        <div className="flex min-w-0 flex-1 basis-80 flex-col gap-1">
+          <span className="font-semibold">{entry.title}</span>
+          <span className="whitespace-pre-line text-ink-body">{entry.body}</span>
+          <span className="text-xs text-ink-muted">
+            {MEMORY_KIND[entry.kind]} · About {scopeName(tree, entry.scope || employee.scope)} · {pending ? "Saving…" : entryOrigin(entry, changes)}
+            {entry.sourceRunId && (
+              <>
+                {" · "}
+                <Link href={paths.run(entry.sourceRunId)} className={LINK}>
+                  the task
+                </Link>
+              </>
+            )}
+          </span>
+        </div>
         {editable && !pending && !removing && !editing && (
-          <span className="-my-1 flex flex-wrap gap-1">
+          <span className="-mx-3 -my-1 flex shrink-0 gap-1">
             <Button size="sm" variant="quiet" onClick={() => setEditing(true)}>
               Correct
             </Button>
@@ -1063,7 +1096,7 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
             </Button>
           </span>
         )}
-      </span>
+      </div>
       {editing && <MemoryForm employee={employee} entry={entry} includeArchived={includeArchived} onDone={() => setEditing(false)} className="mt-2" />}
       {removing && (
         <ConfirmCard
@@ -1243,7 +1276,7 @@ function ReviewPanel({ employee, changes, onRetry, editable }: { employee: Emplo
   };
 
   return (
-    <div className="flex flex-col gap-2 border-t pt-4">
+    <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           {changes.kind === "loading" && (
