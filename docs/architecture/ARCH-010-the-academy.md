@@ -130,7 +130,8 @@ message only when `event.source` is the frame's own window and `source` is `"end
 | `reset` | `{}` | an echo of `id` |
 
 `Action` is one of `{ click: Target }`, `{ hover: Target }`, `{ type: { into: Target, text } }`,
-`{ select: { into: Target, value } }`, `{ press: key }`, `{ wait: ms | Target }`, `{ clock: … }`; a `Target`
+`{ select: { into: Target, value } }`, `{ press: key }`, `{ wait: ms | Target }`, `{ clock: … }`,
+`{ attach: { files: [{ name, text? | base64? }] } }` (files into the open conversation's composer); a `Target`
 is `{ selector? | testId? | text? }`, where `text` is the visible label of a control, quoted exactly
 as the flow quotes it. `instant: true` asks for the end state without the motion (catching up).
 

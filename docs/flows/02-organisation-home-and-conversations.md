@@ -794,26 +794,33 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - Each checkpoint is answered in the conversation itself (TALK-17), titled with what will happen.
 - It works in up to 12 steps.
 - It cannot create, rename or delete nodes, set budgets, secrets, context or access, hire, or decide verdicts.
+- A message may carry files (TALK-19): up to 10, 10 MB each, 25 MB in all — images (PNG, JPEG, WebP, GIF), PDFs and text files, checked by their bytes, stored with the conversation in the database and deleted with it. Images reach the model as pictures only where every model on the answering route takes images; otherwise an image is refused before sending. Text and a PDF's text reach it as named blocks.
+- A message may be narrowed for itself alone (TALK-20): "Don’t search the web" (where whoever answers can search and the rules let it) and "Answer only: start no work" (where it can start work). The Runner enforces both; nothing widens what the autonomy rules allow.
+- Work a message starts (an idea's research, a change, a try again) is named in the turn's log (`message` with `kind: "work.started"`) and followed in the conversation by a live work card (TALK-21). The history lists each turn's run with its tool count and the work it started, so cards come back after a reload.
+- The pane (ARCH-011): on a desktop it is docked at the right edge, full height under a header that stays put, narrow or wide, collapsible to a rail, or full width (TALK-23); on a tablet, an app's page and an employee's page it is a framed pane of its own height; on a phone it fills the sheet opened by **Talk**.
 
 ### TALK-01 Talk to the whole organisation
 - **Who:** Builder or above at the organisation (to send); Viewer (to read).
-- **Starts at:** `/`, the dock, with the whole organisation selected (the default).
-- **Needs:** at least one division (otherwise there is no dock, ORG-12).
+- **Starts at:** `/`, the conversation pane, with the whole organisation selected (the default).
+- **Needs:** at least one division (otherwise there is no conversation, ORG-12).
 - **Level:** Foundation · **Learn first:** ORG-07 · **What you learn:** the conversation answers for the selected level and everything beneath it.
 - **Steps:**
-  1. The dock shows a square avatar and "Talking to {org}", with the hint "Select a division, project or employee to narrow this."
+  1. The pane's header shows a square avatar, the level ("ORGANISATION"), "Talking to {org}" and the hint "Select a division, project or employee to narrow this."; on a desktop, the buttons "Make the pane wider", "Open full width" and "Collapse the pane" (TALK-23).
   2. The history loads: a skeleton, screen-reader text "Loading what was said before" (TALK-11).
-  3. If nothing has been said yet: "Ask what needs you, or tell it what to change. It answers for {org} and everything beneath it."
-  4. Below the log: label "Message {org}", input placeholder "Ask, or tell it what to change", the button "Send" (disabled while the input is blank or the cost is being worked out), and under it "A message here costs at most {ceiling} credits, usually about {credits} credits; it is charged at what it actually costs." (a usual figure under 0.1 reads "usually less than 0.1 credits"; when the ceiling is more than 20 times the usual figure the line reads "Usually well under 1 credit. It can never cost more than {ceiling}, the most its steps could cost; it is charged at what it actually costs.", or "Usually about {credits} credits. …" from 1 credit up) ("Working out what a message costs…" while it loads).
-  5. The person types a question (for example "what is over budget?") and presses "Send". Their bubble, headed "You", appears right away, faded while it sends (`POST /api/conversations {scope}`). Typing dots show under it at once — "Sending…" until the work that answers it has started, then "Working on it" until it ends. The log scrolls to the latest as the message and then the reply arrive.
-  6. The Runner answers using `read_organisation`. The reply streams in as a grey bubble headed "Endgame", drawn from its markdown: bold, italics, lists, inline code and links read as formatting, never as asterisks or backticks, and nothing in it is ever run as HTML. The runner's closing word is not printed beside a reply, so each thing is said once; a notice with a reason of its own (the budget ran out) stays, in the attention colour. When the run did tool work, the link "See how it got there" appears (TALK-12).
+  3. If nothing has been said yet: "Ask about {org}, or tell it what to change", a sentence on what it answers for and that it can start work here asking first, "Type / for the actions here, or @ to send it to someone or an app beneath this level. Files can be attached or dropped in.", and up to three things to ask, each built from what is really there (an app that is down, what waits for you, the app that cost most this month, a project being built, an idle employee). Choosing one puts it in the box, ready to send or change.
+  4. At the foot of the pane: a text box labelled "Message {org}" with the placeholder "Ask, or tell it what to change", which grows to about eight lines (Enter sends, Shift+Enter starts a new line); beneath it **Attach files** (TALK-19), **What it can use here** (TALK-20), **Actions** ("/", TALK-22), **Address someone** ("@", TALK-22) and **Send** (disabled while the box is blank or the cost is being worked out); and under the box "A message here costs at most {ceiling} credits, usually about {credits} credits; it is charged at what it actually costs." (a usual figure under 0.1 reads "usually less than 0.1 credits"; when the ceiling is more than 20 times the usual figure the line reads "Usually well under 1 credit. It can never cost more than {ceiling}, the most its steps could cost; it is charged at what it actually costs.", or "Usually about {credits} credits. …" from 1 credit up) ("Working out what a message costs…" while it loads).
+  5. The person types a question (for example "what is over budget?") and presses Enter or **Send**. Their bubble, headed "You", appears right away, faded while it sends (`POST /api/conversations {scope}`). Typing dots show under it at once — "Sending…" until the work that answers it has started, then "Working on it" until it ends — and **Stop the reply** appears beside **Send**, cancelling the reply being written. The log scrolls to the latest as the message and then the reply arrive.
+  6. The Runner answers using `read_organisation`. The steps it took show as one line ("Read the org chart and what waits for you · Read the recent work", which opens to each step) with **"See how it got there"** beside it (TALK-12). The reply streams in as a grey bubble headed "Endgame", drawn from its markdown: headings, lists, tables, quotes, code (with **Copy the code**), bold, italics and links; a link to an app, an employee, a piece of work or an idea is drawn as a chip with its kind; nothing in it is ever run as HTML. The runner's closing word is not printed beside a reply, so each thing is said once; a notice with a reason of its own (the budget ran out) stays, in the attention colour. A screen reader hears the reply once it arrives ("Endgame replied: …"), not every word as it streams.
   7. Up to two lines under the log show employees working anywhere in the tree: "{Name} is {activity}" as a sentence: a run's title becomes what they are doing — "Theo is making a change: {request}", "Theo is building: {name}", "Iris is researching: {idea}" — an activity in "-ing" keeps "is", and anything else reads "{Name}: {activity}".
 - **You know it worked when:** a grey reply bubble appears under your message.
-- **Variations and refusals:** see TALK-13 to TALK-15. Someone who has scrolled up to read what was said before is left there when a reply arrives, and a **"New reply"** button over the foot of the log takes them down to it (and the log follows again). On a phone the conversation is in a full-screen sheet opened by **Talk** in the bottom bar (SHL-07); on a tablet it is under the chart, and **"Talk"** in the header brings it into view. If the cost cannot be worked out: "What a message costs could not be worked out: {reason} Its cost is still held before each step and shown with the reply." and Send stays available.
-- **Where:** `ConversationDock.tsx`; `POST /api/conversations/estimate`, `POST`/`GET /api/conversations` (`WorkEndpoints`); `FactoryEstimates.ConversationAsync`; `Runner/Workflows/ConversationWorkflow.cs`; `Runner/Agents/RunnerTools.cs` (`ReadOrganisationTool`); `GET /api/runs/{id}/events`.
+- **Variations and refusals:** see TALK-13 to TALK-15. Someone who has scrolled up to read what was said before is left there when a reply arrives, and a **"New reply"** button over the foot of the log takes them down to it (and the log follows again). On a phone the conversation is in a full-screen sheet opened by **Talk** in the bottom bar (SHL-07); on a tablet it is a framed pane under the chart, across its whole width, and **"Talk"** in the header brings it into view. If the cost cannot be worked out: "What a message costs could not be worked out: {reason} Its cost is still held before each step and shown with the reply." and Send stays available.
+- **Where:** `features/home/ConversationDock.tsx`, `features/conversation/Composer.tsx`; `components/Markdown.tsx`; `POST /api/conversations/estimate`, `POST`/`GET /api/conversations` (`WorkEndpoints`); `FactoryEstimates.ConversationAsync`; `Runner/Workflows/ConversationWorkflow.cs`; `Runner/Agents/RunnerTools.cs` (`ReadOrganisationTool`); `GET /api/runs/{id}/events`.
 - **Reachable from:** UI.
 - **Covered by tests:**
   - `HomeView.test.tsx`: "scopes the breadcrumb and the conversation to the selected node, and streams the reply"
+  - `ConversationDock.test.tsx`: "says who it is talking to and at which level, with its log, its composer pinned beneath"
+  - `composer.test.tsx`: "sends on Enter, keeps a new line on Shift+Enter"
+  - `Markdown.test.tsx`: "draws a table, and a link to something in the organisation as a chip with its kind (ARCH-011)"
   - `IdeasAndConversationsTests.A_conversation_persists_per_scope_and_returns_runs`
   - `WorkflowTests.A_conversation_answers_from_its_read_tools_and_asks_before_starting_an_idea`
   - `RunnerContractTests.The_conversation_reads_the_organisation_through_its_own_tool`
@@ -956,6 +963,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   1. Opening the dock reads `GET /api/conversations?scope=&employeeId=`: the last 200 messages, oldest first.
   2. Earlier turns draw as blue bubbles (people's) and grey bubbles (replies), each headed by who said it: "You" for your own, the sender's name for anyone else's, the employee's name or "Endgame" for replies. Endgame's own notices (TALK-15) draw as notices. Consecutive messages from one person on one run are merged.
   3. Messages sent during this visit are drawn from their live run, never twice.
+  4. Files sent with a message show with it, as pictures or as chips that open (TALK-19). A turn that did work shows its steps line again, and the work it started comes back as its card in its present state (TALK-21); an earlier turn's work is read only once it scrolls into view, so a long history opens fast.
 - **You know it worked when:** after a reload, your earlier exchange is still in the dock.
 - **Variations and refusals:**
   - History fails: "What was said before could not be loaded: {reason} New messages still send." with "Try again".
@@ -974,9 +982,9 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Starts at:** a reply in the dock.
 - **Needs:** the reply's run made a tool call or has tasks.
 - **Level:** Core · **Learn first:** TALK-01 · **What you learn:** every reply is a run, with a trace you can open.
-- **Steps:** select "See how it got there" to go to `/runs/{id}` (runs reader), where its trace and any approvals are shown.
+- **Steps:** above the reply, the steps it took read as one line ("Read the org chart and what waits for you · Read the recent work"); select it to see each step and how many there were in all. Select **"See how it got there"** beside it to go to `/runs/{id}` (runs reader), where its trace and any approvals are shown.
 - **You know it worked when:** the run page for that reply opens.
-- **Variations and refusals:** replies with no tool work have no link.
+- **Variations and refusals:** replies with no tool work have no steps line and no link. Work the reply started has a card of its own with **"See the whole run"** (TALK-21).
 - **Where:** `ConversationDock.tsx` (`Replies`).
 - **Reachable from:** UI.
 - **Covered by tests:** `HomeView.test.tsx` (streaming).
@@ -1068,6 +1076,91 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Where:** `RunnerTools.TryAgainTool`; `POST /internal/runs/{id}/retry`; `RetryService`.
 - **Reachable from:** UI (conversation); MCP `run_retry`.
 - **Covered by tests:** `WorkflowTests.The_conversation_asks_in_plain_words_before_changing_an_app_or_trying_work_again_and_a_decline_is_told_truthfully`; `TryAgainAndChangesTests.A_built_app_is_changed…` (the internal retry's scope check).
+
+### TALK-19 Attach files to a message
+- **Who:** Builder or above at the conversation's level.
+- **Starts at:** any conversation's composer.
+- **Needs:** —
+- **Level:** Core · **Learn first:** TALK-01 · **What you learn:** a message can carry pictures, PDFs and text files, and whoever answers reads them.
+- **Steps:**
+  1. Press **Attach files** and pick files, drop files anywhere on the pane ("Drop files to attach them"), or paste them into the box.
+  2. Each file shows as a chip above the box with its name and size (a picture shows itself), "Adding…" while it uploads (`POST /api/conversations/attachments`), and **Take off {name}**. The cost line adds "The files are counted in it." and its figures include them.
+  3. Send. The files show with your message — pictures as thumbnails, other files as chips ("PDF, 3 pages", a size for text) — and each opens in a new tab. Whoever answers reads them first (in the demo: "I read **court-rules.md**. …").
+- **You know it worked when:** the files are on your message and the reply speaks to them.
+- **Variations and refusals:**
+  - Said before anything uploads, in the words the control plane uses: "{name}: SVG images are not accepted, because they can carry scripts. Send it as PNG instead.", "{name}: this kind of file is not accepted. Images (PNG, JPEG, WebP, GIF), PDFs and text files are.", "{name} is empty.", "{name} is {size}; a file may be at most 10 MB.", "A message carries at most 10 files.", "These files come to {size}; a message carries at most 25 MB."
+  - Refused by the control plane by the file's bytes, whatever its name: a picture named as text, text named as a picture, an archive (even renamed), a file that is not UTF-8 text, a picture over 40 megapixels, a PDF whose text cannot be read.
+  - A picture where whoever answers reads text only (Endgame's own assistant): "Endgame’s assistant reads text only, so an image cannot be sent here. Take the image off, or put it in a PDF, or ask an employee who can look at pictures." Send stays off until it is taken off. An employee whose thinking power takes pictures receives it as a picture.
+  - Someone else's unsent file cannot be read or sent; a sent file cannot be taken back (409). Unsent files are cleared after a day.
+- **Where:** `features/conversation/attachments.ts`, `useDraftFiles.ts`, `AttachmentChips.tsx`; `ConversationAttachments`, `ConversationAttachmentService` (`WorkEndpoints`); `ConversationWorkflow` (content parts); `ModelEntry.InputModalities`.
+- **Reachable from:** UI; API `POST /api/conversations/attachments`, `GET /api/conversations/attachments/{id}/content`, `DELETE /api/conversations/attachments/{id}`.
+- **Covered by tests:** `composer.test.tsx` ("uploads a file as it is added and sends it by id; refuses an SVG before uploading it", "says before sending that an image cannot go to an answerer that reads text only", "refuses what the control plane would, in the same words"); `AttachmentChecksTests`; `ConversationAttachmentsTests`; `ConversationContentTests`; `demo/server/conversation.test.ts`; `phone.spec.ts` ("the composer: files, what it can use and the actions…").
+
+### TALK-20 See what it can use here, and narrow one message
+- **Who:** Viewer or above (to read); Builder (to send narrowed).
+- **Starts at:** any conversation's composer: **What it can use here**.
+- **Needs:** —
+- **Level:** Core · **Learn first:** TALK-01, AUTO-01 · **What you learn:** what whoever answers at this level can use, from real data, and how to ask for less for one message.
+- **Steps:**
+  1. Press **What it can use here** (`GET /api/conversations/capabilities`). A panel opens over the thread, headed "What {name} can use here":
+     - **Who answers:** "Endgame’s assistant, for everything here" or the employee by name and role, with its thinking power ("Light, for quick answers").
+     - **It may:** the tools it answers with, in the hire page's words ("Read the organisation", "Remember things"), and web search as "Search the web: may / asks you first / may not" under the autonomy rules — or "It answers from what Endgame holds here; it does not search the web." where it cannot search.
+     - **Work it can start, asking you first:** only what applies here ("Ask for a change to an app" only where there is an app; "Try stopped work again" only where something stopped).
+     - **Skills the builders here use**, **Services the apps here have** (Sign-in, AI inside apps, Secrets, Email, Scheduled jobs, Incoming data, Health and traffic, each with a fact where one is known: "2 secrets set here"), **AI assistants** (each key's name, role and when it was last used, or "Give one access"), and **Attaching files** (the limits).
+  2. Under **For this message only**, switch on "Don’t search the web" or "Answer only: start no work", where they apply. The composer shows "No web search" or "Answer only" beside the box; select it to turn it off.
+  3. Send. The narrowing goes with that message only (`narrow` on `POST /api/conversations`) and is then cleared.
+- **You know it worked when:** with "Answer only", a request that would start work is answered and nothing asks to start.
+- **Variations and refusals:** nothing can be widened here; the autonomy rules are changed on the Autonomy page (AUTO-01). Close the panel with **Close** or Escape.
+- **Where:** `features/conversation/CanUse.tsx`, `Composer.tsx`; `ConversationCapabilitiesService`; `ConversationWorkflow` (narrowing).
+- **Reachable from:** UI; API `GET /api/conversations/capabilities`.
+- **Covered by tests:** `composer.test.tsx` ("sends a narrowing with the one message it was set for, and never again"); `ConversationAttachmentsTests` (capabilities); `ConversationContentTests` (narrowing enforced); `demo/server/conversation.test.ts` ("what it can use here", "starts nothing when the message asked for an answer only").
+
+### TALK-21 Follow the work a message started, in its card
+- **Who:** Viewer or above.
+- **Starts at:** a conversation where a message started work (TALK-07, TALK-17, TALK-18, CHG-02).
+- **Needs:** work started from the conversation.
+- **Level:** Core · **Learn first:** TALK-17 · **What you learn:** the work shows live in the conversation — its plan, its parts, who is doing what — without leaving it.
+- **Steps:**
+  1. Once approved, a card appears under the reply: what the work is ("A change", "Research", "Building", "Trying again") and its title, who is doing it (employees' avatars and names, contractors by role: "3 research contractors"), a status chip (Starting · Working · Waiting for you · Paused · Finished · Stopped · Cancelled), the time it has taken, and a meter of the credits used against its estimate ("2.5 of about 10 credits").
+  2. **The plan:** "{n} of {m} parts done", with a track of the parts (five or fewer) or a stepper (more), each part's state: Waiting · Working on it now · Being checked · Sent back for repair (n) · Passed · Needs a look · Did not pass, and the security review after them. The part being worked on is open: its tasks with who holds each ("Build · Kasper · Done", "Check · Mina · Working"), what the checker said, and what its tools did ("Read 3 files, changed 3, ran the tests once"); select another part to open it. Technical mode adds **Each action** (every tool call).
+  3. **Research:** the researchers side by side — "Looking", "Reported" or "Stopped", what each looks for, and "{n} of 7 searches".
+  4. An approval the work asks for appears inside the card; the plan's approval shows the plan above it ("The plan, waiting for you").
+  5. When it ends: the outcome sentence and what to do next — **Open {app}** and **Manage {app}**, **Read the verdict**, or **Try again** — with "Cost {n} credits, estimated {m}". **See the whole run** opens its page at any time.
+- **You know it worked when:** the card ends "Finished" with the outcome and the next step.
+- **Variations and refusals:** a dropped stream: "{error} The work goes on; its page has everything." The card stays in the conversation in its final state, and comes back after a reload (TALK-11). A screen reader hears that an answer is needed, once.
+- **Where:** `features/conversation/WorkCard.tsx`, `workModel.ts`; `ConversationDock.tsx` (`Replies`, `TurnWork`); the run's events (`GET /api/runs/{id}/events`); `message` `kind: "work.started"`.
+- **Reachable from:** UI.
+- **Covered by tests:** `WorkCard.test.tsx`; `workModel.test.ts`; `demo/server/conversation.test.ts` ("is named in the conversation's own log once approved…"); `ConversationContentTests` (`work.started`); `phone.spec.ts` ("work the conversation starts is a card in the sheet…").
+
+### TALK-22 Act with "/", or send it to someone with "@"
+- **Who:** Builder or above.
+- **Starts at:** any conversation's composer.
+- **Needs:** for "@", an employee or an app beneath the level.
+- **Level:** Core · **Learn first:** TALK-01, TALK-05 · **What you learn:** the actions a conversation can take here are one keystroke away, and a message can be sent to someone beneath without leaving the box.
+- **Steps:**
+  1. Type "/" in an empty box, or press **Actions**: "Actions here" lists what the conversation can do at this level — "Start an idea", "Change {app}" or "Change an app", "Try stopped work again", "Change a setting" — and "Propose a hire", which opens Hiring. Arrow keys move, Enter or a click chooses; Escape closes.
+  2. Choosing an action puts its opening words in the box ("Change the app ", "Start researching this idea: "); finish the sentence and send. It asks before it acts (TALK-17).
+  3. Type "@" (or press **Address someone**): "Send it to" lists the employees and apps beneath this level, filtered as you type. Choosing one moves the conversation there ("Talking to {Name}"), keeping what you typed without the mention; send it there.
+- **You know it worked when:** the header names who you chose, and the reply comes from them.
+- **Variations and refusals:** on an app's or an employee's page, "@" moves to the org chart with the conversation at who you chose, your words carried over. Only actions that apply here are listed.
+- **Where:** `features/conversation/Composer.tsx`, `scopeModel.ts`.
+- **Reachable from:** UI.
+- **Covered by tests:** `composer.test.tsx` ("offers the actions it can take here under /…", "lists the employees and apps beneath a level for @…").
+
+### TALK-23 Make the pane wider, collapse it, or open it full width
+- **Who:** anyone with a conversation, on a desktop.
+- **Starts at:** the conversation pane's header on `/`.
+- **Needs:** a desktop-sized window.
+- **Level:** Foundation · **Learn first:** TALK-01 · **What you learn:** the pane fits how you work, and keeps to it next time.
+- **Steps:**
+  1. **Make the pane wider** widens it from 26 rem to 36 rem (**Make the pane narrower** goes back). On a screen 1,800 pixels wide or more it opens wide until you choose.
+  2. **Open full width** hides the page and centres the conversation; **Back to the page** returns.
+  3. **Collapse the pane** leaves a rail at the right edge with the avatar; **Open the conversation with {name}** opens it again. A dot on the rail says a reply is being written.
+- **You know it worked when:** after a reload, the pane is as wide, or as collapsed, as you left it.
+- **Variations and refusals:** the width and collapsed state are kept per person in this browser (`endgame.dock.{user}`); full width is not kept, so the page is never lost.
+- **Where:** `features/conversation/dockLayout.ts`; `features/shell/AppShell.tsx` (the docked aside); `ConversationDock.tsx` (`PaneHeader`).
+- **Reachable from:** UI.
+- **Covered by tests:** `academy-scripts.spec.ts` (TALK-23).
 
 ---
 

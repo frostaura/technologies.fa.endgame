@@ -181,7 +181,7 @@ clock | layout | reset` for tests.
 | --- | --- | --- |
 | `goto` | `{ route?, persona?, scenario? }` | Switches persona and/or scenario (a new scenario is a new world), then opens the route (default: the scenario's). |
 | `highlight` | `{ selector? \| testId? \| text? \| label?, note? }`; `{}` clears | Clears the ring and note already shown, waits (up to 4 s) until nothing on screen is still loading — no skeleton, no busy region — then scrolls the control into view (a control taller than the view at its top, its heading kept in view) and rings it, with the note beside it; waits up to 5 s for it. The ring stands off the control into the gap around it, never over a neighbour's words; the note goes below, above or beside the ring, wherever it covers least of the page and never the ring. |
-| `act` | `{ actions: Action[], instant? }` | Clears the step before's ring and note, then performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. `press: "Tab"` moves the focus to the next control, as the browser does; `hover` rests the pointer on a target, so what the page shows on hover appears. A `wait` approves an open (or opening) device sheet; a `wait` for a time then lasts until the control plane has answered what the step started, played or instant alike. |
+| `act` | `{ actions: Action[], instant? }` | Clears the step before's ring and note, then performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. `press: "Tab"` moves the focus to the next control, as the browser does; `hover` rests the pointer on a target, so what the page shows on hover appears; `attach: { files: [{ name, text? \| base64? }] }` adds files to the open conversation's composer, as a person picking them would (ARCH-011). A `wait` approves an open (or opening) device sheet; a `wait` for a time then lasts until the control plane has answered what the step started, played or instant alike. |
 | `clock` | `{ play?, pause?, speed?, seek? }` | Plays, pauses, sets the speed, or jumps (a moment's name or milliseconds). |
 | `layout` | `{}` | Replies `{ op: "layout", args: { viewport, width, height, breakpoints, top, bottom } }`: the layout the console draws in this frame (`phone`, `tablet` or `desktop`), the frame's size, the widths it changes at (`lib/tokens.ts` `breakpoints`), and how much of the frame its own header takes at the top and its bottom bar at the foot, so an overlay drawn outside the frame can keep clear of them. Asking never changes anything. |
 | `reset` | `{}` | Rebuilds the scenario's world from scratch and opens its route, as a first visit: every key the console keeps in the tab's storage (all named `endgame.…` — the mode, the organisation chosen, the one entered, the address kept across a sign-in) is removed, and so is what the demo holds for the page's life (an open device sheet, a half-way passkey ceremony, the hosted apps' device and reading lists) — `demo/pristine.ts`. A `goto` to another scenario does the same. |
@@ -265,7 +265,8 @@ control it did not name, or matched only part of a word ("Mon" inside "month").
         { "type": "object", "required": ["select"], "properties": { "select": { "type": "object", "required": ["into", "value"], "properties": { "into": { "$ref": "#/$defs/target" }, "value": { "type": "string" } } } }, "additionalProperties": false },
         { "type": "object", "required": ["press"], "properties": { "press": { "oneOf": [{ "type": "string" }, { "type": "object", "required": ["key"], "properties": { "key": { "type": "string" } } }] } }, "additionalProperties": false },
         { "type": "object", "required": ["wait"], "properties": { "wait": { "oneOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/$defs/target" }] } }, "additionalProperties": false },
-        { "type": "object", "required": ["clock"], "properties": { "clock": { "$ref": "#/$defs/clock" } }, "additionalProperties": false }
+        { "type": "object", "required": ["clock"], "properties": { "clock": { "$ref": "#/$defs/clock" } }, "additionalProperties": false },
+        { "type": "object", "required": ["attach"], "properties": { "attach": { "type": "object", "required": ["files"], "properties": { "files": { "type": "array", "items": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "text": { "type": "string" }, "base64": { "type": "string" } } } } } } }, "additionalProperties": false }
       ]
     }
   }
@@ -348,6 +349,15 @@ The run scripts were modelled on two real run logs read from a development stack
 of 40 events and a build run of 1,457): the same event types, payload fields, milestones and
 sentences. Every name, id and address in them was replaced; none of the captured data is in the
 repository.
+
+The conversation's files (ARCH-011) are checked by their bytes as the control plane checks them
+(`server/conversationKit.ts`: the same limits, refusals and words); a file of 512 KB or less is kept
+with the world as a data URL, so it still opens after a reload, and a larger one is held only by the
+page. "What it can use here" is read from the world as the control plane reads it: the answerer's
+tier (`chat` reads text only and cannot search; `research` can do both), the stage rule sets for
+`web_search`, the apps and stopped work beneath the scope, the secrets on its chain and the
+organisation's keys. Approving work a conversation asked for appends `work.started` to the
+conversation's run, and its history lists each turn's run with its tool count and that work.
 
 ## Invariants
 

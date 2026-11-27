@@ -31,7 +31,9 @@ export type Action =
   | { select: { into: Target; value: string } }
   | { press: string }
   | { wait: number | Target }
-  | { clock: ClockOp };
+  | { clock: ClockOp }
+  /** Files added to the conversation's composer (text, or bytes in base64), as a person picking them would. */
+  | { attach: { files: { name: string; text?: string; base64?: string }[] } };
 
 /** `seek` takes script milliseconds or a named moment such as "build:plan"; `speed` plays live runs faster (ARCH-009). */
 export type ClockOp = { play: true } | { pause: true } | { seek: number | string } | { speed: number };

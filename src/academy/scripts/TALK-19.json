@@ -1,0 +1,129 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-19",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "attach": {
+            "files": [
+              {
+                "name": "court-rules.md",
+                "text": "# Court rules\n\n- Book at most 7 days ahead\n- A full court opens a waitlist\n"
+              },
+              {
+                "name": "members.csv",
+                "text": "name,joined\nAda,2024-01-02\nBo,2024-03-04\n"
+              }
+            ]
+          }
+        },
+        {
+          "wait": {
+            "text": "The files are counted in it."
+          }
+        }
+      ],
+      "highlight": {
+        "text": "court-rules.md",
+        "note": "Attach, drop or paste files: each is a chip, uploaded as it is added."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "The files are counted in it.",
+        "note": "The cost before sending counts the files too."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "Here are the court rules and the members: what should change?"
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "I read"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "I read",
+        "note": "Your files go with your message, and the reply reads them first."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "A picture where whoever answers reads text only",
+      "persona": "owner",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "A message here costs at most"
+              }
+            },
+            {
+              "attach": {
+                "files": [
+                  {
+                    "name": "booking-screen.png",
+                    "base64": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mNk+M9Qz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC"
+                  }
+                ]
+              }
+            },
+            {
+              "wait": {
+                "text": "reads text only"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "reads text only",
+            "note": "A picture where whoever answers reads text only is refused before sending."
+          }
+        }
+      ]
+    }
+  ]
+}
