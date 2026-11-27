@@ -6,7 +6,7 @@ import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { ConfirmCard } from "@/components/ui/confirm";
-import { LINK } from "@/components/ui/layout";
+import { LINK_ALONE } from "@/components/ui/layout";
 import { Input } from "@/components/ui/field";
 import { formatCredits, plural } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -272,7 +272,7 @@ export function AppItself({ app, canChange, isAdmin }: { app: AppDetail; canChan
           {isAdmin && <DeleteNode level="app" id={app.id} name={app.name} tree={tree} onDeleted={() => navigate(entered ? paths.homeOf(entered) : paths.home())} />}
         </div>
       )}
-      <Link href={paths.manage(app.scope, entered)} className={cn(LINK, "self-start text-sm")}>
+      <Link href={paths.manage(app.scope, entered)} className={cn(LINK_ALONE, "self-start text-sm")}>
         Manage it with the rest of the organisation
       </Link>
     </section>

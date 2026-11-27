@@ -4,7 +4,7 @@ import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { LINK } from "@/components/ui/layout";
+import { LINK_ALONE } from "@/components/ui/layout";
 import { SECTION } from "@/components/ui/page";
 import { formatDate, formatNumber, timeAgo } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -20,7 +20,7 @@ const PAGE = 10;
 function Author({ v }: { v: AppVersion }) {
   if (v.author.kind === "employee" && v.author.id) {
     return (
-      <Link href={paths.employee(v.author.id)} className={LINK}>
+      <Link href={paths.employee(v.author.id)} className={LINK_ALONE}>
         {v.author.name}
       </Link>
     );

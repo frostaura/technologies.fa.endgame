@@ -4,7 +4,7 @@ import type { IconName } from "@/components/iconNames";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { LINK } from "@/components/ui/layout";
+import { LINK_ALONE } from "@/components/ui/layout";
 import { formatDate, formatTime, plural } from "@/lib/format";
 import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -77,7 +77,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
               {i < all.length - 1 ? ", " : "."}
             </span>
           ))}{" "}
-          <Link href={paths.secrets(app.scope)} className={LINK}>
+          <Link href={paths.secrets(app.scope)} className={LINK_ALONE}>
             Manage them
           </Link>
         </p>
@@ -85,7 +85,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
       {canSeeSecrets && secretsView.kind === "failed" && <p className="text-sm text-attention-text">Its secrets could not be read: {secretsView.reason}</p>}
       <p className="text-sm text-ink-body">
         An AI assistant you let in can use this app the way a person does.{" "}
-        <Link href={paths.assistants()} className={LINK}>
+        <Link href={paths.assistants()} className={LINK_ALONE}>
           Let an assistant in
         </Link>
       </p>

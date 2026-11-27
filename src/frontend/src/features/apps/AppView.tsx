@@ -8,7 +8,7 @@ import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
 import { Alert, STATES } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { LINK } from "@/components/ui/layout";
+import { LINK_ALONE } from "@/components/ui/layout";
 import { Input } from "@/components/ui/field";
 import { capitalise, formatCredits, formatDate, formatDuration, formatNumber, headlineNumber, plural, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
@@ -606,7 +606,7 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
           <Icon name="secrets" tinted />
           Secrets
         </h2>
-        <Link href={paths.secrets(scope)} className={LINK}>
+        <Link href={paths.secrets(scope)} className={LINK_ALONE}>
           Manage secrets
         </Link>
       </div>

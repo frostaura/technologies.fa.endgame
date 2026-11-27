@@ -13,6 +13,9 @@ export const SCROLL_ROW = "no-scrollbar flex flex-wrap gap-2 max-sm:-mx-4 max-sm
  */
 export const LINK = "font-medium text-primary-link underline decoration-primary-link/40 underline-offset-2 hover:text-primary-hover hover:decoration-current";
 
+/** The same link standing on its own (not a word in a sentence): a thumb's height wherever it is worked by touch. */
+export const LINK_ALONE = `${LINK} touch:inline-flex touch:min-h-touch touch:items-center`;
+
 /**
  * The one menu and popover look (ARCH-011): a defined edge, a clear lift, inner padding, 8px off its trigger,
  * at most `max-h-popover` tall and scrolling inside — its items are whole rows, so it never ends half-way
