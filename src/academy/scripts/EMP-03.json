@@ -45,7 +45,7 @@
         }
       ],
       "highlight": {
-        "text": "Budget 1,800 a month, 188 used",
+        "text": "188 of 1,800 this month",
         "note": "Changed at once, on “Cost so far” and the “Budget” row."
       }
     },
@@ -76,7 +76,7 @@
         }
       ],
       "highlight": {
-        "text": "no budget of its own, the one above holds",
+        "text": "this month, no budget of its own",
         "note": "Emptied, the cap is removed: the Court booking and Technologies caps hold it now."
       }
     }
@@ -131,7 +131,7 @@
           "step": 1,
           "kind": "demo",
           "highlight": {
-            "text": "Budget 190 a month, 190 used",
+            "text": "190 of 190 this month",
             "note": "Kasper has spent all of his own budget this month."
           }
         },

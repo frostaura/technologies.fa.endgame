@@ -27,7 +27,7 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "selector": "ol[aria-label='Operator log']",
+        "selector": "[aria-label='Operator log']",
         "note": "Each entry in plain words, with when and who: entries, set-up and screening, top-ups, overdraft, requests answered, prices, and “As an Admin: …”."
       }
     }
