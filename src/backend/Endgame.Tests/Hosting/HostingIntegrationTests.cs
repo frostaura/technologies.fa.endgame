@@ -404,7 +404,7 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
         Assert.Equal(HttpStatusCode.ServiceUnavailable, page.StatusCode);
         var html = await page.Content.ReadAsStringAsync();
         Assert.Contains("This app has stopped for a moment", html, StringComparison.Ordinal);
-        Assert.Contains("/brand/endgame-mark.svg", html, StringComparison.Ordinal);
+        Assert.Contains("/_endgame/assets/endgame-mark.svg", html, StringComparison.Ordinal);
         Assert.DoesNotContain("container", html, StringComparison.OrdinalIgnoreCase);
 
         // After the back-off the next visitor wakes it again.
