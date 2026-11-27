@@ -150,7 +150,7 @@ test.describe("notifications", () => {
     // "Mark read" sits on its row's tag line, never alone between the time and the tags (real-stack 17).
     const row = feed.locator('li[data-notification][data-read="false"]').first();
     const button = await row.getByRole("button", { name: "Mark read" }).boundingBox();
-    const tag = await row.locator("span.rounded-full").first().boundingBox();
+    const tag = await row.locator("span.rounded-full.h-6").first().boundingBox();
     expect(Math.abs((button?.y ?? 0) + (button?.height ?? 0) / 2 - ((tag?.y ?? 99) + (tag?.height ?? 0) / 2))).toBeLessThanOrEqual(6);
   });
 });
