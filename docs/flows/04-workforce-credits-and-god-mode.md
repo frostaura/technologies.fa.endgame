@@ -956,6 +956,7 @@ Shared vocabulary used below:
 - **Steps:**
   1. The heading reads "Operator access", with "Every time someone from FrostAura entered <Org> or acted on it, newest first. It is never silent, and only the Owner can read it."
   2. One table, newest first, with the columns "When", "What was done" and "By" (a list of cards where its column is narrow). Entries read, for example, "Entered the organisation", "Screened against the red lines: it crosses none (by a model)", "Set up the organisation", "Added <n> credits", "Changed the deepest overdraft to <n> credits below zero", "Answered a top-up request with <n> credits", "Declined a top-up request for <n> credits: <why>", "Changed the prices for every organisation" and "As an Admin: <what they changed>" (a change the control plane titles only with its endpoint's description reads "Changed something as an Admin", never that description; asking what a message would cost reads "As an Admin: Asked what a message in the conversation would cost"), each with "<operator name> · <email>". Technical mode adds the raw action and its detail.
+  3. Beside it, "What is written here": every entry into the organisation, every change made in it as an Admin, top-ups, the deepest overdraft and the prices, and how it was screened against the red lines when it was set up — "Only the Owner can read it."
 - **You know it worked when:** the log, or its empty state, is shown.
 - **Variations and refusals:**
   - Empty: "No one from FrostAura has entered <Org>" with "If anyone does, it is written here first."

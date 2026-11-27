@@ -9,6 +9,7 @@ import { useAppSelector } from "@/store";
 import { useGetOperatorAccessQuery } from "@/store/api";
 import type { OperatorAction } from "@/store/types";
 import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { AppShell } from "../shell/AppShell";
 import { adminLine } from "./operatorLogModel";
 
@@ -70,7 +71,7 @@ export function OperatorAccessView() {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
 
   return (
-    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Operator access" }]}>
+    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Operator access" }]} aside={org ? <WhatIsLogged /> : undefined}>
       <PageHeader
         className={RISE}
         icon="god-mode"
@@ -137,5 +138,23 @@ export function OperatorAccessView() {
         </>
       )}
     </AppShell>
+  );
+}
+
+/** The side panel: what the log holds and who reads it, so an empty log still says what it would show. */
+function WhatIsLogged() {
+  return (
+    <section aria-labelledby="logged-title" className={cn("flex flex-col gap-2.5", RISE)}>
+      <h2 id="logged-title" className="text-base font-semibold">
+        What is written here
+      </h2>
+      <ul className="flex list-disc flex-col gap-1 pl-5 text-ink-body">
+        <li>Every time someone from FrostAura enters the organisation</li>
+        <li>Every change they make in it, as an Admin</li>
+        <li>Top-ups, the deepest overdraft and the prices</li>
+        <li>How it was screened against the red lines when it was set up</li>
+      </ul>
+      <p className="text-sm text-ink-muted">Only the Owner can read it.</p>
+    </section>
   );
 }

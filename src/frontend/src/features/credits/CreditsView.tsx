@@ -127,7 +127,7 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
         <div className={cn("flex min-w-0 flex-col gap-6 3xl:sticky 3xl:top-6", RISE, stagger(2))}>
           {/* A caption is one short line; what it means is said once, in a sentence under the figures. */}
           <section aria-label="How the month went" className="flex flex-col gap-2.5">
-            <StatRow cols={2} className="max-sm:grid-cols-1 rail:grid-cols-1 3xl:grid-cols-1">
+            <StatRow cols={2} className="max-sm:grid-cols-1 3xl:grid-cols-1">
               {credits.estimates && credits.estimates.pieces > 0 ? (
                 <Stat label="Estimates against what it cost" value={estimateFigure(credits.estimates)} caption={`Across ${plural(credits.estimates.pieces, "piece")} of work`} />
               ) : (

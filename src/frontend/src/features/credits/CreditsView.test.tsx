@@ -88,7 +88,7 @@ describe("CreditsView", () => {
     expect(within(budgets).getByRole("link", { name: "Ledger web" }).getAttribute("href")).toBe("/apps/a1");
     expect(screen.getByText(/Usually 13% under the estimate/)).toBeTruthy();
     expect(screen.getByText("42 credits")).toBeTruthy();
-    expect(screen.getByText(/3 repairs where an employee got it wrong/)).toBeTruthy();
+    expect(screen.getByText(/3 repairs, where an employee got it wrong the first time, cost you nothing/)).toBeTruthy();
     expect(screen.getByText("Not set")).toBeTruthy();
   });
 

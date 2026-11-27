@@ -527,7 +527,7 @@ function PricingPanel() {
             ) : (
               <ol aria-label="Price changes" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
                 {view.data.history.map((h, i) => (
-                  <li key={`${h.at}-${i}`} className="grid grid-cols-1 gap-x-6 gap-y-1 border-b px-5 py-3 last:border-b-0 md:grid-cols-name-wide">
+                  <li key={`${h.at}-${i}`} className="grid grid-cols-1 gap-x-6 gap-y-1 border-b px-5 py-3 last:border-b-0 lg:grid-cols-name-wide">
                     <span className="text-sm font-medium">
                       {formatDate(h.at)}
                       {h.byEmail ? ` · ${h.byEmail}` : ""}

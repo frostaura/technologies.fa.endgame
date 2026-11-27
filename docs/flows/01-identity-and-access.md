@@ -483,7 +483,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Learn first:** AST-02
 - **What you learn:** you can see when each key was last used, and shut one out at once.
 - **Steps:**
-  1. Each row shows the name, "{Role} in {Organisation} · made {date} · ends/ended {date}" (or "· never ends"; a revoked key "· revoked {date}"), "Last used {time ago}" or "Never used", and a badge: **"Active"**, **"Expired"** or **"Revoked"**. Technical mode adds the prefix and id. Live keys come first; a revoked or expired key is drawn quietly, greyed, after them.
+  1. Each row shows the name, "{Role} in {Organisation} · made {date} · ends/ended {date}" (or "· never ends"; a revoked key "· revoked {date}"), "Last used {time ago}" or "Never used", and a badge: **"Active"**, **"Expired"** or **"Revoked"**. Technical mode adds the prefix and id. Live keys come first; a revoked or expired key is drawn quietly, greyed, after them. The list opens on the first ten; with more, **"Show all {n} keys"** opens the rest (and **"Show fewer"** closes them).
   2. The person clicks **"Revoke"**, at the end of the row. A confirmation shows: "The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in.", with **"Revoke it"** and **"Keep it"**.
   3. They click **"Revoke it"**. The badge becomes **"Revoked"** at once, and the key's next call gets 401.
 - **You know it worked when:** the badge reads **"Revoked"** and **"Revoke"** has gone.
