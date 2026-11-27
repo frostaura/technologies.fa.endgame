@@ -103,6 +103,9 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         public required Func<Task> SetAutonomy { get; init; }
 
         public required Func<Task> Share { get; init; }
+
+        /// <summary>A file the Owner attached and sent in the division's conversation, so anyone who may read it can.</summary>
+        public required Func<Task<Guid>> FreshSentAttachment { get; init; }
     }
 
     /// <summary>Endpoints a role does not decide, and why.</summary>
@@ -117,6 +120,7 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         ["POST /api/notifications/{id:guid}/read"] = "the caller's own read state",
         ["POST /api/notifications/read-all"] = "the caller's own read state",
         ["GET /api/tree"] = "shows each member their own branch (TreeEndpointTests); outside it is tested below",
+        ["DELETE /api/conversations/attachments/{id:guid}"] = "the caller's own upload, only before it is sent (ConversationAttachmentsTests)",
     };
 
     private ControlPlaneApp app = null!;
@@ -226,6 +230,13 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
                 (await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/projects", new { parent = $"{org}/{division}", name = "x", slug = Unique("xx") })))["path"]!.GetValue<string>(),
             FreshMembership = async () =>
                 Guid.Parse((await ControlPlaneApp.Ok(owner.PostAsJsonAsync("/api/members", new { scope = project, email = $"{Unique("m")}@example.com", role = "viewer" })))["member"]!["membershipId"]!.GetValue<string>()),
+            FreshSentAttachment = async () =>
+            {
+                using var form = new MultipartFormDataContent { { new StringContent($"{org}/{division}"), "scope" }, { new ByteArrayContent("Court times."u8.ToArray()), "file", "times.txt" } };
+                var file = (await ControlPlaneApp.Created(owner.PostAsync("/api/conversations/attachments", form)))["id"]!.GetValue<string>();
+                await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/conversations", new { scope = $"{org}/{division}", message = "See the file.", attachmentIds = new[] { file } }));
+                return Guid.Parse(file);
+            },
             FreshMemory = async employee =>
                 Guid.Parse((await ControlPlaneApp.Created(owner.PostAsJsonAsync($"/api/employees/{employee}/memory", new { title = Unique("fact"), body = "The club opens at six.", kind = "fact" })))["id"]!.GetValue<string>()),
             FreshHire = Hire,
@@ -318,6 +329,10 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
         new("POST", "/api/conversations/estimate", MemberRole.Viewer, Level.Branch, s => R("/api/conversations/estimate", new { scope = s.Division })),
         new("POST", "/api/conversations", MemberRole.Builder, Level.Branch, s => R("/api/conversations", new { scope = s.Division, message = "Hello" })),
         new("GET", "/api/conversations", MemberRole.Viewer, Level.Branch, s => R($"/api/conversations?scope={s.Division}")),
+        new("GET", "/api/conversations/capabilities", MemberRole.Viewer, Level.Branch, s => R($"/api/conversations/capabilities?scope={s.Division}")),
+        new("POST", "/api/conversations/attachments", MemberRole.Builder, Level.Branch, s => R("/api/conversations/attachments",
+            new MultipartFormDataContent { { new StringContent(s.Division), "scope" }, { new ByteArrayContent("Notes."u8.ToArray()), "file", "notes.txt" } })),
+        new("GET", "/api/conversations/attachments/{id:guid}/content", MemberRole.Viewer, Level.Branch, async s => new Req($"/api/conversations/attachments/{await s.FreshSentAttachment()}/content")),
 
         // Apps: settings, sharing, asking, versions, export
         new("GET", "/api/apps/{id:guid}", MemberRole.Viewer, Level.Branch, s => R($"/api/apps/{s.AppId}")),
@@ -407,7 +422,12 @@ public sealed class AuthorizationMatrixTests(PostgresServer postgres) : IAsyncLi
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, string method, Req request)
     {
         using var message = new HttpRequestMessage(new HttpMethod(method), request.Url);
-        if (request.Body is not null)
+        if (request.Body is HttpContent content)
+        {
+            // A form (an upload), sent as it is.
+            message.Content = content;
+        }
+        else if (request.Body is not null)
         {
             message.Content = new StringContent(JsonSerializer.Serialize(request.Body, ControlPlaneApp.Web), Encoding.UTF8, "application/json");
         }

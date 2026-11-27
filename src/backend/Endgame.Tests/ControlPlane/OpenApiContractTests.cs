@@ -35,6 +35,8 @@ public sealed class OpenApiContractTests(PostgresServer postgres)
         ("get", "/api/auth/options"),
         ("post", "/api/ideas/estimate"),
         ("get", "/api/conversations"),
+        ("get", "/api/conversations/capabilities"),
+        ("post", "/api/conversations/attachments"), ("get", "/api/conversations/attachments/{id}/content"), ("delete", "/api/conversations/attachments/{id}"),
         ("get", "/api/cascade"), ("put", "/api/cascade"), ("delete", "/api/cascade"),
         ("get", "/api/members"), ("post", "/api/members"), ("delete", "/api/members/{membershipId}"),
         ("post", "/api/credits/top-ups"),
