@@ -3,7 +3,7 @@ import { TAP_LINE } from "@/lib/touch";
 import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { estimateFigure, estimateHeadline, estimateSpread } from "@/lib/estimates";
 import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
-import { formatCredits, formatDate, formatNumber, percent, plural } from "@/lib/format";
+import { formatCredits, formatDate, formatNumber, percent, plural, signedNumber } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -17,7 +17,11 @@ import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { Fold } from "@/components/Fold";
 import { SECTION } from "@/components/ui/page";
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
+import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
+import { LINK } from "@/components/ui/layout";
 import { AppShell } from "../shell/AppShell";
 import { CapControl, NarrowerLimit, NarrowerLimits, OwnLimit, TopUpRequests } from "./CreditsActions";
 import { capAbove, noCapLine, paceLine } from "./creditsModel";
@@ -38,7 +42,7 @@ export function CreditsView() {
     <AppShell crumbs={[...(org ? [{ label: org.name, href: home }] : []), { label: "Credits" }]} aside={view.kind === "loaded" && org ? <OverdraftAside credits={view.data} organisation={org.slug} role={active.role} /> : undefined}>
       {me.data && !org && (
         <p data-state="empty" className="py-1 text-ink-body">
-          There are no credits to show until your organisation is named. <Link href={paths.start()} className="font-semibold text-primary-link">Start</Link>
+          There are no credits to show until your organisation is named. <Link href={paths.start()} className={LINK}>Start</Link>
         </p>
       )}
       {view.kind === "loading" && (me.isLoading || org) && (
@@ -64,16 +68,18 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
   return (
     <>
       {credits.neverToppedUp && (
-        <p role="note" data-testid="never-topped-up" className="flex max-w-prose flex-col gap-1 rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-ink">
-          {NEVER_TOPPED_UP}
-          <button
-            type="button"
-            onClick={() => document.getElementById("asking-for-more")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-            className="min-h-touch self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover"
-          >
-            Ask for a top-up
-          </button>
-        </p>
+        <Alert
+          role="note"
+          tone="warn"
+          testId="never-topped-up"
+          className="max-w-prose"
+          title={NEVER_TOPPED_UP}
+          action={
+            <Button size="sm" variant="quiet" onClick={() => document.getElementById("asking-for-more")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+              Ask for a top-up
+            </Button>
+          }
+        />
       )}
       {branch && (
         <p role="note" className="max-w-prose text-ink-body">
@@ -81,16 +87,17 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
         </p>
       )}
       {/* The hero: white, the balance as the page's title, the month's figures across from it. Below zero, the figure says so in red. */}
-      <section aria-label="Balance" className={cn("grid grid-cols-1 items-end gap-x-12 gap-y-5 rounded-lg border bg-surface px-6 py-7 shadow-card max-sm:px-5 max-sm:py-5 sm:px-8 rail:!px-5 lg:grid-cols-grow-end", RISE)}>
+      <section aria-label="Balance" className={cn("flex flex-col gap-6 rounded-lg border bg-surface px-6 py-7 shadow-card max-sm:px-5 max-sm:py-5 sm:px-8 rail:!px-5", RISE)}>
+        {/* The balance on a row of its own, so it always has the width to show whole. */}
         <div className="flex min-w-0 flex-col gap-1">
-          <Stat plain valueAs="h1" size="xl" tone={negative ? "bad" : "ink"} label={<span className="text-eyebrow font-semibold uppercase">{negative ? "Below zero" : "Credits left"}</span>} value={formatNumber(credits.balance)} />
+          <Stat plain valueAs="h1" size="xl" tone={negative ? "bad" : "ink"} label={negative ? "Below zero" : "Credits left"} value={formatNumber(credits.balance)} />
           <span className="max-w-prose text-ink-body">{paceLine(credits)}</span>
         </div>
-        <div className="grid grid-cols-3 gap-x-10 gap-y-3 max-sm:grid-cols-fit-3 max-sm:justify-between max-sm:gap-x-3 rail:grid-cols-fit-3 rail:justify-between rail:gap-x-2">
+        <StatRow cols={3} className="max-sm:grid-cols-3 max-sm:gap-x-3">
           <Stat plain label="Spent this month" value={formatNumber(credits.month.spent)} />
           <Stat plain label="On AI work" value={formatNumber(credits.month.ai)} />
           <Stat plain label="On hosting" value={formatNumber(credits.month.hosting)} />
-        </div>
+        </StatRow>
       </section>
 
       {/* At 1600 and wider the tree has the room it needs, and the month's figures and the top-ups sit beside it. */}
@@ -163,7 +170,7 @@ function TopUpLedger({ topUps }: { topUps: Credits["topUps"] }) {
           {topUps.map((t, i) => (
             <li key={`${t.at}-${i}`} className="grid grid-cols-grow-end items-baseline gap-x-4 border-b px-5 py-3 last:border-b-0">
               <span className="min-w-0 break-words">{t.note}</span>
-              <span className="whitespace-nowrap font-semibold tabular-nums">+&nbsp;{formatNumber(t.credits)}</span>
+              <span className="whitespace-nowrap font-semibold tabular-nums">{signedNumber(t.credits)}</span>
               <span className="col-span-2 text-sm text-ink-muted">{formatDate(t.at)}</span>
             </li>
           ))}
@@ -173,11 +180,13 @@ function TopUpLedger({ topUps }: { topUps: Credits["topUps"] }) {
   );
 }
 
-/** The columns every row of the budget tree shares: the level, what it spent, its cap, and (for an Admin) its one action. */
-const TREE_COLUMNS = {
-  admin: "grid-cols-grow-end sm:grid-cols-budget-tree",
-  reader: "grid-cols-grow-end sm:grid-cols-budget-tree-read",
-} as const;
+/** The budget tree's columns: the level, what it spent, its cap, and (for an Admin) its one action. */
+const TREE_COLUMNS: Column[] = [
+  { key: "level", header: "Level", kind: "grow" },
+  { key: "spent", header: "Spent this month", kind: "text" },
+  { key: "cap", header: "Cap", kind: "figure" },
+];
+const ACTION_COLUMN: Column = { key: "change", header: "Change", kind: "action", hideHeader: true };
 
 /**
  * The budget tree (CRED-02): one dense row per level, indented under its parent, with what it spent this
@@ -185,7 +194,6 @@ const TREE_COLUMNS = {
  */
 function BudgetTree({ lines, organisation, isAdmin }: { lines: BudgetLine[]; organisation: string; isAdmin: boolean }) {
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
-  const columns = isAdmin ? TREE_COLUMNS.admin : TREE_COLUMNS.reader;
   const hidden = (line: BudgetLine) => [...folded].some((scope) => insideDivision(line, scope));
   const toggle = (scope: string) =>
     setFolded((was) => {
@@ -197,30 +205,23 @@ function BudgetTree({ lines, organisation, isAdmin }: { lines: BudgetLine[]; org
   // The legend's example of a cap held from above is a real one from this tree.
   const held = lines.map((l) => (l.capCredits === null ? capAbove(lines, l) : null)).find((l) => l !== null) ?? null;
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-      <div aria-hidden className={cn("hidden items-end gap-x-4 border-b px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-muted sm:grid", columns)}>
-        <span>Level</span>
-        <span>Spent this month</span>
-        <span className="text-right">Cap</span>
-        {isAdmin && <span />}
-      </div>
-      <ul aria-label="Budgets" className="flex flex-col">
-        {lines.map((line) =>
-          hidden(line) ? null : (
-            <BudgetRow
-              key={`${line.scope}#${line.level}#${line.name}`}
-              line={line}
-              lines={lines}
-              organisation={organisation}
-              isAdmin={isAdmin}
-              columns={columns}
-              fold={line.level === "division" && lines.some((l) => insideDivision(l, line.scope)) ? { folded: folded.has(line.scope), toggle: () => toggle(line.scope) } : null}
-            />
-          ),
-        )}
-      </ul>
+    <div className="flex min-w-0 flex-col gap-2.5">
+      <Table label="Budgets" columns={isAdmin ? [...TREE_COLUMNS, ACTION_COLUMN] : TREE_COLUMNS} at="narrow">
+        {lines.map((line) => {
+          if (hidden(line)) return null;
+          const fold = line.level === "division" && lines.some((l) => insideDivision(l, line.scope)) ? { folded: folded.has(line.scope), toggle: () => toggle(line.scope) } : null;
+          const key = `${line.scope}#${line.level}#${line.name}`;
+          return isAdmin ? (
+            <CapControl key={key} line={line} lines={lines} organisation={organisation}>
+              {(cap) => <BudgetRow line={line} lines={lines} fold={fold} action={cap.action} after={cap.after} />}
+            </CapControl>
+          ) : (
+            <BudgetRow key={key} line={line} lines={lines} fold={fold} />
+          );
+        })}
+      </Table>
       {/* What the cap column's marks mean, said once rather than on every row. */}
-      <p className="flex flex-wrap gap-x-5 gap-y-1 border-t bg-ground px-5 py-2.5 text-sm text-ink-muted">
+      <p className="flex flex-wrap gap-x-5 gap-y-1 px-1 text-sm text-ink-muted">
         {held && (
           <span>
             <span className="font-semibold text-ink-body">↑&nbsp;{formatNumber(held.capCredits ?? 0)}</span> no cap of its own: the cap above it, shown, holds
@@ -245,17 +246,15 @@ const KIND: Partial<Record<BudgetLine["level"], string>> = { app: "app", employe
 function BudgetRow({
   line,
   lines,
-  organisation,
-  isAdmin,
-  columns,
   fold,
+  action,
+  after,
 }: {
   line: BudgetLine;
   lines: BudgetLine[];
-  organisation: string;
-  isAdmin: boolean;
-  columns: string;
   fold: { folded: boolean; toggle: () => void } | null;
+  action?: ReactNode;
+  after?: ReactNode;
 }) {
   const capped = line.capCredits !== null;
   const used = percent(line.spentCredits, line.capCredits);
@@ -264,54 +263,58 @@ function BudgetRow({
   const href = line.appId ? paths.app(line.appId) : line.employeeId ? paths.employee(line.employeeId) : null;
   const top = line.depth <= 1 && line.level !== "employee";
   return (
-    <li data-scope={line.scope} data-level={line.level} className={cn("grid items-center gap-x-4 gap-y-1.5 border-b px-5 py-2 last:border-b-0 max-sm:py-3", columns, line.depth === 0 && "bg-ground")}>
-      <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: `${Math.min(line.depth, 5) * 1.5}rem` }}>
-        {fold ? (
-          <button
-            type="button"
-            aria-expanded={!fold.folded}
-            aria-label={`${fold.folded ? "Show" : "Hide"} what is in ${line.name}`}
-            onClick={fold.toggle}
-            className="relative -ml-8 mr-0.5 flex size-6 shrink-0 items-center justify-center rounded-xs text-ink-muted after:absolute after:-inset-2.5 after:content-[''] hover:bg-ground hover:text-ink"
-          >
-            <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", fold.folded && "-rotate-90")} />
-          </button>
-        ) : null}
-        {href ? (
-          <Link href={href} className={cn("min-w-0 truncate rounded-xs text-ink underline-offset-2 hover:text-primary-hover hover:underline", top && "font-semibold", TAP_LINE)}>
-            {line.name}
-          </Link>
-        ) : (
-          <span className={cn("min-w-0 truncate", top && "font-semibold")}>{line.name}</span>
-        )}
-        {KIND[line.level] && <span className="shrink-0 text-xs text-ink-muted">{KIND[line.level]}</span>}
-      </span>
-      <span className="flex min-w-0 flex-col gap-1 max-sm:col-span-2 max-sm:row-start-2">
-        <span className="whitespace-nowrap tabular-nums text-ink-body">
-          {formatNumber(line.spentCredits)}
-          {capped && <span className="text-ink-muted sm:hidden"> of {formatNumber(line.capCredits ?? 0)} this month</span>}
+    <TableRow data-scope={line.scope} data-level={line.level} className={cn("py-2.5", line.depth === 0 && "bg-ground")} after={after}>
+      <Cell col="level" primary>
+        <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: `${Math.min(line.depth, 5) * 1.5}rem` }}>
+          {fold ? (
+            <button
+              type="button"
+              aria-expanded={!fold.folded}
+              aria-label={`${fold.folded ? "Show" : "Hide"} what is in ${line.name}`}
+              onClick={fold.toggle}
+              className="relative -ml-8 mr-0.5 flex size-6 shrink-0 items-center justify-center text-ink-muted after:absolute after:-inset-2.5 after:content-[''] hover:text-ink"
+            >
+              <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", fold.folded && "-rotate-90")} />
+            </button>
+          ) : null}
+          {href ? (
+            <Link href={href} className={cn("min-w-0 truncate", LINK, TAP_LINE)}>
+              {line.name}
+            </Link>
+          ) : (
+            <span className={cn("min-w-0 truncate", top && "font-semibold")}>{line.name}</span>
+          )}
+          {KIND[line.level] && <span className="shrink-0 text-xs text-ink-muted">{KIND[line.level]}</span>}
         </span>
-        {capped && <Bar value={used} label={`${formatNumber(line.spentCredits)} of ${formatNumber(line.capCredits ?? 0)} used`} tone={over ? "attention" : "primary"} className="h-1.5" />}
-      </span>
-      <span className="whitespace-nowrap text-right tabular-nums max-sm:hidden">
-        {capped ? (
-          <span className={cn("font-semibold", over && "text-attention-text")}>{formatNumber(line.capCredits ?? 0)}</span>
-        ) : above ? (
-          <span aria-label={noCapLine(lines, line)} title={noCapLine(lines, line)} className="text-ink-muted">
-            ↑&nbsp;{formatNumber(above.capCredits ?? 0)}
-          </span>
-        ) : (
-          <span aria-label={noCapLine(lines, line)} title={noCapLine(lines, line)} className="text-ink-muted">
-            —
-          </span>
-        )}
-      </span>
-      {isAdmin && (
-        <ErrorBoundary name={`The cap on ${line.name}`}>
-          <CapControl line={line} lines={lines} organisation={organisation} />
-        </ErrorBoundary>
-      )}
-    </li>
+      </Cell>
+      <Cell col="spent">
+        {/* One baseline per row: a row with no cap keeps the bar's room, empty, so the figures line up. */}
+        <span className="flex min-w-0 flex-col gap-1">
+          <span className="whitespace-nowrap tabular-nums text-ink-body">{formatNumber(line.spentCredits)}</span>
+          {capped ? (
+            <Bar value={used} label={`${formatNumber(line.spentCredits)} of ${formatNumber(line.capCredits ?? 0)} used`} tone={over ? "attention" : "primary"} className="h-1.5" />
+          ) : (
+            <span aria-hidden className="block h-1.5" />
+          )}
+        </span>
+      </Cell>
+      <Cell col="cap">
+        <span className="whitespace-nowrap tabular-nums">
+          {capped ? (
+            <span className={cn("font-semibold", over && "text-attention-text")}>{formatNumber(line.capCredits ?? 0)}</span>
+          ) : above ? (
+            <span aria-label={noCapLine(lines, line)} title={noCapLine(lines, line)} className="text-ink-muted">
+              ↑&nbsp;{formatNumber(above.capCredits ?? 0)}
+            </span>
+          ) : (
+            <span aria-label={noCapLine(lines, line)} title={noCapLine(lines, line)} className="text-ink-muted">
+              —
+            </span>
+          )}
+        </span>
+      </Cell>
+      {action !== undefined && <Cell col="change">{action}</Cell>}
+    </TableRow>
   );
 }
 

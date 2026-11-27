@@ -1,4 +1,6 @@
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,7 +8,6 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { formatCredits, formatDate, formatNumber } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { useActiveTree } from "@/lib/useActiveOrganisation";
-import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
 import {
   api,
@@ -84,7 +85,16 @@ export function OwnLimit({ organisation, credits, isOwner }: { organisation: str
         </p>
       )}
       {open ? (
-        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-2 rounded-xs border border-border-strong p-4" noValidate>
+        <ConfirmCard
+          label="Your own limit"
+          question="Your own limit"
+          confirm={saving.isLoading ? "Saving…" : "Save my limit"}
+          cancel="Not now"
+          destructive={false}
+          busy={n === null || tooDeep || saving.isLoading}
+          onSubmit={(e) => void submit(e)}
+          onCancel={() => setOpen(false)}
+        >
           <Field
             id={id}
             label="How far below zero you may go"
@@ -93,22 +103,14 @@ export function OwnLimit({ organisation, credits, isOwner }: { organisation: str
           >
             <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={`${id}-hint`} aria-invalid={tooDeep || (n === null && value.trim() !== "")} />
           </Field>
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" size="sm" disabled={n === null || tooDeep || saving.isLoading}>
-              {saving.isLoading ? "Saving…" : "Save my limit"}
-            </Button>
-            <Button size="sm" variant="quiet" onClick={() => setOpen(false)}>
-              Not now
-            </Button>
-          </div>
-        </form>
+        </ConfirmCard>
       ) : (
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setOpen(true)}>
             Change your limit
           </Button>
           {credits.overdraft?.ownLimit !== null && credits.overdraft?.ownLimit !== undefined && (
-            <Button variant="quiet" disabled={removing.isLoading} onClick={() => void removeOwn()}>
+            <Button variant="danger-outline" disabled={removing.isLoading} onClick={() => void removeOwn()}>
               Remove your own limit
             </Button>
           )}
@@ -292,23 +294,24 @@ export function TopUpRequests({ organisation, isOwner, isAdmin }: { organisation
       )}
       {isOwner &&
         (open ? (
-          <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-2 rounded-xs border border-border-strong p-4" noValidate>
+          <ConfirmCard
+            label="Ask for a top-up"
+            question="Ask for a top-up"
+            confirm={sending.isLoading ? "Sending…" : "Ask for it"}
+            cancel="Not now"
+            destructive={false}
+            busy={!n || sending.isLoading || openCount >= 5}
+            onSubmit={(e) => void submit(e)}
+            onCancel={() => setOpen(false)}
+          >
             <Field id={ids.credits} label="How many credits" problem={amount.trim() && !n ? "Type a number of credits." : null}>
               <Input id={ids.credits} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </Field>
             <Field id={ids.note} label="A note for FrostAura" hint="Optional.">
               <Textarea id={ids.note} rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
             </Field>
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" size="sm" disabled={!n || sending.isLoading || openCount >= 5}>
-                {sending.isLoading ? "Sending…" : "Ask for it"}
-              </Button>
-              <Button size="sm" variant="quiet" onClick={() => setOpen(false)}>
-                Not now
-              </Button>
-            </div>
             {openCount >= 5 && <p className="text-sm text-ink-muted">Five requests are already waiting; FrostAura answers those first.</p>}
-          </form>
+          </ConfirmCard>
         ) : (
           <Button variant="secondary" className="self-start" onClick={() => setOpen(true)}>
             Ask for a top-up
@@ -359,8 +362,21 @@ export function TopUpRequests({ organisation, isOwner, isAdmin }: { organisation
  * A row's monthly cap (CRED-03, EMP-03), for an Admin: set, change or remove it. A node's cap is a
  * budget on the cascade; an employee's is on its own record and covers the contractors it briefs.
  * The bar moves at once and goes back if the control plane refuses; a removal says what holds instead.
+ *
+ * It hands its row two parts: the one action, for the row's trailing cell, and what opens under the row
+ * (the cap's form, then what became of it).
  */
-export function CapControl({ line, lines, organisation }: { line: BudgetLine; lines: BudgetLine[]; organisation: string }) {
+export function CapControl({
+  line,
+  lines,
+  organisation,
+  children,
+}: {
+  line: BudgetLine;
+  lines: BudgetLine[];
+  organisation: string;
+  children: (parts: { action: ReactNode; after: ReactNode }) => ReactNode;
+}) {
   const [setCascade, setting] = useSetCascadeMutation();
   const [removeCascade, removing] = useRemoveCascadeMutation();
   const [updateEmployee, updating] = useUpdateEmployeeMutation();
@@ -424,37 +440,43 @@ export function CapControl({ line, lines, organisation }: { line: BudgetLine; li
     }
   };
 
-  // Two cells of the row's grid: the one action, in the trailing column; and, open, the cap's form across the whole row.
-  return (
-    <>
-      <span className="flex justify-end max-sm:col-start-2 max-sm:row-start-1">
-        <Button size="sm" variant="quiet" className="text-primary-link max-sm:px-2" disabled={busy} aria-expanded={open} onClick={() => setOpen(!open)} aria-label={`${line.capCredits === null ? "Set a cap on" : "Change the cap on"} ${line.name}`}>
-          {line.capCredits === null ? "Set a cap" : "Change the cap"}
-        </Button>
-      </span>
-      {open && (
-        <form onSubmit={(e) => void save(e)} aria-label={`Cap for ${line.name}`} className="col-span-full flex flex-wrap items-end gap-2 rounded-xs bg-ground px-4 py-3" noValidate>
-          <Field id={id} label="Credits a month" problem={value.trim() && n === null ? "Type a number of credits." : null} className="min-w-0 flex-1 sm:max-w-48 sm:flex-none">
-            <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-invalid={!!value.trim() && n === null} />
-          </Field>
-          <Button type="submit" size="sm" disabled={n === null || busy}>
-            Save the cap
-          </Button>
-          {line.capCredits !== null && (
-            <Button size="sm" variant="quiet" disabled={busy} onClick={() => void remove()} aria-label={`Remove the cap on ${line.name}`}>
-              Remove the cap
-            </Button>
-          )}
-          <Button size="sm" variant="quiet" onClick={() => setOpen(false)}>
-            Not now
-          </Button>
-        </form>
-      )}
-      {result && (
-        <p role={result.ok ? "status" : "alert"} className={cn("col-span-full", result.ok ? "text-sm text-success-text" : "rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text")}>
-          {result.text}
-        </p>
-      )}
-    </>
+  const action = (
+    <ErrorBoundary name={`The cap on ${line.name}`}>
+      <Button size="sm" variant="quiet" disabled={busy} aria-expanded={open} onClick={() => setOpen(!open)} aria-label={`${line.capCredits === null ? "Set a cap on" : "Change the cap on"} ${line.name}`}>
+        {line.capCredits === null ? "Set a cap" : "Change the cap"}
+      </Button>
+    </ErrorBoundary>
   );
+  const after =
+    open || result ? (
+      <ErrorBoundary name={`The cap on ${line.name}`}>
+        {open && (
+          <ConfirmCard
+            label={`Cap for ${line.name}`}
+            question={`Cap for ${line.name}`}
+            confirm="Save the cap"
+            cancel="Not now"
+            destructive={false}
+            busy={n === null || busy}
+            onSubmit={(e) => void save(e)}
+            onCancel={() => setOpen(false)}
+          >
+            <Field id={id} label="Credits a month" problem={value.trim() && n === null ? "Type a number of credits." : null}>
+              <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-invalid={!!value.trim() && n === null} />
+            </Field>
+            {line.capCredits !== null && (
+              <Button size="sm" variant="quiet" className="self-start" disabled={busy} onClick={() => void remove()} aria-label={`Remove the cap on ${line.name}`}>
+                Remove the cap
+              </Button>
+            )}
+          </ConfirmCard>
+        )}
+        {result && (
+          <p role={result.ok ? "status" : "alert"} className={result.ok ? "text-sm text-success-text" : "rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text"}>
+            {result.text}
+          </p>
+        )}
+      </ErrorBoundary>
+    ) : null;
+  return <>{children({ action, after })}</>;
 }
