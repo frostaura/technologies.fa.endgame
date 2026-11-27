@@ -248,7 +248,7 @@ export const tableTracks = {
   text: "minmax(0, 1fr)",
   figure: "minmax(5.5rem, 0.6fr)",
   status: "minmax(8rem, 0.8fr)",
-  date: "minmax(7.5rem, 0.7fr)",
+  date: "minmax(9.5rem, 0.8fr)",
   action: "minmax(7rem, auto)",
   /** The width of a column's name beside its value, in a table's card form. */
   cardLabel: "7.5rem",
@@ -321,7 +321,6 @@ export const layout = {
   /** Grid tracks: a chart's label column beside its bars; a table of figures with a name column. */
   columns: {
     "chart-row": "fit-content(9rem) minmax(0, 1fr)",
-    "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))",
     /** A line that grows and the thing that ends it (a figure, an action): the money pages' rows. */
     "grow-end": "minmax(0, 1fr) auto",
     /** A control before its words (a switch, a dot), and the words; then, optionally, what ends the row. */
@@ -329,18 +328,8 @@ export const layout = {
     "lead-grow-end": "auto minmax(0, 1fr) auto",
     "dot-grow": "0.5rem minmax(0, 1fr)",
     "dot-grow-end": "0.5rem minmax(0, 1fr) auto",
-    /** Figures that each take only their own width, spread across their row. */
-    "fit-3": "auto auto auto",
-    /** The credits budget tree: level, spent this month, cap, and an Admin's one action. */
-    "budget-tree": "minmax(0, 1.5fr) minmax(7rem, 1fr) 5.5rem 9rem",
-    "budget-tree-read": "minmax(0, 1.5fr) minmax(7rem, 1fr) 5.5rem",
     /** A wide credits page: the budget tree, and the month's figures and top-ups beside it. */
     "main-side": "minmax(0, 1fr) 24rem",
-    /** Autonomy's stage matrix: the stage, its three lists, and its actions. */
-    "stage-matrix": "minmax(9rem, 0.9fr) repeat(3, minmax(0, 1fr)) 8.5rem",
-    /** The operator log: when, what was done, and by whom. */
-    "time-grow": "10.5rem minmax(0, 1fr)",
-    "time-grow-who": "10.5rem minmax(0, 1fr) minmax(14rem, 0.45fr)",
     /** God mode's organisation row: who it is, then its four figures. */
     "name-wide": "minmax(13rem, 1.1fr) minmax(0, 2.4fr)",
     /** A form's first field wider than the two after it. */

@@ -50,10 +50,10 @@ export function Table({
   const style = { "--table-cols": columns.map((c) => c.track ?? TRACK[c.kind ?? "text"]).join(" ") } as CSSProperties;
   return (
     <Columns.Provider value={columns}>
-      <div data-table="" data-at={at} data-testid={testId} style={style} className={cn("table-frame overflow-hidden rounded-md border bg-surface shadow-card", className)}>
-        <div aria-hidden className="table-head gap-x-5 border-b bg-ground px-5 py-2.5 text-sm font-medium text-ink-muted">
+      <div data-table="" data-at={at} data-testid={testId} style={style} className={cn("tbl-frame overflow-hidden rounded-md border bg-surface shadow-card", className)}>
+        <div aria-hidden className="tbl-head gap-x-5 border-b bg-ground px-5 py-2.5 text-sm font-medium text-ink-muted">
           {columns.map((c) => (
-            <span key={c.key} data-kind={c.kind ?? "text"} className="min-w-0 truncate">
+            <span key={c.key} data-kind={c.kind ?? "text"} className="min-w-0 break-words leading-snug">
               {c.hideHeader ? "" : c.header}
             </span>
           ))}
@@ -73,7 +73,7 @@ export function Table({
 export function TableRow({ children, after, className, ...rest }: HTMLAttributes<HTMLLIElement> & { after?: ReactNode; [data: `data-${string}`]: string | undefined }) {
   return (
     <li className={cn("flex flex-col gap-3 px-5 py-3.5 max-sm:px-4", className)} {...rest}>
-      <div className="table-row gap-x-5">{children}</div>
+      <div className="tbl-row gap-x-5">{children}</div>
       {after}
     </li>
   );
@@ -88,8 +88,8 @@ export function Cell({ col, primary = false, className, children }: { col: strin
   const kind = column?.kind ?? "text";
   const labelled = !primary && kind !== "action" && !!column?.header;
   return (
-    <div data-kind={kind} data-primary={primary || undefined} className={cn("table-cell min-w-0", className)}>
-      {labelled && <span className="table-cell-label text-sm text-ink-muted">{column?.header}</span>}
+    <div data-kind={kind} data-primary={primary || undefined} className={cn("tbl-cell min-w-0", className)}>
+      {labelled && <span className="tbl-cell-label text-sm text-ink-muted">{column?.header}</span>}
       <div className="min-w-0">{children}</div>
     </div>
   );

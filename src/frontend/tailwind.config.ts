@@ -83,23 +83,23 @@ const config: Config = {
     plugin(({ addComponents, theme }) => {
       const wide = (at: string) => ({
         [`@container table (min-width: ${tableAt[at as keyof typeof tableAt]})`]: {
-          [`.table-frame[data-at="${at}"] > .table-head, .table-frame[data-at="${at}"] .table-row`]: {
+          [`.tbl-frame[data-at="${at}"] > .tbl-head, .tbl-frame[data-at="${at}"] .tbl-row`]: {
             display: "grid",
             gridTemplateColumns: "var(--table-cols)",
             alignItems: "center",
           },
-          [`.table-frame[data-at="${at}"] .table-cell`]: { display: "block" },
-          [`.table-frame[data-at="${at}"] .table-cell-label`]: { display: "none" },
-          [`.table-frame[data-at="${at}"] [data-kind="figure"]`]: { textAlign: "right", fontVariantNumeric: "tabular-nums" },
-          [`.table-frame[data-at="${at}"] [data-kind="action"]`]: { display: "flex", justifyContent: "flex-end" },
+          [`.tbl-frame[data-at="${at}"] .tbl-cell`]: { display: "block" },
+          [`.tbl-frame[data-at="${at}"] .tbl-cell-label`]: { display: "none" },
+          [`.tbl-frame[data-at="${at}"] [data-kind="figure"]`]: { textAlign: "right", fontVariantNumeric: "tabular-nums" },
+          [`.tbl-frame[data-at="${at}"] [data-kind="action"]`]: { display: "flex", justifyContent: "flex-end" },
         },
       });
       addComponents({
-        ".table-frame": { containerType: "inline-size", containerName: "table" },
-        ".table-head": { display: "none" },
-        ".table-row": { display: "flex", flexDirection: "column", rowGap: theme("spacing.1.5") },
-        ".table-cell": { display: "grid", gridTemplateColumns: `${tableTracks.cardLabel} minmax(0, 1fr)`, columnGap: theme("spacing.3"), alignItems: "baseline" },
-        ".table-cell[data-primary], .table-cell[data-kind='action']": { display: "block" },
+        ".tbl-frame": { containerType: "inline-size", containerName: "table" },
+        ".tbl-head": { display: "none" },
+        ".tbl-row": { display: "flex", flexDirection: "column", rowGap: theme("spacing.1.5") },
+        ".tbl-cell": { display: "grid", gridTemplateColumns: `${tableTracks.cardLabel} minmax(0, 1fr)`, columnGap: theme("spacing.3"), alignItems: "baseline" },
+        ".tbl-cell[data-primary], .tbl-cell[data-kind='action']": { display: "block" },
         ...wide("narrow"),
         ...wide("medium"),
         ...wide("wide"),
