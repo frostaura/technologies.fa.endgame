@@ -13,7 +13,7 @@ const Chevron = ({ back = false }: { back?: boolean }) => (
  * slim over the console's foot on a short window. On the last step Next becomes `end` (Finish, then
  * the next flow), so going on is always one tap.
  */
-export function StepPager({ active, total, furthest, onPrev, onNext, end, text, resumed, variant }: {
+export function StepPager({ active, total, furthest, onPrev, onNext, end, text, resumed, variant, extra }: {
   active: number;
   total: number;
   furthest: number;
@@ -26,6 +26,8 @@ export function StepPager({ active, total, furthest, onPrev, onNext, end, text, 
   /** Set when the flow opened where the learner left it: offers the beginning. */
   resumed?: { step: number; onRestart: () => void };
   variant: "bar" | "inline" | "overlay";
+  /** The stage's own actions (Try it yourself, Show me again), set in the same row just before Next. */
+  extra?: ReactNode;
 }) {
   const bar = variant === "bar";
   const overlay = variant === "overlay";
@@ -62,6 +64,7 @@ export function StepPager({ active, total, furthest, onPrev, onNext, end, text, 
           {!overlay && <span className="sr-only sm:not-sr-only">Previous</span>}
         </button>
         {where}
+        {extra && <span className="flex shrink-0 items-center gap-2">{extra}</span>}
         {active < total ? (
           <button type="button" onClick={onNext} className={overlay ? `${ui.primary} min-w-touch px-0` : `${ui.primary} px-4`} aria-label="Next step">
             {!overlay && <span className="sr-only sm:not-sr-only">Next</span>}

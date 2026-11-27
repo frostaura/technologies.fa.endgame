@@ -295,7 +295,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     <button type="button" onClick={toFinish} className={`${ui.primary} px-4`}>Finish</button>
   );
   const stepText = <Inline text={f.steps[active - 1]?.text ?? ""} self={f.id} />;
-  const pager = (variant: "bar" | "inline" | "overlay") =>
+  const pager = (variant: "bar" | "inline" | "overlay", extra?: ReactNode) =>
     total > 0 ? (
       <StepPager
         variant={variant}
@@ -307,6 +307,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
         end={end}
         text={variant === "inline" ? undefined : stepText}
         resumed={resumeShown && resumedFrom !== null ? { step: resumedFrom, onRestart: () => goTo(1) } : undefined}
+        extra={extra}
       />
     ) : null;
 
@@ -388,7 +389,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
       }
       captured={(n) => (branch && variation ? (n === variation.steps.length ? shotFor(f.id, `v${branch.index + 1}`) : undefined) : shotFor(f.id, n))}
       run={run}
-      nav={mode === "desk" ? pager("inline") : mode === "landscape" ? pager("overlay") : undefined}
+      nav={mode === "desk" ? (extra) => pager("inline", extra) : mode === "landscape" ? (extra) => pager("overlay", extra) : undefined}
       expand={mode === "phone" ? { on: big, toggle: () => setBig((b) => !b) } : undefined}
       interactive={interactive}
       onTry={() => setInteractiveAt(active)}
@@ -413,7 +414,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
         </header>
         <div ref={gridRef} className={`grid min-h-0 flex-1 gap-6 pb-5 ${total > 0 ? "grid-cols-player 2xl:grid-cols-player-xl xl:gap-8" : ""}`}>
           {stage && <div className="flex min-h-0 min-w-0 flex-col" data-print="hide">{stage}</div>}
-          <div ref={colRef} className="min-h-0 overflow-y-auto overscroll-contain pb-6 pr-1" data-testid="side-column">
+          <div ref={colRef} className="relative min-h-0 overflow-y-auto overscroll-contain pb-6 pr-1" data-testid="side-column">
             {noSteps}
             {steps}
             {finish}
@@ -548,7 +549,7 @@ function Finish({ flow: f, entry, next, sectionRef }: { flow: Flow; entry: FlowP
     : [];
   const summary = stats ? `${stats.done} of ${stats.total} on ${t?.title ?? f.level}${stats.complete ? ": path complete" : ""}` : "";
   return (
-    <section ref={sectionRef} tabIndex={-1} aria-labelledby="worked" className="mt-6 rounded-lg bg-night p-6 text-primary-ink focus:outline-none">
+    <section ref={sectionRef} tabIndex={-1} aria-labelledby="worked" className="relative mt-6 rounded-lg bg-night p-6 text-primary-ink focus:outline-none">
       <p className="text-eyebrow font-semibold uppercase text-live">You know it worked when</p>
       <p id="worked" className="mt-3 text-lead-sm">{f.workedWhen ? <Inline text={f.workedWhen} self={f.id} plainIds tone="dark" /> : "The last step above is what you see."}</p>
       <p role="status" className="sr-only">{done ? `Flow done. ${summary}.` : ""}</p>

@@ -65,7 +65,7 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay,
   onReplay: () => void;
   branch?: Branch;
   /** Previous, the step bar and Next: pinned to the stage's bottom edge on a wide screen, over its foot on a short one. */
-  nav?: ReactNode;
+  nav?: (actions: ReactNode) => ReactNode;
   mode: PlayerMode;
   /** On a phone: the console enlarged to the whole screen under the header, or back to sharing it. */
   expand?: { on: boolean; toggle: () => void };
@@ -184,13 +184,6 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay,
         </figure>
       )}
       {(media === "facts" || (media === "demo" && unavailable && !shot)) && <Facts flow={flow} />}
-      {mode === "landscape" && nav && (
-        // A short window: the steps ride over the console's foot, slim, so the console keeps the height.
-        <div className="absolute inset-x-2 bottom-2 z-10 flex items-center gap-2 rounded-md border bg-surface/95 px-2 py-1 shadow-raised backdrop-blur" data-testid="step-overlay" data-print="hide">
-          <div className="min-w-0 flex-1">{nav}</div>
-          <span className="flex shrink-0 gap-1.5">{actions}</span>
-        </div>
-      )}
     </div>
   );
 
@@ -205,17 +198,21 @@ export function Stage({ flow, script, active, run, interactive, onTry, onReplay,
     );
   }
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3" data-testid="stage">
+    <div className={`flex h-full min-h-0 flex-col ${mode === "landscape" ? "gap-1.5" : "gap-3"}`} data-testid="stage">
       {banner}
       {picture}
       {mode === "desk" && (
-        <div className="shrink-0 space-y-3" data-print="hide">
-          <div className="flex min-h-touch flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <p className="min-w-0 flex-1 text-sm text-ink-body" aria-live="polite" data-testid="caption">{words}</p>
-            <span className="flex shrink-0 items-center gap-2">{actions}</span>
-          </div>
-          {nav}
+        // Pinned to the console's foot: the caption when there is one to show here, then one row —
+        // Previous, where you are, the actions and Next.
+        <div className="shrink-0 space-y-2" data-print="hide">
+          {words ? <p className="text-sm text-ink-body" aria-live="polite" data-testid="caption">{words}</p> : <p className="sr-only" aria-live="polite" data-testid="caption" />}
+          {nav?.(actions)}
         </div>
+      )}
+      {mode === "landscape" && nav && (
+        // A short window: one slim bar under the console — the step's words, the controls and the
+        // actions — so the console keeps the rest of the height and nothing is drawn over its foot.
+        <div className="shrink-0 rounded-md border bg-surface px-2 py-1 shadow-card" data-testid="step-overlay" data-print="hide">{nav(actions)}</div>
       )}
       {mode === "landscape" && words && <p className="sr-only" aria-live="polite">{words}</p>}
     </div>

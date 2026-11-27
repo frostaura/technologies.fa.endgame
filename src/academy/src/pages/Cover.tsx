@@ -4,7 +4,8 @@ import { LEVEL_BLURB } from "../lib/labels.ts";
 import { href } from "../lib/router.ts";
 import { PDFS } from "../lib/site.ts";
 import { catalogue, useProgress } from "../lib/progress.ts";
-import { nextUp, trackStats } from "../progress/derive.ts";
+import { nextUp, overallNext, trackStats } from "../progress/derive.ts";
+import { plain, sentence } from "../content/text.ts";
 import { Mark } from "../components/Mark.tsx";
 import { ShareCard } from "../components/ShareCard.tsx";
 import { Eyebrow } from "../components/Shell.tsx";
@@ -51,7 +52,8 @@ export function Cover() {
   return (
     // Three blocks: the introduction, the paths, the figures. On a phone the paths come straight after
     // the introduction, in the first screen; on a wide screen they stand beside it.
-    <section className={`${ui.container} grid gap-10 py-8 sm:py-12 lg:min-h-player lg:grid-cols-12 lg:content-center lg:gap-x-12 lg:gap-y-10 xl:gap-x-20`}>
+    <>
+    <section className={`${ui.container} grid gap-10 py-8 sm:py-12 lg:grid-cols-12 lg:gap-x-12 lg:gap-y-10 xl:gap-x-20`}>
       <div className="min-w-0 animate-rise lg:col-span-7">
         <div className="flex items-center gap-3">
           <Mark className="hidden h-10 w-10 sm:block" />
@@ -67,7 +69,7 @@ export function Cover() {
           <a href={href("/demo")} className={`${ui.outline} px-6 text-base`}>Open the live demo</a>
         </div>
       </div>
-      <div className="min-w-0 space-y-6 lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1 lg:self-center">
+      <div className="min-w-0 space-y-6 lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
         <div>
           <h2 className="font-display text-xl font-semibold text-ink">Four paths, in order</h2>
           <p className="mt-1 text-sm text-ink-muted">Each puts every “learn first” ahead of the flow that needs it.</p>
@@ -79,6 +81,45 @@ export function Cover() {
         <Figures className="max-w-read" />
         <PdfLinks className="mt-8" />
       </div>
+    </section>
+    <StartHere />
+    </>
+  );
+}
+
+/**
+ * Where to begin, under the hero: the first flows of the path to learn next (Foundation for someone
+ * new), so the first screen of a tall window is the academy's content, never an empty band.
+ */
+function StartHere() {
+  const progress = useProgress();
+  const next = overallNext(progress, catalogue, CLIENT_LEVELS);
+  const level = next?.flow.level && CLIENT_LEVELS.includes(next.flow.level) ? next.flow.level : "Foundation";
+  const t = track(level);
+  if (!t) return null;
+  const ids = t.flows;
+  const from = next ? Math.max(0, ids.indexOf(next.flow.id)) : 0;
+  const flows = ids.slice(from, from + 6).flatMap((id) => flow(id) ?? []);
+  return (
+    <section className={`${ui.container} pb-12`} aria-labelledby="start-here">
+      <div className="flex flex-wrap items-baseline justify-between gap-3 border-t pt-8">
+        <h2 id="start-here" className="font-display text-xl font-semibold text-ink">{from ? `Next on ${level}` : `Start here: ${level}`}</h2>
+        <a href={href(`/path/${level}`)} className={`text-sm ${ui.textLink}`}>All {ids.length} flows on {level}</a>
+      </div>
+      <ol className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {flows.map((f, i) => (
+          <li key={f.id} className="min-w-0">
+            <a href={href(`/flow/${f.id}`)} className={ui.cardLink}>
+              <span className="flex items-center gap-3 text-xs text-ink-muted">
+                <span className="font-semibold tabular-nums">{from + i + 1}</span>
+                <span className="font-mono font-semibold text-primary-link">{f.id}</span>
+              </span>
+              <span className="mt-2 font-display text-lg font-semibold text-ink group-hover:text-primary-link">{f.title}</span>
+              {f.whatYouLearn && <span className="mt-1.5 line-clamp-2 text-sm text-ink-muted">{sentence(plain(f.whatYouLearn))}</span>}
+            </a>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

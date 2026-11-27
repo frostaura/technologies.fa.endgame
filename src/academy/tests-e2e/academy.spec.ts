@@ -573,15 +573,15 @@ test("on a phone held upright, the console takes at least 60% of the height, and
   }
 });
 
-test("on a phone on its side, the console fills the height with a slim step bar over its foot", async ({ browser }) => {
+test("on a phone on its side, the console takes the height with one slim step bar under it", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 812, height: 375 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await withDemo(page);
   await page.goto("./#/flow/IDEA-02/step/1");
   const media = await page.getByTestId("stage-media").boundingBox();
   const overlay = await page.getByTestId("step-overlay").boundingBox();
-  expect(media && media.height >= 375 * 0.75).toBe(true);
-  expect(overlay && media && overlay.y + overlay.height <= media.y + media.height && overlay.height <= 64).toBe(true);
+  expect(media && media.height >= 375 * 0.6).toBe(true);
+  expect(overlay && media && overlay.y >= media.y + media.height && overlay.y + overlay.height <= 375 && overlay.height <= 64).toBe(true);
   expect(await fitsWidth(page)).toBe(true);
   await context.close();
 });

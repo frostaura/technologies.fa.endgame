@@ -68,8 +68,9 @@ export function flowPages(pdf: Buffer): Record<string, number> {
   const index = new Map(pages.map((p, i) => [p, i + 1]));
   const out: Record<string, number> = {};
   for (const body of objs.values()) {
-    // Names arrays: (flow-ID-01) [12 0 R /XYZ ...] or (flow-ID-01) 40 0 R, the latter an array object.
-    for (const m of body.matchAll(/\(flow-([A-Z]+-\d+)\)\s*(?:\[\s*(\d+) 0 R|(\d+) 0 R)/g)) {
+    // A /Dests dictionary (/flow-ID-01 [12 0 R /XYZ ...]) or a names array ((flow-ID-01) [12 0 R ...]);
+    // either may point at an array object instead (… 40 0 R).
+    for (const m of body.matchAll(/(?:\/|\()flow-([A-Z]+-\d+)\)?\s*(?:\[\s*(\d+) 0 R|(\d+) 0 R)/g)) {
       let page = m[2] ? Number(m[2]) : undefined;
       if (!page && m[3]) page = Number(/\[\s*(\d+) 0 R/.exec(objs.get(Number(m[3])) ?? "")?.[1] ?? 0);
       const at = page ? index.get(page) : undefined;
@@ -113,8 +114,12 @@ async function main() {
       // The numbers are known only once laid out: render, read where each flow landed, render again with them.
       const first = await render(page, route, title);
       const pages = flowPages(first);
-      await page.addInitScript((p) => ((window as unknown as { __pages?: Record<string, number> }).__pages = p), pages);
-      const pdf = await render(page, route, title);
+      // A fresh page for the second pass: the numbers are in place before the print version first renders.
+      const second = await browser.newPage();
+      second.on("pageerror", (e) => errors.push(e.message));
+      await second.addInitScript((p) => ((window as unknown as { __pages?: Record<string, number> }).__pages = p), pages);
+      const pdf = await render(second, route, title);
+      await second.close();
       writeFileSync(path.join(dir, file), pdf);
       if (errors.length) throw new Error(`${file}: ${errors.join("; ")}`);
       process.stdout.write(`Rendered ${path.join(path.relative(process.cwd(), dir), file)} (${Object.keys(pages).length} flows with page numbers)\n`);

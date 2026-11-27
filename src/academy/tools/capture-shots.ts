@@ -38,6 +38,8 @@ const PRINT_QUALITY = 0.72;
  * paper the step's own words say what the bubble says.
  */
 const DETAIL = { width: 600, height: 380 };
+/** Bumped when the print copies change shape: every one is then captured again. */
+const PRINT_FORMAT = 2;
 const SCALE = 2;
 const WORKERS = Number(process.env.SHOTS_WORKERS ?? 4);
 
@@ -54,6 +56,7 @@ interface Play {
 
 export interface ShotIndex {
   format: 1;
+  printFormat?: number;
   viewport: { width: number; height: number };
   shots: Record<string, string>;
   /** Each picture's print copy: the JPEG beside it, and whether it is a detail around the ring or the whole screen. */
@@ -155,7 +158,8 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
         return r && r.width > 0 ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
       });
       // The detail: the ring's surroundings, the ring a little above the middle, kept inside the screen.
-      const clip = ring
+      // A ring wider than the detail (a whole band, a whole panel) prints as the whole screen instead, never sliced.
+      const clip = ring && ring.width <= DETAIL.width * 0.92 && ring.height <= DETAIL.height * 0.92
         ? {
             x: Math.max(0, Math.min(VIEWPORT.width - DETAIL.width, ring.x + ring.width / 2 - DETAIL.width / 2)),
             y: Math.max(0, Math.min(VIEWPORT.height - DETAIL.height, ring.y + ring.height / 2 - DETAIL.height * 0.42)),
@@ -208,8 +212,8 @@ async function main() {
   const old: ShotIndex | null = existsSync(indexFile) ? (JSON.parse(readFileSync(indexFile, "utf8")) as ShotIndex) : null;
   const sameShape = old?.viewport.width === VIEWPORT.width && old.viewport.height === VIEWPORT.height;
   // Print copies older than the detail crop carry no `print` entry: they are captured again.
-  const samePrint = !!old?.print;
-  const index: ShotIndex = { format: 1, viewport: VIEWPORT, shots: filtered && sameShape ? { ...old.shots } : {}, print: filtered && sameShape ? { ...(old.print ?? {}) } : {}, hashes: sameShape && samePrint && old ? { ...old.hashes } : {} };
+  const samePrint = old?.printFormat === PRINT_FORMAT;
+  const index: ShotIndex = { format: 1, printFormat: PRINT_FORMAT, viewport: VIEWPORT, shots: filtered && sameShape ? { ...old.shots } : {}, print: filtered && sameShape ? { ...(old.print ?? {}) } : {}, hashes: sameShape && samePrint && old ? { ...old.hashes } : {} };
   if (filtered) {
     index.shots = Object.fromEntries(Object.entries(index.shots).filter(([k]) => !list.some((p) => k.startsWith(`${p.flow}/`))));
     index.print = Object.fromEntries(Object.entries(index.print ?? {}).filter(([k]) => !list.some((p) => k.startsWith(`${p.flow}/`))));

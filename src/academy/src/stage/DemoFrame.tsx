@@ -10,6 +10,12 @@ export interface FrameRequest {
 
 export const DEMO_SRC = "./demo/index.html?embed=1";
 
+/** The width the console is drawn at in a wide frame — its desktop layout as on a laptop — and the frame width from which it is. */
+const CONSOLE_WIDTH = 1280;
+const SCALE_FROM = 1100;
+/** Below this height a frame narrower than 1024 px shows the console's phone layout (ARCH-009). */
+const MIN_HEIGHT = 520;
+
 /**
  * The live console in a frame, driven only through the bridge. Requests play strictly in order,
  * so the console never skips a step's state. While the learner watches, a
@@ -33,6 +39,8 @@ export function DemoFrame({
   onSpotlight?: (key: string, found: boolean) => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ width: number; height: number; scale: number }>({ width: 0, height: 0, scale: 1 });
   const bridge = useRef<DemoBridge | null>(null);
   const [state, setState] = useState<BridgeState>("loading");
   // The console's address; a hosted app's pages carry their own address bar inside the frame.
@@ -48,6 +56,21 @@ export function DemoFrame({
     stateRef.current = onState;
     spotRef.current = onSpotlight;
   }, [onState, onSpotlight]);
+
+  // The frame's box, measured: the console's own width and the scale it is drawn at.
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      const { width, height } = el.getBoundingClientRect();
+      // Wide: drawn at the laptop width and scaled up. Short (a wide frame under the console's phone
+      // height): drawn at its least tablet height and scaled down a little, never in its phone layout.
+      const scale = width >= SCALE_FROM ? width / CONSOLE_WIDTH : width >= 640 && height >= 400 && height < MIN_HEIGHT ? height / MIN_HEIGHT : 1;
+      setFit({ width: Math.round(width / scale), height: Math.round(height / scale), scale });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const b = new DemoBridge(() => frame.current?.contentWindow ?? null, {
@@ -89,24 +112,30 @@ export function DemoFrame({
 
   return (
     <FrameChrome address={`endgame${route && !route.startsWith("/__app/") ? route : ""}`} status={interactive ? "Yours to try" : "Live"} busy={state === "ready" && busy} on={state === "ready"}>
-      <iframe
-        ref={frame}
-        src={DEMO_SRC}
-        aria-label={name}
-        className={`h-full w-full flex-1 bg-surface ${state === "unavailable" ? "invisible" : ""}`}
-        onError={() => bridge.current?.fail("The live console could not be loaded.")}
-        data-testid="demo-frame"
-      />
-      {/* While a lesson plays, a clear shield keeps a stray click from derailing it; it draws nothing over the console. */}
-      {state === "ready" && !interactive && (
-        <button type="button" onClick={onTry} className="absolute inset-x-0 bottom-0 top-chrome cursor-pointer bg-transparent focus-visible:ring-inset" aria-label="Try it yourself: hand the live console to me" />
-      )}
-      {state === "loading" && (
-        <div className="absolute inset-x-0 bottom-0 top-chrome flex items-center justify-center bg-ground/90" role="status">
-          <span className="h-24 w-64 animate-shimmer rounded-md bg-shimmer bg-shimmer" />
-          <span className="sr-only">Opening the live console</span>
-        </div>
-      )}
+      {/* The console at a width it was designed for: past 1100 px of frame it is drawn 1280 px wide and
+          scaled up to fit, so a wide screen shows it large, never squeezed at a breakpoint. */}
+      <div ref={box} className="relative min-h-0 flex-1 overflow-hidden" data-testid="frame-box">
+        <iframe
+          ref={frame}
+          src={DEMO_SRC}
+          aria-label={name}
+          className={`absolute left-0 top-0 origin-top-left bg-surface ${state === "unavailable" ? "invisible" : ""}`}
+          style={fit.scale === 1 ? { width: "100%", height: "100%" } : { width: `${fit.width}px`, height: `${fit.height}px`, transform: `scale(${fit.scale})` }}
+          onError={() => bridge.current?.fail("The live console could not be loaded.")}
+          data-testid="demo-frame"
+          data-console-width={fit.width || undefined}
+        />
+        {/* While a lesson plays, a clear shield keeps a stray click from derailing it; it draws nothing over the console. */}
+        {state === "ready" && !interactive && (
+          <button type="button" onClick={onTry} className="absolute inset-0 cursor-pointer bg-transparent focus-visible:ring-inset" aria-label="Try it yourself: hand the live console to me" />
+        )}
+        {state === "loading" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-ground/90" role="status">
+            <span className="h-24 w-64 animate-shimmer rounded-md bg-shimmer bg-shimmer" />
+            <span className="sr-only">Opening the live console</span>
+          </div>
+        )}
+      </div>
     </FrameChrome>
   );
 }
