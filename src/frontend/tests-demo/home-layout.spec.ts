@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
  * The home page and Manage at desktop and tablet sizes, in the built demo: what the visual reviews
  * found broken stays fixed. The org chart is a masonry (no column ends with a hole under a short
  * division, every column's first division starts on one line), its wires end at their last project,
- * the shortcut row is one line that never wraps, the graphs never widen the page, and Manage is two
+ * the shortcut row is one line that never wraps, the graph views stay inside their card, and Manage is two
  * panes from 1024 up.
  */
 
@@ -15,6 +15,38 @@ async function open(page: Page, scenario: string, route?: string, persona = "own
   await page.waitForFunction(() => !!(window as unknown as { endgameDemo?: unknown }).endgameDemo);
   if (route) await page.evaluate((r) => (window as unknown as { endgameDemo: { goto: (a: { route: string }) => Promise<void> } }).endgameDemo.goto({ route: r }), route);
   await page.evaluate(() => (window as unknown as { endgameDemo: { settled: (ms: number) => Promise<void> } }).endgameDemo.settled(6000));
+}
+
+/**
+ * What the visual reviews found broken in the graph views stays fixed: nothing in the panel reaches
+ * past its card, no word is cut short (an element whose text overflows it) or set under 14 px, and
+ * the key shows exactly the marks drawn below it.
+ */
+async function graphHolds(page: Page, tab: string) {
+  const r = await page.evaluate(() => {
+    const panel = document.querySelector("#chart-panel") as HTMLElement;
+    const edge = panel.getBoundingClientRect();
+    const out: string[] = [];
+    const cut: string[] = [];
+    const small: string[] = [];
+    for (const el of panel.querySelectorAll<HTMLElement>("*")) {
+      const b = el.getBoundingClientRect();
+      if (b.width === 0 || el.closest(".sr-only")) continue;
+      const text = (el.textContent ?? "").slice(0, 30);
+      if (b.right > edge.right + 1 || b.left < edge.left - 1) out.push(`${el.tagName}: ${text}`);
+      if (el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "visible") cut.push(text);
+      const own = [...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? "").trim());
+      if (own && parseFloat(getComputedStyle(el).fontSize) < 14) small.push(`${text} (${getComputedStyle(el).fontSize})`);
+    }
+    const key = panel.querySelector("ul[aria-label='Key']");
+    const marks = (els: Element[]) => [...new Set(els.map((m) => m.getAttribute("data-mark")))].sort();
+    const all = [...panel.querySelectorAll("[data-mark]")];
+    return { out, cut, small, key: marks(all.filter((m) => key?.contains(m))), body: marks(all.filter((m) => !key?.contains(m))) };
+  });
+  expect(r.out, `${tab}: past its card`).toEqual([]);
+  expect(r.cut, `${tab}: cut short`).toEqual([]);
+  expect(r.small, `${tab}: text under 14 px`).toEqual([]);
+  expect(r.key, `${tab}: the key does not match the marks drawn`).toEqual(r.body);
 }
 
 async function noSideways(page: Page) {
@@ -76,17 +108,22 @@ for (const [width, height] of [
       } else await expect(more).toHaveCount(0);
     });
 
-    test("neither graph widens the page, and the drawing fits its frame", async ({ page }) => {
-      await open(page, "default", "/");
-      for (const tab of ["Who works on what", "How data flows"]) {
-        await page.getByRole("tab", { name: tab }).click();
-        const frame = page.getByRole("region", { name: /, drawn$/ });
-        await expect(frame).toBeVisible();
-        await noSideways(page);
-        const fit = await frame.evaluate((el) => ({ frame: el.getBoundingClientRect().width, svg: el.querySelector("svg")?.getBoundingClientRect().width ?? 0 }));
-        // From 1920 up the drawing fits its frame whole, scaled rather than scrolled.
-        if (width >= 1920) expect(fit.svg).toBeLessThanOrEqual(fit.frame);
-        expect(fit.svg, "the drawing leaves its frame half empty").toBeGreaterThanOrEqual(Math.min(fit.frame * 0.9, 1100));
+    test("neither graph view leaves its card, cuts a word while there is room, or sets text under 14 px", async ({ page }) => {
+      for (const scenario of ["default", "messy-tree"]) {
+        await open(page, scenario, "/");
+        for (const tab of ["Who works on what", "How data flows"]) {
+          await page.getByRole("tab", { name: tab }).click();
+          await expect(page.getByRole("list", { name: "Key" })).toBeVisible();
+          await noSideways(page);
+          await graphHolds(page, tab);
+        }
+        // With the room, the data flow is a matrix of apps by services that fills the card's width.
+        const table = page.getByRole("table", { name: "How data flows" });
+        if (width >= 1920) await expect(table).toBeVisible();
+        if (await table.isVisible()) {
+          const fit = await page.evaluate(() => ({ panel: document.querySelector("#chart-panel")?.getBoundingClientRect().width ?? 0, table: document.querySelector("table[aria-label='How data flows']")?.getBoundingClientRect().width ?? 0 }));
+          expect(fit.table, "the matrix leaves its card half empty").toBeGreaterThanOrEqual(fit.panel - 4);
+        }
       }
     });
 
@@ -121,13 +158,37 @@ test.describe("home on a phone", () => {
     await expect(page.getByRole("button", { name: /^Pages for Technologies/ })).toBeVisible();
   });
 
-  test("the graphs' lists mark each line as the key does, with thumb-sized links", async ({ page }) => {
-    await open(page, "default", "/");
-    await page.getByRole("tab", { name: "Who works on what" }).click();
-    const list = page.getByRole("group", { name: "Who works on what" });
-    await expect(list).toBeVisible();
-    const rows = list.locator("li:has(> svg)");
-    expect(await rows.count()).toBeGreaterThan(0);
-    for (const row of (await rows.all()).slice(0, 6)) expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  test("the graph views are cards, whole on the screen, marked as the key marks them, with thumb-sized links", async ({ page }) => {
+    for (const scenario of ["default", "messy-tree"]) {
+      await open(page, scenario, "/");
+      for (const tab of ["Who works on what", "How data flows"]) {
+        await page.getByRole("tab", { name: tab }).click();
+        const list = page.getByRole("list", { name: tab });
+        await expect(list).toBeVisible();
+        await noSideways(page);
+        await graphHolds(page, tab);
+        for (const link of (await list.getByRole("link").all()).slice(0, 12)) expect((await link.boundingBox())?.height ?? 0, "a link under 44 px").toBeGreaterThanOrEqual(44);
+      }
+    }
   });
 });
+
+for (const [width, height] of [
+  [768, 1024],
+  [812, 375],
+] as const) {
+  test.describe(`the graph views at ${width}×${height}, by touch`, () => {
+    test.use({ viewport: { width, height }, hasTouch: true });
+
+    test("stay inside their card, whole, with thumb-sized links", async ({ page }) => {
+      await open(page, "messy-tree", "/");
+      for (const tab of ["Who works on what", "How data flows"]) {
+        await page.getByRole("tab", { name: new RegExp(`^(${tab}|Who works|Data flow)$`) }).first().click();
+        await expect(page.getByRole("list", { name: "Key" })).toBeVisible();
+        await noSideways(page);
+        await graphHolds(page, tab);
+        for (const link of (await page.locator("#chart-panel a").all()).slice(0, 12)) expect((await link.boundingBox())?.height ?? 0, "a link under 44 px").toBeGreaterThanOrEqual(44);
+      }
+    });
+  });
+}

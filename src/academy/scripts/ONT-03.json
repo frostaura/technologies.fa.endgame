@@ -16,24 +16,39 @@
         }
       ],
       "highlight": {
-        "text": "Key",
-        "note": "The key: Relies on, and Sends data to."
+        "selector": "ul[aria-label='Key']",
+        "note": "The key: an arrow out for what an app sends a service, an arrow in for what it receives."
       }
     },
     {
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "selector": "#chart-panel",
-        "note": "Apps, the platform services they have actually used, and what each declares coming in or going out, named by what they do."
+        "selector": "table[aria-label='How data flows'] thead",
+        "note": "A column for each platform service an app has used, named by what it does, with how many apps use it."
       }
     },
     {
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "selector": "#chart-panel",
-        "note": "What travels moves along its line; point at one to name it: outbound mail, prompts, signed-in people."
+        "selector": "table[aria-label='How data flows'] tbody tr",
+        "note": "A row for each app. Each cell says which way data travels and what it is: prompts, signed-in people, stored records."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "act": [
+        {
+          "hover": {
+            "selector": "td[data-cell='0-0']"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "td[data-cell='0-0']",
+        "note": "Point at a cell, or reach it with the arrow keys, to light its row and column; its tooltip says it as a sentence."
       }
     }
   ]

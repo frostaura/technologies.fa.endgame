@@ -22,7 +22,7 @@
       ],
       "highlight": {
         "selector": "main h1",
-        "note": "An employee or contractor in a graph opens their page."
+        "note": "An employee or contractor in either view opens their page."
       }
     },
     {
@@ -37,13 +37,13 @@
         },
         {
           "click": {
-            "selector": "ul[aria-label='How data flows'] a[href*='apps']"
+            "selector": "#chart-panel [aria-label='How data flows'] a[href*='apps']"
           }
         }
       ],
       "highlight": {
         "selector": "main h1",
-        "note": "An app opens the app's page. Nothing else in the graph is a link."
+        "note": "An app opens the app's page. Nothing else is a link."
       }
     }
   ]

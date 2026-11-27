@@ -4,166 +4,19 @@ import { capitalise } from "@/lib/format";
 import { serviceLabel } from "../workforce/workforceModel";
 
 /**
- * The organisation graph laid out to be read: a layered diagram, left to right. Things flow
- * rightwards — the organisation holds its divisions, an app relies on a service, data travels
- * from a webhook into an app — and the people sit one column beyond what they work on. Cycles
- * (an app that relies on sign-in, which then sends it its users) are broken by keeping the first
- * direction met, so the layout always ends.
+ * The organisation graph read two ways, each shaped for the question it answers rather than drawn
+ * as nodes and lines (three blind reviews found the node-link drawing a tangle at real sizes):
+ *
+ * - **Who works on what** (`teamsOf`): the people, grouped by the division they work in, each team
+ *   a reporting tree (a report sits under the person they report to), and beside each person what
+ *   they work on — and what they are on now.
+ * - **How data flows** (`flowOf`): a matrix, apps by the platform services they have used, each
+ *   cell saying which way data travels between the two and what it is.
  */
 
-export const NODE = { width: 216, height: 60 } as const;
-const GAP = { column: 112, row: 20, margin: 24 } as const;
-/** How far a graph given room may spread: its nodes widen to this, its columns part to this. */
-const ROOM = { node: 264, column: 280 } as const;
-
-/** Edge types whose target sits to the right of their source. */
-const FORWARD = new Set(["owns", "depends-on", "data-flows-to"]);
-/** Edge types whose source (a worker) sits to the right of their target. */
-const BACKWARD = new Set(["works-on", "reports-to"]);
-
-export interface PlacedNode {
-  node: OntologyNode;
-  rank: number;
-  order: number;
-  x: number;
-  y: number;
-}
-
-export interface PlacedEdge {
-  edge: OntologyEdge;
-  d: string;
-  /** Where its label sits. */
-  mid: { x: number; y: number };
-}
-
-export interface Layout {
-  /** How wide each node is drawn: wider when the graph has room. */
-  nodeWidth: number;
-  nodes: PlacedNode[];
-  edges: PlacedEdge[];
-  width: number;
-  height: number;
-}
-
-/**
- * `room`: the width the drawing has. Given room, the graph spreads to fill it — nodes wider (so fewer
- * names are cut), columns further apart — up to a limit; without it, or with less room than it needs,
- * it is drawn at its narrowest and the frame scales or scrolls it.
- */
-export function layoutGraph(nodes: OntologyNode[], edges: OntologyEdge[], room?: number): Layout {
-  const ids = new Set(nodes.map((n) => n.id));
-  const live = edges.filter((e) => ids.has(e.from) && ids.has(e.to) && e.from !== e.to);
-  const out = new Map<string, string[]>();
-  for (const n of nodes) out.set(n.id, []);
-  for (const e of live) {
-    if (FORWARD.has(e.type)) out.get(e.from)?.push(e.to);
-    else if (BACKWARD.has(e.type)) out.get(e.to)?.push(e.from);
-  }
-
-  // Depth-first, dropping back edges, gives a topological order.
-  const state = new Map<string, 0 | 1 | 2>();
-  const order: string[] = [];
-  const dag = new Map<string, string[]>();
-  const visit = (id: string) => {
-    state.set(id, 1);
-    const kept: string[] = [];
-    for (const next of out.get(id) ?? []) {
-      const s = state.get(next) ?? 0;
-      if (s === 1) continue; // back edge: a cycle, ignored for layout
-      kept.push(next);
-      if (s === 0) visit(next);
-    }
-    dag.set(id, kept);
-    state.set(id, 2);
-    order.push(id);
-  };
-  for (const n of nodes) if (!state.get(n.id)) visit(n.id);
-  order.reverse();
-
-  // Longest path from the sources.
-  const rank = new Map<string, number>(nodes.map((n) => [n.id, 0]));
-  for (const id of order) for (const next of dag.get(id) ?? []) rank.set(next, Math.max(rank.get(next) ?? 0, (rank.get(id) ?? 0) + 1));
-
-  // Columns, ordered to keep linked nodes level with each other.
-  const columns = new Map<number, string[]>();
-  for (const n of nodes) {
-    const r = rank.get(n.id) ?? 0;
-    columns.set(r, [...(columns.get(r) ?? []), n.id]);
-  }
-  const position = new Map<string, number>();
-  const ranks = [...columns.keys()].sort((a, b) => a - b);
-  for (const r of ranks) (columns.get(r) ?? []).forEach((id, i) => position.set(id, i));
-  const neighbours = new Map<string, string[]>();
-  for (const e of live) {
-    neighbours.set(e.from, [...(neighbours.get(e.from) ?? []), e.to]);
-    neighbours.set(e.to, [...(neighbours.get(e.to) ?? []), e.from]);
-  }
-  for (let pass = 0; pass < 2; pass += 1) {
-    for (const r of ranks) {
-      const col = columns.get(r) ?? [];
-      const score = (id: string) => {
-        const ns = (neighbours.get(id) ?? []).filter((x) => (rank.get(x) ?? 0) !== r).map((x) => position.get(x) ?? 0);
-        return ns.length === 0 ? (position.get(id) ?? 0) : ns.reduce((a, b) => a + b, 0) / ns.length;
-      };
-      const sorted = [...col].sort((a, b) => score(a) - score(b) || (position.get(a) ?? 0) - (position.get(b) ?? 0));
-      sorted.forEach((id, i) => position.set(id, i));
-      columns.set(r, sorted);
-    }
-  }
-
-  const count = Math.max(1, ranks.length);
-  const narrowest = GAP.margin * 2 + count * NODE.width + (count - 1) * GAP.column;
-  const spare = room ? Math.max(0, room - narrowest) : 0;
-  // Spare room goes first to the nodes (their names), then to the space between columns.
-  const nodeWidth = Math.min(ROOM.node, NODE.width + Math.floor(spare / count));
-  const left = spare - (nodeWidth - NODE.width) * count;
-  const column = count > 1 ? Math.min(ROOM.column, GAP.column + Math.floor(Math.max(0, left) / (count - 1))) : GAP.column;
-
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const placed: PlacedNode[] = [];
-  const at = new Map<string, PlacedNode>();
-  let height = 0;
-  ranks.forEach((r, c) => {
-    (columns.get(r) ?? []).forEach((id, i) => {
-      const node = byId.get(id);
-      if (!node) return;
-      const p = { node, rank: c, order: i, x: GAP.margin + c * (nodeWidth + column), y: GAP.margin + i * (NODE.height + GAP.row) };
-      placed.push(p);
-      at.set(id, p);
-      height = Math.max(height, p.y + NODE.height + GAP.margin);
-    });
-  });
-  const width = GAP.margin * 2 + ranks.length * nodeWidth + Math.max(0, ranks.length - 1) * column;
-
-  // Lines between the same two nodes (either way) are drawn side by side, never one on top of the other.
-  const pairKey = (e: OntologyEdge) => [e.from, e.to].sort().join("\u0000");
-  const pairs = new Map<string, number>();
-  for (const e of live) pairs.set(pairKey(e), (pairs.get(pairKey(e)) ?? 0) + 1);
-  const seen = new Map<string, number>();
-  const placedEdges = live.flatMap((edge): PlacedEdge[] => {
-    const a = at.get(edge.from);
-    const b = at.get(edge.to);
-    if (!a || !b) return [];
-    const key = pairKey(edge);
-    const k = seen.get(key) ?? 0;
-    seen.set(key, k + 1);
-    const shift = (k - ((pairs.get(key) ?? 1) - 1) / 2) * 10;
-    const ay = a.y + NODE.height / 2 + shift;
-    const by = b.y + NODE.height / 2 + shift;
-    if (a.x === b.x) {
-      const x = a.x + nodeWidth;
-      const bend = x + 48;
-      return [{ edge, d: `M ${x} ${ay} C ${bend} ${ay}, ${bend} ${by}, ${x} ${by}`, mid: { x: bend - 12, y: (ay + by) / 2 } }];
-    }
-    const rightward = a.x < b.x;
-    const x1 = rightward ? a.x + nodeWidth : a.x;
-    const x2 = rightward ? b.x : b.x + nodeWidth;
-    const dx = (x2 - x1) / 2;
-    return [{ edge, d: `M ${x1} ${ay} C ${x1 + dx} ${ay}, ${x2 - dx} ${by}, ${x2} ${by}`, mid: { x: (x1 + x2) / 2, y: (ay + by) / 2 } }];
-  });
-
-  return { nodeWidth, nodes: placed, edges: placedEdges, width: Math.max(width, nodeWidth + GAP.margin * 2), height: Math.max(height, NODE.height + GAP.margin * 2) };
-}
+// ---------------------------------------------------------------------------------------------
+// Words
+// ---------------------------------------------------------------------------------------------
 
 const TYPES: Record<string, string> = {
   organisation: "Organisation",
@@ -180,12 +33,19 @@ const TYPES: Record<string, string> = {
 };
 
 export function nodeType(node: OntologyNode): string {
-  return TYPES[node.type] ?? node.type;
+  return TYPES[node.type] ?? capitalise(node.type);
 }
+
+/** Services the shared label list does not name, said plainly and title-cased (never "data"). */
+const SERVICE_NAMES: Record<string, string> = { data: "Stored data" };
 
 /** A node's name as normal mode says it: a service by what it does, never by its internal name. */
 export function nodeName(node: OntologyNode, mode: Mode): string {
-  if (node.type === "service") return serviceLabel(node.name, mode);
+  if (node.type === "service") {
+    const own = SERVICE_NAMES[node.name];
+    if (own) return mode === "technical" ? `${own} (${node.name})` : own;
+    return capitalise(serviceLabel(node.name, mode));
+  }
   const role = node.attributes && typeof node.attributes.role === "string" ? node.attributes.role : null;
   // A contractor is named after its step by the runner; it reads as its role (D51).
   if (node.type === "contractor" || /\(contractor\)\s*$/i.test(node.name)) return `${role ? capitalise(role) : "Contractor"} · contractor`;
@@ -214,4 +74,263 @@ export function edgeLabel(edge: OntologyEdge): string | null {
 /** The id an ontology node carries for the record it stands for: `employee:<id>` → `<id>`. */
 export function recordId(node: OntologyNode): string {
   return node.id.slice(node.id.indexOf(":") + 1);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Who works on what
+// ---------------------------------------------------------------------------------------------
+
+const WORKERS = new Set(["employee", "contractor", "person"]);
+
+export interface Worker {
+  node: OntologyNode;
+  /** Their role, as the record says it. */
+  role: string | null;
+  working: boolean;
+  /** Where they work: the places their record is set at. */
+  places: OntologyNode[];
+  /** What they are on right now, when it is somewhere other than where they work ("Build: Pager"). */
+  now: { node: OntologyNode; title: string }[];
+  /** How they hang under the person above them: "reports to", or "briefed by" (a contractor). */
+  under: { name: string; how: string } | null;
+  reports: Worker[];
+  /** Contractors alike in every way (the same role, work and briefing) are one row: how many it stands for. */
+  count: number;
+}
+
+export interface Team {
+  /** The division they work in; the organisation itself for those who work across it; null for members. */
+  place: OntologyNode | null;
+  /** "Division", "Across the organisation", "Members". */
+  kind: string;
+  title: string;
+  /** The tree's top: people who report to nobody here. */
+  heads: Worker[];
+  size: number;
+}
+
+/**
+ * The people in the graph, grouped into teams by the division their work sits in, each team a tree
+ * by reporting line. Order follows the graph: the organisation's own people first, then each
+ * division in the order the organisation holds them, then members who sign in.
+ */
+export function teamsOf(nodes: OntologyNode[], edges: OntologyEdge[]): Team[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const parent = new Map<string, string>();
+  for (const e of edges) if (e.type === "owns" && byId.has(e.from) && byId.has(e.to) && !parent.has(e.to)) parent.set(e.to, e.from);
+  const divisionOf = (id: string): OntologyNode | null => {
+    const seen = new Set<string>();
+    let at: string | undefined = id;
+    while (at && !seen.has(at)) {
+      seen.add(at);
+      const n = byId.get(at);
+      if (n?.type === "division") return n;
+      at = parent.get(at);
+    }
+    return null;
+  };
+
+  const workers = new Map<string, Worker>();
+  const manager = new Map<string, { id: string; how: string }>();
+  for (const n of nodes) {
+    if (!WORKERS.has(n.type)) continue;
+    const mine = edges.filter((e) => e.from === n.id);
+    const works = mine.filter((e) => e.type === "works-on" && byId.has(e.to));
+    const ups = mine.filter((e) => e.type === "reports-to" && byId.has(e.to) && e.to !== n.id);
+    if (works.length === 0 && ups.length === 0 && !edges.some((e) => e.type === "reports-to" && e.to === n.id)) continue;
+    const role = typeof n.attributes?.role === "string" ? n.attributes.role : (works.find((e) => e.label && !e.label.startsWith("now:"))?.label ?? null);
+    const places: OntologyNode[] = [];
+    const now: Worker["now"] = [];
+    for (const e of works) {
+      const to = byId.get(e.to);
+      if (!to) continue;
+      if (e.label?.startsWith("now:")) now.push({ node: to, title: e.label.replace(/^now:\s*/, "") });
+      else if (!places.includes(to)) places.push(to);
+    }
+    const up = ups.find((e) => !e.label) ?? ups[0];
+    if (up) manager.set(n.id, { id: up.to, how: up.label ?? "reports to" });
+    workers.set(n.id, { node: n, role, working: n.status === "working", places, now, under: null, reports: [], count: 1 });
+  }
+
+  // Each person hangs under their manager unless that would close a loop; then they head a tree of their own.
+  const above = new Map<string, string>();
+  const reaches = (from: string, target: string) => {
+    for (let at: string | undefined = from; at; at = above.get(at)) if (at === target) return true;
+    return false;
+  };
+  for (const id of workers.keys()) {
+    const m = manager.get(id);
+    if (m && workers.has(m.id) && !reaches(m.id, id)) above.set(id, m.id);
+  }
+  const roots: Worker[] = [];
+  for (const [id, w] of workers) {
+    const boss = workers.get(above.get(id) ?? "");
+    if (boss) {
+      boss.reports.push(w);
+      w.under = { name: plainName(boss.node), how: manager.get(id)?.how ?? "reports to" };
+    } else roots.push(w);
+  }
+
+  // Identical contractors side by side read as one row with a count, not the same line three times.
+  const merge = (list: Worker[]): Worker[] => {
+    const out: Worker[] = [];
+    for (const w of list) {
+      w.reports = merge(w.reports);
+      const key = (x: Worker) => `${x.node.type}|${plainName(x.node)}|${x.places.map((p) => p.id).join(",")}|${x.under?.how ?? ""}|${x.reports.length}`;
+      const twin = w.node.type === "contractor" && w.reports.length === 0 ? out.find((o) => o.node.type === "contractor" && key(o) === key(w)) : undefined;
+      if (!twin) {
+        out.push(w);
+        continue;
+      }
+      twin.count += w.count;
+      twin.working ||= w.working;
+      for (const n of w.now) if (!twin.now.some((t) => t.title === n.title && t.node.id === n.node.id)) twin.now.push(n);
+    }
+    return out;
+  };
+  roots.splice(0, roots.length, ...merge(roots));
+
+  const organisation = nodes.find((n) => n.type === "organisation") ?? null;
+  const divisions = nodes.filter((n) => n.type === "division");
+  const teams = new Map<string, Team>();
+  const team = (key: string, make: () => Team) => {
+    const t = teams.get(key) ?? make();
+    teams.set(key, t);
+    return t;
+  };
+  for (const r of roots) {
+    const where = r.places[0] ?? r.now[0]?.node ?? null;
+    if (r.node.type === "person") team("members", () => ({ place: null, kind: "Members", title: "People who sign in", heads: [], size: 0 })).heads.push(r);
+    else {
+      const d = where ? divisionOf(where.id) : null;
+      if (d) team(d.id, () => ({ place: d, kind: "Division", title: d.name, heads: [], size: 0 })).heads.push(r);
+      else team("organisation", () => ({ place: organisation, kind: "Across the organisation", title: organisation?.name ?? "The organisation", heads: [], size: 0 })).heads.push(r);
+    }
+  }
+  const count = (w: Worker): number => w.count + w.reports.reduce((a, x) => a + count(x), 0);
+  const order = ["organisation", ...divisions.map((d) => d.id), "members"];
+  return [...teams.entries()]
+    .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
+    .map(([, t]) => ({ ...t, size: t.heads.reduce((a, w) => a + count(w), 0) }));
+}
+
+/** A person's own name, without their role: "Odile", not "Odile · Division lead"; a contractor by its role ("Research contractor"). */
+export function plainName(node: OntologyNode): string {
+  if (node.type === "contractor" || /\(contractor\)\s*$/i.test(node.name)) {
+    const role = typeof node.attributes?.role === "string" ? node.attributes.role : null;
+    return role ? capitalise(role) : "Contractor";
+  }
+  return node.name;
+}
+
+// ---------------------------------------------------------------------------------------------
+// How data flows
+// ---------------------------------------------------------------------------------------------
+
+export interface FlowCell {
+  relies: boolean;
+  /** What the app sends to this service ("prompts"). */
+  sends: string[];
+  /** What this service, or a source behind it, sends the app ("signed-in people", "inbound calls from Stripe"). */
+  receives: string[];
+}
+
+export interface FlowColumn {
+  /** The column's key: a service's node id, or the kind of source it stands for. */
+  id: string;
+  name: string;
+  /** How many apps use it. */
+  uses: number;
+}
+
+export interface FlowRow {
+  app: OntologyNode;
+  cells: Record<string, FlowCell>;
+}
+
+export interface Flow {
+  columns: FlowColumn[];
+  rows: FlowRow[];
+}
+
+/** Columns in the order a person thinks of an app: who signs in, what it keeps, what it calls, what it reports, what wakes it. */
+const SERVICE_ORDER = ["identity", "data", "models", "email", "secrets", "telemetry", "schedules", "webhooks"];
+/** A declared source of data folds into the service that carries it. */
+const SOURCE_SERVICE: Record<string, string> = { webhook: "webhooks", schedule: "schedules" };
+
+/**
+ * Apps × the services they use. Every relation between an app and a service lands in one cell:
+ * whether it relies on it, what it sends there, and what comes back. A webhook or a schedule an app
+ * declares is read as data arriving through its service ("inbound calls (Payments)").
+ */
+export function flowOf(nodes: OntologyNode[], edges: OntologyEdge[], mode: Mode): Flow {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const columnOf = (n: OntologyNode): { id: string; name: string } | null => {
+    if (n.type === "app") return null;
+    if (n.type === "service") return { id: n.id, name: nodeName(n, mode) };
+    const via = SOURCE_SERVICE[n.type];
+    if (via) {
+      const id = `service:${via}`;
+      const svc = byId.get(id);
+      return { id, name: svc ? nodeName(svc, mode) : nodeName({ ...n, type: "service", name: via }, mode) };
+    }
+    return { id: n.id, name: nodeName(n, mode) };
+  };
+  const rows = new Map<string, FlowRow>();
+  const columns = new Map<string, { id: string; name: string; apps: Set<string> }>();
+  const cell = (app: OntologyNode, col: { id: string; name: string }): FlowCell => {
+    const row = rows.get(app.id) ?? { app, cells: {} };
+    rows.set(app.id, row);
+    const c = columns.get(col.id) ?? { ...col, apps: new Set<string>() };
+    c.apps.add(app.id);
+    columns.set(col.id, c);
+    const found = row.cells[col.id] ?? { relies: false, sends: [], receives: [] };
+    row.cells[col.id] = found;
+    return found;
+  };
+  const add = (list: string[], what: string) => {
+    if (!list.includes(what)) list.push(what);
+  };
+  for (const e of edges) {
+    const from = byId.get(e.from);
+    const to = byId.get(e.to);
+    if (!from || !to) continue;
+    if (e.type === "depends-on" && from.type === "app") {
+      const col = columnOf(to);
+      if (col) cell(from, col).relies = true;
+    } else if (e.type === "data-flows-to") {
+      if (from.type === "app") {
+        const col = columnOf(to);
+        if (col) add(cell(from, col).sends, e.label ?? "data");
+      } else if (to.type === "app") {
+        const col = columnOf(from);
+        if (!col) continue;
+        const what = from.type === "service" ? (e.label ?? "data") : `${e.label ?? "data"} (${from.name})`;
+        add(cell(to, col).receives, what);
+      }
+    }
+  }
+  const rank = (id: string) => {
+    const i = SERVICE_ORDER.indexOf(id.replace(/^service:/, ""));
+    return i < 0 ? SERVICE_ORDER.length : i;
+  };
+  return {
+    columns: [...columns.values()].sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name)).map((c) => ({ id: c.id, name: c.name, uses: c.apps.size })),
+    // Apps in the order the organisation holds them.
+    rows: nodes.filter((n) => rows.has(n.id)).map((n) => rows.get(n.id) as FlowRow),
+  };
+}
+
+/** One cell said as a sentence: "Court booking relies on Sign-in, and receives signed-in people from it." */
+export function cellSentence(app: string, service: string, c: FlowCell): string {
+  const it = c.relies ? "it" : service;
+  const parts: string[] = [];
+  if (c.sends.length) parts.push(`sends ${it} ${list(c.sends)}`);
+  if (c.receives.length) parts.push(`receives ${list(c.receives)} from ${it}`);
+  if (!c.relies) return `${app} ${parts.join(" and ")}.`;
+  return parts.length ? `${app} relies on ${service}, and ${parts.join(" and ")}.` : `${app} relies on ${service}.`;
+}
+
+function list(items: string[]): string {
+  return items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }

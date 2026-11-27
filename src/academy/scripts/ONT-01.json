@@ -24,8 +24,8 @@
         }
       ],
       "highlight": {
-        "text": "Key",
-        "note": "Who works on what: who is responsible for what, and who reports to whom."
+        "selector": "ul[aria-label='Key']",
+        "note": "Who works on what: the people, team by team — what each works on, and who reports to whom."
       }
     },
     {
@@ -39,8 +39,8 @@
         }
       ],
       "highlight": {
-        "text": "Key",
-        "note": "How data flows: what each app relies on, and what travels in and out."
+        "selector": "ul[aria-label='Key']",
+        "note": "How data flows: each app against the services it uses, and which way the data goes."
       }
     }
   ]

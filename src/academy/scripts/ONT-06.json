@@ -31,8 +31,8 @@
         }
       ],
       "highlight": {
-        "text": "Key",
-        "note": "Try again reads it, and the graph is drawn."
+        "selector": "ul[aria-label='Key']",
+        "note": "Try again reads it, and the view is drawn."
       }
     }
   ]

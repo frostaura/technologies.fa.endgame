@@ -111,8 +111,6 @@ export const motion = {
     pulse: { "0%": { boxShadow: "0 0 0 0 rgb(18 161 94 / 0.55)" }, "100%": { boxShadow: "0 0 0 10px rgb(18 161 94 / 0)" } },
     ring: { "0%": { boxShadow: "0 0 0 0 rgb(47 91 255 / 0.5)" }, "100%": { boxShadow: "0 0 0 12px rgb(47 91 255 / 0)" } },
     halo: { "0%": { boxShadow: "0 0 0 0 rgb(107 75 240 / 0.5)" }, "100%": { boxShadow: "0 0 0 16px rgb(107 75 240 / 0)" } },
-    /** A signal travelling along an edge of the organisation graph. */
-    flow: { from: { strokeDashoffset: "24" }, to: { strokeDashoffset: "0" } },
     drift: {
       "0%": { transform: "translate(0,0) scale(1)" },
       "50%": { transform: "translate(70px,-24px) scale(1.25)" },
@@ -138,7 +136,6 @@ export const motion = {
     pulse: "pulse 1.8s ease-out infinite",
     ring: "ring 1.8s ease-out infinite",
     halo: "halo 2s ease-out infinite",
-    flow: "flow 1.2s linear infinite",
     drift: "drift 12s ease-in-out infinite",
     travel: "travel 3.2s linear infinite",
     sheen: "sheen 1s linear infinite",
@@ -325,6 +322,8 @@ export const layout = {
     "numbered-tagged": "1.75rem minmax(0, 1fr) auto",
     /** One task on one line: its state | what it is | who has it | the way to more. */
     task: "7.25rem minmax(0, 1fr) auto 1rem",
+    /** Cards that fill their row: as many 20rem cards as fit, stretched to the row's width; one on a phone. */
+    "card-fill": "repeat(auto-fit, minmax(min(100%, 20rem), 1fr))",
   },
   /** Where the org chart's connecting wire sits under a division's badge. */
   wireInset: "39px",
