@@ -394,36 +394,46 @@ async function inFirstScreenWithoutBar(target: Locator) {
 }
 
 /**
- * A tablet worked by touch (768 × 1024, portrait): the full header on one row, and every control a
- * thumb's height — the same rule as a phone, since a finger is the same size on both.
+ * A tablet worked by touch — portrait 768 and 834, landscape 1024 — the full header on one row that never wraps
+ * (the organisation switcher in it; the mode switch and Sign out in the account menu below 1,100 px), and every
+ * control a thumb's height: the same rule as a phone, since a finger is the same size on both.
  */
-test.describe("the console on a tablet worked by touch", () => {
-  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: false, deviceScaleFactor: 2 });
+for (const [width, height] of [
+  [768, 1024],
+  [834, 1194],
+  [1024, 768],
+] as const) {
+  test.describe(`the console on a tablet worked by touch (${width} × ${height})`, () => {
+    test.use({ viewport: { width, height }, hasTouch: true, isMobile: false, deviceScaleFactor: 2 });
 
-  test("the header's controls sit on one row, Sign out included, also in Technical mode", async ({ page }) => {
-    await open(page, "default", "/");
-    for (const mode of ["Normal", "Technical"]) {
-      await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: mode }).click();
-      const tops = await page.evaluate(() =>
-        [...document.querySelectorAll<HTMLElement>("header a, header button")]
-          .filter((el) => el.offsetParent !== null && !el.closest("nav[aria-label='Where you are']"))
-          .map((el) => Math.round(el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2)),
-      );
-      expect(Math.max(...tops) - Math.min(...tops), `the ${mode} header wraps`).toBeLessThanOrEqual(4);
-    }
-    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
-  });
+    test("the header's controls sit on one row, with two organisations, in both modes", async ({ page }) => {
+      await open(page, "two-organisations", "/", "two-organisations");
+      await expect(page.getByRole("combobox", { name: "Working in" })).toBeVisible();
+      for (const mode of ["Normal", "Technical"]) {
+        await page.getByRole("button", { name: "Your account, the mode and signing out" }).click();
+        await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: mode }).click();
+        await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+        await page.keyboard.press("Escape");
+        const tops = await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLElement>("header a, header button, header select")]
+            .filter((el) => el.offsetParent !== null && !el.closest("nav[aria-label='Where you are']") && !el.closest("[hidden]"))
+            .map((el) => Math.round(el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2)),
+        );
+        expect(Math.max(...tops) - Math.min(...tops), `the ${mode} header wraps`).toBeLessThanOrEqual(4);
+      }
+    });
 
-  test("every control on every main screen is a thumb's height", async ({ page }) => {
-    const found: string[] = [];
-    for (const s of SCREENS) {
-      await open(page, s.scenario, s.route, s.persona);
-      await noSideways(page);
-      for (const t of await shortTargets(page)) found.push(`${s.name}: ${t}`);
-    }
-    expect(found).toEqual([]);
+    test("every control on every main screen is a thumb's height", async ({ page }) => {
+      const found: string[] = [];
+      for (const s of SCREENS) {
+        await open(page, s.scenario, s.route, s.persona);
+        await noSideways(page);
+        for (const t of await shortTargets(page)) found.push(`${s.name}: ${t}`);
+      }
+      expect(found).toEqual([]);
+    });
   });
-});
+}
 
 /**
  * A phone on its side (812 × 375) is not the upright layout stretched: the bar becomes a slim rail at
@@ -451,6 +461,7 @@ test.describe("a phone on its side", () => {
     await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /^More/ }).click();
     const sheet = await page.getByRole("dialog", { name: "More" }).boundingBox();
     expect(sheet?.x ?? 0, "the sheet sits at the right").toBeGreaterThan(300);
-    expect(sheet?.height ?? 0).toBeGreaterThanOrEqual(370);
+    // Sized to what it holds, at most 85% of the screen's height (ARCH-011).
+    expect(sheet?.height ?? 999).toBeLessThanOrEqual(Math.ceil(375 * 0.85) + 1);
   });
 });
