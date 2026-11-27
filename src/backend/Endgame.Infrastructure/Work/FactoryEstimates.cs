@@ -79,8 +79,16 @@ public sealed class FactoryEstimates(FactoryEstimateOptions factory, ModelGatewa
             return whole;
         }
 
+        // Nothing left to build (every part passed, the app was not published): what is left is the review and the release,
+        // priced as one part's share — never "Only 0 of its parts are left to build" (R7-3).
         var share = Math.Max(1, remaining) / (decimal)items;
         var left = Math.Ceiling(whole.Credits * share * 100m) / 100m;
+        if (remaining <= 0)
+        {
+            var release = name == "change" ? "the new version" : "publishing";
+            return new Estimate(left, $"{whole.Basis} Every part is built and checked. What is left is the security review and {release}, so it is priced as one part's share; the parts are not built or charged again.");
+        }
+
         return new Estimate(left, $"{whole.Basis} Only {remaining.ToString(CultureInfo.InvariantCulture)} of its {items.ToString(CultureInfo.InvariantCulture)} parts {(remaining == 1 ? "is" : "are")} left to build, so it is priced for those; the parts already built and checked are not built or charged again.");
     }
 

@@ -109,6 +109,11 @@ export function learned(world: World, org: string, kind: "build" | "change", rem
   const whole = expected(world, org, kind, kind);
   if (items <= 0 || remaining >= items) return whole;
   const left = Math.ceil(whole.credits * (Math.max(1, remaining) / items) * 100) / 100;
+  // Nothing left to build: the review and the release are what is left, priced as one part's share (R7-3).
+  if (remaining <= 0) {
+    const release = kind === "change" ? "the new version" : "publishing";
+    return { credits: left, basis: `${whole.basis} Every part is built and checked. What is left is the security review and ${release}, so it is priced as one part's share; the parts are not built or charged again.` };
+  }
   return { credits: left, basis: `${whole.basis} Only ${remaining} of its ${items} parts ${remaining === 1 ? "is" : "are"} left to build, so it is priced for those; the parts already built and checked are not built or charged again.` };
 }
 
