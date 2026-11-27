@@ -80,6 +80,21 @@ public sealed class PostgresServer : IAsyncLifetime
         return new NpgsqlConnectionStringBuilder(AdminConnectionString) { Database = name, Pooling = true, MaxPoolSize = 100 }.ConnectionString;
     }
 
+    /// <summary>Drops a database <see cref="CreateDatabaseAsync"/> made, once its test is done with it.</summary>
+    public async Task DropDatabaseAsync(string connectionString)
+    {
+        var name = new NpgsqlConnectionStringBuilder(connectionString).Database;
+        if (name is null || !name.StartsWith("endgame_test_", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await using var connection = new NpgsqlConnection(AdminConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand($"DROP DATABASE IF EXISTS {name} WITH (FORCE)", connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
     private static int FreePort()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);

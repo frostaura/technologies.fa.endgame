@@ -33,6 +33,9 @@ public sealed class ControlPlaneApp : IAsyncDisposable
 
     public string ConnectionString { get; }
 
+    /// <summary>The server the database lives on, which drops it when this app is disposed.</summary>
+    private PostgresServer? postgres;
+
     public IServiceProvider Services => factory.Services;
 
     public static async Task<ControlPlaneApp> StartAsync(
@@ -80,7 +83,7 @@ public sealed class ControlPlaneApp : IAsyncDisposable
                 builder.ConfigureServices(services);
             }
         });
-        var app = new ControlPlaneApp(factory, connection);
+        var app = new ControlPlaneApp(factory, connection) { postgres = postgres };
         _ = factory.Server; // start (and migrate) now
         await Task.CompletedTask;
         return app;
@@ -150,6 +153,11 @@ public sealed class ControlPlaneApp : IAsyncDisposable
         await factory.DisposeAsync();
         using var pooled = new Npgsql.NpgsqlConnection(ConnectionString);
         Npgsql.NpgsqlConnection.ClearPool(pooled);
+        // The server's data directory is a tmpfs: databases kept to the end of the run filled it (53100, no space left).
+        if (postgres is not null)
+        {
+            await postgres.DropDatabaseAsync(ConnectionString);
+        }
     }
 
     public static async Task<JsonNode> Expect(HttpResponseMessage response, HttpStatusCode status)
