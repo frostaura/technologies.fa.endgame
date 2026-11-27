@@ -44,6 +44,6 @@ public sealed class AppShellTests : IClassFixture<AppShellTests.PrefixedApp>
             .SelectMany(p => p.Value.EnumerateObject())
             .Select(o => o.Value.GetProperty("operationId").GetString())
             .ToHashSet();
-        Assert.Superset(new HashSet<string?> { "listNotes", "getNote", "createNote", "getCurrentUser" }, operations);
+        Assert.Superset(new HashSet<string?> { "listNotes", "getNote", "createNote", "getNoteFollow", "followNote", "unfollowNote", "getCurrentUser" }, operations);
     }
 }
