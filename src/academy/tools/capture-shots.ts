@@ -30,7 +30,9 @@ const VIEWPORT = { width: 1180, height: 760 };
 const QUALITY = Number(process.env.SHOTS_QUALITY ?? 0.72);
 /** The demo's clock for anything it dates: one fixed moment, so "3 days ago" never drifts between runs. */
 const NOW = new Date("2026-11-25T10:00:00Z");
-const PRINT_QUALITY = 0.72;
+const PRINT_QUALITY = 0.66;
+/** A whole-screen print copy is set across the page (186 mm): 1400 px is sharp there, and keeps the PDF small enough to download. */
+const WHOLE_WIDTH = 1400;
 /**
  * The print picture: the part of the screen the step rings, at twice the pixels, so its words print
  * at 7 pt or more beside the step's text in the PDF (its 108 mm column). With no ring, the whole
@@ -39,7 +41,7 @@ const PRINT_QUALITY = 0.72;
  */
 const DETAIL = { width: 600, height: 380 };
 /** Bumped when the print copies change shape: every one is then captured again. */
-const PRINT_FORMAT = 2;
+const PRINT_FORMAT = 3;
 const SCALE = 2;
 const WORKERS = Number(process.env.SHOTS_WORKERS ?? 4);
 
@@ -174,7 +176,7 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
         const hide = await page.addStyleTag({ content: "[data-demo-note], [data-demo-cursor] { visibility: hidden !important; }" });
         const paper = await page.screenshot({ type: "png", animations: "disabled", caret: "hide", scale: "device", ...(clip ? { clip } : {}) });
         await hide.evaluate((el) => (el as Element).remove());
-        writeFileSync(path.join(out, print.file), await encode(encoder, paper, "image/jpeg", PRINT_QUALITY));
+        writeFileSync(path.join(out, print.file), await encode(encoder, paper, "image/jpeg", PRINT_QUALITY, clip ? undefined : WHOLE_WIDTH));
         index.hashes[file] = hash;
       }
       index.shots[key] = file;
