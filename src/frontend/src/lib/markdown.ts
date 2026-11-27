@@ -1,6 +1,7 @@
 /**
  * A small, safe reading of the markdown a model writes in a reply: paragraphs, line breaks, bullet
- * and numbered lists, headings, fenced code, and inline bold, italics, code and links. It parses to
+ * and numbered lists, headings, fenced code, tables, quotes, and inline bold, italics, code and
+ * links. It parses to
  * a plain tree that a component draws as React elements, so no text is ever handed to the browser
  * as HTML: a `<script>` in a reply is printed as the characters it is.
  */
@@ -13,15 +14,35 @@ export type Inline =
   | { kind: "link"; href: string; children: Inline[] }
   | { kind: "break" };
 
+export type Align = "left" | "center" | "right" | null;
+
 export type Block =
   | { kind: "paragraph"; children: Inline[] }
-  | { kind: "heading"; children: Inline[] }
+  | { kind: "heading"; level?: number; children: Inline[] }
   | { kind: "list"; ordered: boolean; start: number; items: Inline[][] }
-  | { kind: "code"; text: string };
+  | { kind: "code"; text: string; lang?: string }
+  | { kind: "quote"; children: Inline[] }
+  | { kind: "table"; align: Align[]; head: Inline[][]; rows: Inline[][][] };
+
+const QUOTE = /^\s{0,3}>\s?(.*)$/;
+const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+
+/** The cells of one table row: `| a | b |` or `a | b`, with `\|` kept as a bar. */
+export function tableCells(line: string): string[] {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "");
+  return trimmed.split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+}
+
+function alignOf(cell: string): Align {
+  const c = cell.trim();
+  const left = c.startsWith(":");
+  const right = c.endsWith(":");
+  return left && right ? "center" : right ? "right" : left ? "left" : null;
+}
 
 const BULLET = /^\s*[-*+]\s+(.*)$/;
 const NUMBERED = /^\s*(\d{1,9})[.)]\s+(.*)$/;
-const HEADING = /^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/;
+const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
 const FENCE = /^\s{0,3}(```|~~~)/;
 
 export function parseMarkdown(source: string): Block[] {
@@ -47,8 +68,38 @@ export function parseMarkdown(source: string): Block[] {
       flushList();
       const code: string[] = [];
       i++;
+      const lang = line.trim().slice(3).trim().split(/\s+/)[0] ?? "";
       while (i < lines.length && !(lines[i] ?? "").trimStart().startsWith(fence[1] ?? "```")) code.push(lines[i++] ?? "");
-      blocks.push({ kind: "code", text: code.join("\n") });
+      blocks.push(lang && /^[\w+#.-]{1,20}$/.test(lang) ? { kind: "code", text: code.join("\n"), lang } : { kind: "code", text: code.join("\n") });
+      continue;
+    }
+    // A table: a row of cells, a rule of dashes under it, then rows until a line without a bar.
+    const next = lines[i + 1] ?? "";
+    if (line.includes("|") && TABLE_RULE.test(next) && next.includes("-")) {
+      const head = tableCells(line);
+      const rule = tableCells(next);
+      if (head.length >= 1 && rule.length === head.length) {
+        flushParagraph();
+        flushList();
+        const rows: Inline[][][] = [];
+        i += 2;
+        while (i < lines.length && (lines[i] ?? "").includes("|") && (lines[i] ?? "").trim() !== "") {
+          const cells = tableCells(lines[i] ?? "");
+          rows.push(head.map((_, c) => parseInline(cells[c] ?? "")));
+          i++;
+        }
+        i--;
+        blocks.push({ kind: "table", align: rule.map(alignOf), head: head.map((c) => parseInline(c)), rows });
+        continue;
+      }
+    }
+    const quote = line.match(QUOTE);
+    if (quote) {
+      flushParagraph();
+      flushList();
+      const said: string[] = [quote[1] ?? ""];
+      while (i + 1 < lines.length && QUOTE.test(lines[i + 1] ?? "")) said.push((lines[++i] ?? "").match(QUOTE)?.[1] ?? "");
+      blocks.push({ kind: "quote", children: parseInline(said.join("\n")) });
       continue;
     }
     if (line.trim() === "") {
@@ -60,7 +111,7 @@ export function parseMarkdown(source: string): Block[] {
     if (heading) {
       flushParagraph();
       flushList();
-      blocks.push({ kind: "heading", children: parseInline(heading[1] ?? "") });
+      blocks.push({ kind: "heading", level: (heading[1] ?? "#").length, children: parseInline(heading[2] ?? "") });
       continue;
     }
     const bullet = line.match(BULLET);
@@ -194,7 +245,9 @@ export function markdownToPlain(source: string): string {
   const inline = (nodes: Inline[]): string =>
     nodes.map((n) => (n.kind === "text" || n.kind === "code" ? n.text : n.kind === "break" ? " " : "children" in n ? inline(n.children) : "")).join("");
   return parseMarkdown(source)
-    .map((b) => (b.kind === "code" ? b.text : b.kind === "list" ? b.items.map(inline).join("; ") : inline(b.children)))
+    .map((b) =>
+      b.kind === "code" ? b.text : b.kind === "list" ? b.items.map(inline).join("; ") : b.kind === "table" ? [b.head, ...b.rows].map((r) => r.map(inline).join(", ")).join("; ") : inline(b.children),
+    )
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();

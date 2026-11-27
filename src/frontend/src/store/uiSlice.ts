@@ -1,7 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { Mode } from "@/features/runs/runModel";
 import { api } from "./api";
-import type { OrganisationRef } from "./types";
+import type { ConversationAttachment, OrganisationRef } from "./types";
 
 /** What the docked conversation is scoped to: a node of the tree, or one employee on it. */
 export interface Selection {
@@ -19,6 +19,8 @@ export interface ChatMessage {
   state: "sending" | "sent" | "failed";
   runId: string | null;
   error: string | null;
+  /** The files sent with it. */
+  attachments?: ConversationAttachment[];
 }
 
 export interface UiState {

@@ -79,8 +79,10 @@ export function createControlPlane(options: ControlPlaneOptions): ControlPlane {
       return Promise.reject(new TypeError("The demo makes no network requests."));
     }
     const path = url.pathname.slice(prefix.length).replace(/^\/+/, "");
-    const text = request.method === "GET" || request.method === "HEAD" ? "" : await request.text();
-    let body: Record<string, unknown> = {};
+    // A file upload is a form, read as the control plane reads one: its fields, and each file as a `File`.
+    const form = request.method === "POST" && (request.headers.get("content-type") ?? "").startsWith("multipart/form-data") ? await request.formData() : null;
+    const text = form || request.method === "GET" || request.method === "HEAD" ? "" : await request.text();
+    let body: Record<string, unknown> = form ? Object.fromEntries(form.entries()) : {};
     if (text) {
       try {
         const parsed = JSON.parse(text) as unknown;

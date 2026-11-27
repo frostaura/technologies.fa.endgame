@@ -8,6 +8,9 @@ import type {
   CascadeValue,
   ChangeEstimate,
   ConversationEstimate,
+  ConversationAttachment,
+  ConversationCapabilities,
+  ConversationTurn,
   RetryEstimate,
   TreeNode,
   AccessToken,
@@ -288,11 +291,76 @@ export const runGuard: Guard<Run> = obj<Run>({
 
 export const runEventGuard: Guard<RunEvent> = obj<RunEvent>({ seq: num, type: s, at: s, payload: withDefault(record, {}) });
 
+export const attachmentGuard: Guard<ConversationAttachment> = obj<ConversationAttachment>({
+  id: s,
+  name: s,
+  contentType: s,
+  kind: oneOf(["image", "pdf", "text"] as const),
+  bytes: num,
+  pages: withDefault(nn, null),
+  characters: withDefault(nn, null),
+  runId: withDefault(ns, null),
+});
+
+const RUN_STATUSES = ["queued", "running", "waiting", "paused", "finished", "failed", "cancelled"] as const;
+
 export const conversationGuard: Guard<ConversationHistory> = obj<ConversationHistory>({
   scope: s,
   conversationId: ns,
   employeeId: ns,
-  messages: arr(obj<ConversationHistory["messages"][number]>({ runId: s, seq: num, at: s, from: s, text: s, by: withDefault(ns, null), code: withDefault(ns, null) })),
+  messages: arr(
+    obj<ConversationHistory["messages"][number]>({
+      runId: s,
+      seq: num,
+      at: s,
+      from: s,
+      text: s,
+      by: withDefault(ns, null),
+      code: withDefault(ns, null),
+      // An older control plane sends no files with a message.
+      attachments: withDefault(arr(attachmentGuard), []),
+    }),
+  ),
+  turns: withDefault(
+    arr(
+      obj<ConversationTurn>({
+        runId: s,
+        status: oneOf(RUN_STATUSES),
+        toolCalls: withDefault(num, 0),
+        started: withDefault(arr(obj<ConversationTurn["started"][number]>({ runId: s, kind: withDefault(s, ""), title: withDefault(s, "") })), []),
+      }),
+    ),
+    [],
+  ),
+});
+
+export const capabilitiesGuard: Guard<ConversationCapabilities> = obj<ConversationCapabilities>({
+  scope: s,
+  answerer: obj<ConversationCapabilities["answerer"]>({ kind: oneOf(["assistant", "employee"] as const), name: withDefault(ns, null), role: withDefault(ns, null), employeeId: withDefault(ns, null), tier: s }),
+  tools: arr(s),
+  asks: withDefault(arr(s), []),
+  actions: withDefault(arr(s), []),
+  skills: withDefault(arr(obj<ConversationCapabilities["skills"][number]>({ name: s, trigger: withDefault(s, ""), usedBy: withDefault(s, "") })), []),
+  services: withDefault(
+    arr(obj<ConversationCapabilities["services"][number]>({ id: oneOf(["identity", "models", "secrets", "email", "schedules", "webhooks", "telemetry"] as const), detail: withDefault(ns, null) })),
+    [],
+  ),
+  apps: withDefault(num, 0),
+  webSearch: obj<ConversationCapabilities["webSearch"]>({ available: bool, rule: oneOf(["may", "asks", "may-not"] as const), setAtPath: withDefault(ns, null) }),
+  assistants: withDefault(
+    arr(
+      obj<ConversationCapabilities["assistants"][number]>({
+        id: s,
+        name: s,
+        role: oneOf(["admin", "builder", "viewer"] as const),
+        prefix: withDefault(s, ""),
+        lastUsedAt: withDefault(ns, null),
+      }),
+    ),
+    [],
+  ),
+  narrowing: obj<ConversationCapabilities["narrowing"]>({ noWebSearch: withDefault(bool, false), answerOnly: withDefault(bool, false) }),
+  attachments: obj<ConversationCapabilities["attachments"]>({ maxFiles: num, maxFileBytes: num, maxMessageBytes: num, images: bool, extensions: withDefault(arr(s), []) }),
 });
 
 export const retryEstimateGuard: Guard<RetryEstimate> = obj<RetryEstimate>({

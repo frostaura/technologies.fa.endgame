@@ -1,3 +1,4 @@
+import type { DemoAttachment } from "./conversationKit";
 import type {
   AccessToken,
   AppAccess,
@@ -275,6 +276,8 @@ export interface World {
   pricing: PricingView;
   /** Counters for invented ids. */
   counter: number;
+  /** Files on conversation messages (ARCH-011); absent from a world saved before there were any. */
+  attachments?: DemoAttachment[];
   /** What each level says about itself ("What this is"): the cascade's context values. */
   context?: { path: string; key: string; value: unknown; setAt: string }[];
   /** No model answers (the screening of a new organisation then needs an operator's own decision). */

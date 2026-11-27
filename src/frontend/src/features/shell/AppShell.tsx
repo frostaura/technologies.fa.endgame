@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MessageCircle } from "lucide-react";
 import { Sheet } from "@/components/Sheet";
 import { useViewport } from "@/lib/useViewport";
@@ -16,6 +16,7 @@ import { OrganisationSwitcher } from "@/features/account/OrganisationSwitcher";
 import { PhoneHeader, PhoneNav } from "./PhoneShell";
 import { CreditsPill, ModeToggle, SignOut } from "./shellControls";
 import { Talk } from "./talk";
+import { DockLayoutContext, useDockState } from "../conversation/dockLayout";
 import { ShellTalkContext, takeOpenTalkOnArrival } from "./talkContext";
 
 export interface Crumb {
@@ -85,7 +86,25 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
   const talkOpen = talkChosen ?? (arrivedForTalk && compact && talkLabel !== null);
   const shell = useMemo(() => ({ compact, announce: tablet, target: talkTarget, open: openTalk, register }), [compact, tablet, talkTarget, openTalk, register]);
 
-  const side = compact ? aside : aside ?? (talk && (tablet ? <Talk label={talk.label}>{talk.content}</Talk> : talk.content));
+  // A desktop docks the conversation at the right edge, full height under a header that stays put (ARCH-011).
+  const docked = viewport === "desktop" && !!talk && !aside;
+  const dock = useDockState(me?.user.id ?? null);
+  const chrome = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = chrome.current;
+    const root = document.documentElement;
+    if (!docked || !el) return;
+    const measure = () => root.style.setProperty("--shell-chrome", `${el.getBoundingClientRect().height}px`);
+    measure();
+    const sizes = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    sizes?.observe(el);
+    return () => {
+      sizes?.disconnect();
+      root.style.removeProperty("--shell-chrome");
+    };
+  }, [docked]);
+
+  const side = compact ? aside : docked ? null : aside ?? (talk && (tablet ? <Talk label={talk.label}>{talk.content}</Talk> : talk.content));
 
   return (
     <ShellTalkContext.Provider value={shell}>
@@ -93,6 +112,7 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xs focus:bg-surface focus:px-4 focus:py-2">
           Skip to the content
         </a>
+        <div ref={chrome} className={cn(docked && "sticky top-0 z-30")}>
         {me?.isOperator && <GodModeBand />}
         {phone ? (
           <PhoneHeader crumbs={crumbs} signedIn={!!me} />
@@ -130,10 +150,25 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
             </div>
           </header>
         )}
+        </div>
         <div className="flex flex-1 flex-col lg:flex-row">
-          <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10">
+          <main id="main" tabIndex={-1} className={cn("flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10", docked && dock.full && "hidden")}>
             {children}
           </main>
+          {docked && talk && (
+            <DockLayoutContext.Provider value={dock}>
+              <aside
+                aria-label="Conversation pane"
+                data-dock={dock.full ? "full" : dock.collapsed ? "collapsed" : dock.wide ? "wide" : "narrow"}
+                className={cn(
+                  "sticky top-chrome flex h-dock shrink-0 flex-col self-start border-l bg-surface",
+                  dock.full ? "flex-1" : dock.collapsed ? "w-rail" : dock.wide ? "w-dock-wide" : "w-dock",
+                )}
+              >
+                {talk.content}
+              </aside>
+            </DockLayoutContext.Provider>
+          )}
           {side && (
             // A tablet sets the side panel's cards two by two under the page; a phone, one under another.
             <aside className="flex min-w-0 flex-col gap-7 border-t bg-surface px-4 py-8 sm:px-8 md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start lg:w-dock lg:shrink-0 lg:border-l lg:border-t-0 lg:py-10 xl:w-dock">{side}</aside>

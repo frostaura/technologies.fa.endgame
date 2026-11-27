@@ -42,6 +42,7 @@ import type {
   AppSettingsUpdate,
   AppShare,
   AuthOptions,
+  ConversationCapabilities,
   ConversationHistory,
   ConversationRequest,
   CreateIdeaRequest,
@@ -278,7 +279,7 @@ export const api = createApi({
 
     // Conversation ------------------------------------------------------------------------
     /** What one message can cost at most, shown before it is sent (CLAUDE.md rule 11). */
-    estimateMessage: build.query<ConversationEstimate, { scope: string; employeeId?: string }>({
+    estimateMessage: build.query<ConversationEstimate, { scope: string; employeeId?: string; attachmentIds?: string[] }>({
       query: (body) => ({ url: "conversations/estimate", method: "POST", body }),
       extraOptions: guarded(g.conversationEstimateGuard, "the estimate"),
     }),
@@ -291,6 +292,12 @@ export const api = createApi({
       query: ({ scope, employeeId }) => `conversations?scope=${encodeURIComponent(scope)}${employeeId ? `&employeeId=${encodeURIComponent(employeeId)}` : ""}`,
       providesTags: (_r, _e, { scope, employeeId }) => [{ type: "Conversation", id: employeeId ? `${scope}#${employeeId}` : scope }],
       extraOptions: guarded(g.conversationGuard, "the conversation"),
+    }),
+    /** What whoever answers at a scope can use: tools, skills, services, web search, assistants, file limits (ARCH-011). */
+    getConversationCapabilities: build.query<ConversationCapabilities, { scope: string; employeeId?: string }>({
+      query: ({ scope, employeeId }) => `conversations/capabilities?scope=${encodeURIComponent(scope)}${employeeId ? `&employeeId=${encodeURIComponent(employeeId)}` : ""}`,
+      providesTags: (_r, _e, { scope, employeeId }) => [{ type: "Conversation", id: `capabilities:${employeeId ? `${scope}#${employeeId}` : scope}` }],
+      extraOptions: guarded(g.capabilitiesGuard, "what it can use here"),
     }),
 
     // Apps --------------------------------------------------------------------------------
@@ -984,6 +991,7 @@ export const {
   useAnswerApprovalMutation,
   useStartConversationMutation,
   useGetConversationQuery,
+  useGetConversationCapabilitiesQuery,
   useEstimateRetryMutation,
   useRetryRunMutation,
   useEstimateChangeMutation,

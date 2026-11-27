@@ -250,7 +250,7 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
  * The way to the app a finished build or change made: "Open {app}" (the app itself, in a new tab, at the address its page
  * shows) and "Manage {app}" (its page in the console). Shown once the app is read; an app that cannot be read offers neither.
  */
-function BuiltAppActions({ appId }: { appId: string }) {
+export function BuiltAppActions({ appId }: { appId: string }) {
   const app = useGetAppQuery(appId);
   if (!app.data) return null;
   const { name, addresses } = app.data;
