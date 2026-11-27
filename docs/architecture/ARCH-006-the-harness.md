@@ -235,6 +235,20 @@ judgement) with a plain outcome — "failed its check three times in a row for t
 working" — instead of a fourth round on a stronger model. Failures of the evaluator's own free-form faults are never
 counted as "the same". The fault that lists the calls made says each shape once, ids folded to `{id}`.
 
+**The check needs a look — the escalation guard.** A fault the gate's code decides over an evaluator that marked the
+requirement met (`overruled` on the gated answer: today the check of coming back later, `not-met`, with the call sequence
+that decided it — `member-a PUT api/dives/{id}/signup → 201 (id …)`) goes to repair like any other. But when the repair
+that follows changed no application code (only tests, documents or nothing, read from its own `edit_file`/`write_file`
+calls in the log; `BuildWorkflow.IsApplicationCode`) or its builder's reply disputes the fault ("I couldn't find a fault in
+the code, so I made no changes"; `DisputesTheFault`), and the same code-decided fault then repeats with nothing else
+failing, the part stops (`BuildWorkflow.NeedsLook`): the judgement is `final`, `needsLook`, with `trigger` — each overruled
+requirement and the calls code read — and the owner is told the check needs a look and that nothing in it was shown not to
+work. It is never repaired again nor escalated: a stronger model cannot fix the factory's own check. It takes precedence over
+the three-in-a-row stop. Run `67018a21` spent three repair rounds on ever stronger models and about 44 unbilled credits on a
+correct app whose gate was wrong (seq 1287 and 1749 decided "a second record"; the repair between changed only tests);
+replayed from its log (`CheckNeedsLookTests`, the fixture now holding each round's failing kinds and each repair's files and
+reply), it stops before round 3.
+
 ## The security review
 
 After every part has passed, the organisation's standing security reviewer checks the app against its checklist

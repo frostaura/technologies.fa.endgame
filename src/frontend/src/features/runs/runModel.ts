@@ -570,6 +570,7 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
 export const CHECK_LINES = {
   rechecked: "Checked again by a second checker, at no charge.",
   stoppedEarly: "Stopped early: the same requirement failed the same way three times.",
+  needsLook: "The check needs a look: the checker found it working, the factory’s own reading of its calls disagreed twice, and the repair between found nothing in the app to change. Nothing in it was shown not to work, so no stronger model was tried.",
   shownByTest: (title: string | null) => (title ? `Shown by the screen's own test: “${title}”.` : "Shown by the screen's own test."),
 } as const;
 
@@ -578,7 +579,15 @@ const FAILED_HOW: Record<string, string> = {
   "not-met": "it does not work yet.",
   unshown: "the checker said it works, but nothing it gave shows it in the running app.",
   unchecked: "it was not checked in the running app.",
+  overruled: "the checker found it working; only the factory’s own reading of its calls disagreed.",
 };
+
+/** The requirements a "check needs a look" judgement was decided over (`trigger`), each with the calls code read. */
+function triggers(p: Record<string, unknown>): { id: string; calls: string[] }[] {
+  const t = p.trigger;
+  if (!Array.isArray(t)) return [];
+  return t.filter((x): x is Record<string, unknown> => !!x && typeof x === "object").map((x) => ({ id: str(x, "id") ?? "", calls: strings(x, "calls") }));
+}
 
 function strings(payload: Record<string, unknown>, key: string): string[] {
   const v = payload[key];
@@ -619,6 +628,7 @@ export function evaluationDetail(p: Record<string, unknown>, mode: Mode, withSum
       failing.length > 0 ? `Failing: ${failing.join(", ")}` : null,
       p.rechecked === true ? "Rechecked: a second evaluator looked at the same build, not billed." : null,
       p.stoppedEarly === true ? "Stopped early: the same failure three checks running, so no further repair round." : null,
+      ...(p.needsLook === true ? triggers(p).map((t) => `Needs a look (${t.id}): ${t.calls.join(" · ")}`) : []),
     ];
     return lines.filter(Boolean).join("\n") || null;
   }
@@ -627,9 +637,10 @@ export function evaluationDetail(p: Record<string, unknown>, mode: Mode, withSum
   if (withSummary && summary) lines.push(summary);
   if (p.rechecked === true) lines.push(CHECK_LINES.rechecked);
   const unmet = requirements.filter((r) => r.met !== true);
+  const overruled = new Set(p.needsLook === true ? triggers(p).map((t) => t.id) : []);
   for (const r of unmet) {
     const id = str(r, "id") ?? "";
-    const how = failing.find((f) => f.startsWith(`${id}:`))?.split(":")[1] ?? (r.met === false && str(r, "evidence") ? "not-met" : "unchecked");
+    const how = overruled.has(id) ? "overruled" : (failing.find((f) => f.startsWith(`${id}:`))?.split(":")[1] ?? (r.met === false && str(r, "evidence") ? "not-met" : "unchecked"));
     const text = (str(r, "text") ?? "").replace(/[.!?]+$/, "");
     const saw = plainSentences(str(r, "evidence"));
     const quoted = text && isPlain(text) ? `“${text}”: ` : "A requirement: ";
@@ -644,6 +655,7 @@ export function evaluationDetail(p: Record<string, unknown>, mode: Mode, withSum
   }
   for (const r of requirements) if (r.met === true) for (const t of strings(r, "tests")) lines.push(CHECK_LINES.shownByTest(plainOrNull(testTitle(t))));
   if (p.stoppedEarly === true) lines.push(CHECK_LINES.stoppedEarly);
+  if (p.needsLook === true) lines.push(CHECK_LINES.needsLook);
   return lines.join("\n") || null;
 }
 

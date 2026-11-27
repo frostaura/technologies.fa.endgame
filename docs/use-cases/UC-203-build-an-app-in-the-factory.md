@@ -44,7 +44,9 @@
    `evaluation.failed`, with a plain `summary`). The preview and its database are destroyed when the evaluation ends.
 6. **Repair.** A failed item goes back to a builder one tier up, with the faults, not billed; at most three rounds. A
    failure only of how the check showed the work is looked at again once, free, and never repaired: still refused after
-   that second look, the part stops (`unverified`), and the owner is told it could not be checked.
+   that second look, the part stops (`unverified`), and the owner is told it could not be checked. A fault code's own check
+   decided over the evaluator's "met" that repeats after a repair which changed no app code, or disputed it, stops the part
+   as "the check needs a look" (`needsLook`, with the calls code read), never escalated.
 7. **Progress.** A passed item is recorded in `PROGRESS.md` and committed.
 8. **Security review.** The organisation's standing security reviewer (its model calls carry that employee's id) checks the app against the checklist skill; a finding gets an unbilled repair,
    told to bring the app's documents in line with what it changes, and a second only when the first cleared its finding and

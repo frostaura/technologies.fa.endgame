@@ -503,8 +503,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                 }
 
                 failures.Add(Json.Strings(recorded, "failing"));
-                stoppedEarly = SameFailureThrice(failures) && round < run.Options.MaxRepairRounds;
-                if (stoppedEarly || Unverified(recorded))
+                stoppedEarly = SameFailureThrice(failures) && round < run.Options.MaxRepairRounds && !NeedsALook(recorded);
+                if (stoppedEarly || Unverified(recorded) || NeedsALook(recorded))
                 {
                     break;
                 }
@@ -569,8 +569,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                 break;
             }
 
-            // Not shown in a way code can verify, after the second look: the check's, not the builder's (R6).
-            if (Unverified(evaluation))
+            // Not shown in a way code can verify, after the second look: the check's, not the builder's (R6). Nor is a fault code
+            // decided over the evaluator's "met" that a repair changing no app code could not move (the escalation guard).
+            if (Unverified(evaluation) || NeedsALook(evaluation))
             {
                 failures.Add(Json.Strings(evaluation, "failing"));
                 break;
@@ -600,6 +601,18 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             return WorkflowOutcome.Failure($"'{item.Deliverable}' could not be verified by code's gate after a second look at the same build ({string.Join(", ", failing)}), so it was not sent to repair: {string.Join(" ", Json.Strings(lastEvaluation, "faults"))}")
                 with
             { ForOwner = $"\"{item.Text.TrimEnd('.')}\" could not be checked: {what}, even after a second look at the same build. Nothing in it was shown not to work, so it was not sent for repair, and the app was not {(change ? "changed" : "published")}. Its work so far is saved; “Try again” carries on from it." };
+        }
+
+        if (NeedsALook(lastEvaluation))
+        {
+            // The escalation guard: the evaluator found it working, code's own check decided otherwise twice, and the repair between
+            // changed no app code or disputed the fault. A stronger model cannot fix a check, so the part stops for a person to look
+            // (run 67018a21 spent three repair rounds and ever stronger models on a correct app this way).
+            var what = StuckOn(plan, item, Json.Strings(lastEvaluation, "failing"), "by the factory’s own check");
+            await FinishTaskAsync(run, taskId, "failed", $"Stopped: the check needs a look. The checker found it working, the factory's own reading of its calls disagreed twice, and the repair between found nothing in the app to change, so it was not sent to another repair. {what}.", cancellationToken);
+            return WorkflowOutcome.Failure($"'{item.Deliverable}' stopped before another repair round: code's gate decided {string.Join(", ", Json.Strings(lastEvaluation, "failing"))} over an evaluator that marked it met, twice, with a repair between that changed no application code or disputed it — the check needs a look. The calls it read are on the judgement (trigger): {string.Join(" ", Json.Strings(lastEvaluation, "faults"))}")
+                with
+            { ForOwner = $"\"{item.Text.TrimEnd('.')}\" was stopped because the check needs a look: the checker who used the app found it working, the factory’s own reading of the same calls disagreed twice, and the repair between found nothing in the app to change. Nothing in it was shown not to work, so it was not sent to another repair on a stronger model, and the app was not {(change ? "changed" : "published")}. Technical mode shows the calls the check read. Its work so far is saved and the repair was not charged; “Try again” carries on from it." };
         }
 
         if (Json.Bool(lastEvaluation, "passed") != true && stoppedEarly)
@@ -646,6 +659,20 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
 
         var passedNow = Json.Bool(evaluation, "passed") == true;
+        // The escalation guard: the same code-decided fault after a repair that changed no app code, or disputed it (R7-4).
+        if (!passedNow && round > 0 && !Unverified(evaluation))
+        {
+            var log = await run.LogReader.ReadAllAsync(cancellationToken);
+            var repairer = $"builder-{item.Id}-{round}";
+            var reply = log.LastOrDefault(e => e.Type == HarnessEvents.Message && Json.Str(e.Payload, "kind") == MessageKinds.AgentReply && Json.Bool(e.Payload, "final") == true && Json.Str(e.Payload, HarnessEvents.AgentField) == repairer);
+            if (NeedsLook(previous, evaluation, EditedFiles(log, repairer), reply is null ? null : Json.Str(reply.Payload, "reply")) is { } trigger)
+            {
+                evaluation["needsLook"] = true;
+                evaluation["trigger"] = trigger;
+            }
+        }
+
+        var needsLook = NeedsALook(evaluation);
         var shown = (evaluation["requirements"] as JsonArray ?? []).OfType<JsonObject>().ToList();
         var summary = EvaluationSummary(item, passedNow, shown, round);
         // A judgement on the engineer's work by the QA engineer: accepted, or sent back with the repair not charged.
@@ -667,8 +694,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         // The same failure a third time stops the part: this judgement is its last, and no repair follows. So does a check that
         // still could not verify how the work was shown after its second look: no builder can repair the evidence.
         var unverified = Unverified(evaluation);
-        var stops = !passedNow && !unverified && round < run.Options.MaxRepairRounds && SameFailureThrice([.. failures, Json.Strings(evaluation, "failing")]);
-        if (!passedNow && round < run.Options.MaxRepairRounds && !stops && !unverified)
+        var stops = !passedNow && !unverified && !needsLook && round < run.Options.MaxRepairRounds && SameFailureThrice([.. failures, Json.Strings(evaluation, "failing")]);
+        if (!passedNow && round < run.Options.MaxRepairRounds && !stops && !unverified && !needsLook)
         {
             judgement["repairCharged"] = false;
         }
@@ -685,6 +712,14 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                 judgement["unverified"] = true;
                 judgement["summary"] = UnverifiedSummary(item, shown);
             }
+
+            if (needsLook)
+            {
+                // The check needs a look: attached, the calls code read for each requirement it decided over the evaluator's "met".
+                judgement["needsLook"] = true;
+                judgement["trigger"] = evaluation["trigger"]?.DeepClone();
+                judgement["summary"] = NeedsLookSummary(item, shown);
+            }
         }
 
         if (Json.Bool(evaluation, "rechecked") == true)
@@ -694,7 +729,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
         await run.AppendAsync(passedNow ? HarnessEvents.EvaluationPassed : HarnessEvents.EvaluationFailed, judgement, cancellationToken);
         // The judgement above already says how the part fared, in the owner's words; the check's own task says only that it is done.
-        await FinishTaskAsync(run, checkTaskId, "done", CheckDone(item, passedNow, round, run.Options.MaxRepairRounds, stops, unverified), cancellationToken);
+        await FinishTaskAsync(run, checkTaskId, "done", CheckDone(item, passedNow, round, run.Options.MaxRepairRounds, stops, unverified || needsLook), cancellationToken);
         await run.Journal.RecordAsync(key, evaluation, cancellationToken);
         return (evaluation, null);
     }
@@ -1318,6 +1353,72 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     /// could not verify it, and nothing in the app was shown wrong, so it is never sent to a builder to repair.
     /// </summary>
     public static bool Unverified(JsonObject? evaluation) => Json.Bool(evaluation, "passed") != true && Json.Bool(evaluation, "unverified") == true;
+
+    /// <summary>Whether an evaluation stopped its part as "the check needs a look" (<see cref="NeedsLook"/>): never repaired again.</summary>
+    public static bool NeedsALook(JsonObject? evaluation) => Json.Bool(evaluation, "passed") != true && Json.Bool(evaluation, "needsLook") == true;
+
+    /// <summary>
+    /// The escalation guard (R7-4). A part stops as "the check needs a look" — not repaired again, not escalated — when the check
+    /// just made failed it only on faults code's gate decided over an evaluator that had marked those requirements met
+    /// (<c>overruled</c>), the check before failed on the same code-decided faults, and the repair between changed no
+    /// application code (only tests, documents or nothing; <see cref="IsApplicationCode"/>) or its builder disputed the fault
+    /// (<see cref="DisputesTheFault"/>). Run 67018a21 spent three repair rounds and ever stronger models on a correct app
+    /// whose fault was the gate's own. Returns what triggered it — each overruled requirement with the calls code read — or null.
+    /// </summary>
+    public static JsonArray? NeedsLook(JsonObject? previous, JsonObject current, IReadOnlyList<string> repairFiles, string? repairReply)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(repairFiles);
+        if (previous is null || Json.Bool(previous, "passed") == true || Json.Bool(current, "passed") == true)
+        {
+            return null;
+        }
+
+        static List<JsonObject> Overruled(JsonObject e) => (e["overruled"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        var before = Overruled(previous).Select(o => $"{Json.Str(o, "id")}:{Json.Str(o, "kind")}").ToHashSet(StringComparer.Ordinal);
+        var now = Overruled(current);
+        var failing = Json.Strings(current, "failing");
+        // Every failure now is a code-decided one that the check before also decided: nothing else is left for the builder.
+        var repeated = now.Where(o => before.Contains($"{Json.Str(o, "id")}:{Json.Str(o, "kind")}")).ToList();
+        if (repeated.Count == 0 || failing.Count == 0 || !failing.All(f => repeated.Any(o => f == $"{Json.Str(o, "id")}:{Json.Str(o, "kind")}"))
+            || Json.Strings(current, "missingTestIds").Count > 0)
+        {
+            return null;
+        }
+
+        var changedNoCode = !repairFiles.Any(IsApplicationCode);
+        return changedNoCode || DisputesTheFault(repairReply) ? new JsonArray(repeated.Select(o => (JsonNode)o.DeepClone()).ToArray()) : null;
+    }
+
+    /// <summary>
+    /// Whether a changed file is the application's code: anything but its tests (<c>api.tests/</c>, <c>*.test.*</c>,
+    /// <c>*.spec.*</c>) and its documents (<c>docs/</c>, <c>*.md</c>, <c>PROGRESS.md</c>).
+    /// </summary>
+    public static bool IsApplicationCode(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var p = path.Trim().Replace('\\', '/');
+        p = p.StartsWith("/workspace/", StringComparison.Ordinal) ? p["/workspace/".Length..] : p.TrimStart('.', '/');
+        var name = p.Split('/')[^1];
+        return p.Length > 0
+            && !p.StartsWith("api.tests/", StringComparison.OrdinalIgnoreCase)
+            && !p.Contains("/__tests__/", StringComparison.Ordinal)
+            && !name.Contains(".test.", StringComparison.OrdinalIgnoreCase) && !name.Contains(".spec.", StringComparison.OrdinalIgnoreCase)
+            && !p.StartsWith("docs/", StringComparison.OrdinalIgnoreCase) && !name.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Whether a builder's reply says the code is already right and the check is wrong ("I couldn't find a fault…").</summary>
+    public static bool DisputesTheFault(string? reply) => reply is not null && Disputes().IsMatch(reply);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(could ?n[o']t find (a|any) (fault|bug|problem)|found no (fault|bug|problem)|no (fault|bug) in the code|made no (code )?changes|nothing (remained |left )?to (fix|change)|(was|is) already (contract-)?correct|already (works|working)|(the )?code (doesn't|does not) do that|the check (is|was) wrong|nothing in the (code|app) to (fix|change))", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex Disputes();
+
+    private static string NeedsLookSummary(PlanItem item, IReadOnlyList<JsonObject> requirements)
+    {
+        var shown = requirements.Count(r => Json.Bool(r, "met") == true);
+        var count = requirements.Count == 0 ? "" : $" ({shown} of {requirements.Count} of your requirements shown working in the running app)";
+        return $"Not sent back for repair: the check needs a look. The checker found it working, the factory's own reading of its calls disagreed twice, and the repair between found nothing in the app to change, so nothing in it was shown not to work: {item.Text.TrimEnd('.')}{count}.";
+    }
 
     private static string UnverifiedSummary(PlanItem item, IReadOnlyList<JsonObject> requirements)
     {
