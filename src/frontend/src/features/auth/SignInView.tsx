@@ -216,7 +216,7 @@ export function SignInView() {
 
       {/* Its first line sits level with the card's mark (the card's own top padding), so the two tops read as one. */}
       <aside aria-label="What Endgame does" className="flex flex-col gap-7 px-2 pt-8 max-md:hidden sm:pt-10">
-        <p className="font-display text-2xl font-bold leading-10 tracking-tight text-ink">One place to run every product you own</p>
+        <h2 className="font-display text-2xl font-bold leading-10 tracking-tight text-ink">One place to run every product you own</h2>
         <ul className="flex flex-col gap-6">
           {LEADS.map((lead, i) => (
             <li key={lead.title} className={cn("flex gap-4", RISE, stagger(i + 1))}>

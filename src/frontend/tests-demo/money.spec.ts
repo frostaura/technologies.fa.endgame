@@ -307,10 +307,10 @@ test.describe("round three", () => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await open(page, "fresh-install", undefined, "signed-out");
     const mark = await page.locator("img[src$='endgame-mark.svg']").first().boundingBox();
-    const lead = await page.getByRole("complementary", { name: "What Endgame does" }).locator("p").first().boundingBox();
+    const lead = await page.getByRole("complementary", { name: "What Endgame does" }).getByRole("heading").first().boundingBox();
     expect(Math.abs((mark?.y ?? 0) + (mark?.height ?? 0) / 2 - ((lead?.y ?? 0) + (lead?.height ?? 0) / 2))).toBeLessThanOrEqual(8);
     // No small-caps grey label: the aside opens on a heading in ink.
-    expect(await page.getByRole("complementary", { name: "What Endgame does" }).locator("p").first().evaluate((p) => getComputedStyle(p).textTransform)).toBe("none");
+    expect(await page.getByRole("complementary", { name: "What Endgame does" }).getByRole("heading").first().evaluate((p) => getComputedStyle(p).textTransform)).toBe("none");
   });
 
   test("the operator with no organisation sees the organisations and what waits, not an empty screen", async ({ page }) => {

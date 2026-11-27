@@ -327,7 +327,7 @@ function Address({ label, value }: { label: string; value: string }) {
         </Button>
       </div>
       {/* Each segment is kept whole — an app's id never splits at its hyphens (real-stack 55) — and the address breaks only after a "/". */}
-      <code className="overflow-x-auto rounded-xs bg-ground px-3 py-2 font-mono text-xs leading-relaxed break-normal">
+      <code className="overflow-x-auto rounded-xs bg-ground px-2 py-2 font-mono text-xs leading-relaxed break-normal">
         {parts.map((part, i) => (
           <Fragment key={i}>
             <span className="whitespace-nowrap">
