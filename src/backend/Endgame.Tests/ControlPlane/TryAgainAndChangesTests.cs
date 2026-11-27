@@ -133,6 +133,52 @@ public sealed class TryAgainAndChangesTests(PostgresServer postgres) : IAsyncLif
     }
 
     [Fact]
+    public async Task A_long_build_of_many_parts_tried_again_from_the_conversation_is_reported_as_started_work()
+    {
+        // #40: "Try again" of a long failed build from the conversation showed no work card. The card comes from the work.started
+        // message the tool writes from the control plane's answer; here that answer is the real one, for a build with twelve
+        // parts, a log of several pages and a title longer than a run's title holds.
+        var owner = await app.OwnerWithOrganisationAsync();
+        var text = "A sign-up sheet where members claim a seat in a session, see who else is coming, swap seats with each other and get reminded the evening before";
+        var idea = await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/ideas", new { text, constraints = Array.Empty<string>() }));
+        var id = idea["id"]!.GetValue<string>();
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/ideas/{id}/verdict", VerdictSamples.Valid("build")));
+        var build = (await ControlPlaneApp.Ok(owner.PostAsJsonAsync($"/api/ideas/{id}/decision", new { choice = "build" })))["decision"]!["runId"]!.GetValue<string>();
+        for (var page = 0; page < 12; page++)
+        {
+            var filler = Enumerable.Range(0, 100).Select(i => (object)new { type = "tool.requested", payload = new { callId = $"c{page}-{i}", name = "read_file", agent = "builder-part-0" } }).ToArray();
+            await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/runs/{build}/events", new { events = filler }));
+        }
+
+        var parts = Enumerable.Range(1, 12).Select(n => new { id = $"part-{n}", text = $"Part {n} works." }).ToArray();
+        await FinishAsync(build, "failed",
+            new { kind = "workflow.step", agent = "workflow", step = "plan", data = new { summary = "A sign-up sheet", items = parts } },
+            new { kind = "workflow.step", agent = "workflow", step = "item:part-1", data = new { passed = true } });
+        var title = (await ControlPlaneApp.Ok(service.GetAsync($"/internal/runs/{build}")))["title"]!.GetValue<string>();
+        Assert.EndsWith("…", title, StringComparison.Ordinal);
+        Assert.DoesNotContain("...", title, StringComparison.Ordinal);
+
+        var reported = new List<(Guid RunId, string Kind, string Title)>();
+        var tool = new Endgame.Runner.Agents.TryAgainTool(new Endgame.Harness.Platform.ControlPlaneClient(service), "frostaura", (run, kind, named, _) =>
+        {
+            reported.Add((run, kind, named));
+            return Task.CompletedTask;
+        });
+        var arguments = new JsonObject { ["run_id"] = build, ["title"] = "Build: A sign-up sheet … claim a seat in a ..." };
+        // The approval names the stopped work by its own short title, read from the run, never the model's broken copy.
+        Assert.Equal("Try the build again: “A sign-up sheet where members claim a seat in a session, see who else is…”",
+            await ((Endgame.Harness.Permissions.IApprovalTitle)tool).ApprovalTitleAsync(arguments, CancellationToken.None));
+        var outcome = await tool.ExecuteAsync(new Endgame.Harness.Tools.ToolCall("c1", tool.Name, arguments, null!), CancellationToken.None);
+
+        Assert.False(outcome.IsError, outcome.Content);
+        var (again, what, said) = Assert.Single(reported);
+        Assert.Equal("retry", what);
+        Assert.Equal(title, said);
+        var started = await ControlPlaneApp.Ok(service.GetAsync($"/internal/runs/{again}"));
+        Assert.Equal(("build", "queued"), (started["kind"]!.GetValue<string>(), started["status"]!.GetValue<string>()));
+    }
+
+    [Fact]
     public async Task A_built_app_is_changed_by_a_run_that_shows_its_estimate_first_and_one_change_at_a_time()
     {
         var owner = await app.OwnerWithOrganisationAsync();

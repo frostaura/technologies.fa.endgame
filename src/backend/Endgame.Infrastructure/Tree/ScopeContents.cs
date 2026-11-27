@@ -16,10 +16,12 @@ public sealed record ScopeContentsView(string Scope, string Name, string Level, 
 /// <param name="ContractorsWorking">Contractors working there now; never counted as employees.</param>
 public sealed record ContentsCounts(int Divisions, int Projects, int Apps, IReadOnlyDictionary<string, int> AppsByState, int Employees, int ContractorsWorking);
 
-public sealed record ContentsDivision(string Name, string Path, bool Archived, IReadOnlyList<ContentsProject> Projects);
+/// <param name="Id">The division's id, so the conversation can link to it.</param>
+public sealed record ContentsDivision(string Name, string Path, bool Archived, IReadOnlyList<ContentsProject> Projects, Guid Id);
 
 /// <param name="Stage">As home shows it: researching, building, reviewing, live, planning, paused or not-built.</param>
-public sealed record ContentsProject(string Name, string Path, string Stage, string? Note, IReadOnlyList<ContentsApp> Apps);
+/// <param name="Id">The project's id.</param>
+public sealed record ContentsProject(string Name, string Path, string Stage, string? Note, IReadOnlyList<ContentsApp> Apps, Guid Id);
 
 /// <param name="State">
 /// <c>live</c> (running), <c>sleeping</c> (live, asleep until someone opens it), <c>building</c> (its first build is under
@@ -29,7 +31,8 @@ public sealed record ContentsProject(string Name, string Path, string Stage, str
 /// </param>
 /// <param name="Note">Why, in words, where the state needs one (the not-built or paused line).</param>
 /// <param name="Health">healthy, degraded, down, unknown or paused, as home shows it.</param>
-public sealed record ContentsApp(string Name, string Path, string State, string? Note, string Health, string Access);
+/// <param name="Id">The app's id: what a reply links to as <c>/apps/{id}</c>, drawn as the app's chip.</param>
+public sealed record ContentsApp(string Name, string Path, string State, string? Note, string Health, string Access, Guid Id);
 
 public static class ScopeContents
 {
@@ -113,13 +116,13 @@ public static class ScopeContents
                 {
                     workers.AddRange(a.Workers);
                     var (state, note) = StateOf(a, p);
-                    apps.Add(new ContentsApp(a.Name, $"{pPath}/{a.Slug}", state, note, a.Health, a.Access));
+                    apps.Add(new ContentsApp(a.Name, $"{pPath}/{a.Slug}", state, note, a.Health, a.Access, a.Id));
                 }
 
-                projects.Add(new ContentsProject(p.Name, pPath, p.Stage, p.Note, apps));
+                projects.Add(new ContentsProject(p.Name, pPath, p.Stage, p.Note, apps, p.Id));
             }
 
-            divisions.Add(new ContentsDivision(d.Name, dPath, d.Archived, projects));
+            divisions.Add(new ContentsDivision(d.Name, dPath, d.Archived, projects, d.Id));
         }
 
         var allApps = divisions.SelectMany(d => d.Projects).SelectMany(p => p.Apps).ToList();

@@ -11,7 +11,7 @@ import { outcomeOf } from "../runs/timeline";
  * {@link deriveRun}; the card memoises it by the log, which only ever grows.
  */
 
-export type PartState = "waiting" | "working" | "checking" | "repair" | "passed" | "needs-look" | "failed";
+export type PartState = "waiting" | "working" | "checking" | "repair" | "passed" | "carried" | "needs-look" | "failed";
 
 export type TaskRole = "build" | "check" | "repair" | "review" | "other";
 
@@ -21,6 +21,8 @@ export interface WorkTask {
   role: TaskRole;
   status: TaskStatus;
   holder: string | null;
+  /** Whether the holder is a person by name or, while nobody is hired for it yet, the role doing it. */
+  holderKind: "employee" | "role" | null;
   note: string | null;
 }
 
@@ -88,6 +90,12 @@ export interface WorkView {
   lastAt: string | null;
   /** The latest milestone message: what is happening now, in a sentence. */
   now: string | null;
+  /** Time spent waiting for a person's answer, in milliseconds, finished waits only. */
+  waitedMs: number;
+  /** When the work began waiting for an answer it still waits on, or null. */
+  waitingSince: string | null;
+  /** The estimate made again from the plan, with the one before it and why: said on the card, never a silent jump. */
+  reestimate: { from: number | null; to: number; reason: string | null } | null;
 }
 
 export const MAX_ACTIONS = 200;
@@ -188,6 +196,7 @@ export function deriveWork(events: readonly RunEvent[], mode: Mode = "normal"): 
   /** Who held each task, in turn: the builder first, then whoever checked it. */
   const hands = new Map<string, string[]>();
   const taskRole = new Map<string, TaskRole>();
+  const holderKinds = new Map<string, "employee" | "role">();
   const researchers = new Map<string, Researcher>();
   const workers = new Map<string, Worker>();
   const tools = emptyTally();
@@ -198,6 +207,10 @@ export function deriveWork(events: readonly RunEvent[], mode: Mode = "normal"): 
   let firstAt: string | null = null;
   let lastAt: string | null = null;
   let now: string | null = null;
+  let waitedMs = 0;
+  const asked = new Map<string, string>();
+  let reestimate: WorkView["reestimate"] = null;
+  let firstEstimate: number | null = null;
 
   const partOfAgent = (agent: string | null) => {
     const m = agent ? PART_AGENT.exec(agent) : null;
@@ -219,8 +232,10 @@ export function deriveWork(events: readonly RunEvent[], mode: Mode = "normal"): 
       }
       case "task.claimed": {
         const holder = str(p, "holder");
-        if (holder && !workers.has(holder)) workers.set(holder, { name: holder, kind: "employee", role: null });
+        const asRole = str(p, "holderKind") === "role";
+        if (holder && !asRole && !workers.has(holder)) workers.set(holder, { name: holder, kind: "employee", role: null });
         const id = str(p, "taskId");
+        if (id && holder) holderKinds.set(id, asRole ? "role" : "employee");
         if (id && holder) {
           const held = hands.get(id) ?? [];
           if (held[held.length - 1] !== holder) held.push(holder);
@@ -260,6 +275,31 @@ export function deriveWork(events: readonly RunEvent[], mode: Mode = "normal"): 
         if (name === "web_search" && agent && researchers.has(agent)) (researchers.get(agent) as Researcher).searches += 1;
         const phrase = stepPhrase(name, args);
         if (steps[steps.length - 1] !== phrase && !steps.includes(phrase)) steps.push(phrase);
+        break;
+      }
+      case "approval.requested": {
+        const id = str(p, "approvalId");
+        if (id) asked.set(id, e.at);
+        break;
+      }
+      case "approval.answered": {
+        const id = str(p, "approvalId");
+        const since = id ? asked.get(id) : undefined;
+        if (id && since) {
+          const ms = Date.parse(e.at) - Date.parse(since);
+          if (Number.isFinite(ms) && ms > 0) waitedMs += ms;
+          asked.delete(id);
+        }
+        break;
+      }
+      case "estimate.made": {
+        const credits = num(p, "credits");
+        if (credits === null) break;
+        if (str(p, "stage") === "plan") {
+          const from = num(p, "previousCredits") ?? firstEstimate;
+          if (from === null || Math.round(from) !== Math.round(credits)) reestimate = { from, to: credits, reason: str(p, "reason") };
+          else reestimate = null;
+        } else firstEstimate ??= credits;
         break;
       }
       case "model.replied": {
@@ -332,9 +372,9 @@ export function deriveWork(events: readonly RunEvent[], mode: Mode = "normal"): 
     if (held.length > 1 && role === "build") {
       held.forEach((holder, i) => {
         const last = i === held.length - 1;
-        part.tasks.push({ id: `${t.id}:${i}`, summary: t.summary, role: i === 0 ? "build" : "check", status: last ? t.status : "done", holder, note: last ? t.note : null });
+        part.tasks.push({ id: `${t.id}:${i}`, summary: t.summary, role: i === 0 ? "build" : "check", status: last ? t.status : "done", holder, holderKind: holderKinds.get(t.id) ?? "employee", note: last ? t.note : null });
       });
-    } else part.tasks.push({ id: t.id, summary: t.summary, role, status: t.status, holder: t.holder, note: t.note });
+    } else part.tasks.push({ id: t.id, summary: t.summary, role, status: t.status, holder: t.holder, holderKind: t.holder ? (holderKinds.get(t.id) ?? "employee") : null, note: t.note });
     if (t.status === "failed" && part.state !== "passed") part.state = "failed";
   }
   // A part whose builder holds its task and nothing else has said where it is: being worked on.
@@ -342,9 +382,19 @@ export function deriveWork(events: readonly RunEvent[], mode: Mode = "normal"): 
     if (part.state === "waiting" && part.tasks.some((t) => t.status === "working")) part.state = "working";
     if (part.state === "waiting" && part.tasks.some((t) => t.status === "done")) part.state = "passed";
   }
+  // Parts an earlier attempt built and checked, kept by this one (a try again): done before, and counted as done.
+  for (const id of run.carried) {
+    const part = parts.get(id);
+    // Its task may be listed again by the try, but nobody takes it on: what was built before stands.
+    if (part && (part.state === "waiting" || part.state === "passed") && part.tasks.every((t) => t.status === "open")) {
+      part.state = "carried";
+      part.tasks = [];
+      part.outcome ??= "Built and checked in the earlier attempt; kept, not built or charged again.";
+    }
+  }
   if (run.status === "finished" && review === "working") review = "passed";
   const ordered = [...parts.values()];
-  const done = ordered.filter((x) => x.state === "passed" || x.state === "needs-look").length;
+  const done = ordered.filter((x) => x.state === "passed" || x.state === "needs-look" || x.state === "carried").length;
   // Once the work has ended, nothing is "working now".
   const ended = run.status === "finished" || run.status === "failed" || run.status === "cancelled";
   if (ended) {
@@ -367,6 +417,9 @@ export function deriveWork(events: readonly RunEvent[], mode: Mode = "normal"): 
     firstAt,
     lastAt,
     now,
+    waitedMs,
+    waitingSince: [...asked.values()][0] ?? null,
+    reestimate,
   };
 }
 
@@ -383,6 +436,8 @@ export function partStateLabel(state: PartState, repairs: number): string {
       return `Sent back for repair (round ${Math.max(1, repairs)})`;
     case "passed":
       return "Passed";
+    case "carried":
+      return "Done before";
     case "needs-look":
       return "Needs a look";
     case "failed":

@@ -285,10 +285,39 @@ public sealed class ConversationContentTests
     public void The_conversation_prompt_links_only_what_it_read_by_id()
     {
         var prompt = RunnerResources.Prompt("conversation", new Dictionary<string, string> { ["place"] = "Technologies", ["places"] = "- Technologies" });
+        // Apps, employees, work and ideas, each by the id it read: the console draws each as a chip.
+        Assert.Contains("[its name](/apps/{id})", prompt, StringComparison.Ordinal);
         Assert.Contains("[its title](/runs/{id})", prompt, StringComparison.Ordinal);
         Assert.Contains("[their name](/employees/{id})", prompt, StringComparison.Ordinal);
+        Assert.Contains("[its title](/ideas/{id})", prompt, StringComparison.Ordinal);
         Assert.Contains("Never make up an id", prompt, StringComparison.Ordinal);
-        Assert.DoesNotContain("/apps/{id}", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_conversation_prompt_asks_for_rich_replies_only_where_they_help()
+    {
+        var prompt = RunnerResources.Prompt("conversation", new Dictionary<string, string> { ["place"] = "Technologies", ["places"] = "- Technologies" });
+        // The console renders Markdown fully: the old "no headings, no asterisks, no backticks" rule is gone.
+        Assert.DoesNotContain("no headings, no asterisks, no backticks", prompt, StringComparison.Ordinal);
+        Assert.Contains("A short answer is one to three plain sentences", prompt, StringComparison.Ordinal);
+        Assert.Contains("are a list, one item a line", prompt, StringComparison.Ordinal);
+        Assert.Contains("is a table with a header row", prompt, StringComparison.Ordinal);
+        Assert.Contains("A heading only when a long answer has several parts", prompt, StringComparison.Ordinal);
+        Assert.Contains("Bold only for", prompt, StringComparison.Ordinal);
+        // Code only in technical mode or when asked; never a path in inline code, never infrastructure in normal mode.
+        Assert.Contains("A fenced code block only when the person has switched on technical mode or asked for code", prompt, StringComparison.Ordinal);
+        Assert.Contains("Never put a path, an address or a name in inline code", prompt, StringComparison.Ordinal);
+        Assert.Contains("never show a path or infrastructure unless technical mode is on", prompt, StringComparison.Ordinal);
+        Assert.Contains("Do not mention containers, stacks, repositories", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void What_is_read_as_contents_carries_each_app_project_and_division_id_so_a_reply_can_link_it()
+    {
+        // The read_organisation 'contents' shape the prompt's app links rely on (#6): every place has its id beside its name.
+        var json = System.Text.Json.JsonSerializer.SerializeToNode(new Endgame.Infrastructure.Tree.ContentsApp("Club Reading List", "frostaura/community/club/web", "live", null, "healthy", "private", Guid.NewGuid()), Json.Web)!.AsObject();
+        Assert.True(Guid.TryParse(json["id"]?.GetValue<string>(), out _));
+        Assert.Equal("Club Reading List", json["name"]!.GetValue<string>());
     }
 
     [Fact]

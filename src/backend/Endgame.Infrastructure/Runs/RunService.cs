@@ -351,7 +351,8 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
 
         session.UseOrganisation(organisationId);
         var now = clock.GetUtcNow();
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // Joins the caller's transaction when there is one, so a run and its opening events can be created as one act.
+        await using var transaction = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(cancellationToken) : null;
         await session.ApplyAsync(db, cancellationToken);
 
         // The row lock taken here serialises every writer of this run's log.
@@ -370,7 +371,11 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
             if (!await reader.ReadAsync(cancellationToken))
             {
                 await reader.DisposeAsync();
-                await transaction.RollbackAsync(cancellationToken);
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                }
+
                 throw await AppendRefusalAsync(organisationId, runId, leaseHolder, cancellationToken);
             }
 
@@ -392,7 +397,11 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
             status = await ApplyLifecycleAsync(organisationId, runId, employeeId, status, events[i], actor, now, cancellationToken);
         }
 
-        await transaction.CommitAsync(cancellationToken);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+
         return appended;
     }
 

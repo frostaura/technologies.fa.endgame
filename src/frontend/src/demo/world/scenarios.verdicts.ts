@@ -1,6 +1,7 @@
 import { IDS, ORG, PEOPLE } from "./default";
 import { defineScenario } from "./scenarios";
 import { uuidFor, type World } from "../server/world";
+import { titleOf } from "../server/http";
 import type { Idea } from "@/store/types";
 
 /**
@@ -36,7 +37,7 @@ function addIdea(w: World, key: string, text: string, scope: string, extra: Part
   const id = extra.id ?? uuidFor(`idea:verdicts:${key}`);
   const i: Idea = {
     id,
-    title: text.length > 120 ? `${text.slice(0, 117)}...` : text,
+    title: titleOf(text),
     text,
     constraints: [],
     status: "verdict",

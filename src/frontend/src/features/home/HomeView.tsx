@@ -186,7 +186,17 @@ function Organisation({
                 key={w.id}
                 name={w.name}
                 id={w.id}
-                label={workerActivity(w) ? `${workerLabel(w)} — ${workerActivity(w)}` : workerLabel(w)}
+                // Always "name · role": what they are doing is a dot, said in the tooltip and to a screen reader (real-stack 6).
+                label={workerLabel(w)}
+                title={workerActivity(w) ? `${workerLabel(w)}: ${workerActivity(w)}` : workerLabel(w)}
+                after={
+                  workerActivity(w) ? (
+                    <>
+                      <span aria-hidden data-working-dot="" className="size-2 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />
+                      <span className="sr-only">, working: {workerActivity(w)}</span>
+                    </>
+                  ) : undefined
+                }
                 selected={selection?.employeeId === w.id && selection.scope === org.slug}
                 onSelect={() => onSelect({ scope: org.slug, kind: "employee", trail: [org.name, w.name], employeeId: w.id })}
               />

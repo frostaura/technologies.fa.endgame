@@ -181,14 +181,35 @@ public sealed partial class Estimator(RunnerOptions options)
         return new Actuals(billable, free, calls);
     }
 
-    public static JsonObject Made(Estimate estimate, string stage) => new()
+    /// <param name="reason">Why the estimate was made again, in one plain line the card can show beside the new figure.</param>
+    /// <param name="previous">The figure this one replaces, when there was one.</param>
+    public static JsonObject Made(Estimate estimate, string stage, string? reason = null, decimal? previous = null)
     {
-        ["credits"] = estimate.Credits,
-        ["basis"] = estimate.Basis,
-        ["samples"] = estimate.Samples,
-        ["stage"] = stage,
-        ["source"] = "runner",
-    };
+        ArgumentNullException.ThrowIfNull(estimate);
+        var made = new JsonObject
+        {
+            ["credits"] = estimate.Credits,
+            ["basis"] = estimate.Basis,
+            ["samples"] = estimate.Samples,
+            ["stage"] = stage,
+            ["source"] = "runner",
+        };
+        if (reason is not null)
+        {
+            made["reason"] = reason;
+        }
+
+        if (previous is not null)
+        {
+            made["previousCredits"] = previous;
+        }
+
+        return made;
+    }
+
+    /// <summary>Why a build or change is estimated again once its plan is agreed: "Re-estimated after planning: 3 parts."</summary>
+    public static string AfterPlanning(int parts) =>
+        string.Create(CultureInfo.InvariantCulture, $"Re-estimated after planning: {parts} part{(parts == 1 ? "" : "s")}.");
 
     public static JsonObject Scored(decimal expected, Actuals actual) => new()
     {

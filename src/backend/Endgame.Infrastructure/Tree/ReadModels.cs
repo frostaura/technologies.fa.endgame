@@ -497,8 +497,8 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
 
     public static string IdeaTitle(string text)
     {
-        var line = text.Split('\n', 2)[0].Trim();
-        return line.Length <= 120 ? line : line[..117] + "...";
+        // Cut at a word, never mid-word: this is the title the owner reads on cards, approvals and work (#40).
+        return Endgame.Domain.Words.Clamp(text.Split('\n', 2)[0], 120);
     }
 
     // ---------------------------------------------------------------- ideas
@@ -961,7 +961,7 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         var runs = await db.Runs.AsNoTracking()
             .Where(r => r.OrganisationId == organisationId && r.ConversationId == conversationId)
             .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id)
-            .Select(r => new { r.Id, r.Status, r.CreatedAt }).Take(MaxConversationTurns).ToListAsync(cancellationToken);
+            .Select(r => new { r.Id, r.Status, r.CreatedAt, r.StartedAt, r.LeaseHolder }).Take(MaxConversationTurns).ToListAsync(cancellationToken);
         if (runs.Count == 0)
         {
             return [];
@@ -981,10 +981,56 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
             .Where(e => Text(e.Payload?["kind"]) == ConversationMessageKinds.WorkStarted && Guid.TryParse(Text(e.Payload?["runId"]), out _))
             .GroupBy(e => e.RunId)
             .ToDictionary(g => g.Key, g => g.Select(e => new ConversationStartedView(Guid.Parse(Text(e.Payload!["runId"])!), Text(e.Payload!["workKind"]) ?? "work", Text(e.Payload!["title"]) ?? "")).ToList());
+        // Which turns replied, and which have a notice of Endgame's own (a budget that ran out): read in the database, by shape.
+        var replied = await RunsSayingAsync(organisationId, ids, AssistantShape, cancellationToken);
+        var noticed = await RunsSayingAsync(organisationId, ids, RunnerShape, cancellationToken);
         return runs.AsEnumerable().Reverse()
-            .Select(r => new ConversationTurnView(r.Id, RunStatus(r.Status), tools.GetValueOrDefault(r.Id), started.TryGetValue(r.Id, out var list) ? list : []))
+            .Select(r =>
+            {
+                var hasReply = replied.Contains(r.Id);
+                var (ended, why) = Interrupted(r.Status, r.StartedAt is not null, r.LeaseHolder is not null, hasReply, noticed.Contains(r.Id));
+                return new ConversationTurnView(r.Id, RunStatus(r.Status), tools.GetValueOrDefault(r.Id), started.TryGetValue(r.Id, out var list) ? list : [], hasReply, ended, why);
+            })
             .ToList();
     }
+
+    private static readonly string AssistantShape = new JsonObject { ["from"] = "assistant" }.ToJsonString();
+    private static readonly string RunnerShape = new JsonObject { ["from"] = "runner" }.ToJsonString();
+
+    /// <summary>Said when a turn ended with no reply and nothing in the thread says why.</summary>
+    public const string StoppedWithoutReply = "This was stopped before a reply was written.";
+
+    /// <summary>Said when a turn failed with no reply and nothing in the thread says why.</summary>
+    public const string FailedWithoutReply = "The reply could not be written. Nothing more was charged; ask again.";
+
+    /// <summary>Said when a turn was cut off part-way (its Runner was lost) and waits to be picked up again.</summary>
+    public const string PickedUpAgain = "The reply was cut off part-way and is being picked up again.";
+
+    /// <summary>
+    /// Whether a turn ended without a reply, and the sentence that explains a missing reply when nothing in the thread does
+    /// (#7): a reload while a reply is being written must resume it, and one that will never come must say so.
+    /// </summary>
+    public static (bool Ended, string? Why) Interrupted(string status, bool startedOnce, bool held, bool replied, bool noticed)
+    {
+        if (replied || noticed)
+        {
+            return (false, null);
+        }
+
+        return status switch
+        {
+            RunStatuses.Cancelled => (true, StoppedWithoutReply),
+            RunStatuses.Failed => (true, FailedWithoutReply),
+            // Started, then put back in the queue with no holder: the lease was lost and the sweep requeued it.
+            RunStatuses.Queued when startedOnce && !held => (false, PickedUpAgain),
+            _ => (false, null),
+        };
+    }
+
+    private async Task<HashSet<Guid>> RunsSayingAsync(Guid organisationId, List<Guid> ids, string shape, CancellationToken cancellationToken) =>
+        (await db.RunEvents.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && ids.Contains(e.RunId) && e.Type == RunEventTypes.Message && EF.Functions.JsonContains(e.PayloadJson, shape))
+            .Select(e => e.RunId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
 
     private static string? Text(JsonNode? node) => node is JsonValue v && v.GetValueKind() == JsonValueKind.String ? v.GetValue<string>() : null;
 }

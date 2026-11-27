@@ -138,9 +138,10 @@ public sealed class ControlPlaneClient(HttpClient http)
         return Task(await ReadAsync<JsonObject>(response, cancellationToken));
     }
 
-    public async Task<TaskInfo> CheckoutTaskAsync(Guid taskId, Guid runId, Guid? employeeId, string expectedStatus, Guid? expectedHolderRunId, CancellationToken cancellationToken)
+    /// <param name="holderTitle">Who does the work when no employee does (a hire still waiting for the owner), so the claim names someone.</param>
+    public async Task<TaskInfo> CheckoutTaskAsync(Guid taskId, Guid runId, Guid? employeeId, string expectedStatus, Guid? expectedHolderRunId, CancellationToken cancellationToken, string? holderTitle = null)
     {
-        using var response = await Http.PostAsJsonAsync("/internal/tasks/checkout", new { taskId, runId, employeeId, expectedStatus, expectedHolderRunId }, Json.Web, cancellationToken);
+        using var response = await Http.PostAsJsonAsync("/internal/tasks/checkout", new { taskId, runId, employeeId, expectedStatus, expectedHolderRunId, holderTitle }, Json.Web, cancellationToken);
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
             var problem = await response.Content.ReadFromJsonAsync<JsonObject>(Json.Web, cancellationToken);

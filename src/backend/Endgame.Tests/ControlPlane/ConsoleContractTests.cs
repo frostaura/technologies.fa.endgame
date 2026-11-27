@@ -91,7 +91,7 @@ public sealed class ConsoleContractTests(PostgresServer postgres) : IAsyncLifeti
         HasKeys(history, "scope", "conversationId", "employeeId", "messages", "turns");
         HasKeys(history["messages"]![0], "runId", "seq", "at", "from", "text", "by", "code", "attachments");
         HasKeys(history["messages"]![0]!["attachments"]![0], "id", "name", "contentType", "kind", "bytes", "pages", "characters", "runId");
-        HasKeys(history["turns"]![0], "runId", "status", "toolCalls", "started");
+        HasKeys(history["turns"]![0], "runId", "status", "toolCalls", "started", "replied", "endedWithoutReply", "interruption");
         HasKeys(await ControlPlaneApp.Ok(owner.PostAsJsonAsync("/api/conversations/estimate", new { scope = "frostaura", attachmentIds = Array.Empty<string>() })), "credits", "ceiling", "basis");
 
         var capabilities = await ControlPlaneApp.Ok(owner.GetAsync("/api/conversations/capabilities?scope=frostaura"));

@@ -64,6 +64,27 @@ public sealed class ScopeContentsTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_organisation_conversation_names_and_links_an_app_beneath_it_by_its_own_name_and_id()
+    {
+        // C-1: an organisation-level change read "Change Web: …", the app's slug in words, because the names came only from
+        // the levels down to the scope. The contents read carries every place beneath it, with its name and its id.
+        var contents = (await ControlPlaneApp.Ok(service.GetAsync("/internal/contents?scope=frostaura"))).AsObject();
+        var context = (await ControlPlaneApp.Ok(service.GetAsync("/internal/context?scope=frostaura"))).AsObject();
+        var app = contents["divisions"]![0]!["projects"]!.AsArray().SelectMany(p => p!["apps"]!.AsArray()).Single(a => a!["name"]!.GetValue<string>() == "Club Reading List")!;
+        Assert.Equal(reading.ToString(), app["id"]!.GetValue<string>());
+        Assert.True(Guid.TryParse(contents["divisions"]![0]!["id"]!.GetValue<string>(), out _));
+        Assert.True(Guid.TryParse(contents["divisions"]![0]!["projects"]![0]!["id"]!.GetValue<string>(), out _));
+
+        var names = Endgame.Runner.Execution.PlaceNames.FromContext(context);
+        Assert.Equal("Web", names.Name($"{Division}/book-club/web"));
+        var all = names.With(contents);
+        Assert.Equal(("Club Reading List", "Book Club", "Community"), (all.Name($"{Division}/book-club/web"), all.Name($"{Division}/book-club"), all.Name(Division)));
+        var tool = new Endgame.Runner.Agents.ChangeAppTool(new ControlPlaneClient(service), "frostaura", all, ownerWords: "Add a waiting list to the reading list when a session is full.");
+        Assert.Equal("Change Club Reading List: “Add a waiting list to the reading list when a session is full.”",
+            tool.ApprovalTitle(new JsonObject { ["app"] = $"{Division}/book-club/web", ["request"] = "Add a waitlist feature" }));
+    }
+
+    [Fact]
     public async Task At_the_organisation_it_counts_every_app_home_counts_each_with_its_state()
     {
         var home = await ControlPlaneApp.Ok(owner.GetAsync("/api/tree"));

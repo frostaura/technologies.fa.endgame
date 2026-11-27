@@ -302,6 +302,15 @@ public static class ApprovalConsequence
 public interface IApprovalTitle
 {
     string ApprovalTitle(JsonObject arguments);
+
+    /// <summary>
+    /// The plain sentence under the title: what approving this call does, and what a decline leaves (C-1). Null keeps the
+    /// sentence of why it was asked (<see cref="ApprovalDetail.For"/>).
+    /// </summary>
+    string? ApprovalDetail(JsonObject arguments) => null;
+
+    /// <summary>The title, for a tool that must read something first to name what it acts on (the stopped work's own title).</summary>
+    Task<string> ApprovalTitleAsync(JsonObject arguments, CancellationToken cancellationToken) => Task.FromResult(ApprovalTitle(arguments));
 }
 
 /// <summary>The plain sentence under an approval's title (D71): why it is asked, never the tool line.</summary>

@@ -169,6 +169,11 @@ export interface DemoApproval {
   onDecline?: "continues" | "stops";
   /** Which step of its run raised it, so the step after it can read the answer. */
   key?: string;
+  /**
+   * What approving it started (a conversation's `work.started` run id), or why the act was then refused (the control
+   * plane's own words: the tool's result the model reads), so the conversation's next sentence says what truly happened.
+   */
+  outcome?: { started: string } | { refused: string };
 }
 
 /** A run's playback: which script it follows and how far it has got. */

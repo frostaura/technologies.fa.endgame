@@ -179,7 +179,48 @@ public sealed class ConversationAttachmentsTests(PostgresServer postgres) : IAsy
         // A file goes with one message only.
         var again = await ControlPlaneApp.Expect(await owner.PostAsJsonAsync("/api/conversations", new { scope = "frostaura/labs", message = "Again.", attachmentIds = new[] { Id(keep) } }), HttpStatusCode.Conflict);
         Assert.Equal("attachment_sent", again["code"]!.GetValue<string>());
+        // The refused message left nothing behind: no turn, and no message-less run (#7).
+        var turns = (await ControlPlaneApp.Ok(owner.GetAsync("/api/conversations?scope=frostaura/labs")))["turns"]!.AsArray();
+        Assert.Single(turns);
     }
+
+    [Fact]
+    public async Task A_turn_that_ended_with_no_reply_says_so_unless_a_notice_already_does()
+    {
+        // #7: a reload while a reply was being written left the owner's message alone in the thread, with nothing to say why.
+        var stopped = Id(await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/conversations", new { scope = "frostaura/labs", message = "How are we doing?" })));
+        await ControlPlaneApp.Ok(owner.PostAsync($"/api/runs/{stopped}/cancel", null));
+        var budget = Id(await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/conversations", new { scope = "frostaura/labs", message = "And now?" })));
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/runs/{budget}/lease", new { holder = "runner-test", seconds = 60 }));
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/runs/{budget}/events", new
+        {
+            leaseHolder = "runner-test",
+            events = new object[]
+            {
+                new { type = "message", payload = new { from = "runner", code = "budget_exhausted", title = "No reply: the budget ran out", text = "The credit budget ran out." } },
+                new { type = "run.finished", payload = new { outcome = "failed", summary = "Budget." } },
+            },
+        }));
+        var crashed = Id(await ControlPlaneApp.Created(owner.PostAsJsonAsync("/api/conversations", new { scope = "frostaura/labs", message = "Still there?" })));
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/runs/{crashed}/lease", new { holder = "runner-test", seconds = 60 }));
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/runs/{crashed}/events", new { leaseHolder = "runner-test", events = new object[] { new { type = "run.finished", payload = new { outcome = "failed", summary = "The workflow threw." } } } }));
+
+        var turns = (await ControlPlaneApp.Ok(owner.GetAsync("/api/conversations?scope=frostaura/labs")))["turns"]!.AsArray().ToDictionary(t => t!["runId"]!.GetValue<string>());
+        Assert.Equal((false, true, Endgame.Infrastructure.Tree.ReadModels.StoppedWithoutReply), (turns[stopped]!["replied"]!.GetValue<bool>(), turns[stopped]!["endedWithoutReply"]!.GetValue<bool>(), turns[stopped]!["interruption"]!.GetValue<string>()));
+        // The budget notice is in the thread already: nothing more to say.
+        Assert.Equal((false, false), (turns[budget]!["replied"]!.GetValue<bool>(), turns[budget]!["endedWithoutReply"]!.GetValue<bool>()));
+        Assert.Null(turns[budget]!["interruption"]);
+        Assert.Equal((true, Endgame.Infrastructure.Tree.ReadModels.FailedWithoutReply), (turns[crashed]!["endedWithoutReply"]!.GetValue<bool>(), turns[crashed]!["interruption"]!.GetValue<string>()));
+    }
+
+    [Theory]
+    [InlineData("queued", true, false, false, false, false, Endgame.Infrastructure.Tree.ReadModels.PickedUpAgain)]
+    [InlineData("queued", false, false, false, false, false, null)]
+    [InlineData("running", true, true, false, false, false, null)]
+    [InlineData("failed", true, false, true, false, false, null)]
+    [InlineData("cancelled", true, false, false, true, false, null)]
+    public void A_turn_is_said_to_be_interrupted_only_when_nothing_explains_its_missing_reply(string status, bool started, bool held, bool replied, bool noticed, bool ended, string? why) =>
+        Assert.Equal((ended, why), Endgame.Infrastructure.Tree.ReadModels.Interrupted(status, started, held, replied, noticed));
 
     [Fact]
     public async Task Unsent_files_older_than_a_day_are_cleared_when_their_uploader_next_uploads()
@@ -327,6 +368,15 @@ public sealed class ConversationAttachmentsTests(PostgresServer postgres) : IAsy
         var started = Assert.Single(turns[0]!["started"]!.AsArray())!;
         Assert.Equal((research.ToString(), "research", "A court booking app"), (started["runId"]!.GetValue<string>(), started["kind"]!.GetValue<string>(), started["title"]!.GetValue<string>()));
         Assert.Empty(turns[1]!["started"]!.AsArray());
+        // #7: the first turn has its reply; the second, still queued, is neither replied nor interrupted.
+        Assert.Equal((true, false), (turns[0]!["replied"]!.GetValue<bool>(), turns[0]!["endedWithoutReply"]!.GetValue<bool>()));
+        Assert.Null(turns[0]!["interruption"]);
+        Assert.Equal((false, false), (turns[1]!["replied"]!.GetValue<bool>(), turns[1]!["endedWithoutReply"]!.GetValue<bool>()));
+        Assert.Null(turns[1]!["interruption"]);
+        // The turn's run never exists without its owner message: they are committed together.
+        var opening = (await ControlPlaneApp.Ok(service.GetAsync($"/internal/runs/{Id(second)}/events"))).AsArray();
+        Assert.Equal("message", opening[0]!["type"]!.GetValue<string>());
+        Assert.Equal("owner", opening[0]!["payload"]!["from"]!.GetValue<string>());
 
         // What the Runner is given: each file's text, in the order attached.
         var files = (await ControlPlaneApp.Ok(service.GetAsync($"/internal/runs/{firstId}/attachments?taskType=chat")))["attachments"]!.AsArray();

@@ -1,7 +1,7 @@
 import { IDS, ORG } from "./default";
 import { defineScenario } from "./scenarios";
 import { startChange } from "../server/tryAgain";
-import { LONG_RUN_ID, longBuildRun } from "./longRun";
+import { LONG_IDEA_ID, LONG_RUN_ID, longBuildRun, longRunIdea } from "./longRun";
 import { spentBelow, uuidFor, type World } from "../server/world";
 
 /**
@@ -207,7 +207,12 @@ defineScenario({
   title: "A long build that did not succeed: about 2,000 steps, a request cut at 120 characters, a part sent back three times",
   apply: (w) => {
     w.runs = w.runs.filter((r) => !r.playback);
-    w.runs.push(longBuildRun(LEARNING));
+    const long = longBuildRun(LEARNING);
+    // Decided from an idea, as every build is: without one it could not be tried again, and asking the conversation to try
+    // it again started nothing while the reply said it had (#40).
+    long.run.ideaId = LONG_IDEA_ID;
+    w.runs.push(long);
+    w.ideas.push(longRunIdea(LEARNING));
   },
   route: "/runs/{run}",
   featured: { run: LONG_RUN_ID },

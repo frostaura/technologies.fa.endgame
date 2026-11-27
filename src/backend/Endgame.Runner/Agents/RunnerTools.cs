@@ -413,14 +413,66 @@ internal static class StartedWork
             return;
         }
 
-        await started(id, workKind, OutputText.Truncate(titleOf(body, run) ?? Json.Str(run, "title") ?? "", 200), cancellationToken);
+        // Cut at a word, never with the model's "[n characters cut]" marker: this is the card's heading (#40).
+        await started(id, workKind, Endgame.Domain.Words.Clamp(titleOf(body, run) ?? Json.Str(run, "title") ?? "", 200), cancellationToken);
     }
 }
 
-/// <summary><c>POST /internal/ideas</c> {scope, text, constraints} → <c>{ idea, run, estimate }</c>.</summary>
-public sealed class StartIdeaTool(ControlPlaneClient controlPlane, string scope, WorkStarted? started = null) : ITool, IApprovalTitle
+/// <summary>
+/// How a conversation's approvals read (C-1): the act and the place or work it is about by its own name, then the owner's own
+/// words of this turn in typographic quotes — never the model's rephrasing, which stays in the approval's technical detail.
+/// </summary>
+public static class ApprovalWording
 {
-    public string ApprovalTitle(JsonObject arguments) => $"Start researching an idea: {Json.Str(arguments, "text")}";
+    /// <summary>How much of the owner's words an approval quotes, cut at a word.</summary>
+    public const int QuotedCharacters = 140;
+
+    /// <summary>How much of a stopped piece of work's title "Try again" names.</summary>
+    public const int ShortTitleCharacters = 80;
+
+    /// <summary>The owner's words in quotes; the model's words only when the owner wrote none (they sent files alone).</summary>
+    public static string Quote(string? ownerWords, string? modelWords) =>
+        Endgame.Domain.Words.Quoted(string.IsNullOrWhiteSpace(ownerWords) ? modelWords : ownerWords, QuotedCharacters);
+
+    /// <summary>A run's title without the word the factory puts first ("Build: ", "Change: ", "Research: "), cut short at a word.</summary>
+    public static string ShortTitle(string? title)
+    {
+        var text = Endgame.Domain.Words.OneLine(title);
+        foreach (var lead in new[] { "Build: ", "Change: ", "Research: " })
+        {
+            if (text.StartsWith(lead, StringComparison.Ordinal))
+            {
+                text = text[lead.Length..];
+                break;
+            }
+        }
+
+        // A title the control plane already cut ("… in a ..." from before titles were cut at a word) loses its dangling end.
+        text = text.EndsWith("...", StringComparison.Ordinal) ? text[..^3].TrimEnd() : text;
+        return Endgame.Domain.Words.Clamp(text, ShortTitleCharacters);
+    }
+
+    /// <summary>"Try the build again", "Try the change again", "Try the research again", from the stopped run's kind.</summary>
+    public static string TryAgainLead(string? kind, string? title) => kind switch
+    {
+        Endgame.Domain.Runs.RunKinds.Build => "Try the build again",
+        Endgame.Domain.Runs.RunKinds.Research => "Try the research again",
+        Endgame.Domain.Runs.RunKinds.Task => "Try the change again",
+        _ => (title ?? "").StartsWith("Build: ", StringComparison.Ordinal) ? "Try the build again"
+            : (title ?? "").StartsWith("Change: ", StringComparison.Ordinal) ? "Try the change again"
+            : (title ?? "").StartsWith("Research: ", StringComparison.Ordinal) ? "Try the research again"
+            : "Try again",
+    };
+}
+
+/// <summary><c>POST /internal/ideas</c> {scope, text, constraints} → <c>{ idea, run, estimate }</c>.</summary>
+/// <param name="ownerWords">The owner's own message this turn, which the approval quotes (C-1).</param>
+public sealed class StartIdeaTool(ControlPlaneClient controlPlane, string scope, WorkStarted? started = null, string? ownerWords = null) : ITool, IApprovalTitle
+{
+    public string ApprovalTitle(JsonObject arguments) => $"Start researching an idea: {ApprovalWording.Quote(ownerWords, Json.Str(arguments, "text"))}";
+
+    public string? ApprovalDetail(JsonObject arguments) =>
+        "Approving starts research on this idea, its estimate shown first; the verdict comes back to you to decide on. If you decline, nothing is started.";
 
     public string Name => "start_idea";
 
@@ -487,6 +539,11 @@ public sealed partial class AdjustSettingTool(ControlPlaneClient controlPlane, s
     public string ApprovalTitle(JsonObject arguments) =>
         Describe(Json.Str(arguments, "key"), Json.Str(arguments, "value"), names, scope)?.Title ?? "Change a setting";
 
+    public string? ApprovalDetail(JsonObject arguments) =>
+        Describe(Json.Str(arguments, "key"), Json.Str(arguments, "value"), names, scope) is { } d
+            ? $"Approving makes this change now: {d.Done} If you decline, nothing changes."
+            : null;
+
     public string Name => "adjust_setting";
 
     public string Description => "Change one setting at the scope being discussed: autonomy (\"auto\" or \"checkpoints\"), checkpoint.start, checkpoint.plan or checkpoint.hire (true or false), sleep.mode (\"auto\" or \"always_on\"), sleep.idle_minutes (minutes) or workforce.idle_days (days). The owner is asked to confirm first. Nothing else can be changed here: who may open an app, credits and overdraft are a person's to change on their own screens.";
@@ -550,7 +607,8 @@ public sealed partial class AdjustSettingTool(ControlPlaneClient controlPlane, s
 /// <c>POST /internal/apps/changes</c> — the estimate is shown first in the change's own run, then a plan, the build, the checks
 /// and the new version. The owner confirms first.
 /// </summary>
-public sealed partial class ChangeAppTool(ControlPlaneClient controlPlane, string scope, PlaceNames? places = null, WorkStarted? started = null) : ITool, IApprovalTitle
+/// <param name="ownerWords">The owner's own message this turn, which the approval quotes (C-1).</param>
+public sealed partial class ChangeAppTool(ControlPlaneClient controlPlane, string scope, PlaceNames? places = null, WorkStarted? started = null, string? ownerWords = null) : ITool, IApprovalTitle
 {
     private readonly PlaceNames names = places ?? new PlaceNames([]);
 
@@ -600,8 +658,14 @@ public sealed partial class ChangeAppTool(ControlPlaneClient controlPlane, strin
 
     public ToolEffect Effect => ToolEffect.External;
 
+    /// <summary>"Change Club Reading List: “add a waiting list when a session is full”" — the app by its name, the owner's words quoted.</summary>
     public string ApprovalTitle(JsonObject arguments) =>
-        $"Change {names.Name(Json.Str(arguments, "app") is { Length: > 0 } a ? a : scope)}: {Json.Str(arguments, "request")?.Trim().TrimEnd('.', '?', '!')}";
+        $"Change {names.Name(AppOf(arguments))}: {ApprovalWording.Quote(ownerWords, Json.Str(arguments, "request"))}";
+
+    public string? ApprovalDetail(JsonObject arguments) =>
+        $"Approving starts this change to {names.Name(AppOf(arguments))}: its estimate is shown first, then a plan, the change built and checked in the running app, and a new version. If you decline, nothing changes.";
+
+    private string AppOf(JsonObject arguments) => Json.Str(arguments, "app") is { Length: > 0 } a ? a.Trim().TrimEnd('/') : scope;
 
     public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root)
     {
@@ -644,6 +708,35 @@ public sealed partial class ChangeAppTool(ControlPlaneClient controlPlane, strin
 /// </summary>
 public sealed class TryAgainTool(ControlPlaneClient controlPlane, string scope, WorkStarted? started = null) : ITool, IApprovalTitle
 {
+    /// <summary>"Try the build again: “A sign-up sheet”" from what the model passed, when the stopped run cannot be read.</summary>
+    public string ApprovalTitle(JsonObject arguments) => Titled(null, Json.Str(arguments, "title"));
+
+    /// <summary>The stopped work named by its own title, read from the run itself — never the model's copy of it, cut mid-sentence.</summary>
+    public async Task<string> ApprovalTitleAsync(JsonObject arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (Guid.TryParse(Json.Str(arguments, "run_id"), out var id))
+        {
+            try
+            {
+                var stopped = await controlPlane.GetRunAsync(id, cancellationToken);
+                return Titled(stopped.Kind, stopped.Title);
+            }
+            catch (Exception e) when (e is ServiceProblemException or HttpRequestException or System.Text.Json.JsonException)
+            {
+                // Named from what the model read instead: the approval is still asked, and the call refused later if the id is wrong.
+            }
+        }
+
+        return ApprovalTitle(arguments);
+    }
+
+    public string? ApprovalDetail(JsonObject arguments) =>
+        "Approving starts it again as new work, its estimate shown first, keeping what was already built and agreed. If you decline, nothing is started.";
+
+    private static string Titled(string? kind, string? title) =>
+        ApprovalWording.ShortTitle(title) is { Length: > 0 } shortTitle ? $"{ApprovalWording.TryAgainLead(kind, title)}: “{shortTitle}”" : ApprovalWording.TryAgainLead(kind, title);
+
     public string Name => "try_again";
 
     public string Description => "Start again a research, a build or a change that failed, was cancelled or stopped for budget, picking up what was already built and agreed (read 'runs' to find it). The owner is asked to confirm first.";
@@ -655,8 +748,6 @@ public sealed class TryAgainTool(ControlPlaneClient controlPlane, string scope, 
     }, "run_id", "title");
 
     public ToolEffect Effect => ToolEffect.External;
-
-    public string ApprovalTitle(JsonObject arguments) => $"Try again: {Json.Str(arguments, "title")}";
 
     public (ToolTargets Targets, string? Error) Target(JsonObject arguments, string root) =>
         Guid.TryParse(Json.Str(arguments, "run_id"), out _) ? (new ToolTargets([], Json.Str(arguments, "run_id")), null) : (ToolTargets.None, "try_again needs the run's id, from read_organisation 'runs'.");

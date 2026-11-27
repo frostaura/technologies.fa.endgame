@@ -1,13 +1,13 @@
 import type { DecisionChoice, Idea } from "@/store/types";
 import { append } from "../engine";
 import { homeOrganisation, me, requireRole, scopeOf } from "../access";
-import { area, conflict, created, invalid, noContent, notFound, num, ok, problem, Refusal, str, strings, titleOf } from "../http";
+import { area, clampWords, conflict, created, invalid, noContent, notFound, num, ok, problem, Refusal, str, strings, titleOf } from "../http";
 import { capabilities, checkFile, content, FileRefused, keep, LIMITS, takesImages, view } from "../conversationKit";
 import { setStage, startRun } from "../mutations";
 import { startResearch } from "../scripts";
 import { changeEstimate, changeText, conversationEstimate, retryEstimate, retryRun, runView, startChange } from "../tryAgain";
 import { appView, ideaView } from "../views";
-import { newId, orgOf, runRecord, setting, type World } from "../world";
+import { newId, orgOf, runRecord, setting, type DemoRun, type World } from "../world";
 
 /** `WorkEndpoints.cs`: ideas and decisions, runs and their controls, approvals, tasks, apps, conversations. */
 
@@ -31,8 +31,10 @@ export function answerApproval(world: World, approvalId: string, decision: "appr
   const r = runRecord(world, a.runId);
   a.answer = decision === "approve" ? "approved" : "rejected";
   a.answeredBy = by;
+  // `ApprovalService.AnswerAsync`: who answered, by id and by name, so the receipt never shows a person as an id.
+  const person = world.users.find((u) => u.displayName === by || u.id === by);
   if (r) {
-    append(world, r, "approval.answered", { approvalId: a.id, answer: a.answer, comment: note, by });
+    append(world, r, "approval.answered", { approvalId: a.id, answer: a.answer, comment: note?.trim() ? note.trim() : null, by: person?.id ?? by, byName: person?.displayName ?? by });
     if (!world.approvals.some((x) => x.runId === r.run.id && x.answer === null) && r.run.status === "waiting") r.run.status = "running";
     if (r.playback) r.playback.params = { ...r.playback.params, answer: a.answer };
   }
@@ -40,19 +42,31 @@ export function answerApproval(world: World, approvalId: string, decision: "appr
     const act = a.onApprove;
     // What the conversation started, said in its own log so the conversation follows it (`work.started`, ARCH-012).
     const started = (run: { run: { id: string; title: string } } | undefined, workKind: string) => {
-      if (r && run && r.run.kind === "conversation") append(world, r, "message", { kind: "work.started", runId: run.run.id, workKind, title: run.run.title });
+      if (!run) return;
+      a.outcome = { started: run.run.id };
+      if (r && r.run.kind === "conversation") append(world, r, "message", { kind: "work.started", runId: run.run.id, workKind, title: clampWords(run.run.title, 200) });
     };
-    if (act.kind === "start-idea") {
-      const idea = createIdea(world, act.text, [], act.scope, "conversation");
-      started(runRecord(world, idea.runId), "research");
-    }
-    if (act.kind === "change-app") {
-      const app = world.apps.find((x) => x.path === act.scope);
-      if (app) started(startChange(world, app, act.request, null, "conversation"), "change");
-    }
-    if (act.kind === "try-again") {
-      const stopped = runRecord(world, act.runId);
-      if (stopped) started(retryRun(world, stopped, null, startResearch), "retry");
+    try {
+      if (act.kind === "start-idea") {
+        const idea = createIdea(world, act.text, [], act.scope, "conversation");
+        started(runRecord(world, idea.runId), "research");
+      }
+      if (act.kind === "change-app") {
+        const app = world.apps.find((x) => x.path === act.scope);
+        if (!app) throw notFound("The app");
+        started(startChange(world, app, act.request, null, "conversation"), "change");
+      }
+      if (act.kind === "try-again") {
+        const stopped = runRecord(world, act.runId);
+        if (!stopped) throw notFound("The run");
+        started(retryRun(world, stopped, null, startResearch), "retry");
+      }
+    } catch (e) {
+      // Approving answers the question; the tool's call is what the control plane then refuses (`StartedWork`), and the
+      // conversation reads that refusal and says it did not happen. The answer itself is never refused for it.
+      if (!(e instanceof Refusal) || !r || r.run.kind !== "conversation") throw e;
+      const body = (e.reply.body ?? {}) as { title?: string; detail?: string };
+      a.outcome = { refused: body.detail ?? body.title ?? "It could not be started." };
     }
     if (act.kind === "setting") {
       const key = act.key === "sleep.mode" ? "sleep.mode" : act.key;
@@ -320,30 +334,7 @@ area("WorkEndpoints", {
     const narrowBody = (req.body.narrow ?? {}) as Record<string, unknown>;
     const narrow = { ...(narrowBody.noWebSearch === true ? { noWebSearch: true } : {}), ...(narrowBody.answerOnly === true ? { answerOnly: true } : {}) };
     const given = str(req.body, "conversationId");
-    let conversation = given ? world.conversations.find((c) => c.id === given) : world.conversations.find((c) => c.scope === scope && c.employeeId === employeeId);
-    if (given && !conversation) throw notFound("The conversation");
-    if (conversation && conversation.scope !== scope) throw conflict("This conversation belongs to another scope; start a new one here.");
-    if (!conversation) {
-      conversation = { id: newId(world, "conversation"), scope, employeeId, runIds: [] };
-      world.conversations.push(conversation);
-    }
-    const first = message ? (message.split("\n")[0] ?? message) : `Sent ${files.map((f) => f.name).join(", ")}`;
-    const r = startRun(world, { id: newId(world, "run"), kind: "conversation", title: first.length > 120 ? `${first.slice(0, 117)}...` : first, scope, ideaId: null, estimateCredits: null, employeeId, conversationId: conversation.id }, "conversation", {
-      text: message,
-      employeeId,
-      files: files.map((f) => `${f.name}|${f.kind}|${f.pages ?? ""}`).join("\n") || null,
-      answerOnly: narrow.answerOnly === true,
-    });
-    for (const f of files) f.runId = r.run.id;
-    append(world, r, "message", {
-      from: "owner",
-      userId: me(world).id,
-      text: message,
-      ...(files.length > 0 ? { attachments: files.map((f) => ({ id: f.id, name: f.name, kind: f.kind, contentType: f.contentType, bytes: f.bytes })) } : {}),
-      ...(Object.keys(narrow).length > 0 ? { narrow } : {}),
-    });
-    conversation.runIds.push(r.run.id);
-    world.changed.push("Conversation");
+    const r = startTurn(world, { scope, message, employeeId, userId: me(world).id, files, narrow, conversationId: given ?? null });
     return created(runView(world, r));
   },
 
@@ -370,7 +361,7 @@ area("WorkEndpoints", {
       const started = r.events
         .filter((e) => e.type === "message" && e.payload.kind === "work.started" && typeof e.payload.runId === "string")
         .map((e) => ({ runId: String(e.payload.runId), kind: String(e.payload.workKind ?? ""), title: String(e.payload.title ?? "") }));
-      return [{ runId: id, status: r.run.status, toolCalls: r.events.filter((e) => e.type === "tool.requested").length, started }];
+      return [{ runId: id, status: r.run.status, toolCalls: r.events.filter((e) => e.type === "tool.requested").length, started, ...replyState(r) }];
     });
     return ok({ scope, conversationId: c?.id ?? null, employeeId: employeeId ?? null, messages: messages.slice(-200), turns });
   },
@@ -427,4 +418,57 @@ area("WorkEndpoints", {
 /** The autonomy a scope works under: whether a plan waits for a person. */
 export function planWaits(world: World, scope: string) {
   return setting(world, scope, "autonomy")?.value === "checkpoints" && setting(world, scope, "checkpoint.plan")?.value === "true";
+}
+
+/** `ConversationService.PostAsync`, once the request is checked: the turn's run, its files and the owner's message, as one act. */
+export function startTurn(
+  world: World,
+  o: { scope: string; message: string; employeeId: string | null; userId: string; files?: NonNullable<World["attachments"]>; narrow?: { noWebSearch?: boolean; answerOnly?: boolean }; conversationId?: string | null },
+): DemoRun {
+  const { scope, message, employeeId } = o;
+  const files = o.files ?? [];
+  const narrow = o.narrow ?? {};
+  let conversation = o.conversationId ? world.conversations.find((c) => c.id === o.conversationId) : world.conversations.find((c) => c.scope === scope && c.employeeId === employeeId);
+  if (o.conversationId && !conversation) throw notFound("The conversation");
+  if (conversation && conversation.scope !== scope) throw conflict("This conversation belongs to another scope; start a new one here.");
+  if (!conversation) {
+    conversation = { id: newId(world, "conversation"), scope, employeeId, runIds: [] };
+    world.conversations.push(conversation);
+  }
+  const first = message ? (message.split("\n")[0] ?? message) : `Sent ${files.map((f) => f.name).join(", ")}`;
+  const r = startRun(world, { id: newId(world, "run"), kind: "conversation", title: clampWords(first, 120), scope, ideaId: null, estimateCredits: null, employeeId, conversationId: conversation.id }, "conversation", {
+    text: message,
+    employeeId,
+    files: files.map((f) => `${f.name}|${f.kind}|${f.pages ?? ""}`).join("\n") || null,
+    answerOnly: narrow.answerOnly === true,
+  });
+  for (const f of files) f.runId = r.run.id;
+  append(world, r, "message", {
+    from: "owner",
+    userId: o.userId,
+    text: message,
+    ...(files.length > 0 ? { attachments: files.map((f) => ({ id: f.id, name: f.name, kind: f.kind, contentType: f.contentType, bytes: f.bytes })) } : {}),
+    ...(Object.keys(narrow).length > 0 ? { narrow } : {}),
+  });
+  conversation.runIds.push(r.run.id);
+  world.changed.push("Conversation");
+  return r;
+}
+
+/** `ReadModels.Interrupted`'s words: why a turn has no reply, when nothing in the thread says it. */
+export const STOPPED_WITHOUT_REPLY = "This was stopped before a reply was written.";
+export const FAILED_WITHOUT_REPLY = "The reply could not be written. Nothing more was charged; ask again.";
+
+/**
+ * `ReadModels.ConversationTurnsAsync`: whether a turn has its reply (an assistant message), whether it ended without one and
+ * with no notice of Endgame's own (a budget that ran out) saying why, and that sentence. A turn still being written is
+ * neither, so a reload resumes it.
+ */
+export function replyState(r: DemoRun): { replied: boolean; endedWithoutReply: boolean; interruption: string | null } {
+  const says = (from: string) => r.events.some((e) => e.type === "message" && !e.payload.kind && e.payload.from === from);
+  const replied = says("assistant");
+  if (replied || says("runner")) return { replied, endedWithoutReply: false, interruption: null };
+  if (r.run.status === "cancelled") return { replied, endedWithoutReply: true, interruption: STOPPED_WITHOUT_REPLY };
+  if (r.run.status === "failed") return { replied, endedWithoutReply: true, interruption: FAILED_WITHOUT_REPLY };
+  return { replied, endedWithoutReply: false, interruption: null };
 }

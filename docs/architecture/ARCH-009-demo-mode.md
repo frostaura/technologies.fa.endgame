@@ -145,10 +145,23 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `verdict-long`, `verdict-long-red-line`, `suggestions-long` | Real-sized research: a 200-character idea, a two-line headline, a summary in paragraphs, 21 products, 41 sources with very long addresses, 14 signals and four earlier overrules; the same over a red line, its reasoning written three times; five long suggestions, one reusing a thing twice, three taken or set aside | |
 | `s3-stage-rules` | Learning's build stage asks before `docs/app.md` changes and refuses `docs/decisions.md` | |
 | `s3-suggestions`, `s3-employee-paused` | Two open ideas from the portfolio, one taken, one set aside; Kasper paused, so Court booking takes no new work | |
-| `run-long` | A long build that did not succeed, shaped like the longest real run: about 2,000 events and 430 actions, a request cut at 120 characters, a part sent back three times (`world/longRun.ts`; the run page is designed and measured against it) | |
+| `run-long` | A long build that did not succeed, shaped like the longest real run: about 2,000 events and 430 actions, a request cut at a word at 120 characters, a part sent back three times, its tasks held by roles while the hires wait (`world/longRun.ts`; the run page is designed and measured against it). Decided from an idea, so it can be tried again — from its page, or from the conversation on home, with its card | |
+| `talk-rich-replies`, `talk-rich-replies-app`, `talk-rich-replies-employee` | The conversation's rich replies on home, on Court booking's page and on Kasper's: a table of what each app cost, a long answer under headings with lists, fenced YAML, bold, chips to apps, people, work and ideas by their real ids, and a long path in inline code that must wrap (`world/scenarios.talk.ts`; the same questions bring them in every scenario) | |
+| `talk-web-search-approval` | Research the conversation started, waiting inside its card on a web search Northwind's research rules ask about first | |
+| `talk-plan-approval`, `talk-plan-approval-app`, `talk-plan-approval-employee` | A change the conversation started, stopped at its plan for your sign-off (checkpoints, plan checkpoint on), from home, Court booking's page and Kasper's page | |
+| `talk-card-failed`, `talk-card-cancelled` | A change the conversation started that failed (Try again on its card), or that was cancelled part-way | |
+| `talk-part-states` | Two changes from the conversation: one whose last part did not pass, one stopped because a part's check needs a look | |
+| `talk-over-estimate` | A change estimated at about 10, re-estimated after planning at about 15 with why, that cost more than that | |
+| `talk-many-parts` | A change planned in six parts, under way | |
+| `talk-retry-carried` | The reading list's failed build tried again from the conversation, the parts built before carried over, finished | |
+| `talk-not-sent` | The first message cannot be sent (one 503), then can | |
+| `talk-budget-stopped` | Northwind's own budget spent: the conversation's budget notice already in the thread, and on every new message | |
+| `talk-long-history` | 32 turns over five days, two finished cards, a declined approval with its note and an approved one, replies with tables | |
+| `talk-reply-interrupted` | The last turn ended failed with no reply (`endedWithoutReply`) | |
+| `talk-midreply` | A long reply still being written; the clock plays it, about twenty seconds, so a reload part-way shows it resuming | |
 
-Scenarios are kept one file per flow file, `world/scenarios.s<n>.ts`, each registered by one
-side-effect import in `host.ts`. Not in `scenarios.ts`: a scenario file calls its `defineScenario`,
+Scenarios are kept one file per flow file, `world/scenarios.s<n>.ts` (the conversation's in
+`world/scenarios.talk.ts`), each registered by one side-effect import in `host.ts`. Not in `scenarios.ts`: a scenario file calls its `defineScenario`,
 so importing it there is a cycle whose `const` map is not yet initialised.
 
 The academy's organisation, tree, notification and system flows use `world/scenarios.s2.ts`. A
@@ -167,7 +180,8 @@ own words, or none), with the server's eight services in `StatusOptions.Probes` 
 `build:sent-back`, `build:repaired`, `build:budget-stopped`, `build:security-review`,
 `build:security-finding`, `build:security-passed`, `build:published`, `build:finished`,
 `build:failed`; the same for a change of a built app as `change:…`, with `change:screened` and
-`change:red-line`; `conversation:approval`, `conversation:replied`, `conversation:budget-stopped`.
+`change:red-line`; `conversation:thinking` (its steps taken, before the reply), `conversation:approval`,
+`conversation:replied`, `conversation:budget-stopped`.
 A budget, a checkpoint or a stage rule is read when its step is reached (an `effect` or an `ask`
 step), so a setting changed while a run plays changes what it does next. A number instead moves every live
 run forward by that many script milliseconds (approvals on the way stop it). Seeking to a name
@@ -372,7 +386,26 @@ page. "What it can use here" is read from the world as the control plane reads i
 tier (`chat` reads text only and cannot search; `research` can do both), the stage rule sets for
 `web_search`, the apps and stopped work beneath the scope, the secrets on its chain and the
 organisation's keys. Approving work a conversation asked for appends `work.started` to the
-conversation's run, and its history lists each turn's run with its tool count and that work.
+conversation's run, and its history lists each turn's run with its tool count, that work, and
+whether it has its reply (`replied`), ended without one (`endedWithoutReply`) and the sentence
+that says so (`interruption`, `ReadModels.Interrupted`'s words).
+
+The conversation's approvals read as the Runner's do (`ApprovalWording`, `AgentLoop.Question`): the
+act and the app or stopped work by its own name, then the owner's own words of the turn in
+typographic quotes, cut at a word (`server/http.ts` `clampWords`, `Words.Clamp`), with no "?" after
+a quote; the detail says what approving does; the scripted rephrasing is in `technical`. Run titles
+are cut at a word with "…". `approval.answered` carries `by` (the person's id) and `byName`. The
+sentence after an answer is decided when it is reached, from what approving did
+(`DemoApproval.outcome`): the work it started, or the control plane's refusal of it, which the
+conversation then says — an answer is never refused because the act was. Once a turn has named
+the stopped work it asks to try again, it keeps naming it, so its steps rebuild the same way. A try
+again carries on from the earlier attempt's placement, agreed plan and passed parts
+(`BuildWorkflow.CarryOverAsync`). Every `task.claimed` names a `holder` with `holderKind`
+(`employee`, or `role` while nobody is hired); a plan's re-estimate carries `reason` and
+`previousCredits`; `read_organisation 'contents'` returns each division, project and app with its id.
+Replies are Markdown where it helps (`richAnswer` in `server/scripts.ts`): the questions that bring
+each kind are in `scenarios.talk.ts` (`RICH_QUESTIONS`). A stage's rules are checked for every tool
+call made under a stage, reading ones too, so research's web searches can ask first.
 
 ## Invariants
 

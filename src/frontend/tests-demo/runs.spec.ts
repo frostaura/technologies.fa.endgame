@@ -98,5 +98,7 @@ test("a paused run shows no live pulse", async ({ page }) => {
 test("at 1024 the page keeps its width: no squeezed side column", async ({ page }) => {
   await open(page, "build-running", 1024, 768);
   const cost = await page.getByRole("region", { name: "Cost" }).boundingBox();
-  expect(cost?.width ?? 0).toBeGreaterThan(850);
+  // Beside the docked conversation (ARCH-012) the page column is what is left; the cost takes all of it.
+  const main = await page.locator("main").boundingBox();
+  expect(cost?.width ?? 0).toBeGreaterThan((main?.width ?? 0) - 100);
 });

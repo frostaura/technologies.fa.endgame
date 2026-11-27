@@ -104,7 +104,7 @@ public sealed class ChangeService(EndgameDbContext db, TenantSession session, Ru
 
     private static string Title(string text)
     {
-        var line = text.Split('\n', 2)[0].Trim();
-        return line.Length <= 110 ? line : line[..107] + "...";
+        // Cut at a word, never mid-word: this is the title the owner reads on cards, approvals and work (#40).
+        return Endgame.Domain.Words.Clamp(text.Split('\n', 2)[0], 110);
     }
 }

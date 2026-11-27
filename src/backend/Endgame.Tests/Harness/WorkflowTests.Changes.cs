@@ -270,17 +270,28 @@ public sealed partial class WorkflowTests
     public async Task The_conversation_asks_in_plain_words_before_changing_an_app_or_trying_work_again_and_a_decline_is_told_truthfully()
     {
         var cp = new FakeControlPlane("frostaura/technologies/recipes/web", "conversation", "Add star ratings, and try the failed build again.") { Headroom = 100m, AnswerApproval = _ => false, ApprovalNote = "Not this week." };
-        var stoppedRun = Guid.NewGuid();
+        // The stopped work's own title, longer than a question can carry; the model passes its own cut-short copy of it.
+        var stoppedRun = cp.Stopped("build", "Build: Recipe box for families, where every household keeps its recipes and shares the best ones with the others");
         var model = new ScriptedModel()
             .ThenTool("change_app", new { request = RatingsRequest })
-            .ThenTool("try_again", new { run_id = stoppedRun.ToString(), title = "Build: Recipe box" })
+            .ThenTool("try_again", new { run_id = stoppedRun.ToString(), title = "Build: Recipe box for families, where every household ke ..." })
             .ThenTool("adjust_setting", new { key = "checkpoint.plan", value = "true" })
             .ThenText("You declined all three, so none of them was done.");
         await EstimateTests.Executor(cp, model, workflows: [new ConversationWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
 
         Assert.Equal(
-            ["Change web: Members can rate each recipe from one to five stars?", "Try again: Build: Recipe box?", "Turn on the “Before the plan is carried out” checkpoint in web?"],
+            [
+                // C-1: the app by its name and the owner's own words, quoted; the stopped work by its own short title, cut at a word.
+                "Change web: “Add star ratings, and try the failed build again.”",
+                "Try the build again: “Recipe box for families, where every household keeps its recipes and shares…”",
+                "Turn on the “Before the plan is carried out” checkpoint in web?",
+            ],
             cp.Approvals);
+        // Under each: what approving does, in a plain sentence; the model's own rephrasing kept for technical mode.
+        Assert.StartsWith("Approving starts this change to web:", cp.ApprovalsAsked[0]["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains(RatingsRequest, cp.ApprovalsAsked[0]["technical"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.StartsWith("Approving starts it again as new work", cp.ApprovalsAsked[1]["detail"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.StartsWith("Approving makes this change now:", cp.ApprovalsAsked[2]["detail"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.All(cp.Approvals, a => Assert.DoesNotContain("_", a, StringComparison.Ordinal));
         Assert.DoesNotContain(cp.Requests, r => r is "POST /internal/apps/changes" || r.EndsWith("/retry", StringComparison.Ordinal) || r == "PUT /internal/cascade");
         var denied = cp.Events.Where(e => e.Type == "tool.result" && e.Payload["isError"]?.GetValue<bool>() == true).Select(e => e.Payload["content"]!.GetValue<string>()).ToList();

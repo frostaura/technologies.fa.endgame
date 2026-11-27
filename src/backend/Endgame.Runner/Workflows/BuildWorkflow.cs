@@ -193,7 +193,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         if (!run.Journal.Done("estimate.plan"))
         {
             var estimate = await estimator.EstimateAsync(run, plan, cancellationToken);
-            await run.AppendAsync(HarnessEvents.EstimateMade, Estimator.Made(estimate, "plan"), cancellationToken);
+            // Said with the figure it replaces and why (C-4): a card that moves "about 10" to "about 15" with no word reads as a mistake.
+            await run.AppendAsync(HarnessEvents.EstimateMade, Estimator.Made(estimate, "plan", Estimator.AfterPlanning(plan.Items.Count), Estimator.Latest(run.History)), cancellationToken);
             var headroom = await HeadroomAsync(run, cancellationToken);
             if (headroom is { } room && estimate.Credits > room)
             {
@@ -475,11 +476,11 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                 "A new division was created for this work, and every division has someone answerable for it."), cancellationToken);
         }
 
-        var engineer = await Workforce.HireAsync(run, new Need("stage", $"stage:build:{project}", project, "Theo", "Software engineer",
+        var engineer = await Workforce.HireAsync(run, new Need("stage", $"stage:build:{project}", project, "Theo", EngineerTitle,
             $"Plan and build {name} feature by feature on the app kit, each one verified and committed; repair what the evaluator sends back.",
             run.Options.BuildTiers[0], Workforce.BuilderTools, credits.GetValueOrDefault("engineer", 1500m),
             $"{name} is entering its build, and somebody must build and maintain it.", lead), cancellationToken);
-        var qa = await Workforce.HireAsync(run, new Need("stage", $"stage:evaluate:{project}", project, "Nadia", "QA engineer",
+        var qa = await Workforce.HireAsync(run, new Need("stage", $"stage:evaluate:{project}", project, "Nadia", QaTitle,
             $"Check every feature of {name} against its contract, independently of the person who built it: tests, the running app, the details.",
             run.Options.EvaluateTaskType, Workforce.ReaderTools, credits.GetValueOrDefault("qa", 600m),
             $"{name} is entering evaluation, and the person who checks the work must not be the one who did it.", lead), cancellationToken);
@@ -517,6 +518,15 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             $"The app now runs recurring jobs ({string.Join(", ", schedules)}), and recurring work needs someone to watch it.", crew.Engineer), cancellationToken);
     }
 
+    /// <summary>Who holds a part's task when the employee for it is not hired yet: the role that does the work.</summary>
+    public const string EngineerTitle = "Software engineer";
+
+    /// <summary>Who holds a check's task when the QA engineer is not hired yet.</summary>
+    public const string QaTitle = "QA engineer";
+
+    /// <summary>Who holds the security review's task when the standing reviewer cannot be read.</summary>
+    public const string ReviewerTitle = "Security reviewer";
+
     /// <summary>Who does what in this build, and what each of them remembers about it.</summary>
     private sealed record Crew(Guid? Engineer, string EngineerMemory, Guid? Qa, string QaMemory, Guid? Reviewer, string ReviewerMemory, string ProjectPath);
 
@@ -531,7 +541,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var checkFirst = change && item.Id == KeepItem;
 
         // The item is a task in the graph, claimed by the engineer who builds it: the work is theirs wherever the run belongs.
-        var taskId = await ClaimTaskAsync(run, $"build:{item.Id}", crew.ProjectPath, item.Text, $"{item.Detail}\nChecked by: {item.Check}", checkFirst ? crew.Qa : crew.Engineer, cancellationToken);
+        var taskId = await ClaimTaskAsync(run, $"build:{item.Id}", crew.ProjectPath, item.Text, $"{item.Detail}\nChecked by: {item.Check}", checkFirst ? crew.Qa : crew.Engineer, checkFirst ? QaTitle : EngineerTitle, cancellationToken);
         var tiers = run.Options.BuildTiers;
         JsonObject? lastEvaluation = null;
         // How each failed round failed (EvaluationGate's "failing"), oldest first: the same failure three times stops the part.
@@ -697,7 +707,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     {
         var key = $"item:{item.Id}:round:{round}";
         // The check is the QA engineer's own piece of work.
-        var checkTaskId = await ClaimTaskAsync(run, $"check:{item.Id}:{round}", crew.ProjectPath, $"Check: {item.Text}", $"Round {round}, built on {tier}. Checked by: {item.Check}", crew.Qa, cancellationToken);
+        var checkTaskId = await ClaimTaskAsync(run, $"check:{item.Id}:{round}", crew.ProjectPath, $"Check: {item.Text}", $"Round {round}, built on {tier}. Checked by: {item.Check}", crew.Qa, QaTitle, cancellationToken);
         var evaluation = await EvaluateAsync(run, plan, item, round, tier, workspace, appId, crew, previous, cancellationToken);
         if (evaluation is null)
         {
@@ -785,7 +795,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     /// still waits for the owner). Created once — the journal remembers it, so a resumed build creates nothing twice — and
     /// claimed again on resume only if the lease sweep handed it back. Attribution never stops the work: a refusal is null.
     /// </summary>
-    private static async Task<Guid?> ClaimTaskAsync(RunContext run, string key, string scope, string title, string description, Guid? employeeId, CancellationToken cancellationToken)
+    private static async Task<Guid?> ClaimTaskAsync(RunContext run, string key, string scope, string title, string description, Guid? employeeId, string holderTitle, CancellationToken cancellationToken)
     {
         var step = $"task:{key}";
         var recorded = run.Journal.Get(step);
@@ -800,7 +810,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             var id = Guid.Parse(Json.Str(recorded, "taskId")!);
             try
             {
-                await run.ControlPlane.CheckoutTaskAsync(id, run.Run.Id, employeeId, TaskStatuses.Todo, null, cancellationToken);
+                // Named even when no employee does it (a hire still waiting for the owner): the part is being worked, by its role (C-3).
+                await run.ControlPlane.CheckoutTaskAsync(id, run.Run.Id, employeeId, TaskStatuses.Todo, null, cancellationToken, employeeId is null ? holderTitle : null);
             }
             catch (Harness.Tasks.TaskConflictException)
             {
@@ -1147,7 +1158,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
 
         var reviewTask = await ClaimTaskAsync(run, key, crew.ProjectPath, attempt == 0 ? "Review the app's security before it is published" : "Check the security fixes before the app is published",
-            "Secrets, sign-in, data, model calls and outbound calls, against the security review checklist.", crew.Reviewer, cancellationToken);
+            "Secrets, sign-in, data, model calls and outbound calls, against the security review checklist.", crew.Reviewer, ReviewerTitle, cancellationToken);
         var reviewer = await WorkflowSupport.RunAgentAsync(run, AgentFactory.As(run, run.Agents.SecurityReviewer(run, workspace.Root) with { Id = $"security-reviewer-{attempt}" }, crew.Reviewer, crew.ReviewerMemory, canRemember: true, crew.ProjectPath), workspace,
             "Review the app now against your checklist, then reply with the JSON object.", cancellationToken);
         if (WorkflowOutcome.FromAgent(reviewer) is { } stopped)
@@ -1202,7 +1213,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     private static async Task<WorkflowOutcome?> RepairFindingsAsync(RunContext run, PlanContract plan, IWorkspace workspace, Crew crew, int repair, IReadOnlyList<JsonObject> blocking, IReadOnlyList<JsonObject> repaired, CancellationToken cancellationToken)
     {
         var suffix = repair == 0 ? "" : $"-{repair}";
-        var fixTask = await ClaimTaskAsync(run, repair == 0 ? "security-fix" : $"security-fix:{repair}", crew.ProjectPath, "Fix what the security review found", "Each finding fixed, verified with make lint and make test, and committed.", crew.Engineer, cancellationToken);
+        var fixTask = await ClaimTaskAsync(run, repair == 0 ? "security-fix" : $"security-fix:{repair}", crew.ProjectPath, "Fix what the security review found", "Each finding fixed, verified with make lint and make test, and committed.", crew.Engineer, EngineerTitle, cancellationToken);
         var builder = AgentFactory.As(run, run.Agents.Builder(run, $"builder-security-repair{suffix}", run.Options.BuildTiers[Math.Min(1 + repair, run.Options.BuildTiers.Count - 1)], repair: true, workspace.Root), crew.Engineer, crew.EngineerMemory, canRemember: true, crew.ProjectPath);
         var log = repair == 0 ? [] : await run.LogReader.ReadAllAsync(cancellationToken);
         var fix = await WorkflowSupport.RunAgentAsync(run, builder, workspace, SecurityRepairBrief(plan, repair, blocking, repaired, log), cancellationToken);
@@ -1255,7 +1266,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     private static async Task<(bool OnlyDocuments, WorkflowOutcome? Stopped)> FixDocumentsAsync(RunContext run, IWorkspace workspace, Crew crew, IReadOnlyList<JsonObject> documents, CancellationToken cancellationToken)
     {
         const string Agent = "builder-security-docs";
-        var fixTask = await ClaimTaskAsync(run, "security-docs", crew.ProjectPath, "Correct what the app's documents say about its security", "Each document the review named says what the code does, and nothing else is changed.", crew.Engineer, cancellationToken);
+        var fixTask = await ClaimTaskAsync(run, "security-docs", crew.ProjectPath, "Correct what the app's documents say about its security", "Each document the review named says what the code does, and nothing else is changed.", crew.Engineer, EngineerTitle, cancellationToken);
         var builder = AgentFactory.As(run, run.Agents.Builder(run, Agent, run.Options.BuildTiers[0], repair: true, workspace.Root), crew.Engineer, crew.EngineerMemory, canRemember: true, crew.ProjectPath);
         var fix = await WorkflowSupport.RunAgentAsync(run, builder, workspace, RunnerResources.Prompt("security-docs", new Dictionary<string, string> { ["findings"] = SecurityFindings.Render(documents) }), cancellationToken);
         if (WorkflowOutcome.FromAgent(fix) is { } stopped)

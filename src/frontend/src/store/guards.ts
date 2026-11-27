@@ -328,6 +328,10 @@ export const conversationGuard: Guard<ConversationHistory> = obj<ConversationHis
         status: oneOf(RUN_STATUSES),
         toolCalls: withDefault(num, 0),
         started: withDefault(arr(obj<ConversationTurn["started"][number]>({ runId: s, kind: withDefault(s, ""), title: withDefault(s, "") })), []),
+        // An older control plane says nothing of how a turn ended.
+        replied: optional(bool),
+        endedWithoutReply: optional(bool),
+        interruption: optional(ns),
       }),
     ),
     [],

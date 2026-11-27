@@ -481,6 +481,8 @@ public sealed partial class WorkflowTests
         var planned = cp.Events.Last(e => e.Type == "estimate.made").Payload;
         Assert.Equal((10m, "plan"), (planned["credits"]!.GetValue<decimal>(), planned["stage"]!.GetValue<string>()));
         Assert.Contains("measured starting figure for build runs", planned["basis"]!.GetValue<string>(), StringComparison.Ordinal);
+        // Re-estimating after the plan says why, in a plain line (C-4).
+        Assert.Equal("Re-estimated after planning: 2 parts.", planned["reason"]!.GetValue<string>());
         // One session, one clean commit and one progress entry per feature; a separate evaluator each.
         Assert.Equal(2, types.Count(t => t == "evaluation.passed"));
         Assert.Equal(4, ws.CommitMessages.Count);
@@ -561,6 +563,11 @@ public sealed partial class WorkflowTests
         Assert.Equal("division", cp.Hires["division:frostaura/labs"]["trigger"]!.GetValue<string>());
         Assert.Equal("recurring", cp.Hires["recurring:frostaura/labs/recipe-box-for-families/web"]["trigger"]!.GetValue<string>());
         Assert.All(cp.Hires.Values, h => Assert.Equal("proposed", h["status"]!.GetValue<string>()));
+        // With nobody hired yet, every part being worked still names who works it, by role (C-3: never "Not taken yet").
+        var claims = cp.Events.Where(e => e.Type == "task.claimed").Select(e => e.Payload["holder"]?.GetValue<string>()).ToList();
+        Assert.NotEmpty(claims);
+        Assert.All(claims, h => Assert.Contains(h, new[] { BuildWorkflow.EngineerTitle, BuildWorkflow.QaTitle, "Vigil" }));
+        Assert.Contains(BuildWorkflow.EngineerTitle, claims);
         // Said once, in plain words; a hire is not a milestone, and its key never reaches the owner.
         Assert.Single(cp.Events, e => e.Type == "message" && e.Payload["title"]?.GetValue<string>() == "Theo is proposed");
         Assert.DoesNotContain(cp.Events, e => e.Type == "message" && e.Payload["kind"] is null && e.Payload.ToJsonString().Contains("stage:build", StringComparison.Ordinal));
@@ -699,6 +706,8 @@ public sealed partial class WorkflowTests
         Assert.Equal("done", Assert.Single(cp.Tasks, t => t["employeeId"]?.GetValue<string>() == cp.Reviewer.ToString())["status"]!.GetValue<string>());
         Assert.All(cp.Tasks, t => Assert.True(Endgame.Harness.Events.OwnerText.IsPlain(t["title"]!.GetValue<string>()), t["title"]!.GetValue<string>()));
         Assert.All(cp.Events.Where(e => e.Type is "task.claimed" or "task.done" or "task.failed"), e => Assert.NotNull(e.Payload["employeeId"]));
+        // Each claim names its holder (C-3), and a claim by an employee never sends a stand-in title.
+        Assert.All(cp.Events.Where(e => e.Type == "task.claimed"), e => Assert.False(string.IsNullOrEmpty(e.Payload["holder"]?.GetValue<string>())));
 
         // Each evaluation judges the engineer's task, by the QA engineer: sent back with the repair not charged, then accepted.
         var apiTask = built[0]["id"]!.GetValue<string>();
@@ -970,7 +979,8 @@ public sealed partial class WorkflowTests
         Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
         Assert.All(model.Calls, c => Assert.Equal("chat", c.TaskType));
         Assert.Contains("Ada", model.Calls[1].Messages[^1]!["content"]!.GetValue<string>(), StringComparison.Ordinal);
-        Assert.StartsWith("Start researching an idea: A habit tracker", Assert.Single(cp.Approvals), StringComparison.Ordinal);
+        // The owner's own words, quoted (C-1), not the model's "A habit tracker."
+        Assert.Equal("Start researching an idea: “How many people work here, and start an idea for a habit tracker.”", Assert.Single(cp.Approvals));
         Assert.DoesNotContain(cp.Requests, r => r == "POST /internal/ideas");
         Assert.Contains(cp.Events, e => e.Type == "message" && e.Payload["from"]?.GetValue<string>() == "assistant" && e.Payload["text"]!.GetValue<string>().StartsWith("One person works here", StringComparison.Ordinal));
     }
@@ -1008,7 +1018,8 @@ public sealed partial class WorkflowTests
             }
         }
 
-        Assert.Equal(2, cp.Requests.Count(r => r == "GET /internal/contents"));
+        // Its two reads, and the one the turn makes for the names of the places beneath it (C-1).
+        Assert.Equal(3, cp.Requests.Count(r => r == "GET /internal/contents"));
     }
 
     private static string System(ChatCall call) => call.Messages[0]!["content"] is JsonValue v ? v.GetValue<string>() : call.Messages[0]!["content"]![0]!["text"]!.GetValue<string>();

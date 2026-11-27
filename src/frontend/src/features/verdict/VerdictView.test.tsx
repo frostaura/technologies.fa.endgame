@@ -261,9 +261,9 @@ describe("VerdictView", () => {
     const api = stub(json(ideaFixture()), { "POST /api/ideas/i1/decision": json(ideaFixture({ status: "decided", decision: { choice: "overrule", at: "2026-11-24T10:00:00Z", by: "Owner", overruled: true, runId: null, via: "person" } })) });
     renderWithStore(<VerdictView ideaId="i1" />);
     fireEvent.click(await screen.findByRole("button", { name: "Overrule and build anyway" }));
-    expect(api.calls.some((c) => c.method === "POST")).toBe(false);
+    expect(api.calls.some((c) => c.method === "POST" && c.path.endsWith("/decision"))).toBe(false);
     fireEvent.click(within(screen.getByRole("group", { name: "Confirm" })).getByRole("button", { name: "Yes" }));
-    await waitFor(() => expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ choice: "overrule" }));
+    await waitFor(() => expect(api.calls.find((c) => c.method === "POST" && c.path.endsWith("/decision"))?.body).toEqual({ choice: "overrule" }));
   });
 
   it("asks what should change, and sends it as the note", async () => {
@@ -273,7 +273,7 @@ describe("VerdictView", () => {
     const form = screen.getByRole("form", { name: "Change the idea" });
     fireEvent.change(within(form).getByLabelText("What should change?"), { target: { value: "Only for teams already on Ledger" } });
     fireEvent.click(within(form).getByRole("button", { name: "Research it again with this change" }));
-    await waitFor(() => expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ choice: "change", note: "Only for teams already on Ledger" }));
+    await waitFor(() => expect(api.calls.find((c) => c.method === "POST" && c.path.endsWith("/decision"))?.body).toEqual({ choice: "change", note: "Only for teams already on Ledger" }));
   });
 
   it("shows a recorded overrule clearly", async () => {

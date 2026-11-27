@@ -17,7 +17,9 @@ export function formatNumber(n: number): string {
 }
 
 export function formatCredits(n: number): string {
-  return `${formatNumber(n)} ${n === 1 ? "credit" : "credits"}`;
+  // Singular by what is read: 0.96 is shown as "1", so it is "1 credit".
+  const shown = formatNumber(n);
+  return `${shown} ${shown === "1" ? "credit" : "credits"}`;
 }
 
 /**
@@ -61,7 +63,8 @@ export function possessive(name: string): string {
 }
 
 export function plural(n: number, one: string, many: string = `${one}s`): string {
-  return `${formatNumber(n)} ${n === 1 ? one : many}`;
+  const shown = formatNumber(n);
+  return `${shown} ${shown === "1" ? one : many}`;
 }
 
 export function formatDuration(ms: number): string {

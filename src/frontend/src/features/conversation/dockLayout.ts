@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useState, useSyncExternalStore } from "react";
 
 /**
  * How the docked conversation is drawn on a desktop (ARCH-012): narrow or wide, open or collapsed
@@ -6,7 +6,12 @@ import { createContext, useCallback, useContext, useState } from "react";
  * device — a convenience, never state anyone else reads — so it opens as they left it.
  */
 export interface DockLayout {
+  /** Wide, as drawn: a stored choice of wide holds only where the window is wide enough for it ({@link WIDER_FROM}). */
   wide: boolean;
+  /** Whether "wider" pushes the page aside here; below {@link WIDER_FROM} the wide pane would crush the page, so it lies over it instead. */
+  canWiden: boolean;
+  /** Wide, over the page as a drawer (below {@link WIDER_FROM}), rather than beside it. */
+  overlay: boolean;
   collapsed: boolean;
   /** Across the whole width, the page hidden behind it; not remembered, so the page is never lost. */
   full: boolean;
@@ -26,6 +31,25 @@ const KEY = "endgame.dock";
 
 /** The viewport width from which the pane opens wide until someone chooses. */
 export const WIDE_FROM = 1880;
+
+/** The narrowest window that offers the wide pane: below it the page would keep less than about 960 pixels. */
+export const WIDER_FROM = 1500;
+
+function wideEnough(): boolean {
+  return typeof window === "undefined" || typeof window.matchMedia !== "function" ? true : window.matchMedia(`(min-width: ${WIDER_FROM}px)`).matches;
+}
+
+function subscribeWidth(listener: () => void) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => undefined;
+  const q = window.matchMedia(`(min-width: ${WIDER_FROM}px)`);
+  q.addEventListener("change", listener);
+  return () => q.removeEventListener("change", listener);
+}
+
+/** Whether the window is wide enough for the wide pane. */
+export function useCanWiden(): boolean {
+  return useSyncExternalStore(subscribeWidth, wideEnough, () => true);
+}
 
 interface Stored {
   wide: boolean;
@@ -90,5 +114,6 @@ export function useDockState(person: string | null): DockLayout {
     },
     [update],
   );
-  return { wide: stored.wide, collapsed: stored.collapsed, full, setWide, setCollapsed, setFull };
+  const canWiden = useCanWiden();
+  return { wide: stored.wide && canWiden, canWiden, overlay: stored.wide && !canWiden && !stored.collapsed && !full, collapsed: stored.collapsed, full, setWide, setCollapsed, setFull };
 }

@@ -97,11 +97,14 @@ public sealed class ConversationService(EndgameDbContext db, TenantSession sessi
 
         db.ChangeTracker.Clear();
         var title = text.Length > 0 ? text.Split('\n', 2)[0] : $"Sent {string.Join(", ", files.Select(f => f.Name))}";
-        var run = await runs.CreateAsync(scope, RunKinds.Conversation, title.Length <= 120 ? title : title[..117] + "...", employeeId, null, conversation.Id, conversation.LastRunId, by, cancellationToken);
+        // The turn's run, its files, the owner's message and its estimate are one act (#7): committed together, so no Runner
+        // can claim a turn whose message is not there yet, and a request that dies half-way leaves no message-less turn.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var run = await runs.CreateAsync(scope, RunKinds.Conversation, Endgame.Domain.Words.Clamp(title, 120), employeeId, null, conversation.Id, conversation.LastRunId, by, cancellationToken);
         if (!await attachments.LinkAsync(scope.OrganisationId, conversation.Id, run.Id, files.Select(f => f.Id).ToList(), cancellationToken))
         {
-            // Another message took one of the files a moment ago: this one is not sent, and says why.
-            await runs.CancelAsync(scope.OrganisationId, run.Id, by, "A file attached to it was sent with another message first.", cancellationToken);
+            // Another message took one of the files a moment ago: this one is not sent (nothing of it is kept), and says why.
+            await transaction.RollbackAsync(cancellationToken);
             throw new EndgameProblem(409, "attachment_sent", "A file was already sent", "One of the files was sent with another message a moment ago. Attach it again to send it again.");
         }
 
@@ -131,6 +134,7 @@ public sealed class ConversationService(EndgameDbContext db, TenantSession sessi
         session.UseOrganisation(scope.OrganisationId);
         await db.Conversations.Where(c => c.OrganisationId == scope.OrganisationId && c.Id == conversation.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.LastRunId, run.Id), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new ConversationTurn(conversation.Id, scope.Path.ToString(), await runs.GetAsync(scope.OrganisationId, run.Id, cancellationToken));
     }
 }

@@ -27,7 +27,8 @@ public sealed record TestSessionRequest(string? Persona, string? Role);
 
 public sealed record AppendEventsRequest(string? LeaseHolder, IReadOnlyList<EventInput>? Events);
 
-public sealed record CheckoutRequest(Guid TaskId, Guid RunId, Guid? EmployeeId, string? ExpectedStatus, Guid? ExpectedHolderRunId);
+/// <param name="HolderTitle">Who does the work when no employee does (a hire still waiting, a contractor): its title, so the claim names someone.</param>
+public sealed record CheckoutRequest(Guid TaskId, Guid RunId, Guid? EmployeeId, string? ExpectedStatus, Guid? ExpectedHolderRunId, string? HolderTitle = null);
 
 public sealed record CreateTaskRequest(string? Scope, Guid? RunId, Guid? ParentTaskId, string? Title, string? Description, decimal? EstimateCredits, IReadOnlyList<Guid>? DependsOn);
 
@@ -157,7 +158,7 @@ internal static class InternalEndpoints
 
         group.MapPost("/tasks/checkout", async (CheckoutRequest request, TaskService tasks, CancellationToken ct) =>
         {
-            var claimed = await tasks.CheckoutAsync(request.TaskId, request.RunId, request.EmployeeId, request.ExpectedStatus ?? "", request.ExpectedHolderRunId, ct);
+            var claimed = await tasks.CheckoutAsync(request.TaskId, request.RunId, request.EmployeeId, request.ExpectedStatus ?? "", request.ExpectedHolderRunId, ct, request.HolderTitle);
             if (claimed is not null)
             {
                 return Results.Ok(claimed);

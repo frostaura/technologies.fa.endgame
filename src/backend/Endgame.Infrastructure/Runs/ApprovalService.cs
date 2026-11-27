@@ -93,12 +93,15 @@ public sealed class ApprovalService(EndgameDbContext db, TenantSession session, 
                 : $"This approval was already {approval.Status}.");
         }
 
+        // The receipt names who answered ("Approved by Dean · 14:02"), so the console never shows a person as an id.
+        var byName = await db.Users.AsNoTracking().Where(u => u.Id == by).Select(u => u.DisplayName).SingleOrDefaultAsync(cancellationToken);
         await runs.AppendAsync(organisationId, runId, [new NewEvent(RunEventTypes.ApprovalAnswered, new JsonObject
         {
             ["approvalId"] = approvalId.ToString(),
             ["answer"] = status,
             ["comment"] = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
             ["by"] = by.ToString(),
+            ["byName"] = string.IsNullOrWhiteSpace(byName) ? null : byName,
         })], null, by, cancellationToken);
         return View(approval);
     }

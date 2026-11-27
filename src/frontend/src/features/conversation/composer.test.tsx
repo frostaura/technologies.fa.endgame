@@ -133,6 +133,33 @@ describe("the composer", () => {
     await waitFor(() => expect(stub.calls.find((c) => c.path === "/api/conversations" && c.method === "POST")?.body).toMatchObject({ attachmentIds: ["f1"] }));
   });
 
+  it("keeps a menu open with nothing matching, and Escape closes only the menu (findings 26, 29)", async () => {
+    renderWithStore(<ConversationDock tree={TREE} selection={ORG} />);
+    const input = await box();
+    fireEvent.change(input, { target: { value: "/zzq", selectionStart: 4 } });
+    expect(screen.getByText("No action here matches that.")).toBeTruthy();
+    const reachedDocument = vi.fn();
+    document.addEventListener("keydown", reachedDocument);
+    fireEvent.keyDown(input, { key: "Escape" });
+    document.removeEventListener("keydown", reachedDocument);
+    expect(screen.queryByText("No action here matches that.")).toBeNull();
+    // The layer below (a sheet) never hears it.
+    expect(reachedDocument).not.toHaveBeenCalled();
+  });
+
+  it("keeps a refused file as a chip in its error state, its reason on it, beside the others (findings 16–18)", async () => {
+    renderWithStore(<ConversationDock tree={TREE} selection={ORG} />);
+    await box();
+    const picker = document.querySelector("input[type=file]") as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(picker, { target: { files: [new File(["MZ"], "setup.exe"), new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" })] } });
+    });
+    const refused = document.querySelectorAll("[data-attachment-chip=failed]");
+    expect(refused).toHaveLength(2);
+    expect(screen.getAllByRole("alert").map((a) => a.textContent).join(" ")).toMatch(/not accepted/);
+    expect(screen.queryByText("Wait for the files to be added.")).toBeNull();
+  });
+
   it("says before sending that an image cannot go to an answerer that reads text only", async () => {
     renderWithStore(<ConversationDock tree={TREE} selection={ORG} />);
     await box();

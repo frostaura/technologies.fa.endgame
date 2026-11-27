@@ -274,7 +274,14 @@ public sealed record ConversationMessageView(Guid RunId, long Seq, DateTimeOffse
 public sealed record ConversationStartedView(Guid RunId, string Kind, string Title);
 
 /// <summary>One run of a conversation, so its card is restored after a reload: its status, how many tools it used, and the work it started.</summary>
-public sealed record ConversationTurnView(Guid RunId, string Status, int ToolCalls, IReadOnlyList<ConversationStartedView> Started);
+/// <param name="Replied">The turn has its reply (an assistant message): a reload shows it, and no "writing…" is resumed.</param>
+/// <param name="EndedWithoutReply">The turn ended (failed or cancelled) with no reply and no notice of Endgame's own saying why.</param>
+/// <param name="Interruption">
+/// Why a turn has no reply, in a plain sentence, when nothing in the thread says it: it ended without one, or it was cut off and
+/// is being picked up again. Null while a reply is being written as normal, once it has replied, or when a notice explains it.
+/// </param>
+public sealed record ConversationTurnView(Guid RunId, string Status, int ToolCalls, IReadOnlyList<ConversationStartedView> Started,
+    bool Replied = false, bool EndedWithoutReply = false, string? Interruption = null);
 
 /// <summary><c>GET /api/conversations?scope=</c>: the messages of the conversation docked at a scope, oldest first, and each of its runs.</summary>
 public sealed record ConversationHistoryView(string Scope, Guid? ConversationId, Guid? EmployeeId, IReadOnlyList<ConversationMessageView> Messages, IReadOnlyList<ConversationTurnView> Turns);

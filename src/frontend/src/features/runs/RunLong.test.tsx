@@ -46,7 +46,7 @@ describe("a long run", () => {
   });
 
   it("is named for what it is, never cut mid-word, with the whole request under it", () => {
-    expect(LONG.run.title.endsWith("...")).toBe(true);
+    expect(/(\.\.\.|…)$/.test(LONG.run.title)).toBe(true);
     expect(shortRunName(LONG.run.title)).toBe("Build: A sign-up sheet for the rowing club's Saturday outings");
     expect(shortRunName("Build: Pager")).toBe("Build: Pager");
     // A first clause still too long is cut at a whole word, and says it goes on.

@@ -272,6 +272,19 @@ public sealed class RunsAndTasksTests(PostgresServer postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_task_claimed_with_no_employee_names_who_works_it_by_title()
+    {
+        // C-3: a part being worked by a role whose hire still waits read "Not taken yet"; the claim now says who.
+        var run = await RunAsync();
+        var task = (await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/tasks", new { scope = "frostaura/technologies/endgame", runId = run, title = "Members can rate a recipe" })))["id"]!.GetValue<string>();
+        await ControlPlaneApp.Ok(service.PostAsJsonAsync("/internal/tasks/checkout", new { taskId = task, runId = run, expectedStatus = "todo", holderTitle = "Software engineer" }));
+        var claimed = (await ControlPlaneApp.Ok(service.GetAsync($"/internal/runs/{run}/events"))).AsArray().Single(e => e!["type"]!.GetValue<string>() == "task.claimed")!["payload"]!;
+        Assert.Equal(("Software engineer", "role"), (claimed["holder"]!.GetValue<string>(), claimed["holderKind"]!.GetValue<string>()));
+        Assert.Null(claimed["employeeId"]);
+        await ControlPlaneApp.Expect(await service.PostAsJsonAsync("/internal/tasks/checkout", new { taskId = task, runId = run, expectedStatus = "todo", holderTitle = new string('x', 121) }), HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task A_run_waits_on_an_approval_and_the_answer_puts_it_back_in_the_queue()
     {
         var run = await RunAsync();
@@ -293,6 +306,11 @@ public sealed class RunsAndTasksTests(PostgresServer postgres) : IAsyncLifetime
         Assert.Equal(["run.started", "approval.requested", "approval.answered"], types);
         var requested = (await ControlPlaneApp.Ok(service.GetAsync($"/internal/runs/{run}/events"))).AsArray()[1]!;
         Assert.Equal("Publish privately?", requested["payload"]!["question"]!.GetValue<string>());
+        // The receipt names the person who answered, not only their id ("Approved by The Owner · 14:02"), and both events carry when.
+        var answered = (await ControlPlaneApp.Ok(service.GetAsync($"/internal/runs/{run}/events"))).AsArray()[2]!;
+        Assert.Equal("The Owner", answered["payload"]!["byName"]!.GetValue<string>());
+        Assert.True(Guid.TryParse(answered["payload"]!["by"]!.GetValue<string>(), out _));
+        Assert.True(answered["at"]!.GetValue<DateTimeOffset>() >= requested["at"]!.GetValue<DateTimeOffset>());
         Assert.Empty((await ControlPlaneApp.Ok(owner.GetAsync("/api/tree")))["needsYou"]!.AsArray());
     }
 
