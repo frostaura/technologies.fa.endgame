@@ -52,13 +52,19 @@ export function RenameNode({ level, id, name, slug, tree, onDone }: { level: Man
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={`Rename the ${word(level)}`} className="flex max-w-form flex-col gap-2" noValidate>
+    <form onSubmit={(e) => void submit(e)} aria-label={`Rename the ${word(level)}`} className="flex min-w-0 flex-col gap-2" noValidate>
+      {/*
+        The field grows with its panel and Save sits at its end, on the field's own line (console-desktop 13). Where the
+        two do not fit side by side (a phone, a narrow side column), Save wraps under the field.
+      */}
       <Field id={fieldId} label="Name" hint={`Its address stays ${slug}: an address never changes once it is made.`} problem={value.length > 0 ? problem : null}>
-        <Input id={fieldId} value={value} maxLength={NAME_LIMIT + 1} onChange={(e) => setValue(e.target.value)} aria-describedby={`${fieldId}-hint`} aria-invalid={!!problem} />
+        <div data-rename-row="" className="flex flex-wrap items-center gap-2">
+          <Input id={fieldId} value={value} maxLength={NAME_LIMIT + 1} onChange={(e) => setValue(e.target.value)} aria-describedby={`${fieldId}-hint`} aria-invalid={!!problem} className="flex-1 basis-56" />
+          <Button type="submit" className="shrink-0" disabled={!!problem || typed === name || state.isLoading}>
+            {state.isLoading ? "Saving…" : "Save the name"}
+          </Button>
+        </div>
       </Field>
-      <Button type="submit" className="self-start" disabled={!!problem || typed === name || state.isLoading}>
-        {state.isLoading ? "Saving…" : "Save the name"}
-      </Button>
       {result && <Outcome ok={result.ok}>{result.text}</Outcome>}
     </form>
   );

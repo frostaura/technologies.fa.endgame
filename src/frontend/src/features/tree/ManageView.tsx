@@ -23,7 +23,12 @@ import { ContextPanel } from "./ContextPanel";
 import { ArchiveNode, CreateChild, DeleteNode, RenameNode } from "./NodeControls";
 import { LEVEL_NAME, childLevel, flatten, may, nodeAt, whoMay, type ManagedNode } from "./treeManage";
 
-const INDENT: Record<number, string> = { 0: "pl-3", 1: "pl-7", 2: "pl-11", 3: "pl-14" };
+/**
+ * The outline's levels, 24 px apart (console-desktop 12): each row's padding, and the guide drawn under each ancestor's
+ * icon (its centre: the ancestor's padding plus half the 16 px icon) so a level reads as hanging from the one above.
+ */
+const INDENT: Record<number, string> = { 0: "pl-2", 1: "pl-8", 2: "pl-14", 3: "pl-20" };
+const GUIDE: Record<number, string> = { 1: "left-4", 2: "left-10", 3: "left-16" };
 const ICON = { organisation: "organisation", division: "division", project: "project", app: "app" } as const;
 
 /**
@@ -56,7 +61,8 @@ export function ManageView() {
     <AppShell
       crumbs={[
         ...(org ? [{ label: org.name, href: entered ? paths.homeOf(entered) : paths.home() }] : []),
-        ...(step === "part" && selected ? [{ label: "Manage", href: outlineHref }, { label: selected.name }] : [{ label: "Manage" }]),
+        // The part chosen is where you are (real-stack 52): Manage links back to the outline once a part below the top is chosen.
+        ...(selected && (step === "part" || (step === "both" && selected.level !== "organisation")) ? [{ label: "Manage", href: outlineHref }, { label: selected.name }] : [{ label: "Manage" }]),
       ]}
     >
       <div className={cn("flex flex-col gap-2", RISE)}>
@@ -80,7 +86,8 @@ export function ManageView() {
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
           {/* Two panes: the outline, as wide as a side panel, and the part chosen filling the rest. */}
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          {/* From a portrait tablet up (console-small 35): the outline narrower there, a side panel's width from 1024. */}
+          <div className="flex flex-col gap-6 md:flex-row md:items-start">
             {step !== "part" && <Outline nodes={nodes} selected={step === "outline" ? "" : selected.scope} onSelect={select} />}
             {step === "part" && (
               <Link href={outlineHref} className={cn(LINK, "flex min-h-touch items-center gap-1 self-start")}>
@@ -115,7 +122,7 @@ export function ManageView() {
 
 function Outline({ nodes, selected, onSelect }: { nodes: ManagedNode[]; selected: string; onSelect: (scope: string) => void }) {
   return (
-    <nav aria-label="Every part of the organisation" className="flex flex-col overflow-hidden rounded-md border bg-surface py-2 shadow-card lg:w-aside lg:shrink-0 3xl:w-aside-wide">
+    <nav aria-label="Every part of the organisation" className="flex flex-col overflow-hidden rounded-md border bg-surface p-2 shadow-card md:w-72 md:shrink-0 lg:w-aside 3xl:w-aside-wide">
       <ul className="flex flex-col">
         {nodes.map((n) => (
           <li key={n.scope}>
@@ -124,15 +131,20 @@ function Outline({ nodes, selected, onSelect }: { nodes: ManagedNode[]; selected
               aria-current={n.scope === selected ? "true" : undefined}
               onClick={() => onSelect(n.scope)}
               className={cn(
-                "flex min-h-touch w-full items-center gap-2.5 py-2 pr-3 text-left transition-colors hover:bg-primary-tint",
-                INDENT[n.depth],
+                "relative flex min-h-touch w-full items-center gap-2.5 py-2 pr-3 text-left transition-colors hover:bg-primary-tint",
+                INDENT[n.depth] ?? INDENT[3],
                 n.scope === selected && "bg-primary-tint font-semibold",
                 n.archived && "text-ink-muted",
               )}
             >
+              {Array.from({ length: Math.min(n.depth, 3) }, (_, i) => (
+                <span key={i} aria-hidden data-guide="" className={cn("absolute inset-y-0 w-px bg-border", GUIDE[i + 1])} />
+              ))}
               <Icon name={ICON[n.level]} className={cn("size-4 shrink-0", n.archived ? "text-ink-muted" : "text-ink-body")} />
               {/* Names are never cut: a long one wraps under itself. */}
               <span className="min-w-0 flex-1 break-words">{n.name}</span>
+              {/* An app usually shares its project's name: the row says which of the two it is (console-desktop 12, real-stack 52). */}
+              {n.level === "app" && !n.archived && <span className="shrink-0 text-xs text-ink-muted">App</span>}
               {n.archived && <Badge tone="neutral">Archived</Badge>}
               <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-muted sm:hidden" />
             </button>

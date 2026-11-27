@@ -35,13 +35,27 @@ export function needLines(item: NeedsYou, redLine: string | null = null): { head
 export const RED_LINE_HEADLINE = "Research refused this idea: it crosses a red line";
 
 function refusedLines(item: Extract<NeedsYou, { kind: "verdict" }>): { headline: string; line: string } {
-  return { headline: RED_LINE_HEADLINE, line: `“${shortTitle(item.title.replace(/^a verdict is waiting:\s*/i, ""), 80)}” — drop it, or change it.` };
+  return { headline: RED_LINE_HEADLINE, line: `“${quotedIdea(item.title.replace(/^a verdict is waiting:\s*/i, ""), 80)}” — drop it, or change it.` };
+}
+
+/**
+ * An idea's text short enough to quote in a headline. A long one is cut at its first clause break ("Allergen labels for
+ * the kitchen: pick a dish…" becomes "Allergen labels for the kitchen"), so the quote ends on a whole thought with no
+ * ellipsis inside the marks (console-desktop 7); only text with no such break is cut at a word, with an ellipsis.
+ */
+export function quotedIdea(text: string, max = 60): string {
+  const clean = text.replace(/\s+/g, " ").replace(/\.{3,}$|…$/, "").trim();
+  if (clean.length <= max) return clean.replace(/[.\s]+$/, "");
+  const head = clean.slice(0, max + 1);
+  const breaks = [...head.matchAll(/\s*(?:[:;,.(]|\s[—–-]\s)/g)].map((m) => m.index ?? 0).filter((i) => i >= 16);
+  const at = breaks[0];
+  return at !== undefined ? clean.slice(0, at).trim() : shortTitle(clean, max);
 }
 
 function cardLines(item: NeedsYou): { headline: string; line: string } {
   switch (item.kind) {
     case "verdict": {
-      const headline = /^research says/i.test(item.title) ? shortTitle(item.title, 90) : `Research says ${SAYS[item.verdict]} “${shortTitle(item.title.replace(/^a verdict is waiting:\s*/i, ""), 60)}”`;
+      const headline = /^research says/i.test(item.title) ? shortTitle(item.title, 90) : `Research says ${SAYS[item.verdict]} “${quotedIdea(item.title.replace(/^a verdict is waiting:\s*/i, ""))}”`;
       return { headline, line: meaningfulLine(item.detail) ?? (item.verdict === "do-not-build" ? "Read it, or overrule." : "Read it, then decide.") };
     }
     case "hire":

@@ -84,7 +84,8 @@ describe("HomeView", () => {
     renderWithStore(<HomeView />);
     const needs = await screen.findByRole("region", { name: "Needs you" });
     const card = within(needs).getByRole("link");
-    expect(card.textContent).toContain("Research says do not build “A personal health trends app.");
+    // A long idea is quoted up to its first clause break: a whole thought, no ellipsis inside the marks.
+    expect(card.textContent).toContain("Research says do not build “A personal health trends app”");
     expect(card.textContent).toContain("This idea is three commodities bolted together: an ingest endpoint, storage, and charts.");
     expect(card.textContent).not.toContain("Commercially it is worse");
     expect(card.textContent).not.toContain("The case against first");

@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils";
 import type { Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import type { Selection } from "@/store/uiSlice";
 import { isArchived } from "../tree/treeManage";
-import { useMasonry } from "./masonry";
-import { activityLine, appChips, appNote, contractorsLabel, progressLine, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
+import { stack, useMasonry } from "./masonry";
+import { activityLine, appChips, appNote, contractorsLabel, progressLine, saysSame, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
 
 /**
  * The chart's geometry. A division column is never narrower than 20 rem on a tablet (so it still takes two) nor 24 rem on a desktop (so a card's figures and names keep their room), and the
@@ -92,21 +92,43 @@ export function OrgChart({ tree, selection, onSelect }: Props) {
   );
 }
 
-/** Divisions as columns: each stacks under whichever column is shortest, so no column leaves a hole and none runs on alone. */
+/**
+ * Divisions as columns: each stacks under whichever column is shortest, so no column leaves a hole and none runs on alone.
+ * One grid, every division a direct child in reading order (a screen reader reads them as listed), placed into its column
+ * and row; moving one between columns moves it rather than drawing it again.
+ */
 function Masonry({ divisions, draw }: { divisions: TreeDivision[]; draw: (d: TreeDivision, i: number) => ReactNode }) {
   const viewport = useViewport();
-  const { container, columns, measure } = useMasonry(divisions, (d) => d.id, estimate, { min: viewport === "desktop" ? COLUMN.min : COLUMN.tablet, gap: COLUMN.gap, max: viewport === "phone" ? 1 : COLUMN.max });
+  const { container, columns, measure, heightOf } = useMasonry(divisions, (d) => d.id, estimate, {
+    min: viewport === "desktop" ? COLUMN.min : COLUMN.tablet,
+    gap: COLUMN.gap,
+    max: viewport === "phone" ? 1 : COLUMN.max,
+    // What makes a division a different height for good: its projects and apps coming or going, not a line of live work.
+    shape: (d) => `${d.workers.length}/${d.projects.map((p) => `${p.apps.length}${p.progress ? "w" : ""}`).join(".")}`,
+  });
+  const placed = new Map(stack(columns, heightOf, COLUMN.gap).map((p) => [p.item.id, p] as const));
   return (
-    <div ref={container} data-columns={columns.length} className="flex items-start gap-6">
-      {columns.map((column, c) => (
-        <div key={c} data-chart-column="" className="flex min-w-0 flex-1 flex-col gap-6">
-          {column.map((d) => (
-            <div key={d.id} ref={measure(d.id)} className="min-w-0">
-              {draw(d, divisions.indexOf(d))}
-            </div>
-          ))}
-        </div>
-      ))}
+    <div
+      ref={container}
+      data-columns={columns.length}
+      className="grid items-start gap-x-6"
+      style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`, gridAutoRows: "1px" }}
+    >
+      {divisions.map((d, i) => {
+        const at = placed.get(d.id);
+        return (
+          <div
+            key={d.id}
+            ref={measure(d.id)}
+            data-chart-item=""
+            data-column={at?.column ?? 0}
+            className="min-w-0 self-start"
+            style={at ? { gridColumn: at.column + 1, gridRow: `${at.top + 1} / span ${at.height}` } : undefined}
+          >
+            {draw(d, i)}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -170,10 +192,10 @@ function DivisionColumn({
           disabled={division.role === null}
           title={division.role === null ? "You hold no role here" : division.name}
           onClick={() => onSelect({ scope, kind: "division", trail })}
-          className="flex min-w-0 flex-1 items-center gap-3.5 rounded-xs text-left after:absolute after:inset-0 after:rounded-md disabled:cursor-default"
+          className="flex min-w-0 flex-1 items-center gap-3.5 rounded-xs text-left max-sm:gap-3 after:absolute after:inset-0 after:rounded-md disabled:cursor-default"
         >
           {/* The division's letter, in ink: one look for every division (ARCH-011's single accent). */}
-          <span aria-hidden className={cn("flex size-10 shrink-0 items-center justify-center rounded-xs font-display text-lg font-bold", archived ? "bg-quiet text-ink-muted" : "bg-ink text-surface")}>
+          <span aria-hidden className={cn("flex size-10 shrink-0 items-center justify-center rounded-xs font-display text-lg font-bold max-sm:size-8 max-sm:text-base", archived ? "bg-quiet text-ink-muted" : "bg-ink text-surface")}>
             {division.name.trim()[0]?.toUpperCase()}
           </span>
           <span className="flex min-w-0 flex-col">
@@ -182,14 +204,18 @@ function DivisionColumn({
               <span aria-hidden>·</span>
               <span className="whitespace-nowrap">{formatCredits(division.spend.monthCredits)}</span>
             </span>
-            <span className="break-words font-display text-lg font-semibold leading-snug">{division.name}</span>
+            {/* Two lines at most, the whole name in the tooltip: a long name never stacks four lines high (console-small 12). */}
+            <span data-division-name="" className="line-clamp-2 break-words font-display text-lg font-semibold leading-snug max-sm:text-base">
+              {division.name}
+            </span>
           </span>
         </button>
         <div className="relative z-10 flex shrink-0 items-center gap-1">
           {archived && <Badge tone="neutral">Archived</Badge>}
           {division.role !== null && (
-            <Link href={manage(scope)} aria-label={`Manage ${division.name}`} className={buttonVariants({ variant: "quiet", size: "sm" })}>
-              Manage
+            // A phone says Manage with its mark, so the name keeps the row's width.
+            <Link href={manage(scope)} aria-label={`Manage ${division.name}`} title="Manage" className={buttonVariants({ variant: "quiet", size: phone ? "icon" : "sm" })}>
+              {phone ? <Icon name="organisation" className="size-5" /> : "Manage"}
             </Link>
           )}
           {phone && (
@@ -294,6 +320,11 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
   const only = project.apps.length === 1 ? project.apps[0] : undefined;
   const merged = !!only && only.name.trim().toLowerCase() === project.name.trim().toLowerCase() && only.spend.monthCredits === project.spend.monthCredits;
   const tag = archived ? <Badge tone="neutral">Archived</Badge> : showStage ? <ChipRow chips={[stageChip(project.stage)]} /> : null;
+  // One reason, said once at the project (console-desktop 59): when an app inside says the same thing ("Paused: …"), the
+  // fuller of the two wordings stands for both, and the app's tile does not repeat it.
+  const ownNote = project.note ?? project.notBuilt?.note ?? null;
+  const echoed = ownNote ? project.apps.map((a) => appNote(a)).filter((n): n is string => !!n && saysSame(ownNote, n)) : [];
+  const projectNote = ownNote ? [ownNote, ...echoed].reduce((a, b) => (b.length > a.length ? b : a)) : null;
 
   return (
     <article
@@ -331,7 +362,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
         )}
       </div>
 
-      {(project.note ?? project.notBuilt?.note) && <p className="text-ink-body">{project.note ?? project.notBuilt?.note}</p>}
+      {projectNote && <p className="text-ink-body">{projectNote}</p>}
 
       {project.progress && (
         <div className="relative flex flex-col gap-2">
@@ -360,7 +391,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
       {project.apps.length > 0 && (
         <ul aria-label={`Apps in ${project.name}`} className="relative flex flex-col gap-2">
           {project.apps.map((app) => (
-            <AppRow key={app.id} app={app} merged={merged} />
+            <AppRow key={app.id} app={app} merged={merged} saidAbove={!!projectNote && saysSame(projectNote, appNote(app))} />
           ))}
         </ul>
       )}
@@ -370,26 +401,38 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
   );
 }
 
-function AppRow({ app, merged }: { app: TreeApp; merged: boolean }) {
+function AppRow({ app, merged, saidAbove }: { app: TreeApp; merged: boolean; saidAbove: boolean }) {
   const archived = isArchived(app);
   const chips: Chip[] = archived ? [{ label: "Archived", tone: "neutral" }] : appChips(app);
   const unmeasured = app.visitsToday === null && !app.lastVisitAt;
   const unbuilt = !archived && chips.some((c) => c.label.startsWith("Not built"));
+  // Why it is paused is said once: by its project, when the project says it (console-desktop 59).
+  const note = archived || saidAbove ? null : appNote(app);
   return (
     <li className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3 max-sm:px-3">
       {merged ? (
-        // The project is this app: its tags, and the way to its page, without saying its name twice.
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <ChipRow chips={chips} />
+        // The project is this app: its tags, and the way to its page, without saying its name twice. The way in keeps
+        // one place in every tile, the top right, with the tags flowing beside it and then under it (console-desktop 60).
+        <div data-app-head="" className="flow-root">
           {unbuilt ? (
             // Nothing is published yet, so there is nothing to open: said plainly, not offered as a link.
-            <span className="flex min-h-touch items-center text-sm text-ink-muted">No version yet</span>
+            <span data-app-open="" className="float-right ml-3 flex min-h-touch items-center text-sm text-ink-muted">
+              No version yet
+            </span>
           ) : (
-            <Link href={paths.app(app.id)} title={app.name} className={cn(LINK, "relative z-10 flex min-h-touch items-center gap-1.5 text-sm")}>
+            <Link data-app-open="" href={paths.app(app.id)} title={app.name} className={cn(LINK, "relative z-10 float-right ml-3 flex min-h-touch items-center gap-1.5 text-sm")}>
               <Icon name="app" className="size-4" />
               Open the app
             </Link>
           )}
+          {/* Inline, so the tags run beside the way in and then under it at the full width, never a column of one tag a row. */}
+          <span className="block pt-2">
+            {chips.map((chip) => (
+              <Badge key={chip.label} tone={chip.tone} className="mb-1.5 mr-1.5 align-middle">
+                {chip.label}
+              </Badge>
+            ))}
+          </span>
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
@@ -400,17 +443,21 @@ function AppRow({ app, merged }: { app: TreeApp; merged: boolean }) {
           <ChipRow chips={chips} />
         </div>
       )}
-      {!archived && appNote(app) && <p className="text-sm text-ink-body">{appNote(app)}</p>}
-      {/* Two figures, always side by side. Null visits means nothing has been measured yet: unknown, never zero — "—", with why under it. */}
+      {note && <p className="text-sm text-ink-body">{note}</p>}
+      {/*
+        Two figures, always side by side, each label one short line so the values sit level at every width (console-desktop
+        58): the period is the credits' caption. Null visits means nothing has been measured yet: unknown, never zero — "—",
+        with why under it.
+      */}
       <StatRow cols={2}>
         <Stat
           plain
           label={app.visitsToday !== null || !app.lastVisitAt ? "Visits today" : "Last visit"}
           value={app.visitsToday !== null ? formatNumber(app.visitsToday) : app.lastVisitAt ? timeAgo(app.lastVisitAt) : NO_VALUE}
           tone={unmeasured ? "muted" : "ink"}
-          caption={unmeasured ? "Not measured yet" : undefined}
+          caption={unmeasured ? "Not measured" : undefined}
         />
-        <Stat plain label="Credits this month" value={formatNumber(app.spend.monthCredits)} />
+        <Stat plain label="Credits" value={formatNumber(app.spend.monthCredits)} caption="This month" />
       </StatRow>
     </li>
   );

@@ -78,6 +78,33 @@ describe("ManageView", () => {
     expect(within(outline).getByRole("button", { name: /Old things/ }).textContent).toContain("Archived");
   });
 
+  it("indents each level on a guide, says which row is the app, and names the part chosen in the trail (console-desktop 12, real-stack 52)", async () => {
+    window.history.replaceState(null, "", "/tree?scope=acme/tools/ledger");
+    stub();
+    renderWithStore(<ManageView />);
+    const outline = await screen.findByRole("navigation", { name: "Every part of the organisation" });
+    const row = (name: RegExp) => within(outline).getByRole("button", { name });
+    expect(row(/^Ledger web/).textContent).toContain("App");
+    expect(row(/^Ledger$/).textContent).not.toContain("App");
+    expect(row(/^Ledger web/).querySelectorAll("[data-guide]")).toHaveLength(3);
+    expect(row(/^Tools/).querySelectorAll("[data-guide]")).toHaveLength(1);
+    expect(row(/^Acme/).querySelectorAll("[data-guide]")).toHaveLength(0);
+    // The trail: the organisation, Manage (back to the outline), then the part chosen.
+    await waitFor(() => expect(screen.getAllByRole("link", { name: "Manage" }).some((a) => a.getAttribute("href")?.startsWith("/tree"))).toBe(true));
+    expect(screen.getAllByText("Ledger").length).toBeGreaterThan(1);
+  });
+
+  it("puts Save at the end of the name's own field, which grows with the panel (console-desktop 13)", async () => {
+    window.history.replaceState(null, "", "/tree?scope=acme/tools");
+    stub();
+    renderWithStore(<ManageView />);
+    const form = await screen.findByRole("form", { name: "Rename the division" });
+    const row = form.querySelector("[data-rename-row]");
+    expect(row?.querySelector("input")).toBeTruthy();
+    expect(within(row as HTMLElement).getByRole("button", { name: "Save the name" })).toBeTruthy();
+    expect(form.className).not.toContain("max-w-form");
+  });
+
   it("records a failed read of the tree, never an empty organisation", async () => {
     stub({ "GET /api/tree": problem(500, "The database did not answer") });
     renderWithStore(<ManageView />);

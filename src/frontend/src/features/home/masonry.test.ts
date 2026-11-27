@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeInColumns } from "./masonry";
+import { balancedLayout, placeInColumns, raggedness, stack } from "./masonry";
 
 describe("placeInColumns", () => {
   it("puts each item under the shortest column so far, so a short division leaves no hole", () => {
@@ -12,5 +12,44 @@ describe("placeInColumns", () => {
   it("fills the first row left to right, and never makes an empty column", () => {
     expect(placeInColumns(["a", "b"], 2, () => 10)).toEqual([["a"], ["b"]]);
     expect(placeInColumns(["a"], 0, () => 10)).toEqual([["a"]]);
+  });
+});
+
+describe("balancedLayout", () => {
+  it("gives up a column when that closes a hole under the shortest (three divisions, the middle one tall)", () => {
+    // Technologies short, Learning tall, Operations middling: three columns leave a 580 px hole under Technologies.
+    const heights: Record<string, number> = { tech: 300, learning: 880, ops: 560 };
+    expect(balancedLayout(Object.keys(heights), 3, (k) => heights[k] ?? 0, 24)).toEqual({ count: 2, tallFirst: false });
+  });
+
+  it("places the tallest first when the reading order would strand one column far below the other", () => {
+    const heights: Record<string, number> = { tech: 350, learning: 560, ops: 690 };
+    expect(balancedLayout(Object.keys(heights), 2, (k) => heights[k] ?? 0, 24)).toEqual({ count: 2, tallFirst: true });
+  });
+
+  it("keeps every column and the reading order when the columns already end nearly level", () => {
+    const heights: Record<string, number> = { a: 400, b: 420, c: 390 };
+    expect(balancedLayout(Object.keys(heights), 3, (k) => heights[k] ?? 0, 24)).toEqual({ count: 3, tallFirst: false });
+  });
+
+  it("never drops to one column where two fit", () => {
+    const heights: Record<string, number> = { a: 1000, b: 100 };
+    expect(balancedLayout(Object.keys(heights), 2, (k) => heights[k] ?? 0, 24).count).toBe(2);
+  });
+
+  it("measures raggedness as the tallest foot above the mean", () => {
+    expect(raggedness([300, 880, 560])).toBeCloseTo(300);
+    expect(raggedness([])).toBe(0);
+  });
+});
+
+describe("stack", () => {
+  it("gives each item its column and a top under the one before, gap between", () => {
+    const h: Record<string, number> = { a: 100, b: 50, c: 30 };
+    expect(stack([["a", "c"], ["b"]], (k) => h[k] ?? 0, 24)).toEqual([
+      { item: "a", column: 0, top: 0, height: 100 },
+      { item: "c", column: 0, top: 124, height: 30 },
+      { item: "b", column: 1, top: 0, height: 50 },
+    ]);
   });
 });
