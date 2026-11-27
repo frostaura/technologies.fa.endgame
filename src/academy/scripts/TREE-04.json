@@ -35,14 +35,14 @@
         {
           "type": {
             "into": {
-              "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+              "selector": "form[aria-label^='Add a'] input[name='name']"
             },
             "text": "Gift Card Shop"
           }
         }
       ],
       "highlight": {
-        "selector": "form[aria-label^='Add a'] input[aria-describedby]",
+        "selector": "form[aria-label^='Add a'] input[name='slug']",
         "note": "Its address: northwind/operations/gift-cards/gift-card-shop."
       }
     },

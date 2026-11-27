@@ -208,7 +208,8 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Level:** Foundation · **Learn first:** ORG-04 · **What you learn:** a division groups projects, and its spend is the sum beneath it.
 - **Steps:** the chart is a masonry of columns — as many as its width holds, up to four — and each division stacks under whichever column is shortest, so a short division leaves no hole. Each division shows:
   - its letter in an ink badge (one look for every division);
-  - "Division · {credits}" (this month's spend, summed beneath it) above its name, and "Manage" (TREE-13); a long name wraps rather than being cut;
+  - "Division" and its name; a long name wraps rather than being cut;
+  - "· {credits}", this month's spend summed beneath it, beside "Division", and "Manage" (TREE-13);
   - its own employees as chips;
   - a wire down to its projects: each project (and the row of the division's own people) hangs off it with the same node, and the wire ends at the last project. A lone division takes the full width, with its projects side by side.
 

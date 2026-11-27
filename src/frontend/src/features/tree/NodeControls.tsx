@@ -202,11 +202,12 @@ export function CreateChild({ level, parent, parentName, onCreated, onCancel }: 
       </h3>
       <div className="flex max-w-form flex-col gap-4">
         <Field id={ids.name} label="Name" hint="What everyone reads. It can be renamed at any time." problem={typed.length > NAME_LIMIT ? `A name is at most ${NAME_LIMIT} characters.` : null}>
-          <Input ref={first} id={ids.name} value={name} onChange={(e) => setName(e.target.value)} aria-describedby={`${ids.name}-hint`} />
+          <Input ref={first} id={ids.name} name="name" value={name} onChange={(e) => setName(e.target.value)} aria-describedby={`${ids.name}-hint`} />
         </Field>
         <Field id={ids.slug} label="Its address" hint={`${parent}/${shown || "…"}. It cannot be changed once it is made.`} problem={slugProblem}>
           <Input
             id={ids.slug}
+            name="slug"
             value={shown}
             onChange={(e) => {
               setEdited(true);

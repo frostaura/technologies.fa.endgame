@@ -35,14 +35,14 @@
         {
           "type": {
             "into": {
-              "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+              "selector": "form[aria-label^='Add a'] input[name='name']"
             },
             "text": "Field Trips"
           }
         }
       ],
       "highlight": {
-        "selector": "form[aria-label^='Add a'] input[aria-describedby]",
+        "selector": "form[aria-label^='Add a'] input[name='slug']",
         "note": "The address fills itself from the name: northwind/field-trips. It can be changed now, never once it is made."
       }
     },
@@ -90,7 +90,7 @@
             {
               "type": {
                 "into": {
-                  "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+                  "selector": "form[aria-label^='Add a'] input[name='name']"
                 },
                 "text": "Field Trips"
               }
@@ -98,7 +98,7 @@
             {
               "type": {
                 "into": {
-                  "selector": "form[aria-label^='Add a'] input[aria-describedby]"
+                  "selector": "form[aria-label^='Add a'] input[name='slug']"
                 },
                 "text": "-trips"
               }
@@ -124,7 +124,7 @@
             {
               "type": {
                 "into": {
-                  "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+                  "selector": "form[aria-label^='Add a'] input[name='name']"
                 },
                 "text": "Learning"
               }
