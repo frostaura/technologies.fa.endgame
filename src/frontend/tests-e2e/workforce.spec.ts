@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { closeSheet, conversation, expectNoSidewaysScroll, isPhone, isPhoneLayout, mockRequests, needsYou, setMode, useScenario, test } from "./support.ts";
+import { closeSheet, conversation, expectNoSidewaysScroll, mockRequests, needsYou, setMode, useScenario, test } from "./support.ts";
 
 /**
  * The verdict, the workforce, hiring and autonomy, end to end in a real browser against the
@@ -73,18 +73,18 @@ test.describe("home — the workforce on the chart", () => {
     await closeSheet(page);
 
     await page.getByRole("tab", { name: "Who works on what" }).click();
-    // A phone groups the list by kind (ONT-04).
-    const kind = isPhoneLayout(page) ? "group" : "list";
-    const list = page.getByRole(kind, { name: "Who works on what" });
-    if (isPhone(page)) {
-      await expect(list.getByRole("link", { name: "Lin · Engineer" })).toBeVisible();
-      await expect(list).toContainText("works on Field notes (now on Building Field notes)");
-    } else {
-      await expect(page.getByRole("region", { name: "Who works on what, drawn" })).toBeVisible();
-    }
+    // The same team cards at every width (ONT-02, ONT-04).
+    const list = page.getByRole("list", { name: "Who works on what" });
+    await expect(list.getByRole("link", { name: "Lin" })).toBeVisible();
+    await expect(list.getByRole("list", { name: "What Lin works on" })).toContainText("Now on Building Field notes · Field notes");
+    await expect(list.getByRole("list", { name: "Reporting to Ada" })).toContainText("Briefed by Ada");
+    await expect(list).not.toContainText("MAIL_API_KEY");
     await page.getByRole("tab", { name: "How data flows" }).click();
-    await expect(page.getByRole(kind, { name: "How data flows" })).toContainText("sends data to AI inside apps");
-    await expect(page.getByRole(kind, { name: "How data flows" })).not.toContainText("models");
+    // A matrix where it fits, a card per app where it does not (ONT-03); either reads each relation as a sentence.
+    const flow = page.locator("#chart-panel [aria-label='How data flows']");
+    await expect(flow).toContainText("Booking desk relies on AI inside apps, and sends it prompts.");
+    await expect(flow).toContainText("receives inbound calls (court-sensor)");
+    await expect(flow).not.toContainText("models");
     await expectNoSidewaysScroll(page);
   });
 

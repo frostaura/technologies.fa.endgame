@@ -84,8 +84,10 @@ hero: build `good`, change `info`, do not build `bad`.
 - `border`, `border-strong`; `border-field` (≥ 3:1 on both surfaces) for every text box, select and check box.
 - `violet`, `teal` — retired from the look. Kept only for chart series and avatar fills;
   `design.test.ts` allows their per-file counts to fall, never rise. The org chart draws every
-  division's letter in ink, and the organisation graph tells its lines apart by ink, the accent and a
-  dash; neither file may use them at all.
+  division's letter in ink, and the two organisation views ("Who works on what", "How data flows")
+  tell their relations apart by the shape of a mark — an arrow out in the accent, an arrow in
+  outlined in ink, a hollow ring, the rule a report is indented on — each named in a key that shows
+  exactly the marks drawn; neither file may use them at all.
 - No gradient band, no drifting aura, no `bg-night`.
 
 ## Do and don't (from the reviews)

@@ -668,82 +668,81 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Core · **Learn first:** ORG-08 · **What you learn:** the same organisation can be read as a chart, as responsibility, or as data.
 - **Steps:**
   1. Above the chart, the tabs "The organisation" (the default), "Who works on what" and "How data flows".
-  2. "Who works on what" swaps the panel for the responsibility graph (`GET /api/ontology?scope={selection}&view=org-chart`).
-  3. "How data flows" swaps it for the data graph (`view=data-flow`).
+  2. "Who works on what" swaps the panel for the people, team by team (`GET /api/ontology?scope={selection}&view=org-chart`).
+  3. "How data flows" swaps it for the apps against the services they use (`view=data-flow`).
 - **You know it worked when:** the selected tab is raised and the panel changes.
 - **Variations and refusals:** the choice is not remembered: it returns to "The organisation" on every visit.
 - **Where:** `HomeView.tsx` (`ChartViews`).
 - **Reachable from:** UI.
 - **Covered by tests:** `workforce.spec.ts` ("…and the graph views").
 
-### ONT-02 Read "Who works on what" (desktop)
+### ONT-02 Read "Who works on what"
 - **Who:** any member.
 - **Starts at:** `/`, tab "Who works on what".
-- **Needs:** md width or wider for the drawing (ONT-04 otherwise).
+- **Needs:** —
 - **Level:** Core · **Learn first:** ONT-01 · **What you learn:** who is responsible for what, and who reports to whom.
 - **Steps:**
   1. While loading: a skeleton (label "Drawing the organisation").
-  2. A key lists the edge types present: "Holds", "Works on", "Reports to" — told apart by ink, the accent and a dash, never by a hue of their own. It ends with "Point at a line, or use the arrow keys, to name it." (or "Drag to move around." when the drawing is wider than its frame) and "Generated {time}."
-  3. A left-to-right layered drawing shows:
-     - the organisation, then its divisions, projects and apps (linked by "holds");
-     - employees and contractors one column beyond what they work on ("works on" with their role, and "now on {run}" while working, animated);
-     - "reports to" dashed lines (including "briefed by");
-     - members as "Person" nodes (works on, with their role);
-     - secrets by name (held by the node that set them).
-  4. Each node card shows its type ("Organisation", "Division", "Project", "App", "Employee", "Contractor", "Person", "Secret"), " · working" when working, and its name (cut only when it outgrows the card; the whole name is its tooltip).
-  5. The drawing fills its frame: given room, nodes widen and columns part; with less, it scales down to three-quarters and then scrolls inside its frame. Pointing at a line, or reaching it with the arrow keys once the drawing has focus, names it on the drawing ("{A} works on {B}"); pointing at a node brings its own lines forward.
-  6. When it scrolls, dragging with the mouse pans the frame. The page itself never scrolls sideways.
-- **You know it worked when:** you see your employees drawn beside what they work on.
-- **Variations and refusals:** empty state "Nobody works on anything yet". **Finding:** in practice this is unreachable, because the "holds" edges from the organisation to its divisions always exist whenever this tab is shown. Secret names appear in normal mode.
-- **Where:** `OntologyView.tsx`, `ontologyModel.ts` (`layoutGraph`); `GET /api/ontology` (`OntologyService.BuildAsync`).
+  2. A key names each mark drawn below, and only those: an arrow for "Works on", the elbow a report hangs from ("Reports to the person above", when anyone reports to anyone) and the accent dot ("Working now", when anyone is); then "Generated {time}."
+  3. One card per team, in the organisation's order: "Across the organisation" ({organisation}: the people whose work is the whole organisation), then each division that has people ("Division", its full name), then "Members" ("People who sign in", when the read includes members). Each card says how many people it holds ("2 people").
+  4. In a card, each person: an avatar, their name (a link to their page for employees and contractors), their role (left out when it is their name, as for "Security reviewer"), "Working" with the accent dot while at work, and one line per place they work on — "→ Court booking · Project", "→ Northwind · Whole organisation" — and, while on a run elsewhere, "Now on {run} · {place}" in the accent.
+  5. A report sits indented under the person they report to, on a rule; a contractor briefed by an employee sits under them with "Briefed by {name}". Contractors alike in every way (same role, place and briefing) are one row with "× {count}", not a link. A reporting line that loops is cut where it closes.
+  6. The cards fill the width: as many 20 rem columns as fit (never more than there are teams), each card whole and the columns balanced; one column on a phone. Nothing is cut short — a long name wraps — and nothing scrolls sideways.
+- **You know it worked when:** you see your employees, each under the person they report to, beside what they work on.
+- **Variations and refusals:** empty state "Nobody works on anything yet" when nobody works on anything (divisions alone do not hide it). Secrets and places nobody works on are not shown here: the chart shows the tree, and "Secrets for {name}" the secrets.
+- **Where:** `OntologyView.tsx` (`WhoWorksOnWhat`), `ontologyModel.ts` (`teamsOf`); `GET /api/ontology` (`OntologyService.BuildAsync`).
 - **Reachable from:** UI.
 - **Covered by tests:**
-  - `OntologyView.test.tsx`: "draws who works on what, and lists it readably…", "lays things out left to right…"
+  - `OntologyView.test.tsx`: "groups people by the division they work in…", "ends on a reporting loop…", "lists who works on what, team by team…" (the key matches the marks drawn)
+  - `tests-demo/home-layout.spec.ts`: the views never leave their card, no word is cut while there is room, text is 14 px or more
   - `WorkforceTests.The_ontology_is_derived_from_the_tree_the_workforce_the_vault_and_what_each_app_used`
 
-### ONT-03 Read "How data flows" (desktop)
+### ONT-03 Read "How data flows"
 - **Who:** as ONT-02.
 - **Starts at:** `/`, tab "How data flows".
 - **Needs:** as ONT-02.
 - **Level:** Core · **Learn first:** ONT-01 · **What you learn:** which platform services each app relies on, and what travels in and out.
 - **Steps:**
-  1. The key shows "Relies on" and "Sends data to".
-  2. The drawing shows apps, the platform services they have actually used, and each app's declared webhooks ("Incoming data") and schedules ("Schedule"). Services are named by what they do in normal mode; the internal name shows in technical mode.
-  3. "Sends data to" edges are animated. What each carries — "inbound calls", "scheduled calls", "prompts", "outbound mail", "signed-in people", "operational telemetry" — is named on the line when it is pointed at or reached with the arrow keys, so no two labels are ever drawn over each other; two lines between the same pair are drawn side by side.
-- **You know it worked when:** pointing at an app's moving line names it "{app} sends data to {service} (outbound mail)".
+  1. The key names each mark drawn: an arrow out of a filled accent circle ("The app sends it"), an arrow in, outlined in ink ("The app receives it"), and a hollow ring ("Relies on it; nothing travels") — each only when some cell carries it.
+  2. A matrix: a row per app (its name a link to the app), a column per platform service any app has used, in the order Sign-in, Stored data, AI inside apps, Email, Secrets, Health and traffic, Scheduled jobs, Incoming data. Each column heading says how many apps use it ("3 of 5 apps"). Services are named by what they do in normal mode; the internal name follows in brackets in technical mode.
+  3. Each cell lists what travels, each on its own line after its mark: "Prompts", "Stored records", "Signed-in people", "Outbound mail", "Operational telemetry"; a declared webhook or schedule appears in its service's column as "Inbound calls ({name})" or "Scheduled calls ({name})". A service an app does not use is "–" ("Not used" to a screen reader).
+  4. Pointing at a cell, or reaching it with the arrow keys (the cells are one tab stop, moved between with the arrows), lights its row and column; its tooltip, and what a screen reader reads, is the cell as a sentence: "{app} relies on Sign-in, and receives signed-in people from it."
+  5. Where the matrix would not fit (each service needs 120 px beside a 176 px app column) — a phone, a tablet, or a desktop with the conversation open and many services — each app is a card instead: its name, how many services it uses, and a line per service with the same marks and words.
+- **You know it worked when:** the cell where an app meets "AI inside apps" says "Prompts" after the arrow out.
 - **Variations and refusals:** empty state "No data flows yet" with "Once an app signs people in, sends mail, calls a model or receives data, the flow appears here."
-- **Where:** as ONT-02.
+- **Where:** `OntologyView.tsx` (`DataFlow`, `FlowMatrix`, `FlowCards`), `ontologyModel.ts` (`flowOf`, `cellSentence`).
 - **Reachable from:** UI.
 - **Covered by tests:**
-  - `OntologyView.test.tsx`: "shows data flows with services named by what they do"
+  - `OntologyView.test.tsx`: "puts every relation between an app and a service in one cell…", "shows data flows app by service…", "draws the matrix when the frame has room, and the keyboard walks its cells"
+  - `tests-demo/home-layout.spec.ts`
   - `FinalDefectsTests.An_app_people_sign_in_to_depends_on_identity_in_the_data_flow_even_with_no_end_users`
 
-### ONT-04 Read either graph on a phone or with a screen reader
+### ONT-04 Read either view on a phone or with a screen reader
 - **Who:** any member.
-- **Starts at:** as ONT-02 / ONT-03, below md width (or any width, for a screen reader). On a phone the three view tabs read "Organisation", "Who works" and "Data flow" (their full names are read out).
+- **Starts at:** as ONT-02 / ONT-03, on a phone (or any width, for a screen reader). On a phone the three view tabs read "Organisation", "Who works" and "Data flow" (their full names are read out).
 - **Needs:** —
-- **Level:** Foundation · **Learn first:** ONT-01 · **What you learn:** the graph is also a plain list.
+- **Level:** Foundation · **Learn first:** ONT-01 · **What you learn:** both views are made for a phone too, and read aloud as they are seen.
 - **Steps:**
-  1. Below md width the drawing is hidden, and a list takes its place; a screen reader reads the list at any width.
-  2. Each card in the list shows a node that has outgoing edges: its type, its name (a link for employees, contractors and apps), and lines like "works on {Name} ({label})", each marked with the same short line the key above it uses, so the key reads the list as it reads the drawing. Every link in it is a full-size touch target.
-  3. On a phone the list is grouped by kind — "Organisations · 1", "Employees · 12", "Projects · 8"… — each group a row naming its first few, the first group open, the rest one tap away.
-- **You know it worked when:** you see a list of cards under the tabs instead of a drawing.
+  1. "Who works on what": the same team cards, one under another. Every link in them is a full-size touch target.
+  2. "How data flows": a card per app (ONT-03 step 5), every app name a full-size touch target.
+  3. A screen reader reads the teams as nested lists ("In Technologies", "Reporting to Odile", "What Kasper works on"), and the matrix as a table whose cells are sentences.
+- **You know it worked when:** you see cards under the tabs, and nothing runs off the screen.
 - **Variations and refusals:** none further.
 - **Where:** `OntologyView.tsx`.
 - **Reachable from:** UI.
-- **Covered by tests:** `OntologyView.test.tsx` ("…lists it readably…").
+- **Covered by tests:** `tests-demo/phone.spec.ts` ("the graph views are cards…"); `OntologyView.test.tsx`.
 
 ### ONT-05 Open an employee or app from a graph
 - **Who:** any member.
 - **Starts at:** ONT-02 to ONT-04.
 - **Needs:** —
-- **Level:** Core · **Learn first:** ONT-02 · **What you learn:** the graph is a way into the records.
+- **Level:** Core · **Learn first:** ONT-02 · **What you learn:** both views are a way into the records.
 - **Steps:**
-  1. Select an Employee or Contractor node, or its link in the list: `/employees/{id}` opens.
-  2. Select an App node, or its link: `/apps/{id}` opens. Other nodes (organisation, division, project, person, secret, service, webhook, schedule) do nothing when selected.
+  1. Select an employee's or contractor's name, or an app named as what someone works on: `/employees/{id}` or `/apps/{id}` opens.
+  2. In "How data flows", select an app's name: `/apps/{id}` opens. Divisions, projects, the organisation, members and services are not links.
 - **You know it worked when:** the employee's or app's page opens.
-- **Variations and refusals:** the drawn nodes are clickable but are `aria-hidden` and not focusable, so keyboard users reach them only through the list.
-- **Where:** `OntologyView.tsx` (`hrefFor`, `open`).
+- **Variations and refusals:** a row standing for several alike contractors ("× 3") is not a link.
+- **Where:** `OntologyView.tsx` (`hrefFor`).
 - **Reachable from:** UI.
 - **Covered by tests:** `workforce.spec.ts` ("…the graph views").
 

@@ -74,7 +74,7 @@ What every person needs on day one: signing in, reading the home screen, startin
 | ORG-10 | Read an app row and open the app | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ORG-11 | Read the workforce on the chart | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ORG-12 | An empty organisation (no divisions yet) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| ONT-04 | Read either graph on a phone or with a screen reader | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| ONT-04 | Read either view on a phone or with a screen reader | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-01 | Talk to the whole organisation | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-02 | Talk to a division | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-03 | Talk to a project | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -157,8 +157,8 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | TREE-12 | Read what applies at a level and what a lower level replaces, and remove a value set there | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TREE-13 | Manage a division from the console | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-01 | Switch between the three views | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| ONT-02 | Read "Who works on what" (desktop) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
-| ONT-03 | Read "How data flows" (desktop) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| ONT-02 | Read "Who works on what" | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| ONT-03 | Read "How data flows" | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-05 | Open an employee or app from a graph | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | ONT-06 | A graph that fails to load | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-04 | Talk to an app | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
