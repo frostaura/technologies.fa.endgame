@@ -168,10 +168,12 @@ control plane gives an app the whole of it).
    from Edge's control listener, signed (§4).
 6. A request to a private app without a session is redirected to step 4's sign-in — except
    `POST hooks/<name>` for a name the app declared (§3.6) and `health` polled from Edge's own listener.
-7. An organisation subdomain that serves apps is never served the console: any address there that
-   is no app's, and not `/api/**` or `/mcp/**` (the identity pages call those on that host), is
-   Edge's "There is no app at this address" (404). On the platform's own host an unknown address is
-   the console's, with its own not-found page.
+7. The console and the control plane (`/api/**`, `/mcp/**`) are served on an organisation's subdomain
+   exactly as on the platform's own host. The one exception there: an address with an app's shape —
+   `/<division>/<project>/<app>/…`, three or more segments under a division that has an app on that
+   subdomain — that is no app's is Edge's "There is no app at this address" (404), signed in or out.
+   The console's own addresses are at most two segments, so they never collide. On the platform's own
+   host an unknown address is the console's, with its own not-found page.
 
 The React Router home of an app is written without its trailing slash during client navigation;
 rule 1 makes a reload there land correctly.

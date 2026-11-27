@@ -229,6 +229,41 @@ test("4. both address shapes through the real Edge; private: signed out to sign-
   await page.close();
 });
 
+test("4a. the console opens on the organisation's own host and signs in there; an app-shaped address with no app is Edge's 404", async ({ browser }) => {
+  // The developer's stack is used at http://<organisation>.localhost:8095/: the console is served on an organisation's host
+  // exactly as on the platform's (real-stack 55's fix once took it away there). Only an app-shaped address no app has is Edge's.
+  const noApp = `${subdomainOrigin}/${division}/${project}/no-such-app/`;
+  const context = await browser.newContext({ baseURL: subdomainOrigin });
+  const page = await context.newPage();
+
+  const signedOutMissing = await page.goto(noApp);
+  expect(signedOutMissing?.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "There is no app at this address" })).toBeVisible();
+
+  const home = await page.goto("/");
+  expect(home?.status()).toBe(200);
+  await expect(page).toHaveURL(`${subdomainOrigin}/sign-in`);
+  await page.getByRole("button", { name: "Development sign-in" }).click();
+  await expect(page).toHaveURL(`${subdomainOrigin}/`);
+  const me = (await ok(await context.request.get("/api/me"))) as { user: { email: string } };
+  expect(me.user.email).toBe(ownerEmail);
+
+  for (const route of [`/apps/${story.probeApp}`, "/runs/no-such-run", "/credits", "/tree"]) {
+    const response = await page.goto(route);
+    expect(response?.status(), route).toBe(200);
+    await expect(page).toHaveURL(`${subdomainOrigin}${route}`);
+    await expect(page.getByRole("heading", { name: "There is no app at this address" })).toHaveCount(0);
+  }
+  await page.goto(`/apps/${story.probeApp}`);
+  await expect(page.getByRole("heading", { name: "Notes", exact: true }).first()).toBeVisible();
+
+  const signedInMissing = await page.goto(noApp);
+  expect(signedInMissing?.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "There is no app at this address" })).toBeVisible();
+  note(`the console signed in at ${subdomainOrigin}/; ${noApp} is Edge's no-app page (404) signed out and in`);
+  await context.close();
+});
+
 test("5. a secret set at the organisation is read from inside the app through the platform API", async () => {
   await ok(await owner.request.put("/api/secrets", { data: { scope: org, name: "PROBE_SECRET", value: story.secret } }));
   const listed = await owner.request.get(`/api/secrets?scope=${encodeURIComponent(`${org}/${division}/${project}/notes`)}`);

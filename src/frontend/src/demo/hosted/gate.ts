@@ -290,8 +290,9 @@ export function decide(request: GateRequest): GateOutcome {
 }
 
 /**
- * `AppGate` on an organisation's app host, at an address no app has: the no-app page (404). The
- * demo only knows the platform's origin, not which address was asked for.
+ * `AppGate` on an organisation's host, at an app-shaped address no app has (`RouteSnapshot.IsAppShaped`):
+ * the no-app page (404), signed in or out. Every other address on that host is the console's, as on the
+ * platform's own host. The demo only knows the platform's origin, not which address was asked for.
  */
 export function noAppLinks(platformOrigin: string): PageLinks {
   return { here: "/", console: platformOrigin, address: null };

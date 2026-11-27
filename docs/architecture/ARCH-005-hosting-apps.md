@@ -67,6 +67,14 @@ One image serves both the path form and the organisation subdomain:
 separated between apps. The kit must not trust origin-scoped storage, and an app that needs
 isolation is served in subdomain form. This is the accepted cost recorded in the spec.
 
+**The console shares an organisation's subdomain.** Everything there that is not an app's address is
+the console's or the control plane's (`/api`, `/mcp`), exactly as on the platform's own host — the
+developer's stack is used at `http://frostaura.localhost:8095/`. The one exception: an address with an
+app's shape — `/<division>/<project>/<app>/…`, three or more segments under a division that has an app
+on that subdomain — that is no app's is Edge's "There is no app at this address" (404), signed in or
+out, never the console's sign-in (`RouteSnapshot.IsAppShaped`, `AppGate`). The console's own addresses
+are at most two segments, which `router.test.ts` holds it to.
+
 ## Who may open an app
 
 An app is **private until a person makes it public** on its page (CLAUDE.md rule 10). Edge asks the control plane

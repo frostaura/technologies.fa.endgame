@@ -53,6 +53,10 @@ public sealed partial class RouteSnapshot
         ByPrefix = apps.ToFrozenDictionary(a => a.PathPrefix, StringComparer.OrdinalIgnoreCase);
         ByHostPrefix = apps.ToFrozenDictionary(a => a.Host + a.HostPrefix, StringComparer.OrdinalIgnoreCase);
         Hosts = apps.Select(a => a.Host).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        DivisionsByHost = apps
+            .Where(a => a.HostPrefix.Length > 0)
+            .GroupBy(a => a.Host, StringComparer.OrdinalIgnoreCase)
+            .ToFrozenDictionary(g => g.Key, g => g.Select(a => a.HostPrefix.Split('/')[1]).ToFrozenSet(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>A hash of the routes themselves: unchanged routes, unchanged version.</summary>
@@ -72,6 +76,28 @@ public sealed partial class RouteSnapshot
 
     /// <summary>Every organisation subdomain that serves at least one app.</summary>
     public FrozenSet<string> Hosts { get; }
+
+    /// <summary>For each organisation subdomain, the divisions that have at least one app addressed under it.</summary>
+    public FrozenDictionary<string, FrozenSet<string>> DivisionsByHost { get; }
+
+    /// <summary>
+    /// True when <paramref name="path"/> on <paramref name="host"/> has the shape of an app's address
+    /// there — <c>/division/project/app/…</c>, at least three segments, the first a division that has
+    /// an app on this host — so a request that reached the console instead is no app's (real-stack
+    /// 55). The console's own addresses are at most two segments (<c>/apps/&lt;id&gt;</c>,
+    /// <c>/assets/&lt;file&gt;</c>, src/frontend/src/lib/router.ts) and are never app-shaped; the
+    /// platform's own host is never in <see cref="DivisionsByHost"/>.
+    /// </summary>
+    public bool IsAppShaped(string host, string path)
+    {
+        if (!DivisionsByHost.TryGetValue(host, out var divisions))
+        {
+            return false;
+        }
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length >= 3 && divisions.Contains(segments[0]);
+    }
 
     public static string VersionOf(RoutingTable table)
     {

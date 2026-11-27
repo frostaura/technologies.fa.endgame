@@ -26,6 +26,35 @@ public sealed class RouteSnapshotTests
         Assert.Empty(snapshot.Rejected);
     }
 
+    [Theory]
+    [InlineData("acme.endgame.test", "/apps/no-such-app/web/", true)]
+    [InlineData("acme.endgame.test", "/apps/notes/nope", true)]
+    [InlineData("ACME.endgame.test", "/Apps/notes/web/deep/page", true)]
+    [InlineData("acme.endgame.test", "/community/dive-club-tools/web/", true)]
+    // The console's own addresses are at most two segments, even where the first is a division's slug.
+    [InlineData("acme.endgame.test", "/", false)]
+    [InlineData("acme.endgame.test", "/apps/abc", false)]
+    [InlineData("acme.endgame.test", "/apps/abc/", false)]
+    [InlineData("acme.endgame.test", "/community/dive-club-tools", false)]
+    [InlineData("acme.endgame.test", "/assets/index-abc.js", false)]
+    [InlineData("acme.endgame.test", "/runs/abc", false)]
+    // A first segment that is no division with an app on this host, or a host with no apps.
+    [InlineData("acme.endgame.test", "/no-division/x/y/", false)]
+    [InlineData("endgame.test", "/apps/no-such-app/web/", false)]
+    [InlineData("other.endgame.test", "/apps/notes/web/", false)]
+    public void An_app_shaped_address_is_three_segments_under_a_division_with_an_app_on_that_host(string host, string path, bool appShaped)
+    {
+        var snapshot = Snapshot(Routes.View(), Routes.View(division: "community", project: "dive-club-tools"));
+        Assert.Equal(appShaped, snapshot.IsAppShaped(host, path));
+    }
+
+    [Fact]
+    public void An_app_with_its_whole_subdomain_names_no_division()
+    {
+        var whole = Routes.View() with { HostPathBase = "/" };
+        Assert.Empty(Snapshot(whole).DivisionsByHost);
+    }
+
     [Fact]
     public void The_version_ignores_when_the_table_was_generated_and_follows_the_routes()
     {
@@ -358,7 +387,7 @@ public sealed class EdgeShippedRoutesTests
 
         var routes = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, "src", "backend", "Endgame.Edge", "appsettings.json")))!["ReverseProxy"]!["Routes"]!.AsObject();
         var console = routes["console"]!["Order"]!.GetValue<int>();
-        // An organisation's app host is never served the console: the gate knows it by this cluster.
+        // An app-shaped address that reached the console on an organisation's host is no app's: the gate knows the console by this cluster.
         Assert.Equal(AppGate.ConsoleCluster, routes["console"]!["ClusterId"]!.GetValue<string>());
         foreach (var path in new[] { "/mcp", "/mcp/{**rest}" })
         {

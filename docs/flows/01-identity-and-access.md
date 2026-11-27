@@ -926,10 +926,10 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Needs:** nothing
 - **Level:** Core
 - **Learn first:** ACC-01
-- **What you learn:** an address can exist before the app's first version does; an organisation's app address with no app is never the console.
+- **What you learn:** an address can exist before the app's first version does; an app-shaped address with no app is Edge's own 404, never the console's sign-in — while the console itself still opens on the organisation's host.
 - **Steps:**
   - Not published: **"This app isn’t ready yet"**, "It has an address, but its first version has not been published. Please check back soon." — to whoever may open it, with **"Try again"** and "Is this your app? **Open it in Endgame**". A visitor who may not is sent to sign in or refused first, exactly as for a published app. An app has its address from the moment it is created or placed: Edge is told at once.
-  - No app at the address, on an organisation's subdomain: **"There is no app at this address"**, "Nothing is published here. Check the address you were given, or ask the person who shared it.", the address asked for, and **"Go to Endgame"** (404). On the platform's own host an unknown address is the console's, which shows its own not-found page.
+  - No app at an app-shaped address on an organisation's subdomain — `/{division}/{project}/{app}/…` (three or more segments) under a division that has an app there: **"There is no app at this address"**, "Nothing is published here. Check the address you were given, or ask the person who shared it.", the address asked for, and **"Go to Endgame"** (404), signed in or out. Every other address on that subdomain is the console's or the control plane's exactly as on the platform's own host (the console's addresses are at most two segments: `/`, `/sign-in`, `/runs/{id}`, `/apps/{id}`, …). On the platform's own host an unknown address is the console's, which shows its own not-found page.
   - The access check unavailable, or an app Edge has not loaded yet: **"This app is temporarily unavailable"**, "Endgame could not reach it just now. Please try again in a moment."
   - Paths under `_platform` from the public side: 404.
   - Declared webhooks (`POST hooks/{name}`) reach even a private app without a session.
@@ -937,7 +937,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Variations and refusals:** none further.
 - **Where:** `AppGate.cs`, `UnavailablePage.cs`.
 - **Reachable from:** UI
-- **Covered by tests:** `EdgePipelineTests.An_organisation_app_host_is_never_served_the_console…`, `Platform_callbacks_are_never_routed…`, `Declared_webhooks_and_only_those_reach_a_private_app…`; `EdgeRoutingTests.Availability_follows_the_version_and_the_pause`; `EdgePipelineTests.A_private_unpublished_app_asks_a_stranger_to_sign_in_and_tells_a_member_it_is_not_ready`; `WalkTwoServerTests.A_new_app_is_in_the_routing_table_unpublished_and_Edge_is_told_at_once`.
+- **Covered by tests:** `EdgePipelineTests.An_app_shaped_address_on_an_organisation_host_that_is_no_apps_is_the_edges_no_app_page_signed_in_or_out`, `On_an_organisation_host_the_console_is_served_exactly_as_on_the_platform_host_signed_in_or_out`, `On_an_organisation_host_the_control_plane_is_reached_exactly_as_on_the_platform_host`; `RouteSnapshotTests.An_app_shaped_address_is_three_segments_under_a_division_with_an_app_on_that_host`, `Platform_callbacks_are_never_routed…`, `Declared_webhooks_and_only_those_reach_a_private_app…`; `EdgeRoutingTests.Availability_follows_the_version_and_the_pause`; `EdgePipelineTests.A_private_unpublished_app_asks_a_stranger_to_sign_in_and_tells_a_member_it_is_not_ready`; `WalkTwoServerTests.A_new_app_is_in_the_routing_table_unpublished_and_Edge_is_told_at_once`.
 
 ---
 

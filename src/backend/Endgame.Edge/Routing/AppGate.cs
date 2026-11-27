@@ -14,16 +14,18 @@ namespace Endgame.Edge.Routing;
 /// app available, may this visitor open it, is it awake — waking it if not — and, if the app
 /// fails underneath the request, the unavailable page instead of a bare error.
 /// <para>
-/// It also keeps the console off an organisation's app host: a host in the routing table (an
-/// organisation subdomain that serves apps) is never served the console. There, anything that is
-/// not an app's address and not the control plane's <c>/api</c> or <c>/mcp</c> (which the identity
-/// pages call on that host) is the edge's "There is no app at this address" (404). On the
-/// platform's own host an unknown address is the console's, which shows its own not-found page.
+/// The console and the control plane are served on an organisation's host exactly as on the
+/// platform's own host (the developer's stack is used at <c>http://frostaura.localhost:8095/</c>).
+/// The one exception there: an address with the shape of an app's — <c>/division/project/app/…</c>
+/// under a division that has apps on that host (<see cref="RouteSnapshot.IsAppShaped"/>) — that
+/// matched no app is the edge's "There is no app at this address" (404), signed in or out, never
+/// the console's sign-in or not-found (real-stack 55). The edge's own page assets are served at
+/// <c>/_endgame/assets</c> on that host for that page.
 /// </para>
 /// </summary>
 public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGate access, AuthPages auth, RouteTableSource routes, IOptions<EdgeOptions> options, ILogger<AppGate> logger)
 {
-    /// <summary>The platform's console cluster (appsettings.json): what an organisation's app host is never served.</summary>
+    /// <summary>The platform's console cluster (appsettings.json): where an unmatched app-shaped address would otherwise land.</summary>
     public const string ConsoleCluster = "console";
 
     public async Task InvokeAsync(HttpContext context, Func<Task> next)
@@ -38,7 +40,7 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
                 return;
             }
 
-            if (route.ClusterId == ConsoleCluster && onAppHost)
+            if (route.ClusterId == ConsoleCluster && routes.Current.IsAppShaped(context.Request.Host.Host, context.Request.Path.Value ?? "/"))
             {
                 await UnavailablePage.WriteAsync(context, Unavailable.NoApp, NoAppLinks(context));
                 return;

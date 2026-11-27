@@ -42,7 +42,7 @@ out, with their passkey still on the device, when the app is no longer shared wi
 `invited`, an address it was shared with. Signed out, "Sign in with a passkey" signs in the first
 console account on the device with a role on the app. A member signing out at an app on the
 platform's host ends the console session too. An app id Edge does not know shows "There is no app
-at this address" (the Edge's 404 for an organisation's app host), whose "Go to Endgame" opens the
+at this address" (the Edge's 404 for an app-shaped address that is no app's on an organisation's host), whose "Go to Endgame" opens the
 console; a link on any Edge page to the console's own host does the same.
 
 ## Interfaces
