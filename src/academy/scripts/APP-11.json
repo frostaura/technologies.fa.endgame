@@ -19,7 +19,7 @@
       "act": [
         {
           "click": {
-            "text": "Set one for Course Notes"
+            "selector": "[data-testid=\"monthly_credits-now\"] ~ span button"
           }
         },
         {
@@ -70,7 +70,7 @@
           "act": [
             {
               "click": {
-                "text": "Set one for Course Notes"
+                "selector": "[data-testid=\"monthly_credits-now\"] ~ span button"
               }
             },
             {

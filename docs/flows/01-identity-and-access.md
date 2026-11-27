@@ -830,7 +830,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 
 ### ACC-11 Sign out of an app
 - **Who:** app end user; member
-- **Starts at:** the app's own **"Sign out"** link (the template's user menu), which goes to `{app}_endgame/auth/sign-out`
+- **Starts at:** the app's own **"Sign out"** link (the template's user menu: in the header on a tablet or desktop; on a phone behind the avatar button "Your account", whose menu shows the person's name and e-mail above it), which goes to `{app}_endgame/auth/sign-out`
 - **Needs:** signed in
 - **Level:** Foundation
 - **Learn first:** ACC-04 or ACC-01

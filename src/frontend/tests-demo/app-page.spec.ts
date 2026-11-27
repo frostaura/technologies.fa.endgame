@@ -5,7 +5,8 @@ import { expect, test, type Page } from "@playwright/test";
  * sideways even with long names; the address breaks only after a "/"; "Open the app" is the primary
  * button only when the app can be used; "Save" sits on its field's row; every dashboard tile has its
  * "Take off" at its top right and a single number is a short tile; the side panel's chosen card is
- * unmistakable; a full dashboard opens short; and from 1600 px the page uses a second column.
+ * unmistakable; a full dashboard opens short; and from 2000 px (beside the docked conversation and the side panel) the
+ * page uses a second column.
  */
 
 const SUB = "/technologies.fa.endgame/demo/index.html";
@@ -115,6 +116,64 @@ for (const size of SIZES) {
       if (f && s) expect(Math.abs(f.y + f.height / 2 - (s.y + s.height / 2)), "Save is not on its field's row").toBeLessThanOrEqual(2);
     });
 
+    test("every chart a tile draws shows its marks: bars in the accent with their value at the end, a line over its grid", async ({ page }) => {
+      await open(page, "app-busy");
+      await openFolds(page);
+      const list = page.getByRole("list", { name: "Kept questions" });
+      const bars = list.locator("[data-share]");
+      expect(await bars.count()).toBeGreaterThan(3);
+      for (const bar of await bars.all()) {
+        const look = await bar.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const value = el.nextElementSibling?.getBoundingClientRect();
+          const tile = el.closest("li")?.getBoundingClientRect();
+          return { w: r.width, h: r.height, bg: getComputedStyle(el).backgroundColor, gap: value ? value.left - r.right : -1, valueEnd: value?.right ?? 0, tileEnd: tile?.right ?? 0 };
+        });
+        expect(look.w, "a bar is drawn").toBeGreaterThan(8);
+        expect(look.h).toBeGreaterThan(8);
+        expect(look.bg, "a bar is in the accent").toBe("rgb(47, 91, 255)");
+        expect(look.gap, "its value sits at the bar's end").toBeLessThanOrEqual(12);
+        expect(look.valueEnd, "its value stays inside the tile").toBeLessThanOrEqual(look.tileEnd);
+      }
+      const line = list.locator("li").filter({ has: page.locator("polyline") });
+      expect(await line.locator("[data-tick]").count()).toBeGreaterThanOrEqual(3);
+      expect(await line.locator("svg line").count()).toBeGreaterThanOrEqual(3);
+      expect(await line.locator("[data-point]").count()).toBeGreaterThanOrEqual(5);
+      // The days along the bottom never run into each other, and stay inside the tile.
+      const days = await line.locator("[data-xlabel]").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ l: r.left, r: r.right })));
+      expect(days.length).toBeGreaterThanOrEqual(2);
+      days.forEach((day, i) => {
+        if (i > 0) expect(day.l, "two days overlap").toBeGreaterThanOrEqual((days[i - 1]?.r ?? 0) + 4);
+      });
+      const tile = await line.boundingBox();
+      if (tile) expect(days[days.length - 1]?.r ?? 0).toBeLessThanOrEqual(tile.x + tile.width);
+      await noSideways(page);
+    });
+
+    test("the figure tiles' captions are never cut", async ({ page }) => {
+      for (const scenario of ["app-busy", "app-paused", "app-crashed", "app-not-published"]) {
+        await open(page, scenario);
+        const cut = await page
+          .getByRole("region", { name: "Today" })
+          .locator("span.truncate")
+          .evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent));
+        expect(cut, `${scenario}: a caption is cut`).toEqual([]);
+      }
+    });
+
+    test("\"Also at\" opens the other address on its own line under the first", async ({ page }) => {
+      await open(page, "app-busy");
+      const address = page.getByTestId("app-address");
+      await address.getByRole("button", { name: "Also at" }).click();
+      const first = await address.locator("p").first().boundingBox();
+      const other = await page.getByTestId("also-at").boundingBox();
+      expect(first && other).toBeTruthy();
+      if (first && other) {
+        expect(other.y, "the other address is under the first").toBeGreaterThanOrEqual(first.y + first.height - 1);
+        expect(Math.abs(other.x - first.x), "both start at one edge").toBeLessThanOrEqual(1);
+      }
+    });
+
     test("a full dashboard opens short", async ({ page }) => {
       await open(page, "dashboard-full");
       await openFolds(page);
@@ -125,8 +184,8 @@ for (const size of SIZES) {
       await noSideways(page);
     });
 
-    if (size.width >= 1600) {
-      test("from 1600 px the page uses a second column", async ({ page }) => {
+    if (size.width >= 2000) {
+      test("from 2000 px the page uses a second column", async ({ page }) => {
         await open(page, "app-busy");
         const change = await page.getByTestId("change-request").boundingBox();
         const ask = await page.getByRole("region", { name: "Asking about this app" }).boundingBox();
@@ -139,3 +198,38 @@ for (const size of SIZES) {
     }
   });
 }
+
+/**
+ * The demo's hosted app is drawn with the app kit's header (src/appkit/sdk-web/src/ui/layout.tsx): on a phone two rows —
+ * the app's name beside a 44px avatar button whose menu holds the person's name, e-mail and "Sign out" — and nothing wider
+ * than the screen; on a desktop one row with the name and "Sign out" in it.
+ */
+test.describe("the hosted app's header, as the kit draws it", () => {
+  for (const size of [{ width: 375, height: 812 }, { width: 1440, height: 900 }]) {
+    test(`at ${size.width}×${size.height}`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await open(page, "app-busy");
+      await page.getByRole("link", { name: "Open the app" }).click();
+      const header = page.locator("[data-slot=app-header]");
+      await expect(header).toBeVisible();
+      await noSideways(page);
+      const signOut = header.getByRole("link", { name: "Sign out" });
+      if (size.width < 640) {
+        const avatar = header.getByRole("button", { name: "Your account" });
+        const box = await avatar.boundingBox();
+        expect(box && box.width >= 44 && box.height >= 44, "the avatar is a 44px target").toBe(true);
+        await expect(signOut.first()).toBeHidden();
+        await avatar.click();
+        const menu = page.getByTestId("user-menu");
+        await expect(menu).toBeVisible();
+        await expect(menu).toContainText("@");
+        await expect(menu.getByRole("link", { name: "Sign out" })).toBeVisible();
+        const name = await header.getByTestId("nav-home").boundingBox();
+        expect(name && box && Math.abs(name.y + name.height / 2 - (box.y + box.height / 2)) <= 2, "the name and the avatar share the first row").toBe(true);
+      } else {
+        await expect(signOut.first()).toBeVisible();
+        await expect(header.getByRole("button", { name: "Your account" })).toBeHidden();
+      }
+    });
+  }
+});

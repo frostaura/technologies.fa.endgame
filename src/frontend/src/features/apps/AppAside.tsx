@@ -14,13 +14,13 @@ import { useAppSelector } from "@/store";
 import { platformOrigin, useGetOntologyQuery, useGetSecretsQuery } from "@/store/api";
 import { downloadExport } from "@/store/sensitive";
 import type { AppDetail } from "@/store/types";
-import { SERVICE, servicesOf } from "./appModel";
+import { SERVICE, serviceName, servicesOf } from "./appModel";
 import { useCardNote } from "@/components/cardNote";
 
-/** One thing the app uses: an icon and its name, in a tidy two-column list. */
+/** One thing the app uses: an icon and its name, in a list of as many columns as fit. */
 function Use({ icon, children }: { icon: IconName; children: ReactNode }) {
   return (
-    <li className="flex min-w-0 items-start gap-2 text-sm text-ink">
+    <li className="flex min-w-0 grow basis-48 items-start gap-2 text-sm text-ink">
       <Icon name={icon} tinted className="mt-0.5 size-4 shrink-0" />
       <span className="min-w-0 text-pretty">{children}</span>
     </li>
@@ -55,10 +55,11 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
       )}
       {graphView.kind === "failed" && <Failed back={false} title="What it uses could not be loaded" reason={graphView.reason} status={graphView.status} onRetry={() => void graph.refetch()} />}
       {graphView.kind === "loaded" && (
-        <ul aria-label="What it uses" className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+        // As many 12rem columns as the card has room for: one in a side card, so no name wraps.
+        <ul aria-label="What it uses" className="flex flex-wrap gap-x-4 gap-y-2.5">
           {services.map((s) => (
             <Use key={s} icon={SERVICE[s]?.icon ?? "app"}>
-              {technical ? s : (SERVICE[s]?.label ?? s)}
+              {serviceName(s, technical ? "technical" : "normal")}
             </Use>
           ))}
           <Use icon="employee">{app.endUsers === 0 ? "No one has signed up yet" : `${plural(app.endUsers, "person", "people")} signed up`}</Use>

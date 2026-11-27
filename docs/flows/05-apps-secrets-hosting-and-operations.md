@@ -19,13 +19,13 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Steps:**
   1. The person opens the app. The page shows the "Loading the app" skeleton: one wide bar and four tiles.
   2. The page loads. The breadcrumb shows the app's own organisation (not necessarily the person's first one), then the division and project names, then the app.
-  3. The heading is the app's name. Under it is one address — the subdomain address, or the path address when there is no subdomain — written without "https://" and breaking only after a "/", with a button that copies it ("Copy the address", then "Copied"). When there is a subdomain, "Also at" opens the path address, with its own copy button ("Copy the other address").
+  3. The heading is the app's name. Under it is one address — the subdomain address, or the path address when there is no subdomain — written without "https://" and breaking only after a "/", with a button that copies it ("Copy the address", then "Copied"). When there is a subdomain, "Also at" beside it opens the path address on a line of its own under the first, the same size, with its own copy button ("Copy the other address").
   4. A button reads "Open the app". It is the page's primary button while the app can be used. When it cannot, the same link is a quiet outline button and a line beside it says why: "Nothing is published yet, so its visitors are told it is not ready.", "It is paused, so its visitors see a holding page until it is restored." or "It is not running, so its visitors are told it is unavailable." (an app asleep can be used: the first visit wakes it).
   5. The four tiles appear (APP-02), then "Ask about this app", "Dashboard", "History", the sharing card and the "Secrets" card.
   6. The side column shows "Running", "Who can open it", "What it may spend", "What it uses", "The app itself" and "It is yours". In technical mode it also shows "Underneath". The side column says one thing at a time: what a card's last action did is replaced by its next one, and cleared when another card acts.
   7. The page re-reads the app every 20 seconds, but only while the browser tab has focus.
 - **Variations and refusals:**
-  - On a phone: the heading, the address and **"Open the app"** across the screen, the four tiles two by two, **"Talk to {app}"**, then every section as a folded row — "Change {app}", "Ask about this app" (opened, the row is the panel's heading, said once), "Dashboard", "History", "Sharing", "Secrets", "Running and who can open it", "What it may spend", "What it uses", "The app itself" (and "Technical details") — each one tap to open (SHL-07).
+  - On a phone: the heading, the address, **"Open the app"** and under it **"Talk to {app}"** across the screen (on a tablet, side by side), the four tiles two by two, then every section as a folded row — "Change {app}", "Ask about this app" (opened, the row is the panel's heading, said once), "Dashboard", "History", "Sharing", "Secrets", "Running and who can open it", "What it may spend", "What it uses", "The app itself" (and "Technical details") — each one tap to open (SHL-07).
   - An unknown id gives "This app could not be found" — with "This was not found, or you cannot see it." and "Back to the org chart" in place of "Try again" (a not-found is an answer, so it does not say "Nothing here is known until it loads.").
   - Any other failure gives "The app could not be loaded", with the reason and a retry.
   - A stale cached copy shows a stale notice above the page.
@@ -47,11 +47,12 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   1. **Health tile.** The value is "Healthy" (with a pulsing dot), "Struggling", "Down" or "Health unknown".
      - The note for a healthy app that has telemetry is "No errors today" or "<n> errors today".
      - Otherwise the note is the plain health summary, for example "Asleep; it wakes on the next visit.", "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it.", "Paused: the organisation reached its overdraft limit. A top-up restores it at once.", "It stopped working and needs attention.", "Not published yet." or "Being built.".
-     - When no plain summary exists, the note is "Running the version from <date>".
+     - The note is one line. A summary too long for it (over about 18 characters) reads "Not running" (or "Running"), and the summary is said in full in a line under the tiles; a budget pause reads "Paused" with "By its budget" (or "At overdraft limit"), with the amber panel below saying why.
+     - When no plain summary exists, the note is "Running since <day month>".
      - Technical mode shows the raw summary, which can include "Running version <v>.".
-  2. **Visits today tile.** The value is a number. The note is one of "<n> errors in <m> requests", "Last visit <time ago>" or "No visits yet".
-  3. **Typical response tile.** The value is the median response time, or "No traffic yet". The note is "Slowest 1 in 20: <time>" or "Measured once it has visitors".
-  4. **Cost this month tile.** The value is the credits spent ("0" for an amount that rounds below 0.1). The note says what holds it: "Its own cap: <n> credits a month", "No cap of its own; <Level>'s <n> credits applies", or "No cap on it or above it".
+  2. **Visits today tile.** The value is a number. The note is one short line: "<n> of <m> failed" (today's requests), "Last visit <time ago>" (minutes and hours shortened: "2 min ago", "3 h ago") or "No visits yet".
+  3. **Typical response tile.** The value is the median response time, or "—" with "No traffic yet" (never measured) or "No traffic today" (no request today, never "0 ms"). Otherwise the note is "Slowest 5%: <time>".
+  4. **Cost this month tile.** The value is the credits spent ("0" for an amount that rounds below 0.1). The note, one short line, says what holds it: "Own cap: <n>", "Cap above: <n>" (where, in "What it may spend"), or "No cap set".
 - **Variations and refusals:**
   - Before the app has measured anything, Visits and Typical response both read "Not measured yet". Their notes are "It reports its visits once it has run." and "Measured once it has visitors.".
   - Health is "degraded" when more than one response in twenty failed over the last 15 minutes. The summary then reads "Running, but X of the last Y responses failed.".
@@ -169,10 +170,10 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Core
 - **Learn first:** APP-01
 - **What you learn:** every app leans on the same shared platform services.
-- **You know it worked when:** a two-column list appears, each item an icon and its name, ending with "Open to AI assistants".
+- **You know it worked when:** a list appears, each item an icon and its name in as many columns as the card has room for (one in a narrow card), ending with "Open to AI assistants".
 - **Steps:**
   1. The section shows the "Loading what it uses" skeleton.
-  2. An item appears for each platform service the app depends on: "Sign-in", "Data", "AI", "E-mail", "Incoming data", "Schedules", "Visits and errors measured". Each comes from the organisation graph's `depends-on` edges, "Data" included: the graph names it for an app that has run or stores data. Technical mode shows the raw service names instead.
+  2. An item appears for each platform service the app depends on: "Sign-in", "Stored data", "AI inside apps", "Email", "Incoming data", "Scheduled jobs", "Health and traffic" — the names the organisation's "How data flows" matrix heads its columns with, one name everywhere. Each comes from the organisation graph's `depends-on` edges, "Stored data" included: the graph names it for an app that has run or stores data. Technical mode adds the internal name in brackets ("Stored data (data)").
   3. Further items follow:
      - "No one has signed up yet", or "<n> people signed up"
      - "Shared with <n> people", only when the app is shared
@@ -231,9 +232,9 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Advanced · **Learn first:** CRED-03 · **What you learn:** an app can be held to its own cap, inside whatever holds the levels above it.
 - **Steps:**
   1. The card says what holds it: "<n> credits a month, set on <App>", "<n> credits a month, from <Level>", or "No cap on it or above it: only the organisation's balance and overdraft hold it."
-  2. Press **"Set one for <App>"** (or **"Change it"**). A card opens in its place headed "Set its monthly cap"; type into "Credits a month" and press **"Save"** ("Not now" beside it): "<App> may spend <n> credits a month here."
+  2. Press **"Set its own"** (or **"Change it"**). A card opens in its place headed "Set its monthly cap"; type into "Credits a month" and press **"Save"** ("Not now" beside it): "<App> may spend <n> credits a month here."
   3. **"Remove it"** removes its own; the card then says which cap applies.
-- **You know it worked when:** the card and the "Cost this month" tile ("Its own cap: <n> credits a month", "No cap of its own; <Level>'s <n> credits applies", or "No cap on it or above it") agree.
+- **You know it worked when:** the card and the "Cost this month" tile ("Own cap: <n>", "Cap above: <n>" or "No cap set") agree.
 - **Variations and refusals:** "Type a number of credits." · refused: "It was not saved: <reason> It is as it was." · failed read: "Its cap could not be loaded". Below Admin: "An Admin or the Owner sets these."
 - **Where:** `AppManage.tsx` (AppSpending), `appModel.ts` (`capNote`); `PUT/DELETE /api/cascade` (budget `monthly_credits`).
 - **Reachable from:** UI; API; MCP `budget_set`.
@@ -328,7 +329,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Steps:**
   1. The person presses "Ask it". The button reads "Asking…", and under it "Writing the query, then reading the records. It usually takes up to half a minute."
   2. A model writes one read-only query, which is guarded and run against the app's telemetry views. If it is refused or fails, the model is shown why and tries once more, and that repair is not charged. A second call puts the rows into words.
-  3. The answer appears: the question as a heading, "Cost <charged> of at most <estimate>", the answer text, and the chart, which is a single number, bars (up to 24, three series at most), a line (up to 120 points) or a table (first 50 rows). Bars and lines start at zero, so a small change looks small.
+  3. The answer appears: the question as a heading, "Cost <charged> of at most <estimate>", the answer text, and the chart, which is a single number, bars (up to 24, three series at most; each bar in the accent with its value at its end), a line (up to 120 points, over light gridlines at round values, the day under the points that have room, and a dot per point that says its value on hover, up to 31 points) or a table (first 50 rows). Bars and lines start at zero, so a small change looks small.
   4. If there were more rows than shown: "Only the first rows are shown; there were more."
   5. The credit balance is refreshed.
 - **Variations and refusals:**

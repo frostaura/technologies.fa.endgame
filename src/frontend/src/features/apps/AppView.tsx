@@ -6,7 +6,7 @@ import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
-import { Alert, STATES } from "@/components/ui/alert";
+import { Alert } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { LINK_ALONE } from "@/components/ui/layout";
 import { Input } from "@/components/ui/field";
@@ -28,7 +28,7 @@ import { AppShell, type Crumb } from "../shell/AppShell";
 import { appHealthChip, namesFor } from "../home/treeModel";
 import { ItIsYours, TechnicalDetails, WhatItUses } from "./AppAside";
 import { AppItself, AppSpending, IdleMinutes, RebuildAndRestart } from "./AppManage";
-import { capNote, notOpenable } from "./appModel";
+import { capNote, notOpenable, visitsNote } from "./appModel";
 import { TITLE, SECTION } from "@/components/ui/page";
 import { AskPanel, Dashboard } from "./AskPanel";
 import { useCardNote } from "@/components/cardNote";
@@ -152,7 +152,6 @@ function AppBody({ app }: { app: AppDetail }) {
   const health = appHealthChip(app.health.state, app.running, app.paused);
   const { builder, admin } = useAppRole(app);
   const budgets = useGetCascadeQuery({ scope: app.scope, kind: "budget" });
-  const nameOf = useNameOf();
   // Held by its budget (or the organisation's overdraft limit): the amber pause whose action raises the budget, never
   // the red stopped panel and a rebuild that cannot help (ARCH-011).
   const held = heldByBudget(app);
@@ -179,16 +178,13 @@ function AppBody({ app }: { app: AppDetail }) {
         <Stat label="Health" value={healthValue.value} tone={healthValue.tone} caption={healthNote(app, technical)} />
         {t ? (
           <>
-            <Stat
-              label="Visits today"
-              value={formatNumber(t.visitsToday)}
-              caption={t.errorsToday > 0 ? `${plural(t.errorsToday, "error")} in ${plural(t.requestsToday, "request")}` : t.lastVisitAt ? `Last visit ${timeAgo(t.lastVisitAt)}` : "No visits yet"}
-            />
+            <Stat label="Visits today" value={formatNumber(t.visitsToday)} caption={visitsNote(t)} />
+            {/* No visitor today, no response to time: "—", never "0 ms". */}
             <Stat
               label="Typical response"
-              value={t.latencyP50Ms !== null ? formatDuration(t.latencyP50Ms) : NO_VALUE}
-              tone={t.latencyP50Ms !== null ? "ink" : "muted"}
-              caption={t.latencyP95Ms !== null ? `Slowest 1 in 20: ${formatDuration(t.latencyP95Ms)}` : "No traffic yet"}
+              value={t.latencyP50Ms !== null && t.requestsToday > 0 ? formatDuration(t.latencyP50Ms) : NO_VALUE}
+              tone={t.latencyP50Ms !== null && t.requestsToday > 0 ? "ink" : "muted"}
+              caption={t.latencyP95Ms !== null && t.requestsToday > 0 ? `Slowest 5%: ${formatDuration(t.latencyP95Ms)}` : t.latencyP50Ms === null ? "No traffic yet" : "No traffic today"}
             />
           </>
         ) : (
@@ -197,11 +193,17 @@ function AppBody({ app }: { app: AppDetail }) {
             <Stat label="Typical response" value={NO_VALUE} tone="muted" caption={NOT_MEASURED} />
           </>
         )}
-        <Stat label="Cost this month" value={headlineNumber(app.cost.monthCredits)} caption={capNote(app, budgets.data, nameOf)} />
+        <Stat label="Cost this month" value={headlineNumber(app.cost.monthCredits)} caption={capNote(app, budgets.data)} />
       </StatRow>
-      {/* What the figures cannot say in a line: why there are no visits or responses to measure yet. */}
-      {!held && (!t || t.latencyP50Ms === null) && (
-        <p className="max-w-prose text-sm text-ink-muted">{t ? "Its response times are measured once it has visitors." : "It reports its visits once it has run, and its response times once it has visitors."}</p>
+      {/* What the figures cannot say in a line: the health summary in full, and why there are no visits or responses to measure yet. */}
+      {/* When the stopped panel shows, it says the summary itself, once. */}
+      {longHealth(app, technical) && !(stopped && builder) && (
+        <p className="max-w-prose text-ink-body" data-testid="health-summary">
+          {longHealth(app, technical)}
+        </p>
+      )}
+      {!held && (!t || t.latencyP50Ms === null || t.requestsToday === 0) && (
+        <p className="max-w-prose text-sm text-ink-muted">{t ? (t.latencyP50Ms === null ? "Its response times are measured once it has visitors." : "Its response times show once it has visitors today.") : "It reports its visits once it has run, and its response times once it has visitors."}</p>
       )}
 
       {held && (
@@ -220,7 +222,7 @@ function AppBody({ app }: { app: AppDetail }) {
       )}
       {stopped && builder && (
         <Alert state="crashed" title={app.status === "failed" ? `${app.name} stopped working.` : `${app.name} is stopped.`} action={<RebuildAndRestart app={app} onResult={(r) => setRebuilt(r.published ? `${app.name} is rebuilt and running again.` : null)} />}>
-          Rebuilding builds its newest version again and starts it. Nothing in its history changes.
+          {longHealth(app, technical) ? `${longHealth(app, technical)} ` : ""}Rebuilding builds its newest version again and starts it. Nothing in its history changes.
         </Alert>
       )}
       {!stopped && rebuilt && (
@@ -229,8 +231,9 @@ function AppBody({ app }: { app: AppDetail }) {
         </p>
       )}
 
-      {/* From 1600 the two ways to act on it sit side by side, tops aligned, each as tall as what it holds. */}
-      <div className={cn("grid grid-cols-1 items-start gap-6 max-sm:gap-5", builder && "3xl:grid-cols-2")}>
+      {/* From 2000 the two ways to act on it sit side by side, tops aligned, each as tall as what it holds. Below that the
+          page column beside the docked conversation and the side panel is too narrow for two (about 745 px at 1920). */}
+      <div className={cn("grid grid-cols-1 items-start gap-6 max-sm:gap-5", builder && "4xl:grid-cols-2")}>
         {builder && (
           <Fold title={`Change ${app.name}`} summary="Say what to change; it is built in a preview first">
             <ErrorBoundary name="Changing this app">
@@ -250,10 +253,8 @@ function AppBody({ app }: { app: AppDetail }) {
         </ErrorBoundary>
       </Fold>
 
-      {/* A phone or a tablet: the button that opens this app's conversation, straight under the figures on a phone (its order class). */}
-      <TalkLauncher className="max-sm:-order-1" />
-
-      <div className="grid grid-cols-1 items-start gap-6 max-sm:gap-5 2xl:grid-cols-2">
+      {/* History beside Sharing and Secrets only from 2000, for the same reason: at 1536–1999 its rows wrapped in a third of the page. */}
+      <div className="grid grid-cols-1 items-start gap-6 max-sm:gap-5 4xl:grid-cols-2">
         <Fold title="History" summary="Every version, and bringing one back">
           <ErrorBoundary name="The history">
             <History app={app} canRestore={builder} />
@@ -330,14 +331,34 @@ function CopyAddress({ url, label }: { url: string; label: string }) {
 function AppAddress({ addresses }: { addresses: AppDetail["addresses"] }) {
   const main = addresses.subdomain ?? addresses.path;
   const other = addresses.subdomain ? addresses.path : null;
+  const [open, setOpen] = useState(false);
+  const id = useId();
   return (
-    <div data-testid="app-address" className="flex min-w-0 flex-wrap items-center gap-x-3">
-      <p className="flex min-w-0 max-w-full items-center gap-1 text-ink-body">
-        <Breakable url={main} />
-        <CopyAddress url={main} label="Copy the address" />
-      </p>
+    <div data-testid="app-address" className="flex min-w-0 flex-col">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3">
+        <p className="flex min-w-0 max-w-full items-center gap-1 text-ink-body">
+          <Breakable url={main} />
+          <CopyAddress url={main} label="Copy the address" />
+        </p>
+        {other && (
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={id}
+            onClick={() => setOpen((o) => !o)}
+            className="inline-flex min-h-touch items-center gap-1 rounded-xs text-sm text-ink-muted hover:text-ink"
+          >
+            Also at
+            <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+          </button>
+        )}
+      </div>
+      {/* The other address on a line of its own under the first, the same size and the same copy button (console-desktop 26). */}
       {other && (
-        <AlsoAt url={other} />
+        <p id={id} data-testid="also-at" className={cn("min-w-0 max-w-full items-center gap-1 text-ink-body", open ? "flex" : "hidden")}>
+          <Breakable url={other} />
+          <CopyAddress url={other} label="Copy the other address" />
+        </p>
       )}
     </div>
   );
@@ -351,9 +372,12 @@ function OpenTheApp({ app }: { app: AppDetail }) {
   const why = notOpenable(app);
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
-      <a href={app.addresses.subdomain ?? app.addresses.path} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants({ variant: why ? "secondary" : "primary" }), "max-sm:w-full")}>
+      <a href={app.addresses.subdomain ?? app.addresses.path} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants({ variant: why ? "secondary" : "primary", size: "lg" }), "max-sm:w-full")}>
         Open the app
       </a>
+      {/* A phone or a tablet: the button that opens this app's conversation, beside "Open the app" (under it on a phone), the
+          page's two ways in kept together rather than a lone bar between the figures and the sections (console-small 21). */}
+      <TalkLauncher className="sm:w-auto max-sm:order-last" />
       {why && (
         <p data-testid="open-note" className="max-w-prose text-sm text-ink-muted">
           {why}
@@ -378,10 +402,30 @@ function pausedNote(app: AppDetail): string {
 function healthNote(app: AppDetail, technical: boolean): string {
   if (technical) return app.health.summary;
   if (app.notBuilt) return app.notBuilt.note;
-  // Paused: the panel under the figures says why and what restores it; the tile says it in a line.
-  if (heldByBudget(app)) return STATES["paused-by-budget"].label;
+  // Paused: the panel under the figures says why and what restores it; the tile, under "Paused", says by what.
+  if (heldByBudget(app)) return app.paused?.reason === "overdraft_limit" ? "At overdraft limit" : "By its budget";
   if (app.health.state === "healthy" && app.telemetry) return app.telemetry.errorsToday === 0 ? "No errors today" : `${plural(app.telemetry.errorsToday, "error")} today`;
-  return plainOrNull(app.health.summary) ?? (app.publishedAt ? `Running the version from ${formatDate(app.publishedAt)}` : "Not published yet");
+  // A tile's caption is one line: a summary longer than that is said in full under the tiles (`longHealth`).
+  const summary = plainOrNull(app.health.summary);
+  if (summary && summary.length <= CAPTION_ROOM) return summary;
+  if (summary) return app.health.state === "healthy" ? "Running" : "Not running";
+  return app.publishedAt ? `Running since ${shortDate(app.publishedAt)}` : "Not published yet";
+}
+
+/** About as many characters as a phone's half-width figure tile holds on one line. */
+const CAPTION_ROOM = 18;
+
+/** The health summary in full, when it is too long for the tile's one line (normal mode); otherwise null. */
+function longHealth(app: AppDetail, technical: boolean): string | null {
+  if (technical || app.notBuilt || heldByBudget(app)) return null;
+  if (app.health.state === "healthy" && app.telemetry) return null;
+  const summary = plainOrNull(app.health.summary);
+  return summary && summary.length > CAPTION_ROOM ? summary : null;
+}
+
+/** "12 Nov": a day without its year, for a caption. */
+function shortDate(iso: string): string {
+  return formatDate(iso).replace(/\s\d{4}$/, "");
 }
 
 /** Private or public: there is no list of people to manage, and the page says how to start one. */
@@ -760,29 +804,5 @@ function ConfirmPublic({ appName, onConfirm, onCancel }: { appName: string; onCo
       onConfirm={onConfirm}
       onCancel={onCancel}
     />
-  );
-}
-
-/** The app's second address, behind a small toggle: said only when asked for. */
-function AlsoAt({ url }: { url: string }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
-  return (
-    <div className="min-w-0 max-w-full text-sm text-ink-muted">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={id}
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex min-h-touch items-center gap-1 rounded-xs hover:text-ink"
-      >
-        Also at
-        <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
-      </button>
-      <p id={id} className={cn("min-w-0 items-center gap-1", open ? "flex" : "hidden")}>
-        <Breakable url={url} />
-        <CopyAddress url={url} label="Copy the other address" />
-      </p>
-    </div>
   );
 }

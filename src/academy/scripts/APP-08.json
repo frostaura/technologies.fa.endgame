@@ -18,7 +18,7 @@
       "kind": "demo",
       "highlight": {
         "selector": "ul[aria-label=\"What it uses\"]",
-        "note": "A chip for each platform service it has used: here, sign-in and measured visits."
+        "note": "A line for each platform service it has used, named as the organisation's data-flow view names it: here, Sign-in and Health and traffic."
       }
     },
     {

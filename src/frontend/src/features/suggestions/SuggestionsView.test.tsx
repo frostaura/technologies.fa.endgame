@@ -104,7 +104,7 @@ describe("SuggestionsView", () => {
     renderWithStore(<SuggestionsView />);
     const card = (await screen.findByRole("list", { name: "Suggested ideas" })).querySelector('[data-suggestion="s1"]') as HTMLElement;
     expect(within(card).getByText("Sign-in")).toBeTruthy();
-    expect(within(card).getByText("E-mail")).toBeTruthy();
+    expect(within(card).getByText("Email")).toBeTruthy();
     expect(within(card).getByText("Bookings")).toBeTruthy();
     expect(within(card).queryByText(/\(service\)/)).toBeNull();
   });
