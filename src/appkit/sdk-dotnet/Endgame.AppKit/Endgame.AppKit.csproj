@@ -19,5 +19,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Endgame.AppKit.Tests" />
+    <!-- AppChecks reads the endpoints UseEndgameApp() captured, as the start-up contract does. -->
+    <InternalsVisibleTo Include="Endgame.AppKit.Testing" />
   </ItemGroup>
 </Project>

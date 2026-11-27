@@ -47,7 +47,9 @@ idea asked for has failed, however good the rest is.
    - Something a signed-in person makes or joins of their own — joining a trip, signing up, an RSVP, their
      own checklist — is kept against their user id, with a unique index, and found again when they come back,
      never made twice (the app kit's "A person's own record"). Its item's check says the same member doing it
-     again, signed in afresh, gets the record they already have, and the read shows one.
+     again, signed in afresh, gets the record they already have, and the read shows one. Reading it requires
+     sign-in like the writes; what anyone may see — how many have joined — is a field of the thing joined (the
+     dive, the trip), never answered by the person's own record.
    - leftOut: only a requirement you deliberately will not build, with the reason the owner will read
      (for example one that needs a payment provider, which apps cannot use). Leaving something out is the
      exception; never leave one out because it is hard.

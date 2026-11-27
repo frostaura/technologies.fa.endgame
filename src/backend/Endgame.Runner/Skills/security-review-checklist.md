@@ -13,7 +13,11 @@ file and line and what to change.
 - Secrets are read through `IEndgameSecrets`, at the point of use, never logged and never returned by an endpoint.
 
 ## Identity and access
-- Every endpoint that writes, or reads someone's own data, has `.RequireUser()` and takes `EndgameUser`.
+- Every endpoint that writes, or reads someone's own data, has `.RequireUser()` and takes `EndgameUser`. A handler
+  that takes `EndgameUser?` (signed in or not) is a finding: it reads the person's own data when they are signed in.
+  The one exception is the kit's own `getCurrentUser` (`GET api/me`). What anyone may see — a count, a total — belongs
+  on the public resource, readable signed out, never beside someone's own record (the app kit's "A person's own
+  record"; the app's `AppRulesTests` checks this too).
 - Ownership is checked: a user reads and changes only what is theirs (look for queries by id with no owner filter).
 - Owners are stored as `EndgameUser.Id`, never an email. No home-made sessions, cookies or password handling.
 - Nothing trusts origin-scoped browser storage for identity or authorisation (apps on paths share an origin).

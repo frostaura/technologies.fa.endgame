@@ -201,7 +201,12 @@ given up. The first live build after this check — "Dive Seat Sheet", run `6701
 repair rounds on both counts: it compared a first join with a join made after the seat was given up (201 X, 200 X,
 DELETE, 201 Y), and it asked for the read in the prose although it was in the call log. Its four failed evaluations are
 replayed from the run's own log in `ComingBackRealRunTests` and all pass. The app kit's convention it holds apps to is in
-the template's `AGENTS.md` ("A person's own record").
+the template's `AGENTS.md` ("A person's own record"). Reading that record requires sign-in like the writes, and what anyone
+may see — how many joined — is a field of the public resource: the security review's checklist says so, and the kit's own
+example once did not (R6-5: a build copied its `EndgameUser?` read for "GET dives/{id}/signup", and the review blocked
+publishing on it). The template's `AppRulesTests` (`AppChecks`) now fails any app, the template included, whose endpoint
+takes the person without `.RequireUser()`, and `KitConventionTests` fails the platform if the kit, the checklist and the
+planner's and builder's guidance stop saying the same.
 
 **A refusal of how the work was shown is checked again, not sent to the builder.** When the evaluator said the item
 works (no faults of its own) or gave no verdict at all, and the only reason it failed is that code could not verify how a
