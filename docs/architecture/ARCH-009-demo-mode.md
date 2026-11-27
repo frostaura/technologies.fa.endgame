@@ -138,6 +138,8 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `s3-checkpoints`, `s3-start-checkpoint` | Northwind in checkpoints mode, so a verdict waits for you; Learning asking "Start this work?" before research begins | |
 | `s3-waiting-for-budget`, `s3-checkpoints-waiting-for-budget`, `s3-budget-runs-out` | Learning with 5 credits left, so research waits for budget; the same in checkpoints mode, which waits too; 1.4 left with the reading list's build estimated within it, so it starts and stops part-way for budget | |
 | `s3-change-running`, `s3-change-failed` | A change to Court booking playing from its estimate; one whose check of what worked before still fails after its repairs | |
+| `verdict-dropped`, `verdict-overruled`, `verdict-decided`, `verdict-researching` | A verdict you dropped; one you overruled; one you chose to build; an idea still being researched — on its own page (`scenarios.verdicts.ts`) | |
+| `verdict-long`, `verdict-long-red-line`, `suggestions-long` | Real-sized research: a 200-character idea, a two-line headline, a summary in paragraphs, 21 products, 41 sources with very long addresses, 14 signals and four earlier overrules; the same over a red line, its reasoning written three times; five long suggestions, one reusing a thing twice, three taken or set aside | |
 | `s3-stage-rules` | Learning's build stage asks before `docs/app.md` changes and refuses `docs/decisions.md` | |
 | `s3-suggestions`, `s3-employee-paused` | Two open ideas from the portfolio, one taken, one set aside; Kasper paused, so Court booking takes no new work | |
 

@@ -46,6 +46,8 @@ describe("SuggestionsView", () => {
     expect(within(card).getByText("Clubs track ladders on paper.")).toBeTruthy();
     expect(within(card).getByText("Acme already runs bookings for the club.")).toBeTruthy();
     expect(within(card).getByText("Member sign-in")).toBeTruthy();
+    // Taken and set-aside ones fold away under the shared disclosure, never the browser's own triangle.
+    fireEvent.click(screen.getByRole("button", { name: "Taken or set aside (1)" }));
     expect(within(screen.getByRole("list", { name: "Taken or set aside" })).getByText("Coach notes")).toBeTruthy();
   });
 

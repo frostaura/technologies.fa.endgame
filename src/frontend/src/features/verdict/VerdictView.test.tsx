@@ -206,11 +206,11 @@ describe("VerdictView", () => {
     expect(products.textContent).not.toContain("beeper/beeper-server");
     expect(within(products).getByRole("link", { name: "beeper.example.test" }).getAttribute("href")).toBe("https://beeper.example.test/docs");
     expect(screen.getByText("No defensible gap survives the evidence.")).toBeTruthy();
-    expect(screen.getByText(/No evidence of demand was found. That counts/)).toBeTruthy();
+    expect(screen.getByText("That counts against building.")).toBeTruthy();
     expect(screen.getByText("A verified cohort paying a real price.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "No red line is crossed" })).toBeTruthy();
     expect(screen.getAllByText("1 of 3", { selector: "span" })).toHaveLength(3);
-    expect(screen.getByText("existing products, the gap, demand")).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "Strands" })).getByText("existing products")).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Where you are" }).textContent).toBe("Acme/Tools/Pager");
   });
 
@@ -220,8 +220,8 @@ describe("VerdictView", () => {
     const signals = await screen.findByRole("list", { name: "Signals of demand" });
     expect(within(signals).getByText("Asked on the forum twice")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "What to change" })).toBeTruthy();
-    expect(screen.getByText("medium")).toBeTruthy();
-    expect(screen.getByText("7")).toBeTruthy();
+    // The method's figures, said once in a line.
+    expect(screen.getByText("7 searches · 2 sources · medium confidence")).toBeTruthy();
     expect(within(screen.getByRole("list", { name: "Strands" })).getByText("3 searches · 2 sources · low confidence")).toBeTruthy();
     // A change verdict is not overruled: it is built as described, or changed.
     expect(screen.queryByRole("button", { name: /Overrule/ })).toBeNull();

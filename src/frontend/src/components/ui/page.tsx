@@ -55,9 +55,23 @@ export function PageHeader({
   );
 }
 
-/** Independent sections: one column, then two across at 1600 and wider. */
-export function ContentGrid({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn("grid grid-cols-1 items-start gap-6 3xl:grid-cols-2", className)}>{children}</div>;
+/**
+ * Independent sections: one column, then two across at 1600 and wider. `masonry`: sections of very
+ * different heights flow down two columns, each under the one before it, instead of sitting in rows
+ * where a short section beside a long one leaves a hole — read in order, top to bottom, left then right.
+ */
+export function ContentGrid({ className, masonry = false, label, children }: { className?: string; masonry?: boolean; label?: string; children: ReactNode }) {
+  if (masonry)
+    return (
+      <div aria-label={label} role={label ? "group" : undefined} className={cn("flex flex-col gap-6 3xl:block 3xl:columns-2 3xl:gap-6 3xl:[&>*]:mb-6 3xl:[&>*]:break-inside-avoid 3xl:[&>*:last-child]:mb-0", className)}>
+        {children}
+      </div>
+    );
+  return (
+    <div aria-label={label} role={label ? "group" : undefined} className={cn("grid grid-cols-1 items-start gap-6 3xl:grid-cols-2", className)}>
+      {children}
+    </div>
+  );
 }
 
 /** A card in the side panel: it ends where its content ends. */

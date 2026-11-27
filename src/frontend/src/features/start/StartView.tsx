@@ -1,20 +1,24 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { TAP } from "@/lib/touch";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
+import { CHIP } from "@/components/ui/chip";
 import { Select } from "@/components/ui/field";
-import { formatCredits, isValidSlug, slugify } from "@/lib/format";
+import { PageHeader, SideCard } from "@/components/ui/page";
+import { NO_VALUE, Stat } from "@/components/ui/stat";
+import { estimateFigure, estimateHeadline } from "@/lib/estimates";
+import { formatCredits, formatNumber, isValidSlug, plural, slugify } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { ROLE_NAME, effectiveRole, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
-import { platformHost, useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetCreditsQuery, useGetMeQuery } from "@/store/api";
-import type { Autonomy, IdeaEstimate, MemberRole } from "@/store/types";
+import { platformHost, useCreateIdeaMutation, useCreateOrganisationMutation, useEstimateIdeaMutation, useGetAutonomyQuery, useGetCreditsQuery, useGetMeQuery, useGetSuggestionsQuery } from "@/store/api";
+import type { Autonomy, IdeaEstimate, MemberRole, Tree } from "@/store/types";
 import { isArchived } from "../tree/treeManage";
-import { NEVER_TOPPED_UP, nextSteps, researchPromise, roomFor, shortfall } from "./startModel";
+import { NEVER_TOPPED_UP, exampleIdeas, nextSteps, researchPromise, roomFor, shortfall } from "./startModel";
 import { AppShell } from "../shell/AppShell";
 
 /** Things an idea commonly has to respect, offered as one-tap constraints. They are the owner's words, sent as text. */
@@ -27,6 +31,12 @@ type EstimateState = { kind: "idle" } | { kind: "loading" } | { kind: "loaded"; 
 /** An estimate answer, remembered against the exact idea and constraints it was for. */
 type EstimateResult = { key: string } & ({ ok: true; estimate: IdeaEstimate } | { ok: false; reason: string });
 
+/**
+ * A new idea: the form, and beside it what happens next, what research costs here and ideas to start
+ * from. From 1600 the form itself is two columns — the idea and what it must respect, then where it goes,
+ * its estimate and the start — so a wide screen is used rather than left as a narrow column. On a phone
+ * the start stays above the bottom bar however long the idea is.
+ */
 export function StartView() {
   const me = useGetMeQuery(undefined);
   const active = useActiveOrganisation();
@@ -59,6 +69,7 @@ export function StartView() {
   const [createOrganisation, orgState] = useCreateOrganisationMutation();
   const [createIdea, ideaState] = useCreateIdeaMutation();
   const ids = { org: useId(), idea: useId(), other: useId(), orgHint: useId(), place: useId(), placeHint: useId() };
+  const ideaBox = useRef<HTMLTextAreaElement>(null);
 
   const constraints = [...chosen, ...(other.trim() ? [other.trim()] : [])];
   const text = idea.trim();
@@ -110,148 +121,186 @@ export function StartView() {
   };
 
   const toggle = (c: string) => setChosen((cur) => (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]));
+  const startFrom = (example: string) => {
+    setIdea(example);
+    ideaBox.current?.focus();
+  };
+  const refused = unplaced || (blocked && !!org);
 
   return (
     <AppShell
       crumbs={org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }, { label: "New idea" }] : [{ label: "Start" }]}
-      aside={<NextSteps scope={firstRun ? null : (scope ?? null)} division={place && place.scope !== org?.slug ? place.label : null} />}
+      aside={
+        refused ? undefined : (
+          [
+            <SideCard key="next" label="What happens next">
+              <NextSteps scope={firstRun ? null : (scope ?? null)} division={place && place.scope !== org?.slug ? place.label : null} />
+            </SideCard>,
+            !firstRun && scope && (
+              <SideCard key="costs" title="What research costs here">
+                <Costs scope={scope} estimate={estimate.kind === "loaded" ? estimate.estimate.credits : null} />
+              </SideCard>
+            ),
+            !firstRun && org && <Examples key="examples" organisation={org.slug} tree={tree.data ?? null} onPick={startFrom} />,
+          ]
+        )
+      }
     >
       {unplaced ? (
-        <section data-state="refused" className="mx-auto flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
-          <h1 className="text-3xl font-semibold max-sm:text-2xl leading-tight max-sm:text-2xl">Organisations are set up by FrostAura</h1>
-          <p className="text-base text-ink-body">
-            An idea lives in an organisation, and you hold no role in one yet. FrostAura sets one up for each person it invites; if someone already works here, ask them to give you a role.
-          </p>
+        <section data-state="refused" className="flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
+          <PageHeader title="Organisations are set up by FrostAura" lead="An idea lives in an organisation, and you hold no role in one yet. FrostAura sets one up for each person it invites; if someone already works here, ask them to give you a role." />
           <Link href={paths.home()} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
             Back to the org chart
           </Link>
         </section>
       ) : blocked && org ? (
-        <section data-state="refused" className="mx-auto flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
-          <h1 className="text-3xl font-semibold max-sm:text-2xl leading-tight max-sm:text-2xl">Only a Builder or above starts an idea</h1>
-          <p className="text-base text-ink-body">
-            {active.role ? `You are ${article(active.role)} ${ROLE_NAME[active.role]} in ${org.name}` : `You hold no role over the whole of ${org.name}`}, and no division gives you more. An Admin or the Owner can make you a Builder; until then, you can follow everything that is being built.
-          </p>
+        <section data-state="refused" className="flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
+          <PageHeader
+            title="Only a Builder or above starts an idea"
+            lead={`${active.role ? `You are ${article(active.role)} ${ROLE_NAME[active.role]} in ${org.name}` : `You hold no role over the whole of ${org.name}`}, and no division gives you more. An Admin or the Owner can make you a Builder; until then, you can follow everything that is being built.`}
+          />
           <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
             Back to the org chart
           </Link>
         </section>
       ) : (
-      <form onSubmit={(e) => void submit(e)} className="mx-auto flex w-full max-w-form flex-col gap-9 py-4 lg:py-8" aria-describedby={submitError ? "start-error" : undefined}>
-        <div className={cn("flex flex-col gap-2.5", RISE)}>
-          <h1 className="text-3xl font-semibold max-sm:text-2xl leading-tight max-sm:text-2xl">What do you want to build?</h1>
-          <p className="text-base text-ink-body">Describe it the way you would to a friend. Endgame researches it first, tells you plainly whether it is worth building, then builds and runs it.</p>
-        </div>
+        <form onSubmit={(e) => void submit(e)} className="flex w-full max-w-form flex-col gap-8 3xl:max-w-page" aria-describedby={submitError ? "start-error" : undefined}>
+          <PageHeader className={RISE} title="What do you want to build?" lead="Describe it the way you would to a friend. Endgame researches it first, tells you plainly whether it is worth building, then builds and runs it." />
 
-        {me.isLoading && <Skeleton className="h-20" />}
-        {firstRun && (
-          <div className={cn("flex flex-col gap-2", RISE, stagger(1))}>
-            <label htmlFor={ids.org} className="font-medium">
-              Your organisation
-            </label>
-            <input
-              id={ids.org}
-              required
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              aria-describedby={ids.orgHint}
-              aria-invalid={orgName.length > 0 && !isValidSlug(slug)}
-              className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 text-base"
-            />
-            <span id={ids.orgHint} className={cn("text-xs", orgName.length > 0 && !isValidSlug(slug) ? "text-attention-text" : "text-ink-muted")}>
-              {orgName.length > 0 && !isValidSlug(slug)
-                ? "Use at least two letters or digits."
-                : `Everything you make lives under this name. Its apps appear at ${host}/${slug || "your-name"}.`}
-            </span>
+          {/*
+            One column, in the order it is filled in; from 1600 two: the idea and what it must respect, beside
+            where it goes, its estimate and the start. Each column is `contents` below 1600, so its fields take
+            their place in the single column by `order`.
+          */}
+          <div className="flex flex-col gap-8 3xl:grid 3xl:grid-cols-2 3xl:items-start 3xl:gap-10">
+            <div className="contents 3xl:flex 3xl:flex-col 3xl:gap-8">
+              <div className={cn("order-2 flex flex-col gap-2", RISE, stagger(2))}>
+                <label htmlFor={ids.idea} className="font-medium">
+                  The idea
+                </label>
+                <textarea
+                  ref={ideaBox}
+                  id={ids.idea}
+                  required
+                  rows={5}
+                  value={idea}
+                  onChange={(e) => setIdea(e.target.value)}
+                  className="min-h-32 resize-y rounded-xs border border-border-field bg-surface px-3.5 py-3 text-base leading-relaxed 3xl:min-h-56"
+                />
+              </div>
+
+              <fieldset className={cn("order-3 flex flex-col gap-2.5", RISE, stagger(3))}>
+                <legend className="mb-2.5 font-medium">
+                  Anything it must respect? <span className="font-normal text-ink-muted">Optional</span>
+                </legend>
+                <div className="flex flex-wrap gap-2">
+                  {CONSTRAINT_OPTIONS.map((c) => {
+                    const on = chosen.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggle(c)}
+                        className={cn(CHIP, "min-h-8 px-3.5 transition-colors touch:min-h-touch touch:px-4", on ? "bg-primary text-primary-ink" : "border border-border-strong bg-surface hover:bg-ground")}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+                <label htmlFor={ids.other} className="mt-2 text-sm text-ink-muted">
+                  Anything else, in your own words
+                </label>
+                <input id={ids.other} value={other} onChange={(e) => setOther(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3.5" />
+              </fieldset>
+            </div>
+
+            <div className="contents 3xl:flex 3xl:flex-col 3xl:gap-8">
+              {me.isLoading && <Skeleton className="order-1 h-20" />}
+              {firstRun && (
+                <div className={cn("order-1 flex flex-col gap-2", RISE, stagger(1))}>
+                  <label htmlFor={ids.org} className="font-medium">
+                    Your organisation
+                  </label>
+                  <input
+                    id={ids.org}
+                    required
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    aria-describedby={ids.orgHint}
+                    aria-invalid={orgName.length > 0 && !isValidSlug(slug)}
+                    className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 text-base"
+                  />
+                  <span id={ids.orgHint} className={cn("text-sm", orgName.length > 0 && !isValidSlug(slug) ? "text-attention-text" : "text-ink-muted")}>
+                    {orgName.length > 0 && !isValidSlug(slug)
+                      ? "Use at least two letters or digits."
+                      : `Everything you make lives under this name. Its apps appear at ${host}/${slug || "your-name"}.`}
+                  </span>
+                </div>
+              )}
+
+              {!firstRun && org && (
+                <div className={cn("order-1 flex flex-col gap-2", RISE, stagger(1))}>
+                  <label htmlFor={ids.place} className="font-medium">
+                    Where it goes
+                  </label>
+                  {tree.isLoading ? (
+                    <Skeleton className="h-11" />
+                  ) : (
+                    <Select id={ids.place} value={place?.scope ?? ""} onChange={(e) => setPicked(e.target.value)} aria-describedby={ids.placeHint}>
+                      {places.map((p) => (
+                        <option key={p.scope} value={p.scope}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  <span id={ids.placeHint} className="text-sm text-ink-muted">
+                    {tree.isError
+                      ? "The divisions could not be loaded, so for now it can only go to the whole organisation."
+                      : place && place.scope !== org.slug
+                        ? `It is researched for ${place.label}, and built there if it is built.`
+                        : "Endgame suggests a division for it once it is researched."}
+                  </span>
+                </div>
+              )}
+
+              <div className="order-4">
+                <EstimatePanel state={estimate} scope={scope ?? null} firstRun={firstRun} />
+              </div>
+
+              {submitError && (
+                <p id="start-error" role="alert" data-state="failed" className="order-5 rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
+                  Research did not start: {submitError} Nothing was charged.
+                </p>
+              )}
+
+              {/* On a phone the start stays in view above the bottom bar, however long the idea is. */}
+              <div
+                className={cn(
+                  "order-6 flex flex-wrap items-center gap-x-4 gap-y-2",
+                  "phone:sticky phone:bottom-nav-safe phone:z-10 phone:-mx-4 phone:flex-nowrap phone:border-t phone:bg-surface phone:px-4 phone:py-3 rail:bottom-0 rail:-mx-5 rail:px-5",
+                  RISE,
+                  stagger(5),
+                )}
+              >
+                <Button type="submit" size="lg" disabled={!ready || submitting} className="phone:shrink-0">
+                  {submitting ? "Starting research…" : "Research this idea"}
+                </Button>
+                <span className="text-ink-muted phone:text-sm">
+                  <span className="phone:hidden">Takes a few minutes. You can leave and come back.</span>
+                  <span className="hidden phone:inline">{estimate.kind === "loaded" ? `${formatCredits(estimate.estimate.credits)} for research` : "A few minutes; you can leave"}</span>
+                </span>
+              </div>
+              {org && (
+                <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn("order-7 self-start rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
+                  Back to the org chart
+                </Link>
+              )}
+            </div>
           </div>
-        )}
-
-        {!firstRun && org && (
-          <div className={cn("flex flex-col gap-2", RISE, stagger(1))}>
-            <label htmlFor={ids.place} className="font-medium">
-              Where it goes
-            </label>
-            {tree.isLoading ? (
-              <Skeleton className="h-11" />
-            ) : (
-              <Select id={ids.place} value={place?.scope ?? ""} onChange={(e) => setPicked(e.target.value)} aria-describedby={ids.placeHint}>
-                {places.map((p) => (
-                  <option key={p.scope} value={p.scope}>
-                    {p.label}
-                  </option>
-                ))}
-              </Select>
-            )}
-            <span id={ids.placeHint} className="text-xs text-ink-muted">
-              {tree.isError
-                ? "The divisions could not be loaded, so for now it can only go to the whole organisation."
-                : place && place.scope !== org.slug
-                  ? `It is researched for ${place.label}, and built there if it is built.`
-                  : "Endgame suggests a division for it once it is researched."}
-            </span>
-          </div>
-        )}
-
-        <div className={cn("flex flex-col gap-2", RISE, stagger(2))}>
-          <label htmlFor={ids.idea} className="font-medium">
-            The idea
-          </label>
-          <textarea
-            id={ids.idea}
-            required
-            rows={5}
-            value={idea}
-            onChange={(e) => setIdea(e.target.value)}
-            className="resize-y rounded-xs border border-border-field bg-surface px-3.5 py-3 text-base leading-relaxed"
-          />
-        </div>
-
-        <fieldset className={cn("flex flex-col gap-2.5", RISE, stagger(3))}>
-          <legend className="mb-2.5 font-medium">
-            Anything it must respect? <span className="font-normal text-ink-muted">Optional</span>
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {CONSTRAINT_OPTIONS.map((c) => {
-              const on = chosen.includes(c);
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => toggle(c)}
-                  className={cn("min-h-touch rounded-full px-4 transition-colors", on ? "bg-primary text-primary-ink" : "border border-border-strong bg-surface hover:bg-ground")}
-                >
-                  {c}
-                </button>
-              );
-            })}
-          </div>
-          <label htmlFor={ids.other} className="mt-2 text-sm text-ink-muted">
-            Anything else, in your own words
-          </label>
-          <input id={ids.other} value={other} onChange={(e) => setOther(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3.5" />
-        </fieldset>
-
-        <EstimatePanel state={estimate} scope={scope ?? null} firstRun={firstRun} />
-
-        {submitError && (
-          <p id="start-error" role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
-            Research did not start: {submitError} Nothing was charged.
-          </p>
-        )}
-
-        <div className={cn("flex flex-wrap items-center gap-4", RISE, stagger(5))}>
-          <Button type="submit" size="lg" disabled={!ready || submitting}>
-            {submitting ? "Starting research…" : "Research this idea"}
-          </Button>
-          <span className="text-ink-muted">Takes a few minutes. You can leave and come back.</span>
-        </div>
-        {org && (
-          <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn("self-start rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
-            Back to the org chart
-          </Link>
-        )}
-      </form>
+        </form>
       )}
     </AppShell>
   );
@@ -275,10 +324,14 @@ function EstimatePanel({ state, scope, firstRun }: { state: EstimateState; scope
             ? shortfall(roomFor(credits.data, scope), state.estimate.credits)
             : null;
   return (
-    <section aria-label="Research estimate" aria-live="polite" className={cn("flex flex-col gap-2.5 rounded-md border border-primary-line bg-primary-tint px-5 py-4", RISE, stagger(4))}>
-      <div className="flex flex-wrap justify-between gap-2">
+    <section aria-label="Research estimate" aria-live="polite" className={cn("flex flex-col gap-2.5 rounded-md border bg-surface px-5 py-4 shadow-card", RISE, stagger(4))}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="font-semibold">Research comes first</span>
-        {state.kind === "loaded" && <span data-state="loaded">Estimated {formatCredits(state.estimate.credits)}</span>}
+        {state.kind === "loaded" && (
+          <span data-state="loaded" className="font-semibold tabular-nums">
+            Estimated {formatCredits(state.estimate.credits)}
+          </span>
+        )}
         {state.kind === "loading" && (
           <span role="status" data-state="loading" className="flex items-center gap-2 text-ink-muted">
             <Skeleton className="h-4 w-28" />
@@ -316,14 +369,14 @@ function EstimatePanel({ state, scope, firstRun }: { state: EstimateState; scope
   );
 }
 
-/** What happens next, as the autonomy at the chosen place will actually do it. */
+/** What happens next, as the autonomy at the chosen place will actually do it: a stepper, first step current. */
 function NextSteps({ scope, division }: { scope: string | null; division: string | null }) {
   const query = useGetAutonomyQuery(scope ?? "", { skip: !scope });
   const view = viewOf(query);
   const autonomy: Autonomy | null = scope ? (view.kind === "loaded" ? view.data : null) : null;
   return (
     <>
-      <h2 className="text-lg font-semibold">What happens next</h2>
+      <h2 className="text-base font-semibold">What happens next</h2>
       {scope && view.kind === "loading" && (
         <Loading label="Loading how much happens on its own here" className="flex flex-col gap-4">
           <Skeleton className="h-12" />
@@ -333,25 +386,85 @@ function NextSteps({ scope, division }: { scope: string | null; division: string
       )}
       {scope && view.kind === "failed" && <Failed title="What happens next could not be worked out" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {(!scope || view.kind === "loaded") && (
-        <ol className="flex flex-col gap-5">
-          {nextSteps(autonomy, division).map(([title, text], i) => (
-            <li key={title} className={cn("flex gap-3.5", RISE, stagger(i))}>
+        <ol aria-label="Steps" className="flex flex-col">
+          {nextSteps(autonomy, division).map(([title, text], i, all) => (
+            <li key={title} className={cn("relative flex gap-3.5 pb-4 last:pb-0", RISE, stagger(i))}>
+              {/* The line that joins each step to the next. */}
+              {i < all.length - 1 && <span aria-hidden className="absolute bottom-0 left-3.5 top-8 w-px -translate-x-1/2 bg-border-strong" />}
               <span
+                aria-hidden
                 className={cn(
-                  "flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-                  i === 0 ? "animate-ring bg-primary text-primary-ink motion-reduce:animate-none" : "border border-ink-muted",
+                  "relative flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums",
+                  i === 0 ? "bg-primary text-primary-ink" : "border border-border-strong bg-surface text-ink-body",
                 )}
               >
                 {i + 1}
               </span>
-              <div className="flex flex-col gap-0.5">
+              <div className="flex min-w-0 flex-col gap-0.5 pt-0.5">
                 <span className="font-semibold">{title}</span>
-                <span className="text-ink-body">{text}</span>
+                <span className="text-sm text-ink-body">{text}</span>
               </div>
             </li>
           ))}
         </ol>
       )}
     </>
+  );
+}
+
+/** What research costs here, from this organisation's own figures: what can be spent at the place, and how estimates have landed. */
+function Costs({ scope, estimate }: { scope: string; estimate: number | null }) {
+  const credits = useGetCreditsQuery(scope.split("/")[0] ?? "", { skip: !scope });
+  if (credits.isLoading) return <Skeleton className="h-28" />;
+  if (!credits.data) return <p className="text-sm text-ink-muted">The figures could not be read just now. The estimate is still shown before anything is charged.</p>;
+  const c = credits.data;
+  const room = roomFor(c, scope);
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+      <Stat
+        plain
+        label="This idea"
+        value={estimate === null ? NO_VALUE : formatNumber(estimate)}
+        caption={estimate === null ? "Shown once it is described" : "credits, estimated"}
+      />
+      <Stat
+        plain
+        label="To spend here"
+        value={c.neverToppedUp ? "0" : Number.isFinite(room) ? formatNumber(Math.floor(room)) : NO_VALUE}
+        caption={c.neverToppedUp ? "No credits added yet" : "credits, within every cap"}
+      />
+      {c.estimates && c.estimates.pieces > 0 && (
+        <Stat plain className="col-span-2" label="Estimates here" value={estimateFigure(c.estimates)} caption={`${estimateHeadline(c.estimates)}, across ${plural(c.estimates.pieces, "piece")} of work.`} />
+      )}
+    </div>
+  );
+}
+
+/** Two or three ideas to start from: this organisation's own suggestions first, else ideas around the apps it already runs. */
+function Examples({ organisation, tree, onPick }: { organisation: string; tree: Tree | null; onPick: (idea: string) => void }) {
+  const suggestions = useGetSuggestionsQuery(organisation);
+  const open = (suggestions.data ?? []).filter((s) => s.status === "open");
+  const examples = exampleIdeas(open, tree);
+  if (examples.length === 0) return null;
+  return (
+    <SideCard title="Start from what you run">
+      <ul className="flex flex-col gap-2">
+        {examples.map((e) => (
+          <li key={e.idea}>
+            <button
+              type="button"
+              onClick={() => onPick(e.idea)}
+              className="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-sm border bg-surface px-3.5 py-2.5 text-left hover:border-primary hover:bg-ground"
+            >
+              <span className="text-sm text-ink-muted">{e.from}</span>
+              <span className="text-ink">{e.idea}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <Link href={paths.suggestions(organisation)} className={cn("self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
+        Ideas from your portfolio
+      </Link>
+    </SideCard>
   );
 }

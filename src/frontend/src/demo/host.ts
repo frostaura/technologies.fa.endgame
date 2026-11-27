@@ -12,6 +12,7 @@ import "./world/scenarios.s1";
 import "./world/scenarios.s3";
 import "./world/scenarios.s4";
 import "./world/scenarios.s5";
+import "./world/scenarios.verdicts";
 import { installDevice } from "./device";
 import { pristine } from "./pristine";
 
