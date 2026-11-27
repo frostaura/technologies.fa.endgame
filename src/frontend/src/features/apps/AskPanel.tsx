@@ -1,10 +1,12 @@
 import { useId, useState, type FormEvent } from "react";
+import { X } from "lucide-react";
 import { Icon } from "@/components/Icon";
 import { Empty, Failed, Loading, Skeleton, Stale, Spinner } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { formatCredits, timeAgo } from "@/lib/format";
 import { RISE } from "@/lib/motion";
+import { SECTION, useShowAll } from "@/components/ui/page";
 import { describeError, errorStatus, viewOf } from "@/lib/queryState";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
@@ -111,12 +113,12 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
     <section aria-label="Asking about this app" className={cn("flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card sm:p-6", RISE)}>
       <form onSubmit={(e) => void getEstimate(e)} className="flex flex-col gap-2">
         {/* A heading, so the phone's fold row of the same words stands in for it once opened (R5-2); it names the field too. */}
-        <h2 id={`${inputId}-title`} className="flex items-center gap-2 font-display text-lg font-semibold">
+        <h2 id={`${inputId}-title`} className={cn(SECTION, "flex items-center gap-2")}>
           <Icon name="research" tinted />
           Ask about this app
         </h2>
-        <span className="text-ink-body">Ask in plain words about its visits, errors and what its people do in it. It answers from this app&rsquo;s own records only.</span>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <span className="max-w-prose text-ink-body">Ask in plain words about its visits, errors and what its people do in it. It answers from this app&rsquo;s own records only.</span>
+        <div className="flex flex-col gap-2 pt-1 sm:flex-row">
           <Input id={inputId} aria-labelledby={`${inputId}-title`} value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} placeholder="Which days are busiest?" className="min-h-12 flex-1 px-4" />
           <Button type="submit" variant="outline" className="min-h-12" disabled={!typed || estimating.isLoading}>
             {estimating.isLoading ? (
@@ -236,16 +238,18 @@ export function Dashboard({ appId, canChange }: { appId: string; canChange: bool
   const view = viewOf(query);
   // Said here, not on the card: a question taken off is gone from the list until a refusal brings it back.
   const [problem, setProblem] = useState<string | null>(null);
+  // A full dashboard (30 questions) shows its first six, and the rest on request.
+  const { shown, control } = useShowAll(view.kind === "loaded" ? view.data : [], 6, "questions");
   return (
     <section aria-labelledby="dashboard-title" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="dashboard-title" className="text-lg font-semibold">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="dashboard-title" className={SECTION}>
           Dashboard
         </h2>
         {view.kind === "loaded" && view.data.length > 0 && <span className="text-sm text-ink-muted">Worked out afresh each time you open it, at no cost.</span>}
       </div>
       {view.kind === "loading" && (
-        <Loading label="Loading the dashboard" className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Loading label="Loading the dashboard" className={GRID}>
           <Skeleton className="h-48 rounded-md" />
           <Skeleton className="h-48 rounded-md" />
         </Loading>
@@ -264,17 +268,30 @@ export function Dashboard({ appId, canChange }: { appId: string; canChange: bool
               Ask a question above, then keep the answer here. It is worked out again from the latest records whenever this page opens.
             </Empty>
           ) : (
-            <ul aria-label="Kept questions" className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              {view.data.map((q) => (
-                <SavedCard key={q.id} appId={appId} question={q} canChange={canChange} onRefused={setProblem} />
-              ))}
-            </ul>
+            <>
+              <ul aria-label="Kept questions" className={TILES}>
+                {shown.map((q) => (
+                  <SavedCard key={q.id} appId={appId} question={q} canChange={canChange} onRefused={setProblem} />
+                ))}
+              </ul>
+              {control}
+            </>
           )}
         </>
       )}
     </section>
   );
 }
+
+/** The skeleton's two tiles. */
+const GRID = "grid grid-cols-1 gap-4 xl:grid-cols-2 3xl:grid-cols-3";
+
+/**
+ * The dashboard's tiles: two columns on a desktop, three from 1600. Each tile is as tall as what it
+ * holds (a single number is a short tile, never stretched to a table's height), and the tiles flow down
+ * balanced columns, so no column is left with a hole under a short tile. The first row's tops align.
+ */
+const TILES = "gap-4 xl:columns-2 3xl:columns-3";
 
 function SavedCard({ appId, question, canChange, onRefused }: { appId: string; question: SavedQuestion; canChange: boolean; onRefused: (text: string | null) => void }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
@@ -289,12 +306,13 @@ function SavedCard({ appId, question, canChange, onRefused }: { appId: string; q
     }
   };
   return (
-    <li data-question={question.id} className="flex min-w-0 flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h3 className="min-w-0 break-words font-display text-base font-semibold">{question.question}</h3>
+    <li data-question={question.id} className="mb-4 flex min-w-0 break-inside-avoid last:mb-0 flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
+      {/* Every tile has one header: the question, and "Take off" as a small button at its top right. */}
+      <div className="flex items-start gap-2">
+        <h3 className="min-w-0 flex-1 break-words pt-0.5 font-display text-base font-semibold">{question.question}</h3>
         {canChange && !pending && (
-          <Button size="sm" variant="ghost" onClick={() => void drop()} aria-label={`Take “${question.question}” off the dashboard`}>
-            Take off
+          <Button size="sm" variant="ghost" className="-mr-2 -mt-2 size-11 shrink-0 p-0 text-ink-muted hover:text-ink" onClick={() => void drop()} aria-label={`Take off “${question.question}”`} title="Take it off the dashboard">
+            <X aria-hidden className="size-4" />
           </Button>
         )}
       </div>

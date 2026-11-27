@@ -254,7 +254,7 @@ export const layout = {
   field: "12rem",
   /** Grid tracks: a chart's label column beside its bars; a table of figures with a name column. */
   columns: {
-    "chart-row": "minmax(3rem, 9rem) minmax(0, 1fr)",
+    "chart-row": "fit-content(9rem) minmax(0, 1fr)",
     "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))",
     /** A line that grows and the thing that ends it (a figure, an action): the money pages' rows. */
     "grow-end": "minmax(0, 1fr) auto",

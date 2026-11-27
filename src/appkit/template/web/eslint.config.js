@@ -24,6 +24,8 @@ export default defineConfig([
       // Dates and numbers through formatDate / formatDateTime / formatNumber from @endgame/appkit, never toLocale*String or
       // Intl's formatters: those throw on a value a browser lets through (a six-digit year), and a throw blanks the page.
       "endgame/no-unsafe-format": "error",
+      // Fields from the kit (Input, Textarea, Select, Checkbox): a raw one has a faint edge a person cannot see (~1.2:1).
+      "endgame/use-kit-fields": "error",
       // One token layer: arbitrary Tailwind values (p-[13px], text-[#fff]) bypass it.
       "no-restricted-syntax": [
         "error",

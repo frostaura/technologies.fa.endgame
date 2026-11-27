@@ -4,21 +4,31 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyAuthInfo,
+  assetsAt,
   authProblems,
+  authText,
+  DISPLAY_FILE,
   escapeDataString,
+  fontFaces,
   htmlEncode,
+  MARK_FILE,
+  messageBody,
+  ONWARD,
   PAGE_CHROME_STYLE,
   renderAuthPage,
+  renderDocument,
   renderUnavailablePage,
+  SANS_FILE,
   SIGN_IN_BODY,
   SIGN_UP_BODY,
   UNAVAILABLE_COPY,
   type AppAuthInfo,
   type AuthPageConfig,
+  type PageLinks,
   type Unavailable,
 } from "./edgePages";
-import { accessCheck, decide, inside, addressesOf, isInside, resolve, type GateOutcome } from "./gate";
-import { HostedAppView } from "./HostedAppView";
+import { accessCheck, decide, inside, addressesOf, isInside, pageLinks, resolve, type GateOutcome } from "./gate";
+import { HostedAppView, HostedUnknownApp } from "./HostedAppView";
 import { CLUB_MEMBERS, newReadingList, readingListFor } from "./readingList";
 import { pageKeyFor, type AppPageKey } from "./apps";
 import { defaultWorld } from "../world/default";
@@ -53,6 +63,31 @@ describe("the Edge's pages are the platform's own", () => {
     expect(rawStrings(pageChrome)[0]).toBe(PAGE_CHROME_STYLE);
     expect(PAGE_CHROME_STYLE).toContain("--ground: #F5F6FB;");
     expect(PAGE_CHROME_STYLE).toContain("--danger: #B42318;");
+    // Fields carry the 3:1 field edge, as the console's do (ARCH-011).
+    expect(PAGE_CHROME_STYLE).toContain("--border-field: #868DA3;");
+    expect(PAGE_CHROME_STYLE).toContain("border: 1px solid var(--border-field);");
+    expect(PAGE_CHROME_STYLE).toContain("--shadow-card: 0 1px 2px rgb(11 16 32 / 0.05), 0 10px 28px rgb(11 16 32 / 0.05);");
+  });
+
+  it("carries PageChrome.Fonts and PageChrome.Document byte for byte", () => {
+    const [, fonts, documentTemplate] = rawStrings(pageChrome);
+    const assets = "/acme/apps/notes/web/_endgame/assets";
+    const url = assetsAt(assets);
+    expect(pageChrome).toContain(`SansFile = "${SANS_FILE}"`);
+    expect(pageChrome).toContain(`DisplayFile = "${DISPLAY_FILE}"`);
+    expect(pageChrome).toContain(`MarkFile = "${MARK_FILE}"`);
+    expect((fonts ?? "").replaceAll("{{assets}}", assets).replace("{{SansFile}}", SANS_FILE).replace("{{DisplayFile}}", DISPLAY_FILE)).toBe(fontFaces(url));
+    const expected = (documentTemplate ?? "")
+      .replace("{{head}}", "\n<meta x>")
+      .replace("{{WebUtility.HtmlEncode(title)}}", htmlEncode("It’s <here>"))
+      .replace("{{styleAttributes}}", ' nonce="n"')
+      .replace("{{Fonts(assets)}}", fontFaces(url))
+      .replace("{{Style}}", PAGE_CHROME_STYLE)
+      .replace("{{WebUtility.HtmlEncode(assets)}}", htmlEncode(assets))
+      .replace("{{MarkFile}}", MARK_FILE)
+      .replace("{{body}}", "<p>body</p>")
+      .replace("{{scripts}}", "\n<script></script>");
+    expect(renderDocument("It’s <here>", url, "<p>body</p>", "\n<meta x>", ' nonce="n"', "\n<script></script>")).toBe(expected);
   });
 
   it("carries both AuthPage bodies byte for byte", () => {
@@ -61,23 +96,54 @@ describe("the Edge's pages are the platform's own", () => {
     expect(strings).toContain(SIGN_IN_BODY);
   });
 
-  it("carries every UnavailablePage title and message", () => {
+  it("carries every UnavailablePage title and message, and its words for the ways onward", () => {
     const copy = [...unavailablePage.matchAll(/(Unavailable\.(\w+)|_) => \("([^"]+)",\s*"([^"]+)"\)/g)];
-    expect(copy).toHaveLength(8);
+    expect(copy).toHaveLength(9);
     for (const m of copy) {
       const reason = (m[2] ?? "Temporary") as Unavailable;
       expect(UNAVAILABLE_COPY[reason]).toEqual({ title: m[3], message: m[4] });
     }
   });
 
-  it("renders the unavailable page as UnavailablePage.Render does", () => {
-    const template = rawStrings(unavailablePage)[0] ?? "";
-    const expected = template
-      .replace("{{PageChrome.Style}}", PAGE_CHROME_STYLE)
-      .replace("{{mark}}", '<span class="wordmark">Endgame</span>')
-      .replaceAll("{{WebUtility.HtmlEncode(title)}}", htmlEncode(UNAVAILABLE_COPY.Paused.title))
-      .replace("{{WebUtility.HtmlEncode(message)}}", htmlEncode(UNAVAILABLE_COPY.Paused.message));
-    expect(renderUnavailablePage("Paused", null)).toBe(expected);
+  it("names every way onward with UnavailablePage's own words", () => {
+    for (const words of [ONWARD.tryAgain, ONWARD.goToEndgame, ONWARD.signInAsSomeoneElse, ONWARD.yourApp, ONWARD.retriesItself, ONWARD.topUp, ONWARD.raiseBudget, ONWARD.openIt]) {
+      expect(unavailablePage).toContain(`"${words}"`);
+    }
+    // Typographic apostrophes everywhere (real-stack 58).
+    for (const { title, message } of Object.values(UNAVAILABLE_COPY)) expect(title + message).not.toContain("'");
+  });
+
+  // The same expectations as Endgame.Tests' UnavailablePageTests, so both renderings are held to one result.
+  const LINKS: PageLinks = {
+    here: "/acme/apps/notes/web/books?page=2",
+    console: "",
+    member: true,
+    switchAccount: "/acme/apps/notes/web/_endgame/auth/sign-out?returnTo=x",
+    appId: "6f0b1c2d-0000-4000-8000-000000000001",
+  };
+  const page = (reason: Unavailable, links: PageLinks = LINKS) => renderUnavailablePage(reason, links, assetsAt("/acme/apps/notes/web/_endgame/assets"));
+
+  it("renders the unavailable pages as UnavailablePage.Render does", () => {
+    for (const reason of ["Crashed", "Busy", "Slow", "Temporary", "Paused", "BudgetSpent", "NotReady"] as Unavailable[]) {
+      expect(page(reason)).toContain('<nav class="actions" aria-label="What to do next"><a class="button" href="/acme/apps/notes/web/books?page=2">Try again</a></nav>');
+    }
+    expect(page("Slow")).toContain('<meta http-equiv="refresh" content="3">');
+    expect(page("Slow")).toContain('<p class="note">This page tries again by itself in a few seconds.</p>');
+    expect(page("Forbidden")).toContain(
+      '<a class="button" href="/">Go to Endgame</a><a class="button secondary" href="/acme/apps/notes/web/_endgame/auth/sign-out?returnTo=x">Sign in as someone else</a>',
+    );
+    expect(page("Paused", { ...LINKS, console: "https://endgame.test" })).toContain(
+      '<p class="note">Is this your app? <a href="https://endgame.test/credits">Top up the credits in Endgame</a></p>',
+    );
+    expect(page("BudgetSpent")).toContain(`<a href="/apps/${LINKS.appId}">Raise its budget in Endgame</a>`);
+    expect(page("NotReady", { ...LINKS, console: null })).not.toContain('class="note"');
+    expect(page("Crashed")).toContain('<img class="mark" src="/acme/apps/notes/web/_endgame/assets/endgame-mark.svg"');
+    const noApp = renderUnavailablePage("NoApp", { here: "/x", console: "https://endgame.test", address: "acme.endgame.test/community/<no-such-app>/web/" }, assetsAt("/_endgame/assets"));
+    expect(noApp).toContain("<h1>There is no app at this address</h1>");
+    expect(noApp).toContain('<p class="address">acme.endgame.test/community/&lt;no-such-app&gt;/web/</p>');
+    expect(noApp).toContain('<a class="button" href="https://endgame.test/">Go to Endgame</a>');
+    expect(authPage).toContain('<nav class=\\"actions\\" aria-label=\\"What to do next\\"><a class=\\"button\\" href=\\"');
+    expect(messageBody("T", "M", "/l", "Sign in again")).toBe('<h1>T</h1>\n<p>M</p>\n<nav class="actions" aria-label="What to do next"><a class="button" href="/l">Sign in again</a></nav>');
   });
 
   it("uses the script's and the control plane's exact wording", () => {
@@ -92,6 +158,8 @@ describe("the Edge's pages are the platform's own", () => {
       "`Anyone may use ${info.appName}. A passkey on this device signs you in — there is no password.`",
       "`${info.appName} belongs to ${info.organisationName}.`",
       "`Members of ${info.organisationName}`",
+      "Endgame keeps your sign-in at its own address, so you sign in here and go straight back to ${new URL(config.returnTo).host}.",
+      "`Back to ${info.appName}`",
       "The passkey prompt was closed or timed out. Nothing was changed.",
     ]) {
       expect(authPage).toContain(fragment);
@@ -103,6 +171,7 @@ describe("the Edge's pages are the platform's own", () => {
   it("encodes as WebUtility.HtmlEncode and Uri.EscapeDataString do", () => {
     expect(htmlEncode(`<b>"Tom's" & café 😀</b>`)).toBe("&lt;b&gt;&quot;Tom&#39;s&quot; &amp; caf&#233; &#128512;&lt;/b&gt;");
     expect(htmlEncode("This app isn't ready yet")).toBe("This app isn&#39;t ready yet");
+    expect(htmlEncode("This app isn’t ready yet")).toBe("This app isn’t ready yet");
     expect(escapeDataString("/a b/it's(1)!*")).toBe("%2Fa%20b%2Fit%27s%281%29%21%2A");
   });
 });
@@ -168,12 +237,30 @@ describe("the sign-in and sign-up pages", () => {
     expect(closed.getElementById("sign-up")?.hidden).toBe(true);
   });
 
+  it("says where a visitor sent from the subdomain is signing in, and why; a public app's page leads back to it", () => {
+    const doc = new DOMParser().parseFromString(renderAuthPage("sign-in"), "text/html");
+    const config: AuthPageConfig = { page: "sign-in", returnTo: "https://northfield.apps.example/community/club/reading-list/", handoff: true, signedIn: false, signInUrl: "https://x/in", signUpUrl: "https://x/up" };
+    applyAuthInfo(doc, config, { appName: "Club Reading List", organisationName: "Northfield Readers", signUp: true, invitationRequired: false, developmentSignIn: false });
+    expect(doc.getElementById("via")?.hidden).toBe(false);
+    expect(doc.getElementById("via")?.textContent).toBe(authText.via("northfield.apps.example"));
+    expect(doc.getElementById("via")?.textContent).toBe(
+      "Endgame keeps your sign-in at its own address, so you sign in here and go straight back to northfield.apps.example.",
+    );
+    expect(doc.getElementById("back")?.hidden).toBe(false);
+    expect(doc.getElementById("back-link")?.textContent).toBe("Back to Club Reading List");
+    expect(doc.getElementById("back-link")?.getAttribute("href")).toBe(config.returnTo);
+    // On the platform's host, to a private app: neither (the app's address would only lead back here).
+    const plain = page("sign-in", "private");
+    expect(plain.getElementById("via")?.hidden).toBe(true);
+    expect(plain.getElementById("back")?.hidden).toBe(true);
+  });
+
   it("the paused page reads as the platform's", () => {
-    const doc = new DOMParser().parseFromString(renderUnavailablePage("Paused"), "text/html");
+    const doc = new DOMParser().parseFromString(renderUnavailablePage("Paused", { here: "/", console: "" }), "text/html");
     expect(doc.title).toBe("This app is paused · Endgame");
     expect(doc.querySelector("h1")?.textContent).toBe("This app is paused");
     expect(doc.querySelector("main p")?.textContent).toBe(
-      "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up.",
+      "Its organisation has used up its credits. Nothing has been lost\u00a0— it will be back as soon as they are topped up.",
     );
   });
 });
@@ -280,6 +367,24 @@ describe("the gate", () => {
     expect(kindOf(shown("public", "signed-out", "running", "path", "_endgame/auth/handoff?code=abc").outcome)).toBe("message");
     const out = decide({ app: APP, form: "path", rest: "_endgame/auth/sign-out?returnTo=https%3A%2F%2Fevil.example%2F", visitor: V.member });
     expect(out).toEqual({ kind: "sign-out", location: "https://endgame.example/northfield/community/club/reading-list/" });
+  });
+
+  it("gives every page the Edge's ways onward: the same address, the console, sign in as someone else", () => {
+    const onPath = pageLinks({ app: APP, form: "path", rest: "books/new?x=1", visitor: V["member-without-access"] });
+    expect(onPath).toEqual({
+      here: "/northfield/community/club/reading-list/books/new?x=1",
+      console: "",
+      member: true,
+      switchAccount: `/northfield/community/club/reading-list/_endgame/auth/sign-out?returnTo=${escapeDataString(
+        `/northfield/community/club/reading-list/_endgame/auth/sign-in?returnTo=${escapeDataString("/northfield/community/club/reading-list/")}`,
+      )}`,
+      appId: "app-1",
+    });
+    // On the organisation subdomain the console is the platform's origin, and no console session is carried.
+    const onHost = pageLinks({ app: APP, form: "subdomain", rest: "", visitor: V.member });
+    expect(onHost.console).toBe("https://endgame.example");
+    expect(onHost.member).toBe(false);
+    expect(onHost.here).toBe("/community/club/reading-list/");
   });
 
   it("keeps returnTo inside the app's two addresses", () => {
@@ -422,7 +527,33 @@ describe("HostedAppView", () => {
   it("serves the paused page in an isolated document", () => {
     render(<HostedAppView ctx={context({ visitor: V.member, app: { state: "paused" } })} />);
     expect(edgeDoc().querySelector("h1")?.textContent).toBe("This app is paused");
-    expect(edgeDoc().querySelector("style")?.textContent).toContain("--measure: 32rem;");
+    expect(edgeDoc().querySelector("style")?.textContent).toContain("--measure: 34rem;");
+    expect(edgeDoc().querySelector("style")?.textContent).toContain('@font-face { font-family: "Space Grotesk Variable"');
+    expect(edgeDoc().querySelector("nav.actions a")?.textContent).toBe("Try again");
+  });
+
+  it("opens the console from an Edge page's link to it", async () => {
+    const openConsole = vi.fn();
+    render(<HostedAppView ctx={context({ visitor: V.member, app: { state: "not-published" }, openConsole })} />);
+    must(edgeDoc().querySelector<HTMLAnchorElement>("p.note a")).click();
+    await waitFor(() => expect(openConsole).toHaveBeenCalledWith("/apps/app-1"));
+  });
+
+  it("asks a slow app again by itself after its Retry-After", () => {
+    vi.useFakeTimers();
+    render(<HostedAppView ctx={context({ visitor: V.member, app: { state: "slow" } })} />);
+    const first = edgeDoc();
+    expect(first.querySelector("meta[http-equiv=refresh]")).toBeNull();
+    act(() => vi.advanceTimersByTime(3000));
+    expect(edgeDoc().querySelector("h1")?.textContent).toBe("This app is taking longer than usual");
+  });
+
+  it("shows an address with no app as the Edge's no-app page, with the way to Endgame", async () => {
+    const openConsole = vi.fn();
+    render(<HostedUnknownApp appId="0b0e0000-0000-4000-8000-000000000000" openConsole={openConsole} />);
+    expect(edgeDoc().querySelector("h1")?.textContent).toBe("There is no app at this address");
+    must(edgeDoc().querySelector<HTMLAnchorElement>("nav.actions a")).click();
+    await waitFor(() => expect(openConsole).toHaveBeenCalledWith("/"));
   });
 
   it("holds a sleeping app's visitor for wakeMs, then opens it", () => {

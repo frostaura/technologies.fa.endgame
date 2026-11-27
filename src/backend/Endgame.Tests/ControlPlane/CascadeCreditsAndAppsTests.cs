@@ -175,6 +175,8 @@ public sealed class CascadeCreditsAndAppsTests(PostgresServer postgres) : IAsync
         Assert.Equal("frostaura/technologies/squash/bookings", route["sleep"]!["modeSetAt"]!.GetValue<string>());
         Assert.Equal("abc123", route["version"]!.GetValue<string>());
         Assert.Equal("shared", route["access"]!.GetValue<string>());
+        // The one name the app shows: its name in the tree, which Edge sends it (PLATFORM-API §5).
+        Assert.Equal("Bookings", route["name"]!.GetValue<string>());
 
         await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{appId}/state", new { status = "sleeping" }));
         Assert.True((await ControlPlaneApp.Ok(service.GetAsync("/internal/routes")))["routes"]![0]!["sleeping"]!.GetValue<bool>());

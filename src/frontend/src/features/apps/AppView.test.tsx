@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppDetail } from "@/store/types";
-import { ONTOLOGY_APP } from "@/test/breadth";
+import { ONTOLOGY_APP, SAVED, VERSIONS } from "@/test/breadth";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { AppView } from "./AppView";
+import { notOpenable } from "./appModel";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const TREE = { organisation: null, divisions: [], needsYou: [] };
@@ -55,9 +56,9 @@ describe("AppView", () => {
       "GET /api/me": json({ ...ME, memberships: [...ME.memberships, { id: "m2", scope: "beta", level: "organisation", role: "owner", organisationId: "o2", organisationSlug: "beta", organisationName: "Beta Works" }] }),
     });
     renderWithStore(<AppView appId="a1" />);
-    expect(await screen.findByText("Private: only people in Beta Works")).toBeTruthy();
+    expect(await screen.findByRole("radio", { name: "Private: only people in Beta Works" })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Where you are" }).textContent).toContain("Beta Works");
-    expect(screen.queryByText("Private: only people in Acme")).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Private: only people in Acme" })).toBeNull();
   });
 
   it("shows a skeleton while loading", () => {
@@ -107,7 +108,13 @@ describe("AppView", () => {
     stub(json(APP));
     renderWithStore(<AppView appId="a1" />);
     expect(await screen.findByRole("heading", { name: "Ledger web" })).toBeTruthy();
-    expect(screen.getByText(/https:\/\/acme.host.test\/ledger · also at https:\/\/host.test\/acme\/tools\/ledger/)).toBeTruthy();
+    // One address, short, with a copy button; the other behind "Also at".
+    const address = screen.getByTestId("app-address");
+    expect(address.textContent).toContain("acme.host.test/ledger");
+    expect(address.textContent).not.toContain("https://");
+    expect(within(address).getByRole("button", { name: "Copy the address" })).toBeTruthy();
+    expect(within(address).getByText("Also at")).toBeTruthy();
+    expect(address.textContent).toContain("host.test/acme/tools/ledger");
     expect(screen.getByText("Healthy")).toBeTruthy();
     expect(screen.getByText("120 ms")).toBeTruthy();
     expect(screen.getByText("Slowest 1 in 20: 1.5 s")).toBeTruthy();
@@ -290,5 +297,143 @@ describe("AppView", () => {
     fireEvent.click(within(confirm).getByRole("button", { name: "Stop sharing" }));
     await waitFor(() => expect(api.calls.find((c) => c.method === "DELETE")?.path).toBe("/api/apps/a1/shares?email=ann%40example.test"));
     await waitFor(() => expect(screen.queryByText("ann@example.test")).toBeNull());
+  });
+});
+
+/**
+ * The app page's look (the apps visual lane): one address with a copy button, "Open the app" primary
+ * only when the app can be used, side-panel choices whose chosen card is unmistakable, one tile layout
+ * on the dashboard, and a full dashboard that does not run the page long.
+ */
+
+const LOOK_APP: AppDetail = {
+  id: "a1",
+  name: "Ledger web",
+  scope: "acme/tools/ledger/web",
+  health: { state: "healthy", summary: "Running." },
+  running: "awake",
+  addresses: { path: "https://host.test/acme/tools/ledger/web/", subdomain: "https://acme.host.test/tools/ledger/web/" },
+  telemetry: { visitsToday: 2, requestsToday: 22, errorsToday: 0, latencyP50Ms: 1.9, latencyP95Ms: 174.3, lastVisitAt: null },
+  cost: { monthCredits: 0.07, capCredits: null },
+  settings: { running: "sleep", access: "private" },
+  runningCost: { state: "estimated", windowDays: 14, minimumHours: 24, measuredHours: 58, basis: "Measured.", prices: "Prices.", sleep: { credits: 74, awakeHoursPerMonth: 99, basis: "Awake about 99 hours." }, alwaysOn: { credits: 184, awakeHoursPerMonth: 720, basis: "Awake all 720 hours." }, measured: { awakeHours: 8, memoryMb: 448, storageMb: 2048, requestsPerMonth: 59586 } },
+  sharedWith: 0,
+  endUsers: 0,
+  status: "running",
+  version: "f2a84f83",
+  publishedAt: "2026-11-25T01:59:54Z",
+  idleMinutes: 15,
+};
+const LOOK_CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
+
+function lookStub(app: AppDetail = LOOK_APP, extra: Record<string, Parameters<typeof stubApi>[0][string]> = {}) {
+  return stubApi({
+    "GET /api/me": json(ME),
+    "GET /api/credits": json(LOOK_CREDITS),
+    "GET /api/tree": json({ generatedAt: "t", viewerRole: "owner", organisation: null, divisions: [], needsYou: [] }),
+    "GET /api/notifications": json({ organisation: "acme", unread: 0, notifications: [] }),
+    "GET /api/apps/a1": json(app),
+    "GET /api/secrets": json({ scope: LOOK_APP.scope, effective: [], setBelow: [] }),
+    "GET /api/ontology": json(ONTOLOGY_APP),
+    "GET /api/apps/a1/dashboard": json([]),
+    "GET /api/apps/a1/versions": json(VERSIONS),
+    "GET /api/cascade": json([]),
+    ...extra,
+  });
+}
+
+describe("whether the app can be opened", () => {
+  it("is open to visitors when published and running, asleep included", () => {
+    expect(notOpenable(LOOK_APP)).toBeNull();
+    expect(notOpenable({ ...LOOK_APP, running: "asleep" })).toBeNull();
+  });
+
+  it("says why not: nothing published, paused, or not running", () => {
+    expect(notOpenable({ ...LOOK_APP, publishedAt: null })).toMatch(/^Nothing is published yet/);
+    expect(notOpenable({ ...LOOK_APP, running: "paused" })).toMatch(/^It is paused/);
+    expect(notOpenable({ ...LOOK_APP, status: "failed" })).toMatch(/^It is not running/);
+  });
+
+  it("makes \"Open the app\" the primary button only when it can be used", async () => {
+    lookStub();
+    renderWithStore(<AppView appId="a1" />);
+    const open = await screen.findByRole("link", { name: "Open the app" });
+    expect(open.className).toContain("bg-primary");
+    expect(screen.queryByTestId("open-note")).toBeNull();
+  });
+
+  it("keeps the link, quietly, beside the reason when it cannot", async () => {
+    lookStub({ ...LOOK_APP, publishedAt: null, version: null, telemetry: null });
+    renderWithStore(<AppView appId="a1" />);
+    const open = await screen.findByRole("link", { name: "Open the app" });
+    expect(open.className).not.toContain("bg-primary");
+    expect(screen.getByTestId("open-note").textContent).toBe("Nothing is published yet, so its visitors are told it is not ready.");
+  });
+});
+
+describe("the address", () => {
+  it("is written short, breaks only after a slash, and copies", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    lookStub();
+    renderWithStore(<AppView appId="a1" />);
+    const address = await screen.findByTestId("app-address");
+    // Each part between slashes is kept whole; a break opportunity follows each slash.
+    const parts = [...address.querySelectorAll("p:first-child span.whitespace-nowrap")].map((p) => p.textContent);
+    expect(parts).toEqual(["acme.host.test/", "tools/", "ledger/", "web"]);
+    fireEvent.click(within(address).getByRole("button", { name: "Copy the address" }));
+    expect(writeText).toHaveBeenCalledWith("https://acme.host.test/tools/ledger/web/");
+    expect(await within(address).findByRole("button", { name: "Copied" })).toBeTruthy();
+  });
+
+  it("shows only the path address, with no \"Also at\", when there is no subdomain", async () => {
+    lookStub({ ...LOOK_APP, addresses: { path: LOOK_APP.addresses.path, subdomain: null } });
+    renderWithStore(<AppView appId="a1" />);
+    const address = await screen.findByTestId("app-address");
+    expect(address.textContent).toContain("host.test/acme/tools/ledger/web");
+    expect(within(address).queryByText("Also at")).toBeNull();
+  });
+});
+
+describe("the side panel's choices", () => {
+  it("draws the chosen card in the accent, and only that one", async () => {
+    lookStub();
+    renderWithStore(<AppView appId="a1" />);
+    const chosen = (await screen.findByRole("radio", { name: /Private: only people in/ })).closest("label") as HTMLElement;
+    const other = screen.getByRole("radio", { name: /Public:/ }).closest("label") as HTMLElement;
+    expect(chosen.dataset.chosen).toBe("true");
+    expect(chosen.className).toContain("border-primary");
+    expect(other.dataset.chosen).toBeUndefined();
+    expect(other.className).not.toContain("border-primary");
+  });
+
+  it("keeps \"Save\" on its field's own row", async () => {
+    lookStub();
+    renderWithStore(<AppView appId="a1" />);
+    const field = await screen.findByLabelText("Sleeps after this many idle minutes");
+    expect(within(field.parentElement as HTMLElement).getByRole("button", { name: "Save" })).toBeTruthy();
+  });
+});
+
+describe("the dashboard's tiles", () => {
+  it("puts \"Take off\" in the same place on every tile: a small button in its header", async () => {
+    lookStub(LOOK_APP, { "GET /api/apps/a1/dashboard": json([SAVED, { ...SAVED, id: "q2", question: "Bookings?" }]) });
+    renderWithStore(<AppView appId="a1" />);
+    const buttons = await screen.findAllByRole("button", { name: /^Take off “/ });
+    expect(buttons).toHaveLength(2);
+    for (const b of buttons) {
+      expect(b.parentElement?.querySelector("h3")).toBeTruthy();
+      expect(b.textContent).toBe("");
+    }
+  });
+
+  it("shows the first six of a full dashboard, then the rest on request", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ ...SAVED, id: `q${i}`, question: `Question ${i + 1}?` }));
+    lookStub(LOOK_APP, { "GET /api/apps/a1/dashboard": json(many) });
+    renderWithStore(<AppView appId="a1" />);
+    const list = await screen.findByRole("list", { name: "Kept questions" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(6);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 30 questions" }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(30);
   });
 });

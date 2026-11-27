@@ -50,6 +50,70 @@ public sealed class HostingTests
         }
     }
 
+    private const string TitledIndex = """
+        <!doctype html><html><head><base href="/" /><meta charset="utf-8" /><title>Club dives</title><script type="module" src="./assets/index-abc123.js"></script></head>
+        <body><div id="root"></div></body></html>
+        """;
+
+    [Fact]
+    public void The_apps_name_from_the_platform_becomes_the_title_and_a_meta_element_right_after_the_base()
+    {
+        var page = SpaHost.Render(TitledIndex, new PathString("/acme/labs/dives"), "Dive Seat Sheet");
+        Assert.Contains("<base href=\"/acme/labs/dives/\" /><meta name=\"endgame-app-name\" content=\"Dive Seat Sheet\">", page);
+        Assert.Contains("<title>Dive Seat Sheet</title>", page);
+        Assert.DoesNotContain("Club dives", page);
+    }
+
+    [Fact]
+    public void The_apps_name_is_html_encoded_and_never_read_as_a_replacement_pattern()
+    {
+        var page = SpaHost.Render(TitledIndex, new PathString("/acme/labs/dives"), "Tom's <Club> & \"Co\" $1 $&");
+        const string encoded = "Tom&#39;s &lt;Club&gt; &amp; &quot;Co&quot; $1 $&amp;";
+        Assert.Contains($"<meta name=\"endgame-app-name\" content=\"{encoded}\">", page);
+        Assert.Contains($"<title>{encoded}</title>", page);
+        Assert.DoesNotContain("<Club>", page);
+    }
+
+    [Fact]
+    public void A_page_with_no_title_gets_one_beside_the_meta_element()
+    {
+        var page = SpaHost.Render(WebRoot.GoodIndex, PathString.Empty, "Books");
+        Assert.Contains("<base href=\"/\" /><meta name=\"endgame-app-name\" content=\"Books\"><title>Books</title>", page);
+    }
+
+    [Fact]
+    public void Without_a_name_from_the_platform_the_page_is_served_as_built()
+    {
+        var page = SpaHost.Render(TitledIndex, new PathString("/acme/labs/dives"));
+        Assert.Equal(TitledIndex.Replace("<base href=\"/\" />", "<base href=\"/acme/labs/dives/\" />", StringComparison.Ordinal), page);
+        Assert.DoesNotContain("endgame-app-name", page);
+    }
+
+    [Theory]
+    [InlineData("Caf%C3%A9%20Club", "Café Club")]
+    [InlineData("Dive%20Seat%20Sheet", "Dive Seat Sheet")]
+    [InlineData("", null)]
+    [InlineData("%20%20", null)]
+    [InlineData("Line%0Abreak", null)]
+    public void The_header_is_percent_encoded_utf8(string header, string? expected)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Headers[SpaHost.AppNameHeader] = header;
+        Assert.Equal(expected, SpaHost.AppNameFrom(context.Request));
+    }
+
+    [Fact]
+    public async Task The_served_page_carries_the_name_edge_sent()
+    {
+        using var root = new WebRoot(TitledIndex);
+        await using var host = await KitHost.StartAsync(webRoot: root.Path);
+        using var http = host.Client("/acme/labs/dives");
+        http.DefaultRequestHeaders.Add(SpaHost.AppNameHeader, Uri.EscapeDataString("Dive Seat Sheet · Café"));
+        var html = await http.GetStringAsync("/trips/7");
+        Assert.Contains("<meta name=\"endgame-app-name\" content=\"Dive Seat Sheet &#183; Caf&#233;\">", html);
+        Assert.Contains("<title>Dive Seat Sheet &#183; Caf&#233;</title>", html);
+    }
+
     [Fact]
     public async Task Fingerprinted_assets_are_served_immutable_and_missing_files_are_not_the_page()
     {

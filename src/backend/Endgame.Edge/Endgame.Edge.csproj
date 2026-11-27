@@ -5,4 +5,12 @@
   <ItemGroup>
     <ProjectReference Include="../Endgame.Hosting.Contracts/Endgame.Hosting.Contracts.csproj" />
   </ItemGroup>
+  <!--
+    The edge's own pages are drawn in the console's typefaces and carry its mark (Pages/PageChrome.cs).
+    The fonts are the latin variable files of @fontsource-variable/inter and /space-grotesk 5.3.0,
+    under the SIL Open Font License 1.1 (Pages/Assets/*-LICENSE.txt); the mark is public/brand/endgame-mark.svg.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Pages/Assets/*.woff2;Pages/Assets/*.svg" LogicalName="Endgame.Edge.Pages.Assets.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

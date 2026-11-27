@@ -29,7 +29,8 @@ export function EdgeDocument({
     const doc = frame.current?.contentDocument;
     if (!doc) return;
     doc.open();
-    doc.write(html);
+    // A written about:blank page would refresh to a blank one: the view retries by redrawing instead.
+    doc.write(html.replace(/\n<meta http-equiv="refresh"[^>]*>/, ""));
     doc.close();
     setUp(doc);
     return wireAuthPage(doc, (action) => act(action));

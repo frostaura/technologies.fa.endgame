@@ -213,3 +213,120 @@ export async function holdsUpAgainstBadInput(field: string, options: BadInputOpt
   cleanup();
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// Page shape: the worst layout mistakes, caught by a test (AGENTS.md, "What good looks like")
+// ---------------------------------------------------------------------------------------------
+
+/** What a page is, for {@link pageShapeProblems}: a list of things, a form to add or change one, or one thing's own page. */
+export type PageKind = "list" | "form" | "detail";
+
+/** The desktop a list page is judged at, and the share of it a list's content must be allowed to fill. */
+export const SHAPE_VIEWPORT = 1440;
+export const LIST_MIN_SHARE = 0.6;
+
+const REM = 16;
+/** Tailwind's named max-widths, in pixels. The kit's `max-w-page` (96rem) and `max-w-form` (42rem) are its own. */
+const MAX_WIDTHS: Record<string, number> = {
+  "0": 0, px: 1, xs: 20 * REM, sm: 24 * REM, md: 28 * REM, lg: 32 * REM, xl: 36 * REM, "2xl": 42 * REM, "3xl": 48 * REM,
+  "4xl": 56 * REM, "5xl": 64 * REM, "6xl": 72 * REM, "7xl": 80 * REM, prose: 65 * 8.5, form: 42 * REM, aside: 22 * REM,
+  page: 96 * REM, "screen-sm": 640, "screen-md": 768, "screen-lg": 1024, "screen-xl": 1280, "screen-2xl": 1536,
+};
+/** Fractions of the width that hold a list to part of the page (`w-1/2`, `lg:w-1/3`). */
+const FRACTION = /^(?:[a-z0-9]+:)*w-(\d+)\/(\d+)$/;
+const MAX_WIDTH = /^(?:[a-z0-9]+:)*max-w-(\[[^\]]+\]|[a-z0-9-]+)$/;
+
+function widthLimit(token: string): number | null {
+  const fraction = FRACTION.exec(token);
+  if (fraction) return (Number(fraction[1]) / Number(fraction[2])) * SHAPE_VIEWPORT;
+  const max = MAX_WIDTH.exec(token);
+  if (!max) return null;
+  const name = max[1] ?? "";
+  if (name.startsWith("[")) {
+    const value = /^\[(\d+(?:\.\d+)?)(px|rem)\]$/.exec(name);
+    return value ? Number(value[1]) * (value[2] === "rem" ? REM : 1) : null;
+  }
+  return MAX_WIDTHS[name] ?? null;
+}
+
+/** A control a person types or chooses in: its edge must be the field border, 3:1 against the page. */
+function isField(el: Element): boolean {
+  if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true;
+  return el instanceof HTMLInputElement && !["hidden", "checkbox", "radio", "submit", "button", "reset", "image", "file", "range", "color"].includes(el.type);
+}
+
+/**
+ * What is wrong with a rendered page's shape, in words — empty when nothing is. The page is the element carrying its
+ * `page-<view>` test id, rendered with its data loaded. Every page has one `<h1>`, and every text box, select and text area
+ * has the kit's field edge (`border-border-field`, 3:1) — use the kit's `Input`, `Select` and `Textarea`. Then by kind:
+ *
+ * - `list`: the `…-list` element, and everything around it up to `<main>`, may use at least 60% of a 1440px desktop (no
+ *   `max-w-2xl`, no `w-1/3`), and it is more than one column on a desktop: the kit's `CardGrid`, a grid with columns from
+ *   `sm:` up, or a table.
+ * - `form`: a `<form>` with a submit button and a "Cancel" beside it (the kit's `FormActions`).
+ * - `detail`: a way back to the page above (the kit's `BackLink`, or `PageHeader`'s `back`).
+ *
+ * jsdom draws nothing, so this reads the classes the page asks for, which is what a browser would honour.
+ */
+export function pageShapeProblems(page: HTMLElement, kind: PageKind): string[] {
+  const problems: string[] = [];
+  const name = page.getAttribute("data-testid") ?? "the page";
+  const headings = page.querySelectorAll("h1");
+  if (headings.length !== 1) problems.push(`${name} has ${headings.length} <h1> headings; a page has exactly one, its title (the kit's PageHeader).`);
+
+  for (const field of Array.from(page.querySelectorAll("input, textarea, select")).filter(isField)) {
+    if (!field.classList.contains("border-border-field")) {
+      const id = field.getAttribute("data-testid") ?? field.getAttribute("name") ?? field.tagName.toLowerCase();
+      problems.push(`The field ${id} does not have the field edge (border-border-field, 3:1): use the kit's Input, Select or Textarea.`);
+    }
+  }
+
+  if (kind === "list") {
+    const list = page.querySelector('[data-testid$="-list"]');
+    if (!list) {
+      problems.push(`${name} has no element with a "<entity>-list" test id.`);
+    } else {
+      const floor = SHAPE_VIEWPORT * LIST_MIN_SHARE;
+      for (let el: Element | null = list; el && el.tagName !== "MAIN" && el !== document.body; el = el.parentElement) {
+        for (const token of Array.from(el.classList)) {
+          const limit = widthLimit(token);
+          if (limit !== null && limit < floor) {
+            problems.push(`The list is held to ${Math.round(limit)}px by "${token}" on <${el.tagName.toLowerCase()}>: a list page uses the width (at least ${Math.round(floor)}px of a ${SHAPE_VIEWPORT}px desktop).`);
+          }
+        }
+        if (el === page) break;
+      }
+      const classes = Array.from(list.classList);
+      const columns =
+        list.tagName === "TABLE" ||
+        list.getAttribute("role") === "table" ||
+        list.querySelector("table") !== null ||
+        classes.includes("grid-cols-cards") ||
+        classes.some((c) => /^(?:sm|md|lg|xl|2xl):grid-cols-(?:[2-9]|1[0-2])$/.test(c));
+      if (!columns) problems.push(`The list is one column at every width: use the kit's CardGrid (or a grid with columns from sm: up, or a table).`);
+    }
+  }
+
+  if (kind === "form") {
+    const form = page.querySelector("form");
+    if (!form) {
+      problems.push(`${name} has no <form>.`);
+    } else {
+      if (!form.querySelector('button[type="submit"], input[type="submit"], button:not([type])')) problems.push("The form has no submit button.");
+      const cancel = Array.from(page.querySelectorAll("a, button")).some((el) => /^cancel$/i.test((el.textContent ?? "").trim()));
+      if (!cancel) problems.push(`The form has no "Cancel" beside its main action: a person can always leave without saving (the kit's FormActions).`);
+    }
+  }
+
+  if (kind === "detail" && !page.querySelector('[data-slot="back-link"]')) {
+    problems.push(`${name} has no way back to the page above: give PageHeader a "back" link (the kit's BackLink).`);
+  }
+
+  return problems;
+}
+
+/** Fails, naming every problem, unless the page's shape is right (see {@link pageShapeProblems}). */
+export function expectPageShape(page: HTMLElement, kind: PageKind): void {
+  const problems = pageShapeProblems(page, kind);
+  if (problems.length > 0) throw new Error(`The page's shape is wrong:\n  - ${problems.join("\n  - ")}`);
+}

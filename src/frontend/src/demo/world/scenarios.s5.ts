@@ -142,3 +142,19 @@ defineScenario({
   route: "/__app/{app}/path/",
   featured: NOTES,
 });
+
+// Real, messy data on the app page (the real-stack review): a long name, long addresses and e-mails, a long secret name and a long kept question.
+defineScenario({
+  name: "app-long-names",
+  title: "Court booking with long names everywhere: its title, who it is shared with, a secret, a kept question",
+  apply: (w) => {
+    const a = court(w);
+    if (a) a.name = "Court booking for members, guests and the junior league's coaching programme";
+    w.shares.push({ appId: IDS.tableBookings, email: "junior.league.coaching.coordinator@northwind-sports-and-social.example", invitedAt: ago(3 * 60), registered: false, code: "TB-LONG1" });
+    if (a) w.secrets.push({ path: a.path, name: "JUNIOR_LEAGUE_COACHING_CALENDAR_SYNC_SERVICE_ACCOUNT_TOKEN", setAt: ago(60) });
+    const kept = w.dashboard.find((q) => q.appId === IDS.tableBookings);
+    if (kept) w.dashboard.push({ ...kept, id: uuidFor("question:long"), question: "Across every court and every membership type, which hour of which weekday had the most cancellations made less than two hours before the booking started, over the last three months?" });
+  },
+  route: "/apps/{app}",
+  featured: COURT,
+});

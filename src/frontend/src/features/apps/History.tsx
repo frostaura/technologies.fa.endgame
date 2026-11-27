@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useState } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { cn } from "@/lib/utils";
 import { TAP } from "@/lib/touch";
 import { Link } from "@/components/Link";
@@ -131,27 +132,19 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
 }
 
 function ConfirmRestore({ app, onConfirm, onCancel }: { app: AppDetail; onConfirm: () => void; onCancel: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  useEffect(() => ref.current?.focus(), []);
   return (
-    <div ref={ref} role="alertdialog" aria-labelledby={titleId} tabIndex={-1} onKeyDown={(e) => e.key === "Escape" && onCancel()} className="flex flex-col gap-2 rounded-sm border border-attention-line bg-attention-tint px-4 py-3 outline-none">
-      <p id={titleId} className="font-semibold text-attention-text">
-        Bring this version of {app.name} back?
-      </p>
-      <p className="text-attention-deep">
-        It becomes the newest version, made by you; nothing in the history is lost. The app is rebuilt and restarted, so it is briefly unavailable.
-        {app.settings.access === "public" ? " It is public now, so it becomes private: look at the restored version before you make it public again." : ""}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={onConfirm}>
-          Bring it back
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          Keep the live version
-        </Button>
-      </div>
-    </div>
+    <ConfirmCard
+      role="alertdialog"
+      focus
+      destructive={false}
+      label={`Bring this version of ${app.name} back?`}
+      question={`Bring this version of ${app.name} back?`}
+      detail={`It becomes the newest version, made by you; nothing in the history is lost. The app is rebuilt and restarted, so it is briefly unavailable.${app.settings.access === "public" ? " It is public now, so it becomes private: look at the restored version before you make it public again." : ""}`}
+      confirm="Bring it back"
+      cancel="Keep the live version"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }
 

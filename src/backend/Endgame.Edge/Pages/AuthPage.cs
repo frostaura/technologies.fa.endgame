@@ -13,38 +13,43 @@ namespace Endgame.Edge.Pages;
 /// </summary>
 public static class AuthPage
 {
-    public static async Task WriteAsync(HttpContext context, string page, string configJson, string markUrl)
+    /// <param name="context">The request.</param>
+    /// <param name="page"><c>sign-in</c> or <c>sign-up</c>.</param>
+    /// <param name="configJson">The page's config, read by its script.</param>
+    /// <param name="assets">Where the page's typefaces and mark are served (<see cref="PageChrome.AssetsAt"/>).</param>
+    public static async Task WriteAsync(HttpContext context, string page, string configJson, string assets)
     {
         var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
-        Prepare(context, StatusCodes.Status200OK, nonce, markUrl);
+        Prepare(context, StatusCodes.Status200OK, nonce);
         if (HttpMethods.IsHead(context.Request.Method))
         {
             return;
         }
 
         var title = page == "sign-up" ? "Create your sign-in" : "Sign in";
-        await context.Response.WriteAsync(Shell(title, nonce, markUrl, Body(page), $"<script type=\"application/json\" id=\"config\">{configJson}</script><script nonce=\"{nonce}\">{Script}</script>"), context.RequestAborted);
+        var scripts = $"\n<script type=\"application/json\" id=\"config\">{configJson}</script><script nonce=\"{nonce}\">{Script}</script>";
+        await context.Response.WriteAsync(PageChrome.Document(title, assets, Body(page), styleAttributes: $" nonce=\"{nonce}\"", scripts: scripts), context.RequestAborted);
     }
 
-    /// <summary>A page with a title, a message and one link onward (an expired hand-off, a failure).</summary>
-    public static async Task WriteMessageAsync(HttpContext context, int status, string title, string message, string link, string linkText, string markUrl)
+    /// <summary>A page with a title, a message and one way onward (an expired hand-off, a failure).</summary>
+    public static async Task WriteMessageAsync(HttpContext context, int status, string title, string message, string link, string linkText, string assets)
     {
         var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
-        Prepare(context, status, nonce, markUrl);
+        Prepare(context, status, nonce);
         if (HttpMethods.IsHead(context.Request.Method))
         {
             return;
         }
 
-        var body = $"""
-            <h1>{WebUtility.HtmlEncode(title)}</h1>
-            <p>{WebUtility.HtmlEncode(message)}</p>
-            <p class="note"><a class="button" href="{WebUtility.HtmlEncode(link)}">{WebUtility.HtmlEncode(linkText)}</a></p>
-            """;
-        await context.Response.WriteAsync(Shell(title, nonce, markUrl, body, ""), context.RequestAborted);
+        await context.Response.WriteAsync(PageChrome.Document(title, assets, MessageBody(title, message, link, linkText), styleAttributes: $" nonce=\"{nonce}\""), context.RequestAborted);
     }
 
-    private static void Prepare(HttpContext context, int status, string nonce, string markUrl)
+    /// <summary>The body of <see cref="WriteMessageAsync"/>.</summary>
+    public static string MessageBody(string title, string message, string link, string linkText) =>
+        $"<h1>{WebUtility.HtmlEncode(title)}</h1>\n<p>{WebUtility.HtmlEncode(message)}</p>\n<nav class=\"actions\" aria-label=\"What to do next\"><a class=\"button\" href=\"{WebUtility.HtmlEncode(link)}\">{WebUtility.HtmlEncode(linkText)}</a></nav>";
+
+    // The typefaces and the mark are the edge's own, served from this host (PageChrome.AssetsPath).
+    private static void Prepare(HttpContext context, int status, string nonce)
     {
         var response = context.Response;
         response.Clear();
@@ -53,37 +58,15 @@ public static class AuthPage
         response.Headers.CacheControl = "no-store";
         response.Headers["Referrer-Policy"] = "no-referrer";
         response.Headers["X-Content-Type-Options"] = "nosniff";
-        var image = Uri.TryCreate(markUrl, UriKind.Absolute, out var mark) ? $"'self' {mark.GetLeftPart(UriPartial.Authority)}" : "'self'";
         response.Headers.ContentSecurityPolicy =
-            $"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'; img-src {image}; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+            $"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
     }
-
-    private static string Shell(string title, string nonce, string markUrl, string body, string scripts) => $$"""
-        <!doctype html>
-        <html lang="en">
-        <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-        <meta name="robots" content="noindex">
-        <title>{{WebUtility.HtmlEncode(title)}} · Endgame</title>
-        <style nonce="{{nonce}}">
-        {{PageChrome.Style}}
-        </style>
-        </head>
-        <body>
-        <main>
-        <img class="mark" src="{{WebUtility.HtmlEncode(markUrl)}}" alt="Endgame" width="48" height="48">
-        {{body}}
-        </main>
-        {{scripts}}
-        </body>
-        </html>
-        """;
 
     private static string Body(string page) => page == "sign-up"
         ? """
             <h1 id="title">Create your sign-in</h1>
             <p id="lead">Checking what this app offers…</p>
+            <p id="via" class="note" hidden></p>
             <form id="sign-up" hidden>
               <section>
                 <label>E-mail address<input id="email" name="email" type="email" autocomplete="email" required></label>
@@ -99,10 +82,12 @@ public static class AuthPage
               <div class="actions"><button id="dev-visitor-up" type="button" class="secondary">Continue without a passkey</button></div>
             </section>
             <p id="error" class="error" role="alert" hidden></p>
+            <p id="back" class="note" hidden><a id="back-link" href="#">Back to the app</a></p>
             """
         : """
             <h1 id="title">Sign in</h1>
             <p id="lead">Checking what this app offers…</p>
+            <p id="via" class="note" hidden></p>
             <section id="members" hidden>
               <h2 id="members-title">Members</h2>
               <p>Sign in with the passkey you use for Endgame.</p>
@@ -124,6 +109,7 @@ public static class AuthPage
               </div>
             </section>
             <p id="error" class="error" role="alert" hidden></p>
+            <p id="back" class="note" hidden><a id="back-link" href="#">Back to the app</a></p>
             """;
 
     // Plain browser JavaScript: the page has no build step and loads nothing else.
@@ -203,6 +189,17 @@ public static class AuthPage
             const info = await call(base);
             const visitors = info.signUp === true;
             $("title").textContent = config.page === "sign-up" ? `Create your sign-in for ${info.appName}` : `Sign in to ${info.appName}`;
+            // On the organisation subdomain the visitor was sent here, to the platform's host: say where they are, and why.
+            if (config.handoff) {
+              $("via").textContent = `Endgame keeps your sign-in at its own address, so you sign in here and go straight back to ${new URL(config.returnTo).host}.`;
+              show("via");
+            }
+            // A public app opens signed out too: signing in can wait.
+            if (visitors && info.invitationRequired !== true) {
+              $("back-link").textContent = `Back to ${info.appName}`;
+              $("back-link").href = config.returnTo;
+              show("back");
+            }
             if (config.page === "sign-up") {
               if (!visitors) {
                 $("lead").textContent = `${info.appName} is private: only members of ${info.organisationName} can open it.`;

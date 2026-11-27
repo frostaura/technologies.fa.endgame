@@ -224,7 +224,7 @@ test("4. both address shapes through the real Edge; private: signed out to sign-
   const outsider = await stranger.newPage();
   const refused = await outsider.goto(at.path("notes"));
   expect(refused?.status()).toBe(403);
-  await expect(outsider.getByRole("heading", { name: "You don't have access to this app" })).toBeVisible();
+  await expect(outsider.getByRole("heading", { name: "You don’t have access to this app" })).toBeVisible();
   await stranger.close();
   await page.close();
 });

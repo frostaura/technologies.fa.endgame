@@ -16,10 +16,28 @@ namespace Endgame.AppKit;
 /// Serves the built front end so one image works under any address prefix (ARCH-005): the page's
 /// <c>&lt;base href&gt;</c> is rewritten on every request from the forwarded prefix, and the page is
 /// never served by default-file handling.
+/// <para>
+/// The app's name is the platform's (PLATFORM-API §5): its name in the organisation tree, which a
+/// person can rename and which the console, the sign-in pages and e-mails already show. Edge sends it
+/// as <see cref="AppNameHeader"/> (percent-encoded UTF-8); when it is present the page's
+/// <c>&lt;title&gt;</c> text becomes that name and <c>&lt;meta name="endgame-app-name" content="…"&gt;</c>
+/// (HTML-encoded) is written right after the <c>&lt;base&gt;</c> element, where the web SDK's
+/// <c>appName(fallback)</c> reads it for the header and tab titles. With no header (tests, local
+/// development) the page is served as built.
+/// </para>
 /// </summary>
 internal sealed partial class SpaHost(IWebHostEnvironment environment)
 {
     internal const string IndexFile = "index.html";
+
+    /// <summary>The app's name in the tree, from Edge: <c>Uri.EscapeDataString</c> of its UTF-8 (Endgame.Hosting.Contracts' <c>HostingConventions.AppNameHeader</c>).</summary>
+    internal const string AppNameHeader = "X-Endgame-App-Name";
+
+    /// <summary>The meta element's name the web SDK reads.</summary>
+    internal const string AppNameMeta = "endgame-app-name";
+
+    /// <summary>A name longer than this is not a name: the page is served as built.</summary>
+    private const int MaxAppName = 200;
 
     /// <summary>Path prefixes that are never the front end, even when nothing else matched.</summary>
     internal static readonly string[] ReservedPrefixes =
@@ -29,6 +47,9 @@ internal sealed partial class SpaHost(IWebHostEnvironment environment)
 
     [GeneratedRegex(@"<base\s+href=""[^""]*""\s*/?>", RegexOptions.IgnoreCase)]
     private static partial Regex BaseElement();
+
+    [GeneratedRegex(@"<title>[^<]*</title>", RegexOptions.IgnoreCase)]
+    private static partial Regex TitleElement();
 
     // A src or href that starts with a single slash ignores <base> and breaks under a prefix.
     [GeneratedRegex(@"\s(?:src|href)=""/(?!/)[^""]*""", RegexOptions.IgnoreCase)]
@@ -90,10 +111,46 @@ internal sealed partial class SpaHost(IWebHostEnvironment environment)
         return problems;
     }
 
-    internal static string Render(string template, PathString pathBase)
+    /// <param name="template">The built page.</param>
+    /// <param name="pathBase">The forwarded prefix.</param>
+    /// <param name="appName">The app's name from Edge, decoded; null serves the page's own title.</param>
+    internal static string Render(string template, PathString pathBase, string? appName = null)
     {
         var href = WebUtility.HtmlEncode((pathBase.Value ?? "").TrimEnd('/') + "/");
-        return BaseElement().Replace(template, $"<base href=\"{href}\" />", 1);
+        if (appName is not { Length: > 0 })
+        {
+            return BaseElement().Replace(template, _ => $"<base href=\"{href}\" />", 1);
+        }
+
+        // Evaluators, not replacement patterns: a name may hold "$1" or "$&".
+        var name = WebUtility.HtmlEncode(appName);
+        var title = $"<title>{name}</title>";
+        var hasTitle = TitleElement().IsMatch(template);
+        var meta = $"<meta name=\"{AppNameMeta}\" content=\"{name}\">" + (hasTitle ? "" : title);
+        var page = BaseElement().Replace(template, _ => $"<base href=\"{href}\" />{meta}", 1);
+        return hasTitle ? TitleElement().Replace(page, _ => title, 1) : page;
+    }
+
+    /// <summary>The app's name Edge sent (<see cref="AppNameHeader"/>), decoded; null when absent or not a plausible name.</summary>
+    internal static string? AppNameFrom(HttpRequest request)
+    {
+        var raw = request.Headers[AppNameHeader].ToString();
+        if (raw.Length == 0)
+        {
+            return null;
+        }
+
+        string name;
+        try
+        {
+            name = Uri.UnescapeDataString(raw).Trim();
+        }
+        catch (UriFormatException)
+        {
+            return null;
+        }
+
+        return name.Length is > 0 and <= MaxAppName && !name.Any(char.IsControl) ? name : null;
     }
 
     internal static bool IsReserved(PathString path) =>
@@ -114,7 +171,7 @@ internal sealed partial class SpaHost(IWebHostEnvironment environment)
 
         context.Response.Headers.CacheControl = "no-cache";
         context.Response.Headers.XContentTypeOptions = "nosniff";
-        return Results.Content(Render(_template, context.Request.PathBase), "text/html; charset=utf-8");
+        return Results.Content(Render(_template, context.Request.PathBase, AppNameFrom(context.Request)), "text/html; charset=utf-8");
     }
 
     internal StaticFileOptions StaticFiles() => new()

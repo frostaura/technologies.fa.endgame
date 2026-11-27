@@ -226,13 +226,50 @@ const noUnsafeFormat: Rule.RuleModule = {
   },
 };
 
+/** The kit's own field for each raw element: its edge is the 3:1 field border and its height the 44px target. */
+const KIT_FIELDS: Record<string, string> = { input: "Input", textarea: "Textarea", select: "Select" };
+/** Input types that are not a field a person sees: no edge to get wrong. */
+const UNSEEN_INPUTS = new Set(["hidden"]);
+
+/**
+ * A raw `<input>`, `<textarea>` or `<select>` is drawn with the page's faint divider (about 1.2:1 against white), so a person
+ * cannot see where to type, and it is a different height from the kit's. The kit's `Input`, `Textarea`, `Select` and
+ * `Checkbox` carry the 3:1 field edge and the 44px target; use them.
+ */
+const useKitFields: Rule.RuleModule = {
+  meta: {
+    type: "problem",
+    docs: { description: "Disallow raw form fields: use the kit's Input, Textarea, Select and Checkbox." },
+    schema: [],
+    messages: {
+      raw:
+        "A raw <{{tag}}> has a faint edge (about 1.2:1) and its own height. Use {{kit}} from @endgame/appkit/ui: " +
+        "its edge is the 3:1 field border and it is a 44px target.",
+    },
+  },
+  create(context) {
+    return {
+      JSXOpeningElement(node: Node) {
+        const element = node as unknown as { name: { type: string; name?: string }; attributes: { type: string; name?: { name?: unknown }; value?: { type: string; value?: unknown } | null }[] };
+        if (element.name.type !== "JSXIdentifier" || !element.name.name || !(element.name.name in KIT_FIELDS)) return;
+        const tag = element.name.name;
+        const type = element.attributes.find((a) => a.type === "JSXAttribute" && a.name?.name === "type")?.value;
+        const typeText = type && type.type === "Literal" && typeof type.value === "string" ? type.value : null;
+        if (tag === "input" && typeText && UNSEEN_INPUTS.has(typeText)) return;
+        const kit = tag === "input" && typeText === "checkbox" ? "Checkbox" : (KIT_FIELDS[tag] ?? "Input");
+        context.report({ node, messageId: "raw", data: { tag, kit } });
+      },
+    };
+  },
+};
+
 /**
  * `import endgame from "@endgame/appkit/eslint"` → `plugins: { endgame }`, rules
- * `endgame/no-root-relative-url`, `endgame/no-location-read` and `endgame/no-unsafe-format`.
+ * `endgame/no-root-relative-url`, `endgame/no-location-read`, `endgame/no-unsafe-format` and `endgame/use-kit-fields`.
  */
 const plugin: ESLint.Plugin = {
   meta: { name: "@endgame/appkit", version: "0.1.0" },
-  rules: { "no-root-relative-url": noRootRelativeUrl, "no-location-read": noLocationRead, "no-unsafe-format": noUnsafeFormat },
+  rules: { "no-root-relative-url": noRootRelativeUrl, "no-location-read": noLocationRead, "no-unsafe-format": noUnsafeFormat, "use-kit-fields": useKitFields },
 };
 
 export default plugin;

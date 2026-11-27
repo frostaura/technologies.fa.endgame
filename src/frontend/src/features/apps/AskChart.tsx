@@ -57,9 +57,10 @@ function Bars({ chart, className }: { chart: AskChart; className?: string }) {
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {series.length > 1 && <Legend names={series.map((s) => s.name)} />}
-      <div role="img" aria-label={`${series.map((s) => s.name).join(" and ")}: ${description}`} className="flex flex-col gap-2">
+      <div role="img" aria-label={`${series.map((s) => s.name).join(" and ")}: ${description}`} className="grid grid-cols-chart-row items-center gap-x-3 gap-y-2">
+        {/* One grid for every row: the names' column is as wide as the longest name (up to 9rem), so the bars start together, right after them. */}
         {points.map((p, i) => (
-          <div key={i} className="grid grid-cols-chart-row items-center gap-3">
+          <div key={i} className="contents">
             <span className="truncate text-ink-muted" title={label(p.x)}>
               {label(p.x)}
             </span>

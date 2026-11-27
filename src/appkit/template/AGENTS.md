@@ -50,15 +50,14 @@ The example feature is **Notes**; replace it with the real product, keeping its 
   that answers one way signed in and another signed out. What anyone may see (a count, a total) is a field
   of the public resource it belongs to. Only the kit's own `getCurrentUser` takes `EndgameUser?`. This is
   the security review's rule, and `make test` checks it (`api.tests/AppRulesTests.cs`).
-- **Front end:** primitives from `@endgame/appkit/ui`; classes from the token layer only
-  (`bg-surface`, `text-ink-muted`, `text-primary`). No hex colours, no `p-[13px]`, no fonts or
-  scripts from other hosts. Light, calm, one accent. Use the width on large screens (columns, a
-  side panel — never one narrow centred column), and make every page whole on a phone: one column
-  under `sm`, nothing wider than the screen, buttons and links at least 44px tall (`min-h-11`),
-  labels above fields, the main action full width (`max-sm:w-full`), `pt-safe-t`/`pb-safe-b` where a
-  page meets the screen's edge, `min-h-dvh` rather than `min-h-screen`.
-- **The app's name** is written once, in `web/src/appName.ts` (and `web/index.html`'s `<title>`). Each
-  page names itself with `usePageTitle("All notes")`, which titles the tab "All notes · Notes".
+- **Front end:** primitives and page layouts from `@endgame/appkit/ui`; classes from the token layer only
+  (`bg-surface`, `text-ink-muted`, `text-primary`). No hex colours, no `p-[13px]`, no fonts or scripts from other hosts.
+  Light, calm, one accent. Every page follows **What good looks like** below.
+- **The app's name is the platform's**: the name the app has in its organisation, which the console, the platform's
+  sign-in page and its e-mails show. The server writes it into every page (`<meta name="endgame-app-name">`), and
+  `web/src/appName.ts` reads it (`APP_NAME = appName("Notes")`), so the header, the tab and the sign-in page always agree
+  and a rename needs no rebuild. Set the fallback (and `index.html`'s `<title>`) to the app's name for tests and local runs;
+  never write the name anywhere else. Each page names itself with `usePageTitle("All notes")` → "All notes · <the app>".
 - **Errors in the UI:** `api()` throws `ValidationError` (show `errors` by field),
   `NotSignedInError` (go to `signInUrl`), `NotFoundError`, `BudgetExhaustedError`. A page that throws while it
   renders is caught by the kit's `AppErrorBoundary`, mounted in `main.tsx` and around the routes in `App.tsx`: it shows
@@ -85,6 +84,53 @@ The example feature is **Notes**; replace it with the real product, keeping its 
   Health, traffic, errors and latency are recorded without any code.
 - **Recurring work:** `app.MapSchedule("nightly-digest", "0 3 * * *", run => …)`.
   **Inbound calls** from devices or services: `app.MapWebhook("name", WebhookVerification.HmacSha256(…), …)`.
+
+## What good looks like — every page, checked
+
+An app is what a customer is handed. These are the house rules for how it looks; the kit's layouts already follow them, so
+build every page from them rather than from bare `div`s. `web/src/pageShapes.test.tsx` checks the worst mistakes on every
+page and fails the build: **every page you add gets a row there** (`{ at, page, kind: "list" | "form" | "detail", ready }`).
+
+**The frame (already in `App.tsx`; keep it).**
+- One header, the kit's `AppHeader`: the app's name (linking home), its navigation as `NavItem`s when it has more than one
+  place, and who is signed in with "Sign out". Never a second header, a page-level sign-out or a hand-made user menu.
+- The header and every page share one width (`AppMain`), so the header's edges line up with the content's.
+
+**Every page.**
+- Starts with the kit's `PageHeader`: one `<h1>` (the page's title), a line on what it is, and its one or two actions on the
+  right. Any page below the first has a way back (`back={<Link to="/">All dives</Link>}`).
+- Uses the width on a desktop: the page and a side panel (`PageLayout aside={…}`) — a summary of the list, the record's facts,
+  a form's live preview or what happens next. Never one narrow card in the corner of an empty screen, and never a card
+  stretched across 1,400 px with its content in the left third.
+- Is whole on a phone: one column, nothing wider than the screen, every button and link at least 44 px (`min-h-11`; the kit's
+  controls already are), the main action full width. The side panel follows the page; it never disappears.
+- Shows loading, failed, empty and loaded differently (rule 5), with the kit's states. An empty list is `EmptyState` with the
+  action that fills it — never a dashed box. An address with nothing at it is `NotFoundState` with a way back.
+
+**A list page** (`kind: "list"`).
+- The items fill the width: `CardGrid` (as many columns as fit — one on a phone, three or four on a desktop) of `ItemCard`s,
+  each card one link to the item; or a table when people compare rows. Beside it, a summary in a `Panel` (`Facts`).
+- A status is a `Badge` in one of the five tones (`neutral`, `info`, `good`, `warn`, `bad`), never colour of its own, never
+  12 px grey text.
+
+**A form page** (`kind: "form"`).
+- `PageHeader` with the title ("New dive") and a way back; the fields in `FormCard` (a measured column, never a whole
+  desktop wide); `PageLayout form aside={…}` with a live preview or a word on what happens next beside it.
+- Each field is the kit's `Field` (label above, hint, error beside it) around `Input`, `Select`, `Textarea` or `Checkbox` —
+  their edge is the 3:1 field border; a raw `<input>` is faint (about 1.2:1) and ESLint (`endgame/use-kit-fields`) refuses it.
+- `FormActions` at the foot: the main action **and Cancel** beside it (`cancel={<Link to="/">Cancel</Link>}`).
+
+**A detail page** (`kind: "detail"`).
+- A way back, the record's name as the title, its content, and beside it its facts (`Facts`) and what a person can do.
+- A status and an action are two things: a `Badge` saying "You are on this dive", and a button beside it ("Give up my seat",
+  `variant="danger"` when it removes something). Never one button that says both.
+- A link to share is `CopyLink` (shown short, with "Copy link"), never a raw address in a text box.
+- Things to tick are a `Checklist` of `ChecklistItem`s — a real check box, the whole row the target, done items struck
+  through — with a `Progress` for "7 of 12 packed". Never rows of grey bars.
+
+Checklist before a page is done: one `PageHeader`; a way back below the first page; the width used beside a side panel on a
+desktop; one column and 44 px targets on a phone; kit fields only; Cancel beside a form's main action; a `Badge` for every
+status; the four states; a row in `pageShapes.test.tsx`.
 
 ## A person's own record — found again, never made twice
 
@@ -175,7 +221,8 @@ make migration name=AddSomething
 ```
 
 A change is done when `make lint` and `make test` pass with zero warnings, there is a test for the
-behaviour (back end and front end), a navigation test for each new link between pages, a bad-input test for each form field, the
+behaviour (back end and front end), a navigation test for each new link between pages, a bad-input test for each form field, a
+row in `pageShapes.test.tsx` for each new page, the
 screens carry their test ids, and `docs/` says what changed — `docs/app.md`'s table names every endpoint by its
 operation id with "Signed in?" Yes or No, exactly as the code has it (`AppRulesTests` fails otherwise).
 

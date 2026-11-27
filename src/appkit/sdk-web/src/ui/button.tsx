@@ -9,8 +9,10 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary: "bg-primary text-primary-ink hover:bg-primary-hover",
-        outline: "border bg-surface text-ink hover:bg-ground",
+        outline: "border border-border-strong bg-surface text-ink hover:bg-ground",
         ghost: "text-ink hover:bg-ground",
+        /** Removes or gives something up: "Delete", "Give up my seat". Always beside a quiet way back. */
+        danger: "bg-attention-text text-primary-ink hover:bg-attention-text/90",
       },
       // `sm` is compact where a pointer is precise; on a phone every button is a 44px target.
       size: { sm: "h-11 px-3 sm:h-9", md: "h-11 px-4" },
@@ -18,6 +20,8 @@ const buttonVariants = cva(
     defaultVariants: { variant: "primary", size: "md" },
   },
 );
+
+export { buttonVariants };
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   /** Render the child (e.g. a router `Link` or an `<a>`) with button styling instead of a `<button>`. */

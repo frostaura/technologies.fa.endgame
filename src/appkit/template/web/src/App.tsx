@@ -1,8 +1,7 @@
 import { lazy, Suspense } from "react";
-import { Link, Route, Routes, useLocation } from "react-router";
-import { AppErrorBoundary, LoadingState } from "@endgame/appkit/ui";
+import { Link, NavLink, Route, Routes, useLocation } from "react-router";
+import { AppErrorBoundary, AppHeader, AppMain, LoadingState, NavItem } from "@endgame/appkit/ui";
 import { APP_NAME } from "./appName";
-import { UserMenu } from "./UserMenu";
 import { NotesPage } from "./notes/NotesPage";
 import { NotFoundPage } from "./NotFoundPage";
 
@@ -15,19 +14,21 @@ export function App() {
   // link to another page tries afresh (the boundary resets when the address changes).
   const { pathname } = useLocation();
   return (
-    // One column on a phone, the whole width on anything larger; the header clears a phone's notch.
+    // The kit's header (the app's name, its places, who is signed in) and page frame share one width, so their edges line up.
     <div className="flex min-h-dvh flex-col">
-      <header className="border-b bg-surface pt-safe-t">
-        <div className="mx-auto flex w-full max-w-page items-center justify-between gap-3 px-4 py-2 sm:px-8 sm:py-4">
-          <nav aria-label="Main" className="min-w-0">
-            <Link to="/" data-testid="nav-home" className="flex min-h-11 items-center truncate font-display text-lg font-semibold text-ink">
-              {APP_NAME}
-            </Link>
-          </nav>
-          <UserMenu />
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-page flex-1 px-4 pb-safe-b pt-6 sm:px-8 sm:py-8">
+      <AppHeader home={<Link to="/">{APP_NAME}</Link>}>
+        <NavItem>
+          <NavLink to="/" end data-testid="nav-home">
+            All notes
+          </NavLink>
+        </NavItem>
+        <NavItem>
+          <NavLink to="/notes/new" data-testid="nav-new-note">
+            New note
+          </NavLink>
+        </NavItem>
+      </AppHeader>
+      <AppMain>
         <AppErrorBoundary resetKey={pathname}>
           <Suspense fallback={<LoadingState />}>
             <Routes>
@@ -38,7 +39,7 @@ export function App() {
             </Routes>
           </Suspense>
         </AppErrorBoundary>
-      </main>
+      </AppMain>
     </div>
   );
 }

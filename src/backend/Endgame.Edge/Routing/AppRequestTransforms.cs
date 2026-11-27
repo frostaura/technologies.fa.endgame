@@ -10,11 +10,16 @@ namespace Endgame.Edge.Routing;
 /// What an app receives (ARCH-005, address rule 6): the prefix stripped, and <c>X-Forwarded-Prefix</c>,
 /// <c>-Host</c>, <c>-Proto</c> and <c>-For</c> set by the edge alone — whatever the visitor sent
 /// is dropped, as is every client-sent <c>X-Endgame-*</c> header. The platform's own cookies —
-/// the console session and every <c>endgame.app.*</c> app session — never reach an app.
+/// the console session and every <c>endgame.app.*</c> app session — never reach an app. The app is
+/// told its name in the tree (<see cref="HostingConventions.AppNameHeader"/>), so its header and tab
+/// title show the one name a person sees for it everywhere else.
 /// </summary>
 public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITransformProvider
 {
     public const string SessionItem = "endgame.session";
+
+    /// <summary>The app's name, set by <see cref="AppGate"/> from the routing table.</summary>
+    public const string NameItem = "endgame.app-name";
 
     public void ValidateRoute(TransformRouteValidationContext context)
     {
@@ -90,6 +95,12 @@ public sealed class AppRequestTransforms(IOptions<EdgeOptions> options) : ITrans
             if (transform.HttpContext.Items.TryGetValue(SessionItem, out var session) && session is string token)
             {
                 headers.TryAddWithoutValidation(HostingConventions.SessionHeader, token);
+            }
+
+            // Header values are Latin-1: the name goes percent-encoded UTF-8, which the app kit decodes.
+            if (transform.HttpContext.Items.TryGetValue(NameItem, out var named) && named is string { Length: > 0 } appName)
+            {
+                headers.TryAddWithoutValidation(HostingConventions.AppNameHeader, Uri.EscapeDataString(appName));
             }
 
             if (request.Headers.Cookie.Count > 0)

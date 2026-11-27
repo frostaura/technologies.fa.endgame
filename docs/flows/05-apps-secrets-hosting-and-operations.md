@@ -19,8 +19,8 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Steps:**
   1. The person opens the app. The page shows the "Loading the app" skeleton: one wide bar and four tiles.
   2. The page loads. The breadcrumb shows the app's own organisation (not necessarily the person's first one), then the division and project names, then the app.
-  3. The heading is the app's name. Under it is the subdomain address followed by "· also at <path address>", or only the path address when there is no subdomain.
-  4. A button reads "Open the app".
+  3. The heading is the app's name. Under it is one address — the subdomain address, or the path address when there is no subdomain — written without "https://" and breaking only after a "/", with a button that copies it ("Copy the address", then "Copied"). When there is a subdomain, "Also at" opens the path address, with its own copy button ("Copy the other address").
+  4. A button reads "Open the app". It is the page's primary button while the app can be used. When it cannot, the same link is a quiet outline button and a line beside it says why: "Nothing is published yet, so its visitors are told it is not ready.", "It is paused, so its visitors see a holding page until it is restored." or "It is not running, so its visitors are told it is unavailable." (an app asleep can be used: the first visit wakes it).
   5. The four tiles appear (APP-02), then "Ask about this app", "Dashboard", "History", the sharing card and the "Secrets" card.
   6. The side column shows "Running", "Who can open it", "What it may spend", "What it uses", "The app itself" and "It is yours". In technical mode it also shows "Underneath". The side column says one thing at a time: what a card's last action did is replaced by its next one, and cleared when another card acts.
   7. The page re-reads the app every 20 seconds, but only while the browser tab has focus.
@@ -83,7 +83,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Core
 - **Learn first:** APP-01, APP-02
 - **What you learn:** sleeping is cheaper, being always on is instant, and the page prices each choice from the app's own measured use.
-- **You know it worked when:** the chosen radio has a dark border, the legend icon changes (asleep or always-on), and no "The change was not saved" alert appears.
+- **You know it worked when:** the chosen card is drawn in the accent (its edge and a tint), the legend icon changes (asleep or always-on), and no "The change was not saved" alert appears.
 - **Steps:**
   1. The person reads the two choices:
      - "Sleeps when unused": "Cheapest. The first visitor waits a few seconds. About <n> credits a month."
@@ -108,7 +108,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Advanced · **Learn first:** APP-04 · **What you learn:** a sleeping app costs least, and how soon it sleeps is yours to choose.
 - **Steps:**
   1. Under the running choices, **"Sleeps after this many idle minutes"** holds the current value, with "From 1 to 1,440 (a day)."
-  2. Type a number and press **"Save"**. "It sleeps after <n> idle minutes now." appears under the field and its button, which keep their width at any size.
+  2. Type a number and press **"Save"**, on the field's own row. "It sleeps after <n> idle minutes now." appears under the field and its button, with the hint "From 1 to 1,440 (a day)."
 - **You know it worked when:** the message shows, and "Underneath" in technical mode reads the new value.
 - **Variations and refusals:**
   - Locally: "A whole number of minutes, from 1 to 1,440." and the button stays disabled. The server: "sleep.idle_minutes is a whole number from 1 to 1440."
@@ -126,7 +126,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Core
 - **Learn first:** APP-01, and roles (another reader's People area)
 - **What you learn:** who may open an app is one setting, private by default, and it inherits down the cascade.
-- **You know it worked when:** the chosen radio has a dark border and the sharing card changes. Shared shows "Shared with"; private shows the "Sharing" explanation.
+- **You know it worked when:** the chosen card is drawn in the accent (its edge and a tint) and the sharing card changes. Shared shows "Shared with"; private shows the "Sharing" explanation.
 - **Steps:**
   1. Three radios are shown:
      - "Private: only people in <org name>"
@@ -169,11 +169,11 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Core
 - **Learn first:** APP-01
 - **What you learn:** every app leans on the same shared platform services.
-- **You know it worked when:** a row of chips appears, ending with "Open to AI assistants".
+- **You know it worked when:** a two-column list appears, each item an icon and its name, ending with "Open to AI assistants".
 - **Steps:**
   1. The section shows the "Loading what it uses" skeleton.
-  2. Chips appear for each platform service the app depends on: "Sign-in", "Data", "AI", "E-mail", "Incoming data", "Schedules", "Visits and errors measured". Each comes from the organisation graph's `depends-on` edges, "Data" included: the graph names it for an app that has run or stores data. Technical mode shows the raw service names instead.
-  3. Further chips follow:
+  2. An item appears for each platform service the app depends on: "Sign-in", "Data", "AI", "E-mail", "Incoming data", "Schedules", "Visits and errors measured". Each comes from the organisation graph's `depends-on` edges, "Data" included: the graph names it for an app that has run or stores data. Technical mode shows the raw service names instead.
+  3. Further items follow:
      - "No one has signed up yet", or "<n> people signed up"
      - "Shared with <n> people", only when the app is shared
      - "<n> secrets", when any apply
@@ -387,7 +387,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** each card shows its answer and chart with "Worked out <time ago>", and the heading reads "Worked out afresh each time you open it, at no cost."
 - **Steps:**
   1. The section shows the "Loading the dashboard" skeleton.
-  2. Each kept question is re-run and shown as a card: the question, the stored answer, a fresh chart, "Only the first rows are shown." when cut short, and "Worked out <time ago>".
+  2. Each kept question is re-run and shown as a card, two across on a desktop and three from 1600 px wide, each as tall as what it holds: the question, with "Take off" as a small × button at its top right, the stored answer, a fresh chart, "Only the first rows are shown." when cut short, and "Worked out <time ago>".
 - **Variations and refusals:**
   - With nothing kept: "Nothing is kept on the dashboard yet" with "Ask a question above, then keep the answer here. It is worked out again from the latest records whenever this page opens."
   - A failed read: "The dashboard could not be loaded" with a retry.
@@ -395,6 +395,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - A timed-out question reads "…It took too long to work out this time. It is tried again each time this page opens."
   - Technical mode adds "The query" and "What failed underneath".
   - The dashboard is read when the page mounts. It is not polled.
+  - More than seven kept questions: the first six show, then "Show all <n> questions" (and "Show fewer").
 - **Where:** `AskPanel.tsx` (Dashboard, SavedCard); `GET /api/apps/{id}/dashboard` (Viewer)
 - **Reachable from:** UI and API
 - **Covered by tests:** `AppBreadth.test.tsx` ("shows a skeleton, then each kept question re-run…", "records a failed read on the page", "says why a kept question no longer works out…", "shows each saved query only in technical mode"); `AskTests.A_saved_question_that_no_longer_runs…`
@@ -407,7 +408,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Learn first:** ASK-05
 - **What you learn:** taking a question off is immediate and needs no confirmation.
 - **You know it worked when:** the card disappears and no alert appears.
-- **Steps:** the person presses "Take off". The card leaves at once and `DELETE /api/apps/{id}/dashboard/{questionId}` is sent.
+- **Steps:** the person presses "Take off" (the × at the card's top right; its name reads "Take off “<question>”"). The card leaves at once and `DELETE /api/apps/{id}/dashboard/{questionId}` is sent.
 - **Variations and refusals:**
   - On refusal the card comes back and an alert reads "“<question>” was not taken off the dashboard: <reason> It is back."
   - A card still being kept shows no "Take off".
@@ -827,7 +828,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Learn first:** KIT-01
 - **What you learn:** being signed in is not the same as having access.
 - **You know it worked when:** the refusal page below appears.
-- **Steps:** Edge answers 403 with "You don't have access to this app" and "You are signed in, but your account has no access to this app. Ask its owner for access."
+- **Steps:** Edge answers 403 with "You don’t have access to this app" and "You are signed in, but your account has no access to this app. Ask its owner for access.", with **"Sign in as someone else"** (and **"Go to Endgame"** for a member signed in on the platform's host).
 - **Variations and refusals:** none.
 - **Where:** `Pages/UnavailablePage.cs` (Forbidden)
 - **Reachable from:** UI
@@ -1187,8 +1188,9 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Steps:** Edge serves one of these pages:
   - Took over 30 seconds: "This app is taking longer than usual" / "It is still starting. Please try again in a few seconds." (Retry-After 3)
   - No room to start it: "This app could not start just now" / "Endgame is very busy at the moment. Please try again in a minute."
-  - Nothing published: "This app isn't ready yet" / "It has an address, but its first version has not been published. Please check back soon."
+  - Nothing published: "This app isn’t ready yet" / "It has an address, but its first version has not been published. Please check back soon."
   - Anything else: "This app is temporarily unavailable" / "Endgame could not reach it just now. Please try again in a moment."
+  - Each offers **"Try again"**, a plain link to the same address; the slow page also tries again by itself after 3 seconds and says so ("This page tries again by itself in a few seconds."). The not-ready page adds, for its owner, "Is this your app? **Open it in Endgame**".
 - **Variations and refusals:** an archived or unknown app is denied, which serves the Forbidden page.
 - **Where:** `Pages/UnavailablePage.cs`; `AppGate.ReasonFor`
 - **Reachable from:** UI
@@ -1203,7 +1205,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** a cap holds for everything beneath it; nothing is lost, and the app returns when the budget is raised or the month turns.
 - **You know it worked when:** visitors see the page below, and the app page's Health reads paused with "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it." — on the chart too.
 - **Steps:**
-  1. Edge serves "This app is paused" / "It has used this month's budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns." It never wakes the app.
+  1. Edge serves "This app is paused" / "It has used this month’s budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns.", with **"Try again"** and "Is this your app? **Raise its budget in Endgame**". It never wakes the app.
   2. The app page and its chart row read health `paused` (never "Healthy"), with `paused { reason: budget_exhausted, note }` — from the same routing table Edge serves. At the overdraft limit the reason is `overdraft_limit` and the note "Paused: the organisation reached its overdraft limit. A top-up restores it at once." (HOST-04).
   3. Raising or removing the budget (APP-11), a top-up, or the month turning restores the app. A person's budget, overdraft or top-up change has Edge read the new table before the request answers, so the app is back at once.
 - **Variations and refusals:** none.

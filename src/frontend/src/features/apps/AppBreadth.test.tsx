@@ -300,7 +300,7 @@ describe("what it uses, and taking it away", () => {
     expect(within(uses).getByText("Visits and errors measured")).toBeTruthy();
     expect(within(uses).getByText("1 secret")).toBeTruthy();
     expect(within(uses).getByText("Open to AI assistants")).toBeTruthy();
-    expect(screen.getByText(/Secrets it can read: MAIL_KEY/)).toBeTruthy();
+    expect(screen.getByText(/^Secrets it can read:/).textContent).toMatch(/^Secrets it can read: MAIL_KEY\. /);
     expect(screen.queryByText(/MCP:/)).toBeNull();
   });
 
@@ -399,10 +399,11 @@ describe("after the real-stack walk", () => {
     const form = screen.getByRole("form", { name: "Idle minutes before it sleeps" });
     fireEvent.click(within(form).getByRole("button", { name: "Save" }));
     const saved = await screen.findByText("It sleeps after 30 idle minutes now.");
-    // The message is not a sibling of the field in its row, so it cannot squeeze the label.
-    const field = screen.getByLabelText("Sleeps after this many idle minutes").closest("div.flex-col") as HTMLElement;
-    expect(saved.parentElement).not.toBe(field.parentElement);
-    expect(field.className).toContain("min-w-field");
+    // The message is not in the field's row, so it cannot squeeze the field; "Save" is in that row, beside it (D34).
+    const input = screen.getByLabelText("Sleeps after this many idle minutes");
+    const row = input.parentElement as HTMLElement;
+    expect(within(row).getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(row.contains(saved)).toBe(false);
     // Another card acts: the first card's message goes.
     fireEvent.click(screen.getAllByRole("button", { name: "Set one for Ledger web" })[0] as HTMLElement);
     expect(screen.queryByText("It sleeps after 30 idle minutes now.")).toBeTruthy();

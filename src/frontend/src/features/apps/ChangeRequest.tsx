@@ -1,5 +1,9 @@
 import { useId, useState, type FormEvent } from "react";
+import { Icon } from "@/components/Icon";
 import { Spinner } from "@/components/states";
+import { SECTION } from "@/components/ui/page";
+import { Textarea } from "@/components/ui/field";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/format";
 import { describeError } from "@/lib/queryState";
@@ -44,19 +48,20 @@ export function ChangeRequest({ appId, appName }: { appId: string; appName: stri
   };
 
   return (
-    <section aria-labelledby={`${fieldId}-title`} data-testid="change-request" className="flex flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
-      <h2 id={`${fieldId}-title`} className="text-lg font-semibold">
+    <section aria-labelledby={`${fieldId}-title`} data-testid="change-request" className="flex h-full flex-col gap-3 rounded-md border bg-surface p-5 shadow-card sm:p-6">
+      <h2 id={`${fieldId}-title`} className={cn(SECTION, "flex items-center gap-2")}>
+        <Icon name="build" tinted />
         Change {appName}
       </h2>
-      <p className="text-ink-body">
+      <p className="max-w-prose text-ink-body">
         Describe the change in your own words. It is checked against FrostAura’s red lines, planned from your words, built and checked part by part in a private preview, and
         everything {appName} does now is checked again before the new version is published. Who may open it does not change.
       </p>
-      <form onSubmit={(e) => void price(e)} className="flex flex-col gap-2">
+      <form onSubmit={(e) => void price(e)} className="mt-auto flex flex-col gap-2">
         <label htmlFor={fieldId} className="font-medium">
           What should change?
         </label>
-        <textarea
+        <Textarea
           id={fieldId}
           value={request}
           rows={4}
@@ -65,7 +70,7 @@ export function ChangeRequest({ appId, appName }: { appId: string; appName: stri
             setRequest(e.target.value);
             setEstimate(null);
           }}
-          className="rounded-xs border border-border-field bg-surface px-3 py-2"
+          className="resize-y"
         />
         {estimate ? (
           <div role="status" className="flex flex-col gap-2 rounded-sm bg-primary-tint px-4 py-3">

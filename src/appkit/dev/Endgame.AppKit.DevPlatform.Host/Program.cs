@@ -4,6 +4,7 @@
 //   DEV_HOST_PREFIX  the address on the organisation subdomain, e.g. /labs/demo/notes (default /labs/demo/notes;
 //                    empty serves the app at the subdomain's root)
 //   DEV_APP_TOKEN    the token the app was started with                      (default dev-app-token)
+//   DEV_APP_NAME     the app's name in the tree, sent as X-Endgame-App-Name  (default: none, so the page keeps its own)
 using System.Net;
 using Endgame.AppKit.DevPlatform;
 using Microsoft.AspNetCore.Http.Features;
@@ -24,6 +25,7 @@ builder.Services.AddHttpForwarder();
 var appUrl = new Uri(builder.Configuration["DEV_APP_URL"] ?? throw new InvalidOperationException("DEV_APP_URL is required (the app container's address)."));
 var pathPrefix = (builder.Configuration["DEV_PATH_PREFIX"] ?? "/acme/labs/demo/notes").TrimEnd('/');
 var hostPrefix = (builder.Configuration["DEV_HOST_PREFIX"] ?? "/labs/demo/notes").TrimEnd('/');
+var appName = builder.Configuration["DEV_APP_NAME"] is { Length: > 0 } named ? named : null;
 var state = new DevPlatformState { AppToken = builder.Configuration["DEV_APP_TOKEN"] ?? "dev-app-token" };
 
 var app = builder.Build();
@@ -88,7 +90,7 @@ app.UseWhen(c => c.Connection.LocalPort is PathEdgePort or HostEdgePort, edge =>
     }
 
     var session = context.Request.Cookies.TryGetValue(DevAuthPages.Cookie, out var token) && state.Sessions.ContainsKey(token) ? token : null;
-    var error = await forwarder.SendAsync(context, appUrl.ToString(), upstream, ForwarderRequestConfig.Empty, new EdgeTransformer(appBase, session));
+    var error = await forwarder.SendAsync(context, appUrl.ToString(), upstream, ForwarderRequestConfig.Empty, new EdgeTransformer(appBase, session, appName));
     if (error != ForwarderError.None)
     {
         log.LogWarning("dev edge: forwarding {Path} failed: {Error}", path, error);
@@ -114,7 +116,7 @@ internal sealed class ExactTarget(Uri target) : HttpTransformer
 /// prefix (already done), say what it was, drop anything the browser tried to pass as platform
 /// state, and attach the app-scoped session.
 /// </summary>
-internal sealed class EdgeTransformer(string appBase, string? session) : HttpTransformer
+internal sealed class EdgeTransformer(string appBase, string? session, string? appName = null) : HttpTransformer
 {
     public override async ValueTask TransformRequestAsync(HttpContext httpContext, HttpRequestMessage proxyRequest, string destinationPrefix, CancellationToken cancellationToken)
     {
@@ -137,6 +139,12 @@ internal sealed class EdgeTransformer(string appBase, string? session) : HttpTra
         if (session is not null)
         {
             headers.Add("X-Endgame-Session", session);
+        }
+
+        // The app's name in the tree, percent-encoded UTF-8 (header values are Latin-1).
+        if (appName is not null)
+        {
+            headers.Add("X-Endgame-App-Name", Uri.EscapeDataString(appName));
         }
 
         // The browser's platform cookie never reaches the app.

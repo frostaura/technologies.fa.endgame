@@ -1,15 +1,20 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { api, ApiError, checkDateInput, formatDateTime, formatNumber, NotSignedInError, signInUrl, signUpUrl, useCurrentUser, ValidationError } from "@endgame/appkit";
-import { Button, Card, CardContent, CardHeader, CardTitle, FailedState, FieldError, Input, Label, LoadingState, Textarea } from "@endgame/appkit/ui";
+import { Button, EmptyState, FailedState, Field, FormActions, FormCard, Input, LoadingState, PageHeader, PageLayout, Panel, Textarea } from "@endgame/appkit/ui";
 import { usePageTitle } from "../usePageTitle";
 import { BODY_MAX, HAPPENS_AT_LIMITS, TITLE_MAX, type NoteDetail } from "./types";
 
-/** Writing needs a signed-in person; everyone else is offered the platform's sign-in. */
+/**
+ * Writing a note: the form page's shape (AGENTS.md, "What good looks like") — a way back, the page's title, the form in a
+ * measured column with "Save note" and "Cancel" at its foot, and beside it on a desktop (under it on a phone) the note as it
+ * will read. Writing needs a signed-in person; everyone else is offered the platform's sign-in.
+ */
 export default function NewNotePage() {
   usePageTitle("New note");
   return (
     <section data-testid="page-new-note">
+      <PageHeader back={<Link to="/">All notes</Link>} title="New note" description="Everyone in the app can read it once it is saved." />
       <NewNoteContent />
     </section>
   );
@@ -21,19 +26,22 @@ function NewNoteContent() {
   if (me.status === "failed") return <FailedState error={me.error} onRetry={me.reload} />;
   if (me.data === null) {
     return (
-      <Card className="max-w-xl">
-        <CardHeader>
-          <CardTitle>Sign in to write a note</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button asChild>
-            <a href={signInUrl()}>Sign in</a>
-          </Button>
-          <Button asChild variant="outline">
-            <a href={signUpUrl()}>Create an account</a>
-          </Button>
-        </CardContent>
-      </Card>
+      <EmptyState
+        className="max-w-form"
+        title="Sign in to write a note"
+        action={
+          <div className="flex flex-wrap gap-3 max-sm:flex-col">
+            <Button asChild>
+              <a href={signInUrl()}>Sign in</a>
+            </Button>
+            <Button asChild variant="outline">
+              <a href={signUpUrl()}>Create an account</a>
+            </Button>
+          </div>
+        }
+      >
+        Notes are written by the people who use this app.
+      </EmptyState>
     );
   }
   return <NewNoteForm />;
@@ -80,83 +88,78 @@ function NewNoteForm() {
   const titleError = fieldErrors.Title?.[0];
   const happensAtError = fieldErrors.HappensAt?.[0];
   const bodyError = fieldErrors.Body?.[0];
-  // A desktop uses its width: the form, and beside it the note as it will read. A phone has the form alone.
+  // A desktop uses its width: the form in a measured column, and beside it the note as it will read. On a phone the preview
+  // follows the form.
   return (
-    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <CardTitle>New note</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                name="title"
-                data-testid="note-title"
-                autoComplete="off"
-                enterKeyHint="next"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                invalid={!!titleError}
-                aria-describedby="title-error"
-                required
-                aria-required="true"
-                maxLength={TITLE_MAX}
-              />
-              <FieldError id="title-error">{titleError}</FieldError>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="happensAt">When it happens (optional)</Label>
-              <Input
-                id="happensAt"
-                name="happensAt"
-                type="datetime-local"
-                data-testid="note-happens-at"
-                min={HAPPENS_AT_LIMITS.min}
-                max={HAPPENS_AT_LIMITS.max}
-                value={happensAt}
-                onChange={(e) => setHappensAt(e.target.value)}
-                invalid={!!happensAtError}
-                aria-describedby="happens-at-error"
-              />
-              <FieldError id="happens-at-error">{happensAtError}</FieldError>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="body">Body</Label>
-              <Textarea
-                id="body"
-                name="body"
-                data-testid="note-body"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                maxLength={BODY_MAX}
-                invalid={!!bodyError}
-                aria-describedby="body-error"
-              />
-              <FieldError id="body-error">{bodyError}</FieldError>
-            </div>
-            {failure && <FailedState title="The note was not saved" error={failure} />}
-            <div>
-              <Button type="submit" disabled={saving} data-testid="save-note" className="max-sm:w-full">
+    <PageLayout
+      form
+      asideLabel="How it will read"
+      aside={
+        <Panel title="How it will read">
+          <div className="flex flex-col gap-2">
+            <p className="break-words font-display text-lg font-semibold text-ink">{title.trim() || "Untitled"}</p>
+            {/* Formatted by the kit, which never throws: whatever the field holds, the preview stays whole. */}
+            <p className="text-sm text-ink-muted">{formatDateTime(happensAt, { fallback: "No date yet" })}</p>
+            {body.trim() ? <p className="whitespace-pre-wrap break-words">{body}</p> : <p className="text-ink-muted">No body yet.</p>}
+          </div>
+        </Panel>
+      }
+    >
+      <FormCard>
+        <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+          <Field label="Title" htmlFor="title" error={titleError} errorId="title-error" hint={`Up to ${TITLE_MAX} characters.`}>
+            <Input
+              id="title"
+              name="title"
+              data-testid="note-title"
+              autoComplete="off"
+              enterKeyHint="next"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              invalid={!!titleError}
+              aria-describedby="title-error"
+              required
+              aria-required="true"
+              maxLength={TITLE_MAX}
+            />
+          </Field>
+          <Field label="When it happens (optional)" htmlFor="happensAt" error={happensAtError} errorId="happens-at-error">
+            <Input
+              id="happensAt"
+              name="happensAt"
+              type="datetime-local"
+              data-testid="note-happens-at"
+              min={HAPPENS_AT_LIMITS.min}
+              max={HAPPENS_AT_LIMITS.max}
+              value={happensAt}
+              onChange={(e) => setHappensAt(e.target.value)}
+              invalid={!!happensAtError}
+              aria-describedby="happens-at-error"
+            />
+          </Field>
+          <Field label="Body" htmlFor="body" error={bodyError} errorId="body-error">
+            <Textarea
+              id="body"
+              name="body"
+              data-testid="note-body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              maxLength={BODY_MAX}
+              invalid={!!bodyError}
+              aria-describedby="body-error"
+            />
+          </Field>
+          {failure && <FailedState title="The note was not saved" error={failure} />}
+          <FormActions
+            submit={
+              <Button type="submit" disabled={saving} data-testid="save-note">
                 {saving ? "Saving…" : "Save note"}
               </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-      <Card className="hidden lg:block" aria-label="How it will read">
-        <CardHeader>
-          <p className="text-sm font-semibold text-ink-muted">How it will read</p>
-          <CardTitle className="break-words">{title.trim() || "Untitled"}</CardTitle>
-          {/* Formatted by the kit, which never throws: whatever the field holds, the preview stays whole. */}
-          <p className="text-sm text-ink-muted">{formatDateTime(happensAt, { fallback: "No date yet" })}</p>
-        </CardHeader>
-        <CardContent>
-          {body.trim() ? <p className="whitespace-pre-wrap break-words">{body}</p> : <p className="text-ink-muted">No body.</p>}
-        </CardContent>
-      </Card>
-    </div>
+            }
+            cancel={<Link to="/">Cancel</Link>}
+          />
+        </form>
+      </FormCard>
+    </PageLayout>
   );
 }

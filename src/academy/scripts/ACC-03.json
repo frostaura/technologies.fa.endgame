@@ -47,7 +47,7 @@
           "step": 1,
           "kind": "demo",
           "highlight": {
-            "text": "You don't have access to this app",
+            "text": "You don’t have access to this app",
             "note": "Signed in, but Ines holds no role on Tutor Match: refused, not asked to sign in (ACC-10)."
           }
         }

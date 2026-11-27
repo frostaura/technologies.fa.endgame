@@ -111,5 +111,9 @@ header in both modes, and the rail layout on a phone on its side.
 
 ## Risks and open questions
 
-- The app kit's own template (`src/appkit`, and its copy in `src/demo/hosted/`) is not yet on this
-  system: its field borders, dashed 404 and narrow list pages are the apps lane's.
+- The apps an Endgame app factory builds are on this system through the app kit (`@endgame/appkit/ui`): the same tokens
+  (the 3:1 `border-field`, the five status tones), one `AppHeader`, and page layouts (`PageHeader`, `PageLayout`,
+  `CardGrid`, `FormCard` + `FormActions`, `Checklist`, `NotFoundState`) that a list, a form and a record are built from. The
+  template's `AGENTS.md` ("What good looks like") is the builder's checklist; `pageShapes.test.tsx` (the kit's
+  `expectPageShape`) and ESLint's `endgame/use-kit-fields` fail an app below it. The demo's reading list
+  (`src/demo/hosted/kit.tsx`) carries the same class strings.

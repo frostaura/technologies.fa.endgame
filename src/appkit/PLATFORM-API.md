@@ -149,16 +149,29 @@ control plane gives an app the whole of it).
 3. Remove every client-sent `X-Endgame-*` header. If the visitor has a session valid for this app,
    set `X-Endgame-Session` to an **app-scoped** token — never the browser's own cookie value, so
    an app cannot replay it against the console. Strip every platform cookie (`endgame.*`: the console
-   session and every `endgame.app.*` app session) from `Cookie`.
-4. Serve `<app address>/_endgame/auth/{sign-in|sign-up|sign-out|handoff}?returnTo=<path or address>`
+   session and every `endgame.app.*` app session) from `Cookie`. Set `X-Endgame-App-Name` to the
+   app's name in the organisation tree — the one name a person sees for it (the console, the identity
+   pages, e-mails), which they can rename — as percent-encoded UTF-8 (`Uri.EscapeDataString`; header
+   values are Latin-1). The kit's front-end host (`SpaHost`) then serves the page with its `<title>`
+   text replaced by that name and `<meta name="endgame-app-name" content="<HTML-encoded name>">`
+   right after the `<base>` element; the web SDK's `appName(fallback)` reads that element for the
+   header and tab titles. With no header (tests, local development) the page is served as built and
+   `appName` returns its fallback. The dev platform sends it when `DEV_APP_NAME` is set.
+4. Serve `<app address>/_endgame/assets/<file>` itself (the typefaces and mark of the pages Edge
+   draws), and `<app address>/_endgame/auth/{sign-in|sign-up|sign-out|handoff}?returnTo=<path or address>`
    itself (the organisation's identity pages, driving the control plane's `/api/app-auth/{appId}/*`);
    accept only a `returnTo` inside one of the app's two addresses. On the subdomain, sign-in and
    sign-up move to the path form on the platform's host and come back through `handoff`, which sets
-   the subdomain's own app-session cookie.
+   the subdomain's own app-session cookie; the page says so in one line. The kit reserves `/_endgame`,
+   so no app path is ever shadowed.
 5. Never route `<app address>/_platform/*` from the public side. Platform callbacks reach the app
    from Edge's control listener, signed (§4).
 6. A request to a private app without a session is redirected to step 4's sign-in — except
    `POST hooks/<name>` for a name the app declared (§3.6) and `health` polled from Edge's own listener.
+7. An organisation subdomain that serves apps is never served the console: any address there that
+   is no app's, and not `/api/**` or `/mcp/**` (the identity pages call those on that host), is
+   Edge's "There is no app at this address" (404). On the platform's own host an unknown address is
+   the console's, with its own not-found page.
 
 The React Router home of an app is written without its trailing slash during client navigation;
 rule 1 makes a reload there land correctly.

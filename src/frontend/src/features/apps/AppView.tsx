@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { Check, ChevronDown, Copy } from "lucide-react";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
@@ -8,11 +9,12 @@ import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
 import { capitalise, formatCredits, formatDate, formatDuration, formatNumber, headlineNumber, plural, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
-import { plainOrNull } from "@/lib/plain";
+import { plainOrNull, shortTitle } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store";
 import { useGetAppQuery, useGetCascadeQuery, useGetMeQuery, useGetSecretsQuery, useGetSharesQuery, useRemoveShareMutation, useUpdateAppSettingsMutation } from "@/store/api";
@@ -26,7 +28,8 @@ import { AppShell, type Crumb } from "../shell/AppShell";
 import { appHealthChip, namesFor } from "../home/treeModel";
 import { ItIsYours, TechnicalDetails, WhatItUses } from "./AppAside";
 import { AppItself, AppSpending, IdleMinutes, RebuildAndRestart } from "./AppManage";
-import { capNote } from "./appModel";
+import { capNote, notOpenable } from "./appModel";
+import { TITLE, SECTION } from "@/components/ui/page";
 import { AskPanel, Dashboard } from "./AskPanel";
 import { useCardNote } from "@/components/cardNote";
 import { CardNotesProvider } from "@/components/CardNotes";
@@ -161,23 +164,11 @@ function AppBody({ app }: { app: AppDetail }) {
       : { value: health.label, tone: health.tone === "good" ? "good" : health.tone === "bad" ? "bad" : "ink" };
   return (
     <>
-      <div className={cn("flex flex-wrap items-start justify-between gap-5 max-sm:-order-3 max-sm:gap-3", RISE)}>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <h1 className="text-3xl font-semibold max-sm:text-2xl">{app.name}</h1>
-          <span className="break-words text-ink-body">
-            {app.addresses.subdomain ? (
-              <>
-                {app.addresses.subdomain} · also at {app.addresses.path}
-              </>
-            ) : (
-              app.addresses.path
-            )}
-          </span>
-        </div>
-        <a href={app.addresses.subdomain ?? app.addresses.path} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants(), "max-sm:w-full")}>
-          Open the app
-        </a>
-      </div>
+      <header className={cn("flex min-w-0 flex-col gap-2 max-sm:-order-3", RISE)}>
+        <h1 className={cn(TITLE, "break-words")}>{app.name}</h1>
+        <AppAddress addresses={app.addresses} />
+        <OpenTheApp app={app} />
+      </header>
 
       <StatRow cols={4} label="Today" className="max-sm:-order-2">
         <Stat label="Health" value={healthValue.value} tone={healthValue.tone} caption={healthNote(app, technical)} />
@@ -217,18 +208,21 @@ function AppBody({ app }: { app: AppDetail }) {
         </p>
       )}
 
-      {builder && (
-        <Fold title={`Change ${app.name}`} summary="Say what to change; it is built in a preview first">
-          <ErrorBoundary name="Changing this app">
-            <ChangeRequest appId={app.id} appName={app.name} />
+      {/* From 1600 the two ways to act on it sit side by side, tops aligned, each as tall as what it holds. */}
+      <div className={cn("grid grid-cols-1 items-start gap-6 max-sm:gap-5", builder && "3xl:grid-cols-2")}>
+        {builder && (
+          <Fold title={`Change ${app.name}`} summary="Say what to change; it is built in a preview first">
+            <ErrorBoundary name="Changing this app">
+              <ChangeRequest appId={app.id} appName={app.name} />
+            </ErrorBoundary>
+          </Fold>
+        )}
+        <Fold title="Ask about this app" summary="A question about its data, answered with a chart">
+          <ErrorBoundary name="Asking about this app">
+            <AskPanel appId={app.id} canAsk={builder} />
           </ErrorBoundary>
         </Fold>
-      )}
-      <Fold title="Ask about this app" summary="A question about its data, answered with a chart">
-        <ErrorBoundary name="Asking about this app">
-          <AskPanel appId={app.id} canAsk={builder} />
-        </ErrorBoundary>
-      </Fold>
+      </div>
       <Fold title="Dashboard" summary="The questions kept on it">
         <ErrorBoundary name="The dashboard">
           <Dashboard appId={app.id} canChange={builder} />
@@ -237,7 +231,8 @@ function AppBody({ app }: { app: AppDetail }) {
 
       {/* A phone draws the button that opens this conversation straight under the figures (its order class). */}
       <ErrorBoundary name="The conversation">
-        <Talk label={`Talk to ${app.name}`} launcherClassName="max-sm:-order-1">
+        {/* The launcher is one line: a long app name is cut short in it (the h1 carries the whole name). */}
+        <Talk label={`Talk to ${shortTitle(app.name, 32)}`} launcherClassName="max-sm:-order-1">
           <TalkToApp scope={app.scope} />
         </Talk>
       </ErrorBoundary>
@@ -263,6 +258,104 @@ function AppBody({ app }: { app: AppDetail }) {
   );
 }
 
+/** An address as a person reads it: no scheme, no closing slash. */
+function shortAddress(url: string): string {
+  return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
+/**
+ * The address written so a line only ever breaks after a "/": every part between slashes keeps its
+ * letters together, and a break opportunity follows each slash.
+ */
+function Breakable({ url }: { url: string }) {
+  const parts = shortAddress(url).split("/");
+  return (
+    <span className="min-w-0 break-normal">
+      {parts.map((part, i) => (
+        <span key={i}>
+          <span className="whitespace-nowrap">
+            {part}
+            {i < parts.length - 1 ? "/" : ""}
+          </span>
+          {i < parts.length - 1 && <wbr />}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Copies an address, and says so for a moment. */
+function CopyAddress({ url, label }: { url: string; label: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setState("copied");
+    } catch {
+      setState("failed");
+    }
+    window.setTimeout(() => setState("idle"), 2000);
+  };
+  const said = state === "copied" ? "Copied" : state === "failed" ? "It could not be copied; select it and copy it by hand" : label;
+  return (
+    <button type="button" onClick={() => void copy()} aria-label={said} title={said} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "size-11 shrink-0 p-0 text-ink-muted hover:text-ink")}>
+      {state === "copied" ? <Check aria-hidden className="size-4 text-success-text" /> : <Copy aria-hidden className="size-4" />}
+      <span role="status" className="sr-only">
+        {state === "copied" ? "Copied" : state === "failed" ? said : ""}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The app's address (ARCH-011, the apps lane): the one to give people, short, with a copy button; the
+ * other address the same app answers at is behind "Also at".
+ */
+function AppAddress({ addresses }: { addresses: AppDetail["addresses"] }) {
+  const main = addresses.subdomain ?? addresses.path;
+  const other = addresses.subdomain ? addresses.path : null;
+  return (
+    <div data-testid="app-address" className="flex min-w-0 flex-wrap items-center gap-x-3">
+      <p className="flex min-w-0 max-w-full items-center gap-1 text-ink-body">
+        <Breakable url={main} />
+        <CopyAddress url={main} label="Copy the address" />
+      </p>
+      {other && (
+        <details className="group min-w-0 max-w-full text-sm text-ink-muted">
+          <summary className="inline-flex min-h-touch cursor-pointer list-none items-center gap-1 rounded-xs hover:text-ink [&::-webkit-details-marker]:hidden">
+            Also at
+            <ChevronDown aria-hidden className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+          </summary>
+          <p className="flex min-w-0 items-center gap-1">
+            <Breakable url={other} />
+            <CopyAddress url={other} label="Copy the other address" />
+          </p>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Open the app": the page's one primary action while the app can be used. When it cannot, the same
+ * link stays (it shows what its visitors meet) but quietly, beside the reason.
+ */
+function OpenTheApp({ app }: { app: AppDetail }) {
+  const why = notOpenable(app);
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+      <a href={app.addresses.subdomain ?? app.addresses.path} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants({ variant: why ? "outline" : "primary" }), "max-sm:w-full")}>
+        Open the app
+      </a>
+      {why && (
+        <p data-testid="open-note" className="max-w-prose text-sm text-ink-muted">
+          {why}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** The health line: in normal mode a version is "the latest version", never its id. */
 function healthNote(app: AppDetail, technical: boolean): string {
   if (technical) return app.health.summary;
@@ -278,7 +371,7 @@ function healthNote(app: AppDetail, technical: boolean): string {
 function SharingOff({ app }: { app: AppDetail }) {
   return (
     <section aria-label="Sharing" className={cn("flex flex-col gap-2 rounded-md border bg-surface px-5 py-4 shadow-card", RISE, stagger(2))}>
-      <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+      <h2 className={cn(SECTION, "flex items-center gap-2")}>
         <Icon name="employee" tinted />
         Sharing
       </h2>
@@ -295,7 +388,7 @@ function SharingOff({ app }: { app: AppDetail }) {
 function SharingForOthers({ app }: { app: AppDetail }) {
   return (
     <section aria-label="Sharing" className={cn("flex flex-col gap-2 rounded-md border bg-surface px-5 py-4 shadow-card", RISE, stagger(2))}>
-      <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+      <h2 className={cn(SECTION, "flex items-center gap-2")}>
         <Icon name="employee" tinted />
         Shared with
       </h2>
@@ -347,7 +440,7 @@ function Sharing({ app }: { app: AppDetail }) {
 
   return (
     <section aria-label="Sharing" className={cn("flex flex-col gap-4 rounded-md border bg-surface px-5 py-4 shadow-card", RISE, stagger(2))}>
-      <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+      <h2 className={cn(SECTION, "flex items-center gap-2")}>
         <Icon name="employee" tinted />
         Shared with
       </h2>
@@ -378,14 +471,17 @@ function Sharing({ app }: { app: AppDetail }) {
             <ul aria-label="People it is shared with" className="flex flex-col gap-2">
               {view.data.map((share) => (
                 <li key={share.email} className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="min-w-0 break-all font-medium">{share.email}</span>
-                    <div className="flex flex-wrap items-center gap-2">
+                  {/* Every row the same shape: who and where they stand on the left, "Stop sharing" at the right. */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+                      <span title={share.email} className="max-w-full truncate font-medium">
+                        {share.email}
+                      </span>
                       <Badge tone={share.registered ? "good" : "neutral"}>{share.registered ? "Registered" : `Invited ${timeAgo(share.invitedAt)}`}</Badge>
-                      <Button size="sm" variant="ghost" onClick={() => setConfirmRemove(share.email)} aria-label={`Stop sharing with ${share.email}`}>
-                        Stop sharing
-                      </Button>
                     </div>
+                    <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setConfirmRemove(share.email)} aria-label={`Stop sharing with ${share.email}`}>
+                      Stop sharing
+                    </Button>
                   </div>
                   {confirmRemove === share.email && (
                     <ConfirmCard
@@ -410,7 +506,7 @@ function Sharing({ app }: { app: AppDetail }) {
           Invite by e-mail
         </label>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <input
+          <Input
             id={emailId}
             type="email"
             value={email}
@@ -418,7 +514,7 @@ function Sharing({ app }: { app: AppDetail }) {
             autoComplete="off"
             aria-invalid={invalid}
             aria-describedby={invalid ? `${emailId}-problem` : undefined}
-            className="min-h-12 min-w-0 flex-1 rounded-sm border border-border-strong bg-surface px-4"
+            className="min-h-12 flex-1 px-4"
           />
           <Button type="submit" className="min-h-12 px-5" disabled={!typed || invalid || inviting}>
             {inviting ? "Inviting…" : "Invite"}
@@ -475,7 +571,7 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
   if (!canSee) {
     return (
       <section aria-label="Secrets" className={cn("flex flex-col gap-2 rounded-md border bg-surface px-5 py-4 shadow-card", RISE, stagger(3))}>
-        <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+        <h2 className={cn(SECTION, "flex items-center gap-2")}>
           <Icon name="secrets" tinted />
           Secrets
         </h2>
@@ -486,7 +582,7 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
   return (
     <section aria-label="Secrets" className={cn("flex flex-col gap-3 rounded-md border bg-surface px-5 py-4 shadow-card", RISE, stagger(3))}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+        <h2 className={cn(SECTION, "flex items-center gap-2")}>
           <Icon name="secrets" tinted />
           Secrets
         </h2>
@@ -507,11 +603,12 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
             No secrets apply to it. Add one, and the app can read it by name.
           </p>
         ) : (
-          <ul aria-label="Secrets it can read" className="flex flex-col gap-1.5">
+          <ul aria-label="Secrets it can read" className="flex flex-col divide-y">
+            {/* One shape for every row: the name, then where it was set — beside it from a tablet up, under it on a phone. */}
             {view.data.effective.map((secret) => (
-              <li key={secret.name} className="flex flex-wrap items-center justify-between gap-2">
-                <code className="break-all font-mono text-sm">{secret.name}</code>
-                <span className="text-sm text-ink-muted">{secret.inherited ? `Set at ${secret.setAtLevel} level` : "Set on this app"}</span>
+              <li key={secret.name} className="flex flex-col gap-0.5 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                <code className="min-w-0 break-all font-mono text-sm">{secret.name}</code>
+                <span className="shrink-0 text-sm text-ink-muted">{secret.inherited ? `Set at ${secret.setAtLevel} level` : "Set on this app"}</span>
               </li>
             ))}
           </ul>
@@ -572,26 +669,16 @@ function Settings({ app, orgName, canRun, canChooseWho }: { app: AppDetail; orgN
         </p>
       )}
       <fieldset className={cn("flex flex-col gap-2.5", RISE)}>
-        <legend className="mb-2.5 flex items-center gap-2 font-display text-lg font-semibold">
+        <legend className={cn(SECTION, "mb-2.5 flex items-center gap-2")}>
           <Icon name={shown.running === "always-on" ? "always-on" : "asleep"} tinted />
           Running
         </legend>
         {options.map((o) => (
-          <label
-            key={o.value}
-            className={cn(
-              "flex gap-3 rounded-xs border bg-surface px-4 py-3.5 transition motion-reduce:transition-none",
-              canRun ? "cursor-pointer hover:-translate-y-px hover:shadow-raised motion-reduce:hover:translate-y-0" : "cursor-default",
-              shown.running === o.value ? "border-ink" : "border-border-strong",
-            )}
-          >
-            <input type="radio" name={runName} value={o.value} checked={shown.running === o.value} disabled={!canRun} onChange={() => void save({ running: o.value })} className="mt-1 size-4 accent-primary" />
-            <span className="flex flex-col gap-0.5">
-              <span className="font-semibold">{o.title}</span>
-              <span className="text-ink-body">{o.text}</span>
-              {o.basis && <span className="text-sm text-ink-muted">{o.basis}</span>}
-            </span>
-          </label>
+          <Choice key={o.value} name={runName} value={o.value} checked={shown.running === o.value} disabled={!canRun} onChange={() => void save({ running: o.value })}>
+            <span className="font-semibold text-ink">{o.title}</span>
+            <span className="text-ink-body">{o.text}</span>
+            {o.basis && <span className="text-sm text-ink-muted">{o.basis}</span>}
+          </Choice>
         ))}
         <p data-state={cost.state} className="text-sm text-ink-muted">
           {cost.state === "estimated" ? cost.basis : `Not enough history yet. ${cost.basis}`} {cost.prices}
@@ -601,22 +688,17 @@ function Settings({ app, orgName, canRun, canChooseWho }: { app: AppDetail; orgN
       </fieldset>
 
       <fieldset className={cn("flex flex-col gap-2.5", RISE, stagger(1))}>
-        <legend className="mb-2.5 flex items-center gap-2 font-display text-lg font-semibold">
+        <legend className={cn(SECTION, "mb-2.5 flex items-center gap-2")}>
           <Icon name={shown.access === "public" ? "public" : "private"} tinted />
           Who can open it
         </legend>
         {access.map((o) => (
-          <label
-            key={o.value}
-            className={cn(
-              "flex gap-3 rounded-xs border bg-surface px-4 py-3 transition motion-reduce:transition-none",
-              canChooseWho ? "cursor-pointer hover:-translate-y-px hover:shadow-raised motion-reduce:hover:translate-y-0" : "cursor-default",
-              shown.access === o.value ? "border-ink" : "border-border-strong",
-            )}
-          >
-            <input type="radio" name={whoName} value={o.value} checked={shown.access === o.value} disabled={!canChooseWho} onChange={() => chooseAccess(o.value)} className="mt-1 size-4 accent-primary" />
-            <span>{o.text}</span>
-          </label>
+          <Choice key={o.value} name={whoName} value={o.value} checked={shown.access === o.value} disabled={!canChooseWho} onChange={() => chooseAccess(o.value)}>
+            <span className="text-ink-body">
+              <span className="font-semibold text-ink">{o.text.slice(0, o.text.indexOf(":") + 1)}</span>
+              {o.text.slice(o.text.indexOf(":") + 1)}
+            </span>
+          </Choice>
         ))}
         {!canChooseWho && <p className="text-sm text-ink-muted">An Admin or the Owner chooses who can open it.</p>}
         {confirmPublic && <ConfirmPublic appName={app.name} onConfirm={() => { setConfirmPublic(false); void save({ access: "public" }); }} onCancel={() => setConfirmPublic(false)} />}
@@ -625,35 +707,42 @@ function Settings({ app, orgName, canRun, canChooseWho }: { app: AppDetail; orgN
   );
 }
 
-/** Going public is a person's act (CLAUDE.md rule 10): it waits for this explicit confirmation. */
-function ConfirmPublic({ appName, onConfirm, onCancel }: { appName: string; onConfirm: () => void; onCancel: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
+/**
+ * One choice of a side-panel setting, drawn as a card: the chosen one is unmistakable (the accent's
+ * edge and tint, as well as its filled radio), and its words wrap without leaving one alone on a line.
+ */
+function Choice({ name, value, checked, disabled, onChange, children }: { name: string; value: string; checked: boolean; disabled: boolean; onChange: () => void; children: ReactNode }) {
   return (
-    <div
-      ref={ref}
-      role="alertdialog"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-      onKeyDown={(e) => e.key === "Escape" && onCancel()}
-      className="flex flex-col gap-3 rounded-sm border border-attention-line bg-attention-tint px-4 py-3 outline-none"
+    <label
+      data-chosen={checked || undefined}
+      className={cn(
+        "flex gap-3 rounded-sm border px-4 py-3 transition-colors motion-reduce:transition-none",
+        checked ? "border-primary bg-primary-tint ring-1 ring-primary" : "border-border-strong bg-surface",
+        disabled ? "cursor-default" : "cursor-pointer",
+        !disabled && !checked && "hover:border-ink",
+      )}
     >
-      <p id={titleId} className="font-semibold text-attention-text">
-        Make {appName} public?
-      </p>
-      <p className="text-attention-deep">Anyone with the address will be able to open it, without signing in. Only a person can make this choice.</p>
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={onConfirm}>
-          Make it public
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          Keep it as it is
-        </Button>
-      </div>
-    </div>
+      <input type="radio" name={name} value={value} checked={checked} disabled={disabled} onChange={onChange} className="mt-0.5 size-5 shrink-0 accent-primary" />
+      <span className="flex min-w-0 flex-col gap-0.5 text-pretty">{children}</span>
+    </label>
+  );
+}
+
+/** Going public is a person's act (CLAUDE.md rule 10): it waits for this explicit confirmation, the house's one confirmation card. */
+function ConfirmPublic({ appName, onConfirm, onCancel }: { appName: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <ConfirmCard
+      role="alertdialog"
+      focus
+      destructive={false}
+      label={`Make ${appName} public?`}
+      question={`Make ${appName} public?`}
+      detail="Anyone with the address will be able to open it, without signing in. Only a person can make this choice."
+      confirm="Make it public"
+      cancel="Keep it as it is"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }
 

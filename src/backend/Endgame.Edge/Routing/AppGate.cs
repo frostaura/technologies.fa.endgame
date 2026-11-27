@@ -13,37 +13,73 @@ namespace Endgame.Edge.Routing;
 /// The step in the proxy pipeline between matching an app's route and forwarding to it: is the
 /// app available, may this visitor open it, is it awake — waking it if not — and, if the app
 /// fails underneath the request, the unavailable page instead of a bare error.
+/// <para>
+/// It also keeps the console off an organisation's app host: a host in the routing table (an
+/// organisation subdomain that serves apps) is never served the console. There, anything that is
+/// not an app's address and not the control plane's <c>/api</c> or <c>/mcp</c> (which the identity
+/// pages call on that host) is the edge's "There is no app at this address" (404). On the
+/// platform's own host an unknown address is the console's, which shows its own not-found page.
+/// </para>
 /// </summary>
-public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGate access, AuthPages auth, IOptions<EdgeOptions> options, ILogger<AppGate> logger)
+public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGate access, AuthPages auth, RouteTableSource routes, IOptions<EdgeOptions> options, ILogger<AppGate> logger)
 {
+    /// <summary>The platform's console cluster (appsettings.json): what an organisation's app host is never served.</summary>
+    public const string ConsoleCluster = "console";
+
     public async Task InvokeAsync(HttpContext context, Func<Task> next)
     {
         var route = context.GetReverseProxyFeature().Route.Config;
         if (AppProxyConfig.AppOf(route) is not { } appId)
         {
+            var onAppHost = routes.Current.Hosts.Contains(context.Request.Host.Host);
+            if (route.ClusterId == ConsoleCluster && onAppHost && context.Request.Path.StartsWithSegments(PageChrome.AssetsPath, out var file)
+                && await PageChrome.TryServeAsync(context, file.Value?.TrimStart('/') ?? ""))
+            {
+                return;
+            }
+
+            if (route.ClusterId == ConsoleCluster && onAppHost)
+            {
+                await UnavailablePage.WriteAsync(context, Unavailable.NoApp, NoAppLinks(context));
+                return;
+            }
+
             await next();
             return;
         }
 
         var shape = route.Metadata?.GetValueOrDefault(AppProxyConfig.ShapeKey);
-        var mark = MarkUrl(shape);
-        var app = registry.Get(appId);
-        if (app is null)
-        {
-            await UnavailablePage.WriteAsync(context, Unavailable.Temporary, mark);
-            return;
-        }
-
-        if (app.Route.Availability == AppAvailability.Paused)
-        {
-            await UnavailablePage.WriteAsync(context, app.Route.PausedReason == PausedReasons.BudgetExhausted ? Unavailable.BudgetSpent : Unavailable.Paused, mark);
-            return;
-        }
-
         var prefix = route.Metadata?.GetValueOrDefault(AppProxyConfig.PrefixKey) ?? "";
         var path = context.Request.Path.Value ?? "/";
         var inApp = path.Length > prefix.Length ? path[prefix.Length..] : "/";
         var appAddress = context.Request.PathBase + prefix;
+
+        // The edge's own pages' typefaces and mark, under every app's address (the app kit reserves /_endgame).
+        if (inApp.StartsWith(PageChrome.AssetsPath + "/", StringComparison.Ordinal))
+        {
+            if (!await PageChrome.TryServeAsync(context, inApp[(PageChrome.AssetsPath.Length + 1)..]))
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+            }
+
+            return;
+        }
+
+        var links = Links(context, appId, shape, appAddress);
+        var app = registry.Get(appId);
+        if (app is null)
+        {
+            await UnavailablePage.WriteAsync(context, Unavailable.Temporary, links);
+            return;
+        }
+
+        context.Items[AppRequestTransforms.NameItem] = app.Route.Name;
+        if (app.Route.Availability == AppAvailability.Paused)
+        {
+            await UnavailablePage.WriteAsync(context, app.Route.PausedReason == PausedReasons.BudgetExhausted ? Unavailable.BudgetSpent : Unavailable.Paused, links);
+            return;
+        }
+
         if (StartsWithSegment(inApp, HostingConventions.PlatformCallbackPath))
         {
             // Platform-to-app callbacks arrive on the edge's control listener, signed, never on the public side.
@@ -64,7 +100,7 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
             var decision = await access.CheckAsync(app.Route, context, inApp + context.Request.QueryString, context.RequestAborted);
             if (!decision.Allowed)
             {
-                await RefuseAsync(context, decision, appAddress, inApp, mark);
+                await RefuseAsync(context, decision, appAddress, inApp, links);
                 return;
             }
 
@@ -78,7 +114,7 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
         // sent to sign in or refused first, exactly as for a published app (D68, ACC-16).
         if (app.Route.Availability == AppAvailability.Unpublished)
         {
-            await UnavailablePage.WriteAsync(context, Unavailable.NotReady, mark);
+            await UnavailablePage.WriteAsync(context, Unavailable.NotReady, links);
             return;
         }
 
@@ -92,7 +128,7 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
                 if (outcome != WakeOutcome.Awake)
                 {
                     logger.LogInformation("App {AppId} could not be woken: {Outcome}.", appId, outcome);
-                    await UnavailablePage.WriteAsync(context, ReasonFor(outcome), mark);
+                    await UnavailablePage.WriteAsync(context, ReasonFor(outcome), links);
                     return;
                 }
 
@@ -108,7 +144,7 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
                 app.MarkAsleep();
                 if (!context.Response.HasStarted)
                 {
-                    await UnavailablePage.WriteAsync(context, app.Crashed ? Unavailable.Crashed : Unavailable.Temporary, mark);
+                    await UnavailablePage.WriteAsync(context, app.Crashed ? Unavailable.Crashed : Unavailable.Temporary, links);
                 }
             }
         }
@@ -135,7 +171,7 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
         path.StartsWith(segment, StringComparison.OrdinalIgnoreCase)
         && (path.Length == segment.Length || path[segment.Length] == '/');
 
-    private static async Task RefuseAsync(HttpContext context, AccessDecision decision, string appAddress, string inApp, string? mark)
+    private static async Task RefuseAsync(HttpContext context, AccessDecision decision, string appAddress, string inApp, PageLinks links)
     {
         switch (decision.Decision)
         {
@@ -157,20 +193,41 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
 
                 return;
             case AccessDecisions.Deny:
-                await UnavailablePage.WriteAsync(context, Unavailable.Forbidden, mark);
+                await UnavailablePage.WriteAsync(context, Unavailable.Forbidden, links);
                 return;
             default:
-                await UnavailablePage.WriteAsync(context, Unavailable.Temporary, mark);
+                await UnavailablePage.WriteAsync(context, Unavailable.Temporary, links);
                 return;
         }
     }
 
-    // On the path form the console shares the origin and serves the mark itself; on an
-    // organisation subdomain that path belongs to the app, so the console's origin is named.
-    private string? MarkUrl(string? shape) =>
-        shape == AppProxyConfig.PathShape ? UnavailablePage.MarkPath
-        : options.Value.PlatformOrigin is { Length: > 0 } origin ? origin.TrimEnd('/') + UnavailablePage.MarkPath
-        : null;
+    /// <summary>
+    /// Where an app's page may send the visitor: the same address again; the console — on the
+    /// path form it shares this host, on a subdomain it is the platform's origin (none when that
+    /// is not configured); and the app's sign-out, returning to its sign-in.
+    /// </summary>
+    private PageLinks Links(HttpContext context, Guid appId, string? shape, string appAddress)
+    {
+        var request = context.Request;
+        var signIn = $"{appAddress}{HostingConventions.AuthPath}/{AuthPages.SignIn}?returnTo={Uri.EscapeDataString(appAddress + "/")}";
+        return new PageLinks(
+            PageChrome.AssetsAt(appAddress),
+            request.PathBase + request.Path + request.QueryString,
+            ConsoleFrom(shape == AppProxyConfig.PathShape),
+            request.Cookies.ContainsKey(PlatformCookies.MemberSession),
+            $"{appAddress}{HostingConventions.AuthPath}/{AuthPages.SignOut}?returnTo={Uri.EscapeDataString(signIn)}",
+            appId);
+    }
+
+    private PageLinks NoAppLinks(HttpContext context)
+    {
+        var request = context.Request;
+        return new PageLinks(PageChrome.AssetsPath, request.PathBase + request.Path + request.QueryString, ConsoleFrom(onPlatformHost: false),
+            Address: $"{request.Host.Value}{request.PathBase}{request.Path}");
+    }
+
+    private string? ConsoleFrom(bool onPlatformHost) =>
+        onPlatformHost ? "" : options.Value.PlatformOrigin is { Length: > 0 } origin ? origin.TrimEnd('/') : null;
 
     public static Unavailable ReasonFor(WakeOutcome outcome) => outcome switch
     {

@@ -25,15 +25,22 @@ export const endgamePreset: Partial<Config> = {
         mono: [...typography.fontFamily.mono],
       },
       maxWidth: layout.width,
+      gridTemplateColumns: layout.grid,
       width: { aside: layout.width.aside },
       spacing: { "safe-t": layout.safe.top, "safe-b": layout.safe.bottom, "safe-l": layout.safe.left, "safe-r": layout.safe.right },
       minHeight: { touch: layout.touch },
       minWidth: { touch: layout.touch },
+      // "← All dives": the kit's BackLink draws its arrow with `before:content-back`.
+      content: { back: '"←"' },
     },
   },
   plugins: [
     plugin(({ addBase }) => {
       addBase({ ":root": { colorScheme: "light", ...cssVariables() } });
+    }),
+    // `current:` — the place in the navigation a person is on (the router sets aria-current="page").
+    plugin(({ addVariant }) => {
+      addVariant("current", '&[aria-current="page"]');
     }),
   ],
 };

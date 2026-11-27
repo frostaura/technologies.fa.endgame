@@ -50,7 +50,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         controlPlane = await FakeControlPlane.StartAsync(Token);
         (echo, echoAddress) = await StartEchoAsync();
         controlPlane.SetRoutes(
-            Routes.View(publicApp, project: "notes", target: Target),
+            Routes.View(publicApp, project: "notes", target: Target, name: "Café Readers · Books"),
             Routes.View(privateApp, project: "secret", target: Target, access: AppAccess.Private, hooks: "court-sensor"),
             Routes.View(pausedApp, project: "paused", target: Target, paused: true),
             Routes.View(unpublishedApp, project: "soon", target: Target, version: null),
@@ -121,6 +121,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         request.Headers.Add("X-Forwarded-Host", "evil.example");
         request.Headers.Add(HostingConventions.SessionHeader, "forged");
         request.Headers.Add("X-Endgame-Anything", "forged");
+        request.Headers.Add(HostingConventions.AppNameHeader, "Forged");
         request.Headers.Add("Cookie", $"endgame.session=member-session; app_pref=dark; endgame.app.{publicApp:N}=app-session-cookie; endgame.app_auth=ceremony");
         var seen = await EchoAsync(request);
         Assert.Equal("/api/whoami", seen.GetProperty("path").GetString());
@@ -132,6 +133,8 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         Assert.Equal(FakeControlPlane.SessionFor(publicApp), seen.GetProperty("session").GetString());
         Assert.Equal("", seen.GetProperty("other").GetString());
         Assert.Equal("app_pref=dark", seen.GetProperty("cookie").GetString());
+        // The app's one name, from the routing table: percent-encoded UTF-8, never what the visitor sent.
+        Assert.Equal(Uri.EscapeDataString("Café Readers · Books"), seen.GetProperty("appName").GetString());
     }
 
     [Fact]
@@ -226,6 +229,9 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         var policy = signIn.Headers.GetValues("Content-Security-Policy").Single();
         Assert.Contains("script-src 'nonce-", policy, StringComparison.Ordinal);
         Assert.Contains("connect-src 'self'", policy, StringComparison.Ordinal);
+        Assert.Contains("font-src 'self'", policy, StringComparison.Ordinal);
+        Assert.Contains("img-src 'self';", policy, StringComparison.Ordinal);
+        Assert.Contains("src=\"/acme/apps/secret/web/_endgame/assets/endgame-mark.svg\"", html, StringComparison.Ordinal);
         Assert.DoesNotContain("unsafe-inline", policy, StringComparison.Ordinal);
 
         // A return address outside the app is replaced by the app's home, never followed.
@@ -324,6 +330,59 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_organisation_app_host_is_never_served_the_console_an_unknown_address_there_is_the_edges_no_app_page()
+    {
+        foreach (var path in new[] { "/community/no-such-app/web/", "/", "/acme/settings", "/apps/notes/nope/" })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            request.Headers.Host = $"acme.endgame.test:{publicPort}";
+            using var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            var html = await response.Content.ReadAsStringAsync();
+            Assert.Contains("<h1>There is no app at this address</h1>", html, StringComparison.Ordinal);
+            Assert.Contains($"<p class=\"address\">acme.endgame.test:{publicPort}{path}</p>", html, StringComparison.Ordinal);
+            Assert.Contains("<a class=\"button\" href=\"https://endgame.test/\">Go to Endgame</a>", html, StringComparison.Ordinal);
+            Assert.DoesNotContain("console", html, StringComparison.Ordinal);
+        }
+
+        // The identity pages' scripts call the control plane on that host; those still reach it.
+        using var api = new HttpRequestMessage(HttpMethod.Get, "/api/system/status");
+        api.Headers.Host = $"acme.endgame.test:{publicPort}";
+        using var apiResponse = await client.SendAsync(api);
+        Assert.Equal("control-plane", (await apiResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("from").GetString());
+
+        // On the platform's own host an unknown address is the console's (it has its own not-found page).
+        Assert.Contains("console", await client.GetStringAsync("/acme/no-such-app"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_edges_pages_typefaces_and_mark_are_served_under_every_apps_address_and_at_an_app_hosts_root()
+    {
+        foreach (var (path, host, type) in new[]
+        {
+            ("/acme/apps/notes/web/_endgame/assets/inter-latin-wght-normal.woff2", (string?)null, "font/woff2"),
+            ("/acme/apps/paused/web/_endgame/assets/space-grotesk-latin-wght-normal.woff2", null, "font/woff2"),
+            ("/apps/secret/web/_endgame/assets/endgame-mark.svg", $"acme.endgame.test:{publicPort}", "image/svg+xml"),
+            ("/_endgame/assets/endgame-mark.svg", $"acme.endgame.test:{publicPort}", "image/svg+xml"),
+        })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            if (host is not null)
+            {
+                request.Headers.Host = host;
+            }
+
+            using var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(type, response.Content.Headers.ContentType?.MediaType);
+            Assert.True((await response.Content.ReadAsByteArrayAsync()).Length > 300);
+        }
+
+        using var unknown = await client.GetAsync("/acme/apps/notes/web/_endgame/assets/app.js");
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+    }
+
+    [Fact]
     public async Task Internal_paths_are_never_routed_from_the_public_listener()
     {
         foreach (var path in new[] { "/internal/routes", "/INTERNAL/apps", "/internal/routes/refresh" })
@@ -384,7 +443,9 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("This app is paused", html, StringComparison.Ordinal);
-        Assert.Contains("/brand/endgame-mark.svg", html, StringComparison.Ordinal);
+        Assert.Contains("src=\"/acme/apps/paused/web/_endgame/assets/endgame-mark.svg\"", html, StringComparison.Ordinal);
+        Assert.Contains("<a class=\"button\" href=\"/acme/apps/paused/web/\">Try again</a>", html, StringComparison.Ordinal);
+        Assert.Contains("<a href=\"/credits\">Top up the credits in Endgame</a>", html, StringComparison.Ordinal);
         Assert.Equal(calls, backend.WakeCalls);
     }
 
@@ -395,7 +456,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("This app is paused", html, StringComparison.Ordinal);
-        Assert.Contains("this month&#39;s budget", html, StringComparison.Ordinal);
+        Assert.Contains("this month’s budget", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -597,7 +658,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     public async Task An_unpublished_app_says_it_is_not_ready()
     {
         using var response = await client.GetAsync("/acme/apps/soon/web/");
-        Assert.Contains("isn&#39;t ready yet", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Contains("isn’t ready yet", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -612,7 +673,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         request.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.MemberSession}");
         using var member = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, member.StatusCode);
-        Assert.Contains("isn&#39;t ready yet", await member.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Contains("isn’t ready yet", await member.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -658,7 +719,12 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         request.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.OutsiderSession}");
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Contains("don&#39;t have access", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains("don’t have access", html, StringComparison.Ordinal);
+        // A member signed in as the wrong person: back to Endgame, or sign in as someone else and come back here.
+        Assert.Contains("<a class=\"button\" href=\"/\">Go to Endgame</a>", html, StringComparison.Ordinal);
+        var switchAccount = $"/acme/apps/secret/web/_endgame/auth/sign-out?returnTo={Uri.EscapeDataString("/acme/apps/secret/web/_endgame/auth/sign-in?returnTo=" + Uri.EscapeDataString("/acme/apps/secret/web/"))}";
+        Assert.Contains($"<a class=\"button secondary\" href=\"{System.Net.WebUtility.HtmlEncode(switchAccount)}\">Sign in as someone else</a>", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -761,6 +827,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
             forwardedProto = c.Request.Headers["X-Forwarded-Proto"].ToString(),
             session = c.Request.Headers[HostingConventions.SessionHeader].ToString(),
             other = c.Request.Headers["X-Endgame-Anything"].ToString(),
+            appName = c.Request.Headers[HostingConventions.AppNameHeader].ToString(),
             signature = c.Request.Headers["X-Court-Signature"].ToString(),
             authorization = c.Request.Headers.Authorization.ToString(),
             cookie = c.Request.Headers.Cookie.ToString(),

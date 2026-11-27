@@ -16,12 +16,14 @@
 export const primitives = {
   white: "#FFFFFF",
   ground: "#F5F6FB",
-  ink: { 900: "#0B1020", 600: "#535B70" },
-  line: "#E4E7F2",
+  ink: { 900: "#0B1020", 700: "#3B4350", 600: "#535B70", 500: "#434A5E" },
+  line: { DEFAULT: "#E4E7F2", strong: "#C9CEDF", field: "#868DA3" },
+  slate: { 100: "#EEF0F7" },
   blue: { 50: "#EEF2FF", 500: "#2F5BFF", 700: "#1E3FCC" },
   violet: { 50: "#F3EEFF", 500: "#6B4BF0" },
   teal: { 50: "#E3F8FB", 600: "#0B8FA6" },
   green: { 50: "#E9FBF1", 500: "#12A15E", 800: "#0E6B42" },
+  amber: { 50: "#FFF4E0", 500: "#D98A00", 800: "#8A4B00" },
   red: { 50: "#FFF1EC", 700: "#B42318" },
 } as const;
 
@@ -31,12 +33,23 @@ const p = primitives;
 export const roles = {
   ground: p.ground,
   surface: p.white,
-  ink: { DEFAULT: p.ink[900], muted: p.ink[600] },
-  border: p.line,
+  /** `body`: running text; `muted`: what is secondary (a date, a caption). */
+  ink: { DEFAULT: p.ink[900], body: p.ink[700], muted: p.ink[600] },
+  /**
+   * `DEFAULT` divides and outlines cards; `strong` outlines a secondary button; `field` is the edge of every text box,
+   * select and check box — 3:1 against both surfaces (WCAG 1.4.11), so a person can see where to type.
+   */
+  border: { DEFAULT: p.line.DEFAULT, strong: p.line.strong, field: p.line.field },
+  /** The quiet tag and track: a fact with no judgement (to do, private, not started). */
+  quiet: { DEFAULT: p.slate[100], text: p.ink[500] },
   primary: { DEFAULT: p.blue[500], hover: p.blue[700], tint: p.blue[50], ink: p.white },
   violet: { DEFAULT: p.violet[500], tint: p.violet[50] },
   teal: { DEFAULT: p.teal[600], tint: p.teal[50] },
+  /** Finished well: done, confirmed, paid. */
   success: { DEFAULT: p.green[500], text: p.green[800], tint: p.green[50] },
+  /** Waits on a person or is held: pending, waiting for you. Never a failure. */
+  warn: { DEFAULT: p.amber[500], text: p.amber[800], tint: p.amber[50] },
+  /** Failed or refused, and the destructive button. */
   attention: { text: p.red[700], tint: p.red[50] },
 } as const;
 
@@ -59,7 +72,14 @@ export const typography = {
 
 /** Named widths. `page` bounds the console so lines stay readable on an ultrawide. */
 export const layout = {
-  width: { page: "96rem", aside: "22rem" },
+  /** `page` bounds every page and the header alike, so their edges line up; `aside` is a page's side panel; `form` a form's column. */
+  width: { page: "96rem", aside: "22rem", form: "42rem" },
+  /**
+   * Grid columns the page layouts are built from: a page beside its side panel, a form's measured column beside its preview
+   * or help (the pair stays together rather than leaving a gap between them), and cards that fill the width — as many
+   * columns of at least 17rem as fit, so a list uses a desktop and is one column on a phone.
+   */
+  grid: { "page-aside": "minmax(0, 1fr) 22rem", "form-aside": "minmax(0, 42rem) minmax(18rem, 28rem)", cards: "repeat(auto-fill, minmax(min(17rem, 100%), 1fr))" },
   /** A phone's safe area — the notch and the home indicator — for pages drawn edge to edge (`viewport-fit=cover`). */
   safe: { top: "env(safe-area-inset-top, 0px)", bottom: "env(safe-area-inset-bottom, 0px)", left: "env(safe-area-inset-left, 0px)", right: "env(safe-area-inset-right, 0px)" },
   /** The smallest comfortable touch target. */

@@ -1,11 +1,12 @@
 import { useId, useState, type FormEvent } from "react";
 import { cn } from "@/lib/utils";
+import { SECTION } from "@/components/ui/page";
 import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
+import { Input } from "@/components/ui/field";
 import { formatCredits, plural } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { navigate, paths } from "@/lib/router";
@@ -33,7 +34,7 @@ export function AppSpending({ app, isAdmin, nameOf }: { app: AppDetail; isAdmin:
   const settingView = viewOf(settings);
   return (
     <section aria-labelledby="spending-title" className="flex flex-col gap-3">
-      <h2 id="spending-title" className="flex items-center gap-2 font-display text-lg font-semibold">
+      <h2 id="spending-title" className={cn(SECTION, "flex items-center gap-2")}>
         <Icon name="credits" tinted />
         What it may spend
       </h2>
@@ -137,12 +138,20 @@ function Limit({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-xs border border-border-strong bg-surface px-4 py-3">
+    <div className="flex flex-col gap-1.5 rounded-sm border border-border-strong bg-surface px-4 py-3">
       <span className="font-semibold">{title}</span>
       <span className="text-sm text-ink-body">{what}</span>
-      <span className="font-display text-lg font-semibold" data-testid={`${valueKey}-now`}>
-        {own && amount !== null ? `${formatCredits(amount)} a month, set on ${app.name}` : inherited && amount !== null ? `${formatCredits(amount)} a month, from ${nameOf(inherited.setAtPath)}` : noneLine}
-      </span>
+      {/* What holds it now: the amount in a figure's weight, where it was set in plain words beside it; none, as a plain sentence. */}
+      {amount !== null && (own || inherited) ? (
+        <p className="pt-1 text-ink-body" data-testid={`${valueKey}-now`}>
+          <span className="font-semibold tabular-nums text-ink">{formatCredits(amount)} a month</span>
+          {own ? `, set on ${app.name}` : `, from ${nameOf((inherited as CascadeValue).setAtPath)}`}
+        </p>
+      ) : (
+        <p className="pt-1 text-sm text-ink-body" data-testid={`${valueKey}-now`}>
+          {noneLine}
+        </p>
+      )}
       {removed && !own && (
         <p role="status" className="text-sm text-success-text">
           {app.name} has none of its own now. {inherited && amount !== null ? `${nameOf(inherited.setAtPath)}'s ${formatCredits(amount)} applies.` : noneLine}
@@ -150,16 +159,25 @@ function Limit({
       )}
       {isAdmin &&
         (open ? (
-          <form onSubmit={(e) => void submit(e)} aria-label={`Set ${title.toLowerCase()}`} className="flex flex-wrap items-end gap-2" noValidate>
-            <Field id={id} label="Credits a month" problem={value.trim() && n === null ? "Type a number of credits." : null} className="min-w-0 flex-1">
-              <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} />
-            </Field>
-            <Button type="submit" size="sm" disabled={n === null || saving.isLoading}>
-              Save
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-              Not now
-            </Button>
+          <form onSubmit={(e) => void submit(e)} aria-label={`Set ${title.toLowerCase()}`} className="flex flex-col gap-1.5" noValidate>
+            <label htmlFor={id} className="font-medium">
+              Credits a month
+            </label>
+            {/* The field and its buttons share one row, centred on the field. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-invalid={Boolean(value.trim()) && n === null} aria-describedby={value.trim() && n === null ? `${id}-problem` : undefined} className="w-auto min-w-0 flex-1 basis-24" />
+              <Button type="submit" size="sm" disabled={n === null || saving.isLoading}>
+                Save
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+                Not now
+              </Button>
+            </div>
+            {value.trim() && n === null && (
+              <span id={`${id}-problem`} role="alert" className="text-sm text-attention-text">
+                Type a number of credits.
+              </span>
+            )}
           </form>
         ) : (
           <span className="flex flex-wrap gap-1">
@@ -207,15 +225,25 @@ export function IdleMinutes({ app, canChange }: { app: AppDetail; canChange: boo
   if (!canChange) return <p className="text-sm text-ink-muted">It sleeps after {plural(app.idleMinutes, "idle minute")}. A Builder or above changes it.</p>;
   return (
     // The field and its button share a row; what saving said sits under them, so neither squeezes the label (D34).
-    <form onSubmit={(e) => void submit(e)} aria-label="Idle minutes before it sleeps" className="flex flex-col gap-2" noValidate>
-      <div className="flex flex-wrap items-end gap-2">
-        <Field id={id} label="Sleeps after this many idle minutes" hint="From 1 to 1,440 (a day)." problem={value.trim() && !valid ? "A whole number of minutes, from 1 to 1,440." : null} className="min-w-field flex-1">
-          <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={`${id}-hint`} aria-invalid={!valid} />
-        </Field>
+    <form onSubmit={(e) => void submit(e)} aria-label="Idle minutes before it sleeps" className="flex flex-col gap-1.5" noValidate>
+      <label htmlFor={id} className="font-medium">
+        Sleeps after this many idle minutes
+      </label>
+      {/* "Save" sits on the field's own row, centred on it; the hint and any problem go under both. */}
+      <div className="flex items-center gap-2">
+        <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={`${id}-hint${value.trim() && !valid ? ` ${id}-problem` : ""}`} aria-invalid={!valid} className="w-auto min-w-0 flex-1" />
         <Button type="submit" size="sm" variant="outline" disabled={!valid || n === app.idleMinutes || state.isLoading}>
           Save
         </Button>
       </div>
+      <span id={`${id}-hint`} className="text-sm text-ink-muted">
+        From 1 to 1,440 (a day).
+      </span>
+      {value.trim() && !valid && (
+        <span id={`${id}-problem`} role="alert" className="text-sm text-attention-text">
+          A whole number of minutes, from 1 to 1,440.
+        </span>
+      )}
       {result && <Outcome ok={result.ok}>{result.text}</Outcome>}
     </form>
   );
@@ -228,9 +256,10 @@ export function AppItself({ app, canChange, isAdmin }: { app: AppDetail; canChan
   const slug = app.scope.split("/").pop() ?? app.scope;
   const archived = isArchived(app);
   const entered = active.entered ? active.organisation?.slug : undefined;
+  // A long app name makes long button words ("Archive …", from the tree's own controls): here they wrap inside the card, never past it.
   return (
-    <section aria-labelledby="itself-title" className="flex flex-col gap-3">
-      <h2 id="itself-title" className="flex items-center gap-2 font-display text-lg font-semibold">
+    <section aria-labelledby="itself-title" className="flex flex-col gap-3 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:py-2 [&_button]:text-left">
+      <h2 id="itself-title" className={cn(SECTION, "flex items-center gap-2")}>
         <Icon name="app" tinted />
         The app itself
       </h2>

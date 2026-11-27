@@ -55,6 +55,8 @@ export interface HostedContext {
   navigate(rest: string): void;
   /** Leave the app back to the console. */
   exit(): void;
+  /** Follow a link from an Edge page to a console address on the platform's host ("Go to Endgame", "/credits"). Default: {@link exit}. */
+  openConsole?(route: string): void;
 
   /** How long a sleeping app takes to wake, in milliseconds. Default 2000. */
   wakeMs?: number;
