@@ -4,6 +4,7 @@ using Endgame.Domain.Runs;
 using Endgame.Harness;
 using Endgame.Harness.Events;
 using Endgame.Harness.Kernel;
+using System.Globalization;
 using Endgame.Harness.Platform;
 using Endgame.Harness.Tools;
 using Endgame.Runner.Agents;
@@ -26,19 +27,33 @@ public sealed class ConversationWorkflow : IWorkflow
     public async Task<WorkflowOutcome> RunAsync(RunContext run, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(run);
-        var question = Json.Str(run.OwnerMessage(), "text") ?? run.Run.Title;
+        var owner = run.OwnerMessage();
+        var question = Json.Str(owner, "text") is { Length: > 0 } words ? words : owner?["attachments"] is JsonArray { Count: > 0 } ? FilesOnly : run.Run.Title;
+        var narrow = owner?["narrow"] as JsonObject;
+        var answerOnly = Json.Bool(narrow, "answerOnly") == true;
+        var noWebSearch = Json.Bool(narrow, "noWebSearch") == true;
         var earlier = await EarlierTurnsAsync(run, cancellationToken);
         var scope = run.Run.Scope;
         var places = PlaceNames.Of(run);
-        ITool[] tools =
-        [
-            new ReadOrganisationTool(run.ControlPlane, scope),
-            new StartIdeaTool(run.ControlPlane, scope),
-            new ChangeAppTool(run.ControlPlane, scope, places),
-            new TryAgainTool(run.ControlPlane, scope),
-            new AdjustSettingTool(run.ControlPlane, scope, places),
-        ];
-        var agent = run.Agents.Conversation(run, tools);
+        WorkStarted started = (id, kind, title, ct) => run.AppendAsync(HarnessEvents.Message, new JsonObject
+        {
+            ["kind"] = ConversationMessageKinds.WorkStarted,
+            ["runId"] = id.ToString(),
+            ["workKind"] = kind,
+            ["title"] = title,
+        }, ct);
+        // "Answer only" (ARCH-011): the tools that start work or change a setting are not given at all, so none can be asked for.
+        ITool[] tools = answerOnly
+            ? [new ReadOrganisationTool(run.ControlPlane, scope)]
+            :
+            [
+                new ReadOrganisationTool(run.ControlPlane, scope),
+                new StartIdeaTool(run.ControlPlane, scope, started),
+                new ChangeAppTool(run.ControlPlane, scope, places, started),
+                new TryAgainTool(run.ControlPlane, scope, started),
+                new AdjustSettingTool(run.ControlPlane, scope, places),
+            ];
+        var agent = run.Agents.Conversation(run, tools, noWebSearch);
         string? speaker = null;
         if (run.Run.EmployeeId is { } employeeId)
         {
@@ -53,6 +68,17 @@ public sealed class ConversationWorkflow : IWorkflow
         }
 
         var task = earlier.Length == 0 ? question : $"Earlier in this conversation:\n{earlier}\nThe owner now says:\n{question}";
+        if (answerOnly)
+        {
+            task += "\n\n" + AnswerOnlyLine;
+        }
+
+        if (owner?["attachments"] is JsonArray { Count: > 0 })
+        {
+            var files = await run.ControlPlane.RunAttachmentsAsync(run.Run.Id, agent.TaskType, cancellationToken);
+            agent = agent with { TaskContent = Content(task, files["attachments"] as JsonArray ?? [], Json.Bool(files, "imagesAccepted") == true) };
+        }
+
         var result = await WorkflowSupport.RunAgentAsync(run, agent, NoWorkspace.Instance, task, cancellationToken);
         if (result.StopReason == StopReasons.BudgetExhausted && !run.Journal.Done("answered"))
         {
@@ -95,6 +121,70 @@ public sealed class ConversationWorkflow : IWorkflow
             : WorkflowOutcome.Failure(answer);
     }
 
+    /// <summary>The question when the owner sent files and no words.</summary>
+    public const string FilesOnly = "(The owner sent the attached files without a message. Say briefly what they are, and answer what they most likely want to know about them.)";
+
+    /// <summary>Said in the task when the person asked for an answer only (ARCH-011).</summary>
+    public const string AnswerOnlyLine = "The owner asked for an answer only in this message: start no work and change nothing. If they ask for something to be done, say what you would start, and that they can ask for it to be done in another message.";
+
+    /// <summary>
+    /// The first message as content parts: the task's words, then each file — a text file or PDF as a fenced block headed
+    /// with its name, an image as an <c>image_url</c> part named by the text part before it, where the route takes images.
+    /// </summary>
+    public static JsonArray Content(string task, JsonArray files, bool imagesAccepted)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        var parts = new JsonArray(new JsonObject { ["type"] = ContentParts.TextType, ["text"] = task });
+        foreach (var file in files.OfType<JsonObject>())
+        {
+            var name = Json.Str(file, "name") ?? "a file";
+            var kind = Json.Str(file, "kind");
+            if (kind == "image")
+            {
+                if (imagesAccepted && Json.Str(file, "data") is { Length: > 0 } data)
+                {
+                    parts.Add(ContentParts.ImageLabel(name));
+                    parts.Add(new JsonObject { ["type"] = ContentParts.ImageType, ["image_url"] = new JsonObject { ["url"] = $"data:{Json.Str(file, "contentType")};base64,{data}" } });
+                }
+                else
+                {
+                    parts.Add(new JsonObject { ["type"] = ContentParts.TextType, ["text"] = $"Attached image: {name}. You cannot look at images here, so you do not know what it shows: say so if it matters." });
+                }
+
+                continue;
+            }
+
+            parts.Add(new JsonObject { ["type"] = ContentParts.TextType, ["text"] = FileBlock(file, name, kind) });
+        }
+
+        return parts;
+    }
+
+    /// <summary>A text file or a PDF as the model reads it: its name and size, then its text in a fence it cannot close early.</summary>
+    public static string FileBlock(JsonObject file, string name, string? kind)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        var text = Json.Str(file, "text") ?? "";
+        var pages = Json.Int(file, "pages");
+        var what = kind == "pdf" ? $"PDF{(pages is { } p ? $", {p} page{(p == 1 ? "" : "s")}" : "")}" : "text file";
+        if (text.Trim().Length == 0)
+        {
+            return $"Attached file: {name} ({what}). No text could be read from it{(kind == "pdf" ? "; it may be scanned pages" : "")}.";
+        }
+
+        var cut = Json.Bool(file, "truncated") == true ? $"; only its first {text.Length.ToString("N0", CultureInfo.InvariantCulture)} characters were read" : "";
+        var longest = 0;
+        var run = 0;
+        foreach (var c in text)
+        {
+            run = c == '`' ? run + 1 : 0;
+            longest = Math.Max(longest, run);
+        }
+
+        var fence = new string('`', Math.Max(3, longest + 1));
+        return $"Attached file: {name} ({what}{cut}):\n{fence}\n{text}\n{fence}";
+    }
+
     public const string UnreachableAnswer = "I could not reach Endgame's AI models, so I could not answer that, and nothing was charged. Please ask again; if it keeps happening, tell FrostAura.";
 
     private static async Task<JsonObject?> EmployeeAsync(RunContext run, Guid employeeId, CancellationToken cancellationToken)
@@ -130,7 +220,10 @@ public sealed class ConversationWorkflow : IWorkflow
             var events = await run.ControlPlane.ReadEventsAsync(id, 0, 500, cancellationToken);
             var asked = events.FirstOrDefault(e => e.Type == HarnessEvents.Message && Json.Str(e.Payload, "from") == "owner");
             var said = events.LastOrDefault(e => e.Type == HarnessEvents.Message && Json.Str(e.Payload, "from") == "assistant");
-            turns.Add($"Owner: {Json.Str(asked?.Payload, "text")}\nYou: {Json.Str(said?.Payload, "text") ?? "(no answer)"}");
+            // An earlier message's files are named, not read again.
+            var files = (asked?.Payload["attachments"] as JsonArray ?? []).OfType<JsonObject>().Select(f => Json.Str(f, "name")).OfType<string>().ToList();
+            var attached = files.Count == 0 ? "" : $" [attached: {string.Join(", ", files)}]";
+            turns.Add($"Owner: {Json.Str(asked?.Payload, "text")}{attached}\nYou: {Json.Str(said?.Payload, "text") ?? "(no answer)"}");
             parent = (await run.ControlPlane.GetRunAsync(id, cancellationToken)).ParentRunId;
         }
 

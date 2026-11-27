@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Endgame.Harness.Context;
 using Endgame.Harness.Hooks;
+using Endgame.Harness.Kernel;
 using Endgame.Harness.Model;
 using Endgame.Harness.Permissions;
 using Endgame.Harness.Planning;
@@ -71,6 +72,13 @@ public sealed record AgentDefinition
     public ProgressReports? Progress { get; init; }
 
     public required ToolRegistry Tools { get; init; }
+
+    /// <summary>
+    /// The first user message as content parts (<see cref="ContentParts"/>), when the task carries files: the task's words,
+    /// each file's text and each image. Rebuilt by the workflow on every run, resumed ones too, and never written into the log:
+    /// the log keeps the task's words and what each part was, so a 25 MB image never enters an event.
+    /// </summary>
+    public JsonArray? TaskContent { get; init; }
 
     public AgentLimits Limits { get; init; } = new();
 

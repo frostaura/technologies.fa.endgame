@@ -59,7 +59,7 @@ public static class Replay
 
                             if (Json.Bool(p, "final") == true)
                             {
-                                state.FinalText = (p["assistant"]?["content"] as JsonValue)?.GetValue<string>() ?? Json.Str(p, "reply") ?? Json.Str(p, "text");
+                                state.FinalText = ContentParts.TextOrNull(p["assistant"]?["content"]) ?? Json.Str(p, "reply") ?? Json.Str(p, "text");
                                 state.StopReason = state.EverEdited ? StopReasons.Completed : StopReasons.CompletedNoEdits;
                             }
 

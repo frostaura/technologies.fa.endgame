@@ -196,6 +196,17 @@ public sealed class ControlPlaneClient(HttpClient http)
 
     /// <summary>The workforce at and beneath a scope (employees, and contractors while they work).</summary>
     /// <summary>One employee with its job description and track record (<c>GET /internal/employees/{id}</c>), as the control plane wrote it.</summary>
+    /// <summary>
+    /// The files sent with a conversation turn (<c>GET /internal/runs/{id}/attachments</c>): <c>{ runId, imagesAccepted,
+    /// attachments: [{ id, name, kind, contentType, bytes, pages, characters, truncated, text, data }] }</c>, where
+    /// <c>imagesAccepted</c> says whether <paramref name="taskType"/>'s route takes images and <c>data</c> is an image's base64.
+    /// </summary>
+    public async Task<JsonObject> RunAttachmentsAsync(Guid runId, string taskType, CancellationToken cancellationToken)
+    {
+        using var response = await Http.GetAsync($"/internal/runs/{runId:D}/attachments?taskType={Uri.EscapeDataString(taskType)}", cancellationToken);
+        return await ReadAsync<JsonObject>(response, cancellationToken);
+    }
+
     public async Task<JsonObject> EmployeeAsync(Guid employeeId, CancellationToken cancellationToken)
     {
         using var response = await Http.GetAsync($"/internal/employees/{employeeId:D}", cancellationToken);
