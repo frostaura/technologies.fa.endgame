@@ -646,7 +646,7 @@ function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs:
             </ul>
           </div>
         ) : tasks.length === 0 ? (
-          <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
+          <p data-state="empty" className="py-1 text-ink-muted">
             {worked.finished > 0
               ? `${employee.name} has finished ${plural(worked.finished, "piece")} of work here, none of it split into tasks (research is not).${employee.lastRunId ? " Its last piece of work is linked above." : ""}`
               : `${employee.name} has not taken on any work here yet.`}
@@ -708,7 +708,7 @@ function ContractorsBriefed({ detail }: { detail: EmployeeDetail }) {
         <ul aria-label="Contractors working now" className="flex flex-col gap-2">
           {detail.contractors.map((x) => (
             <li key={x.id}>
-              <Link href={paths.employee(x.id)} className="flex flex-col gap-1 rounded-sm border border-dashed border-violet-dash bg-surface px-4 py-3 text-ink transition-colors hover:bg-violet-tint">
+              <Link href={paths.employee(x.id)} className="flex flex-col gap-1 rounded-sm border bg-surface px-4 py-3 text-ink transition-colors hover:bg-violet-tint">
                 <span className="flex items-center gap-2 font-medium">
                   <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-violet-line border-t-violet motion-reduce:animate-none" />
                   {x.role}

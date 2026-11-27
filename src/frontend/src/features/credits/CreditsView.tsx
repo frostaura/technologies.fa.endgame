@@ -34,7 +34,7 @@ export function CreditsView() {
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: home }] : []), { label: "Credits" }]} aside={view.kind === "loaded" && org ? <OverdraftAside credits={view.data} organisation={org.slug} role={active.role} /> : undefined}>
       {me.data && !org && (
-        <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-6 text-ink-body">
+        <p data-state="empty" className="py-1 text-ink-body">
           There are no credits to show until your organisation is named. <Link href={paths.start()} className="font-semibold text-primary-link">Start</Link>
         </p>
       )}
@@ -98,7 +98,7 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
           </span>
         </div>
         {credits.budgets.length === 0 ? (
-          <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
+          <p data-state="empty" className="py-1 text-ink-muted">
             No spending or caps anywhere in the tree yet.
           </p>
         ) : (

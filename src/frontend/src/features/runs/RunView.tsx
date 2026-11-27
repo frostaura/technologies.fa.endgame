@@ -505,7 +505,7 @@ function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]
   const latest = hidden > 0 ? timeline.items.slice(hidden) : timeline.items;
   const items = phone ? [...latest].reverse() : latest;
   const more = hidden > 0 && (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-border-strong bg-surface px-5 py-3 max-sm:px-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-surface px-5 py-3 max-sm:px-4">
       <span className="text-ink-body">{phone ? `${plural(hidden, "earlier step")} not shown yet.` : `${plural(hidden, "earlier step")} folded away; the latest ${formatNumber(items.length)} are below.`}</span>
       <Button size="sm" variant="outline" onClick={() => setShown((n) => n + batch)}>
         {`Show ${plural(Math.min(batch, hidden), "earlier step")}`}
@@ -526,7 +526,7 @@ function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]
       </div>
       {timeline.items.length === 0 ? (
         stream === "failed" ? null : terminal ? (
-          <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
+          <p data-state="empty" className="py-1 text-ink-muted">
             This work recorded no steps.
           </p>
         ) : (

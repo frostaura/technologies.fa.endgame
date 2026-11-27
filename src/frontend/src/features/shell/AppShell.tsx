@@ -112,7 +112,7 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
               xl, Sign out and System are icons, so the bar never wraps.
             */}
             <div className="mx-auto flex w-full max-w-frame flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 sm:px-8 xl:gap-x-3">
-              <Link href={paths.home()} aria-label="Endgame home" className="mr-1 flex shrink-0 items-center gap-2.5 rounded-xs text-ink">
+              <Link href={paths.home()} aria-label="Endgame home" className="mr-1 flex min-h-touch shrink-0 items-center gap-2.5 rounded-xs text-ink">
                 <img src="/brand/endgame-mark.svg" alt="" width={30} height={30} className="size-8" />
                 <span className={cn("font-display text-lg font-bold tracking-tight", trail.length > 0 && "hidden xl:inline")}>Endgame</span>
               </Link>
@@ -239,7 +239,7 @@ export function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
                   {label}
                 </button>
               ) : crumb.href && !last ? (
-                <Link href={crumb.href} className="min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover">
+                <Link href={crumb.href} className="min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover touch:min-h-touch touch:leading-touch">
                   {label}
                 </Link>
               ) : (

@@ -353,7 +353,7 @@ function ExistingProducts({ products, evidence }: { products: ExistingProduct[];
 function SourceLink({ url }: { url: string }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   return (
-    <a href={url} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-touch max-w-full items-center break-all rounded-xs text-sm text-primary-link hover:text-primary-hover sm:min-h-0">
+    <a href={url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-full items-center break-all rounded-xs text-sm text-primary-link hover:text-primary-hover touch:min-h-touch">
       {technical ? url : sourceLabel(url)}
     </a>
   );

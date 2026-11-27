@@ -21,7 +21,7 @@ export function ModeToggle() {
       onClick={() => dispatch(modeSet(value))}
       className={cn(
         // 36px drawn inside the 44px track; the track's padding is part of the target, and the focus ring stays inside it.
-        "relative h-9 rounded-xs px-2.5 text-sm transition-colors before:absolute before:-inset-y-1 before:inset-x-0 focus-visible:ring-inset focus-visible:ring-offset-0 xl:px-4",
+        "relative h-9 rounded-xs px-2.5 text-sm transition-colors after:absolute after:-inset-y-1 after:inset-x-0 focus-visible:ring-inset focus-visible:ring-offset-0 xl:px-4",
         mode === value ? "bg-surface font-semibold text-ink shadow-toggle" : "bg-transparent text-ink-muted hover:text-ink",
       )}
     >
@@ -29,14 +29,14 @@ export function ModeToggle() {
     </button>
   );
   return (
-    <div role="group" aria-label="Mode" className="flex h-11 shrink-0 items-center rounded-xs bg-quiet p-1 ring-1 ring-inset ring-border-strong">
+    <div role="group" aria-label="Mode" className="relative flex h-11 shrink-0 items-center rounded-xs bg-quiet p-1 ring-1 ring-inset ring-border-strong">
       {option("normal", "Normal")}
       {option("technical", "Technical")}
       {mode === "technical" && (
         <Link
           href={paths.system()}
           title="System"
-          className="relative ml-1 flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-xs px-2 text-sm text-ink-muted before:absolute before:-inset-y-1 before:inset-x-0 hover:text-ink focus-visible:ring-inset focus-visible:ring-offset-0 2xl:px-3"
+          className="relative ml-1 flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-xs px-2 text-sm text-ink-muted after:absolute after:-inset-y-1 after:inset-x-0 hover:text-ink focus-visible:ring-inset focus-visible:ring-offset-0 2xl:px-3"
         >
           <Icon name="health" className="size-4" />
           <span className="sr-only 2xl:not-sr-only">System</span>

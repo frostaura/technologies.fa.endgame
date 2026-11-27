@@ -49,7 +49,7 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
           {view.data.length === 0 ? (
-            <p data-state="empty" className="rounded-xs border border-dashed border-border-strong bg-surface px-4 py-3 text-ink-muted">
+            <p data-state="empty" className="py-1 text-ink-muted">
               Nothing is said about {name} yet{level === "organisation" ? "" : ", here or above it"}.
             </p>
           ) : (

@@ -208,7 +208,7 @@ function RecurringRow({ role, tree, isAdmin, waiting }: { role: RecurringRole; t
   };
 
   return (
-    <li className="flex flex-col gap-1.5 rounded-xs border border-dashed border-violet-dash bg-surface px-4 py-3.5">
+    <li className="flex flex-col gap-1.5 rounded-xs border bg-surface px-4 py-3.5">
       <span className="font-semibold">{role.role}</span>
       <span className="text-ink-body">
         Briefed {plural(role.contractors, "time")} in {plural(role.windowDays, "day")} at {scopeName(tree, role.scope)}, costing {formatCredits(role.costCredits)}.

@@ -128,7 +128,7 @@ function SecretsBody({ list, tree, where, notice, onNotice }: { list: SecretList
       <section aria-label="Secrets set beneath" className={cn("flex flex-col gap-3", RISE, stagger(2))}>
         <h2 className="font-display text-lg font-semibold">Set beneath</h2>
         {list.setBelow.length === 0 ? (
-          <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface px-5 py-4 text-ink-muted">
+          <p data-state="empty" className="py-1 text-ink-muted">
             Nothing beneath {where} sets a secret of its own.
           </p>
         ) : (

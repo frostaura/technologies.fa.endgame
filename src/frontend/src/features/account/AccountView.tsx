@@ -68,7 +68,7 @@ function AccountBody({ me }: { me: Me }) {
             </div>
           )}
           {organisations.length === 0 ? (
-            <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
+            <p data-state="empty" className="py-1 text-ink-muted">
               You hold no role in any organisation yet. {me.isOperator ? "As an operator you enter organisations from Every organisation." : "Whoever invited you grants one."}
             </p>
           ) : (
