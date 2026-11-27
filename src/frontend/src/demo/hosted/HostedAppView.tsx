@@ -246,7 +246,7 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
   return (
     <div className="flex min-h-screen flex-col bg-ground" data-testid="hosted-app">
       <div className="flex flex-wrap items-center gap-3 border-b bg-surface px-4 py-2">
-        <Button variant="ghost" size="sm" onClick={ctx.exit}>
+        <Button variant="quiet" size="sm" onClick={ctx.exit}>
           <ArrowLeft className="size-4" aria-hidden />
           Back to Endgame
         </Button>

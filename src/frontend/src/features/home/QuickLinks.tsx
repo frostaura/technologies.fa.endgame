@@ -15,7 +15,7 @@ export interface QuickLink {
   label: string;
 }
 
-const ITEM = cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0 text-ink-body hover:text-ink");
+const ITEM = cn(buttonVariants({ variant: "quiet", size: "sm" }), "shrink-0 text-ink-body hover:text-ink");
 /** Room kept for "More" when anything is in it, and the space between two links. */
 const MORE_WIDTH = 96;
 const GAP = 4;

@@ -20,7 +20,7 @@ export function Talk({ label, launcher = true, launcherClassName, children }: { 
   return (
     <>
       {launcher && (
-        <Button variant="soft" size="lg" className={cn("w-full justify-start", launcherClassName)} onClick={shell.open} aria-haspopup="dialog" data-talk-launcher="">
+        <Button variant="secondary" size="lg" className={cn("w-full justify-start", launcherClassName)} onClick={shell.open} aria-haspopup="dialog" data-talk-launcher="">
           <MessageCircle aria-hidden className="size-5 text-primary" />
           {label}
         </Button>

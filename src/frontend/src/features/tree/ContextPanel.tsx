@@ -72,7 +72,7 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
         adding ? (
           <ContextForm scope={scope} onDone={() => setAdding(false)} onRefused={setRefused} />
         ) : (
-          <Button variant="outline" size="sm" className="self-start" onClick={() => setAdding(true)}>
+          <Button variant="secondary" size="sm" className="self-start" onClick={() => setAdding(true)}>
             Say something about {name}
           </Button>
         )
@@ -147,11 +147,11 @@ function ContextRow({ entry, scope, name, label, canWrite, nameOf, onChange }: {
       </span>
       {canWrite && !confirming && (
         <span className="flex flex-wrap gap-2 pt-1">
-          <Button size="sm" variant="outline" onClick={onChange}>
+          <Button size="sm" variant="secondary" onClick={onChange}>
             {here ? "Change" : "Say it differently here"}
           </Button>
           {here && (
-            <Button size="sm" variant="outline" disabled={removing.isLoading} onClick={() => setConfirming(true)}>
+            <Button size="sm" variant="secondary" disabled={removing.isLoading} onClick={() => setConfirming(true)}>
               {replaced.length > 0 ? `Remove it; ${nameOf(replaced[0] ?? "")}'s applies again` : "Remove it"}
             </Button>
           )}
@@ -211,7 +211,7 @@ function ContextForm({ scope, entry, onDone, onRefused }: { scope: string; entry
         <Button type="submit" size="sm" disabled={!isContextKey(key) || !text.trim() || text.length > VALUE_LIMIT || saving.isLoading}>
           {entry ? "Save it" : "Add it"}
         </Button>
-        <Button size="sm" variant="ghost" onClick={onDone}>
+        <Button size="sm" variant="quiet" onClick={onDone}>
           Cancel
         </Button>
       </span>

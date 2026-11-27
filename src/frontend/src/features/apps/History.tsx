@@ -98,7 +98,7 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
                       {live && <Badge tone="good">Live now</Badge>}
                       {technical && <code className="font-mono text-xs">{v.commit.slice(0, 12)}</code>}
                       {canRestore && !v.live && !live && confirm?.commit !== v.commit && (
-                        <Button size="sm" variant="ghost" className="min-h-touch px-2 text-primary-link" disabled={restoring.isLoading} onClick={() => setConfirm(v)} aria-label={`Bring back “${title}” from ${timeAgo(v.at)}`}>
+                        <Button size="sm" variant="quiet" className="min-h-touch px-2 text-primary-link" disabled={restoring.isLoading} onClick={() => setConfirm(v)} aria-label={`Bring back “${title}” from ${timeAgo(v.at)}`}>
                           Bring back
                         </Button>
                       )}
@@ -111,12 +111,12 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
             </ol>
           )}
           {!technical && (everyStep || historyRows(view.data.versions, false, false).folded > 0) && (
-            <Button variant="ghost" className="self-start" aria-expanded={everyStep} onClick={() => setEveryStep((x) => !x)}>
+            <Button variant="quiet" className="self-start" aria-expanded={everyStep} onClick={() => setEveryStep((x) => !x)}>
               {everyStep ? "Show only the changes" : `Show every saved step (${formatNumber(historyRows(view.data.versions, false, false).folded)} more)`}
             </Button>
           )}
           {view.data.hasMore && (
-            <Button variant="ghost" className="self-start" onClick={() => setLimit((n) => n + PAGE)} disabled={query.isFetching}>
+            <Button variant="quiet" className="self-start" onClick={() => setLimit((n) => n + PAGE)} disabled={query.isFetching}>
               {query.isFetching ? "Loading…" : "Show earlier versions"}
             </Button>
           )}
@@ -155,7 +155,7 @@ function Restored({ app, result, technical, canRestore, onDone }: { app: AppDeta
       {result.madePrivate && <p>It was public, so it is private now. Make it public again once you have looked at it.</p>}
       {!result.published && <p className="text-attention-deep">{technical && result.publishError ? result.publishError : "It could not be rebuilt and started. Rebuild it again below, or ask the builder to look."}</p>}
       {!result.published && canRestore && <RebuildAndRestart app={app} />}
-      <Button size="sm" variant="ghost" className="self-start" onClick={onDone}>
+      <Button size="sm" variant="quiet" className="self-start" onClick={onDone}>
         Done
       </Button>
     </div>

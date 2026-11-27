@@ -51,7 +51,7 @@ function Origin({ setAtPath, scope, tree, fallback }: { setAtPath: string | null
 /** "Use the inherited setting": a quiet action beside the "Set here" it undoes, drawn as the link it is. */
 function UseInherited({ busy, onClick }: { busy: boolean; onClick: () => void }) {
   return (
-    <Button size="sm" variant="ghost" className="px-2 text-primary-link hover:text-primary-hover" disabled={busy} onClick={onClick}>
+    <Button size="sm" variant="quiet" className="px-2 text-primary-link hover:text-primary-hover" disabled={busy} onClick={onClick}>
       Use the inherited setting
     </Button>
   );
@@ -346,11 +346,11 @@ function StageRules({ stage, rule, scope, tree, admin }: { stage: string; rule: 
       <div className="flex flex-wrap gap-1 sm:flex-col sm:items-end">
         {admin && !editing && (
           <>
-            <Button size="sm" variant="outline" onClick={start} disabled={busy}>
+            <Button size="sm" variant="secondary" onClick={start} disabled={busy}>
               {setHere ? "Change" : "Set rules here"}
             </Button>
             {setHere && (
-              <Button size="sm" variant="ghost" onClick={() => void remove()} disabled={busy}>
+              <Button size="sm" variant="quiet" onClick={() => void remove()} disabled={busy}>
                 Remove here
               </Button>
             )}
@@ -370,7 +370,7 @@ function StageRules({ stage, rule, scope, tree, admin }: { stage: string; rule: 
             <Button size="sm" onClick={() => void submit()} disabled={busy}>
               Save for {scopeName(tree, scope)}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            <Button size="sm" variant="quiet" onClick={() => setEditing(false)}>
               Cancel
             </Button>
           </div>
@@ -428,7 +428,7 @@ function RuleList({ title, example, rules, mode, id, onChange }: { title: string
                 add();
               }
             }} placeholder={example} title="A tool, or a tool with a pattern" className="min-h-touch min-w-0 flex-1 rounded-xs border border-border-field bg-surface px-3 font-mono text-sm" />
-          <Button size="sm" variant="outline" onClick={add}>
+          <Button size="sm" variant="secondary" onClick={add}>
             Add
           </Button>
         </span>
@@ -442,7 +442,7 @@ function RuleList({ title, example, rules, mode, id, onChange }: { title: string
               </option>
             ))}
           </select>
-          <Button size="sm" variant="outline" onClick={add} disabled={!next}>
+          <Button size="sm" variant="secondary" onClick={add} disabled={!next}>
             Add
           </Button>
         </span>

@@ -97,18 +97,18 @@ export function OwnLimit({ organisation, credits, isOwner }: { organisation: str
             <Button type="submit" size="sm" disabled={n === null || tooDeep || saving.isLoading}>
               {saving.isLoading ? "Saving…" : "Save my limit"}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            <Button size="sm" variant="quiet" onClick={() => setOpen(false)}>
               Not now
             </Button>
           </div>
         </form>
       ) : (
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setOpen(true)}>
+          <Button variant="secondary" onClick={() => setOpen(true)}>
             Change your limit
           </Button>
           {credits.overdraft?.ownLimit !== null && credits.overdraft?.ownLimit !== undefined && (
-            <Button variant="ghost" disabled={removing.isLoading} onClick={() => void removeOwn()}>
+            <Button variant="quiet" disabled={removing.isLoading} onClick={() => void removeOwn()}>
               Remove your own limit
             </Button>
           )}
@@ -167,7 +167,7 @@ export function NarrowerLimits({ credits, organisation }: { credits: Credits; or
               </span>
               <span className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
                 {l.setByName ? `Set by ${l.setByName}, ${formatDate(l.setAt)}` : `Set ${formatDate(l.setAt)}`}
-                <Button size="sm" variant="ghost" disabled={removing.isLoading} onClick={() => void remove(l.scope, l.name)} aria-label={`Remove ${l.name}'s tighter limit`}>
+                <Button size="sm" variant="quiet" disabled={removing.isLoading} onClick={() => void remove(l.scope, l.name)} aria-label={`Remove ${l.name}'s tighter limit`}>
                   Remove
                 </Button>
               </span>
@@ -237,7 +237,7 @@ export function NarrowerLimit({ organisation, credits }: { organisation: string;
           <Input id={ids.value} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-invalid={tooDeep} />
         </Field>
       </div>
-      <Button type="submit" size="sm" variant="outline" className="self-start" disabled={n === null || tooDeep || saving.isLoading}>
+      <Button type="submit" size="sm" variant="secondary" className="self-start" disabled={n === null || tooDeep || saving.isLoading}>
         {saving.isLoading ? "Saving…" : "Set this limit"}
       </Button>
       {result && (
@@ -303,14 +303,14 @@ export function TopUpRequests({ organisation, isOwner, isAdmin }: { organisation
               <Button type="submit" size="sm" disabled={!n || sending.isLoading || openCount >= 5}>
                 {sending.isLoading ? "Sending…" : "Ask for it"}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              <Button size="sm" variant="quiet" onClick={() => setOpen(false)}>
                 Not now
               </Button>
             </div>
             {openCount >= 5 && <p className="text-sm text-ink-muted">Five requests are already waiting; FrostAura answers those first.</p>}
           </form>
         ) : (
-          <Button variant="outline" className="self-start" onClick={() => setOpen(true)}>
+          <Button variant="secondary" className="self-start" onClick={() => setOpen(true)}>
             Ask for a top-up
           </Button>
         ))}
@@ -428,7 +428,7 @@ export function CapControl({ line, lines, organisation }: { line: BudgetLine; li
   return (
     <>
       <span className="flex justify-end max-sm:col-start-2 max-sm:row-start-1">
-        <Button size="sm" variant="ghost" className="text-primary-link max-sm:px-2" disabled={busy} aria-expanded={open} onClick={() => setOpen(!open)} aria-label={`${line.capCredits === null ? "Set a cap on" : "Change the cap on"} ${line.name}`}>
+        <Button size="sm" variant="quiet" className="text-primary-link max-sm:px-2" disabled={busy} aria-expanded={open} onClick={() => setOpen(!open)} aria-label={`${line.capCredits === null ? "Set a cap on" : "Change the cap on"} ${line.name}`}>
           {line.capCredits === null ? "Set a cap" : "Change the cap"}
         </Button>
       </span>
@@ -441,11 +441,11 @@ export function CapControl({ line, lines, organisation }: { line: BudgetLine; li
             Save the cap
           </Button>
           {line.capCredits !== null && (
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void remove()} aria-label={`Remove the cap on ${line.name}`}>
+            <Button size="sm" variant="quiet" disabled={busy} onClick={() => void remove()} aria-label={`Remove the cap on ${line.name}`}>
               Remove the cap
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          <Button size="sm" variant="quiet" onClick={() => setOpen(false)}>
             Not now
           </Button>
         </form>

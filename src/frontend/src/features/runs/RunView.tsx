@@ -203,7 +203,7 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
             Resume
           </Button>
         ) : (
-          <Button variant="outline" onClick={() => void act("pause")} disabled={controlState.isLoading}>
+          <Button variant="secondary" onClick={() => void act("pause")} disabled={controlState.isLoading}>
             Pause
           </Button>
         )}
@@ -218,7 +218,7 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
             onCancel={() => setConfirmCancel(false)}
           />
         ) : (
-          <Button variant="soft" onClick={() => setConfirmCancel(true)} disabled={controlState.isLoading}>
+          <Button variant="secondary" onClick={() => setConfirmCancel(true)} disabled={controlState.isLoading}>
             Cancel
           </Button>
         )}
@@ -365,7 +365,7 @@ export function BuiltAppActions({ appId }: { appId: string }) {
       <a href={addresses.subdomain ?? addresses.path} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants(), "max-sm:w-full")}>
         Open {name}
       </a>
-      <Link href={paths.app(appId)} className={cn(buttonVariants({ variant: "outline" }), "max-sm:w-full")}>
+      <Link href={paths.app(appId)} className={cn(buttonVariants({ variant: "secondary" }), "max-sm:w-full")}>
         Manage {name}
       </Link>
     </div>
@@ -417,7 +417,7 @@ function StoppedPanel({ run, derived, declined }: { run: Run; derived: DerivedRu
   return (
     <div aria-label="Stopped for budget" role="group" className="flex flex-col gap-3">
       <p className="max-w-prose font-medium text-ink">The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged.</p>
-      <Link href={paths.credits()} className={cn(buttonVariants({ variant: "outline" }), "self-start")}>
+      <Link href={paths.credits()} className={cn(buttonVariants({ variant: "secondary" }), "self-start")}>
         See credits
       </Link>
     </div>
@@ -809,7 +809,7 @@ function Rows({ items, label, className }: { items: TimelineItem[]; label: strin
       {hidden > 0 && (
         <div className={cn("flex flex-wrap items-center justify-between gap-3 border-b bg-surface px-4 py-3 sm:px-5", className && "mb-3 rounded-md border shadow-card")}>
           <span className="text-ink-body">{`${plural(hidden, "earlier step")} folded away; the latest ${formatNumber(latest.length)} are below.`}</span>
-          <Button size="sm" variant="outline" onClick={() => setShown((n) => n + batch)}>
+          <Button size="sm" variant="secondary" onClick={() => setShown((n) => n + batch)}>
             {`Show ${plural(Math.min(batch, hidden), "earlier step")}`}
           </Button>
         </div>
@@ -976,7 +976,7 @@ function CreditsNote() {
     <SideCard title="Where the credits go">
       <p className="text-ink-body">Credits are held before each step and settled from what it really cost. Repairing a mistake of its own is never billed.</p>
       {active.organisation && (
-        <Link href={paths.credits()} className={cn(buttonVariants({ variant: "outline" }), "self-start")}>
+        <Link href={paths.credits()} className={cn(buttonVariants({ variant: "secondary" }), "self-start")}>
           See credits
         </Link>
       )}

@@ -80,13 +80,13 @@ export function ChangeRequest({ appId, appName }: { appId: string; appName: stri
               <Button type="button" onClick={() => void start()} disabled={starting.isLoading}>
                 {starting.isLoading ? "Starting…" : "Make this change"}
               </Button>
-              <Button type="button" variant="ghost" onClick={() => setEstimate(null)}>
+              <Button type="button" variant="quiet" onClick={() => setEstimate(null)}>
                 Not now
               </Button>
             </div>
           </div>
         ) : (
-          <Button type="submit" variant="outline" className="self-start" disabled={!text || estimating.isLoading}>
+          <Button type="submit" variant="secondary" className="self-start" disabled={!text || estimating.isLoading}>
             {estimating.isLoading ? (
               <>
                 <Spinner inherit />

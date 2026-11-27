@@ -269,7 +269,7 @@ function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
             <span className="text-sm font-medium">Mode</span>
             <ModeToggle />
           </div>
-          {me.data && <SignOut className={cn(buttonVariants({ variant: "soft" }), "w-full")} />}
+          {me.data && <SignOut className={cn(buttonVariants({ variant: "secondary" }), "w-full")} />}
         </section>
         {pages.length > 0 && (
           <nav aria-label="Pages">

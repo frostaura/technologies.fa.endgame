@@ -189,10 +189,10 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
             {entering.isLoading ? "Entering…" : `Enter ${org.name}`}
           </Button>
         )}
-        <Button size="sm" variant="outline" aria-expanded={action === "top-up"} onClick={() => open("top-up")}>
+        <Button size="sm" variant="secondary" aria-expanded={action === "top-up"} onClick={() => open("top-up")}>
           Top up
         </Button>
-        <Button size="sm" variant="soft" aria-expanded={action === "overdraft"} onClick={() => open("overdraft")}>
+        <Button size="sm" variant="secondary" aria-expanded={action === "overdraft"} onClick={() => open("overdraft")}>
           Deepest overdraft
         </Button>
       </div>
@@ -289,7 +289,7 @@ function TopUpForm({ organisation, name, request, onDone, onAdded }: { organisat
             {sending.isLoading ? "Adding…" : request ? "Add it and close the request" : "Add the credits"}
           </Button>
         )}
-        <Button size="sm" variant="ghost" onClick={onDone}>
+        <Button size="sm" variant="quiet" onClick={onDone}>
           {result?.ok ? "Done" : "Not now"}
         </Button>
       </div>
@@ -331,7 +331,7 @@ function OverdraftForm({ org, onDone, onSaved }: { org: OperatorOrganisation; on
         <Button type="submit" size="sm" disabled={n === null || saving.isLoading}>
           {saving.isLoading ? "Saving…" : "Save"}
         </Button>
-        <Button size="sm" variant="ghost" onClick={onDone}>
+        <Button size="sm" variant="quiet" onClick={onDone}>
           Not now
         </Button>
       </div>
@@ -431,7 +431,7 @@ function RequestRow({ request, onAdded }: { request: TopUpRequest; onAdded: (tex
             <Button size="sm" onClick={() => void decline()} disabled={closing.isLoading}>
               Decline it
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode(null)}>
+            <Button size="sm" variant="quiet" onClick={() => setMode(null)}>
               Not now
             </Button>
           </div>
@@ -441,7 +441,7 @@ function RequestRow({ request, onAdded }: { request: TopUpRequest; onAdded: (tex
           <Button size="sm" onClick={() => setMode("fulfil")}>
             Add the credits
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setMode("decline")}>
+          <Button size="sm" variant="quiet" onClick={() => setMode("decline")}>
             Decline
           </Button>
         </div>

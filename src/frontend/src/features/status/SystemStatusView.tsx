@@ -20,7 +20,7 @@ export function SystemStatusView() {
         title="System status"
         lead="Every service, asked directly whether it is healthy."
         actions={
-          <Button variant="outline" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
+          <Button variant="secondary" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
             <RefreshCw aria-hidden className={cn("size-4", query.isFetching && "animate-spin motion-reduce:animate-none")} />
             Check again
           </Button>

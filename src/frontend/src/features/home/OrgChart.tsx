@@ -51,7 +51,7 @@ export function AddDivision({ tree }: { tree: Tree }) {
   const org = tree.organisation;
   if (!org || roleRank(effectiveRole(tree, me.data, org.slug)) < roleRank("admin")) return null;
   return (
-    <Link href={`${manage(org.slug)}&add=1`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-primary-link hover:text-primary-hover")}>
+    <Link href={`${manage(org.slug)}&add=1`} className={cn(buttonVariants({ variant: "quiet", size: "sm" }), "text-primary-link hover:text-primary-hover")}>
       <Plus aria-hidden className="size-4" />
       Add a division
     </Link>

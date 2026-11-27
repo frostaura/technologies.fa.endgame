@@ -81,7 +81,7 @@ function OpenApproval({ runId, approval, compact }: { runId: string; approval: D
           {/* On a phone the answer stays in reach above the bottom bar while the card is on screen. */}
           <div className="flex flex-wrap gap-2 max-sm:sticky max-sm:bottom-nav-safe max-sm:z-10 max-sm:-mx-4 max-sm:grid max-sm:grid-cols-2 max-sm:border-t max-sm:bg-surface max-sm:px-4 max-sm:py-2">
             <Button onClick={() => void decide("approve")}>Approve</Button>
-            <Button variant="outline" onClick={() => void decide("reject")}>
+            <Button variant="secondary" onClick={() => void decide("reject")}>
               Decline
             </Button>
           </div>

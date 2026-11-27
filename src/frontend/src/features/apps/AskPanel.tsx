@@ -120,7 +120,7 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
         <span className="max-w-prose text-ink-body">Ask in plain words about its visits, errors and what its people do in it. It answers from this app&rsquo;s own records only.</span>
         <div className="flex flex-col gap-2 pt-1 sm:flex-row">
           <Input id={inputId} aria-labelledby={`${inputId}-title`} value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} placeholder="Which days are busiest?" className="min-h-12 flex-1 px-4" />
-          <Button type="submit" variant="outline" className="min-h-12" disabled={!typed || estimating.isLoading}>
+          <Button type="submit" variant="secondary" className="min-h-12" disabled={!typed || estimating.isLoading}>
             {estimating.isLoading ? (
               <>
                 <Spinner inherit />
@@ -177,12 +177,12 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
           {technical && answer.sql && <Query sql={answer.sql} />}
           <div className="flex flex-wrap items-center gap-2">
             {canAsk && (
-              <Button variant="outline" onClick={() => void keep()} disabled={saving.isLoading || saved?.startsWith("It is on") === true}>
+              <Button variant="secondary" onClick={() => void keep()} disabled={saving.isLoading || saved?.startsWith("It is on") === true}>
                 {saving.isLoading ? "Keeping it…" : "Keep this on the dashboard"}
               </Button>
             )}
             <Button
-              variant="ghost"
+              variant="quiet"
               onClick={() => {
                 setAnswer(null);
                 setEstimate(null);
@@ -311,7 +311,7 @@ function SavedCard({ appId, question, canChange, onRefused }: { appId: string; q
       <div className="flex items-start gap-2">
         <h3 className="min-w-0 flex-1 break-words pt-0.5 font-display text-base font-semibold">{question.question}</h3>
         {canChange && !pending && (
-          <Button size="sm" variant="ghost" className="-mr-2 -mt-2 size-11 shrink-0 p-0 text-ink-muted hover:text-ink" onClick={() => void drop()} aria-label={`Take off “${question.question}”`} title="Take it off the dashboard">
+          <Button size="sm" variant="quiet" className="-mr-2 -mt-2 size-11 shrink-0 p-0 text-ink-muted hover:text-ink" onClick={() => void drop()} aria-label={`Take off “${question.question}”`} title="Take it off the dashboard">
             <X aria-hidden className="size-4" />
           </Button>
         )}

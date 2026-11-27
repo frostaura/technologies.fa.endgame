@@ -183,7 +183,7 @@ export function SignInView() {
               <Button type="submit" size="lg" disabled={!supported || busy !== null}>
                 {busy === "register" ? "Waiting for your device…" : "Create passkey"}
               </Button>
-              <Button variant="ghost" onClick={() => setCreating(false)} disabled={busy !== null}>
+              <Button variant="quiet" onClick={() => setCreating(false)} disabled={busy !== null}>
                 I already have one
               </Button>
             </div>
@@ -194,7 +194,7 @@ export function SignInView() {
               <Icon name="secrets" />
               {busy === "login" ? "Waiting for your device…" : "Sign in with a passkey"}
             </Button>
-            <Button variant="ghost" className="px-0 text-primary-link hover:bg-transparent hover:text-primary-hover" onClick={() => setCreating(true)} disabled={busy !== null}>
+            <Button variant="quiet" className="px-0 text-primary-link hover:bg-transparent hover:text-primary-hover" onClick={() => setCreating(true)} disabled={busy !== null}>
               First time here? <span className="font-semibold underline underline-offset-4">Create your passkey</span>
             </Button>
           </div>
@@ -253,7 +253,7 @@ function DevelopmentSignIn({ options, busy, onSignIn }: { options: ReturnType<ty
     <div className="flex max-w-form flex-col gap-2 rounded-md border bg-ground p-4">
       <span className="text-eyebrow font-semibold uppercase text-ink-muted">Development only</span>
       <p className="text-sm text-ink-body">This deployment is in development and offers a sign-in without a passkey.</p>
-      <Button variant="outline" className="self-start" onClick={onSignIn} disabled={busy !== null}>
+      <Button variant="secondary" className="self-start" onClick={onSignIn} disabled={busy !== null}>
         {busy === "development" ? "Signing in…" : "Development sign-in"}
       </Button>
     </div>

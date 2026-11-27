@@ -551,7 +551,7 @@ function Decisions({ idea, verdict, redLine, stacked = false }: { idea: Idea; ve
         </p>
         {d.overruled && <p className="text-ink-body">The project carries a note that research advised against it.</p>}
         {d.runId && (
-          <Link href={paths.run(d.runId)} className={cn(buttonVariants({ variant: "outline" }), stacked && "w-full")}>
+          <Link href={paths.run(d.runId)} className={cn(buttonVariants({ variant: "secondary" }), stacked && "w-full")}>
             Watch the work that followed
           </Link>
         )}
@@ -611,7 +611,7 @@ function Decisions({ idea, verdict, redLine, stacked = false }: { idea: Idea; ve
           ),
           // On a "change" verdict research's own change can be accepted and built in, without another round of research (VERD-06).
           o.choice === "build" && withChange ? (
-            <Button key="with-change" size="lg" variant="outline" disabled={state.isLoading} onClick={() => void submit("build", undefined, true)}>
+            <Button key="with-change" size="lg" variant="secondary" disabled={state.isLoading} onClick={() => void submit("build", undefined, true)}>
               Build it with this change
             </Button>
           ) : null,
@@ -629,7 +629,7 @@ function Decisions({ idea, verdict, redLine, stacked = false }: { idea: Idea; ve
             <Button type="submit" disabled={!changeNote.trim() || state.isLoading}>
               Research it again with this change
             </Button>
-            <Button variant="ghost" onClick={() => setConfirming(null)}>
+            <Button variant="quiet" onClick={() => setConfirming(null)}>
               Not now
             </Button>
           </div>

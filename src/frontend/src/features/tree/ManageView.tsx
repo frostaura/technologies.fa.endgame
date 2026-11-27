@@ -185,7 +185,7 @@ function NodePanel({
           <div className="flex flex-wrap items-center gap-2">
             {node.archived ? <Badge tone="neutral">Archived</Badge> : <Badge tone="good">Active</Badge>}
             {node.level === "app" && (
-              <Link href={paths.app(node.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <Link href={paths.app(node.id)} className={buttonVariants({ variant: "secondary", size: "sm" })}>
                 The app&rsquo;s page
               </Link>
             )}
@@ -233,7 +233,7 @@ function NodePanel({
                   adding ? (
                     <CreateChild level={child} parent={node.scope} parentName={node.name} onCancel={() => setAdding(false)} onCreated={(made) => onSelect(made.path)} />
                   ) : (
-                    <Button size="sm" variant="outline" className="self-start" onClick={() => setAdding(true)}>
+                    <Button size="sm" variant="secondary" className="self-start" onClick={() => setAdding(true)}>
                       Add {article(child)} {child}
                     </Button>
                   )

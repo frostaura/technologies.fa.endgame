@@ -188,11 +188,11 @@ function SecretRow({ secret, scope, nameOf, notice, onNotice }: { secret: Secret
         {secret.overrides.length > 0 && <span className="text-sm text-ink-body">Replaces the one set at {secret.overrides.map(nameOf).join(", ")}.</span>}
       </div>
       <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button size="sm" variant="soft" onClick={() => setMode(mode === "replace" ? "idle" : "replace")} aria-expanded={mode === "replace"}>
+        <Button size="sm" variant="secondary" onClick={() => setMode(mode === "replace" ? "idle" : "replace")} aria-expanded={mode === "replace"}>
           {setHere ? "Replace" : "Set its own here"}
         </Button>
         {setHere && (
-          <Button size="sm" variant="ghost" disabled={removing.isLoading} onClick={() => setMode("remove")}>
+          <Button size="sm" variant="quiet" disabled={removing.isLoading} onClick={() => setMode("remove")}>
             Remove
           </Button>
         )}

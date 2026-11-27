@@ -169,7 +169,7 @@ function Limit({
               <Button type="submit" size="sm" disabled={n === null || saving.isLoading}>
                 Save
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              <Button size="sm" variant="quiet" onClick={() => setOpen(false)}>
                 Not now
               </Button>
             </div>
@@ -181,11 +181,11 @@ function Limit({
           </form>
         ) : (
           <span className="flex flex-wrap gap-1">
-            <Button size="sm" variant="ghost" className="text-primary-link" onClick={() => setOpen(true)}>
+            <Button size="sm" variant="quiet" className="text-primary-link" onClick={() => setOpen(true)}>
               {own ? "Change it" : `Set one for ${app.name}`}
             </Button>
             {own && (
-              <Button size="sm" variant="ghost" disabled={removing.isLoading} onClick={() => void drop()}>
+              <Button size="sm" variant="quiet" disabled={removing.isLoading} onClick={() => void drop()}>
                 Remove it
               </Button>
             )}
@@ -232,7 +232,7 @@ export function IdleMinutes({ app, canChange }: { app: AppDetail; canChange: boo
       {/* "Save" sits on the field's own row, centred on it; the hint and any problem go under both. */}
       <div className="flex items-center gap-2">
         <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={`${id}-hint${value.trim() && !valid ? ` ${id}-problem` : ""}`} aria-invalid={!valid} className="w-auto min-w-0 flex-1" />
-        <Button type="submit" size="sm" variant="outline" disabled={!valid || n === app.idleMinutes || state.isLoading}>
+        <Button type="submit" size="sm" variant="secondary" disabled={!valid || n === app.idleMinutes || state.isLoading}>
           Save
         </Button>
       </div>

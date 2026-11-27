@@ -428,7 +428,7 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
   const buttons = contractor ? (
     <ActionGroup
       first={
-        <Button variant="outline" aria-expanded={open === "cap"} onClick={() => toggle("cap")} disabled={busy} className="max-sm:flex-1">
+        <Button variant="secondary" aria-expanded={open === "cap"} onClick={() => toggle("cap")} disabled={busy} className="max-sm:flex-1">
           Cap its spending
         </Button>
       }
@@ -446,19 +446,19 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
       }
       note={employee.standing !== null ? "A standing hire is never let go: every organisation keeps one." : null}
     >
-      <Button variant="outline" aria-expanded={open === "reassign"} onClick={() => toggle("reassign")} disabled={busy} className={MENU_ITEM}>
+      <Button variant="secondary" aria-expanded={open === "reassign"} onClick={() => toggle("reassign")} disabled={busy} className={MENU_ITEM}>
         Reassign
       </Button>
-      <Button variant="outline" aria-expanded={open === "budget"} onClick={() => toggle("budget")} disabled={busy} className={MENU_ITEM}>
+      <Button variant="secondary" aria-expanded={open === "budget"} onClick={() => toggle("budget")} disabled={busy} className={MENU_ITEM}>
         Change budget
       </Button>
       {employee.status === "paused" ? (
-        <Button variant="outline" onClick={() => void run(() => update({ id: employee.id, patch: { status: "idle" } }).unwrap(), "resume")} disabled={busy} className={MENU_ITEM}>
+        <Button variant="secondary" onClick={() => void run(() => update({ id: employee.id, patch: { status: "idle" } }).unwrap(), "resume")} disabled={busy} className={MENU_ITEM}>
           Resume
         </Button>
       ) : (
         <Button
-          variant="outline"
+          variant="secondary"
           onClick={() =>
             void run(
               () =>
@@ -527,7 +527,7 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
             <Button type="submit" disabled={busy || (scope === employee.scope && manager === (employee.reportsTo?.id ?? ""))}>
               Move
             </Button>
-            <Button variant="ghost" onClick={() => setOpen(null)}>
+            <Button variant="quiet" onClick={() => setOpen(null)}>
               Cancel
             </Button>
           </span>
@@ -553,7 +553,7 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
             <Button type="submit" disabled={busy}>
               {open === "budget" ? "Save budget" : "Save the cap"}
             </Button>
-            <Button variant="ghost" onClick={() => setOpen(null)}>
+            <Button variant="quiet" onClick={() => setOpen(null)}>
               Cancel
             </Button>
           </span>
@@ -615,7 +615,7 @@ function ActionGroup({ first, note, children }: { first: ReactNode; note?: strin
     <div className="flex min-w-0 flex-col gap-2 max-sm:w-full sm:items-end">
       <div role="group" aria-label="Actions" className="flex flex-wrap items-center gap-2 max-sm:w-full">
         {first}
-        <Button variant="outline" aria-expanded={menu} aria-controls={id} onClick={() => setMenu((x) => !x)} className="sm:hidden">
+        <Button variant="secondary" aria-expanded={menu} aria-controls={id} onClick={() => setMenu((x) => !x)} className="sm:hidden">
           More
           <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", menu && "rotate-180")} />
         </Button>
@@ -686,7 +686,7 @@ function EditJob({ employee, managers, tree, onDone, onError }: { employee: Empl
         <Button type="submit" disabled={state.isLoading}>
           Save the job
         </Button>
-        <Button variant="ghost" onClick={onDone}>
+        <Button variant="quiet" onClick={onDone}>
           Cancel
         </Button>
       </span>
@@ -1031,7 +1031,7 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
         (adding ? (
           <MemoryForm employee={employee} includeArchived={includeArchived} onDone={() => setAdding(false)} />
         ) : (
-          <Button variant="outline" className="self-start" onClick={() => setAdding(true)}>
+          <Button variant="secondary" className="self-start" onClick={() => setAdding(true)}>
             Add something {employee.name} should know
           </Button>
         ))}
@@ -1092,10 +1092,10 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
         </span>
         {editable && !pending && !removing && (
           <span className="-my-1 flex flex-wrap gap-1">
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+            <Button size="sm" variant="quiet" onClick={() => setEditing(true)}>
               Correct
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setRemoving(true)}>
+            <Button size="sm" variant="quiet" onClick={() => setRemoving(true)}>
               Remove
             </Button>
           </span>
@@ -1190,7 +1190,7 @@ function MemoryForm({ employee, entry, includeArchived, onDone }: { employee: Em
         <Button type="submit" size="sm" disabled={adding.isLoading || correcting.isLoading}>
           {entry ? "Save the correction" : "Add it"}
         </Button>
-        <Button size="sm" variant="ghost" onClick={onDone}>
+        <Button size="sm" variant="quiet" onClick={onDone}>
           Cancel
         </Button>
       </span>
@@ -1251,7 +1251,7 @@ function MemoryHistory({ changes, entries, onRetry }: { changes: ViewState<Memor
               })}
             </ol>
             {changes.data.length > 8 && (
-              <Button size="sm" variant="ghost" className="self-start" onClick={() => setAll((x) => !x)}>
+              <Button size="sm" variant="quiet" className="self-start" onClick={() => setAll((x) => !x)}>
                 {all ? "Show the latest only" : `Show all ${formatNumber(changes.data.length)}`}
               </Button>
             )}
@@ -1303,7 +1303,7 @@ function ReviewPanel({ employee, changes, onRetry, editable }: { employee: Emplo
                 Review started — watch it
               </Link>
             )}
-            <Button size="sm" variant="outline" onClick={() => void start()} disabled={state.isLoading || queued !== null}>
+            <Button size="sm" variant="secondary" onClick={() => void start()} disabled={state.isLoading || queued !== null}>
               Review now
             </Button>
           </div>

@@ -156,10 +156,10 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
         <Button onClick={() => setConfirming("accept")} disabled={state.isLoading} aria-expanded={confirming === "accept"}>
           Hire {hire.name}
         </Button>
-        <Button variant="outline" onClick={onEdit} disabled={state.isLoading}>
+        <Button variant="secondary" onClick={onEdit} disabled={state.isLoading}>
           Edit the proposal
         </Button>
-        <Button variant="ghost" onClick={() => setConfirming("decline")} disabled={state.isLoading} aria-expanded={confirming === "decline"}>
+        <Button variant="quiet" onClick={() => setConfirming("decline")} disabled={state.isLoading} aria-expanded={confirming === "decline"}>
           Decline
         </Button>
       </div>
@@ -280,7 +280,7 @@ function EditHire({ hire, tree, onDone, onError }: { hire: Hire; tree: Tree | un
         <Button type="submit" disabled={state.isLoading}>
           Save the proposal
         </Button>
-        <Button variant="ghost" onClick={onDone}>
+        <Button variant="quiet" onClick={onDone}>
           Cancel
         </Button>
       </span>

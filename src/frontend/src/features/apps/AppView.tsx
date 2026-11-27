@@ -298,7 +298,7 @@ function CopyAddress({ url, label }: { url: string; label: string }) {
   };
   const said = state === "copied" ? "Copied" : state === "failed" ? "It could not be copied; select it and copy it by hand" : label;
   return (
-    <button type="button" onClick={() => void copy()} aria-label={said} title={said} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "size-11 shrink-0 p-0 text-ink-muted hover:text-ink")}>
+    <button type="button" onClick={() => void copy()} aria-label={said} title={said} className={cn(buttonVariants({ variant: "quiet", size: "sm" }), "size-11 shrink-0 p-0 text-ink-muted hover:text-ink")}>
       {state === "copied" ? <Check aria-hidden className="size-4 text-success-text" /> : <Copy aria-hidden className="size-4" />}
       <span role="status" className="sr-only">
         {state === "copied" ? "Copied" : state === "failed" ? said : ""}
@@ -470,7 +470,7 @@ function Sharing({ app }: { app: AppDetail }) {
                       </span>
                       <Badge tone={share.registered ? "good" : "neutral"}>{share.registered ? "Registered" : `Invited ${timeAgo(share.invitedAt)}`}</Badge>
                     </div>
-                    <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setConfirmRemove(share.email)} aria-label={`Stop sharing with ${share.email}`}>
+                    <Button size="sm" variant="quiet" className="shrink-0" onClick={() => setConfirmRemove(share.email)} aria-label={`Stop sharing with ${share.email}`}>
                       Stop sharing
                     </Button>
                   </div>
@@ -542,13 +542,13 @@ function InvitationCode({ created, appName, onDone }: { created: AppShareCreated
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <code className="min-w-0 break-all rounded-xs bg-surface px-3 py-2 font-mono text-base">{created.invitationCode}</code>
-        <Button size="sm" variant="outline" onClick={() => void copy()}>
+        <Button size="sm" variant="secondary" onClick={() => void copy()}>
           {copied === "yes" ? "Copied" : "Copy the code"}
         </Button>
       </div>
       {copied === "failed" && <p className="text-sm text-attention-text">The code could not be copied; select it and copy it by hand.</p>}
       <p className="font-semibold text-success-text">It will not be shown again.</p>
-      <Button size="sm" variant="ghost" className="self-start" onClick={onDone}>
+      <Button size="sm" variant="quiet" className="self-start" onClick={onDone}>
         Done
       </Button>
     </div>

@@ -54,7 +54,7 @@ export function TryAgain({ runId, why, ideaId = null, showCredits = false }: { r
             <Button onClick={() => void start()} disabled={starting.isLoading}>
               {starting.isLoading ? "Starting…" : "Start it again"}
             </Button>
-            <Button variant="ghost" onClick={() => setEstimate(null)}>
+            <Button variant="quiet" onClick={() => setEstimate(null)}>
               Not now
             </Button>
           </div>
@@ -70,7 +70,7 @@ export function TryAgain({ runId, why, ideaId = null, showCredits = false }: { r
             ) : "Try again"}
           </Button>
           {showCredits && (
-            <Link href={paths.credits()} className={cn(buttonVariants({ variant: "outline" }))}>
+            <Link href={paths.credits()} className={cn(buttonVariants({ variant: "secondary" }))}>
               See credits
             </Link>
           )}

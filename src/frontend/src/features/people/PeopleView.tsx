@@ -282,12 +282,12 @@ function MemberRow({
           <div className="min-w-0 max-md:w-48 md:order-2">{roleCell}</div>
           <div className="flex md:order-5 md:justify-end">
             {variant === "member" && editable && !inherited && !confirm && (
-              <Button size="sm" variant="ghost" aria-label={`Remove ${member.displayName}`} title={`Remove ${member.displayName}`} disabled={removing.isLoading} onClick={() => setConfirm(true)}>
+              <Button size="sm" variant="quiet" aria-label={`Remove ${member.displayName}`} title={`Remove ${member.displayName}`} disabled={removing.isLoading} onClick={() => setConfirm(true)}>
                 Remove
               </Button>
             )}
             {variant === "invitation" && editable && !inherited && !renewed && (
-              <Button size="sm" variant="soft" disabled={renewing} onClick={() => void renew()}>
+              <Button size="sm" variant="secondary" disabled={renewing} onClick={() => void renew()}>
                 {renewing ? "Sending a new code…" : "Send a new code"}
               </Button>
             )}
@@ -301,7 +301,7 @@ function MemberRow({
         </OneTime>
       )}
       {variant === "invitation" && editable && !inherited && !confirm && (
-        <Button size="sm" variant="ghost" className="-ml-3 self-start" disabled={removing.isLoading} onClick={() => setConfirm(true)}>
+        <Button size="sm" variant="quiet" className="-ml-3 self-start" disabled={removing.isLoading} onClick={() => setConfirm(true)}>
           Remove {member.displayName}
         </Button>
       )}

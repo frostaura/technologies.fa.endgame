@@ -202,13 +202,13 @@ function AskForIdeas({ scope, here, canAsk, started, suggesting, onStarted }: { 
             <Button onClick={() => void go()} disabled={starting.isLoading}>
               {starting.isLoading ? "Starting…" : "Suggest ideas"}
             </Button>
-            <Button variant="ghost" onClick={() => setCost(null)}>
+            <Button variant="quiet" onClick={() => setCost(null)}>
               Not now
             </Button>
           </div>
         </div>
       ) : canAsk ? (
-        <Button variant="outline" className="self-start phone:self-stretch" onClick={() => void see()} disabled={estimating.isLoading}>
+        <Button variant="secondary" className="self-start phone:self-stretch" onClick={() => void see()} disabled={estimating.isLoading}>
           {estimating.isLoading ? (
               <>
                 <Spinner inherit />
@@ -310,7 +310,7 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
                 <Button onClick={() => void confirm()} disabled={taking.isLoading}>
                   {taking.isLoading ? "Starting…" : "Research this idea"}
                 </Button>
-                <Button variant="ghost" onClick={() => setCost(null)}>
+                <Button variant="quiet" onClick={() => setCost(null)}>
                   Not now
                 </Button>
               </div>
@@ -327,7 +327,7 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
                   "Take this idea"
                 )}
               </Button>
-              <Button variant="ghost" onClick={() => void setAside()}>
+              <Button variant="quiet" onClick={() => void setAside()}>
                 Set it aside
               </Button>
             </div>

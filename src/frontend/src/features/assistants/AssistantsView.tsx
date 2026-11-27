@@ -149,7 +149,7 @@ function TokenRow({ token, technical, organisation }: { token: AccessToken; tech
       <div className="flex items-center justify-end gap-2">
         <Badge tone={s.tone}>{s.label}</Badge>
         {token.active && !confirm && (
-          <Button size="sm" variant="ghost" disabled={revoking.isLoading} onClick={() => setConfirm(true)}>
+          <Button size="sm" variant="quiet" disabled={revoking.isLoading} onClick={() => setConfirm(true)}>
             Revoke
           </Button>
         )}
@@ -294,7 +294,7 @@ function Address({ label, value }: { label: string; value: string }) {
         <span className="min-w-0 truncate text-sm font-medium text-ink-body">{label}</span>
         <Button
           size="sm"
-          variant="ghost"
+          variant="quiet"
           className="-mr-2 shrink-0 px-2 text-primary-link hover:text-primary-hover"
           aria-label={`Copy the address for ${label}`}
           onClick={() =>

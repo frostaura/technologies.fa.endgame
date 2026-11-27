@@ -48,7 +48,7 @@ export function NotificationFeed({ organisation, limit, onNavigate, compact = fa
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-ink-body">{view.data.unread === 0 ? "Nothing unread." : `${view.data.unread} unread`}</span>
             {view.data.unread > 0 && (
-              <Button size="sm" variant="ghost" onClick={() => void readAll()} disabled={all.isLoading}>
+              <Button size="sm" variant="quiet" onClick={() => void readAll()} disabled={all.isLoading}>
                 Mark all read
               </Button>
             )}
@@ -98,7 +98,7 @@ function Feed({ items, older, onOlder, children }: { items: NotificationItem[]; 
         ))}
       </ul>
       {hidden > 0 && (
-        <Button variant="soft" className="self-center" onClick={onOlder}>
+        <Button variant="secondary" className="self-center" onClick={onOlder}>
           Show older ({formatNumber(Math.min(hidden, PHONE_PAGE))} of {formatNumber(hidden)})
         </Button>
       )}
@@ -188,7 +188,7 @@ function Time({ at }: { at: string }) {
 
 function MarkRead({ onClick }: { onClick: () => void }) {
   return (
-    <Button size="sm" variant="ghost" className="-mr-2 px-2 text-primary-link hover:text-primary-hover" onClick={onClick}>
+    <Button size="sm" variant="quiet" className="-mr-2 px-2 text-primary-link hover:text-primary-hover" onClick={onClick}>
       Mark read
     </Button>
   );

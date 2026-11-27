@@ -116,7 +116,7 @@ export function ItIsYours({ app, isOwner }: { app: AppDetail; isOwner: boolean }
       <p className="text-ink-body">Download the code, its full history and all its data whenever you like, at no cost. Secrets are never included.</p>
       {isOwner ? (
         <>
-          <Button variant="outline" className="self-start" disabled={state.kind === "working"} onClick={() => void download()}>
+          <Button variant="secondary" className="self-start" disabled={state.kind === "working"} onClick={() => void download()}>
             {state.kind === "working" ? "Preparing the download…" : "Download everything"}
           </Button>
           {state.kind === "done" && (

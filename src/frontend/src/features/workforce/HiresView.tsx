@@ -55,7 +55,7 @@ export function HiresView() {
         lead="Hires are proposed when the organisation needs someone: a new division, a project reaching a new stage, or a job that keeps coming back. In auto-mode one that fits the budget is taken on at once; otherwise it waits for you here."
         actions={
           scope && isAdmin && !raising ? (
-            <Button variant="outline" onClick={() => setRaising(true)}>
+            <Button variant="secondary" onClick={() => setRaising(true)}>
               Ask for a hire
             </Button>
           ) : undefined
@@ -260,13 +260,13 @@ function RecurringRow({ role, tree, isAdmin, waiting }: { role: RecurringRole; t
             <Button type="submit" size="sm" disabled={state.isLoading}>
               Propose the hire
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            <Button size="sm" variant="quiet" onClick={() => setOpen(false)}>
               Cancel
             </Button>
           </span>
         </form>
       ) : isAdmin ? (
-        <Button size="sm" variant="outline" className="self-start" onClick={() => setOpen(true)}>
+        <Button size="sm" variant="secondary" className="self-start" onClick={() => setOpen(true)}>
           Propose as a permanent hire
         </Button>
       ) : (
@@ -348,7 +348,7 @@ function RaiseHire({ scope, name, tree, onClose }: { scope: string; name: string
         <Button type="submit" disabled={state.isLoading}>
           {state.isLoading ? "Asking…" : "Ask for this hire"}
         </Button>
-        <Button variant="ghost" onClick={onClose}>
+        <Button variant="quiet" onClick={onClose}>
           Not now
         </Button>
       </span>

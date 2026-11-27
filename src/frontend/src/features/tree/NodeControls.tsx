@@ -55,7 +55,7 @@ export function RenameNode({ level, id, name, slug, tree, onDone }: { level: Man
       <Field id={fieldId} label="Name" hint={`Its address stays ${slug}: an address never changes once it is made.`} problem={value.length > 0 ? problem : null}>
         <Input id={fieldId} value={value} maxLength={NAME_LIMIT + 1} onChange={(e) => setValue(e.target.value)} aria-describedby={`${fieldId}-hint`} aria-invalid={!!problem} />
       </Field>
-      <Button type="submit" size="sm" variant="outline" className="self-start" disabled={!!problem || typed === name || state.isLoading}>
+      <Button type="submit" size="sm" variant="secondary" className="self-start" disabled={!!problem || typed === name || state.isLoading}>
         {state.isLoading ? "Saving…" : "Save the name"}
       </Button>
       {result && <Outcome ok={result.ok}>{result.text}</Outcome>}
@@ -89,13 +89,13 @@ export function ArchiveNode({ level, id, name, archived, published, tree, onArch
   return (
     <div className="flex flex-col gap-2">
       {archived ? (
-        <Button size="sm" variant="outline" className="self-start" disabled={state.isLoading} onClick={() => void change(reactivatedStatus(level, published))}>
+        <Button size="sm" variant="secondary" className="self-start" disabled={state.isLoading} onClick={() => void change(reactivatedStatus(level, published))}>
           Reactivate {name}
         </Button>
       ) : confirming ? (
         <Confirm title={`Archive ${name}?`} text={effect} yes={`Yes, archive ${name}`} no="Keep it active" onYes={() => void change("archived")} onNo={() => setConfirming(false)} />
       ) : (
-        <Button size="sm" variant="outline" className="self-start" disabled={state.isLoading} onClick={() => setConfirming(true)}>
+        <Button size="sm" variant="secondary" className="self-start" disabled={state.isLoading} onClick={() => setConfirming(true)}>
           Archive {name}
         </Button>
       )}
@@ -147,7 +147,7 @@ export function DeleteNode({ level, id, name, tree, onDeleted }: { level: Manage
           onNo={() => setConfirming(false)}
         />
       ) : (
-        <Button size="sm" variant="outline" className="self-start border-attention-text text-attention-text" disabled={state.isLoading} onClick={() => setConfirming(true)}>
+        <Button size="sm" variant="secondary" className="self-start border-attention-text text-attention-text" disabled={state.isLoading} onClick={() => setConfirming(true)}>
           Delete {name}
         </Button>
       )}
@@ -155,7 +155,7 @@ export function DeleteNode({ level, id, name, tree, onDeleted }: { level: Manage
         <div role="alert" className="flex flex-col gap-2 rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           <span>{note.text}</span>
           {note.archivable && (
-            <Button size="sm" variant="outline" className="self-start" disabled={archiving.isLoading} onClick={() => void archiveInstead()}>
+            <Button size="sm" variant="secondary" className="self-start" disabled={archiving.isLoading} onClick={() => void archiveInstead()}>
               Archive it instead
             </Button>
           )}
@@ -224,7 +224,7 @@ export function CreateChild({ level, parent, parentName, onCreated, onCancel }: 
           {state.isLoading ? "Adding…" : `Add the ${word(level)}`}
         </Button>
         {onCancel && (
-          <Button size="sm" variant="ghost" onClick={onCancel}>
+          <Button size="sm" variant="quiet" onClick={onCancel}>
             Not now
           </Button>
         )}
