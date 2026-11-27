@@ -282,7 +282,7 @@ export function StartView() {
               <div
                 className={cn(
                   "order-6 flex flex-wrap items-center gap-x-4 gap-y-2",
-                  "phone:sticky phone:bottom-nav-safe phone:z-10 phone:-mx-4 phone:flex-nowrap phone:border-t phone:bg-surface phone:px-4 phone:py-3 rail:bottom-0 rail:-mx-5 rail:px-5",
+                  "phone:sticky phone:bottom-nav-safe phone:z-10 phone:-mx-4 phone:flex-nowrap phone:border-t phone:bg-surface phone:px-4 phone:py-3 rail:static rail:mx-0 rail:border-t-0 rail:bg-transparent rail:px-0 rail:py-0",
                   RISE,
                   stagger(5),
                 )}
