@@ -3,7 +3,9 @@
 `canvas/` holds the source of the console design the founder approved on 2026-11-24: six screens
 and the iconography sheet, as the HTML the design canvas renders. They are the reference for look,
 layout, copy tone and motion. They are not application code, they contain sample figures, and
-nothing imports them. The brand mark and icon sprite the product actually uses are in
+nothing imports them. Where they show a gradient band, a tinted card or hue-coded icons, the design
+system in `docs/architecture/ARCH-011-design-system.md` supersedes them: black on white, one accent,
+status colour only in tags and meters. The brand mark and icon sprite the product actually uses are in
 `src/frontend/public/brand/`.
 
 | File | Screen |

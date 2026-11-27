@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { Icon } from "@/components/Icon";
-import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { Empty, Failed, Loading, Skeleton, Stale, Spinner } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { formatCredits, timeAgo } from "@/lib/format";
@@ -119,7 +119,12 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input id={inputId} aria-labelledby={`${inputId}-title`} value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} placeholder="Which days are busiest?" className="min-h-12 flex-1 px-4" />
           <Button type="submit" variant="outline" className="min-h-12" disabled={!typed || estimating.isLoading}>
-            {estimating.isLoading ? "Working it out…" : "See what it costs"}
+            {estimating.isLoading ? (
+              <>
+                <Spinner inherit />
+                Working it out…
+              </>
+            ) : "See what it costs"}
           </Button>
         </div>
       </form>

@@ -3,7 +3,7 @@ import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisatio
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
-import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { Empty, Failed, Loading, Skeleton, Stale, Spinner } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
@@ -209,7 +209,12 @@ function AskForIdeas({ scope, here, canAsk, started, suggesting, onStarted }: { 
         </div>
       ) : canAsk ? (
         <Button variant="outline" className="self-start" onClick={() => void see()} disabled={estimating.isLoading}>
-          {estimating.isLoading ? "Working it out…" : "See what it costs"}
+          {estimating.isLoading ? (
+              <>
+                <Spinner inherit />
+                Working it out…
+              </>
+            ) : "See what it costs"}
         </Button>
       ) : (
         <p className="text-sm text-ink-muted">Asking for ideas spends credits, so it needs the Builder role here.</p>
@@ -310,7 +315,12 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
         ) : (
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void price()} disabled={estimating.isLoading}>
-              {estimating.isLoading ? "Working it out…" : "Take this idea"}
+              {estimating.isLoading ? (
+              <>
+                <Spinner inherit />
+                Working it out…
+              </>
+            ) : "Take this idea"}
             </Button>
             <Button variant="ghost" onClick={() => void setAside()}>
               Set it aside

@@ -119,8 +119,18 @@ export function Working({ children, className }: { children: ReactNode; classNam
   );
 }
 
-export function Spinner({ className }: { className?: string }) {
-  return <span aria-hidden className={cn("size-4 shrink-0 animate-spin rounded-full border-2 border-border-strong border-t-primary motion-reduce:animate-none", className)} />;
+/** `inherit`: drawn in the text's own colour, for inside a button that is working ("Working it out…"). */
+export function Spinner({ className, inherit = false }: { className?: string; inherit?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "size-4 shrink-0 animate-spin rounded-full border-2 motion-reduce:animate-none",
+        inherit ? "border-current border-t-transparent" : "border-border-strong border-t-primary",
+        className,
+      )}
+    />
+  );
 }
 
 /**
