@@ -29,13 +29,18 @@ record (`NoteDetailPage.tsx`) — and its test, and `web/src/App.test.tsx` for n
     summary `Panel` of `Facts` beside it; a status is a `Badge` in one of five tones (`neutral`, `info`, `good`, `warn`, `bad`);
   - a form: `PageLayout form aside={preview or help}`, the fields in `FormCard`, each a `Field` around `Input`, `Select`,
     `Textarea` or `Checkbox` (a raw `<input>` has a faint 1.2:1 edge; ESLint `endgame/use-kit-fields` refuses it), and
-    `FormActions` with the main action and **Cancel** (`cancel={<Link to="/">Cancel</Link>}`);
+    `FormActions` with the main action and **Cancel** (`cancel={<Link to="/">Cancel</Link>}`); field errors only through the
+    kit's `useFormErrors()` (`<form {...form.formProps}>`), so a corrected field stops being marked wrong at once;
   - a record: its facts in a `Panel` beside it; things to tick as a `Checklist` of `ChecklistItem`s with a `Progress`; a link
-    to share as `CopyLink`; a status (`Badge`) and its action (a `Button`, `variant="danger"` when it removes) kept apart;
+    to share as `CopyLink`; a status (`Badge`) and its action (a `Button`, `variant="danger"` when it removes) kept apart; once
+    an action is done its card goes — what happened becomes a fact in the details and a `Badge` in the header — and a record
+    of a line or two sits in the description or the facts, never alone in a wide card;
   - nothing at an address: `NotFoundState` with a way back; nothing in a list: `EmptyState` with the action that fills it.
 - The header is the kit's `AppHeader` in `App.tsx` — the app's name (`APP_NAME`, which is the platform's name for the app),
   navigation as `NavItem`s, who is signed in and "Sign out". Never add another header, title or sign-out to a page, and never
   write the app's name anywhere but `appName.ts`.
+- Words on a page — descriptions, hints, empty states, buttons — never state a fact the request did not (no "on the boat"
+  when nobody mentioned a boat). Where the request is silent, say less.
 - Classes only from the token layer (`bg-surface`, `text-ink-muted`, `text-primary`, `shadow-raised`). No hex colours, no
   arbitrary values such as `p-[13px]`, no fonts or scripts from other hosts.
 - No URL starts with `/` except router paths in `<Link to>` and `<Route path>`; the router adds the base.
