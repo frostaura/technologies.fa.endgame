@@ -140,7 +140,7 @@ describe("the Edge's pages are the platform's own", () => {
     expect(page("Crashed")).toContain('<img class="mark" src="/acme/apps/notes/web/_endgame/assets/endgame-mark.svg"');
     const noApp = renderUnavailablePage("NoApp", { here: "/x", console: "https://endgame.test", address: "acme.endgame.test/community/<no-such-app>/web/" }, assetsAt("/_endgame/assets"));
     expect(noApp).toContain("<h1>There is no app at this address</h1>");
-    expect(noApp).toContain('<p class="address">acme.endgame.test/community/&lt;no-such-app&gt;/web/</p>');
+    expect(noApp).toContain('<p class="address"><span>acme.endgame.test/</span><wbr><span>community/</span><wbr><span>&lt;no-such-app&gt;/</span><wbr><span>web/</span></p>');
     expect(noApp).toContain('<a class="button" href="https://endgame.test/">Go to Endgame</a>');
     expect(authPage).toContain('<nav class=\\"actions\\" aria-label=\\"What to do next\\"><a class=\\"button\\" href=\\"');
     expect(messageBody("T", "M", "/l", "Sign in again")).toBe('<h1>T</h1>\n<p>M</p>\n<nav class="actions" aria-label="What to do next"><a class="button" href="/l">Sign in again</a></nav>');
@@ -527,7 +527,7 @@ describe("HostedAppView", () => {
   it("serves the paused page in an isolated document", () => {
     render(<HostedAppView ctx={context({ visitor: V.member, app: { state: "paused" } })} />);
     expect(edgeDoc().querySelector("h1")?.textContent).toBe("This app is paused");
-    expect(edgeDoc().querySelector("style")?.textContent).toContain("--measure: 34rem;");
+    expect(edgeDoc().querySelector("style")?.textContent).toContain("--measure: 40rem;");
     expect(edgeDoc().querySelector("style")?.textContent).toContain('@font-face { font-family: "Space Grotesk Variable"');
     expect(edgeDoc().querySelector("nav.actions a")?.textContent).toBe("Try again");
   });
