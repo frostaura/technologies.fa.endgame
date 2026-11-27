@@ -574,6 +574,7 @@ Shared vocabulary used below:
      - "You are below zero. <n> credits more can be spent before work stops; the next top-up settles the debt first."
      - "You are below zero, at your limit. Work is paused until a top-up settles the debt."
   3. Three figures follow: "Spent this month", "On AI work", "On hosting".
+  4. Below the budgets (CRED-02) — beside them, on a screen 1,600 wide or more — the month's two figures (CRED-04) and "Top-ups": every top-up made, with its note, its date and "+ <n>".
 - **You know it worked when:** the balance and the three figures are shown.
 - **Variations and refusals:**
   - No organisation: "There are no credits to show until your organisation is named." with a "Start" link.
@@ -592,10 +593,10 @@ Shared vocabulary used below:
 - **Starts at:** `/credits`, section "Budgets" ("A cap set higher up holds for everything beneath it. Work that would break a cap does not start.", with " An Admin or the Owner sets the caps." for anyone below Admin).
 - **Needs:** nothing.
 - **Steps:**
-  1. Rows run in tree order (by name at each level), indented: organisation, divisions, projects, apps; each level's employees with a cap of their own follow it.
-  2. Each row shows a bar "<n> of <n> used" (warning colour at 100%), or which cap holds it: "No cap here; the cap on <Name>, <n> credits, holds" — or "No cap here or above it".
-  3. App and employee names link to their page. An employee's row reads "With the contractors it briefs" and counts their spend too, as its cap does.
-- **You know it worked when:** the tree of rows is shown with bars where caps exist.
+  1. One dense table, columns "Level", "Spent this month" and "Cap" (and, for an Admin, the row's one action). Rows run in tree order (by name at each level), indented: organisation, divisions, projects, apps; each level's employees with a cap of their own follow it, marked "employee" (an app is marked "app"). Each division's row has a chevron that folds away everything in it ("Hide what is in <Name>" / "Show what is in <Name>").
+  2. A row with a cap of its own shows what it spent with a slim meter against the cap ("<n> of <n> used", warning colour at 100%) and the cap in the "Cap" column. A row with none shows "↑ <n>", the cap above that holds it (its name, read aloud and on hover, is "No cap here; the cap on <Name>, <n> credits, holds"), or "—" ("No cap here or above it"). A legend under the table says what "↑" and "—" mean, once. On a phone the cap column folds into "<n> of <cap> this month".
+  3. App and employee names link to their page. The legend says "An employee’s spending is with the contractors it briefs": its row counts their spend too, as its cap does.
+- **You know it worked when:** the tree of rows is shown with meters where caps exist.
 - **Variations and refusals:** "No spending or caps anywhere in the tree yet." when the list is empty.
 - **Where:** `CreditsView.tsx` (BudgetRow), `creditsModel.ts` (`capAbove`, `noCapLine`). `ReadModels.BudgetLinesAsync`.
 - **Reachable from:** UI.
@@ -606,11 +607,11 @@ Shared vocabulary used below:
 - **Level:** Core
 - **Learn first:** CRED-02.
 - **What you learn:** a monthly cap at a level stops work that would exceed it, and pauses the apps beneath it once spent.
-- **Starts at:** `/credits`, any row of "Budgets": **"Set a cap"**, **"Change the cap"** or **"Remove it"**. An app's own cap also on its page (APP-11). Also `PUT/DELETE /api/cascade` (kind `budget`, key `monthly_credits`) and MCP `budget_set`.
+- **Starts at:** `/credits`, any row of "Budgets": its one action, **"Set a cap"** or **"Change the cap"**. An app's own cap also on its page (APP-11). Also `PUT/DELETE /api/cascade` (kind `budget`, key `monthly_credits`) and MCP `budget_set`.
 - **Needs:** Admin at that level.
 - **Steps:**
-  1. Press "Set a cap" (or "Change the cap"), type into "Credits a month" and press "Save the cap". The bar changes at once and "<Name> may spend <n> credits a month." appears (for an employee "…, with the contractors it briefs.").
-  2. "Remove it" takes the cap away at once and says what holds it now: "<Name> has no cap of its own now; the cap on <Above>, <n> credits a month, holds it." — or "…and nothing above it has one: only the balance and the overdraft limit hold it."
+  1. Press "Set a cap" (or "Change the cap"): the row opens a form across its width. Type into "Credits a month" and press "Save the cap" ("Not now" closes it). The meter changes at once and "<Name> may spend <n> credits a month." appears (for an employee "…, with the contractors it briefs.").
+  2. In the same form, a row with a cap offers **"Remove the cap"**, which takes the cap away at once and says what holds it now: "<Name> has no cap of its own now; the cap on <Above>, <n> credits a month, holds it." — or "…and nothing above it has one: only the balance and the overdraft limit hold it."
   3. At 80%, at the cap and after, as before: notifications, refused model calls, paused apps.
 - **You know it worked when:** the row shows "<n> of <cap> used", or which cap holds it.
 - **Variations and refusals:**
@@ -642,7 +643,7 @@ Shared vocabulary used below:
 - **Level:** Advanced
 - **Learn first:** CRED-01, CRED-08.
 - **What you learn:** the organisation may choose to stop sooner than FrostAura allows, never later.
-- **Starts at:** the `/credits` aside "If you run out" ("Nothing stops at zero. You can go below it, down to your limit, and the next top-up settles it."), with "Most FrostAura allows you" and "Your own limit" ("Not set" or "<n> below zero").
+- **Starts at:** the `/credits` aside "If you run out" ("Nothing stops at zero. You can go below it, down to your limit, and the next top-up settles it."), with "Most FrostAura allows" and "Your own limit" ("Not set" or "<n> below zero").
 - **Needs:** Owner.
 - **Steps:**
   1. Press "Change your limit". Fill in "How far below zero you may go", with the hint "FrostAura allows at most <n> below zero. Yours can be tighter, never deeper."
@@ -775,9 +776,9 @@ Shared vocabulary used below:
 - **Starts at:** `/operator`, section "Every organisation" (refreshes every 30 seconds).
 - **Needs:** operator.
 - **Steps:**
-  1. Each card shows the name, "<slug> · since <date>" (plus the status when not active), and a badge "In credit", "Below zero" or "At its limit".
-  2. The card shows "Balance", "Overdraft allowed" ("<n> below zero", with "Their own: <n>; yours: <n>" or "Set by you: <n>"), "Apps" and "Last active" ("Never").
-  3. Waiting requests show "One top-up request is waiting." or "<n> top-up requests are waiting."
+  1. Under the section's line "Entering one is logged where its Owner can read it.", one card per organisation, one under another, every card on the same grid: the name with a badge "In credit", "Below zero" or "At its limit", and "<slug> · since <date>" (plus the status when not active).
+  2. Beside it, in the same four places on every card, "Balance" (red below zero), "Overdraft allowed" ("<n> below zero", with "Their own: <n>; yours: <n>" or "Set by you: <n>"), "Apps" and "Last active" ("Never"). The actions ("Enter <Org>", "Top up", "Deepest overdraft") run along the card's foot, and a form they open spans the card.
+  3. Waiting requests show "One top-up request is waiting." or "<n> top-up requests are waiting." under the name.
 - **You know it worked when:** a card is listed for each organisation.
 - **Variations and refusals:** empty "No organisations yet" with "Provision the first one for an invited Owner." Failed: "The organisations could not be loaded". Technical mode adds the id.
 - **Where:** `OperatorView.tsx` (Organisations, OrganisationCard). `GET /api/operator/organisations`. `OperatorOverview.cs`.
@@ -952,7 +953,7 @@ Shared vocabulary used below:
 - **Needs:** Owner.
 - **Steps:**
   1. The heading reads "Operator access", with "Every time someone from FrostAura entered <Org> or acted on it, newest first. It is never silent, and only the Owner can read it."
-  2. Entries read, for example, "Entered the organisation", "Screened against the red lines: it crosses none (by a model)", "Set up the organisation", "Added <n> credits", "Changed the deepest overdraft to <n> credits below zero", "Answered a top-up request with <n> credits", "Declined a top-up request for <n> credits: <why>", "Changed the prices for every organisation" and "As an Admin: <what they changed>", each with the date and time and "<operator name> · <email>". Technical mode adds the raw action and its detail.
+  2. One list, newest first, every entry on the same grid: the date and time first, then what was done, then who. Entries read, for example, "Entered the organisation", "Screened against the red lines: it crosses none (by a model)", "Set up the organisation", "Added <n> credits", "Changed the deepest overdraft to <n> credits below zero", "Answered a top-up request with <n> credits", "Declined a top-up request for <n> credits: <why>", "Changed the prices for every organisation" and "As an Admin: <what they changed>", each with "<operator name> · <email>". Technical mode adds the raw action and its detail.
 - **You know it worked when:** the log, or its empty state, is shown.
 - **Variations and refusals:**
   - Empty: "No one from FrostAura has entered <Org>" with "If anyone does, it is written here first."

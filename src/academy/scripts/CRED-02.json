@@ -10,15 +10,15 @@
       "kind": "demo",
       "highlight": {
         "selector": "ul[aria-label='Budgets']",
-        "note": "Every level in tree order, indented: the organisation, divisions, projects, apps — each with its employees that have a cap of their own."
+        "note": "Every level in tree order, indented: the organisation, divisions (each folds away), projects, apps — and each employee with a cap of its own. One row each: what it spent this month, its cap, and the one action."
       }
     },
     {
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "text": "No cap here; the cap on Technologies, 450 credits, holds",
-        "note": "A bar where a level has its own cap; otherwise which cap above holds it."
+        "label": "No cap here; the cap on Technologies, 450 credits, holds",
+        "note": "A meter where a level has its own cap; where it has none, ↑ and the cap above that holds it."
       }
     },
     {
@@ -26,7 +26,7 @@
       "kind": "demo",
       "highlight": {
         "text": "With the contractors it briefs",
-        "note": "An employee's row, linked to its record, counts what its contractors spend, as its cap does."
+        "note": "Said once, under the tree: an employee's row, linked to its record, counts what its contractors spend, as its cap does."
       }
     }
   ],

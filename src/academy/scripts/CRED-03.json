@@ -45,6 +45,11 @@
       "act": [
         {
           "click": {
+            "text": "Change the cap on Technologies"
+          }
+        },
+        {
+          "click": {
             "text": "Remove the cap on Technologies"
           }
         },
@@ -61,7 +66,7 @@
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "text": "120 of 120",
+        "label": "120 of 120 used",
         "note": "At 80% and at the cap you are told; at the cap its work stops and its apps pause — as Stock Counter's has."
       }
     }
