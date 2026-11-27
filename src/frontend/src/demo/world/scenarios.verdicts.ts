@@ -79,6 +79,37 @@ defineScenario({
   featured: { idea: IDS.ideaVans },
 });
 
+/**
+ * A verdict reached without a single web search — what a research run whose rules held back `web_search`, or
+ * whose model answered from what it already knew, writes: products named from memory with no address, signals
+ * with no source, every strand at 0 searches and 0 sources, low confidence. The page says once that nothing
+ * was searched and never counts that knowledge as evidence it read.
+ */
+defineScenario({
+  name: "verdict-no-search",
+  title: "A verdict reached without any web search",
+  apply: (w) => {
+    const i = idea(w, IDS.ideaVans);
+    if (!i?.verdict) return;
+    const v = JSON.parse(JSON.stringify(i.verdict)) as Record<string, unknown> & { existing: { products: { name: string; does: string; sources: string[] }[] }; demand: Record<string, unknown> };
+    v.existing.products = [
+      ...v.existing.products.map((p) => ({ ...p, sources: [] })),
+      { name: "Onfleet", does: "Delivery tracking with a live map link for each customer.", sources: [] },
+      { name: "Tookan", does: "Dispatch and tracking for small fleets.", sources: [] },
+    ];
+    v.demand = { evidence: "Customers of small shops rarely ask where the van is; they ask when it will arrive.", signals: [{ text: "Couriers' own apps already send a live map link, so customers have one.", source: null }] };
+    v.method = {
+      strands: ["existing products", "the gap", "demand"].map((t, n) => ({ id: ["existing", "gap", "demand"][n], title: `Looked at ${t}`, searches: 0, sources: 0, confidence: "low" })),
+      searches: 0,
+      sources: [],
+      confidence: "low",
+    };
+    Object.assign(i, { verdict: v });
+  },
+  route: "/ideas/{idea}",
+  featured: { idea: IDS.ideaVans },
+});
+
 defineScenario({ name: "verdict-decided", title: "A verdict you chose to build", route: "/ideas/{idea}", featured: { idea: IDS.ideaReadingList, run: IDS.runBuildReadingList } });
 
 defineScenario({ name: "verdict-researching", title: "An idea still being researched", route: "/ideas/{idea}", featured: { idea: IDS.ideaTides, run: IDS.runResearchTides } });

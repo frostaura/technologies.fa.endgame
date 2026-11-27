@@ -1,4 +1,6 @@
 import { ShapeError, type Guard } from "@/lib/guards";
+import { NO_VALUE } from "@/components/ui/stat";
+import { formatNumber, plural } from "@/lib/format";
 import type { DecisionChoice, ExistingProduct, Signal, Strand, Verdict, VerdictOutcome } from "@/store/types";
 
 /**
@@ -282,4 +284,67 @@ export function shortSummary(summary: string, max = 320): { text: string; full: 
   }
   const text = picked.join(" ");
   return { text, full: text.length >= summary.replace(/\s+/g, " ").trim().length - 30 };
+}
+
+/**
+ * True when research ran no web search and read no source: the verdict is what the researcher already knew.
+ * The page then says so once, and never counts what it knew as evidence it read.
+ */
+export function nothingSearched(verdict: Verdict): boolean {
+  const m = verdict.method;
+  if (!m || sourceCount(verdict) > 0) return false;
+  const strandSearches = m.strands.reduce((n, x) => n + (x.searches ?? 0), 0);
+  return (m.searchCount ?? 0) === 0 && strandSearches === 0 && (m.searchCount === 0 || m.strands.some((x) => x.searches === 0));
+}
+
+/** How many sources research read: its list, or what its strands counted when it kept no list. */
+export function sourceCount(verdict: Verdict): number {
+  const listed = new Set(verdict.method.sources).size;
+  return listed > 0 ? listed : verdict.method.strands.reduce((n, x) => n + (x.sources ?? 0), 0);
+}
+
+/** Three short figures for the hero: what is already sold, how many signs of demand, and how sure research is. */
+export function heroFacts(verdict: Verdict): { label: string; value: string; caption: string }[] {
+  if (notResearched(verdict) || nothingSearched(verdict)) return [];
+  const products = verdict.existing.products.length;
+  const signals = verdict.demand.signals.length;
+  const sources = sourceCount(verdict);
+  const confidence = verdict.method?.confidence;
+  return [
+    { label: "Already sold", value: formatNumber(products), caption: products === 1 ? "product like it" : "products like it" },
+    {
+      label: "Demand",
+      value: !verdict.demand.evidenceFound ? "None" : signals > 0 ? formatNumber(signals) : "Some",
+      caption: !verdict.demand.evidenceFound ? "none found" : signals > 0 ? (signals === 1 ? "signal found" : "signals found") : "no signals listed",
+    },
+    { label: "Confidence", value: confidence ? `${confidence.charAt(0).toUpperCase()}${confidence.slice(1)}` : NO_VALUE, caption: sources > 0 ? `from ${plural(sources, "source")}` : "no sources recorded" },
+  ];
+}
+
+
+/** A title as a person would write it: older records kept the idea's first words in lower case. */
+export function titleCase(text: string): string {
+  const t = text.trim();
+  return t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}` : t;
+}
+
+/** Words cut to at most `max` characters at a word's end, with "…" — never part of a word ("the ho…"). */
+export function wordClamp(text: string, max = 110): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const end = cut.lastIndexOf(" ");
+  return `${(end > max / 2 ? cut.slice(0, end) : cut).replace(/[\s,;:.—–-]+$/, "")}…`;
+}
+
+/** Every source read, once per site: the site, the first address read there and how many were. */
+export function sourceSites(urls: readonly string[]): { site: string; url: string; pages: number }[] {
+  const bySite = new Map<string, { site: string; url: string; pages: number }>();
+  for (const url of new Set(urls)) {
+    const site = sourceLabel(url);
+    const seen = bySite.get(site);
+    if (seen) seen.pages += 1;
+    else bySite.set(site, { site, url, pages: 1 });
+  }
+  return [...bySite.values()];
 }
