@@ -88,7 +88,7 @@ export function ArchiveNode({ level, id, name, archived, published, tree, onArch
       : `It is marked archived and keeps its history, spending and people. None of its apps is served until it is reactivated.`;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 max-w-full flex-col gap-2">
       {archived ? (
         <Button size="sm" variant="secondary" className="self-start" disabled={state.isLoading} onClick={() => void change(reactivatedStatus(level, published))}>
           Reactivate {name}
@@ -137,7 +137,7 @@ export function DeleteNode({ level, id, name, tree, onDeleted }: { level: Manage
   };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 max-w-full flex-col gap-2">
       {confirming ? (
         <Confirm
           title={`Delete ${name}?`}

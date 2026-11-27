@@ -54,9 +54,12 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, asChild = false, type, children, title, ...props }, ref) => {
   const Comp = asChild ? Slot : "button";
-  const words = !asChild && typeof children === "string";
+  // A label of plain words (`Archive {name}` is several strings): cut with an ellipsis when it outgrows its column.
+  const parts = Array.isArray(children) ? children : [children];
+  const words = !asChild && parts.length > 0 && parts.every((c) => typeof c === "string" || typeof c === "number");
+  const text = words ? parts.join("") : "";
   return (
-    <Comp ref={ref} type={asChild ? undefined : (type ?? "button")} title={title ?? (words && children.length > 40 ? children : undefined)} className={cn(buttonVariants({ variant, size }), className)} {...props}>
+    <Comp ref={ref} type={asChild ? undefined : (type ?? "button")} title={title ?? (words && text.length > 40 ? text : undefined)} className={cn(buttonVariants({ variant, size }), className)} {...props}>
       {words ? <span className="min-w-0 truncate">{children}</span> : children}
     </Comp>
   );

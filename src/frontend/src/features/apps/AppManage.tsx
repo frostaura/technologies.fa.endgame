@@ -267,7 +267,7 @@ export function AppItself({ app, canChange, isAdmin }: { app: AppDetail; canChan
       {canChange ? <RenameNode level="app" id={app.id} name={app.name} slug={slug} tree={tree} /> : <p className="text-sm text-ink-muted">A Builder or above renames or archives it.</p>}
       {/* Archive and Delete side by side: the outlined choice, then the destructive one, at one size. */}
       {(canChange || isAdmin) && (
-        <div className="flex flex-wrap items-start gap-2">
+        <div className="flex min-w-0 flex-wrap items-start gap-2">
           {canChange && <ArchiveNode level="app" id={app.id} name={app.name} archived={archived} published={app.version !== null || app.publishedAt !== null} tree={tree} />}
           {isAdmin && <DeleteNode level="app" id={app.id} name={app.name} tree={tree} onDeleted={() => navigate(entered ? paths.homeOf(entered) : paths.home())} />}
         </div>
