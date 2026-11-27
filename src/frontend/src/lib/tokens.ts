@@ -226,9 +226,44 @@ export const viewportQueries = {
 
 /** Named widths. `frame` caps the whole console (header, page and side panel) so nothing spans an ultrawide. */
 export const layout = {
-  width: { frame: "137.5rem", page: "96rem", aside: "22rem", "aside-wide": "26rem", dock: "26rem", form: "40rem", prose: "45rem", aura: "20rem", bubble: "85%", reply: "92%" },
+  width: {
+    /** The whole console's cap from the 4xl tier. */
+    frame: "137.5rem",
+    page: "96rem",
+    aside: "22rem",
+    "aside-wide": "26rem",
+    /** The conversation pane docked at the right: narrow, wide, and collapsed to a rail (ARCH-012). */
+    dock: "26rem",
+    "dock-wide": "34rem",
+    "dock-rail": "3.5rem",
+    form: "40rem",
+    prose: "45rem",
+    aura: "20rem",
+    bubble: "85%",
+    reply: "92%",
+    /** A menu or panel that opens over the composer. */
+    popover: "24rem",
+    /** An attachment chip's name before it is cut short. */
+    chip: "11rem",
+  },
   /** The organisation graph's frame: tall enough to read, short enough to keep the page in view. A bottom sheet's tallest. */
-  height: { graph: "40rem", sheet: "calc(var(--visible-height, 100dvh) - 2.5rem)", visible: "var(--visible-height, 100dvh)" },
+  height: {
+    graph: "40rem",
+    sheet: "calc(var(--visible-height, 100dvh) - 2.5rem)",
+    visible: "var(--visible-height, 100dvh)",
+    /** The docked conversation: the viewport under the shell's sticky header (`--shell-chrome`, kept current by the shell). */
+    dock: "calc(100dvh - var(--shell-chrome, 0px))",
+    /** The conversation placed in a page (a tablet, an app's or an employee's page): tall enough to talk, never the whole page. */
+    pane: "min(46rem, 80dvh)",
+    /** The composer's text box at its tallest before it scrolls (about eight lines). */
+    composer: "12rem",
+    /** A thumbnail of an attached image. */
+    thumb: "4.5rem",
+    /** The panel of what it can use, and the "/" and "@" menus, at their tallest. */
+    popover: "min(28rem, 50dvh)",
+  },
+  /** How far below the top a sticky panel sits: under the shell's header. */
+  chrome: "var(--shell-chrome, 0px)",
   /** The smallest comfortable touch target. */
   touch: "44px",
   /** The clear band above and below a 32px control (a switch) that makes it a touch target without drawing it larger. */

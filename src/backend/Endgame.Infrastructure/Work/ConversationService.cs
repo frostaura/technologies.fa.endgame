@@ -12,23 +12,51 @@ namespace Endgame.Infrastructure.Work;
 
 public sealed record ConversationTurn(Guid ConversationId, string Scope, RunView Run);
 
+/// <summary>What one message asks whoever answers not to do (ARCH-012): only ever less than the rules allow, never more.</summary>
+/// <param name="NoWebSearch">Do not search the web for this one.</param>
+/// <param name="AnswerOnly">Answer only: start no work and change nothing.</param>
+public sealed record MessageNarrowing(bool? NoWebSearch = null, bool? AnswerOnly = null)
+{
+    /// <summary>The narrowing as the owner message records it: only the flags that are set, or null for none.</summary>
+    public JsonObject? ToPayload()
+    {
+        var o = new JsonObject();
+        if (NoWebSearch == true)
+        {
+            o["noWebSearch"] = true;
+        }
+
+        if (AnswerOnly == true)
+        {
+            o["answerOnly"] = true;
+        }
+
+        return o.Count == 0 ? null : o;
+    }
+}
+
 /// <summary>
 /// The docked conversation: each message becomes a queued run whose first event is the message; the
 /// reply streams back as that run's events. A conversation keeps its scope; continuing it in another
 /// scope is refused rather than silently moved.
 /// </summary>
-public sealed class ConversationService(EndgameDbContext db, TenantSession session, RunService runs, TimeProvider clock)
+public sealed class ConversationService(EndgameDbContext db, TenantSession session, RunService runs, ConversationAttachmentService attachments, TimeProvider clock)
 {
     public const int MaxMessageLength = 20_000;
 
     /// <param name="estimate">What the turn is expected to cost and the most it can, shown before the message was sent; it opens the run's log.</param>
-    public async Task<ConversationTurn> PostAsync(ResolvedScope scope, string message, Guid? conversationId, Guid? employeeId, Guid by, CancellationToken cancellationToken, Application.Gateway.Estimate? estimate = null)
+    /// <param name="files">The files sent with it, already checked by <see cref="ConversationAttachmentService.ForSendAsync"/>.</param>
+    /// <param name="narrow">What this one message asks not to be done; recorded on the message, enforced by the Runner.</param>
+    public async Task<ConversationTurn> PostAsync(ResolvedScope scope, string message, Guid? conversationId, Guid? employeeId, Guid by, CancellationToken cancellationToken, Application.Gateway.Estimate? estimate = null,
+        IReadOnlyList<ConversationAttachmentView>? files = null, MessageNarrowing? narrow = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
+        files ??= [];
         var text = message?.Trim() ?? "";
-        if (text.Length is 0 or > MaxMessageLength)
+        // A message may be files alone; with no file it needs words.
+        if ((text.Length == 0 && files.Count == 0) || text.Length > MaxMessageLength)
         {
-            throw EndgameProblem.Invalid($"A message is 1 to {MaxMessageLength} characters.");
+            throw EndgameProblem.Invalid($"A message is 1 to {MaxMessageLength} characters, or files with no words.");
         }
 
         session.UseOrganisation(scope.OrganisationId);
@@ -68,14 +96,32 @@ public sealed class ConversationService(EndgameDbContext db, TenantSession sessi
         }
 
         db.ChangeTracker.Clear();
-        var title = text.Split('\n', 2)[0];
+        var title = text.Length > 0 ? text.Split('\n', 2)[0] : $"Sent {string.Join(", ", files.Select(f => f.Name))}";
         var run = await runs.CreateAsync(scope, RunKinds.Conversation, title.Length <= 120 ? title : title[..117] + "...", employeeId, null, conversation.Id, conversation.LastRunId, by, cancellationToken);
-        List<NewEvent> opening = [new NewEvent(RunEventTypes.Message, new JsonObject
+        if (!await attachments.LinkAsync(scope.OrganisationId, conversation.Id, run.Id, files.Select(f => f.Id).ToList(), cancellationToken))
+        {
+            // Another message took one of the files a moment ago: this one is not sent, and says why.
+            await runs.CancelAsync(scope.OrganisationId, run.Id, by, "A file attached to it was sent with another message first.", cancellationToken);
+            throw new EndgameProblem(409, "attachment_sent", "A file was already sent", "One of the files was sent with another message a moment ago. Attach it again to send it again.");
+        }
+
+        var said = new JsonObject
         {
             ["from"] = "owner",
             ["userId"] = by.ToString(),
             ["text"] = text,
-        })];
+        };
+        if (files.Count > 0)
+        {
+            said["attachments"] = ConversationAttachmentService.Summary(files);
+        }
+
+        if (narrow?.ToPayload() is { } narrowed)
+        {
+            said["narrow"] = narrowed;
+        }
+
+        List<NewEvent> opening = [new NewEvent(RunEventTypes.Message, said)];
         if (estimate is not null)
         {
             opening.Add(new NewEvent("estimate.made", new JsonObject { ["credits"] = estimate.Credits, ["basis"] = "conversation", ["reason"] = estimate.Basis, ["ceiling"] = estimate.Ceiling }));

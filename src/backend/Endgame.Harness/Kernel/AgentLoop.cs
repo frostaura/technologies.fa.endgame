@@ -55,18 +55,29 @@ public sealed class AgentLoop
     {
         ArgumentNullException.ThrowIfNull(task);
         var state = new AgentState { AgentId = agent.Id };
-        await events.WriteAsync(HarnessEvents.Message, new JsonObject
+        var start = new JsonObject
         {
             ["kind"] = MessageKinds.AgentStart,
             ["title"] = agent.Title,
             ["taskType"] = agent.TaskType,
             ["system"] = agent.SystemPrompt,
             ["task"] = task,
-        }, cancellationToken);
+        };
+        if (agent.TaskContent is { } parts)
+        {
+            // What the first message carried, without the files themselves: the workflow gives them again on a resume.
+            start["parts"] = new JsonArray(parts.OfType<JsonObject>().Select(p => (JsonNode)new JsonObject
+            {
+                ["type"] = p["type"]?.DeepClone(),
+                ["chars"] = ContentParts.IsImage(p) ? null : ContentParts.Text(new JsonArray(p.DeepClone())).Length,
+            }).ToArray());
+        }
+
+        await events.WriteAsync(HarnessEvents.Message, start, cancellationToken);
         state.Messages =
         [
             new JsonObject { ["role"] = "system", ["content"] = agent.SystemPrompt },
-            new JsonObject { ["role"] = "user", ["content"] = task },
+            new JsonObject { ["role"] = "user", ["content"] = (JsonNode?)agent.TaskContent?.DeepClone() ?? task },
         ];
         return await ContinueAsync(state, cancellationToken);
     }
@@ -86,6 +97,12 @@ public sealed class AgentLoop
         if (replayed.State.StopReason is { } stopped)
         {
             return new AgentResult(stopped, replayed.State.FinalText, replayed.State);
+        }
+
+        // The log holds the task's words; the files the first message carried come from the definition again.
+        if (agent.TaskContent is { } parts && replayed.State.Messages.Count > 1 && replayed.State.Messages[1] is JsonObject first && first["role"]?.GetValue<string>() == "user")
+        {
+            first["content"] = parts.DeepClone();
         }
 
         foreach (var call in replayed.Interrupted)
@@ -175,11 +192,11 @@ public sealed class AgentLoop
 
             var accounting = Accounting(reply);
             // A reply read by code, or one that said nothing at all, cut at its output limit (R2-6).
-            var said = message["content"] is JsonValue sv && sv.TryGetValue<string>(out var st) && !string.IsNullOrWhiteSpace(st);
+            var said = !string.IsNullOrWhiteSpace(ContentParts.Text(message["content"]));
             if (reply.FinishReason == FinishReasons.Length && (agent.StructuredAnswer || (toolCalls is null && !said)))
             {
                 // A reply read by code and cut at its output limit is not an answer in the wrong form: it did not fit (R2-6).
-                var cutText = message["content"] is JsonValue cv && cv.TryGetValue<string>(out var cs) ? cs : "";
+                var cutText = ContentParts.Text(message["content"]);
                 var retrying = !state.RetryingCutOff;
                 await events.WriteAsync(HarnessEvents.Message, new JsonObject
                 {
@@ -206,7 +223,7 @@ public sealed class AgentLoop
             state.RetryingCutOff = false;
             if (toolCalls is null)
             {
-                var text = message["content"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
+                var text = ContentParts.Text(message["content"]);
                 var nudge = await StopNudgeAsync(state, text, cancellationToken);
                 await events.WriteAsync(HarnessEvents.Message, new JsonObject
                 {
@@ -676,7 +693,7 @@ public sealed class AgentLoop
         }
 
         state.SettledCredits += summary.SettledCredits;
-        var text = summary.Message["content"]?.GetValue<string>() ?? "";
+        var text = ContentParts.Text(summary.Message["content"]);
         var message = Compactor.SummaryMessage(text, state);
         await events.WriteAsync(HarnessEvents.Message, new JsonObject
         {

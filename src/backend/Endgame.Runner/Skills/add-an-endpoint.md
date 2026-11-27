@@ -1,6 +1,7 @@
 ---
 name: add-an-endpoint
 trigger: Adding or changing an HTTP endpoint in an app's API.
+used-by: builders
 ---
 # Adding an endpoint
 

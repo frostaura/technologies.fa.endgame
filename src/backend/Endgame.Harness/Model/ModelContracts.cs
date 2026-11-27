@@ -154,6 +154,11 @@ public static class ModelTraits
                     ["cache_control"] = new JsonObject { ["type"] = "ephemeral" },
                 });
             }
+            else if (message["content"] is JsonArray parts && parts.OfType<JsonObject>().LastOrDefault(p => p["type"]?.GetValue<string>() == "text") is { } last)
+            {
+                // A message of parts (a task with files) is marked on its last text part.
+                last["cache_control"] = new JsonObject { ["type"] = "ephemeral" };
+            }
         }
     }
 }

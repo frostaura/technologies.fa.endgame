@@ -53,7 +53,7 @@ function matches(rule: string, tool: string, target: string): boolean {
 }
 
 /** `PermissionPolicy.Decide` for the cascade's rule sets at a stage: deny, then "asks you first", then allow, nearest level first. */
-function decide(world: World, scope: string, stage: string, tool: string, target: string, reading: boolean): Decision {
+export function decide(world: World, scope: string, stage: string, tool: string, target: string, reading: boolean): Decision {
   const sets = chain(scope)
     .reverse()
     .flatMap((p) => world.ruleSets.filter((r) => r.path === p && (r.stage === stage || r.stage === "all")));
@@ -978,15 +978,30 @@ function earlierParts(world: World, appId: string): string[] {
   return [...new Set(parts)].reverse().slice(0, 8);
 }
 
-/** The change, as a plan item: the request in the owner's words, built where the app keeps it. */
-function changeItem(request: string): Part {
+/**
+ * The change, as plan items: one for each thing the request asks for, as a planner splits a request that lists several
+ * ("let members join a waitlist, see their place in it and leave it at any time" is three parts), in the owner's words.
+ */
+function changeItems(request: string): Part[] {
   const first = (request.split("\n")[0] ?? request).trim().replace(/\.$/, "");
+  const lead = /^(let members|let people|members can|let them)\s+/i.exec(first)?.[0] ?? "";
+  const asks = first
+    .split(/,\s*(?:and\s+)?|;\s*|\s+and\s+(?=(?:see|get|leave|add|show|send|let|choose|pick|mark|cancel|change)\b)/i)
+    .map((a) => a.trim())
+    .filter((a) => a.split(/\s+/).length >= 3);
+  if (asks.length < 2) return [changeItem(first, 1)];
+  return asks.slice(0, 4).map((a, i) => changeItem(i === 0 || !lead ? a : `${lead}${a}`, i + 1));
+}
+
+/** One part of a change, built where the app keeps it. */
+function changeItem(first: string, n: number): Part {
+  const text = first.charAt(0).toUpperCase() + first.slice(1);
   return {
-    id: "c1",
-    text: `${first}.`,
+    id: `c${n}`,
+    text: `${text.replace(/\.$/, "")}.`,
     detail: "api/Bookings/BookingsEndpoints.cs and api.tests/BookingsApiTests.cs for the rule; web/src/bookings/BookingPage.tsx and its Vitest tests for the screen; PROGRESS.md records it.",
     check: "make lint and make test pass; signed in, the change works in the running app as asked.",
-    covers: ["C1"],
+    covers: [`C${n}`],
   };
 }
 
@@ -1029,7 +1044,7 @@ defineScript("change", (world, run) => {
   }
   const before = app ? earlierParts(world, app.id) : [];
   const kept = before.map((text, i) => ({ id: `k${i + 1}`, text: `${text}.` }));
-  const items: Part[] = [changeItem(request)];
+  const items: Part[] = changeItems(request);
   if (kept.length) {
     items.push({ id: "keep", text: "Everything the app did before still works", detail: "No new work: the app as changed is checked again against each part it already had.", check: "Each part the app had before is shown working in the running app, signed in, with the app's own tests passing.", covers: kept.map((k) => k.id), keep: true });
   }
@@ -1040,7 +1055,7 @@ defineScript("change", (world, run) => {
     projectPath,
     appPath,
     summary: `A change to ${name}: ${request.split("\n")[0]?.replace(/\.$/, "")}, built and checked in the running app, then everything ${name} did before checked again`,
-    requirements: [{ id: "C1", text: request }, ...kept],
+    requirements: [...items.map((it, i) => ({ id: `C${i + 1}`, text: items.length === 1 ? request : it.text })), ...kept],
     items,
     leftOut: [],
     sentBack: p.clean === true || !kept.length ? null : { item: "keep", fault: "League block bookings no longer hold their four courts: the change frees a league's courts as if they were single bookings.", evidence: "Signed in as a league captain in the preview, a two-hour block on four courts was booked; after the change one of its courts showed as free to members." },
@@ -1138,11 +1153,22 @@ defineScript("conversation", (world, run) => {
   s.wait(400);
   cycle(s, run, { agent: "conversation", employeeId: who?.id ?? null, taskType: who?.jobDescription.modelTier ?? "chat", credits: 0.018 });
   const lower = text.toLowerCase();
-  const asked = settingAsked(lower);
+  // Files sent with the message are read first: the reply says what it took from each (ARCH-012).
+  const files = String(p.files ?? "")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [name = "", kind = "", pages = ""] = line.split("|");
+      return { name, kind, pages };
+    });
+  if (files.length > 0) said([filesRead(files)]);
+  // "Answer only": nothing is asked to start, change or try again, whatever the message says (`narrow.answerOnly`).
+  const answerOnly = p.answerOnly === true;
+  const asked = answerOnly ? null : settingAsked(lower);
   const atApp = !!appAt(world, scope);
-  const retryAsk = /\b(try (it |that |this )?again|try the .* again|retry|start .* again)\b/.test(lower);
-  const changeAsk = !retryAsk && !asked && (atApp || /\b(change|update)\b.*\bapp\b/.test(lower)) && /(let |add |change |make |should |show |allow |remove |cancel|rename|update )/.test(lower);
-  const ideaAsk = !retryAsk && !asked && !changeAsk && /(idea|build|make (us |me )?an? |could we|new app|we need an? |start researching)/.test(lower);
+  const retryAsk = !answerOnly && /\b(try (it |that |this )?again|try the .* again|retry|start .* again)\b/.test(lower);
+  const changeAsk = !answerOnly && !retryAsk && !asked && (atApp || /\b(change|update)\b.*\bapp\b/.test(lower)) && /(let |add |change |make |should |show |allow |remove |cancel|rename|update )/.test(lower);
+  const ideaAsk = !answerOnly && !retryAsk && !asked && !changeAsk && /(idea|build|make (us |me )?an? |could we|new app|we need an? |start researching)/.test(lower);
   if (retryAsk) {
     const stopped = world.runs
       .filter((r) => (r.run.scope === scope || r.run.scope.startsWith(`${scope}/`)) && (r.run.status === "failed" || r.run.status === "cancelled") && (r.run.kind === "research" || r.run.kind === "build" || r.run.kind === "task"))
@@ -1186,7 +1212,7 @@ defineScript("conversation", (world, run) => {
     s.wait(400).effect(() => undefined);
     if (p.answer === "rejected") said(["Left as it was."]);
     else if (p.answer === "approved") said(["Done. The change applies here and to everything beneath it that does not set its own."]);
-  } else {
+  } else if (text.trim() || files.length === 0) {
     said(answer(world, scope, lower, who));
   }
   s.wait(300).event("run.finished", { totals: {}, outcome: "succeeded", summary: "Replied." }, "conversation:replied");
@@ -1199,6 +1225,13 @@ const SIGN_OFF = "This waits for your sign-off before it is done. If you decline
 
 function clip(t: string) {
   return t.length > 300 ? `${t.slice(0, 148)} … ${t.slice(-148)}` : t;
+}
+
+/** What the reply says it read, file by file: a PDF by its pages, a picture as looked at, text as read. */
+function filesRead(files: { name: string; kind: string; pages: string }[]): string {
+  const each = files.map((f) => (f.kind === "pdf" ? `**${f.name}** (${f.pages || "1"} ${f.pages === "1" ? "page" : "pages"})` : f.kind === "image" ? `the picture **${f.name}**` : `**${f.name}**`));
+  const list = each.length === 1 ? each[0] : `${each.slice(0, -1).join(", ")} and ${each[each.length - 1]}`;
+  return `I read ${list}. What follows takes ${files.length === 1 ? "it" : "them"} into account.`;
 }
 
 /** A reply, streamed sentence by sentence as separate messages. */

@@ -950,6 +950,117 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.ConversationAttachmentRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<long>("Bytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("bytes");
+
+                    b.Property<int?>("Characters")
+                        .HasColumnType("integer")
+                        .HasColumnName("characters");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DivisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("division_id");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("employee_id");
+
+                    b.Property<string>("ExtractedText")
+                        .HasColumnType("text")
+                        .HasColumnName("extracted_text");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organisation_id");
+
+                    b.Property<int?>("Pages")
+                        .HasColumnType("integer")
+                        .HasColumnName("pages");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("OrganisationId", "Id");
+
+                    b.HasIndex("UploadedBy");
+
+                    b.HasIndex("OrganisationId", "ConversationId");
+
+                    b.HasIndex("OrganisationId", "EmployeeId");
+
+                    b.HasIndex("OrganisationId", "RunId");
+
+                    b.HasIndex("OrganisationId", "DivisionId", "ProjectId");
+
+                    b.HasIndex("OrganisationId", "ProjectId", "AppId");
+
+                    b.HasIndex("OrganisationId", "UploadedBy", "ConversationId", "CreatedAt");
+
+                    b.ToTable("conversation_attachments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_conversation_attachments_bytes", "bytes > 0 AND bytes <= 10485760");
+
+                            t.HasCheckConstraint("ck_conversation_attachments_kind", "kind IN ('image', 'pdf', 'text')");
+
+                            t.HasCheckConstraint("ck_conversation_attachments_path", "(app_id IS NULL OR project_id IS NOT NULL) AND (project_id IS NULL OR division_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_conversation_attachments_sent", "run_id IS NULL OR conversation_id IS NOT NULL");
+                        });
+                });
+
             modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.ConversationRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3229,6 +3340,57 @@ namespace Endgame.Infrastructure.Persistence.Migrations
                     b.HasOne("Endgame.Domain.Tree.Division", null)
                         .WithMany()
                         .HasForeignKey("OrganisationId", "DivisionId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Domain.Tree.Project", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "DivisionId", "ProjectId")
+                        .HasPrincipalKey("OrganisationId", "DivisionId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Domain.Tree.App", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "ProjectId", "AppId")
+                        .HasPrincipalKey("OrganisationId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Endgame.Infrastructure.Persistence.Records.ConversationAttachmentRecord", b =>
+                {
+                    b.HasOne("Endgame.Domain.Tree.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Identity.EndgameUser", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.ConversationRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "ConversationId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Endgame.Domain.Tree.Division", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "DivisionId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.EmployeeRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "EmployeeId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Endgame.Infrastructure.Persistence.Records.RunRecord", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "RunId")
                         .HasPrincipalKey("OrganisationId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
 

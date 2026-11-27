@@ -27,7 +27,7 @@ function sources(): { file: string; text: string }[] {
 const HAND_DRAWN_FIGURE = /<(span|p|div|strong|dd|td)[^>]*className=(?:"|\{cn\(")[^"]*\btext-(2xl|3xl|4xl|5xl|hero|balance)\b/g;
 
 /** Where a dashed outline is allowed: a genuine drop zone. The hosted copy of the app kit's pages is the apps lane's (ARCH-011). */
-const DASHED_ALLOWED = new Set(["src/demo/hosted/kit.tsx"]);
+const DASHED_ALLOWED = new Set(["src/demo/hosted/kit.tsx", "src/features/home/ConversationDock.tsx"]);
 
 /**
  * The two retired hues, counted per file. The org chart and the organisation graph no longer use them; they stay only for
@@ -35,7 +35,6 @@ const DASHED_ALLOWED = new Set(["src/demo/hosted/kit.tsx"]);
  */
 const RETIRED_HUES = /\b(?:bg|text|border|ring|fill|stroke)-(?:violet|teal)\b[\w/-]*/g;
 const RETIRED_HUE_ALLOWANCE: Record<string, number> = {
-  "src/features/home/ConversationDock.tsx": 3,
   "src/features/apps/AskChart.tsx": 6,
   "src/features/autonomy/AutonomyView.tsx": 1,
 };

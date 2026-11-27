@@ -25,16 +25,23 @@ afterEach(() => {
 });
 
 describe("ConversationDock", () => {
-  it("fills the column it is docked in", async () => {
-    renderWithStore(<ConversationDock tree={TREE} selection={{ scope: "acme", kind: "organisation", trail: ["Acme"] }} />);
-    expect((await screen.findByRole("region", { name: "Conversation" })).className).toContain("min-h-full");
+  // Outside the desktop dock (a tablet, an app's or an employee's page) it is a framed pane of its own height, never the page's:
+  // taking the page's height there left a blank band the height of the whole page above everything after it.
+  it("is a framed pane of its own height when placed in a page", async () => {
+    renderWithStore(<ConversationDock tree={TREE} selection={{ scope: "acme", kind: "organisation", trail: ["Acme"] }} fill={false} />);
+    const pane = await screen.findByRole("region", { name: "Conversation" });
+    expect(pane.dataset.variant).toBe("framed");
+    expect(pane.className).toContain("h-pane");
+    expect(pane.className).not.toContain("min-h-full");
   });
 
-  // On an app's page it sits among the page's sections: taking the page's height there left a
-  // blank band the height of the whole page above everything after it.
-  it("takes only the height of what it holds when placed inline", async () => {
-    renderWithStore(<ConversationDock tree={TREE} selection={{ scope: "acme", kind: "organisation", trail: ["Acme"] }} fill={false} />);
-    expect((await screen.findByRole("region", { name: "Conversation" })).className).not.toContain("min-h-full");
+  it("says who it is talking to and at which level, with its log, its composer pinned beneath", async () => {
+    renderWithStore(<ConversationDock tree={TREE} selection={{ scope: "acme", kind: "organisation", trail: ["Acme"] }} />);
+    expect(await screen.findByRole("heading", { name: "Talking to Acme" })).toBeTruthy();
+    expect(screen.getByText("Organisation")).toBeTruthy();
+    const log = screen.getByRole("log");
+    const composer = document.querySelector("[data-composer]");
+    expect(composer && log.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   async function sendAndStream(emit: (es: FakeEventSource) => void) {
@@ -42,7 +49,7 @@ describe("ConversationDock", () => {
       "GET /api/me": json(ME),
       "GET /api/tree": json(TREE),
       "GET /api/conversations": json({ scope: "acme", conversationId: null, employeeId: null, messages: [] }),
-      "GET /api/conversations/estimate": json({ credits: 0.05, ceiling: 1, basis: "" }),
+      "POST /api/conversations/estimate": json({ credits: 0.05, ceiling: 1, basis: "" }),
       "POST /api/conversations": json({ id: "r1", kind: "conversation", title: "", scope: "acme", status: "running", startedAt: "", finishedAt: null, lastSeq: 0, ideaId: null, estimateCredits: null, spentCredits: 0 }, 201),
     });
     renderWithStore(<ConversationDock tree={TREE} selection={{ scope: "acme", kind: "organisation", trail: ["Acme"] }} />);
@@ -95,7 +102,7 @@ describe("ConversationDock", () => {
     stubApi({
       "GET /api/me": json(ME),
       "GET /api/tree": json(TREE),
-      "GET /api/conversations/estimate": json({ credits: 0.05, ceiling: 1, basis: "" }),
+      "POST /api/conversations/estimate": json({ credits: 0.05, ceiling: 1, basis: "" }),
       "GET /api/conversations": json({
         scope: "acme",
         conversationId: "c1",

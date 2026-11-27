@@ -69,6 +69,21 @@ gateway is not built yet; this is the design it must follow.
     exactly 2,000, answered in 2,383 with valid JSON and stopped. A reply cut at its limit with no content at all is
     returned to the loop as a cut-off, never retried as an empty reply at the same cap.
 
+14. **Images are what the catalogue says a model reads, and they are reserved by count, not by size (ARCH-012).** Each
+    catalogue entry carries `InputModalities`, OpenRouter's `architecture.input_modalities` limited to what Endgame sends
+    (`text`, `image`; empty means text only; anything else, or a list without `text`, stops the host). A route takes images
+    only when **every** model on it does, since any of them may serve the call (`ModelGatewayOptions.AcceptsImages`); a
+    call carrying an `image_url` content part on any other route is refused before it is sent (`422
+    images_not_accepted`). Read from OpenRouter's public listing on 2026-11-27: `qwen/qwen3.7-flash`,
+    `qwen/qwen3.7-plus`, `deepseek/deepseek-v4.1-flash` and `anthropic/claude-sonnet-5.5` read images;
+    `openai/gpt-oss-20b` and `z-ai/glm-5.2` read text only. So `research`, `build`, `build-t1` and `build-t3` take
+    images, and `chat` (Endgame's own assistant), `classify`, `summarise`, `ask`, `plan`, `architecture`, `code`,
+    `evaluate`, `build-t2` and the `app.*` routes do not. An image is billed by its pixels, never by the length of its
+    base64, so the reservation leaves image data out of the byte count (`PromptMeasure`) and adds
+    `ReservationFormula.ImageTokens` (16,384, the most any vision model in the catalogue bills one image at: Qwen's
+    dynamic resolution stops there) for each image part; a prompt with no image is measured exactly as before. Content
+    parts are passed to the provider untouched. *Not verified live:* the per-image token figure each provider bills.
+
 ## Routing table shape
 
 Each task type maps to: an ordered list of validated models; the provider ceiling and sort; an

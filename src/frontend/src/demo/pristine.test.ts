@@ -40,7 +40,7 @@ describe("a reset of the demo is a first visit", () => {
       // A key written inline, not named, would escape this check.
       expect(text, f).not.toMatch(/(get|set|remove)Item\("/);
     }
-    expect(keys.sort()).toEqual(["endgame.entered", "endgame.mode", "endgame.organisation", "endgame.return-to"]);
+    expect(keys.sort()).toEqual(["endgame.dock", "endgame.entered", "endgame.mode", "endgame.organisation", "endgame.return-to"]);
     for (const k of keys) expect(k.startsWith(CONSOLE_KEY_PREFIX)).toBe(true);
   });
 });

@@ -68,6 +68,8 @@ public sealed class EndgameDbContext : IdentityUserContext<EndgameUser, Guid>, I
 
     public DbSet<ConversationRecord> Conversations => Set<ConversationRecord>();
 
+    public DbSet<ConversationAttachmentRecord> ConversationAttachments => Set<ConversationAttachmentRecord>();
+
     public DbSet<CreditEntryRecord> CreditEntries => Set<CreditEntryRecord>();
 
     public DbSet<OperatorActionRecord> OperatorActions => Set<OperatorActionRecord>();

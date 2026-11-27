@@ -471,7 +471,7 @@ public sealed class StreamAssembler
 
     internal static bool IsEmpty(JsonObject message) =>
         message["tool_calls"] is not JsonArray { Count: > 0 }
-        && string.IsNullOrWhiteSpace(message["content"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null);
+        && string.IsNullOrWhiteSpace(Kernel.ContentParts.Text(message["content"]));
 
     private static decimal Dec(JsonNode? node) => node is JsonValue v && v.TryGetValue<decimal>(out var d) ? d : 0m;
 }

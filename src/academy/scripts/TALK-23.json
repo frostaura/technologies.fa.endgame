@@ -1,0 +1,74 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-23",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Make the pane wider"
+          }
+        },
+        {
+          "wait": {
+            "selector": "[data-dock=wide]"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "[data-dock=wide]",
+        "note": "The conversation is docked at the right edge. Wider, and kept that way next time."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Open full width"
+          }
+        },
+        {
+          "wait": {
+            "selector": "[data-dock=full]"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Back to the page",
+        "note": "Full width: the conversation alone, centred. “Back to the page” returns."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Back to the page"
+          }
+        },
+        {
+          "click": {
+            "text": "Collapse the pane"
+          }
+        },
+        {
+          "wait": {
+            "selector": "[data-dock=collapsed]"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Open the conversation with Northwind",
+        "note": "Collapsed to a rail; select it to open the conversation again."
+      }
+    }
+  ]
+}

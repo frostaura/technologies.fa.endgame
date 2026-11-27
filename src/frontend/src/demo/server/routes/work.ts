@@ -1,7 +1,8 @@
 import type { DecisionChoice, Idea } from "@/store/types";
 import { append } from "../engine";
 import { homeOrganisation, me, requireRole, scopeOf } from "../access";
-import { area, conflict, created, invalid, notFound, num, ok, problem, Refusal, str, strings, titleOf } from "../http";
+import { area, conflict, created, invalid, noContent, notFound, num, ok, problem, Refusal, str, strings, titleOf } from "../http";
+import { capabilities, checkFile, content, FileRefused, keep, LIMITS, takesImages, view } from "../conversationKit";
 import { setStage, startRun } from "../mutations";
 import { startResearch } from "../scripts";
 import { changeEstimate, changeText, conversationEstimate, retryEstimate, retryRun, runView, startChange } from "../tryAgain";
@@ -37,14 +38,21 @@ export function answerApproval(world: World, approvalId: string, decision: "appr
   }
   if (a.answer === "approved") {
     const act = a.onApprove;
-    if (act.kind === "start-idea") createIdea(world, act.text, [], act.scope, "conversation");
+    // What the conversation started, said in its own log so the conversation follows it (`work.started`, ARCH-012).
+    const started = (run: { run: { id: string; title: string } } | undefined, workKind: string) => {
+      if (r && run && r.run.kind === "conversation") append(world, r, "message", { kind: "work.started", runId: run.run.id, workKind, title: run.run.title });
+    };
+    if (act.kind === "start-idea") {
+      const idea = createIdea(world, act.text, [], act.scope, "conversation");
+      started(runRecord(world, idea.runId), "research");
+    }
     if (act.kind === "change-app") {
       const app = world.apps.find((x) => x.path === act.scope);
-      if (app) startChange(world, app, act.request, null, "conversation");
+      if (app) started(startChange(world, app, act.request, null, "conversation"), "change");
     }
     if (act.kind === "try-again") {
       const stopped = runRecord(world, act.runId);
-      if (stopped) retryRun(world, stopped, null, startResearch);
+      if (stopped) started(retryRun(world, stopped, null, startResearch), "retry");
     }
     if (act.kind === "setting") {
       const key = act.key === "sleep.mode" ? "sleep.mode" : act.key;
@@ -289,12 +297,28 @@ area("WorkEndpoints", {
   "POST conversations": (req, { world }) => {
     const scope = scopeOf(world, str(req.body, "scope"));
     requireRole(world, scope, "builder");
-    const message = str(req.body, "message") ?? "";
-    if (!message.trim() || message.length > 20000) throw invalid("A message is 1 to 20000 characters.");
+    const message = (str(req.body, "message") ?? "").trim();
     const employeeId = str(req.body, "employeeId") ?? null;
+    // Files go by id: each uploaded by this person, at this level, and not sent before (`ConversationService.PostAsync`).
+    const ids = strings(req.body, "attachmentIds");
+    const files = ids.map((id) => {
+      const a = (world.attachments ?? []).find((x) => x.id === id && x.uploadedBy === me(world).id);
+      if (!a) throw notFound("The file");
+      if (a.runId) throw conflict(`${a.name} was already sent with another message.`);
+      if (a.scope !== scope || a.employeeId !== employeeId) throw conflict(`${a.name} was attached in another conversation.`);
+      return a;
+    });
+    if (!message && files.length === 0) throw invalid("A message is 1 to 20000 characters.");
+    if (message.length > 20000) throw invalid("A message is 1 to 20000 characters.");
+    if (files.length > LIMITS.maxFiles) throw invalid(`A message carries at most ${LIMITS.maxFiles} files.`);
+    if (files.reduce((n, f) => n + f.bytes, 0) > LIMITS.maxMessageBytes) throw new Refusal(problem(413, "attachments_too_large", "Too much attached", "The files on one message may come to 25 MB at most."));
     const worker = employeeId ? world.employees.find((e) => e.id === employeeId && e.status !== "released") : undefined;
     if (employeeId && !worker) throw notFound("The employee");
     if (worker?.status === "paused") throw conflict(`${worker.name} is paused, so they are given no new work. Resume them first.`);
+    if (files.some((f) => f.kind === "image") && !takesImages(worker?.jobDescription.modelTier ?? "chat"))
+      throw new Refusal(problem(422, "images_not_accepted", "Images cannot be sent here", `${worker?.name ?? "Endgame’s assistant"} reads text only, so an image cannot be sent to it. Take the image off, or attach it as a PDF.`));
+    const narrowBody = (req.body.narrow ?? {}) as Record<string, unknown>;
+    const narrow = { ...(narrowBody.noWebSearch === true ? { noWebSearch: true } : {}), ...(narrowBody.answerOnly === true ? { answerOnly: true } : {}) };
     const given = str(req.body, "conversationId");
     let conversation = given ? world.conversations.find((c) => c.id === given) : world.conversations.find((c) => c.scope === scope && c.employeeId === employeeId);
     if (given && !conversation) throw notFound("The conversation");
@@ -303,9 +327,21 @@ area("WorkEndpoints", {
       conversation = { id: newId(world, "conversation"), scope, employeeId, runIds: [] };
       world.conversations.push(conversation);
     }
-    const first = message.split("\n")[0] ?? message;
-    const r = startRun(world, { id: newId(world, "run"), kind: "conversation", title: first.length > 120 ? `${first.slice(0, 117)}...` : first, scope, ideaId: null, estimateCredits: null, employeeId, conversationId: conversation.id }, "conversation", { text: message, employeeId });
-    append(world, r, "message", { from: "owner", userId: me(world).id, text: message });
+    const first = message ? (message.split("\n")[0] ?? message) : `Sent ${files.map((f) => f.name).join(", ")}`;
+    const r = startRun(world, { id: newId(world, "run"), kind: "conversation", title: first.length > 120 ? `${first.slice(0, 117)}...` : first, scope, ideaId: null, estimateCredits: null, employeeId, conversationId: conversation.id }, "conversation", {
+      text: message,
+      employeeId,
+      files: files.map((f) => `${f.name}|${f.kind}|${f.pages ?? ""}`).join("\n") || null,
+      answerOnly: narrow.answerOnly === true,
+    });
+    for (const f of files) f.runId = r.run.id;
+    append(world, r, "message", {
+      from: "owner",
+      userId: me(world).id,
+      text: message,
+      ...(files.length > 0 ? { attachments: files.map((f) => ({ id: f.id, name: f.name, kind: f.kind, contentType: f.contentType, bytes: f.bytes })) } : {}),
+      ...(Object.keys(narrow).length > 0 ? { narrow } : {}),
+    });
     conversation.runIds.push(r.run.id);
     world.changed.push("Conversation");
     return created(runView(world, r));
@@ -319,14 +355,72 @@ area("WorkEndpoints", {
     const messages = (c?.runIds ?? []).flatMap((id) => {
       const r = runRecord(world, id);
       return (r?.events ?? [])
-        .filter((e) => e.type === "message" && typeof e.payload.text === "string" && !e.payload.kind)
+        .filter((e) => e.type === "message" && typeof e.payload.text === "string" && !e.payload.kind && (e.payload.text !== "" || Array.isArray(e.payload.attachments)))
         .map((e) => {
           const from = String(e.payload.from ?? "assistant");
           const by = from === "owner" ? (world.users.find((x) => x.id === e.payload.userId)?.displayName ?? null) : typeof e.payload.by === "string" ? e.payload.by : null;
-          return { runId: id, seq: e.seq, at: e.at, from, text: String(e.payload.text), by, code: typeof e.payload.code === "string" ? e.payload.code : null };
+          const attachments = from === "owner" ? (world.attachments ?? []).filter((a) => a.runId === id).map(view) : [];
+          return { runId: id, seq: e.seq, at: e.at, from, text: String(e.payload.text), by, code: typeof e.payload.code === "string" ? e.payload.code : null, attachments };
         });
     });
-    return ok({ scope, conversationId: c?.id ?? null, employeeId: employeeId ?? null, messages: messages.slice(-200) });
+    // Each turn's run, with its tool count and the work it started, so its card comes back after a reload.
+    const turns = (c?.runIds ?? []).flatMap((id) => {
+      const r = runRecord(world, id);
+      if (!r) return [];
+      const started = r.events
+        .filter((e) => e.type === "message" && e.payload.kind === "work.started" && typeof e.payload.runId === "string")
+        .map((e) => ({ runId: String(e.payload.runId), kind: String(e.payload.workKind ?? ""), title: String(e.payload.title ?? "") }));
+      return [{ runId: id, status: r.run.status, toolCalls: r.events.filter((e) => e.type === "tool.requested").length, started }];
+    });
+    return ok({ scope, conversationId: c?.id ?? null, employeeId: employeeId ?? null, messages: messages.slice(-200), turns });
+  },
+
+  "GET conversations/capabilities": (req, { world }) => {
+    const scope = scopeOf(world, req.query.get("scope"));
+    requireRole(world, scope, "viewer");
+    const employeeId = req.query.get("employeeId");
+    if (employeeId && !world.employees.some((e) => e.id === employeeId)) throw notFound("The employee");
+    return ok(capabilities(world, scope, employeeId ?? null));
+  },
+
+  "POST conversations/attachments": async (req, { world }) => {
+    const scope = scopeOf(world, str(req.body, "scope"));
+    requireRole(world, scope, "builder");
+    const file = req.body.file;
+    if (!(file instanceof File)) throw invalid("Attach one file, as the form field file.");
+    const employeeId = str(req.body, "employeeId") ?? null;
+    if (employeeId && !world.employees.some((e) => e.id === employeeId)) throw notFound("The employee");
+    const mine = me(world).id;
+    const day = Date.now() - 24 * 3600 * 1000;
+    world.attachments = (world.attachments ?? []).filter((a) => a.runId || a.uploadedBy !== mine || Date.parse(a.createdAt) > day);
+    if (world.attachments.filter((a) => !a.runId && a.uploadedBy === mine).length >= LIMITS.maxUnsentPerPerson)
+      throw conflict(`You have ${LIMITS.maxUnsentPerPerson} files waiting to be sent. Send them, or take some off, before adding more.`);
+    let checked;
+    try {
+      checked = await checkFile(file);
+    } catch (e) {
+      if (e instanceof FileRefused) throw new Refusal(problem(e.status, e.code, "The file was not accepted", e.message));
+      throw e;
+    }
+    const kept = await keep(world, { id: newId(world, "attachment"), name: file.name, contentType: checked.contentType, kind: checked.kind, bytes: file.size, pages: checked.pages, characters: checked.characters, runId: null, scope, employeeId, uploadedBy: mine, createdAt: new Date().toISOString() }, file);
+    return created(view(kept));
+  },
+
+  "GET conversations/attachments/{id}/content": (req, { world }) => {
+    const a = (world.attachments ?? []).find((x) => x.id === req.params.id);
+    if (!a || (!a.runId && a.uploadedBy !== me(world).id)) throw notFound("The file");
+    requireRole(world, a.scope, "viewer");
+    const blob = content(a);
+    if (!blob) throw new Refusal(problem(410, "attachment_gone", "Not kept in this demo", "This demo keeps a large file only until the page is reloaded."));
+    return { status: 200, body: blob, headers: { "content-type": a.contentType, "x-content-type-options": "nosniff" } };
+  },
+
+  "DELETE conversations/attachments/{id}": (req, { world }) => {
+    const a = (world.attachments ?? []).find((x) => x.id === req.params.id && x.uploadedBy === me(world).id);
+    if (!a) throw notFound("The file");
+    if (a.runId) throw conflict(`${a.name} was sent with a message, so it stays with the conversation.`);
+    world.attachments = (world.attachments ?? []).filter((x) => x !== a);
+    return noContent();
   },
 });
 

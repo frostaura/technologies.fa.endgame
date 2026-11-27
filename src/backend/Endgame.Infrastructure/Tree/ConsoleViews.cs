@@ -267,10 +267,17 @@ public sealed record CreditsView(
 
 /// <param name="By">Who said it, by name: the person who sent it, or the employee who answered; null for Endgame's own assistant.</param>
 /// <param name="Code">A machine-readable reason on Endgame's own notices, such as <c>budget_exhausted</c>.</param>
-public sealed record ConversationMessageView(Guid RunId, long Seq, DateTimeOffset At, string From, string Text, string? By = null, string? Code = null);
+/// <param name="Attachments">The files sent with an owner's message; empty for every other message.</param>
+public sealed record ConversationMessageView(Guid RunId, long Seq, DateTimeOffset At, string From, string Text, string? By, string? Code, IReadOnlyList<Work.ConversationAttachmentView> Attachments);
 
-/// <summary><c>GET /api/conversations?scope=</c>: the messages of the conversation docked at a scope, oldest first.</summary>
-public sealed record ConversationHistoryView(string Scope, Guid? ConversationId, Guid? EmployeeId, IReadOnlyList<ConversationMessageView> Messages);
+/// <summary>A piece of work a conversation turn started: an idea's research, a change, a try again (a <c>work.started</c> message).</summary>
+public sealed record ConversationStartedView(Guid RunId, string Kind, string Title);
+
+/// <summary>One run of a conversation, so its card is restored after a reload: its status, how many tools it used, and the work it started.</summary>
+public sealed record ConversationTurnView(Guid RunId, string Status, int ToolCalls, IReadOnlyList<ConversationStartedView> Started);
+
+/// <summary><c>GET /api/conversations?scope=</c>: the messages of the conversation docked at a scope, oldest first, and each of its runs.</summary>
+public sealed record ConversationHistoryView(string Scope, Guid? ConversationId, Guid? EmployeeId, IReadOnlyList<ConversationMessageView> Messages, IReadOnlyList<ConversationTurnView> Turns);
 
 /// <summary>One finished run's actual cost (<c>GET /internal/estimates/history</c>).</summary>
 public sealed record CostHistoryView(Guid RunId, DateTimeOffset FinishedAt, decimal Credits, int Steps);

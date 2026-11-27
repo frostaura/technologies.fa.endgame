@@ -1,6 +1,7 @@
 ---
 name: build-on-the-app-kit
 trigger: Before changing any Endgame app: where things go, the five rules, and the commands that prove a change.
+used-by: builders
 ---
 # Building on the app kit
 

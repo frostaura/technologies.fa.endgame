@@ -108,7 +108,8 @@ public sealed class AgentFactory(RunnerOptions options)
     /// </summary>
     public AgentDefinition Answerer(RunContext run, string id, string prompt) => Researcher(run, id, prompt) with { Tools = new ToolRegistry([]) };
 
-    public AgentDefinition Conversation(RunContext run, IEnumerable<ITool> tools) => Base(run, "assistant", options.ChatTaskType) with
+    /// <param name="noWebSearch">The person asked for no web search in this message (ARCH-012): web search is denied by the run's own rule, ahead of the cascade, and no call may search.</param>
+    public AgentDefinition Conversation(RunContext run, IEnumerable<ITool> tools, bool noWebSearch = false) => Base(run, "assistant", options.ChatTaskType) with
     {
         SystemPrompt = RunnerResources.Prompt("conversation", new Dictionary<string, string>
         {
@@ -118,9 +119,9 @@ public sealed class AgentFactory(RunnerOptions options)
         Tools = new ToolRegistry(tools),
         // Starting an idea, changing an app, trying stopped work again or changing a setting is the owner's call: each asks, as a
         // checkpoint the person answers in the conversation itself, before it happens.
-        Permissions = Policy(run, "conversation", ["read_organisation"], checkpoints: ["start_idea", "change_app", "try_again", "adjust_setting"]),
+        Permissions = Policy(run, "conversation", ["read_organisation"], deny: noWebSearch ? [WebSearch.Name] : null, checkpoints: ["start_idea", "change_app", "try_again", "adjust_setting"]),
         StopHooks = [],
-        Limits = new AgentLimits { MaxSteps = 12, MaxOutputTokens = 4000 },
+        Limits = new AgentLimits { MaxSteps = 12, MaxOutputTokens = 4000, MaxSearchesPerCall = noWebSearch ? 0 : null },
     };
 
     /// <summary>

@@ -63,6 +63,9 @@ public sealed record ContextView(
 /// <summary>The internal API (ARCH-004): for the Runner, Dock and the edge, behind the service token. Never routed by the edge.</summary>
 internal static class InternalEndpoints
 {
+    /// <summary>The largest model call the gateway takes: a message's files as base64 (a third larger), with room for the rest of the prompt.</summary>
+    public const long MaxModelCallBytes = (ConversationAttachments.MaxMessageBytes * 4 / 3) + (16L * 1024 * 1024);
+
     public static void MapInternal(this RouteGroupBuilder group)
     {
         group.MapPost("/model/chat", async (ChatRequest request, HttpContext http, ModelGateway gateway, CancellationToken ct) =>
@@ -96,7 +99,18 @@ internal static class InternalEndpoints
             return Results.Empty;
         })
         .WithName("ModelChat")
+        // A conversation's images travel as base64 in every call of its turn: up to a message's files, a third larger, and the rest.
+        .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxModelCallBytes))
         .WithSummary("A model call through the gateway: routed by task type, reserved before sending, settled from the reply's own cost. 402 budget_exhausted is terminal; 422 ceiling_unreachable is not.");
+
+        group.MapGet("/runs/{id:guid}/attachments", async (Guid id, string? taskType, RunService runs, ConversationAttachmentService attachments, ModelGatewayOptions gateway, FactoryEstimateOptions factory, CancellationToken ct) =>
+        {
+            var (run, _) = await runs.RequireAsync(id, ct);
+            return Results.Ok(new RunAttachmentsView(id, WorkEndpoints.AcceptsImages(gateway, factory, taskType), await attachments.ForRunAsync(run.OrganisationId, id, ct)));
+        })
+        .WithName("RunAttachments")
+        .WithSummary("The files sent with a conversation turn, in the order they were attached: the text read from each PDF and text file, each image's bytes as base64; and whether the route ?taskType= names takes images.")
+        .Produces<RunAttachmentsView>();
 
         group.MapPost("/runs", async (CreateRunRequest request, ScopeResolver scopes, RunService runs, CancellationToken ct) =>
         {

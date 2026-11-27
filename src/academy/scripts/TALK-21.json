@@ -1,0 +1,189 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-21",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "Please change the Court booking app: let members join a waitlist when a court is full."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:approval"
+          }
+        },
+        {
+          "wait": {
+            "text": "Needs you"
+          }
+        },
+        {
+          "click": {
+            "text": "Approve"
+          }
+        },
+        {
+          "wait": {
+            "selector": "[data-work-card]"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "[data-work-card]",
+        "note": "Approved: the change appears as a live card — what it is, who does it, its status and its credits against the estimate."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "clock": {
+        "seek": "change:part-1"
+      },
+      "act": [
+        {
+          "wait": {
+            "selector": "[data-plan]"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "The plan",
+        "note": "The plan as parts, each with its state; the part being worked on is open, with its tasks, who holds each and what its tools did."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "selector": "[data-open-part]"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "[data-open-part]",
+        "note": "The part being worked on: its tasks, who holds each, and what its tools did. Select another part to open it."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "selector": "[data-work-card]",
+        "note": "Approvals the work asks for appear inside the card; this change asked for none, so it carried on."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "clock": {
+        "seek": "change:finished"
+      },
+      "act": [
+        {
+          "wait": {
+            "selector": "[data-work-card][data-status=finished]"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "See the whole run",
+        "note": "Finished: the outcome, what to do next, and the cost against the estimate. The card stays in the conversation."
+      }
+    }
+  ],
+  "variations": [
+    {
+      "title": "Research: the researchers side by side",
+      "persona": "owner",
+      "scenario": "established",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "act": [
+            {
+              "wait": {
+                "text": "A message here costs at most"
+              }
+            },
+            {
+              "type": {
+                "into": {
+                  "text": "Message Northwind"
+                },
+                "text": "Start researching a booking app for the club minibus."
+              }
+            },
+            {
+              "click": {
+                "text": "Send"
+              }
+            },
+            {
+              "wait": {
+                "text": "Working on it"
+              }
+            },
+            {
+              "clock": {
+                "seek": "conversation:approval"
+              }
+            },
+            {
+              "wait": {
+                "text": "Needs you"
+              }
+            },
+            {
+              "click": {
+                "text": "Approve"
+              }
+            },
+            {
+              "clock": {
+                "seek": "research:started"
+              }
+            },
+            {
+              "wait": {
+                "selector": "[data-researcher]"
+              }
+            }
+          ],
+          "highlight": {
+            "text": "3 researchers, at the same time",
+            "note": "Research shows its researchers side by side: what each looks for, and the searches each has used."
+          }
+        }
+      ]
+    }
+  ]
+}

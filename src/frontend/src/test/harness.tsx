@@ -23,7 +23,8 @@ export function stubApi(routes: Record<string, Route>) {
     const url = new URL(request.url);
     const path = url.pathname + url.search;
     const text = request.method === "GET" ? "" : await request.clone().text();
-    const body = text ? (JSON.parse(text) as unknown) : null;
+    // A form (a file upload) is kept as its text; everything else the console sends is JSON.
+    const body = text ? (((request.headers.get("content-type") ?? "").startsWith("multipart/") ? text : JSON.parse(text)) as unknown) : null;
     calls.push({ method: request.method, path, body });
     const key = Object.keys(routes).find((k) => {
       const [m, p] = k.split(" ");

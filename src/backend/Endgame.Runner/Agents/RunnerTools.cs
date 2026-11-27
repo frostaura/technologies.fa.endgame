@@ -397,8 +397,28 @@ public sealed class ReadOrganisationTool(ControlPlaneClient controlPlane, string
     private bool Within(string other) => other == scope || other.StartsWith(scope + "/", StringComparison.Ordinal);
 }
 
-/// <summary>Proposed endpoints: <c>POST /internal/ideas</c> {scope, text, constraints, by: "conversation"} and <c>PUT /internal/cascade</c> {scope, kind: "setting", key, value}.</summary>
-public sealed class StartIdeaTool(ControlPlaneClient controlPlane, string scope) : ITool, IApprovalTitle
+/// <summary>
+/// Told when a conversation's tool has started a piece of work: the started run's id, what kind of work it is
+/// (<c>research</c>, <c>change</c> or <c>retry</c>) and its title, so the conversation can follow it (ARCH-012).
+/// </summary>
+public delegate Task WorkStarted(Guid runId, string workKind, string title, CancellationToken cancellationToken);
+
+/// <summary>Reads the started run out of what the control plane answered, and passes it on.</summary>
+internal static class StartedWork
+{
+    public static async Task ReportAsync(WorkStarted? started, string answer, Func<JsonObject, JsonObject?> runOf, string workKind, Func<JsonObject, JsonObject, string?> titleOf, CancellationToken cancellationToken)
+    {
+        if (started is null || Json.ParseTolerant(answer) is not JsonObject body || runOf(body) is not { } run || !Guid.TryParse(Json.Str(run, "id"), out var id))
+        {
+            return;
+        }
+
+        await started(id, workKind, OutputText.Truncate(titleOf(body, run) ?? Json.Str(run, "title") ?? "", 200), cancellationToken);
+    }
+}
+
+/// <summary><c>POST /internal/ideas</c> {scope, text, constraints} → <c>{ idea, run, estimate }</c>.</summary>
+public sealed class StartIdeaTool(ControlPlaneClient controlPlane, string scope, WorkStarted? started = null) : ITool, IApprovalTitle
 {
     public string ApprovalTitle(JsonObject arguments) => $"Start researching an idea: {Json.Str(arguments, "text")}";
 
@@ -422,9 +442,13 @@ public sealed class StartIdeaTool(ControlPlaneClient controlPlane, string scope)
         ArgumentNullException.ThrowIfNull(call);
         using var response = await controlPlane.Http.PostAsJsonAsync("/internal/ideas", new { scope, text = Json.Str(call.Arguments, "text"), constraints = Json.Strings(call.Arguments, "constraints") }, Json.Web, cancellationToken);
         var text = await response.Content.ReadAsStringAsync(cancellationToken);
-        return response.IsSuccessStatusCode
-            ? new ToolOutcome($"Research started: {OutputText.Truncate(text, 2000)}")
-            : ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The idea could not be started ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}"), "tool_error");
+        if (!response.IsSuccessStatusCode)
+        {
+            return ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The idea could not be started ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}"), "tool_error");
+        }
+
+        await StartedWork.ReportAsync(started, text, b => b["run"] as JsonObject, "research", (b, _) => Json.Str(b["idea"] as JsonObject, "title"), cancellationToken);
+        return new ToolOutcome($"Research started: {OutputText.Truncate(text, 2000)}");
     }
 }
 
@@ -526,7 +550,7 @@ public sealed partial class AdjustSettingTool(ControlPlaneClient controlPlane, s
 /// <c>POST /internal/apps/changes</c> — the estimate is shown first in the change's own run, then a plan, the build, the checks
 /// and the new version. The owner confirms first.
 /// </summary>
-public sealed partial class ChangeAppTool(ControlPlaneClient controlPlane, string scope, PlaceNames? places = null) : ITool, IApprovalTitle
+public sealed partial class ChangeAppTool(ControlPlaneClient controlPlane, string scope, PlaceNames? places = null, WorkStarted? started = null) : ITool, IApprovalTitle
 {
     private readonly PlaceNames names = places ?? new PlaceNames([]);
 
@@ -604,9 +628,13 @@ public sealed partial class ChangeAppTool(ControlPlaneClient controlPlane, strin
         var app = Json.Str(call.Arguments, "app") is { Length: > 0 } a ? a : scope;
         using var response = await controlPlane.Http.PostAsJsonAsync("/internal/apps/changes", new { scope = app, request = Json.Str(call.Arguments, "request") }, Json.Web, cancellationToken);
         var text = await response.Content.ReadAsStringAsync(cancellationToken);
-        return response.IsSuccessStatusCode
-            ? new ToolOutcome($"The change to {names.Name(app)} has started; its estimate is shown first in its own work (name it as {names.Name(app)}, never by its path): {OutputText.Truncate(text, 2000)}")
-            : ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The change could not be started ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it did not start."), "tool_error");
+        if (!response.IsSuccessStatusCode)
+        {
+            return ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The change could not be started ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it did not start."), "tool_error");
+        }
+
+        await StartedWork.ReportAsync(started, text, b => b["run"] as JsonObject, "change", (_, r) => Json.Str(r, "title"), cancellationToken);
+        return new ToolOutcome($"The change to {names.Name(app)} has started; its estimate is shown first in its own work (name it as {names.Name(app)}, never by its path): {OutputText.Truncate(text, 2000)}");
     }
 }
 
@@ -614,7 +642,7 @@ public sealed partial class ChangeAppTool(ControlPlaneClient controlPlane, strin
 /// <c>try_again</c>: starts a failed, cancelled or budget-stopped piece of work again (CHG-03) through
 /// <c>POST /internal/runs/{id}/retry</c>, picking up what was already built and agreed. The owner confirms first.
 /// </summary>
-public sealed class TryAgainTool(ControlPlaneClient controlPlane, string scope) : ITool, IApprovalTitle
+public sealed class TryAgainTool(ControlPlaneClient controlPlane, string scope, WorkStarted? started = null) : ITool, IApprovalTitle
 {
     public string Name => "try_again";
 
@@ -639,8 +667,13 @@ public sealed class TryAgainTool(ControlPlaneClient controlPlane, string scope) 
         var id = Guid.Parse(Json.Str(call.Arguments, "run_id")!);
         using var response = await controlPlane.Http.PostAsJsonAsync($"/internal/runs/{id:D}/retry", new { scope }, Json.Web, cancellationToken);
         var text = await response.Content.ReadAsStringAsync(cancellationToken);
-        return response.IsSuccessStatusCode
-            ? new ToolOutcome($"Started again: {OutputText.Truncate(text, 2000)}")
-            : ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"It could not be started again ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it did not start."), "tool_error");
+        if (!response.IsSuccessStatusCode)
+        {
+            return ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"It could not be started again ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it did not start."), "tool_error");
+        }
+
+        // The control plane answers with the new run itself.
+        await StartedWork.ReportAsync(started, text, b => b, "retry", (_, r) => Json.Str(r, "title"), cancellationToken);
+        return new ToolOutcome($"Started again: {OutputText.Truncate(text, 2000)}");
     }
 }

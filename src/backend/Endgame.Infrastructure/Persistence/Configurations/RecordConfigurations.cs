@@ -476,6 +476,50 @@ internal sealed class ConversationConfiguration : IEntityTypeConfiguration<Conve
     }
 }
 
+internal sealed class ConversationAttachmentConfiguration : IEntityTypeConfiguration<ConversationAttachmentRecord>
+{
+    public void Configure(EntityTypeBuilder<ConversationAttachmentRecord> builder)
+    {
+        builder.ToTable("conversation_attachments");
+        builder.HasKey(a => a.Id);
+        builder.HasAlternateKey(a => new { a.OrganisationId, a.Id });
+        builder.Property(a => a.Id).HasColumnName("id").ValueGeneratedNever();
+        builder.MapScope("conversation_attachments");
+        builder.Property(a => a.EmployeeId).HasColumnName("employee_id");
+        builder.Property(a => a.ConversationId).HasColumnName("conversation_id");
+        builder.Property(a => a.RunId).HasColumnName("run_id");
+        builder.Property(a => a.UploadedBy).HasColumnName("uploaded_by");
+        builder.Property(a => a.Name).HasColumnName("name").HasMaxLength(Work.ConversationAttachments.MaxNameLength);
+        builder.Property(a => a.ContentType).HasColumnName("content_type").HasMaxLength(100);
+        builder.Property(a => a.Kind).HasColumnName("kind").HasMaxLength(10);
+        builder.Property(a => a.Bytes).HasColumnName("bytes");
+        builder.Property(a => a.Pages).HasColumnName("pages");
+        builder.Property(a => a.Characters).HasColumnName("characters");
+        builder.Property(a => a.ExtractedText).HasColumnName("extracted_text");
+        builder.Property(a => a.Content).HasColumnName("content").HasColumnType("bytea");
+        builder.Property(a => a.CreatedAt).HasColumnName("created_at");
+        builder.Status("conversation_attachments", "kind", Work.ConversationAttachments.Kinds);
+        builder.ToTable(t => t.HasCheckConstraint("ck_conversation_attachments_bytes", $"bytes > 0 AND bytes <= {Work.ConversationAttachments.MaxFileBytes}"));
+        builder.ToTable(t => t.HasCheckConstraint("ck_conversation_attachments_sent", "run_id IS NULL OR conversation_id IS NOT NULL"));
+        // Deleted with its conversation (ARCH-012).
+        builder.HasOne<ConversationRecord>().WithMany()
+            .HasForeignKey(a => new { a.OrganisationId, a.ConversationId })
+            .HasPrincipalKey(c => new { c.OrganisationId, c.Id })
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<RunRecord>().WithMany()
+            .HasForeignKey(a => new { a.OrganisationId, a.RunId })
+            .HasPrincipalKey(r => new { r.OrganisationId, r.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<EmployeeRecord>().WithMany()
+            .HasForeignKey(a => new { a.OrganisationId, a.EmployeeId })
+            .HasPrincipalKey(e => new { e.OrganisationId, e.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<EndgameUser>().WithMany().HasForeignKey(a => a.UploadedBy).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(a => new { a.OrganisationId, a.RunId });
+        builder.HasIndex(a => new { a.OrganisationId, a.UploadedBy, a.ConversationId, a.CreatedAt });
+    }
+}
+
 internal sealed class CreditEntryConfiguration : IEntityTypeConfiguration<CreditEntryRecord>
 {
     public void Configure(EntityTypeBuilder<CreditEntryRecord> builder)

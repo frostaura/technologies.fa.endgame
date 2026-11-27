@@ -246,6 +246,44 @@ test.describe("the console on a phone", () => {
     await expect(jump).toHaveCount(0);
   });
 
+  test("the composer: files, what it can use and the actions, each a thumb's size, nothing sideways", async ({ page }) => {
+    await open(page, "default", "/");
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /^Talk/ }).click();
+    const sheet = page.getByRole("dialog");
+    for (const name of ["Attach files", "What it can use here", "Actions", "Send"]) await thumbSized(sheet.getByRole("button", { name }));
+    await sheet.locator("input[type=file]").setInputFiles({ name: "court-rules.md", mimeType: "text/markdown", buffer: Buffer.from("# Court rules\n- Book at most 7 days ahead\n") });
+    await expect(sheet.locator("[data-attachment-chip=ready]")).toHaveCount(1);
+    await thumbSized(sheet.getByRole("button", { name: "Take off court-rules.md" }));
+    await sheet.getByRole("button", { name: "What it can use here" }).click();
+    await expect(sheet.locator("[data-can-use]")).toBeVisible();
+    await noSideways(page);
+    expect(await shortTargets(page)).toEqual([]);
+    await sheet.getByRole("button", { name: "What it can use here" }).click();
+    await sheet.getByLabel(/^Message /).fill("Here are the rules.");
+    await sheet.getByRole("button", { name: "Send" }).click();
+    await expect(sheet.locator("[data-sent-attachments]")).toBeVisible();
+    await expect(sheet.locator("[data-working]")).toHaveCount(0, { timeout: 30_000 });
+    await expect(sheet.getByText(/^I read/)).toBeVisible();
+  });
+
+  test("work the conversation starts is a card in the sheet: the plan, its parts, whole on a phone", async ({ page }) => {
+    await open(page, "app-busy");
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /^Talk/ }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByLabel(/^Message /).fill("Let members join a waitlist when a court is full.");
+    await sheet.getByRole("button", { name: "Send" }).click();
+    await sheet.getByRole("button", { name: /^Approve/ }).click({ timeout: 30_000 });
+    const card = sheet.locator("[data-work-card]");
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await page.evaluate(() => (window as unknown as { endgameDemo: { clock: (a: { speed: number }) => void } }).endgameDemo.clock({ speed: 30 }));
+    await expect(card.getByRole("region", { name: "The plan" })).toBeVisible({ timeout: 60_000 });
+    await page.evaluate(() => (window as unknown as { endgameDemo: { clock: (a: { speed: number }) => void } }).endgameDemo.clock({ speed: 1 }));
+    const box = await card.boundingBox();
+    expect(box?.width ?? 0).toBeLessThanOrEqual(375);
+    await noSideways(page);
+    expect(await shortTargets(page)).toEqual([]);
+  });
+
   test("an opened fold says its title once", async ({ page }) => {
     await open(page, "app-busy");
     await page.getByRole("button", { name: /^Dashboard/ }).click();

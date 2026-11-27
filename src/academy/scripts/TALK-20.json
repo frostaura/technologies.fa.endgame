@@ -1,0 +1,92 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-20",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "click": {
+            "text": "What it can use here"
+          }
+        },
+        {
+          "wait": {
+            "text": "What Northwind can use here"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "What Northwind can use here",
+        "note": "Who answers, its tools, the work it can start (only what applies here), skills, services, web search and AI assistants, read from what is true here."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Answer only: start no work"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Answer only: start no work",
+        "note": "For this message only: ask for less, never more."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "What it can use here"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "Please change the Court booking app: let members join a waitlist."
+          }
+        },
+        {
+          "click": {
+            "text": "Send"
+          }
+        },
+        {
+          "wait": {
+            "text": "Working on it"
+          }
+        },
+        {
+          "clock": {
+            "seek": "conversation:replied"
+          }
+        },
+        {
+          "wait": {
+            "text": "apps are under Northwind"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "apps are under Northwind",
+        "note": "Answered, and nothing asked to start: the narrowing held."
+      }
+    }
+  ]
+}

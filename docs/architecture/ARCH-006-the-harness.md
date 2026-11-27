@@ -100,6 +100,16 @@ routes by task type itself (`ARCH-003`).
   rule that never asked (R6-1). A tool call declined at its approval carries the same two fields
   (`ApprovalDetail.Declined`: "change part of the app"). The decision is replayed from its event, so a resumed session never asks
   again.
+- **A message may be content parts (ARCH-012).** A message's `content` is a string, or parts — `{ type: text, text }`
+  and `{ type: image_url, image_url: { url } }` — when a conversation turn carries files. `AgentDefinition.TaskContent`
+  is the first message's parts; the workflow builds it on every run, a resumed one too, and the loop uses it in place of
+  the task's words. The `agent.start` event keeps only the task's words and what each part was (`parts: [{ type,
+  chars }]`), so no file enters the run log (64 KB an event) and a resumed session is given its files again from the
+  definition. Everything that reads a message's words, measures it or writes it down goes through `ContentParts`: the
+  loop's reply checks, replay's final text, the gateway client's empty-reply check, cache marks (a message of parts is
+  marked on its last text part), and compaction, which counts an image at `ReservationFormula.ImageTokens` (an attached
+  photo is never a reason to compact) and writes one into its transcript as `[image: <name>]` from the
+  `Attached image: <name>` text part before it.
 - **Bookkeeping is not for people.** The loop's own `message` events carry a `kind` and no `text` (`reply`, `detail`,
   `nudge`, `note` instead); sub-agent events carry a `title`, a plain `brief` and a one-sentence `summary`, the raw report in
   `report` (ARCH-004, *Run log*).
@@ -333,6 +343,22 @@ not reach a model says so in its reply. Its prompt is given the places' names (a
 acts only a person can do, with where each is done. A conversation is never held at the start checkpoint (the budget
 pause still applies), and the Runner answers conversations in a lane of their own (`RunLanes`, `ConversationConcurrency`,
 default 2, beside `Concurrency` for every other kind), so chats and long runs never wait on each other.
+
+**Files, narrowing and the work a turn starts (ARCH-012).** When the owner message names `attachments`, the workflow reads
+them from `GET /internal/runs/{id}/attachments?taskType=<the agent's task type>` and makes the first message parts: the
+task's words, then each text file and PDF as a block headed `Attached file: <name> (<kind, pages>)` in a fence longer
+than any run of backticks in it (saying when its text was cut at 200,000 characters, or that nothing could be read from
+it), then each image as `Attached image: <name>` and its `image_url` data URL — where the route takes images; otherwise
+the image is named and the model told it cannot see it. Earlier turns' files are named (`[attached: …]`), never read
+again. A message of files alone is asked as "say what they are, and answer what they most likely want to know". The
+message's `narrow` is enforced here, never widened: `noWebSearch` puts `web_search` in the run's own `deny` (checked before
+the cascade) and sets `MaxSearchesPerCall` to 0, so no call may search and no one is asked; `answerOnly` gives the turn
+`read_organisation` alone — no `start_idea`, `change_app`, `try_again` or `adjust_setting` exists for it to call — and a
+line in the task says the person asked for an answer only. When `start_idea`, `change_app` or `try_again` succeeds, the
+tool appends a `message` of kind `work.started` with the started run's id from the control plane's answer (`run.id` of
+`{ idea, run, estimate }` and `{ run, estimateCredits }`, the retried run itself), `workKind` `research`, `change` or
+`retry`, and its title. The prompt may link a piece of work or an employee it read with its id as `[title](/runs/{id})` or
+`[name](/employees/{id})`; app ids are not in what it reads, so apps are never linked.
 
 ## Research
 

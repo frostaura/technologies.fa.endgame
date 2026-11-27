@@ -33,7 +33,9 @@ export type Action =
   | { select: { into: Target | string; value: string } }
   | { press: string | { key: string } }
   | { wait: number | Target }
-  | { clock: ClockArgs };
+  | { clock: ClockArgs }
+  /** Files added to the conversation's composer, as a person picking them would (ARCH-012): text, or bytes in base64. */
+  | { attach: { files: { name: string; text?: string; base64?: string }[] } };
 
 export interface ClockArgs {
   play?: boolean;
@@ -473,6 +475,27 @@ async function perform(action: Action) {
       else if (form) form.requestSubmit();
     } else if (key === "Tab") tabFrom(el);
     el.dispatchEvent(new win.KeyboardEvent("keyup", { key, bubbles: true }));
+  } else if ("attach" in action) {
+    const pick = (): HTMLInputElement | null => {
+      for (const doc of documents()) {
+        const inputs = [...doc.querySelectorAll<HTMLInputElement>("section[aria-label='Conversation'] input[type=file]")];
+        const shown = inputs.filter((i) => visible(i.closest("section") as Element));
+        const input = shown[shown.length - 1] ?? inputs[inputs.length - 1];
+        if (input) return input;
+      }
+      return null;
+    };
+    const input = pick();
+    if (!input) throw new Error("No conversation is open to attach files to.");
+    const win = windowOf(input);
+    const files = new win.DataTransfer();
+    for (const f of action.attach.files) {
+      const bytes = f.base64 !== undefined ? Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0)) : new TextEncoder().encode(f.text ?? "");
+      files.items.add(new win.File([bytes], f.name, { type: f.base64 !== undefined ? "application/octet-stream" : "text/plain" }));
+    }
+    input.files = files.files;
+    input.dispatchEvent(new win.Event("change", { bubbles: true }));
+    await sleep(instantNow || reduced() ? 0 : 300);
   } else if ("wait" in action) {
     // A step that waits is the person approving on their device, if it asks. A wait for a time is
     // also whatever the step started (a sign-in, a send) finishing, so played or caught up the step

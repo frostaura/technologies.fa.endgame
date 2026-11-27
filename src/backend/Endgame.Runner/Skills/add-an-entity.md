@@ -1,6 +1,7 @@
 ---
 name: add-an-entity
 trigger: Adding a new kind of thing an app stores, end to end: entity, database, API, screen and tests.
+used-by: builders
 ---
 # Adding an entity end to end
 

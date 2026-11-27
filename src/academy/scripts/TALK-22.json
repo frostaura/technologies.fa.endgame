@@ -1,0 +1,85 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "TALK-22",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "A message here costs at most"
+          }
+        },
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "/"
+          }
+        },
+        {
+          "wait": {
+            "text": "Actions here"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Actions here",
+        "note": "“/” lists what the conversation can do at this level."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "selector": "[role=option]"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Message Northwind",
+        "note": "An action puts its opening words in the box; finish the sentence and send."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "type": {
+            "into": {
+              "text": "Message Northwind"
+            },
+            "text": "@Kas"
+          }
+        },
+        {
+          "wait": {
+            "text": "Send it to"
+          }
+        },
+        {
+          "click": {
+            "selector": "[role=option]"
+          }
+        },
+        {
+          "wait": {
+            "text": "Talking to Kasper"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Talking to Kasper",
+        "note": "“@” lists the employees and apps beneath this level; choosing one moves the conversation there."
+      }
+    }
+  ]
+}

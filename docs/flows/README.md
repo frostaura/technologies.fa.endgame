@@ -4,12 +4,12 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 
 **Read from the code, not from the other docs.** On 2026-11-25 five readers each took one area and read the screens, the endpoints, the assistant tools, the edge, the app kit and the Makefile end to end. Where a flow could not be settled from code it says *not verified from code*. Nothing was run to produce it, so a flow's steps are what the code does, not a recording of a session.
 
-**328 flows** in five files:
+**333 flows** in five files:
 
 | File | Covers | Flows |
 | --- | --- | --- |
 | [Identity and access](01-identity-and-access.md) | Signing in, people and roles, AI-assistant keys and MCP, opening apps as a member or end user, the shell. | 49 |
-| [The organisation, home and conversations](02-organisation-home-and-conversations.md) | The home screen, the tree of divisions, projects and apps, the two graph views, conversations, notifications, system status. | 77 |
+| [The organisation, home and conversations](02-organisation-home-and-conversations.md) | The home screen, the tree of divisions, projects and apps, the two graph views, conversations, notifications, system status. | 82 |
 | [The factory](03-the-factory.md) | From an idea to a running app: ideas, research and the verdict, runs, plan, build, check, review, publish, autonomy and rule sets, changing an app. | 62 |
 | [Workforce, credits and God mode](04-workforce-credits-and-god-mode.md) | Hiring, employees and contractors, employee memory, credits, budgets and the overdraft, the operator's screens. | 46 |
 | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) | The app page, asking about an app, versions and export, sharing, secrets, what a hosted app can use, sleep and wake, running the platform. | 94 |
@@ -35,7 +35,7 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 
 Five tracks, each in the order the files give them. A lesson can only teach what has a screen, so each track lists the flows a learner can do in the console and counts the rest separately. The **Operator** track is FrostAura's own handbook and is not for clients.
 
-### Foundation — 78 flows, 76 with a screen
+### Foundation — 79 flows, 77 with a screen
 
 What every person needs on day one: signing in, reading the home screen, starting an idea, reading a verdict, opening an app.
 
@@ -79,6 +79,7 @@ What every person needs on day one: signing in, reading the home screen, startin
 | TALK-02 | Talk to a division | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-03 | Talk to a project | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-11 | Read what was said before, after a reload or a return visit | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TALK-23 | Make the pane wider, collapse it, or open it full width | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | NOTE-01 | See how many notices are unread | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | NOTE-02 | Open the latest notices in place (desktop) | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | NOTE-03 | Read the full feed | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -120,7 +121,7 @@ What every person needs on day one: signing in, reading the home screen, startin
 | HOST-01 | A sleeping app wakes on a visit | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 | HOST-06 | Reach an app at either of its two addresses | Screen | [Apps, secrets, hosting and operations](05-apps-secrets-hosting-and-operations.md) |
 
-### Core — 142 flows, 132 with a screen
+### Core — 146 flows, 136 with a screen
 
 Running an organisation day to day: people, hiring, credits, the app page, secrets, notifications, autonomy.
 
@@ -171,6 +172,10 @@ Running an organisation day to day: people, hiring, credits, the app page, secre
 | TALK-14 | The reply's stream drops | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-17 | Answer the conversation's own approval in the conversation | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | TALK-18 | Ask the conversation to try stopped work again | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TALK-19 | Attach files to a message | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TALK-20 | See what it can use here, and narrow one message | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TALK-21 | Follow the work a message started, in its card | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
+| TALK-22 | Act with "/", or send it to someone with "@" | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | NOTE-08 | The feed fails to load | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | NOTE-09 | Receive an urgent notice by e-mail | Automatic | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
 | SYS-01 | Switch between normal and technical mode | Screen | [The organisation, home and conversations](02-organisation-home-and-conversations.md) |
@@ -409,7 +414,7 @@ Flows that do not exist yet or are purely automatic.
 
 | Reached by | Flows |
 | --- | --- |
-| Screen | 253 |
+| Screen | 258 |
 | API or assistant only | 24 |
 | Command line | 30 |
 | Automatic | 19 |

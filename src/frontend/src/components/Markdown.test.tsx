@@ -25,4 +25,19 @@ describe("Markdown", () => {
     expect(screen.getByRole("link", { name: "Docs" }).getAttribute("target")).toBe("_blank");
     expect(screen.getByRole("link", { name: "Credits" }).getAttribute("target")).toBeNull();
   });
+
+  it("draws a table, and a link to something in the organisation as a chip with its kind (ARCH-012)", () => {
+    const { container } = render(<Markdown text={"| App | Credits |\n|---|---:|\n| Court booking | 296 |\n\nAsk [Kasper](/employees/e1) about [Court booking](/apps/a1)."} />);
+    expect(screen.getByRole("columnheader", { name: "App" })).toBeTruthy();
+    expect(screen.getByRole("cell", { name: "296" }).className).toContain("text-right");
+    expect(screen.getByRole("link", { name: "Kasper" }).getAttribute("data-chip")).toBe("employee");
+    expect(screen.getByRole("link", { name: "Court booking" }).getAttribute("data-chip")).toBe("app");
+    expect(container.textContent).not.toContain("/apps/");
+  });
+
+  it("gives a code block a copy button", () => {
+    render(<Markdown text={"```bash\nmake test\n```"} />);
+    expect(screen.getByRole("button", { name: "Copy the code" })).toBeTruthy();
+    expect(screen.getByText("bash")).toBeTruthy();
+  });
 });

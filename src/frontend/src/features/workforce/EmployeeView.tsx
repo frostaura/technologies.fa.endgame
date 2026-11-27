@@ -245,17 +245,16 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
                 <h2 id="talk-title" className={SECTION}>
                   Talk to {employee.name}
                 </h2>
-                <div className="rounded-md border bg-surface p-5 shadow-card">
-                  <ConversationDock
-                    tree={tree}
-                    selection={{
-                      scope: employee.scope,
-                      kind: "employee",
-                      trail: [...namesFor(tree, employee.scope), employee.name],
-                      employeeId: employee.id,
-                    }}
-                  />
-                </div>
+                {/* The conversation is a framed pane of its own (ARCH-012): no card around it. */}
+                <ConversationDock
+                  tree={tree}
+                  selection={{
+                    scope: employee.scope,
+                    kind: "employee",
+                    trail: [...namesFor(tree, employee.scope), employee.name],
+                    employeeId: employee.id,
+                  }}
+                />
               </section>
             </Talk>
           </ErrorBoundary>

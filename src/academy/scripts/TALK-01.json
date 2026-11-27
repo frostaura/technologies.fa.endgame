@@ -91,7 +91,7 @@
         }
       ],
       "highlight": {
-        "text": "Endgame",
+        "selector": "[data-reply=live]",
         "note": "The reply streams in, headed “Endgame”."
       }
     },

@@ -29,11 +29,14 @@ public sealed record CompactionOptions
 /// </summary>
 public static class Compactor
 {
-    /// <summary>Tokens, estimated as bytes over four (a conservative rule for code and English).</summary>
+    /// <summary>
+    /// Tokens, estimated as bytes over four (a conservative rule for code and English), with each image counted at its fixed
+    /// figure rather than its base64 length — an attached photo is not a reason to compact.
+    /// </summary>
     public static int EstimateTokens(JsonArray messages)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        return Encoding.UTF8.GetByteCount(messages.ToJsonString(Json.Compact)) / 4;
+        return (ContentParts.BytesWithoutImages(messages, Json.Compact) / 4) + (ContentParts.Images(messages) * Domain.Credits.ReservationFormula.ImageTokens);
     }
 
     public static bool ShouldCompact(JsonArray messages, CompactionOptions options)
@@ -65,7 +68,8 @@ public static class Compactor
         {
             var m = messages[i]!.AsObject();
             var role = Role(m);
-            var content = m["content"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : m["content"]?.ToJsonString() ?? "";
+            // A message of parts is written as its words, each image as "[image: name]".
+            var content = m["content"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : m["content"] is JsonArray ? ContentParts.Describe(m["content"]) : m["content"]?.ToJsonString() ?? "";
             sb.Append('[').Append(role).Append("] ").Append(OutputText.Truncate(content, role == "tool" ? 1500 : 4000)).Append('\n');
             if (m["tool_calls"] is JsonArray calls)
             {

@@ -374,6 +374,92 @@ export interface ConversationRequest {
   employeeId?: string;
   /** Continue a given conversation; by default the latest one at the scope is continued. */
   conversationId?: string;
+  /** Files uploaded with `POST /api/conversations/attachments`, sent with this message (ARCH-012). */
+  attachmentIds?: string[];
+  /** Narrowings for this one message; never a widening. Enforced by the Runner. */
+  narrow?: MessageNarrowing;
+}
+
+/** What one message may be asked not to do (ARCH-012). */
+export interface MessageNarrowing {
+  /** Do not search the web for this one. */
+  noWebSearch?: boolean;
+  /** Answer only: start no work, change nothing. */
+  answerOnly?: boolean;
+}
+
+/** A file attached to a conversation message (`POST /api/conversations/attachments`). */
+export interface ConversationAttachment {
+  id: string;
+  name: string;
+  contentType: string;
+  kind: "image" | "pdf" | "text";
+  bytes: number;
+  /** A PDF's page count. */
+  pages: number | null;
+  /** Characters of text read from a PDF or a text file. */
+  characters: number | null;
+  /** Set once it was sent with a message. */
+  runId: string | null;
+}
+
+/** The limits and kinds of files a message may carry (ARCH-012). */
+export interface AttachmentLimits {
+  maxFiles: number;
+  maxFileBytes: number;
+  maxMessageBytes: number;
+  /** Whether whoever answers here can look at images; when false an image is refused before sending. */
+  images: boolean;
+  /** Accepted file name extensions, lower case, with the dot. */
+  extensions: string[];
+}
+
+/** `GET /api/conversations/capabilities?scope=&employeeId=`: what whoever answers here can use (ARCH-012). */
+export interface ConversationCapabilities {
+  scope: string;
+  answerer: {
+    kind: "assistant" | "employee";
+    /** The employee's name; null for Endgame's own assistant. */
+    name: string | null;
+    role: string | null;
+    employeeId: string | null;
+    /** The model tier it answers with (a route key: chat, research, build…). */
+    tier: string;
+  };
+  /** Tool ids it may use in this conversation (`read_organisation`, `start_idea`, …). */
+  tools: string[];
+  /** Of those, the ones that ask the person first. */
+  asks: string[];
+  /** The work a message can start at this scope: tool ids, in the "/" menu's order. */
+  actions: string[];
+  /** Skills the builders and reviewers here load. */
+  skills: { name: string; trigger: string; usedBy: string }[];
+  /** The platform services the apps at and beneath this scope have, each with a live fact when one is known. */
+  services: { id: PlatformService; detail: string | null }[];
+  /** Apps at and beneath this scope. */
+  apps: number;
+  webSearch: {
+    /** Whether whoever answers here can search the web at all. */
+    available: boolean;
+    /** The autonomy rule for `web_search` at this scope's conversation stage. */
+    rule: "may" | "asks" | "may-not";
+    /** Where the rule was set, or null for the default. */
+    setAtPath: string | null;
+  };
+  /** The organisation's active AI assistant keys (MCP); each reaches every level its role allows. */
+  assistants: { id: string; name: string; role: TokenRole; prefix: string; lastUsedAt: string | null }[];
+  /** Which one-message narrowings apply here. */
+  narrowing: { noWebSearch: boolean; answerOnly: boolean };
+  attachments: AttachmentLimits;
+}
+
+/** One run of a conversation, as the history lists it, so a card is restored after a reload. */
+export interface ConversationTurn {
+  runId: string;
+  status: RunStatus;
+  toolCalls: number;
+  /** Work this turn started: an idea's research, a change, a try again. */
+  started: { runId: string; kind: string; title: string }[];
 }
 
 /** One message of a docked conversation, in the order it was written. */
@@ -388,6 +474,8 @@ export interface ConversationMessage {
   by: string | null;
   /** A notice's reason, such as "budget_exhausted". */
   code: string | null;
+  /** The files sent with an owner's message. */
+  attachments: ConversationAttachment[];
 }
 
 /** `GET /api/conversations?scope=&employeeId=`: oldest first, at most the last 200 messages. */
@@ -397,6 +485,8 @@ export interface ConversationHistory {
   conversationId: string | null;
   employeeId: string | null;
   messages: ConversationMessage[];
+  /** Each run of the conversation, oldest first, with its tool count and the work it started. */
+  turns: ConversationTurn[];
 }
 
 // ---------------------------------------------------------------------------------------------

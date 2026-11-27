@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MessageCircle } from "lucide-react";
 import { Sheet } from "@/components/Sheet";
 import { useViewport } from "@/lib/useViewport";
@@ -17,6 +17,7 @@ import { OrganisationSwitcher } from "@/features/account/OrganisationSwitcher";
 import { PhoneHeader, PhoneNav } from "./PhoneShell";
 import { CreditsPill, ModeToggle, SignOut } from "./shellControls";
 import { Talk } from "./talk";
+import { DockLayoutContext, useDockState } from "../conversation/dockLayout";
 import { ShellTalkContext, takeOpenTalkOnArrival } from "./talkContext";
 
 export interface Crumb {
@@ -88,7 +89,26 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
   const talkOpen = talkChosen ?? (arrivedForTalk && compact && talkLabel !== null);
   const shell = useMemo(() => ({ compact, announce: tablet, target: talkTarget, open: openTalk, register }), [compact, tablet, talkTarget, openTalk, register]);
 
-  const side = compact ? aside : aside ?? (talk && (tablet ? <Talk label={talk.label}>{talk.content}</Talk> : talk.content));
+  // A desktop docks the conversation at the right edge, full height under a header that stays put (ARCH-012). A page that
+  // also has side cards keeps them in the page column: beside the page from 3xl, under it below that.
+  const docked = viewport === "desktop" && !!talk;
+  const dock = useDockState(me?.user.id ?? null);
+  const chrome = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = chrome.current;
+    const root = document.documentElement;
+    if (!docked || !el) return;
+    const measure = () => root.style.setProperty("--shell-chrome", `${el.getBoundingClientRect().height}px`);
+    measure();
+    const sizes = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    sizes?.observe(el);
+    return () => {
+      sizes?.disconnect();
+      root.style.removeProperty("--shell-chrome");
+    };
+  }, [docked]);
+
+  const side = compact ? aside : docked ? null : aside ?? (talk && (tablet ? <Talk label={talk.label}>{talk.content}</Talk> : talk.content));
   // Every page's trail starts at the organisation and never names the same place twice in a row.
   const trail = normaliseCrumbs(crumbs, org ? { label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() } : null);
 
@@ -99,6 +119,7 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xs focus:bg-surface focus:px-4 focus:py-2">
           Skip to the content
         </a>
+        <div ref={chrome} className={cn(docked && "sticky top-0 z-30")}>
         {me?.isOperator && <GodModeBand />}
         {phone ? (
           <PhoneHeader crumbs={trail} signedIn={!!me} />
@@ -137,18 +158,45 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
             </div>
           </header>
         )}
+        </div>
         {/* The device's safe area (a notch, in landscape) is kept clear of the page, outside its own gutter. */}
         <div className="mx-auto flex w-full max-w-frame flex-1 flex-col pl-safe-l pr-safe-r lg:flex-row rail:flex-row rail:pl-0">
-          <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10 rail:gap-4 rail:px-5 rail:py-4">
-            {children}
-          </main>
-          {aside ? (
-            <SidePanel>{aside}</SidePanel>
-          ) : (
-            side && (
-              // The conversation: a panel the height of the page beside it on a desktop; on a tablet, under the page.
-              <aside className="flex min-w-0 flex-col gap-7 border-t bg-surface px-4 py-8 sm:px-8 lg:w-dock lg:shrink-0 lg:border-l lg:border-t-0 lg:py-10">{side}</aside>
-            )
+          {/*
+            Docked (ARCH-012): the page column and the conversation pane side by side. Inside the page column, a page's side
+            cards sit beside the page from 3xl (1,600 px: the page keeps at least 640 px beside a wide pane and the cards) and
+            under it below that; with the pane collapsed they go beside the page from lg, as on any other page.
+          */}
+          <div
+            data-page-column=""
+            className={cn("flex min-w-0 flex-1 flex-col", !docked && "lg:flex-row rail:flex-row", docked && (dock.collapsed ? "lg:flex-row" : "3xl:flex-row"), docked && dock.full && "hidden")}
+          >
+            <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10 rail:gap-4 rail:px-5 rail:py-4">
+              {children}
+            </main>
+            {aside ? (
+              <SidePanel beside={!docked || dock.collapsed ? "lg" : "3xl"} below={docked && !dock.collapsed}>
+                {aside}
+              </SidePanel>
+            ) : (
+              side && (
+                // The conversation: a panel the height of the page beside it on a desktop; on a tablet, under the page.
+                <aside className="flex min-w-0 flex-col gap-7 border-t bg-surface px-4 py-8 sm:px-8 lg:w-dock lg:shrink-0 lg:border-l lg:border-t-0 lg:py-10">{side}</aside>
+              )
+            )}
+          </div>
+          {docked && talk && (
+            <DockLayoutContext.Provider value={dock}>
+              <aside
+                aria-label="Conversation pane"
+                data-dock={dock.full ? "full" : dock.collapsed ? "collapsed" : dock.wide ? "wide" : "narrow"}
+                className={cn(
+                  "sticky top-chrome flex h-dock shrink-0 flex-col self-start border-l bg-surface 4xl:border-r",
+                  dock.full ? "flex-1" : dock.collapsed ? "w-dock-rail" : dock.wide ? "w-dock-wide" : "w-dock",
+                )}
+              >
+                {talk.content}
+              </aside>
+            </DockLayoutContext.Provider>
           )}
         </div>
         {compact && talk && (
@@ -173,17 +221,25 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
  * a column taller than the screen scrolls with the page, so nothing in it is ever out of reach. On a
  * tablet the cards sit under the page, two across.
  */
-function SidePanel({ children }: { children: ReactNode }) {
+function SidePanel({ children, beside = "lg", below = false }: { children: ReactNode; beside?: "lg" | "3xl"; below?: boolean }) {
   const { ref, fits } = useFitsScreen<HTMLDivElement>();
   return (
-    <aside aria-label="Beside this page" className="min-w-0 px-4 pb-8 sm:px-8 lg:w-aside lg:shrink-0 lg:py-10 lg:pl-0 3xl:w-aside-wide rail:w-aside rail:shrink-0 rail:py-4 rail:pl-0 rail:pr-5">
+    <aside
+      aria-label="Beside this page"
+      className={cn(
+        "min-w-0 px-4 pb-8 sm:px-8 rail:w-aside rail:shrink-0 rail:py-4 rail:pl-0 rail:pr-5",
+        beside === "lg" ? "lg:w-aside lg:shrink-0 lg:py-10 lg:pl-0 3xl:w-aside-wide" : "3xl:w-aside-wide 3xl:shrink-0 3xl:py-10 3xl:pl-0",
+      )}
+    >
       <div ref={ref} data-side-panel="" className={cn(
           "flex flex-col gap-5 md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start rail:!flex rail:gap-4",
+          // Under the page beside the docked conversation (lg to 3xl): two across, as on a tablet.
+          beside === "3xl" && "lg:max-3xl:grid lg:max-3xl:grid-cols-2 lg:max-3xl:items-start",
           // Every block a page puts here is drawn as a card that ends with its content.
           "[&>*]:min-w-0 [&>*]:rounded-md [&>*]:border [&>*]:bg-surface [&>*]:p-5 [&>*]:shadow-card max-sm:[&>*]:p-4",
           // A fieldset's legend would sit on the card's edge: it is the card's title instead.
           "[&>fieldset>legend]:float-left [&>fieldset>legend]:mb-3 [&>fieldset>legend]:w-full [&>fieldset>legend+*]:clear-both",
-          fits && "lg:sticky lg:top-6",
+          fits && (below ? "3xl:sticky 3xl:top-chrome" : beside === "lg" ? "lg:sticky lg:top-6" : "3xl:sticky 3xl:top-6"),
         )}>
         {children}
       </div>
