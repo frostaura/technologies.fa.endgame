@@ -38,6 +38,8 @@ const scriptsDir = path.join(root, "scripts");
 const out = path.resolve(process.env.SHOTS_OUT ?? path.join(root, "public/shots"));
 const port = Number(process.env.SHOTS_PORT ?? 5691);
 const VIEWPORT = { width: 1180, height: 760 };
+/** A flow taught on the phone's console at every size (`device: "phone"`, SHL-07) is pictured on it too. */
+const PHONE = { width: 390, height: 640 };
 const QUALITY = Number(process.env.SHOTS_QUALITY ?? 0.72);
 /** The demo's clock for anything it dates: one fixed moment, so "3 days ago" never drifts between runs. */
 const NOW = new Date("2026-11-25T10:00:00Z");
@@ -68,6 +70,8 @@ interface Play {
   scenario: string;
   start: string;
   steps: ScriptStep[];
+  /** The console the flow is taught on: the phone's for a flow about the phone itself. */
+  device?: "phone";
   /** Which steps get a picture: every demo step, or (a variation) only where it ends. */
   shoot: (step: DemoStep, last: boolean) => string | null;
 }
@@ -99,8 +103,8 @@ function plays(): Play[] {
     .map((f) => JSON.parse(readFileSync(path.join(scriptsDir, f), "utf8")) as StepScript)
     .filter((s) => wanted(s.flow));
   return scripts.flatMap((s) => [
-    { key: s.flow, flow: s.flow, persona: s.persona, scenario: s.scenario, start: s.start, steps: s.steps, shoot: (st: DemoStep) => `${s.flow}/${st.step}` },
-    ...(s.variations ?? []).map((v, i) => ({ key: `${s.flow} variation ${i + 1}`, flow: s.flow, persona: v.persona, scenario: v.scenario, start: v.start, steps: v.steps, shoot: (_st: DemoStep, last: boolean) => (last ? `${s.flow}/v${i + 1}` : null) })),
+    { key: s.flow, flow: s.flow, persona: s.persona, scenario: s.scenario, start: s.start, steps: s.steps, device: s.device, shoot: (st: DemoStep) => `${s.flow}/${st.step}` },
+    ...(s.variations ?? []).map((v, i) => ({ key: `${s.flow} variation ${i + 1}`, flow: s.flow, persona: v.persona, scenario: v.scenario, start: v.start, steps: v.steps, device: s.device, shoot: (_st: DemoStep, last: boolean) => (last ? `${s.flow}/v${i + 1}` : null) })),
   ]).filter((p) => p.steps.some((st) => st.kind === "demo"));
 }
 
@@ -305,7 +309,7 @@ async function readScene(page: Page): Promise<Scene> {
 }
 
 async function capture(browser: Browser, play: Play, base: string, index: ShotIndex, encoder: Page, earlier: Record<string, PrintCopy>): Promise<string[]> {
-  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: SCALE, reducedMotion: "reduce", colorScheme: "light", locale: "en-GB", timezoneId: "UTC" });
+  const context = await browser.newContext({ viewport: play.device === "phone" ? PHONE : VIEWPORT, deviceScaleFactor: SCALE, reducedMotion: "reduce", colorScheme: "light", locale: "en-GB", timezoneId: "UTC" });
   const page = await context.newPage();
   const problems: string[] = [];
   try {
