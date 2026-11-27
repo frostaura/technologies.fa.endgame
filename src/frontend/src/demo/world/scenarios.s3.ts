@@ -1,6 +1,7 @@
 import { IDS, ORG } from "./default";
 import { defineScenario } from "./scenarios";
 import { startChange } from "../server/tryAgain";
+import { LONG_RUN_ID, longBuildRun } from "./longRun";
 import { spentBelow, uuidFor, type World } from "../server/world";
 
 /**
@@ -199,4 +200,15 @@ defineScenario({
   },
   route: "/apps/{app}",
   featured: COURT,
+});
+
+defineScenario({
+  name: "run-long",
+  title: "A long build that did not succeed: about 2,000 steps, a request cut at 120 characters, a part sent back three times",
+  apply: (w) => {
+    w.runs = w.runs.filter((r) => !r.playback);
+    w.runs.push(longBuildRun(LEARNING));
+  },
+  route: "/runs/{run}",
+  featured: { run: LONG_RUN_ID },
 });

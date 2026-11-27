@@ -464,19 +464,20 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** every step of the work is visible as it happens, and a dropped connection loses nothing.
 - **Steps:**
   1. The page loads (skeleton, "Loading the work").
-  2. The header shows the status badge ("Waiting to start", "Working", "Waiting for you", "Paused", "Finished", "Did not succeed", "Cancelled", or "You declined to start this" for work declined at its start checkpoint), the stream state ("Connecting…", "Live" with a pulsing dot, "Reconnecting…"), the title and "Started {time}".
-  3. Steps arrive under "Step by step". Before the first one: "Waiting for the first step". Events are taken in together, a batch at a time, so a long build's thousands of events draw at once rather than one by one.
-  4. A run with more than 200 steps shows the latest 200, under "{n} earlier steps folded away; the latest 200 are below." with **"Show 200 earlier steps"** (or as many as are left), which unfolds them 200 at a time.
-  5. The stream closes when the run finishes.
+  2. The header shows the status badge ("Waiting to start", "Working", "Waiting for you", "Paused", "Finished", "Did not succeed", "Cancelled", "You declined to start this" for work declined at its start checkpoint, or "Declined by you" for a plan you declined), what kind of work it is ("Research", "Build", "Work on an app", "Conversation"), the stream state ("Connecting…", "Live" with a pulsing dot, "Reconnecting…" — only while the work is under way: never on paused or ended work), a short name for the work as the heading ("Build: A reading list for the supper club" — the kind and the first clause of the request, never cut mid-word), the whole request under it, two lines with **"Show all of it"**, and "Started {date}, {time}" (with "· ended {time}" once it has ended).
+  3. Steps arrive under "Step by step". Before the first one: "Waiting for the first step". An ended run's steps are read in before any is shown ("Reading what the work did"), so its first events never make it look as if it were still working. Events are taken in together, a batch at a time, so a long build's thousands of events draw at once rather than one by one.
+  4. Every step is one row: its mark, who did what, what it cost and when, the cost and the time in the same two right-hand columns on every row. A build's steps are gathered under the part of the plan they are for — "Getting ready", "Part {n} of {m} {the part's words}", "Review and finish" — each a line with its state ("Done", "Working", "Sent back", "Did not succeed", "Stopped"), how many lines it holds, what it cost and when; the part the work is on is open and the others are folded, one click to open. Under a part its lines say "this part" for the part's own words, which its heading says once. The same line said again in a row is one line with "×{n}"; the tasks a plan makes at once are one line, "{n} new tasks". A part with more than 200 lines shows the latest 200, under "{n} earlier steps folded away; the latest 200 are below." with **"Show 200 earlier steps"** (or as many as are left); in technical mode a folded part draws none of its lines until it is opened.
+  5. The stream closes when the run finishes. An ended run says how it ended in one card: "Outcome", and, when it stopped, why and **"Try again"** (RUN-10, RUN-11); a cancel or a decline is said once, by that offer.
+  6. From 1280 wide, "Tasks" and "Where the credits go" stand beside the page; narrower (a 1024 laptop, a tablet, a phone on its side) they come in the page, after the plan. From 1600, "The plan" stands beside "Step by step".
 - **You know it worked when:** "Live" shows and new steps appear without reloading.
 - **Variations and refusals:**
   - Six failed reconnects: "The live connection to this work could not be kept open. What is shown is everything received so far." with **"Reconnect"**.
   - A missing run: "This work could not be found" — with "This was not found, or you cannot see it." and "Back to the org chart" in place of "Try again" (a not-found is an answer, so it does not say "Nothing here is known until it loads."). A failed read: "This work could not be loaded" with a retry.
   - A finished run with no steps: "This work recorded no steps."
-  - On a phone the title is cut to two lines with **"Show all of it"**; an approval waiting comes straight under it, and once scrolled out of sight leaves the bar "Waiting for your approval" pinned at the top, whose **"Answer"** scrolls back to it. The cost tiles are two by two; "The plan" and "Tasks" are folded rows saying how far they got; "Step by step" shows the latest step first, twelve at a time, with **"Show 12 earlier steps"** at the foot.
+  - On a phone an approval waiting comes straight under the heading, before **"Pause"** and **"Cancel"**, its note field before **"Approve"** and **"Decline"**, which stay pinned above the bottom bar while the card is on screen; once scrolled out of sight it leaves the bar "Waiting for your approval" pinned at the top, whose **"Answer"** scrolls back to it. The cost tiles are two by two; "The plan" and "Tasks" are folded rows saying how far they got; a part's lines show twelve at a time, with **"Show 12 earlier steps"** above them.
 - **Where:** `RunView.tsx`, `useRunStream.ts`; `GET /api/runs/{id}`, `GET /api/runs/{id}/events?after=`.
 - **Reachable from:** UI; MCP `run_get`, `run_events`.
-- **Covered by tests:** `RunView.test.tsx` (including "draws a long build promptly, folding its earlier steps…"); `useRunStream.test.ts`; `RunsAndTasksTests.The_event_stream_is_server_sent_events_resumable…`.
+- **Covered by tests:** `RunView.test.tsx` (including "draws a long build promptly, folding its earlier steps…"); `RunLong.test.tsx` (about 2,000 events: never "Working" or "Live" while the log arrives, gathered by part, drawn promptly); `tests-demo/runs.spec.ts` (one grid at every width, by part, never "Live" on a failed run, the side panel from 1280, the plan beside the steps from 1600, a phone's decision first); `useRunStream.test.ts`; `RunsAndTasksTests.The_event_stream_is_server_sent_events_resumable…`.
 
 ### RUN-02 Read a run in normal mode
 - **Who:** Viewer or above.
@@ -487,7 +488,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Steps:**
   1. The count line reads "{n} actions taken" (", {n} refused by your rules" when a rule refused any without asking, ", {n} declined by you" when you declined any at an approval). A run that took no action, such as a conversation that only answered, shows no count. Technical mode adds " · {n} declined by you" after the denials.
   2. Messages appear as "{speaker} · {title}".
-  3. Contractor and agent groups fold away once done, for example "Built: {part}", "Checked: {part}", "Drew up the plan"; "Show its {n} steps" unfolds one. A group still under way is titled in the present tense ("Looking for existing products", "Building: {part}") with "Working"; once the run has ended, a group that never reported back reads "Stopped".
+  3. Contractor and agent groups fold away once done, for example "Built: {part}", "Checked: {part}", "Checked again, by a second checker: {part}", "Drew up the plan" (under a part, "Built: this part"); "Show its {n} steps" unfolds one. Each says what it came back with beside its state ("Found it works", "Found it does not work yet" with "Sent back"). A group still under way is titled in the present tense ("Looking for existing products", "Building: {part}") with "Working"; once the run has ended, a group that never reported back reads "Stopped". A factory agent's id is never read out as words: one with no plain name reads "Checked the work", "Built part of the work" or "A contractor's piece of the work".
   4. The mechanics are summarised, for example "Read 4 files · Changed 2 files · Ran the tests — 12 passed".
   5. An action a rule refused without asking reads "An action was refused by your rules" / "It was not carried out. The work continues without it." One you declined at an approval reads as yours, in the words of the question: "You declined: search the web for what they leave undone", "You declined: change part of the app" / "It was not done. The work continues without it." (technical mode: "Declined by you: {tool}"). An older run's decline, which carried only its rule, reads "You declined: search the web" or "You declined: a step the work asked you about".
   6. **"Outcome"** shows the closing plain message. A conversation's outcome is its reply, drawn from its markdown (bold, lists, inline code).
@@ -694,13 +695,13 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 
 ### RUN-14 Follow the tasks of a run
 - **Who:** Viewer or above.
-- **Starts at:** the run aside **"Tasks"**.
+- **Starts at:** **"Tasks"**, beside the run's page from 1280 wide, in the page after the plan below that.
 - **Needs:** a run that creates tasks (a build).
 - **Level:** Core. **Learn first:** RUN-01.
 - **What you learn:** each part of the work is a task claimed by a named employee.
 - **Steps:**
-  1. Tasks appear with the badges "To do", "In progress", "Done", "Did not succeed".
-  2. Each shows the holder and a note.
+  1. Tasks are gathered under the part of the plan they are for ("{n}. {the part's words}"), one line each: the badge ("To do", "In progress", "Done", "Did not succeed"), what the task is for that part ("Build", "Check", "Check {n}" for each check after a repair, "Check again"), and who holds it. A long plan shows its first four parts and **"Show all {n} parts"**. Tasks that are not one part's show their own words.
+  2. Pressing a task with a note shows it ("Built and handed over: …", "The check of … is finished: it works.").
 - **You know it worked when:** tasks show "Done" with their summaries.
 - **Variations and refusals:** none yet: "No tasks yet. They appear here as the work is broken down." Finished without tasks: "This work was not broken into tasks."
 - **Where:** `RunView.tsx` `RunAside`.

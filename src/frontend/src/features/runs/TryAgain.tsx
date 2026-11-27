@@ -13,6 +13,9 @@ import { keptText, STOPPED, type StopReason } from "./retryModel";
 /**
  * Starting stopped work again (CHG-03, VERD-12, RUN-10): the estimate first (CLAUDE.md rule 11), with what is kept, then the new
  * attempt, which carries on from where this one stopped. The person lands on the new attempt's page.
+ *
+ * It draws no card of its own: it sits inside the card that says how the work ended (the run's, the idea's), so a stop is
+ * never a card inside a card.
  */
 export function TryAgain({ runId, why, ideaId = null, showCredits = false }: { runId: string; why: StopReason; ideaId?: string | null; showCredits?: boolean }) {
   const [estimateRetry, estimating] = useEstimateRetryMutation();
@@ -40,13 +43,13 @@ export function TryAgain({ runId, why, ideaId = null, showCredits = false }: { r
   };
 
   return (
-    <section aria-label="Try again" data-testid="try-again" className="flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
-      <p className="font-medium text-ink">{STOPPED[why]}</p>
+    <section aria-label="Try again" data-testid="try-again" className="flex min-w-0 flex-col gap-3">
+      <p className="max-w-prose font-medium text-ink">{STOPPED[why]}</p>
       {estimate ? (
         <>
-          <p className="text-ink-body">{keptText(estimate)}</p>
+          <p className="max-w-prose text-ink-body">{keptText(estimate)}</p>
           <p className="font-display text-xl font-semibold">Estimated {formatCredits(estimate.credits)}</p>
-          <p className="text-sm text-ink-body">{estimate.basis}</p>
+          <p className="max-w-prose text-sm text-ink-body">{estimate.basis}</p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void start()} disabled={starting.isLoading}>
               {starting.isLoading ? "Starting…" : "Start it again"}
@@ -57,7 +60,7 @@ export function TryAgain({ runId, why, ideaId = null, showCredits = false }: { r
           </div>
         </>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <Button onClick={() => void price()} disabled={estimating.isLoading}>
             {estimating.isLoading ? (
               <>
@@ -66,12 +69,12 @@ export function TryAgain({ runId, why, ideaId = null, showCredits = false }: { r
               </>
             ) : "Try again"}
           </Button>
-          <span className="text-sm text-ink-body">It picks up where this stopped; you see what it costs first.</span>
           {showCredits && (
-            <Link href={paths.credits()} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+            <Link href={paths.credits()} className={cn(buttonVariants({ variant: "outline" }))}>
               See credits
             </Link>
           )}
+          <span className="text-sm text-ink-body">It picks up where this stopped; you see what it costs first.</span>
         </div>
       )}
       {error && (
