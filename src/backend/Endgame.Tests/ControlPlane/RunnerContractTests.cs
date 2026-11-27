@@ -293,8 +293,10 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
     [InlineData("credits")]
     [InlineData("workforce")]
     [InlineData("overview")]
+    [InlineData("contents")]
     public async Task The_conversation_reads_the_organisation_through_its_own_tool(string what)
     {
+        await owner.AppAsync("frostaura/technologies/squash", "web", "Squash web");
         var run = await RunAsync();
         await runner.CreateTaskAsync("frostaura/technologies/squash", run, "Wire the bookings page", null, 1m, null, CancellationToken.None);
         await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/employees", new { scope = "frostaura/technologies/squash", name = "Ada", role = "Builder" }));
@@ -316,8 +318,15 @@ public sealed class RunnerContractTests(PostgresServer postgres) : IAsyncLifetim
             case "workforce":
                 Assert.Equal("Ada", Assert.Single(read.AsArray())!["name"]!.GetValue<string>());
                 break;
+            case "contents":
+                // R5-1: what is beneath the scope, each app with its state, counted as home counts it.
+                Assert.Equal(1, read["counts"]!["apps"]!.GetValue<int>());
+                Assert.Equal("Squash web", read["divisions"]![0]!["projects"]![0]!["apps"]![0]!["name"]!.GetValue<string>());
+                break;
             default:
-                Assert.Equal("frostaura/technologies", read["scope"]!.GetValue<string>());
+                // The overview leads with the contents, then the cascade (its levels are only the path down to the scope).
+                Assert.Equal("frostaura/technologies", read["cascade"]!["scope"]!.GetValue<string>());
+                Assert.Equal(1, read["contents"]!["counts"]!["apps"]!.GetValue<int>());
                 break;
         }
     }

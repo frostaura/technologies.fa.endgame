@@ -12,8 +12,10 @@
 ## Main flow
 
 1. `POST /api/conversations` queues a `conversation` run with the owner's message.
-2. The assistant reads with `read_organisation` (overview, workforce, tasks, runs, credits) at that scope or beneath
-   it, with the last six turns of the conversation in context.
+2. The assistant reads with `read_organisation` (contents, overview, workforce, tasks, runs, credits) at that scope or
+   beneath it, with the last six turns of the conversation in context. "Contents" is every division, project and app
+   there, each app with its state (live, sleeping, building, never built, paused, down, archived), and the counts home
+   shows; the overview leads with it, and the prompt says to count from it, never from recent runs (R5-1).
 3. It may start an idea (`start_idea`), ask for a change to a built app (`change_app`), try stopped work again
    (`try_again`) or change a setting (`adjust_setting`) only through tools the permission pipeline checks; each is a
    checkpoint, so the person confirms it first, in the conversation — asked in plain words ("Start researching an idea:

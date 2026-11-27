@@ -290,19 +290,19 @@ public sealed partial class CheckPreviewTool(IPreviewProbe probe, Guid appId) : 
 }
 
 /// <summary>
-/// The conversation's read tools over the tree: the scope's resolved cascade (levels, context,
-/// settings, budgets), its workforce, and — through endpoints this lane asks for — its tasks, runs
-/// and credits.
+/// The conversation's read tools over the tree: what is at the scope and beneath it (every division, project and app,
+/// each app's state, and home's counts), the scope's resolved cascade (levels, context, settings, budgets), its
+/// workforce, its tasks, runs and credits.
 /// </summary>
 public sealed class ReadOrganisationTool(ControlPlaneClient controlPlane, string scope) : ITool
 {
     public string Name => "read_organisation";
 
-    public string Description => "Read about the organisation at the scope being discussed (or a scope beneath it): 'overview' (levels, context, settings, budgets, and needsYou: everything waiting on the owner — approvals, verdicts, hires — so read it whenever you are asked what is waiting), 'workforce', 'tasks', 'runs' or 'credits'.";
+    public string Description => "Read about the organisation at the scope being discussed (or a scope beneath it): 'contents' (every division, project and app there and beneath it, each app with its state — live, sleeping, building, never built, paused, down, archived — and the counts home shows; read it whenever you are asked how many apps, projects, divisions or employees there are, or which apps are live), 'overview' (the contents, then the levels on the path down to the scope, context, settings, budgets, and needsYou: everything waiting on the owner — approvals, verdicts, hires — so read it whenever you are asked what is waiting), 'workforce', 'tasks', 'runs' (the 20 most recent pieces of work, chats included: never count apps from it) or 'credits'.";
 
     public JsonObject Parameters => Schema.Object(new JsonObject
     {
-        ["what"] = Schema.Enum("What to read.", "overview", "workforce", "tasks", "runs", "credits"),
+        ["what"] = Schema.Enum("What to read.", "contents", "overview", "workforce", "tasks", "runs", "credits"),
         ["scope"] = Schema.Str("A scope path beneath the one being discussed, such as 'frostaura/technologies'. Default: the one being discussed."),
     }, "what");
 
@@ -314,25 +314,50 @@ public sealed class ReadOrganisationTool(ControlPlaneClient controlPlane, string
     public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(call);
-        var at = Json.Str(call.Arguments, "scope") is { Length: > 0 } s ? s : scope;
-        var path = Json.Str(call.Arguments, "what") switch
+        var at = Uri.EscapeDataString(Json.Str(call.Arguments, "scope") is { Length: > 0 } s ? s : scope);
+        var what = Json.Str(call.Arguments, "what");
+        var path = what switch
         {
-            "workforce" => $"/internal/employees?scope={Uri.EscapeDataString(at)}",
-            "tasks" => $"/internal/tasks?scope={Uri.EscapeDataString(at)}",
-            "runs" => $"/internal/runs?scope={Uri.EscapeDataString(at)}&limit=20",
-            "credits" => $"/internal/credits?scope={Uri.EscapeDataString(at)}",
-            _ => $"/internal/context?scope={Uri.EscapeDataString(at)}",
+            "contents" => $"/internal/contents?scope={at}",
+            "workforce" => $"/internal/employees?scope={at}",
+            "tasks" => $"/internal/tasks?scope={at}",
+            "runs" => $"/internal/runs?scope={at}&limit=20",
+            "credits" => $"/internal/credits?scope={at}",
+            _ => $"/internal/context?scope={at}",
         };
-        using var response = await controlPlane.Http.GetAsync(path, cancellationToken);
-        var text = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        var (ok, text) = await ReadAsync(path, cancellationToken);
+        if (!ok)
         {
-            // A failed read is never an empty answer.
-            return ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The read failed ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it could not be read; do not say there is nothing."), "read_failed");
+            return Failed(text);
         }
 
-        return new ToolOutcome(OutputText.Truncate(text, 12_000));
+        if (what is "workforce" or "tasks" or "runs" or "credits" or "contents")
+        {
+            return new ToolOutcome(OutputText.Truncate(text, 12_000));
+        }
+
+        // The overview leads with what is there (R5-1): its levels are only the path down to the scope, and a model that
+        // counted them, or the apps it happened to see in recent runs, said "we run 1 app" of an organisation with three.
+        var (contentsOk, contents) = await ReadAsync($"/internal/contents?scope={at}", cancellationToken);
+        if (!contentsOk)
+        {
+            return Failed(contents);
+        }
+
+        var overview = new JsonObject { ["contents"] = JsonNode.Parse(contents), ["cascade"] = JsonNode.Parse(text) };
+        return new ToolOutcome(OutputText.Truncate(overview.ToJsonString(), 16_000));
     }
+
+    private async Task<(bool Ok, string Text)> ReadAsync(string path, CancellationToken cancellationToken)
+    {
+        using var response = await controlPlane.Http.GetAsync(path, cancellationToken);
+        var text = await response.Content.ReadAsStringAsync(cancellationToken);
+        return response.IsSuccessStatusCode ? (true, text) : (false, string.Create(CultureInfo.InvariantCulture, $"{(int)response.StatusCode}): {OutputText.Truncate(text, 600)}"));
+    }
+
+    // A failed read is never an empty answer.
+    private static ToolOutcome Failed(string why) =>
+        ToolOutcome.Error($"The read failed ({why}. Tell the owner it could not be read; do not say there is nothing.", "read_failed");
 
     private bool Within(string other) => other == scope || other.StartsWith(scope + "/", StringComparison.Ordinal);
 }

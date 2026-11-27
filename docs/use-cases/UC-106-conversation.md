@@ -17,7 +17,7 @@
 2. The Runner replies as `message { from, text }` events on that run; the console streams them.
 3. `GET /api/conversations?scope=&employeeId=` → `{ scope, conversationId | null, employeeId, messages[] { runId, seq, at, from, text } }`, oldest first, at most the last 200.
 
-4. What the assistant reads and does goes through the internal API: `GET /internal/context`, `/internal/employees`,
+4. What the assistant reads and does goes through the internal API: `GET /internal/contents`, `/internal/context`, `/internal/employees`,
    `/internal/tasks`, `/internal/runs`, `/internal/credits` (each at the scope and beneath it), `POST /internal/ideas`,
    `POST /internal/apps/changes`, `POST /internal/runs/{id}/retry` and `PUT /internal/cascade` — the latter for an
    allow-list of settings only (UC-114), never who may open an app. Each action is a checkpoint answered in the

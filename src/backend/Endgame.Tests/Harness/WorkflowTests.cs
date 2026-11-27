@@ -944,6 +944,42 @@ public sealed partial class WorkflowTests
         Assert.Contains(cp.Events, e => e.Type == "message" && e.Payload["from"]?.GetValue<string>() == "assistant" && e.Payload["text"]!.GetValue<string>().StartsWith("One person works here", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task The_organisation_conversation_is_given_every_app_with_its_state_whichever_read_it_makes()
+    {
+        // R5-1: asked how many apps, the organisation's conversation answered "1 app" of three. Its overview carried only the
+        // path's levels and the runs read showed recent chats about one app; now the overview leads with what is there.
+        var cp = new FakeControlPlane("frostaura", "conversation", "In one sentence: how many apps do we run?") { Headroom = 100m };
+        cp.Contents = Json("""
+            {"scope":"frostaura","summary":"1 division · 3 projects · 3 apps · 2 employees",
+             "counts":{"divisions":1,"projects":3,"apps":3,"appsByState":{"live":1,"sleeping":1,"never built":1},"employees":2,"contractorsWorking":0},
+             "divisions":[{"name":"Community","projects":[
+               {"name":"Book Club","apps":[{"name":"Club Reading List","state":"live"}]},
+               {"name":"Dive Trips","apps":[{"name":"Dive Trip Ready","state":"sleeping"}]},
+               {"name":"Gear Swap","apps":[{"name":"Gear Swap","state":"never built","note":"Not built — the build was cancelled."}]}]}]}
+            """).AsObject();
+        var model = new ScriptedModel()
+            .ThenTool("read_organisation", new { what = "overview" })
+            .ThenTool("read_organisation", new { what = "contents" })
+            .ThenText("We run 3 apps: 2 live and 1 that never finished building.");
+        await EstimateTests.Executor(cp, model, workflows: [new ConversationWorkflow()]).ExecuteAsync(cp.Info(), "runner-test", () => false, CancellationToken.None);
+        Assert.Equal("succeeded", cp.Run["status"]!.GetValue<string>());
+        Assert.Contains("'contents' first", System(model.Calls[0]), StringComparison.Ordinal);
+        Assert.Contains("Never count from runs", System(model.Calls[0]), StringComparison.Ordinal);
+        var overview = model.Calls[1].Messages[^1]!["content"]!.GetValue<string>();
+        var contents = model.Calls[2].Messages[^1]!["content"]!.GetValue<string>();
+        foreach (var read in new[] { overview, contents })
+        {
+            Assert.Contains("3 apps", read, StringComparison.Ordinal);
+            foreach (var name in new[] { "Club Reading List", "Dive Trip Ready", "Gear Swap", "never built" })
+            {
+                Assert.Contains(name, read, StringComparison.Ordinal);
+            }
+        }
+
+        Assert.Equal(2, cp.Requests.Count(r => r == "GET /internal/contents"));
+    }
+
     private static string System(ChatCall call) => call.Messages[0]!["content"] is JsonValue v ? v.GetValue<string>() : call.Messages[0]!["content"]![0]!["text"]!.GetValue<string>();
 
     private static JsonNode Json(string text) => JsonNode.Parse(text)!;

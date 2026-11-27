@@ -222,7 +222,10 @@ counted as "the same". The fault that lists the calls made says each shape once,
 A conversation turn with an employee (`run.EmployeeId`) is answered **as that employee**: its name, role and mandate
 from `GET /internal/employees/{id}` are added to the prompt, its curated memory follows as context, it runs on its own
 model tier (thinking power) and may `remember` (`AgentFactory.As`). The answer carries `by` (the employee's name). The
-conversation's tools are `read_organisation`, `start_idea`, `change_app`, `try_again` and `adjust_setting`; every one
+conversation's tools are `read_organisation`, `start_idea`, `change_app`, `try_again` and `adjust_setting`. Its
+`read_organisation` "contents" (and the head of its "overview") is what is in the tree at the scope, counted as home
+counts it, each app with its state; the levels in the prompt and the overview are only the path down to the scope, and
+an organisation conversation that had nothing else answered "we run 1 app" of three, from recent runs (R5-1). Every one
 that acts is a checkpoint the person answers in the conversation itself. A turn the budget stops writes Endgame's own
 notice into the conversation (`from: runner`, `code: budget_exhausted`) instead of leaving it silent; a turn that could
 not reach a model says so in its reply. Its prompt is given the places' names (and must use them, never paths) and the
