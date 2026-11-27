@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/Sheet";
 import { capitalise } from "@/lib/format";
@@ -26,10 +26,12 @@ import { OperatorHome } from "../operator/OperatorHome";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { ConversationDock } from "./ConversationDock";
 import { AddDivision, OrgChart } from "./OrgChart";
-import { OntologyView } from "./OntologyView";
 import { QuickLinks, type QuickLink } from "./QuickLinks";
 import { needLines } from "./needsYouModel";
 import { countTree, orgFigures, organisationSelection, workerActivity, workerLabel } from "./treeModel";
+
+/** The two graphs load when their tab is first chosen: the org chart opens without them. */
+const OntologyView = lazy(() => import("./OntologyView").then((x) => ({ default: x.OntologyView })));
 
 /** How often the org chart refreshes. Status, spend and who is working are live, not a snapshot. */
 export const TREE_POLL_MS = 15_000;
@@ -411,7 +413,13 @@ function ChartViews({ tree, selection, onSelect }: { tree: Tree; selection: Sele
       </div>
       <div id="chart-panel" role="tabpanel" aria-labelledby={`view-${view}`} className="min-w-0">
         <ErrorBoundary name={VIEWS.find((v) => v.value === view)?.label ?? "The chart"} resetKey={view}>
-          {view === "chart" ? <OrgChart tree={tree} selection={selection} onSelect={onSelect} /> : <OntologyView scope={scope} view={view} />}
+          {view === "chart" ? (
+            <OrgChart tree={tree} selection={selection} onSelect={onSelect} />
+          ) : (
+            <Suspense fallback={<Loading label="Loading the graph"><Skeleton className="h-64 rounded-md" /></Loading>}>
+              <OntologyView scope={scope} view={view} />
+            </Suspense>
+          )}
         </ErrorBoundary>
       </div>
     </div>
