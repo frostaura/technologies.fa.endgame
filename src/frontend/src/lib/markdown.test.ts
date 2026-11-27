@@ -56,3 +56,21 @@ describe("markdownToPlain", () => {
     expect(markdownToPlain("You run **1 app**:\n- the `web` one")).toBe("You run 1 app: the web one");
   });
 });
+
+describe("tables, quotes, headings and code (ARCH-011)", () => {
+  it("reads a pipe table with its alignment, a quote, a heading's level and a fence's language", () => {
+    const blocks = parseMarkdown("## Cost\n\n| App | Credits |\n|:---|---:|\n| Court booking | 296 |\n| Tutor \\| Match | 88 |\n\n> Said before\n> twice\n\n```ts\nconst a = 1;\n```");
+    expect(blocks.map((b) => b.kind)).toEqual(["heading", "table", "quote", "code"]);
+    expect(blocks[0]).toMatchObject({ level: 2 });
+    const table = blocks[1];
+    if (table?.kind !== "table") throw new Error("no table");
+    expect(table.align).toEqual(["left", "right"]);
+    expect(table.rows).toHaveLength(2);
+    expect(markdownToPlain("| A | B |\n|---|---|\n| x | y |")).toBe("A, B; x, y");
+    expect(blocks[3]).toEqual({ kind: "code", text: "const a = 1;", lang: "ts" });
+  });
+
+  it("leaves a line with a bar but no rule beneath it as a paragraph", () => {
+    expect(parseMarkdown("a | b\nnot a rule").map((b) => b.kind)).toEqual(["paragraph"]);
+  });
+});

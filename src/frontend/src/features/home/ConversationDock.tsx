@@ -5,6 +5,7 @@ import { Avatar } from "@/components/Avatar";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Markdown } from "@/components/Markdown";
+import { markdownToPlain } from "@/lib/markdown";
 import { Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -477,23 +478,25 @@ function TurnWork({ runId }: { runId: string }) {
 function Steps({ steps, runId, toolCalls }: { steps: string[]; runId: string; toolCalls: number }) {
   const [open, setOpen] = useState(false);
   return (
-    <div data-steps="" className="flex flex-col gap-1.5 text-sm">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch items-center gap-2 self-start rounded-xs text-left text-ink-muted hover:text-ink">
-        <Icon name="plan" className="size-4 shrink-0 text-teal" />
-        <span className="line-clamp-1">{steps.join(" · ")}</span>
-        <ChevronDown aria-hidden className={cn("size-4 shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
-      </button>
+    <div data-steps="" className="flex flex-col gap-1 text-sm">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3">
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch min-w-0 items-center gap-2 rounded-xs text-left text-ink-muted hover:text-ink">
+          <Icon name="plan" className="size-4 shrink-0 text-teal" />
+          <span className="line-clamp-1">{steps.join(" · ")}</span>
+          <ChevronDown aria-hidden className={cn("size-4 shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+        </button>
+        <Link href={paths.run(runId)} className={cn("rounded-xs text-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
+          See how it got there
+        </Link>
+      </div>
       {open && (
-        <div className="flex flex-col gap-1 border-l-2 border-teal-tint pl-4">
+        <div className="flex flex-col gap-1 border-l-2 border-teal-tint pb-1 pl-4">
           <ol className="flex flex-col gap-0.5 text-ink-body">
             {steps.map((s) => (
               <li key={s}>{s}</li>
             ))}
           </ol>
           <span className="text-xs text-ink-muted">{toolCalls === 1 ? "1 step in all." : `${toolCalls} steps in all.`}</span>
-          <Link href={paths.run(runId)} className={cn("self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover", TAP)}>
-            See how it got there
-          </Link>
         </div>
       )}
     </div>
@@ -580,7 +583,7 @@ function Replies({ runId, answerer, onRetry }: { runId: string; answerer: string
   const by = log.events.map((e) => (e.type === "message" && e.payload.from === "assistant" && typeof e.payload.by === "string" ? e.payload.by : null)).find((n) => n !== null) ?? answerer;
   const lastReply = replies[replies.length - 1]?.text ?? null;
   useEffect(() => {
-    if (lastReply) announce(`${by ?? "Endgame"} replied: ${lastReply.slice(0, 200)}`);
+    if (lastReply) announce(`${by ?? "Endgame"} replied: ${markdownToPlain(lastReply).slice(0, 200)}`);
   }, [lastReply, by, announce]);
   useEffect(() => {
     if (pending.length > 0) announce(`Your answer is needed: ${pending[0]?.question ?? ""}`);
