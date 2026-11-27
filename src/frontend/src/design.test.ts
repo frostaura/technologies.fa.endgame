@@ -120,3 +120,15 @@ describe("contrast", () => {
     for (const [text, bg] of pairs) expect(contrastRatio(text, bg), `${text} on ${bg}`).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+/** The browser's own disclosure triangle: the shared fold (`Disclosure`) replaces it. These files may only lose theirs. */
+const NATIVE_DISCLOSURE_ALLOWED = new Set(["src/features/apps/AskPanel.tsx", "src/components/ErrorBoundary.tsx", "src/features/runs/RunView.tsx", "src/features/operator/OperatorView.tsx"]);
+
+describe("one disclosure", () => {
+  it("adds no native <details> fold: a long list folds under the shared Disclosure", () => {
+    const offenders = sources()
+      .filter((s) => !NATIVE_DISCLOSURE_ALLOWED.has(s.file) && /<details\b/.test(s.text))
+      .map((s) => s.file);
+    expect(offenders).toEqual([]);
+  });
+});

@@ -1,5 +1,5 @@
 import { formatCredits } from "@/lib/format";
-import type { Autonomy, Credits } from "@/store/types";
+import type { Autonomy, Credits, Tree } from "@/store/types";
 
 /** A checkpoint is in force only in checkpoints mode, and only when it is on. */
 function stops(autonomy: Autonomy | null, checkpoint: "start" | "plan" | "hire"): boolean {
@@ -69,4 +69,33 @@ export const NEVER_TOPPED_UP = "This organisation has not been given credits yet
 export function shortfall(room: number, estimate: number): string | null {
   if (room >= estimate) return null;
   return `You have ${formatCredits(room)} to spend here, and this needs about ${formatCredits(estimate)}. It starts, then waits for a top-up before it spends anything.`;
+}
+
+/** An idea to start from, and where it came from. */
+export interface ExampleIdea {
+  from: string;
+  idea: string;
+}
+
+/** Ideas around an app the organisation already runs, one per app, in words that fit any app. */
+const AROUND_AN_APP: ((app: string) => string)[] = [
+  (app) => `A weekly email that sums up what happened in ${app}, for the people who use it.`,
+  (app) => `A way for the people who use ${app} to say what is missing, and vote on what comes next.`,
+  (app) => `A phone-friendly page that shows today in ${app} at a glance.`,
+];
+
+/**
+ * Two or three ideas to start from, drawn from this organisation: its own open suggestions first (ideas
+ * from its portfolio, already argued against what it runs), then ideas around the apps it runs. None
+ * when it runs nothing and has no suggestions — the card is then not shown.
+ */
+export function exampleIdeas(suggestions: { title: string; idea: string }[], tree: Pick<Tree, "divisions"> | null, max = 3): ExampleIdea[] {
+  const out: ExampleIdea[] = suggestions.slice(0, max).map((s) => ({ from: "Suggested from your portfolio", idea: s.idea }));
+  const apps = [...new Set((tree?.divisions ?? []).flatMap((d) => (d.archived ? [] : d.projects.flatMap((p) => (p.archived ? [] : p.apps.filter((a) => !a.archived).map((a) => a.name))))))];
+  for (const [i, app] of apps.entries()) {
+    if (out.length >= max) break;
+    const make = AROUND_AN_APP[i % AROUND_AN_APP.length];
+    if (make) out.push({ from: `Around ${app}`, idea: make(app) });
+  }
+  return out;
 }

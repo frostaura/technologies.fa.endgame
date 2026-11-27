@@ -48,7 +48,7 @@ tablet as on a phone.
 | `SideCard` | `components/ui/page.tsx` | A titled card in the side panel | — |
 | `useShowAll(items, n)` | `components/ui/page.tsx` | Any list that can outgrow a screen (a run's tasks, an employee's memory) | Shows the first `n` and "Show all N". |
 | `PageHeader`, `TITLE`, `SECTION` | `components/ui/page.tsx` | The page's h1 (one size: 3xl, 2xl on a phone) and a section's h2 | Title icons are ink, never tinted. |
-| `ContentGrid` | `components/ui/page.tsx` | Independent sections | One column, two from 1600. |
+| `ContentGrid` | `components/ui/page.tsx` | Independent sections | One column, two from 1600. `masonry`: sections of very different heights flow down two columns, each under the one before, never in rows that leave holes (the verdict's evidence). |
 | `Stat`, `StatRow`, `NO_VALUE` | `components/ui/stat.tsx` | **Every big number** | The value is short: a number, a few characters ("73%", "53% under") or one word ("Healthy"). Anything longer is the caption; the value is then "—". Tabular body figures. A `StatRow` has a fixed number of equal slots; `meters` reserves the meter's place in every tile so captions align. |
 | `Badge` (the status tag) | `components/ui/badge.tsx` | A status | Five tones only (below). One line; cut with a tooltip. |
 | `Chip`, `PersonChip` | `components/ui/chip.tsx` | A name, a count, a person | One line, never wraps, solid. A person's avatar colour comes from their stable id. |

@@ -268,7 +268,9 @@ test.describe("the console on a phone", () => {
       expect(box?.width ?? 0, "the decision is not full width").toBeGreaterThanOrEqual(320);
       await thumbSized(decision);
       await expect(page.getByRole("button", { name: /^The case against/ })).toHaveAttribute("aria-expanded", "true");
-      for (const name of [/^Who already does this/, /^What gap is left/, /^Who would want it/, /^How often research says no/]) await expect(page.getByRole("button", { name })).toHaveAttribute("aria-expanded", "false");
+      // Over a red line research looks at no market, and the page says so once rather than three times.
+      const market = scenario === "verdict-red-line" ? [/^The market was not researched/] : [/^Who already does this/, /^What gap is left/, /^Who would want it/];
+      for (const name of [...market, /^How often research says no/]) await expect(page.getByRole("button", { name })).toHaveAttribute("aria-expanded", "false");
       if (scenario === "verdict-red-line") {
         const card = page.getByRole("alert").filter({ hasText: "crosses a red line" });
         await expect(card).toBeVisible();

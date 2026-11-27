@@ -241,6 +241,25 @@ export function plainProductName(name: string): string {
   return name.replace(/\s*\([^()]*\/[^()]*\)/g, "").trim() || name;
 }
 
+/** The same words, whatever the spacing, case or closing punctuation: so a page says a thing once. */
+export function sameText(a: string, b: string): boolean {
+  const flat = (s: string) => s.replace(/\s+/g, " ").replace(/[\s.!?…]+$/, "").trim().toLowerCase();
+  const x = flat(a);
+  const y = flat(b);
+  return x.length > 0 && (x === y || (x.length > 60 && y.includes(x)));
+}
+
+/**
+ * True when research looked at no market at all — what happens over a red line: no product found, no
+ * signal, and every market section is research saying it did not look ("Not researched…", "Not looked
+ * into…", "No evidence was gathered…"). The page then says so once, not three times.
+ */
+export function notResearched(verdict: Verdict): boolean {
+  if (verdict.existing.products.length > 0 || verdict.demand.signals.length > 0) return false;
+  const said = [...verdict.existing.evidence, ...verdict.gap.paragraphs, ...verdict.demand.paragraphs];
+  return said.length > 0 && said.every((t) => /^(not (researched|looked)|no (evidence|market research) was (gathered|done))/i.test(t.trim()));
+}
+
 /** The sentences of a text, kept whole. */
 function sentences(text: string): string[] {
   return (text.replace(/\s+/g, " ").trim().match(/[^.!?]+(?:[.!?]+["”’)]?|$)/g) ?? []).map((s) => s.trim()).filter(Boolean);

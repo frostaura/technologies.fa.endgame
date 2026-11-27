@@ -34,7 +34,8 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - The idea may be 1 to 20,000 characters, constraints the same; otherwise 400.
   - A reserved FrostAura name is refused (TreeEndpoints, another reader).
   - A new organisation starts with no credits, so beside the estimate the page says "A new organisation starts with no credits, and this needs about {credits}. Research starts, then waits for a top-up before it spends anything."
-  - The side panel shows **"What happens next"**: Research → Verdict → A home for it → Hiring → Build, check, review → Running, privately.
+  - The side panel shows **"What happens next"** as a numbered stepper: Research → Verdict → A home for it → Hiring → Build, check, review → Running, privately. Beside an existing organisation it also shows **"What research costs here"** ("This idea", the estimate once shown; "To spend here", the room under every cap; and "Estimates here", how estimates have landed, when any were scored) and **"Start from what you run"**: up to three ideas — the organisation's own open suggestions first, then one around each app it runs — that fill "The idea" when pressed, with a link to **"Ideas from your portfolio"**.
+  - From 1600 px the form is two columns: the idea and what it must respect on the left; where it goes, the estimate and **"Research this idea"** on the right. On a phone **"Research this idea"** stays above the bottom bar, with the estimate beside it, however long the idea is.
 - **Where:** `features/start/StartView.tsx`. `POST /api/ideas/estimate`, `POST /api/organisations`, `POST /api/ideas` (WorkEndpoints), `IdeaService.CreateAsync`.
 - **Reachable from:** UI (also API/MCP, see IDEA-06).
 - **Covered by tests:** `StartView.test.tsx` ("names the organisation on first run…"); `tests-e2e/console.spec.ts` ("first run: name the organisation, see the estimate, research…"); `IdeasAndConversationsTests.The_estimate_is_free_and_works_before_an_organisation_exists`.
@@ -143,12 +144,12 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** Endgame can propose products from what you already hold, and shows the cost first.
 - **Steps:**
   1. The heading reads "Ideas from your portfolio".
-  2. Optionally pick the scope under **"Suggest for"**: "{Org} (the whole organisation)" or a division. The picker only appears when there is more than one choice.
+  2. Optionally pick the scope under **"Suggest for"**: "The whole of {Org}" or a division. The picker only appears when there is more than one choice.
   3. In the side panel **"Ask for ideas"** ("…suggests up to five products that fill a gap"), press **"See what it costs"** ("Working it out…" while it works).
   4. Read "About {credits}." (what it usually costs) and the basis, which says the most it can ever cost. Press **"Suggest ideas"** ("Starting…") or **"Not now"**.
   5. The panel reads the suggest run itself and says what it is doing: while it works, "The suggestions are being worked out." / "They appear here as soon as they are ready; you can watch the work meanwhile." with **"Watch it work"**, which links to the suggest run. The page checks the run and for new suggestions every 10 seconds.
   6. Cards appear, each with: the title, "Suggested {time ago}", the idea, **"The gap it fills"**, **"Why you are placed to build it"**, and **"What it would reuse"** as badges. A platform service is named as the app page names it ("Sign-in", "E-mail"); technical mode shows what the model wrote.
-- **You know it worked when:** suggestion cards appear under the list "Suggested ideas". In the run, the message "Research · New ideas for you" appears ("A new idea for you" for one).
+- **You know it worked when:** suggestion cards appear under the list "Suggested ideas" — one column, two from 1280 px, three from 1600 px; each card names the idea, "The gap it fills", "Why you are placed to build it" and "What it would reuse" (each thing once), with its actions at its foot. In the run, the message "Research · New ideas for you" appears ("A new idea for you" for one).
 - **Variations and refusals:**
   - Below Builder: "Asking for ideas spends credits, so it needs the Builder role here."
   - Estimate refused: "No estimate could be made: … Nothing was started."
@@ -256,9 +257,9 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** the verdict is a page of its own and stays there.
 - **Steps:**
   1. The page loads (skeleton, "Loading the verdict").
-  2. Above the verdict sits "Research by {Iris} · {spent} credits, estimated {estimate}". In technical mode the idea id, run id, status, scope and red line are added.
+  2. Beside the verdict's tag sits "Research by {Iris} · {spent} credits, estimated {estimate}". In technical mode the idea id, run id, status, scope and red line are added under the summary.
   3. While research runs, the page checks every 5 seconds and shows **"Research in progress"**, "The verdict is being worked out.", "The case against the idea is argued first. You can watch every step as it happens." and **"Watch the research"**.
-- **You know it worked when:** the dark verdict banner shows "Verdict · build", "Verdict · change" or "Verdict · do not build".
+- **You know it worked when:** the verdict's white hero shows one tag, "Verdict · build", "Verdict · change" or "Verdict · do not build".
 - **Variations and refusals:** a missing idea shows "This idea could not be found" — with "This was not found, or you cannot see it." and "Back to the org chart" in place of "Try again" (a not-found is an answer, so it does not say "Nothing here is known until it loads."). A failed read shows "The verdict could not be loaded" with a retry. An answer in the wrong shape becomes a failed read naming the field.
 - **Where:** `features/verdict/VerdictView.tsx`; `GET /api/ideas/{id}`.
 - **Reachable from:** UI; MCP `idea_get`.
@@ -271,18 +272,15 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Foundation. **Learn first:** VERD-02.
 - **What you learn:** the verdict names the products it found and counts missing demand against building.
 - **Steps (top to bottom):**
-  1. The banner: stamp "Verdict · {outcome}", the headline, and a two-sentence summary. **"Read the full reasoning"** / **"Hide the full reasoning"** opens "The full reasoning" when the summary is long.
-  2. A red-line alert, when one is breached (VERD-10).
-  3. **"The case against, argued first"**, as numbered points.
-  4. Three cards:
-     - **"Who already does this"**: up to 6 products, each with what it does and source links (site name only in normal mode), plus **"Show all {n}"** / **"Show fewer"**. Empty: "Research found nothing already sold that does this."
-     - **"What gap is left"**. Empty: "Research named no gap."
-     - **"Who would want it"**: paragraphs and "Signals of demand" with sources. If none were found: "No evidence of demand was found. That counts against building."
+  1. The hero, on white: the tag "Verdict · {outcome}", the headline, and two sentences of the summary. **"Read the full reasoning"** / **"Hide the full reasoning"** opens the whole of it in place of those sentences when the summary is long. Beside it (under it below 1600 px), three figures — "Already sold", "Demand" and "Confidence".
+  2. A red-line alert, in the hero in place of those figures, when one is breached (VERD-10).
+  3. **"The case against, argued first"**. Left out when it is the summary the hero already shows whole. From here the evidence runs as sections each as tall as what it holds, two across from 1600 px.
+  4. **"Who already does this"**: the first 5 products, each with what it does and its source (site name only in normal mode, cut to its card), plus **"Show all {n} products"** / **"Show fewer"**; empty: "Research found nothing already sold that does this." **"What gap is left"**; empty: "Research named no gap." **"Who would want it"**: paragraphs and the first 5 "Signals of demand" with sources, plus **"Show all {n} signals"**; if none were found, "No evidence of demand was found. That counts against building." (only "That counts against building." when research's own words already say none was found). Over a red line, where research looked at no market, these three are one section: **"The market was not researched"**.
   5. **"What to change"**, on a change verdict.
   6. **"What would change the verdict"**.
-  7. **"No red line is crossed"**, with the reasoning.
-  8. The decision controls (VERD-05 to VERD-09), or the decision already taken (VERD-13).
-- **You know it worked when:** the three cards and the decision buttons are visible.
+  7. **"No red line is crossed"**, with the reasoning. Then research's record (VERD-04).
+  8. The decision (VERD-05 to VERD-09), or the decision already taken (VERD-13): on a desktop in the side card **"Your decision"**, which stays in view as the page scrolls; on a tablet or a phone straight under the hero.
+- **You know it worked when:** the evidence sections and the decision buttons are visible.
 - **Variations and refusals:** normal mode strips repository names in brackets from product names. Technical mode shows full URLs. On a phone the order changes so the call comes first: the banner, a red line's alert, then the decision controls full width (a confirmation opens in place), then every other section as a folded row — "The case against, argued first" open, "Who already does this" ("{n} products"), "What gap is left", "Who would want it", "What to change", "What would change the verdict", "No red line is crossed", and VERD-04's three sections, each one tap to open.
 - **Where:** `VerdictView.tsx`, `verdictModel.ts`.
 - **Reachable from:** UI; MCP `idea_get` (raw document).
@@ -290,17 +288,17 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 
 ### VERD-04 Read how often research says no, and how it was researched
 - **Who:** Viewer or above.
-- **Starts at:** the side panel of `/ideas/{id}` (on a phone, the last three folded rows of the page).
+- **Starts at:** `/ideas/{id}`: "How this was researched" is the side panel's second card on a desktop; "How often research says no" and "When you overruled" sit under the evidence (on a phone, the last three folded rows of the page).
 - **Needs:** an idea.
 - **Level:** Core. **Learn first:** VERD-03.
 - **What you learn:** a verdict that never says no is treated as a fault, so its record is shown.
 - **Steps:**
   1. **"How often research says no"**, with the line "Research that never refuses is worthless, so Endgame shows you its record." Then bars for Build, Change and Do not build ("{n} of {total}"). For a first verdict: "This is the first verdict for your organisation." After 5 or more verdicts with no "no": "Research has not said no once in {n} verdicts. Treat that as a fault."
-  2. **"When you overruled"**: each overruled idea links to its page, with "Research said {x}." and how it turned out. Empty: "You have not overruled research yet."
-  3. **"How this was researched"**: rows "Strands", "Searches", "Sources" ("None recorded" if empty) and "Confidence" ("Not stated" if missing); a per-strand list; "Suggested home: {name}"; the searches themselves in technical mode; **"Every source ({n})"** as a fold-out; any rules applied (for example "No evidence of demand was found…"); and **"See every step"**.
-- **You know it worked when:** the bars and the method rows show.
+  2. **"When you overruled"**: each overruled idea links to its page, with "Research said {x}." and how it turned out; the first 3, then **"Show all {n} overrules"**. Empty: "You have not overruled research yet."
+  3. **"How this was researched"**: one line "{n} searches · {n} sources · {confidence} confidence" ("no sources recorded" if none); the strands, each with its own searches, sources and confidence when there is more than one; "Suggested home: {name}"; the searches themselves in technical mode; **"Every source ({n})"** as a fold; any rules applied (for example "No evidence of demand was found…"); and **"See every step"**.
+- **You know it worked when:** the bars and the method line show.
 - **Variations and refusals:** the rows "Argued" and "Briefed" and the method summary never appear with today's Runner. `VerdictBuilder.Method` does not write `argued`, `contractors` or `summary`.
-- **Where:** `VerdictView.tsx` `RecordAside`; `ReadModels.VerdictRecordAsync`.
+- **Where:** `VerdictView.tsx` `Method`, `TrackRecord`; `ReadModels.VerdictRecordAsync`.
 - **Reachable from:** UI.
 - **Covered by tests:** `VerdictView.test.tsx` ("shows the agreed document… each strand and the method's searches and confidence").
 
