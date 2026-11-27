@@ -1,10 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Endgame.ControlPlane.Endpoints;
 using Endgame.Infrastructure.Persistence;
 using Endgame.Infrastructure.Tenancy;
 using Endgame.Tests.Fixtures;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -202,6 +204,8 @@ public sealed class ScreensAndRolesTests(PostgresServer postgres) : IAsyncLifeti
         await ControlPlaneApp.Ok(dean.GetAsync("/api/tree?organisation=acme"));
         await dean.DivisionAsync("acme", "labs");
         await dean.SetAsync("acme/labs", "budget", "monthly_credits", 50);
+        // Asking what a message would cost is a read, posted only because it carries a body: no entry of its own.
+        await ControlPlaneApp.Ok(dean.PostAsJsonAsync("/api/conversations/estimate", new { scope = "acme/labs" }));
         // A refused change is not an action; an Owner's own change is not an operator's.
         await ControlPlaneApp.Expect(await dean.PutAsJsonAsync("/api/credits/overdraft", new { scope = "acme", credits = 5 }), HttpStatusCode.Forbidden);
         var ceo = await app.SignInAsync("ceo@acme.example");
@@ -212,6 +216,19 @@ public sealed class ScreensAndRolesTests(PostgresServer postgres) : IAsyncLifeti
         Assert.Equal("Added a division", actions[1]["detail"]!["title"]!.GetValue<string>());
         Assert.Equal("Changed a setting, budget or rule", actions[0]["detail"]!["title"]!.GetValue<string>());
         Assert.All(actions, a => Assert.Equal("dean@frostaura.net", a["operator"]!["email"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Every_estimate_is_a_read_the_operator_log_leaves_out_and_every_one_it_leaves_out_exists()
+    {
+        // A new estimate endpoint must be decided on: listed as a read, or renamed if it changes something.
+        var estimates = app.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .Where(e => e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains(HttpMethods.Post) == true)
+            .Select(e => e.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
+            .OfType<string>()
+            .Where(n => n.StartsWith("Estimate", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(OperatorActionLog.Reads.Order(StringComparer.Ordinal), estimates.Order(StringComparer.Ordinal));
     }
 
     [Fact]

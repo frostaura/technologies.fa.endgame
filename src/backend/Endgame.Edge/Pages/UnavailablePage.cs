@@ -53,7 +53,7 @@ public sealed record PageLinks(string Assets, string Here, string? Console, bool
 /// <list type="bullet">
 /// <item>Crashed, busy, slow, temporary — anyone admitted. Trying again is what helps; a slow wake tries again by itself after its <c>Retry-After</c>.</item>
 /// <item>Paused, budget spent — anyone, before the access check. Trying again (once it is restored); for its owner, the place in Endgame that restores it.</item>
-/// <item>Not ready — whoever may open it. Trying again; for its owner, the app's page in Endgame.</item>
+/// <item>Not ready — whoever may open it, and a signed-out visitor too, before any sign-in (signing in cannot help yet); never someone signed in and refused. Trying again; for its owner, the app's page in Endgame.</item>
 /// <item>Forbidden — someone signed in as the wrong person: signing in as someone else; a member, also back to Endgame.</item>
 /// <item>No app — anyone: the address they asked for, and the way to Endgame.</item>
 /// </list>
@@ -155,7 +155,7 @@ public static class UnavailablePage
         body.Append($"<h1>{WebUtility.HtmlEncode(title)}</h1>\n<p>{WebUtility.HtmlEncode(message)}</p>");
         if (reason == Unavailable.NoApp && links.Address is { Length: > 0 } address)
         {
-            body.Append($"\n<p class=\"address\">{WebUtility.HtmlEncode(address)}</p>");
+            body.Append($"\n<p class=\"address\">{Address(address)}</p>");
         }
 
         var actions = Actions(reason, links);
@@ -181,6 +181,31 @@ public static class UnavailablePage
         // A slow wake refreshes itself once trying again can help, and says so.
         var head = reason == Unavailable.Slow ? $"\n<meta http-equiv=\"refresh\" content=\"{RetryAfter(reason)}\">" : "";
         return PageChrome.Document(title, links.Assets, body.ToString(), head);
+    }
+
+    /// <summary>
+    /// An address that breaks only after a "/": each segment, its slash included, HTML-encoded in a span
+    /// that holds together (<see cref="PageChrome.Style"/>, <c>.address</c>), with a <c>&lt;wbr&gt;</c>
+    /// between segments. A segment wider than the line alone breaks inside itself, as the last resort.
+    /// </summary>
+    public static string Address(string address)
+    {
+        var html = new StringBuilder();
+        var start = 0;
+        while (start < address.Length)
+        {
+            var slash = address.IndexOf('/', start);
+            var end = slash < 0 ? address.Length : slash + 1;
+            if (start > 0)
+            {
+                html.Append("<wbr>");
+            }
+
+            html.Append("<span>").Append(WebUtility.HtmlEncode(address[start..end])).Append("</span>");
+            start = end;
+        }
+
+        return html.ToString();
     }
 
     public static async Task WriteAsync(HttpContext context, Unavailable reason, PageLinks links)

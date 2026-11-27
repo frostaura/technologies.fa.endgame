@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Endgame.Edge;
+using Endgame.Edge.Pages;
 using Endgame.Edge.Runtime;
 using Endgame.Hosting.Contracts;
 using Endgame.Tests.Fixtures;
@@ -405,7 +406,7 @@ public sealed class EdgePipelineTests : IAsyncLifetime
                 Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
                 var html = await response.Content.ReadAsStringAsync();
                 Assert.Contains("<h1>There is no app at this address</h1>", html, StringComparison.Ordinal);
-                Assert.Contains($"<p class=\"address\">acme.endgame.test:{publicPort}{path.Split('?')[0]}</p>", html, StringComparison.Ordinal);
+                Assert.Contains($"<p class=\"address\">{UnavailablePage.Address($"acme.endgame.test:{publicPort}{path.Split('?')[0]}")}</p>", html, StringComparison.Ordinal);
                 Assert.Contains("<a class=\"button\" href=\"https://endgame.test/\">Go to Endgame</a>", html, StringComparison.Ordinal);
                 Assert.DoesNotContain("console", html, StringComparison.Ordinal);
             }
@@ -735,18 +736,34 @@ public sealed class EdgePipelineTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_private_unpublished_app_asks_a_stranger_to_sign_in_and_tells_a_member_it_is_not_ready()
+    public async Task A_private_unpublished_app_tells_a_signed_out_visitor_and_a_member_it_is_not_ready_before_any_sign_in()
     {
-        // The address exists before the first version (D68): who may not open it is sent to sign in, as for any private app.
+        // The address exists before the first version (D68). Signing in cannot help yet, so a signed-out visitor is told at
+        // once; being sent to sign in would have said as much that an app is here, and this page names neither it nor its owner.
         using var stranger = await client.GetAsync("/acme/apps/draft/web/");
-        Assert.Equal(HttpStatusCode.Redirect, stranger.StatusCode);
-        Assert.StartsWith("/acme/apps/draft/web/_endgame/auth/sign-in", stranger.Headers.Location!.OriginalString, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, stranger.StatusCode);
+        Assert.Null(stranger.Headers.Location);
+        var page = await stranger.Content.ReadAsStringAsync();
+        Assert.Contains("isn’t ready yet", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("acme", page.Split("<main>")[1].Replace("/acme/apps/draft/web/", "", StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/draft/web/");
         request.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.MemberSession}");
         using var member = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, member.StatusCode);
         Assert.Contains("isn’t ready yet", await member.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        // Someone signed in whom the app refuses is refused first, published or not.
+        using var refused = new HttpRequestMessage(HttpMethod.Get, "/acme/apps/draft/web/");
+        refused.Headers.Add("Cookie", $"endgame.session={FakeControlPlane.OutsiderSession}");
+        using var outsider = await client.SendAsync(refused);
+        Assert.Equal(HttpStatusCode.Forbidden, outsider.StatusCode);
+        Assert.DoesNotContain("isn’t ready yet", await outsider.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        // A post from a signed-out visitor is told the same, never asked to sign in.
+        using var posted = await client.PostAsync("/acme/apps/draft/web/api/notes", new StringContent("{}"));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, posted.StatusCode);
+        Assert.Null(posted.Headers.Location);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using Endgame.Edge;
 using Endgame.Edge.Access;
 using Endgame.Edge.Pages;
@@ -335,9 +336,47 @@ public sealed class UnavailablePageTests
         Assert.Equal(404, UnavailablePage.StatusFor(Unavailable.NoApp));
         var html = UnavailablePage.Render(Unavailable.NoApp, new PageLinks(PageChrome.AssetsPath, "/x", "https://endgame.test", Address: "acme.endgame.test/community/<no-such-app>/web/"));
         Assert.Contains("<h1>There is no app at this address</h1>", html, StringComparison.Ordinal);
-        Assert.Contains("<p class=\"address\">acme.endgame.test/community/&lt;no-such-app&gt;/web/</p>", html, StringComparison.Ordinal);
+        Assert.Contains("<p class=\"address\"><span>acme.endgame.test/</span><wbr><span>community/</span><wbr><span>&lt;no-such-app&gt;/</span><wbr><span>web/</span></p>", html, StringComparison.Ordinal);
         Assert.Contains("<a class=\"button\" href=\"https://endgame.test/\">Go to Endgame</a>", html, StringComparison.Ordinal);
         Assert.Contains("src=\"/_endgame/assets/endgame-mark.svg\"", html, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("acme.endgame.test/community/no-such-app/web/", "<span>acme.endgame.test/</span><wbr><span>community/</span><wbr><span>no-such-app/</span><wbr><span>web/</span>")]
+    [InlineData("acme.endgame.test/a/b?x=<script>&y=\"1\"", "<span>acme.endgame.test/</span><wbr><span>a/</span><wbr><span>b?x=&lt;script&gt;&amp;y=&quot;1&quot;</span>")]
+    [InlineData("/", "<span>/</span>")]
+    [InlineData("no-slash", "<span>no-slash</span>")]
+    [InlineData("", "")]
+    public void An_address_breaks_only_after_a_slash_and_every_segment_is_encoded(string address, string html) =>
+        Assert.Equal(html, UnavailablePage.Address(address));
+
+    [Fact]
+    public void An_address_segment_holds_together_and_breaks_inside_itself_only_as_a_last_resort()
+    {
+        Assert.Contains(".address > span { display: inline-block; max-width: 100%; overflow-wrap: break-word; }", PageChrome.Style, StringComparison.Ordinal);
+        Assert.DoesNotContain("anywhere", PageChrome.Style, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Every_button_and_field_has_the_consoles_one_radius_and_one_disabled_look()
+    {
+        // ARCH-011: one radius (rounded-xs, 8 px) for every button, primary or not, as in the console.
+        var radii = Regex.Matches(PageChrome.Style, @"border-radius:\s*([^;]+);").Select(m => m.Groups[1].Value.Trim()).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(["var(--radius-card)", "var(--radius-control)"], radii.Order(StringComparer.Ordinal));
+        Assert.Contains("--radius-control: 8px;", PageChrome.Style, StringComparison.Ordinal);
+        Assert.DoesNotContain("--radius-button", PageChrome.Style, StringComparison.Ordinal);
+        // A grey fill and muted words, never a faded colour.
+        Assert.DoesNotContain("opacity", PageChrome.Style, StringComparison.Ordinal);
+        Assert.Contains("button[disabled], button[disabled]:hover { border-color: transparent; background: var(--quiet); color: var(--ink-muted);", PageChrome.Style, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_card_holds_an_apps_usual_name_on_one_line_and_a_phone_keeps_a_16_px_gutter()
+    {
+        // 40rem less 2 × 2.5 × 16 px of padding leaves 560 px: "Sign in to Compressor Service Log" is about 470 px at 1.875rem.
+        Assert.Contains("--measure: 40rem;", PageChrome.Style, StringComparison.Ordinal);
+        Assert.Contains("max(var(--space), env(safe-area-inset-right))", PageChrome.Style, StringComparison.Ordinal);
+        Assert.Contains("max(var(--space), env(safe-area-inset-left))", PageChrome.Style, StringComparison.Ordinal);
     }
 
     [Fact]
