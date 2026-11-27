@@ -444,7 +444,7 @@ describe("the verdict's words", () => {
 });
 
 describe("research's steps on the idea page", () => {
-  const group = (key: string, status: "working" | "done" | "stopped") => ({ kind: "group" as const, key, agent: key, seq: 1, at: "", title: key, outcome: null, status, credits: 0, searches: 0, items: [] });
+  const group = (key: string, status: "working" | "done" | "stopped") => ({ kind: "group" as const, key, agent: key, seq: 1, at: "", title: key, outcome: null, status, credits: 0, freeCredits: 0, searches: 0, items: [] });
   const step = { kind: "step" as const, key: "s", seq: 1, at: "", tone: "quiet" as const, icon: "research" as const, title: "Work started", detail: null, credits: null, raw: null };
 
   it("shows each part of the research once, and where research that stopped got to", () => {
