@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect } from "react";
-import { Failed, Loading, Skeleton } from "@/components/states";
-import { Link } from "@/components/Link";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Failed, Loading, NotFoundPage, Skeleton } from "@/components/states";
+import { PageHeader } from "@/components/ui/page";
+import { Button } from "@/components/ui/button";
 import { errorStatus, describeError } from "@/lib/queryState";
 import { matchRoute, navigate, paths, useLocation, type Route } from "@/lib/router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -147,11 +147,11 @@ function SystemRoute() {
       {mode === "technical" ? (
         <SystemStatusView />
       ) : (
-        <section className="flex max-w-form flex-col items-start gap-4">
-          <h1 className="text-3xl font-semibold">System status is technical detail</h1>
-          <p className="text-ink-body">It names the services Endgame runs on, so it is shown in technical mode only.</p>
-          <Button onClick={() => dispatch(modeSet("technical"))}>Switch to technical mode</Button>
-        </section>
+        <PageHeader icon="health" title="System status is technical detail" lead="It names the services Endgame runs on, so it is shown in technical mode only.">
+          <Button className="self-start" onClick={() => dispatch(modeSet("technical"))}>
+            Switch to technical mode
+          </Button>
+        </PageHeader>
       )}
     </AppShell>
   );
@@ -160,13 +160,7 @@ function SystemRoute() {
 function NotFound() {
   return (
     <AppShell crumbs={[{ label: "Not found" }]}>
-      <section className="flex max-w-form flex-col items-start gap-4">
-        <h1 className="text-3xl font-semibold">Nothing lives at this address</h1>
-        <p className="text-ink-body">The link may be old, or the thing it pointed to was removed.</p>
-        <Link href={paths.home()} className={buttonVariants()}>
-          Back to the org chart
-        </Link>
-      </section>
+      <NotFoundPage title="Nothing lives at this address">The link may be old, or the thing it pointed to was removed.</NotFoundPage>
     </AppShell>
   );
 }

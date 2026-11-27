@@ -208,6 +208,16 @@ export const screens = {
 /** The `short:` variant: a phone on its side. */
 export const shortQuery = `(max-height: ${breakpoints.short - 0.02}px)`;
 
+/**
+ * A phone on its side: short and not wide enough for the desktop. It gets a layout of its own (the
+ * `rail:` variant) — a slim side rail in place of the bottom bar, a one-line header, the page and its
+ * side panel side by side, and sheets that come in from the side.
+ */
+export const railQuery = `${shortQuery} and (max-width: ${breakpoints.lg - 0.02}px)`;
+
+/** A screen worked by touch (any phone or tablet), or drawn as a phone: every control there is a thumb's size (`touch:`). */
+export const coarseQuery = `(pointer: coarse), (max-width: ${breakpoints.sm - 0.02}px), ${shortQuery} and (max-width: ${breakpoints.lg - 0.02}px)`;
+
 /** The media queries the shell's script reads, from the same numbers. */
 export const viewportQueries = {
   phone: `(max-width: ${breakpoints.sm - 0.02}px), ${shortQuery} and (max-width: ${breakpoints.lg - 0.02}px)`,
@@ -227,6 +237,8 @@ export const layout = {
   nav: "4rem",
   /** The phone's header row. */
   bar: "3.5rem",
+  /** The side rail that stands in for the bottom bar on a phone on its side. */
+  rail: "4.5rem",
   /** A bottom sheet stops this far short of the top, so the page behind still shows it is a sheet. */
   sheetGap: "2.5rem",
   /** The device's safe area: the notch, the rounded corners, the home indicator (`viewport-fit=cover`). */
