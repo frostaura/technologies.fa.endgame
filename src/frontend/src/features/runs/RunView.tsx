@@ -201,7 +201,6 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
       // A build or change that finished leads to what it built: the app itself, and its page here (R7-2).
       <BuiltAppActions appId={derived.app.id} />
     ) : !terminal ? (
-      // The confirmation opens under the row that holds "Cancel", in the same column, so it sits under its trigger.
       <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         {status === "paused" ? (
@@ -217,18 +216,22 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
           Cancel
         </Button>
       </div>
-      {confirmCancel && (
-        <ConfirmCard
-          label="Confirm cancelling"
-          question="Stop this work for good?"
-          confirm="Yes, cancel it"
-          cancel="Keep going"
-          busy={controlState.isLoading}
-          onConfirm={() => void act("cancel")}
-          onCancel={() => setConfirmCancel(false)}
-        />
-      )}
       </div>
+    ) : null;
+  // The confirmation opens straight under the header's last row, which holds "Cancel", anchored to its right
+  // edge: the actions stay where they were, rather than wrapping to make room for the card.
+  const cancelCard =
+    !terminal && confirmCancel ? (
+      <ConfirmCard
+        label="Confirm cancelling"
+        question="Stop this work for good?"
+        confirm="Yes, cancel it"
+        cancel="Keep going"
+        busy={controlState.isLoading}
+        onConfirm={() => void act("cancel")}
+        onCancel={() => setConfirmCancel(false)}
+        className="-mt-2 max-sm:-order-1"
+      />
     ) : null;
 
   const stopped = terminal && status !== "finished" && (run.budgetExhausted || run.canTryAgain);
@@ -264,6 +267,7 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
         </div>
         {actions && <div className="max-sm:-order-1">{actions}</div>}
       </header>
+      {cancelCard}
 
       {controlError && (
         <p role="alert" className="rounded-xs bg-attention-tint px-4 py-3 text-attention-text">
