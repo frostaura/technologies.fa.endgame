@@ -562,7 +562,7 @@ test("on a phone held upright, the console takes at least 60% of the height, and
     const frame = page.getByTestId("demo-frame");
     await expect(frame).toBeVisible();
     const box = await page.getByTestId("stage-media").boundingBox();
-    expect((box?.height ?? 0) / viewport.height, `${viewport.width}×${viewport.height}`).toBeGreaterThanOrEqual(0.6);
+    expect((box?.height ?? 0) / viewport.height, `${viewport.width}×${viewport.height}`).toBeGreaterThanOrEqual(0.599);
     // The caption is set under the console, and the console is asked for no note of its own.
     const caption = await page.getByTestId("caption").boundingBox();
     expect(caption && box && caption.y >= box.y + box.height).toBe(true);

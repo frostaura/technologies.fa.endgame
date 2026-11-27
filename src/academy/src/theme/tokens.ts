@@ -83,8 +83,8 @@ export const academy = {
     stage: "calc(100svh - 7rem)",
     "stage-short": "calc(100svh - 4.5rem)",
     "stage-sm": "50svh",
-    /** The larger console on a phone: everything but the header, the step pager and a gap. */
-    "stage-full": "calc(100svh - 3.8125rem - var(--pager-h, 5rem) - 1rem)",
+    /** The larger console on a phone: everything but the header, the flow's one-line title, the step pager and a gap. */
+    "stage-full": "calc(100svh - 3.8125rem - 2.5rem - var(--pager-h, 5rem) - 0.5rem)",
     "screen-d": "100dvh",
     frame: "38rem",
     "frame-sm": "26rem",
