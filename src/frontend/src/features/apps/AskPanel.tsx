@@ -110,13 +110,14 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
   return (
     <section aria-label="Asking about this app" className={cn("flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card sm:p-6", RISE)}>
       <form onSubmit={(e) => void getEstimate(e)} className="flex flex-col gap-2">
-        <label htmlFor={inputId} className="flex items-center gap-2 font-display text-lg font-semibold">
+        {/* A heading, so the phone's fold row of the same words stands in for it once opened (R5-2); it names the field too. */}
+        <h2 id={`${inputId}-title`} className="flex items-center gap-2 font-display text-lg font-semibold">
           <Icon name="research" tinted />
           Ask about this app
-        </label>
+        </h2>
         <span className="text-ink-body">Ask in plain words about its visits, errors and what its people do in it. It answers from this app&rsquo;s own records only.</span>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Input id={inputId} value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} placeholder="Which days are busiest?" className="min-h-12 flex-1 px-4" />
+          <Input id={inputId} aria-labelledby={`${inputId}-title`} value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} placeholder="Which days are busiest?" className="min-h-12 flex-1 px-4" />
           <Button type="submit" variant="outline" className="min-h-12" disabled={!typed || estimating.isLoading}>
             {estimating.isLoading ? "Working it out…" : "See what it costs"}
           </Button>
