@@ -9,7 +9,7 @@ import { Alert } from "@/components/ui/alert";
 import { LINK } from "@/components/ui/layout";
 import { PageHeader, SideCard } from "@/components/ui/page";
 import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
-import { estimateFigure, estimateHeadline } from "@/lib/estimates";
+import { estimateFigure } from "@/lib/estimates";
 import { formatCredits, formatNumber, isValidSlug, plural, slugify } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -35,9 +35,9 @@ type EstimateResult = { key: string } & ({ ok: true; estimate: IdeaEstimate } | 
 
 /**
  * A new idea: the form, and beside it what happens next, what research costs here and ideas to start
- * from. From 1600 the form itself is two columns — the idea and what it must respect, then where it goes,
- * its estimate and the start — so a wide screen is used rather than left as a narrow column. On a phone
- * the start stays above the bottom bar however long the idea is.
+ * from. The fields keep one order at every width — the idea, what it must respect, where it goes, its estimate,
+ * the start — and from 1280 the form is two columns (the idea beside how it starts), so a wide screen is used
+ * rather than left as a narrow column. On a phone the start stays above the bottom bar however long the idea is.
  */
 export function StartView() {
   const me = useGetMeQuery(undefined);
@@ -166,17 +166,18 @@ export function StartView() {
           </Link>
         </section>
       ) : (
-        <form onSubmit={(e) => void submit(e)} className="flex w-full max-w-form flex-col gap-8 3xl:max-w-page" aria-describedby={submitError ? "start-error" : undefined}>
+        <form onSubmit={(e) => void submit(e)} className="flex w-full max-w-form flex-col gap-8 xl:max-w-page" aria-describedby={submitError ? "start-error" : undefined}>
           <PageHeader className={RISE} title="What do you want to build?" lead="Describe it the way you would to a friend. Endgame researches it first, tells you plainly whether it is worth building, then builds and runs it." />
 
           {/*
-            One column, in the order it is filled in; from 1600 two: the idea and what it must respect, beside
-            where it goes, its estimate and the start. Each column is `contents` below 1600, so its fields take
-            their place in the single column by `order`.
+            One order at every width: what it is (the idea, what it must respect), then where it goes, its estimate
+            and the start. From 1280 that is two columns — the idea beside how it starts — so a wide screen is used,
+            and read left then right it is still the same order.
           */}
-          <div className="flex flex-col gap-8 3xl:grid 3xl:grid-cols-2 3xl:items-start 3xl:gap-10">
-            <div className="contents 3xl:flex 3xl:flex-col 3xl:gap-8">
-              <div className={cn("order-2 flex flex-col gap-2", RISE, stagger(2))}>
+          <div className="flex flex-col gap-8 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start xl:gap-10">
+            {/* Each column is `contents` below 1280, so its fields sit in the one column and the phone's start can stay in view. */}
+            <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-8">
+              <div className={cn("flex flex-col gap-2", RISE, stagger(1))}>
                 <label htmlFor={ids.idea} className="font-medium">
                   The idea
                 </label>
@@ -187,11 +188,11 @@ export function StartView() {
                   rows={5}
                   value={idea}
                   onChange={(e) => setIdea(e.target.value)}
-                  className="min-h-32 resize-y py-3 text-base leading-relaxed 3xl:min-h-56"
+                  className="min-h-32 resize-y py-3 text-base leading-relaxed xl:min-h-60"
                 />
               </div>
 
-              <fieldset className={cn("order-3 flex flex-col gap-2.5", RISE, stagger(3))}>
+              <fieldset className={cn("flex flex-col gap-2.5", RISE, stagger(2))}>
                 <legend className="mb-2.5 font-medium">
                   Anything it must respect? <span className="font-normal text-ink-muted">Optional</span>
                 </legend>
@@ -218,10 +219,10 @@ export function StartView() {
               </fieldset>
             </div>
 
-            <div className="contents 3xl:flex 3xl:flex-col 3xl:gap-8">
-              {me.isLoading && <Skeleton className="order-1 h-20" />}
+            <div className="contents xl:sticky xl:top-6 xl:flex xl:min-w-0 xl:flex-col xl:gap-8">
+              {me.isLoading && <Skeleton className="h-20" />}
               {firstRun && (
-                <div className={cn("order-1 flex flex-col gap-2", RISE, stagger(1))}>
+                <div className={cn("flex flex-col gap-2", RISE, stagger(3))}>
                   <label htmlFor={ids.org} className="font-medium">
                     Your organisation
                   </label>
@@ -243,7 +244,7 @@ export function StartView() {
               )}
 
               {!firstRun && org && (
-                <div className={cn("order-1 flex flex-col gap-2", RISE, stagger(1))}>
+                <div className={cn("flex flex-col gap-2", RISE, stagger(3))}>
                   <label htmlFor={ids.place} className="font-medium">
                     Where it goes
                   </label>
@@ -268,12 +269,10 @@ export function StartView() {
                 </div>
               )}
 
-              <div className="order-4">
-                <EstimatePanel state={estimate} scope={scope ?? null} firstRun={firstRun} />
-              </div>
+              <EstimatePanel state={estimate} scope={scope ?? null} firstRun={firstRun} />
 
               {submitError && (
-                <div id="start-error" data-state="failed" className="order-5">
+                <div id="start-error" data-state="failed">
                   <Alert tone="bad" title={`Research did not start: ${submitError} Nothing was charged.`} />
                 </div>
               )}
@@ -281,7 +280,7 @@ export function StartView() {
               {/* On a phone the start stays in view above the bottom bar, however long the idea is. */}
               <div
                 className={cn(
-                  "order-6 flex flex-wrap items-center gap-x-4 gap-y-2",
+                  "flex flex-wrap items-center gap-x-4 gap-y-2",
                   "phone:sticky phone:bottom-nav-safe phone:z-10 phone:-mx-4 phone:flex-nowrap phone:border-t phone:bg-surface phone:px-4 phone:py-3 rail:static rail:mx-0 rail:border-t-0 rail:bg-transparent rail:px-0 rail:py-0",
                   RISE,
                   stagger(5),
@@ -295,11 +294,6 @@ export function StartView() {
                   <span className="hidden phone:inline">{estimate.kind === "loaded" ? `${formatCredits(estimate.estimate.credits)} for research` : "A few minutes; you can leave"}</span>
                 </span>
               </div>
-              {org && (
-                <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn(LINK, "order-7 self-start", TAP)}>
-                  Back to the org chart
-                </Link>
-              )}
             </div>
           </div>
         </form>
@@ -427,16 +421,16 @@ function Costs({ scope, estimate }: { scope: string; estimate: number | null }) 
         plain
         label="This idea"
         value={estimate === null ? NO_VALUE : formatNumber(estimate)}
-        caption={estimate === null ? "Shown once it is described" : "credits, estimated"}
+        caption={estimate === null ? "once described" : "credits, estimated"}
       />
       <Stat
         plain
         label="To spend here"
         value={c.neverToppedUp ? "0" : Number.isFinite(room) ? formatNumber(Math.floor(room)) : NO_VALUE}
-        caption={c.neverToppedUp ? "No credits added yet" : "credits, within every cap"}
+        caption={c.neverToppedUp ? "none added yet" : "credits left here"}
       />
       {c.estimates && c.estimates.pieces > 0 && (
-        <Stat plain className="col-span-2" label="Estimates here" value={estimateFigure(c.estimates)} caption={`${estimateHeadline(c.estimates)}, across ${plural(c.estimates.pieces, "piece")} of work.`} />
+        <Stat plain className="col-span-2" label="Estimates here" value={estimateFigure(c.estimates)} caption={`across ${plural(c.estimates.pieces, "piece")} of work`} />
       )}
     </StatRow>
   );
