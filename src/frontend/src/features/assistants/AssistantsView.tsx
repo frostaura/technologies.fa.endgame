@@ -136,27 +136,29 @@ function TokenRow({ token, technical, organisation }: { token: AccessToken; tech
     }
   };
   return (
-    <li data-token={token.id} className={cn("grid grid-cols-grow-end items-center gap-x-4 gap-y-2 border-b px-5 py-3.5 last:border-b-0", !live(token) && "bg-ground")}>
-      <div className="flex min-w-0 flex-col">
-        <span className={cn("break-words font-semibold", !live(token) && "font-medium text-ink-muted")}>{token.name}</span>
-        <span className={cn("text-sm", live(token) ? "text-ink-body" : "text-ink-muted")}>
-          {ROLE_NAME[token.role]} in {organisation} · made {formatDate(token.createdAt)}
-          {lifetime(token)}
-        </span>
-        <span className="text-sm text-ink-muted">{token.lastUsedAt ? `Last used ${timeAgo(token.lastUsedAt)}` : "Never used"}</span>
-        {technical && <code className="font-mono text-xs text-ink-muted">{token.prefix}… · {token.id}</code>}
-      </div>
-      <div className="flex items-center justify-end gap-2">
-        <Badge tone={s.tone}>{s.label}</Badge>
-        {token.active && !confirm && (
-          <Button size="sm" variant="quiet" disabled={revoking.isLoading} onClick={() => setConfirm(true)}>
-            Revoke
-          </Button>
-        )}
+    // The row, then — directly under it, in the same item — the confirmation its Revoke opened, anchored to it.
+    <li data-token={token.id} className={cn("flex flex-col gap-3 border-b px-5 py-3.5 last:border-b-0", !live(token) && "bg-ground")}>
+      <div className="grid grid-cols-grow-end items-center gap-x-4 gap-y-2">
+        <div className="flex min-w-0 flex-col">
+          <span className={cn("break-words font-semibold", !live(token) && "font-medium text-ink-muted")}>{token.name}</span>
+          <span className={cn("text-sm", live(token) ? "text-ink-body" : "text-ink-muted")}>
+            {ROLE_NAME[token.role]} in {organisation} · made {formatDate(token.createdAt)}
+            {lifetime(token)}
+          </span>
+          <span className="text-sm text-ink-muted">{token.lastUsedAt ? `Last used ${timeAgo(token.lastUsedAt)}` : "Never used"}</span>
+          {technical && <code className="font-mono text-xs text-ink-muted">{token.prefix}… · {token.id}</code>}
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <Badge tone={s.tone}>{s.label}</Badge>
+          {token.active && !confirm && (
+            <Button size="sm" variant="quiet" disabled={revoking.isLoading} onClick={() => setConfirm(true)}>
+              Revoke
+            </Button>
+          )}
+        </div>
       </div>
       {confirm && (
         <ConfirmCard
-          className="col-span-full"
           label={`Confirm revoking ${token.name}`}
           question={`Revoke ${token.name}?`}
           detail="The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in."
@@ -168,7 +170,7 @@ function TokenRow({ token, technical, organisation }: { token: AccessToken; tech
         />
       )}
       {problem && (
-        <p role="alert" className="col-span-full rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+        <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           {problem}
         </p>
       )}
@@ -295,7 +297,7 @@ function Address({ label, value }: { label: string; value: string }) {
         <Button
           size="sm"
           variant="quiet"
-          className="-mr-2 shrink-0 px-2 text-primary-link hover:text-primary-hover"
+          className="-mr-2 shrink-0"
           aria-label={`Copy the address for ${label}`}
           onClick={() =>
             void navigator.clipboard.writeText(value).then(
