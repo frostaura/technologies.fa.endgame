@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { OneTime } from "@/components/OneTime";
@@ -57,7 +58,7 @@ export function PeopleView() {
     >
       <header className={cn("flex flex-wrap items-end justify-between gap-4", RISE)}>
         <div className="flex flex-col gap-1.5">
-          <h1 className="flex items-center gap-3 text-3xl font-semibold">
+          <h1 className="flex items-center gap-3 text-3xl font-semibold max-sm:text-2xl">
             <Icon name="employee" tinted className="size-7" />
             People in {here}
           </h1>
@@ -225,7 +226,7 @@ function MemberRow({
               </Select>
             </>
           ) : (
-            <Badge tone={member.role === "owner" ? "solid" : member.role === "admin" ? "primary" : member.role === "builder" ? "teal" : "quiet"} className="self-start">
+            <Badge tone="neutral" className="self-start">
               {ROLE_NAME[member.role]}
             </Badge>
           )}
@@ -250,15 +251,16 @@ function MemberRow({
         </Button>
       )}
       {confirm && (
-        <div role="group" aria-label={`Confirm removing ${member.displayName}`} className="flex flex-wrap items-center gap-2 rounded-xs bg-attention-tint px-3 py-2">
-          <span className="text-attention-deep">{member.displayName} loses this role at once. Grants set elsewhere stay.</span>
-          <Button size="sm" onClick={() => void drop()}>
-            Remove
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
-            Keep them
-          </Button>
-        </div>
+        <ConfirmCard
+          label={`Confirm removing ${member.displayName}`}
+          question={`Remove ${member.displayName}?`}
+          detail={`${member.displayName} loses this role at once. Grants set elsewhere stay.`}
+          confirm="Remove"
+          cancel="Keep them"
+          busy={removing.isLoading}
+          onConfirm={() => void drop()}
+          onCancel={() => setConfirm(false)}
+        />
       )}
       {editable && inherited && <span className="text-sm text-ink-muted">{fromAbove ? `This grant holds here from ${scopeName(tree, member.scope)}; change it there.` : `Change this grant at ${scopeName(tree, member.scope)}.`}</span>}
       {problem && (

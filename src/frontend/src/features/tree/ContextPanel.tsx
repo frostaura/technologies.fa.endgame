@@ -101,7 +101,7 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
                     <li key={`${entry.setAtPath}#${entry.key}`} className="flex flex-col gap-0.5 rounded-xs bg-ground px-3 py-2">
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{keyName(entry.key)}</span>
-                        <Badge tone={replaces ? "violet" : "neutral"}>{replaces ? `${nameOf(entry.setAtPath)} replaces it` : `Only for ${nameOf(entry.setAtPath)}`}</Badge>
+                        <Badge tone={replaces ? "info" : "neutral"}>{replaces ? `${nameOf(entry.setAtPath)} replaces it` : `Only for ${nameOf(entry.setAtPath)}`}</Badge>
                       </span>
                       <span className="break-words text-sm text-ink-body">{contextText(entry.value)}</span>
                       {technical && <code className="break-all font-mono text-xs text-ink-muted">{entry.setAtPath}</code>}
@@ -135,7 +135,7 @@ function ContextRow({ entry, scope, label, canWrite, nameOf, onChange }: { entry
     <li data-context={entry.key} className="flex flex-col gap-1.5 rounded-xs border border-border-strong bg-surface px-4 py-3">
       <span className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold">{label}</span>
-        <Badge tone={here ? "primary" : "quiet"}>{here ? "Said here" : `From ${nameOf(entry.setAtPath)}`}</Badge>
+        <Badge tone={here ? "info" : "neutral"}>{here ? "Said here" : `From ${nameOf(entry.setAtPath)}`}</Badge>
       </span>
       <span className="whitespace-pre-line break-words text-ink-body">{contextText(entry.value)}</span>
       <span className="text-xs text-ink-muted">

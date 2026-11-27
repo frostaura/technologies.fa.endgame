@@ -31,7 +31,7 @@ export function HiresView() {
   const home = active.entered && org ? paths.homeOf(org.slug) : paths.home();
   return (
     <AppShell
-      crumbs={[...(org ? [{ label: org.name, href: home }] : []), { label: `Hiring · ${name}` }]}
+      crumbs={[...(org ? [{ label: org.name, href: home }] : []), ...(org && scope !== org.slug ? [{ label: name, href: paths.manage(scope) }] : []), { label: "Hiring" }]}
       aside={
         scope ? (
           <>
@@ -46,7 +46,7 @@ export function HiresView() {
       }
     >
       <div className={cn("flex flex-col gap-2", RISE)}>
-        <h1 className="text-3xl font-semibold">Hiring for {name}</h1>
+        <h1 className="text-3xl font-semibold max-sm:text-2xl">Hiring for {name}</h1>
         <p className="max-w-prose text-ink-body">Hires are proposed when the organisation needs someone: a new division, a project reaching a new stage, or a job that keeps coming back. In auto-mode one that fits the budget is taken on at once; otherwise it waits for you here.</p>
       </div>
       {!scope && tree.isLoading && (
@@ -223,7 +223,7 @@ function RecurringRow({ role, tree, isAdmin, waiting }: { role: RecurringRole; t
           <label htmlFor={`name-${role.role}`} className="text-sm font-medium">
             Name the new employee
           </label>
-          <input id={`name-${role.role}`} value={name} onChange={(e) => setName(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
+          <input id={`name-${role.role}`} value={name} onChange={(e) => setName(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
           <span className="text-sm text-ink-muted">Expected about {formatCredits(monthly)} a month, from what the contractors cost.</span>
           <span className="flex flex-wrap gap-2">
             <Button type="submit" size="sm" disabled={state.isLoading}>
@@ -318,14 +318,14 @@ function RaiseHire({ scope, name }: { scope: string; name: string }) {
           <label htmlFor="raise-cost" className="font-medium">
             What it should cost a month
           </label>
-          <input id="raise-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
+          <input id="raise-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
         </span>
       </div>
       <span className="flex flex-col gap-1.5">
         <label htmlFor="raise-reason" className="font-medium">
           Why this hire
         </label>
-        <textarea id="raise-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className="rounded-xs border border-border-strong bg-surface px-3 py-2" />
+        <textarea id="raise-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className="rounded-xs border border-border-field bg-surface px-3 py-2" />
       </span>
       <span className="flex flex-wrap gap-2">
         <Button type="submit" disabled={state.isLoading}>

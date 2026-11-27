@@ -118,7 +118,7 @@ export function StartView() {
     >
       {unplaced ? (
         <section data-state="refused" className="mx-auto flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
-          <h1 className="text-4xl font-semibold leading-tight">Organisations are set up by FrostAura</h1>
+          <h1 className="text-3xl font-semibold max-sm:text-2xl leading-tight max-sm:text-2xl">Organisations are set up by FrostAura</h1>
           <p className="text-base text-ink-body">
             An idea lives in an organisation, and you hold no role in one yet. FrostAura sets one up for each person it invites; if someone already works here, ask them to give you a role.
           </p>
@@ -128,7 +128,7 @@ export function StartView() {
         </section>
       ) : blocked && org ? (
         <section data-state="refused" className="mx-auto flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
-          <h1 className="text-4xl font-semibold leading-tight">Only a Builder or above starts an idea</h1>
+          <h1 className="text-3xl font-semibold max-sm:text-2xl leading-tight max-sm:text-2xl">Only a Builder or above starts an idea</h1>
           <p className="text-base text-ink-body">
             {active.role ? `You are ${article(active.role)} ${ROLE_NAME[active.role]} in ${org.name}` : `You hold no role over the whole of ${org.name}`}, and no division gives you more. An Admin or the Owner can make you a Builder; until then, you can follow everything that is being built.
           </p>
@@ -139,7 +139,7 @@ export function StartView() {
       ) : (
       <form onSubmit={(e) => void submit(e)} className="mx-auto flex w-full max-w-form flex-col gap-9 py-4 lg:py-8" aria-describedby={submitError ? "start-error" : undefined}>
         <div className={cn("flex flex-col gap-2.5", RISE)}>
-          <h1 className="text-4xl font-semibold leading-tight">What do you want to build?</h1>
+          <h1 className="text-3xl font-semibold max-sm:text-2xl leading-tight max-sm:text-2xl">What do you want to build?</h1>
           <p className="text-base text-ink-body">Describe it the way you would to a friend. Endgame researches it first, tells you plainly whether it is worth building, then builds and runs it.</p>
         </div>
 
@@ -156,7 +156,7 @@ export function StartView() {
               onChange={(e) => setOrgName(e.target.value)}
               aria-describedby={ids.orgHint}
               aria-invalid={orgName.length > 0 && !isValidSlug(slug)}
-              className="min-h-12 rounded-xs border border-border-strong bg-surface px-3.5 text-base"
+              className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 text-base"
             />
             <span id={ids.orgHint} className={cn("text-xs", orgName.length > 0 && !isValidSlug(slug) ? "text-attention-text" : "text-ink-muted")}>
               {orgName.length > 0 && !isValidSlug(slug)
@@ -202,7 +202,7 @@ export function StartView() {
             rows={5}
             value={idea}
             onChange={(e) => setIdea(e.target.value)}
-            className="resize-y rounded-xs border border-border-strong bg-surface px-3.5 py-3 text-base leading-relaxed"
+            className="resize-y rounded-xs border border-border-field bg-surface px-3.5 py-3 text-base leading-relaxed"
           />
         </div>
 
@@ -229,7 +229,7 @@ export function StartView() {
           <label htmlFor={ids.other} className="mt-2 text-sm text-ink-muted">
             Anything else, in your own words
           </label>
-          <input id={ids.other} value={other} onChange={(e) => setOther(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3.5" />
+          <input id={ids.other} value={other} onChange={(e) => setOther(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3.5" />
         </fieldset>
 
         <EstimatePanel state={estimate} scope={scope ?? null} firstRun={firstRun} />

@@ -176,9 +176,9 @@ describe("HomeView", () => {
     expect(within(needs).getByRole("link", { name: /Pager/ }).getAttribute("href")).toBe("/ideas/i1");
     // Totals are counted from the tree, not copied from anywhere.
     const band = screen.getByRole("region", { name: "Organisation" });
-    expect(within(band).getByText("division").previousSibling?.textContent).toBe("1");
-    expect(within(band).getByText("employee").previousSibling?.textContent).toBe("1");
-    expect(within(band).getByText("credits this month").previousSibling?.textContent).toBe("77");
+    expect(within(band).getByText("division").nextSibling?.textContent).toBe("1");
+    expect(within(band).getByText("employee").nextSibling?.textContent).toBe("1");
+    expect(within(band).getByText("credits this month").nextSibling?.textContent).toBe("77");
     expect(screen.getAllByText(/Kit is fixing the export/).length).toBeGreaterThan(0);
   });
 

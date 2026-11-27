@@ -248,10 +248,10 @@ export function NarrowerLimit({ organisation, credits }: { organisation: string;
   );
 }
 
-const STATUS: Record<TopUpRequest["status"], { label: string; tone: "primary" | "success" | "quiet" }> = {
-  open: { label: "Waiting for FrostAura", tone: "primary" },
-  fulfilled: { label: "Added", tone: "success" },
-  declined: { label: "Declined", tone: "quiet" },
+const STATUS: Record<TopUpRequest["status"], { label: string; tone: "info" | "good" | "neutral" }> = {
+  open: { label: "Waiting for FrostAura", tone: "info" },
+  fulfilled: { label: "Added", tone: "good" },
+  declined: { label: "Declined", tone: "neutral" },
 };
 
 /** Asking FrostAura for a top-up (the Owner), and every request with what became of it. */

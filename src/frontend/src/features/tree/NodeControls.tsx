@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { useCardNote } from "@/components/cardNote";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { isValidSlug, slugify } from "@/lib/format";
 import { describeError, errorStatus } from "@/lib/queryState";
-import { cn } from "@/lib/utils";
 import { useCreateNodeMutation, useDeleteNodeMutation, useUpdateNodeMutation, type TreeArg } from "@/store/api";
 import type { ManagedLevel, ScopeLevel, TreeNode } from "@/store/types";
 import { LEVEL_NAME, reactivatedStatus } from "./treeManage";
@@ -233,32 +233,7 @@ export function CreateChild({ level, parent, parentName, onCreated, onCancel }: 
   );
 }
 
-/** A confirmation in place, focused when it opens and closed with Escape. */
+/** A confirmation in place, focused when it opens and closed with Escape: the shared `ConfirmCard`. */
 export function Confirm({ title, text, yes, no, onYes, onNo, className }: { title: string; text: string; yes: string; no: string; onYes: () => void; onNo: () => void; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  useEffect(() => ref.current?.focus(), []);
-  return (
-    <div
-      ref={ref}
-      role="alertdialog"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-      onKeyDown={(e) => e.key === "Escape" && onNo()}
-      className={cn("flex flex-col gap-2 rounded-sm border border-attention-line bg-attention-tint px-4 py-3 outline-none", className)}
-    >
-      <p id={titleId} className="font-semibold text-attention-text">
-        {title}
-      </p>
-      <p className="text-sm text-attention-deep">{text}</p>
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={onYes}>
-          {yes}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onNo}>
-          {no}
-        </Button>
-      </div>
-    </div>
-  );
+  return <ConfirmCard role="alertdialog" focus label={title} question={title} detail={text} confirm={yes} cancel={no} onConfirm={onYes} onCancel={onNo} className={className} />;
 }

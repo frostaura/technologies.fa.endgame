@@ -18,7 +18,7 @@ import { useCardNote } from "@/components/cardNote";
 
 function Chip({ icon, children }: { icon: IconName; children: ReactNode }) {
   return (
-    <li className="inline-flex min-h-touch items-center gap-2 rounded-full border border-border-strong bg-surface px-3 py-1.5">
+    <li className="inline-flex min-h-touch items-center gap-2 rounded-full border border-border-field bg-surface px-3 py-1.5">
       <Icon name={icon} tinted className="size-4" />
       <span>{children}</span>
     </li>

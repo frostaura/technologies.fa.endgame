@@ -64,7 +64,7 @@ export function ChangeRequest({ appId, appName }: { appId: string; appName: stri
             setRequest(e.target.value);
             setEstimate(null);
           }}
-          className="rounded-xs border border-border-strong bg-surface px-3 py-2"
+          className="rounded-xs border border-border-field bg-surface px-3 py-2"
         />
         {estimate ? (
           <div role="status" className="flex flex-col gap-2 rounded-sm bg-primary-tint px-4 py-3">

@@ -4,12 +4,14 @@ import { Sheet } from "@/components/Sheet";
 import { SCROLL_ROW } from "@/components/ui/layout";
 import { capitalise } from "@/lib/format";
 import { useViewport } from "@/lib/useViewport";
-import { Avatar } from "@/components/Avatar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { PersonChip } from "@/components/ui/chip";
+import { TITLE } from "@/components/ui/page";
+import { Stat } from "@/components/ui/stat";
 import { buttonVariants } from "@/components/ui/button";
 import { RISE, stagger } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
@@ -153,51 +155,42 @@ function Organisation({
   const isRootSelected = selection?.scope === home.scope && selection.kind === home.kind;
   return (
     <>
-      <section
-        aria-label="Organisation"
-        className={cn("relative flex flex-wrap items-end justify-between gap-6 overflow-hidden rounded-lg bg-primary px-6 py-7 text-primary-ink max-sm:gap-4 max-sm:px-5 max-sm:py-5 sm:px-8", RISE)}
-      >
-        <div aria-hidden className="absolute -top-20 right-32 size-aura animate-drift rounded-full bg-violet opacity-75 blur-aura motion-reduce:animate-none" />
-        <div aria-hidden className="absolute -bottom-36 -right-16 size-aura animate-drift rounded-full bg-teal opacity-75 blur-aura animate-delay-5 motion-reduce:animate-none" />
-        <div className="relative flex min-w-0 flex-col gap-2 max-sm:w-full">
-          <span className="text-eyebrow font-semibold uppercase text-primary-ink-soft">Organisation</span>
-          <h1 className="font-display text-4xl font-bold max-sm:text-3xl sm:text-hero">
-            <button type="button" aria-pressed={isRootSelected} onClick={() => onSelect(root)} className="rounded-xs text-left phone:min-h-touch">
-              {org.name}
-            </button>
-          </h1>
-          {org.summary && <span className="text-primary-tint max-sm:text-sm">{org.summary}</span>}
-          {org.workers.length > 0 && (
-            // A phone keeps the organisation's own people on one line that scrolls sideways.
-            <span className="no-scrollbar flex flex-wrap gap-2 pt-1 max-sm:-mx-5 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-5">
-              {org.workers.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  aria-pressed={selection?.employeeId === w.id && selection.scope === org.slug}
-                  onClick={() => onSelect({ scope: org.slug, kind: "employee", trail: [org.name, w.name], employeeId: w.id })}
-                  className="inline-flex min-h-touch shrink-0 items-center gap-2 rounded-full bg-surface/15 py-1 pl-1 pr-3 text-sm text-primary-ink hover:bg-surface/25 max-sm:whitespace-nowrap"
-                >
-                  <Avatar name={w.name} seed={w.id} size="xs" />
-                  {workerLabel(w)}
-                  {workerActivity(w) && <span className="text-primary-tint">— {workerActivity(w)}</span>}
-                </button>
-              ))}
-            </span>
-          )}
-        </div>
-        {/* A phone sets the four figures small, in one row where they fit, and "New idea" across the band beneath them. */}
-        <div className="relative flex flex-wrap items-end gap-x-7 gap-y-4 max-sm:w-full max-sm:items-start max-sm:gap-x-5 max-sm:gap-y-3">
-          {orgFigures(counts, org.spend.monthCredits).map((f) => (
-            <div key={f.label} className="flex min-w-0 flex-col">
-              <span className="font-display text-3xl font-bold max-sm:text-2xl">{f.value}</span>
-              <span className="text-primary-tint max-sm:whitespace-nowrap max-sm:text-xs max-sm:leading-tight">{f.label}</span>
-            </div>
-          ))}
-          <Link href={paths.start()} className={cn(buttonVariants({ variant: "white", size: "lg" }), "max-sm:w-full")}>
+      {/* The hero: white, the organisation's name as the title, its four figures under the name, its people as chips. */}
+      <section aria-label="Organisation" className={cn("flex flex-col gap-5 rounded-lg border bg-surface px-6 py-6 shadow-card max-sm:gap-4 max-sm:px-5 max-sm:py-5 sm:px-8", RISE)}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 max-w-prose flex-col gap-1.5">
+            <span className="text-eyebrow font-semibold uppercase text-ink-muted">Organisation</span>
+            <h1 className={TITLE}>
+              <button type="button" aria-pressed={isRootSelected} onClick={() => onSelect(root)} className="rounded-xs text-left touch:min-h-touch">
+                {org.name}
+              </button>
+            </h1>
+            {org.summary && <span className="text-ink-body max-sm:text-sm">{org.summary}</span>}
+          </div>
+          <Link href={paths.start()} className={cn(buttonVariants({ size: "lg" }), "max-sm:order-last max-sm:w-full")}>
             New idea
           </Link>
         </div>
+        <div className="grid grid-cols-4 gap-x-8 gap-y-3 self-start max-sm:w-full max-sm:gap-x-3">
+          {orgFigures(counts, org.spend.monthCredits).map((f) => (
+            <Stat key={f.label} plain label={f.label} value={f.value} className="flex-col-reverse" />
+          ))}
+        </div>
+        {org.workers.length > 0 && (
+          // A phone keeps the organisation's own people on one line that scrolls sideways.
+          <div className="no-scrollbar flex flex-wrap gap-2 max-sm:-mx-5 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-5">
+            {org.workers.map((w) => (
+              <PersonChip
+                key={w.id}
+                name={w.name}
+                id={w.id}
+                label={workerActivity(w) ? `${workerLabel(w)} — ${workerActivity(w)}` : workerLabel(w)}
+                selected={selection?.employeeId === w.id && selection.scope === org.slug}
+                onSelect={() => onSelect({ scope: org.slug, kind: "employee", trail: [org.name, w.name], employeeId: w.id })}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       <NeedsYouStrip items={tree.needsYou} />
@@ -279,15 +272,16 @@ function ManageLinks({ tree, selection }: { tree: Tree; selection: Selection }) 
   );
 }
 
-const NEED_STYLE: Record<NeedsYou["kind"], { badge: string; tone: "white" | "violet" | "quiet"; card: string; detail: string }> = {
-  verdict: { badge: "Verdict waiting", tone: "white", card: "border-attention-line bg-attention-tint", detail: "text-attention-deep" },
-  approval: { badge: "Approval needed", tone: "violet", card: "border-violet-line bg-violet-tint", detail: "text-violet-deep" },
-  hire: { badge: "Hire proposed", tone: "violet", card: "border-violet-line bg-violet-tint", detail: "text-violet-deep" },
-  idle: { badge: "Nothing to do", tone: "quiet", card: "border-border-strong bg-surface", detail: "text-ink-body" },
+/** One card style for everything that waits on you; what kind it is, its tag says (ARCH-011). */
+const NEED_STYLE: Record<NeedsYou["kind"], { badge: string; tone: BadgeTone }> = {
+  verdict: { badge: "Verdict waiting", tone: "warn" },
+  approval: { badge: "Approval needed", tone: "warn" },
+  hire: { badge: "Hire proposed", tone: "info" },
+  idle: { badge: "Nothing to do", tone: "neutral" },
 };
 
 /** A verdict research refused over a red line: not waiting for a call, so not marked as one. */
-const RED_LINE_STYLE = { badge: "Refused", tone: "white" as const, card: "border-attention-line bg-attention-tint", detail: "text-attention-deep" };
+const RED_LINE_STYLE = { badge: "Refused", tone: "bad" as const };
 
 function needHref(item: NeedsYou): string {
   switch (item.kind) {
@@ -368,13 +362,13 @@ function NeedCard({ item, technical, redLine }: { item: NeedsYou; technical: boo
     <Link
       href={needHref(item)}
       data-need={item.kind}
-      className={cn("flex flex-col gap-1.5 rounded-md border px-5 py-4 text-ink transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0", style.card)}
+      className="flex flex-col gap-1.5 rounded-md border bg-surface px-5 py-4 text-ink shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
-      <Badge tone={style.tone} className="self-start bg-surface">
+      <Badge tone={style.tone} className="self-start">
         {style.badge}
       </Badge>
       <span className="line-clamp-2 break-words text-base font-semibold">{lines.headline}</span>
-      <span className={cn("line-clamp-1 break-words", style.detail)}>{lines.line}</span>
+      <span className="line-clamp-1 break-words text-ink-body">{lines.line}</span>
       {technical && lines.technical && <code className="break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
     </Link>
   );
@@ -431,7 +425,7 @@ function OperatorHome() {
         <Icon name="god-mode" />
         God mode
       </span>
-      <h1 className="max-w-prose font-display text-3xl font-bold sm:text-4xl">You run Endgame for FrostAura. Every organisation is one step away.</h1>
+      <h1 className={cn(TITLE, "max-w-prose")}>You run Endgame for FrostAura. Every organisation is one step away.</h1>
       <p className="max-w-prose text-ink-body">List them, set one up for an invited Owner, top one up or enter it. Each entry is written where that organisation&rsquo;s Owner can read it.</p>
       <Link href={paths.operator()} className={buttonVariants({ size: "lg" })}>
         Every organisation
@@ -445,7 +439,7 @@ function NotInvited({ email }: { email: string | null }) {
   return (
     <section aria-label="No organisation yet" className={cn("flex flex-col items-start gap-4 rounded-lg border bg-surface px-6 py-8 shadow-card sm:px-10", RISE)}>
       <Icon name="organisation" tinted className="size-8" />
-      <h1 className="max-w-prose font-display text-3xl font-bold sm:text-4xl">Organisations are set up by FrostAura</h1>
+      <h1 className={cn(TITLE, "max-w-prose")}>Organisations are set up by FrostAura</h1>
       <p className="max-w-prose text-ink-body">
         {email ? `You are signed in as ${email}, ` : "You are signed in, "}but you hold no role in any organisation yet, and an organisation cannot be started here. FrostAura sets one up for each
         person it invites. If you were invited, sign in with the invitation code you were sent; if someone already works here, ask them to give you a role.
@@ -456,14 +450,13 @@ function NotInvited({ email }: { email: string | null }) {
 
 function FirstRun() {
   return (
-    <section aria-label="Get started" className={cn("relative flex flex-col items-start gap-5 overflow-hidden rounded-lg bg-primary px-6 py-10 text-primary-ink sm:px-10", RISE)}>
-      <div aria-hidden className="absolute -top-20 right-24 size-aura animate-drift rounded-full bg-violet opacity-75 blur-aura motion-reduce:animate-none" />
-      <img src="/brand/endgame-mark.svg" alt="" width={56} height={56} className="relative size-14 rounded-sm ring-4 ring-surface/30" />
-      <h1 className="relative max-w-prose font-display text-4xl font-bold sm:text-hero">Name your organisation, then describe your first idea.</h1>
-      <p className="relative max-w-prose text-base text-primary-tint">
+    <section aria-label="Get started" className={cn("flex flex-col items-start gap-5 rounded-lg border bg-surface px-6 py-10 shadow-card sm:px-10", RISE)}>
+      <img src="/brand/endgame-mark.svg" alt="" width={56} height={56} className="size-14 rounded-sm" />
+      <h1 className={cn(TITLE, "max-w-prose")}>Name your organisation, then describe your first idea.</h1>
+      <p className="max-w-prose text-base text-ink-body">
         Everything you make lives under it. Endgame researches the idea first, tells you plainly whether it is worth building, then builds and runs it.
       </p>
-      <Link href={paths.start()} className={cn("relative", buttonVariants({ variant: "white", size: "lg" }))}>
+      <Link href={paths.start()} className={buttonVariants({ size: "lg" })}>
         Start
       </Link>
     </section>

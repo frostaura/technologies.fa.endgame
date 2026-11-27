@@ -41,7 +41,7 @@ function stageLabel(stage: string): string {
 /** Where a value came from, said plainly: set here, inherited from a level above, or not set anywhere. */
 function Origin({ setAtPath, scope, tree, fallback }: { setAtPath: string | null; scope: string; tree: Tree | undefined; fallback: string }) {
   if (!setAtPath) return <span className="text-sm text-ink-muted">{fallback}</span>;
-  if (setAtPath === scope) return <Badge tone="primary">Set here</Badge>;
+  if (setAtPath === scope) return <Badge tone="info">Set here</Badge>;
   return <span className="text-sm text-ink-muted">Inherited from {scopeName(tree, setAtPath)}</span>;
 }
 
@@ -61,10 +61,10 @@ export function AutonomyView() {
   const admin = role === "admin" || role === "owner";
 
   return (
-    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: `Autonomy · ${name}` }]} aside={<CascadeAside />}>
+    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), ...(org && scope !== org.slug ? [{ label: name, href: paths.manage(scope) }] : []), { label: "Autonomy" }]} aside={<CascadeAside />}>
       <div className={cn("flex flex-wrap items-end justify-between gap-4", RISE)}>
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold">How much {name} does on its own</h1>
+          <h1 className="text-3xl font-semibold max-sm:text-2xl">How much {name} does on its own</h1>
           <p className="max-w-prose text-ink-body">Set once for the organisation, narrowed for a division, project or app. The credit budget is the limit that is always on.</p>
         </div>
         {tree.data && (
@@ -72,7 +72,7 @@ export function AutonomyView() {
             <label htmlFor="autonomy-scope" className="text-sm text-ink-muted">
               Level
             </label>
-            <select id="autonomy-scope" value={scope} onChange={(e) => navigate(paths.autonomy(e.target.value), { replace: true })} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3">
+            <select id="autonomy-scope" value={scope} onChange={(e) => navigate(paths.autonomy(e.target.value), { replace: true })} className="min-h-touch rounded-xs border border-border-field bg-surface px-3">
               {placements(tree.data).map((p) => (
                 <option key={p.scope} value={p.scope}>
                   {`${"— ".repeat(p.depth)}${p.label}`}
@@ -215,7 +215,7 @@ function Switch({ label, on, disabled, onChange }: { label: string; on: boolean;
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className={cn("relative inline-flex h-8 w-14 min-w-touch shrink-0 items-center rounded-full bg-clip-padding p-1 transition-colors disabled:opacity-60 phone:h-auto phone:min-h-touch phone:border-y-touch phone:border-transparent", on ? "bg-primary" : "bg-border-strong")}
+      className={cn("relative inline-flex h-8 w-14 min-w-touch shrink-0 items-center rounded-full bg-clip-padding p-1 transition-colors disabled:opacity-60 phone:h-auto touch:min-h-touch phone:border-y-touch phone:border-transparent", on ? "bg-primary" : "bg-border-strong")}
     >
       <span aria-hidden className={cn("size-6 rounded-full bg-surface shadow-toggle transition-transform motion-reduce:transition-none", on ? "translate-x-6" : "translate-x-0")} />
       <span className="sr-only">{on ? "On" : "Off"}</span>
@@ -392,7 +392,7 @@ function RuleList({ title, tone, rules, mode, id, onChange }: { title: string; t
                 e.preventDefault();
                 add();
               }
-            }} placeholder="tool or tool(pattern)" className="min-h-touch min-w-0 flex-1 rounded-xs border border-border-strong bg-surface px-3 font-mono text-sm" />
+            }} placeholder="tool or tool(pattern)" className="min-h-touch min-w-0 flex-1 rounded-xs border border-border-field bg-surface px-3 font-mono text-sm" />
           <Button size="sm" variant="outline" onClick={add}>
             Add
           </Button>

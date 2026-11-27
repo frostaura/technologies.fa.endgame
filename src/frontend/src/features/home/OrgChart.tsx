@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { Avatar } from "@/components/Avatar";
 import { useViewport } from "@/lib/useViewport";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Bar } from "@/components/states";
+import { Chip as ChipView, PersonChip } from "@/components/ui/chip";
+import { NO_VALUE, Stat } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { formatCredits, formatNumber, headlineCredits, headlineNumber, percent, plural, timeAgo } from "@/lib/format";
@@ -65,7 +66,7 @@ export function OrgChart({ tree, selection, onSelect }: Props) {
         />
       ))}
       {mayAddDivision && (
-        <Link href={`${manage(org.slug)}&add=1`} className={cn(buttonVariants({ variant: "soft" }), "min-h-16 justify-start gap-3 rounded-md border-dashed px-5", RISE)}>
+        <Link href={`${manage(org.slug)}&add=1`} className={cn(buttonVariants({ variant: "soft" }), "min-h-16 justify-start gap-3 rounded-md px-5", RISE)}>
           <Icon name="division" tinted />
           Add a division
         </Link>
@@ -74,10 +75,6 @@ export function OrgChart({ tree, selection, onSelect }: Props) {
   );
 }
 
-function isActive(division: TreeDivision): boolean {
-  const busy = (ws: Worker[]) => ws.some((w) => w.activity);
-  return busy(division.workers) || division.projects.some((p) => p.progress !== null || busy(p.workers) || p.apps.some((a) => busy(a.workers)));
-}
 
 function DivisionColumn({
   division,
@@ -125,7 +122,7 @@ function DivisionColumn({
         data-archived={archived || undefined}
         className={cn(
           "relative flex items-center justify-between gap-3 rounded-md border bg-surface px-5 py-4 shadow-card max-sm:flex-wrap max-sm:gap-y-2 max-sm:px-4 max-sm:py-3",
-          archived && "border-dashed bg-ground shadow-none",
+          archived && "bg-ground shadow-none",
           selected && "ring-2 ring-primary",
         )}
       >
@@ -147,8 +144,8 @@ function DivisionColumn({
           </span>
         </button>
         <div className="relative z-10 flex flex-wrap items-center justify-end gap-2 max-sm:w-full max-sm:justify-start">
-          {archived && <Badge tone="quiet">Archived</Badge>}
-          <Badge tone={archived ? "quiet" : tone.chip} className="px-3 py-1 text-sm">
+          {archived && <Badge tone="neutral">Archived</Badge>}
+          <Badge tone="neutral" className="px-3 py-1 text-sm">
             {formatCredits(division.spend.monthCredits)}
           </Badge>
           {division.role !== null && (
@@ -177,11 +174,8 @@ function DivisionColumn({
         </div>
       )}
       <div className={cn("relative ml-wire gap-3.5 border-l-2 pl-6 pt-4 max-sm:ml-4 max-sm:pl-3 max-sm:pt-3", wide ? "grid grid-cols-1 items-start lg:grid-cols-2 2xl:grid-cols-3" : "flex flex-col", tone.wire)}>
-        {isActive(division) && (
-          <span aria-hidden className={cn("absolute -left-1.5 size-2.5 animate-travel rounded-full ring-4 motion-reduce:hidden", tone.signal)} />
-        )}
         {division.projects.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border-strong bg-surface px-5 py-4 text-ink-muted lg:col-span-2">No projects in {division.name} yet.</p>
+          <p data-state="empty" className="px-1 py-2 text-ink-muted lg:col-span-2">No projects in {division.name} yet.</p>
         ) : (
           division.projects.map((project) => (
             <ProjectCard key={project.id} project={project} scope={`${scope}/${project.slug}`} trail={[...trail, project.name]} selection={selection} onSelect={onSelect} manage={manage} />
@@ -219,11 +213,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
       aria-label={project.name}
       className={cn(
         "relative flex flex-col gap-3 rounded-md px-5 py-4 transition duration-200 motion-reduce:transition-none max-sm:px-4",
-        atVerdict
-          ? "border-2 border-dashed border-attention-dash bg-attention-wash"
-          : archived
-            ? "border border-dashed bg-ground"
-            : "border bg-surface shadow-card hover:-translate-y-0.5 hover:shadow-raised motion-reduce:hover:translate-y-0",
+        archived ? "border bg-ground" : "border bg-surface shadow-card hover:-translate-y-0.5 hover:shadow-raised motion-reduce:hover:translate-y-0",
         selected && "ring-2 ring-primary",
       )}
     >
@@ -239,7 +229,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
           {project.name}
         </button>
         <div className="relative z-10 flex flex-wrap items-center gap-1.5">
-          {archived ? <Badge tone="quiet">Archived</Badge> : showStage && <ChipRow chips={[stageChip(project.stage)]} />}
+          {archived ? <Badge tone="neutral">Archived</Badge> : showStage && <ChipRow chips={[stageChip(project.stage)]} />}
           <span className="text-sm text-ink-muted">{headlineCredits(project.spend.monthCredits)} this month</span>
           {project.role !== null && (
             <Link href={manage(scope)} aria-label={`Manage ${project.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
@@ -249,7 +239,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
         </div>
       </div>
 
-      {(project.note ?? project.notBuilt?.note) && <p className={atVerdict ? "text-attention-deep" : "text-ink-body"}>{project.note ?? project.notBuilt?.note}</p>}
+      {(project.note ?? project.notBuilt?.note) && <p className="text-ink-body">{project.note ?? project.notBuilt?.note}</p>}
 
       {project.progress && (
         <div className="relative flex flex-col gap-2">
@@ -290,36 +280,29 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
 
 function AppRow({ app }: { app: TreeApp }) {
   const archived = isArchived(app);
-  const chips: Chip[] = archived ? [{ label: "Archived", tone: "quiet" }] : appChips(app);
+  const chips: Chip[] = archived ? [{ label: "Archived", tone: "neutral" }] : appChips(app);
   return (
     <li className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3 max-sm:px-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={paths.app(app.id)} className="relative z-10 flex items-center gap-2 rounded-xs font-semibold text-ink hover:text-primary-hover phone:min-h-touch">
+        <Link href={paths.app(app.id)} className="relative z-10 flex items-center gap-2 rounded-xs font-semibold text-ink hover:text-primary-hover touch:min-h-touch">
           <Icon name="app" tinted className="size-4" />
           {app.name}
         </Link>
         <ChipRow chips={chips} />
       </div>
       {!archived && appNote(app) && <p className="text-sm text-ink-body">{appNote(app)}</p>}
-      <div className="flex flex-wrap gap-6">
-        {/* Null visits means nothing has been measured yet: unknown, never zero. */}
-        <Figure
-          value={app.visitsToday !== null ? formatNumber(app.visitsToday) : app.lastVisitAt ? timeAgo(app.lastVisitAt) : "Not measured yet"}
-          label={app.visitsToday !== null || !app.lastVisitAt ? "visits today" : "last visit"}
-          muted={app.visitsToday === null && !app.lastVisitAt}
+      {/* Two figures, always side by side. Null visits means nothing has been measured yet: unknown, never zero — "—", with why under it. */}
+      <div className="grid grid-cols-2 gap-4">
+        <Stat
+          plain
+          label={app.visitsToday !== null || !app.lastVisitAt ? "Visits today" : "Last visit"}
+          value={app.visitsToday !== null ? formatNumber(app.visitsToday) : app.lastVisitAt ? timeAgo(app.lastVisitAt) : NO_VALUE}
+          tone={app.visitsToday === null && !app.lastVisitAt ? "muted" : "ink"}
+          caption={app.visitsToday === null && !app.lastVisitAt ? "Not measured yet" : undefined}
         />
-        <Figure value={headlineNumber(app.spend.monthCredits)} label="credits this month" />
+        <Stat plain label="Credits this month" value={headlineNumber(app.spend.monthCredits)} />
       </div>
     </li>
-  );
-}
-
-function Figure({ value, label, muted = false }: { value: string; label: string; muted?: boolean }) {
-  return (
-    <div className="flex flex-col">
-      <span className={cn("font-display font-semibold", muted ? "text-base text-ink-muted" : "text-xl")}>{value}</span>
-      <span className="text-ink-muted">{label}</span>
-    </div>
   );
 }
 
@@ -338,10 +321,9 @@ export function Workers({ workers, scope, trail, selection, onSelect }: { worker
           <WorkerChip key={w.id} worker={w} selected={selection?.employeeId === w.id && selection.scope === scope} onSelect={() => onSelect({ scope, kind: "employee", trail: [...trail, w.name], employeeId: w.id })} />
         ))}
         {contractors && (
-          <span className="inline-flex min-h-touch items-center gap-2 rounded-full border border-dashed border-violet-dash px-3 py-1 text-sm text-violet-deep">
-            <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-violet-line border-t-violet motion-reduce:animate-none" />
+          <ChipView className="min-h-touch" icon={<span aria-hidden className="size-3 shrink-0 animate-spin rounded-full border-2 border-border-strong border-t-primary motion-reduce:animate-none" />}>
             {contractorsLabel(contractors)}
-          </span>
+          </ChipView>
         )}
       </div>
       {busy.map((w) => (
@@ -356,21 +338,20 @@ export function Workers({ workers, scope, trail, selection, onSelect }: { worker
 
 function WorkerChip({ worker, selected, onSelect }: { worker: Worker; selected: boolean; onSelect: () => void }) {
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
-      title={worker.activity ?? undefined}
-      className={cn(
-        "relative z-10 inline-flex min-h-touch items-center gap-2 rounded-full bg-ground py-1 pl-1 pr-3 text-sm transition-colors hover:bg-violet-tint",
-        selected && "bg-violet-tint ring-2 ring-violet",
-      )}
-    >
-      <Avatar name={worker.name} seed={worker.id} size="xs" />
-      {workerLabel(worker)}
-      {worker.status === "paused" && <Badge tone="attention">Paused</Badge>}
-      {worker.idle && <Badge tone="quiet">Nothing to do</Badge>}
-      {worker.activity && <span className="sr-only">, working: {worker.activity}</span>}
-    </button>
+    <PersonChip
+      name={worker.name}
+      id={worker.id}
+      label={workerLabel(worker)}
+      selected={selected}
+      onSelect={onSelect}
+      title={worker.activity ?? workerLabel(worker)}
+      after={
+        <>
+          {worker.status === "paused" && <Badge tone="warn">Paused</Badge>}
+          {worker.idle && <Badge tone="neutral">Nothing to do</Badge>}
+          {worker.activity && <span className="sr-only">, working: {worker.activity}</span>}
+        </>
+      }
+    />
   );
 }

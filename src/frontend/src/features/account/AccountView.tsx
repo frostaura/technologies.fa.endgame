@@ -45,10 +45,10 @@ function AccountBody({ me }: { me: Me }) {
   return (
     <>
       <div className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="text-3xl font-semibold">{me.user.displayName}</h1>
+        <h1 className="text-3xl font-semibold max-sm:text-2xl">{me.user.displayName}</h1>
         {me.user.email && <span className="break-all text-ink-body">{me.user.email}</span>}
         {me.isOperator && (
-          <Badge tone="attention" className="self-start">
+          <Badge tone="warn" className="self-start">
             FrostAura operator
           </Badge>
         )}
@@ -82,7 +82,7 @@ function AccountBody({ me }: { me: Me }) {
                         <Icon name="organisation" tinted className="size-4" />
                         {org.name}
                       </span>
-                      {active.organisation?.slug === org.slug && <Badge tone="primary">Working in it now</Badge>}
+                      {active.organisation?.slug === org.slug && <Badge tone="info">Working in it now</Badge>}
                     </span>
                     <ul className="flex flex-col gap-2">
                       {grants.map((g) => (

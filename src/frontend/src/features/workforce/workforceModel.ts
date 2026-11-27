@@ -93,10 +93,10 @@ export function serviceLabel(service: string, mode: Mode): string {
 }
 
 export const STATUS: Record<EmployeeStatus, { label: string; tone: BadgeTone }> = {
-  idle: { label: "Free", tone: "quiet" },
-  working: { label: "Working", tone: "solid" },
-  paused: { label: "Paused", tone: "attention" },
-  released: { label: "Let go", tone: "quiet" },
+  idle: { label: "Free", tone: "neutral" },
+  working: { label: "Working", tone: "info" },
+  paused: { label: "Paused", tone: "warn" },
+  released: { label: "Let go", tone: "neutral" },
 };
 
 export const TRIGGER: Record<HireTrigger, string> = {
@@ -351,10 +351,10 @@ export function costLine(costs: { month: number; ownMonth: number }, monthlyLimi
 
 /** A proposal's state as a badge. One the platform closed itself (`withdrawn`) reads as withdrawn, not as a person's no. */
 export function hireBadge(hire: Pick<Hire, "status" | "withdrawn">, proposed = "Hire proposed"): { label: string; tone: BadgeTone } {
-  if (hire.withdrawn) return { label: "Withdrawn", tone: "quiet" };
-  if (hire.status === "accepted") return { label: "Hired", tone: "success" };
-  if (hire.status === "declined") return { label: "Declined", tone: "quiet" };
-  return { label: proposed, tone: "violet" };
+  if (hire.withdrawn) return { label: "Withdrawn", tone: "neutral" };
+  if (hire.status === "accepted") return { label: "Hired", tone: "good" };
+  if (hire.status === "declined") return { label: "Declined", tone: "neutral" };
+  return { label: proposed, tone: "info" };
 }
 
 /** What a decline holds (R5-3), said before it is made: no new proposal for this role here until the date, unless the person asks. */

@@ -66,7 +66,7 @@ export function ManageView() {
       }
     >
       <div className={cn("flex flex-col gap-2", RISE)}>
-        <h1 className="text-3xl font-semibold">{org ? `Manage ${view.kind === "loaded" ? (view.data.organisation?.name ?? org.name) : org.name}` : "Manage the organisation"}</h1>
+        <h1 className="text-3xl font-semibold max-sm:text-2xl">{org ? `Manage ${view.kind === "loaded" ? (view.data.organisation?.name ?? org.name) : org.name}` : "Manage the organisation"}</h1>
         <p className="max-w-prose text-ink-body">Add divisions, projects and apps, rename them, say what each one is, and archive what you no longer use. A part&rsquo;s address is set when it is made and never changes.</p>
       </div>
 
@@ -124,7 +124,7 @@ function Outline({ nodes, selected, onSelect }: { nodes: ManagedNode[]; selected
             >
               <Icon name={ICON[n.level]} tinted={!n.archived} className="size-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{n.name}</span>
-              {n.archived && <Badge tone="quiet">Archived</Badge>}
+              {n.archived && <Badge tone="neutral">Archived</Badge>}
               <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-muted sm:hidden" />
             </button>
           </li>
@@ -159,7 +159,7 @@ function NodePanel({ node, nodes, role, tree, onSelect, startAdding }: { node: M
             {technical && <code className="break-all font-mono text-xs text-ink-muted">{node.id}</code>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {node.archived ? <Badge tone="quiet">Archived</Badge> : <Badge tone="success">Active</Badge>}
+            {node.archived ? <Badge tone="neutral">Archived</Badge> : <Badge tone="good">Active</Badge>}
             {node.level === "app" && (
               <Link href={paths.app(node.id)} className="rounded-xs font-semibold text-primary-link hover:text-primary-hover">
                 The app&rsquo;s page
@@ -191,7 +191,7 @@ function NodePanel({ node, nodes, role, tree, onSelect, startAdding }: { node: M
                     <li key={c.scope}>
                       <Button size="sm" variant="soft" onClick={() => onSelect(c.scope)}>
                         {c.name}
-                        {c.archived && <Badge tone="quiet">Archived</Badge>}
+                        {c.archived && <Badge tone="neutral">Archived</Badge>}
                       </Button>
                     </li>
                   ))}

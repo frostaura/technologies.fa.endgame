@@ -1,4 +1,5 @@
 import { organisationsOf, useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { useId, useState, type FormEvent } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
@@ -47,7 +48,7 @@ export function AssistantsView() {
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }] : []), { label: technical ? "MCP" : "AI assistants" }]} aside={org ? <Addresses tree={tree.data} technical={technical} /> : undefined}>
       <header className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold">
+        <h1 className="flex items-center gap-3 text-3xl font-semibold max-sm:text-2xl">
           <Icon name="assistants" tinted className="size-7" />
           {title}
         </h1>
@@ -97,10 +98,10 @@ export function AssistantsView() {
   );
 }
 
-function status(t: AccessToken): { label: string; tone: "success" | "quiet" | "attention-strong" } {
-  if (t.revokedAt) return { label: "Revoked", tone: "quiet" };
-  if (!t.active) return { label: "Expired", tone: "attention-strong" };
-  return { label: "Active", tone: "success" };
+function status(t: AccessToken): { label: string; tone: "good" | "neutral" } {
+  if (t.revokedAt) return { label: "Revoked", tone: "neutral" };
+  if (!t.active) return { label: "Expired", tone: "neutral" };
+  return { label: "Active", tone: "good" };
 }
 
 /** When a key stops, as of now: a revoked key says when it was revoked, never an end it will not reach. */
@@ -146,15 +147,16 @@ function TokenRow({ token, technical, organisation }: { token: AccessToken; tech
         </Button>
       )}
       {confirm && (
-        <div role="group" aria-label={`Confirm revoking ${token.name}`} className="flex flex-wrap items-center gap-2 rounded-xs bg-attention-tint px-3 py-2">
-          <span className="text-attention-deep">The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in.</span>
-          <Button size="sm" onClick={() => void drop()}>
-            Revoke it
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
-            Keep it
-          </Button>
-        </div>
+        <ConfirmCard
+          label={`Confirm revoking ${token.name}`}
+          question={`Revoke ${token.name}?`}
+          detail="The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in."
+          confirm="Revoke it"
+          cancel="Keep it"
+          busy={revoking.isLoading}
+          onConfirm={() => void drop()}
+          onCancel={() => setConfirm(false)}
+        />
       )}
       {problem && (
         <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">

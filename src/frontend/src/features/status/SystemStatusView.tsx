@@ -109,7 +109,7 @@ function ServiceCard({ service }: { service: ServiceHealth }) {
           <CardTitle>{service.name}</CardTitle>
           <p className="font-mono text-xs text-ink-muted">{formatLatency(service.latencyMs)}</p>
         </div>
-        <Badge tone={healthy ? "success" : "attention"}>
+        <Badge tone={healthy ? "good" : "bad"}>
           <span aria-hidden className={cn("size-2 rounded-full", healthy ? "bg-success" : "bg-attention-text")} />
           {healthy ? "Healthy" : "Unhealthy"}
         </Badge>

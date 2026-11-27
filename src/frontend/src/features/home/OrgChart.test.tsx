@@ -89,7 +89,7 @@ describe("a project card's work under way (R2-9)", () => {
     const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
     expect(container.textContent).not.toMatch(/step 0 of|0 of an estimated 0|less than 0\.01/);
     expect(container.textContent).toContain("0 credits this month");
-    expect(screen.getByText("credits this month").previousSibling?.textContent).toBe("0");
+    expect(screen.getByText("Credits this month").nextSibling?.textContent).toBe("0");
   });
 
   it("fills the bar with the finished steps and names the one under way", () => {

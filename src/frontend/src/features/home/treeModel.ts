@@ -13,15 +13,15 @@ export interface Chip {
 export function healthChip(health: AppHealth): Chip {
   switch (health) {
     case "healthy":
-      return { label: "Healthy", tone: "success", icon: "health" };
+      return { label: "Healthy", tone: "good", icon: "health" };
     case "degraded":
-      return { label: "Struggling", tone: "attention", icon: "health" };
+      return { label: "Struggling", tone: "warn", icon: "health" };
     case "paused":
-      return { label: "Paused", tone: "attention", icon: "asleep" };
+      return { label: "Paused", tone: "warn", icon: "asleep" };
     case "down":
-      return { label: "Down", tone: "attention-strong", icon: "health" };
+      return { label: "Down", tone: "bad", icon: "health" };
     default:
-      return { label: "Health unknown", tone: "quiet", icon: "health" };
+      return { label: "Health unknown", tone: "neutral", icon: "health" };
   }
 }
 
@@ -31,9 +31,9 @@ export function healthChip(health: AppHealth): Chip {
  */
 export function appChips(app: Pick<TreeApp, "health" | "running" | "access" | "sharedWith" | "visitsToday" | "lastVisitAt"> & Partial<Pick<TreeApp, "paused" | "notBuilt" | "status">>): Chip[] {
   // Its build stopped before anything was published (D81): "Not built", with the reason said beside it (`notBuilt.note`).
-  if (app.notBuilt) return [{ label: "Not built", tone: "quiet", icon: "build" }];
+  if (app.notBuilt) return [{ label: "Not built", tone: "neutral", icon: "build" }];
   const neverBuilt = app.status ? app.status === "draft" || app.status === "building" : app.running === "starting" && app.health === "unknown" && app.visitsToday === null && app.lastVisitAt === null;
-  if (neverBuilt) return [{ label: "Not built yet", tone: "quiet", icon: "build" }];
+  if (neverBuilt) return [{ label: "Not built yet", tone: "neutral", icon: "build" }];
   // Paused for budget or the overdraft, it serves nobody: "Healthy" beside it would be untrue (D66). A crashed app is
   // also not running, and stays "Down".
   if (isPaused(app)) return [runningChip("paused"), accessChip(app.access, app.sharedWith)];
@@ -58,22 +58,22 @@ export function appNote(app: Partial<Pick<TreeApp, "paused" | "notBuilt">>): str
 export function runningChip(running: AppRunning): Chip {
   switch (running) {
     case "always-on":
-      return { label: "Always on", tone: "primary", icon: "always-on" };
+      return { label: "Always on", tone: "info", icon: "always-on" };
     case "awake":
-      return { label: "Awake", tone: "primary", icon: "always-on" };
+      return { label: "Awake", tone: "info", icon: "always-on" };
     case "asleep":
-      return { label: "Asleep", tone: "quiet", icon: "asleep" };
+      return { label: "Asleep", tone: "neutral", icon: "asleep" };
     case "starting":
-      return { label: "Waking", tone: "primary", icon: "always-on" };
+      return { label: "Waking", tone: "info", icon: "always-on" };
     default:
-      return { label: "Paused", tone: "attention", icon: "asleep" };
+      return { label: "Paused", tone: "warn", icon: "asleep" };
   }
 }
 
 export function accessChip(access: AppAccess, sharedWith: number): Chip {
-  if (access === "public") return { label: "Public", tone: "teal", icon: "public" };
-  if (access === "shared") return { label: sharedWith > 0 ? `Shared with ${sharedWith}` : "Shared", tone: "violet", icon: "employee" };
-  return { label: "Private", tone: "quiet", icon: "private" };
+  if (access === "public") return { label: "Public", tone: "info", icon: "public" };
+  if (access === "shared") return { label: sharedWith > 0 ? `Shared with ${sharedWith}` : "Shared", tone: "info", icon: "employee" };
+  return { label: "Private", tone: "neutral", icon: "private" };
 }
 
 const STAGE_LABEL: Record<ProjectStage, string> = {
@@ -93,11 +93,11 @@ const STAGE_LABEL: Record<ProjectStage, string> = {
 
 export function stageChip(stage: ProjectStage): Chip {
   const label = STAGE_LABEL[stage];
-  if (stage === "verdict") return { label, tone: "attention-strong", icon: "verdict" };
-  if (stage === "live") return { label, tone: "success", icon: "publish" };
-  if (stage === "paused" || stage === "dropped" || stage === "not-built") return { label, tone: "quiet" };
-  if (stage === "researching" || stage === "idea") return { label, tone: "teal", icon: "research" };
-  return { label, tone: "solid", icon: "build" };
+  if (stage === "verdict") return { label, tone: "warn", icon: "verdict" };
+  if (stage === "live") return { label, tone: "good", icon: "publish" };
+  if (stage === "paused" || stage === "dropped" || stage === "not-built") return { label, tone: "neutral" };
+  if (stage === "researching" || stage === "idea") return { label, tone: "info", icon: "research" };
+  return { label, tone: "info", icon: "build" };
 }
 
 export interface OrgCounts {

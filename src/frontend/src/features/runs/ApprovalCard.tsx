@@ -21,7 +21,7 @@ export function ApprovalCard({ runId, approval, compact = false }: { runId: stri
 function ClosedApproval({ approval, compact }: { approval: DerivedApproval; compact: boolean }) {
   return (
     <div data-testid="approval-card" data-state="expired" className={compact ? "flex flex-col gap-2 rounded-md border bg-surface px-4 py-3" : "flex flex-col gap-2 rounded-md border bg-surface px-5 py-4"}>
-      <Badge tone="quiet" className="self-start">
+      <Badge tone="neutral" className="self-start">
         No longer waiting
       </Badge>
       <p className="text-base font-medium text-ink-body">{approval.question}</p>
@@ -51,22 +51,22 @@ function OpenApproval({ runId, approval, compact }: { runId: string; approval: D
   };
 
   return (
-    <div data-testid="approval-card" className={compact ? "flex flex-col gap-2.5 rounded-md border border-attention-line bg-attention-tint px-4 py-3" : "flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint px-5 py-4"}>
-      <Badge tone="white" className="self-start">
+    <div data-testid="approval-card" className={compact ? "flex flex-col gap-2.5 rounded-md border bg-surface px-4 py-3 shadow-card" : "flex flex-col gap-3 rounded-md border bg-surface px-5 py-4 shadow-card"}>
+      <Badge tone="warn" className="self-start">
         Needs you
       </Badge>
       <p className="text-base font-semibold">{approval.question}</p>
-      {approval.detail && <ClampedText className="break-words text-sm text-attention-deep">{approval.detail}</ClampedText>}
-      {technical && approval.technical && <p className="break-words font-mono text-xs text-attention-deep">{approval.technical}</p>}
+      {approval.detail && <ClampedText className="break-words text-sm text-ink-body">{approval.detail}</ClampedText>}
+      {technical && approval.technical && <p className="break-words font-mono text-xs text-ink-body">{approval.technical}</p>}
       {optimistic ? (
         <p role="status" className="font-medium text-ink">
           {state.isLoading ? `${optimistic === "approve" ? "Approved." : "Declined."} Sending…` : answeredText(optimistic, approval.onDecline)}
         </p>
       ) : (
         <>
-          {/* A phone puts the answer first and the optional note under it (the order class). */}
-          <div className="flex flex-col gap-1 max-sm:order-1">
-            <label htmlFor={noteId} className="text-sm text-attention-deep">
+          {/* The optional note comes before the answer, so it is written before the answer is given. */}
+          <div className="flex flex-col gap-1">
+            <label htmlFor={noteId} className="text-sm text-ink-body">
               Add a note (optional)
             </label>
             <input
@@ -74,17 +74,18 @@ function OpenApproval({ runId, approval, compact }: { runId: string; approval: D
               value={note}
               maxLength={2000}
               onChange={(e) => setNote(e.target.value)}
-              className="min-h-touch rounded-xs border border-border-strong bg-surface px-3"
+              className="min-h-touch rounded-xs border border-border-field bg-surface px-3"
               autoComplete="off"
             />
           </div>
-          <div className="flex flex-wrap gap-2 max-sm:grid max-sm:grid-cols-2">
+          {/* On a phone the answer stays in reach above the bottom bar while the card is on screen. */}
+          <div className="flex flex-wrap gap-2 max-sm:sticky max-sm:bottom-nav-safe max-sm:z-10 max-sm:-mx-4 max-sm:grid max-sm:grid-cols-2 max-sm:border-t max-sm:bg-surface max-sm:px-4 max-sm:py-2">
             <Button onClick={() => void decide("approve")}>Approve</Button>
             <Button variant="outline" onClick={() => void decide("reject")}>
               Decline
             </Button>
           </div>
-          <p className="text-sm text-attention-deep max-sm:order-2">
+          <p className="text-sm text-ink-body">
             {approval.onDecline === "stops" ? "Declining stops this work." : "Declining skips only this step; the work goes on without it."}
           </p>
         </>

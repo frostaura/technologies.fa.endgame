@@ -65,7 +65,7 @@ export function OperatorAccessView() {
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Operator access" }]}>
       <header className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold">
+        <h1 className="flex items-center gap-3 text-3xl font-semibold max-sm:text-2xl">
           <Icon name="god-mode" tinted className="size-7" />
           Operator access
         </h1>
