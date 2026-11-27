@@ -81,12 +81,12 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
         </p>
       )}
       {/* The hero: white, the balance as the page's title, the month's figures across from it. Below zero, the figure says so in red. */}
-      <section aria-label="Balance" className={cn("grid grid-cols-1 items-end gap-x-12 gap-y-5 rounded-lg border bg-surface px-6 py-7 shadow-card max-sm:px-5 max-sm:py-5 sm:px-8 lg:grid-cols-grow-end", RISE)}>
+      <section aria-label="Balance" className={cn("grid grid-cols-1 items-end gap-x-12 gap-y-5 rounded-lg border bg-surface px-6 py-7 shadow-card max-sm:px-5 max-sm:py-5 sm:px-8 rail:!px-5 lg:grid-cols-grow-end", RISE)}>
         <div className="flex min-w-0 flex-col gap-1">
           <Stat plain valueAs="h1" size="xl" tone={negative ? "bad" : "ink"} label={<span className="text-eyebrow font-semibold uppercase">{negative ? "Below zero" : "Credits left"}</span>} value={formatNumber(credits.balance)} />
           <span className="max-w-prose text-ink-body">{paceLine(credits)}</span>
         </div>
-        <div className="grid grid-cols-3 gap-x-10 gap-y-3 max-sm:grid-cols-fit-3 max-sm:justify-between max-sm:gap-x-3">
+        <div className="grid grid-cols-3 gap-x-10 gap-y-3 max-sm:grid-cols-fit-3 max-sm:justify-between max-sm:gap-x-3 rail:grid-cols-fit-3 rail:justify-between rail:gap-x-2">
           <Stat plain label="Spent this month" value={formatNumber(credits.month.spent)} />
           <Stat plain label="On AI work" value={formatNumber(credits.month.ai)} />
           <Stat plain label="On hosting" value={formatNumber(credits.month.hosting)} />
@@ -117,7 +117,7 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
         </section>
 
         <div className={cn("flex min-w-0 flex-col gap-6", RISE, stagger(2))}>
-          <StatRow cols={2} label="How the month went" className="max-sm:grid-cols-1 3xl:grid-cols-1">
+          <StatRow cols={2} label="How the month went" className="max-sm:grid-cols-1 rail:grid-cols-1 3xl:grid-cols-1">
             {credits.estimates && credits.estimates.pieces > 0 ? (
               <Stat
                 label="Estimates against what it cost"
