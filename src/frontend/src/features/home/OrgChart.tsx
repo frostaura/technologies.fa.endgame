@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useViewport } from "@/lib/useViewport";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
+import { Disclosure } from "@/components/Fold";
 import { Bar } from "@/components/states";
 import { Chip as ChipView, PersonChip } from "@/components/ui/chip";
 import { NO_VALUE, Stat } from "@/components/ui/stat";
@@ -17,16 +18,15 @@ import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import type { Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import type { Selection } from "@/store/uiSlice";
-import { TypingDots } from "./ConversationDock";
 import { isArchived } from "../tree/treeManage";
+import { useMasonry } from "./masonry";
 import { activityLine, appChips, appNote, contractorsLabel, progressLine, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
 
-/** Each division takes the next hue in turn, as the design draws Technologies blue and Labs violet. */
-const DIVISION_TONES = [
-  { badge: "bg-primary", chip: "primary", wire: "border-primary-line", signal: "bg-primary ring-primary/20" },
-  { badge: "bg-violet", chip: "violet", wire: "border-violet-line", signal: "bg-violet ring-violet/20" },
-  { badge: "bg-teal", chip: "teal", wire: "border-teal/30", signal: "bg-teal ring-teal/20" },
-] as const;
+/**
+ * The chart's geometry. A division column is never narrower than the side panel (22 rem) and the
+ * chart takes as many columns as its width holds, up to four.
+ */
+const COLUMN = { min: 352, gap: 24, max: 4 } as const;
 
 interface Props {
   tree: Tree;
@@ -41,46 +41,76 @@ function useManageHref(): (scope: string) => string {
   return (scope) => paths.manage(scope, entered);
 }
 
-export function OrgChart({ tree, selection, onSelect }: Props) {
-  const org = tree.organisation;
+/** "Add a division", for an Admin or the Owner: the chart's header row carries it as a quiet action. */
+export function AddDivision({ tree }: { tree: Tree }) {
   const manage = useManageHref();
   const me = useGetMeQuery(undefined);
-  if (!org) return null;
-  // A lone division takes the whole width, its projects side by side, rather than leaving half the page empty.
-  const lone = tree.divisions.length === 1;
-  const mayAddDivision = roleRank(effectiveRole(tree, me.data, org.slug)) >= roleRank("admin");
+  const org = tree.organisation;
+  if (!org || roleRank(effectiveRole(tree, me.data, org.slug)) < roleRank("admin")) return null;
   return (
-    <section aria-label="Organisation chart" className={cn("grid grid-cols-1 items-start gap-6", !lone && "md:grid-cols-2 2xl:grid-cols-3")}>
-      {tree.divisions.map((division, i) => (
-        <DivisionColumn
-          key={division.id}
-          division={division}
-          orgSlug={org.slug}
-          orgName={org.name}
-          tone={DIVISION_TONES[i % DIVISION_TONES.length] ?? DIVISION_TONES[0]}
-          index={i}
-          wide={lone}
-          selection={selection}
-          onSelect={onSelect}
-          manage={manage}
-        />
-      ))}
-      {mayAddDivision && (
-        <Link href={`${manage(org.slug)}&add=1`} className={cn(buttonVariants({ variant: "soft" }), "min-h-16 justify-start gap-3 rounded-md px-5", RISE)}>
-          <Icon name="division" tinted />
-          Add a division
-        </Link>
-      )}
-    </section>
+    <Link href={`${manage(org.slug)}&add=1`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-primary-link hover:text-primary-hover")}>
+      <Plus aria-hidden className="size-4" />
+      Add a division
+    </Link>
   );
 }
 
+/** How tall a division will draw, before it is measured: its header, and a card's worth for each project and app. */
+function estimate(division: TreeDivision): number {
+  let h = 88 + (division.workers.length > 0 ? 54 : 0);
+  for (const p of division.projects) h += 120 + p.apps.length * 150 + (p.progress ? 70 : 0) + (p.workers.length > 0 ? 54 : 0);
+  return h;
+}
+
+export function OrgChart({ tree, selection, onSelect }: Props) {
+  const org = tree.organisation;
+  const manage = useManageHref();
+  const live = tree.divisions.filter((d) => !isArchived(d));
+  const archived = tree.divisions.filter((d) => isArchived(d));
+  if (!org) return null;
+  const draw = (division: TreeDivision, i: number, lone = false) => (
+    <DivisionColumn key={division.id} division={division} orgSlug={org.slug} orgName={org.name} index={i} wide={lone} selection={selection} onSelect={onSelect} manage={manage} />
+  );
+  return (
+    <div className="flex flex-col gap-6">
+      <section aria-label="Organisation chart">
+        {/* A lone division takes the whole width, its projects side by side, rather than leaving the rest of the page empty. */}
+        {live.length === 1 && live[0] ? draw(live[0], 0, true) : <Masonry divisions={live} draw={draw} />}
+      </section>
+      {archived.length > 0 && (
+        <Disclosure title={`Archived (${archived.length})`} summary={archived.map((d) => d.name).join(", ")}>
+          <section aria-label="Archived divisions">
+            <Masonry divisions={archived} draw={(d, i) => draw(d, live.length + i)} />
+          </section>
+        </Disclosure>
+      )}
+    </div>
+  );
+}
+
+/** Divisions as columns: each stacks under whichever column is shortest, so no column leaves a hole and none runs on alone. */
+function Masonry({ divisions, draw }: { divisions: TreeDivision[]; draw: (d: TreeDivision, i: number) => ReactNode }) {
+  const phone = useViewport() === "phone";
+  const { container, columns, measure } = useMasonry(divisions, (d) => d.id, estimate, { ...COLUMN, max: phone ? 1 : COLUMN.max });
+  return (
+    <div ref={container} data-columns={columns.length} className="flex items-start gap-6">
+      {columns.map((column, c) => (
+        <div key={c} data-chart-column="" className="flex min-w-0 flex-1 flex-col gap-6">
+          {column.map((d) => (
+            <div key={d.id} ref={measure(d.id)} className="min-w-0">
+              {draw(d, divisions.indexOf(d))}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function DivisionColumn({
   division,
   orgSlug,
   orgName,
-  tone,
   index,
   wide,
   selection,
@@ -92,7 +122,6 @@ function DivisionColumn({
   division: TreeDivision;
   orgSlug: string;
   orgName: string;
-  tone: (typeof DIVISION_TONES)[number];
   index: number;
   selection: Selection | null;
   onSelect: (s: Selection) => void;
@@ -115,13 +144,15 @@ function DivisionColumn({
     el.addEventListener("endgame:reveal", reveal);
     return () => el.removeEventListener("endgame:reveal", reveal);
   }, []);
-  const apps = division.projects.reduce((n, p) => n + p.apps.length, 0);
+  const projects = division.projects;
+  const hasWorkers = division.workers.length > 0;
   return (
     <div className={cn("flex min-w-0 flex-col", RISE, stagger(index + 2))}>
       <div
         data-archived={archived || undefined}
+        data-division-header=""
         className={cn(
-          "relative flex items-center justify-between gap-3 rounded-md border bg-surface px-5 py-4 shadow-card max-sm:flex-wrap max-sm:gap-y-2 max-sm:px-4 max-sm:py-3",
+          "relative flex items-center gap-3 rounded-md border bg-surface px-5 py-4 shadow-card max-sm:px-4 max-sm:py-3",
           archived && "bg-ground shadow-none",
           selected && "ring-2 ring-primary",
         )}
@@ -131,23 +162,25 @@ function DivisionColumn({
           aria-pressed={selected}
           // A part the person holds no role in is drawn on the way to theirs, but is not theirs to open.
           disabled={division.role === null}
-          title={division.role === null ? "You hold no role here" : undefined}
+          title={division.role === null ? "You hold no role here" : division.name}
           onClick={() => onSelect({ scope, kind: "division", trail })}
-          className="flex min-w-0 items-center gap-3.5 rounded-xs text-left after:absolute after:inset-0 after:rounded-md disabled:cursor-default"
+          className="flex min-w-0 flex-1 items-center gap-3.5 rounded-xs text-left after:absolute after:inset-0 after:rounded-md disabled:cursor-default"
         >
-          <span aria-hidden className={cn("flex size-10 shrink-0 items-center justify-center rounded-xs font-display text-lg font-bold text-primary-ink", tone.badge)}>
+          {/* The division's letter, in ink: one look for every division (ARCH-011's single accent). */}
+          <span aria-hidden className={cn("flex size-10 shrink-0 items-center justify-center rounded-xs font-display text-lg font-bold", archived ? "bg-quiet text-ink-muted" : "bg-ink text-surface")}>
             {division.name.trim()[0]?.toUpperCase()}
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="text-xs text-ink-muted">Division{phone && ` · ${plural(division.projects.length, "project")}, ${plural(apps, "app")}`}</span>
-            <span className="truncate font-display text-lg font-semibold max-sm:whitespace-normal max-sm:break-words">{division.name}</span>
+            <span className="flex min-w-0 gap-x-1 whitespace-nowrap text-xs text-ink-muted">
+              <span>{phone ? plural(division.projects.length, "project") : "Division"}</span>
+              <span aria-hidden>·</span>
+              <span className="whitespace-nowrap">{formatCredits(division.spend.monthCredits)}</span>
+            </span>
+            <span className="break-words font-display text-lg font-semibold leading-snug">{division.name}</span>
           </span>
         </button>
-        <div className="relative z-10 flex flex-wrap items-center justify-end gap-2 max-sm:w-full max-sm:justify-start">
+        <div className="relative z-10 flex shrink-0 items-center gap-1">
           {archived && <Badge tone="neutral">Archived</Badge>}
-          <Badge tone="neutral" className="px-3 py-1 text-sm">
-            {formatCredits(division.spend.monthCredits)}
-          </Badge>
           {division.role !== null && (
             <Link href={manage(scope)} aria-label={`Manage ${division.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
               Manage
@@ -160,7 +193,7 @@ function DivisionColumn({
               aria-controls={bodyId}
               aria-label={open ? `Fold ${division.name}` : `Show what is in ${division.name}`}
               onClick={() => setOpen((x) => !x)}
-              className="ml-auto flex min-h-touch min-w-touch items-center justify-center rounded-xs text-ink-muted hover:bg-ground"
+              className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-ink-muted hover:bg-ground"
             >
               <ChevronDown aria-hidden className={cn("size-5 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
             </button>
@@ -168,22 +201,61 @@ function DivisionColumn({
         </div>
       </div>
       <div id={bodyId} ref={body} data-fold-body="" className={folded ? "hidden" : "contents"}>
-      {division.workers.length > 0 && (
-        <div className="ml-wire border-l-2 border-transparent pl-6 pt-3 max-sm:ml-4 max-sm:pl-3">
-          <Workers workers={division.workers} scope={scope} trail={trail} selection={selection} onSelect={onSelect} />
-        </div>
-      )}
-      <div className={cn("relative ml-wire gap-3.5 border-l-2 pl-6 pt-4 max-sm:ml-4 max-sm:pl-3 max-sm:pt-3", wide ? "grid grid-cols-1 items-start lg:grid-cols-2 2xl:grid-cols-3" : "flex flex-col", tone.wire)}>
-        {division.projects.length === 0 ? (
-          <p data-state="empty" className="px-1 py-2 text-ink-muted lg:col-span-2">No projects in {division.name} yet.</p>
+        {wide ? (
+          <div className="ml-wire flex flex-col gap-3.5 border-l-2 border-border-strong pl-6 pt-4 max-sm:ml-4 max-sm:pl-3">
+            {hasWorkers && <Workers workers={division.workers} scope={scope} trail={trail} selection={selection} onSelect={onSelect} />}
+            {projects.length === 0 ? (
+              <p data-state="empty" className="px-1 py-2 text-ink-muted">No projects in {division.name} yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-2 2xl:grid-cols-3">
+                {projects.map((project) => (
+                  <ProjectCard key={project.id} project={project} scope={`${scope}/${project.slug}`} trail={[...trail, project.name]} selection={selection} onSelect={onSelect} manage={manage} />
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
-          division.projects.map((project) => (
-            <ProjectCard key={project.id} project={project} scope={`${scope}/${project.slug}`} trail={[...trail, project.name]} selection={selection} onSelect={onSelect} manage={manage} />
-          ))
+          // One wire per division: every project hangs off it with the same node, and it ends at the last one.
+          <ol aria-label={`In ${division.name}`} className="ml-wire flex flex-col max-sm:ml-4">
+            {hasWorkers && (
+              <Branch at="chips" last={projects.length === 0}>
+                <Workers workers={division.workers} scope={scope} trail={trail} selection={selection} onSelect={onSelect} />
+              </Branch>
+            )}
+            {projects.length === 0 ? (
+              <Branch at="chips" last>
+                <p data-state="empty" className="flex min-h-touch items-center text-ink-muted">
+                  No projects in {division.name} yet.
+                </p>
+              </Branch>
+            ) : (
+              projects.map((project, i) => (
+                <Branch key={project.id} at="card" last={i === projects.length - 1}>
+                  <ProjectCard project={project} scope={`${scope}/${project.slug}`} trail={[...trail, project.name]} selection={selection} onSelect={onSelect} manage={manage} />
+                </Branch>
+              ))
+            )}
+          </ol>
         )}
       </div>
-      </div>
     </div>
+  );
+}
+
+/**
+ * One thing hanging off a division's wire: the wire runs past it (or stops at it, the last), and a
+ * node and a short stub join it at its first line — a card's title row, or a row of people.
+ */
+function Branch({ at, last, children }: { at: "card" | "chips"; last: boolean; children: ReactNode }) {
+  return (
+    <li data-branch={at} className="relative pl-6 pt-2.5 max-sm:pl-3">
+      <span aria-hidden data-wire="" className={cn("absolute left-0 top-0 w-0.5 bg-border-strong", last ? (at === "card" ? "h-12" : "h-8") : "bottom-0")} />
+      <span aria-hidden data-node="" className={cn("absolute -left-1 flex w-7 -translate-y-1/2 items-center max-sm:w-4", at === "card" ? "top-12" : "top-8")}>
+        <span className="size-2.5 shrink-0 rounded-full bg-border-strong" />
+        <span className="h-0.5 flex-1 bg-border-strong" />
+      </span>
+      {children}
+    </li>
   );
 }
 
@@ -207,6 +279,10 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
   const unique = [...new Map(workers.map((w) => [w.id, w])).values()];
   const { employees, contractors } = splitWorkers(unique);
   const showStage = project.stage !== "live" || project.apps.length === 0;
+  // A project that is one app of the same name: the app's row is the project's body, its name and spend said once.
+  const only = project.apps.length === 1 ? project.apps[0] : undefined;
+  const merged = !!only && only.name.trim().toLowerCase() === project.name.trim().toLowerCase() && only.spend.monthCredits === project.spend.monthCredits;
+  const tag = archived ? <Badge tone="neutral">Archived</Badge> : showStage ? <ChipRow chips={[stageChip(project.stage)]} /> : null;
 
   return (
     <article
@@ -217,33 +293,38 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
         selected && "ring-2 ring-primary",
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          aria-pressed={selected}
-          disabled={project.role === null}
-          title={project.role === null ? "You hold no role here" : undefined}
-          onClick={() => onSelect({ scope, kind: "project", trail })}
-          className="rounded-xs text-left text-base font-semibold after:absolute after:inset-0 after:rounded-md disabled:cursor-default"
-        >
-          {project.name}
-        </button>
-        <div className="relative z-10 flex flex-wrap items-center gap-1.5">
-          {archived ? <Badge tone="neutral">Archived</Badge> : showStage && <ChipRow chips={[stageChip(project.stage)]} />}
-          <span className="text-sm text-ink-muted">{headlineCredits(project.spend.monthCredits)} this month</span>
+      {/* Every card's head is the same two lines: its name and Manage, then its stage and its spend. */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            aria-pressed={selected}
+            disabled={project.role === null}
+            title={project.role === null ? "You hold no role here" : undefined}
+            onClick={() => onSelect({ scope, kind: "project", trail })}
+            className="min-h-touch min-w-0 rounded-xs text-left text-base font-semibold leading-snug after:absolute after:inset-0 after:rounded-md disabled:cursor-default"
+          >
+            <span className="line-clamp-2 break-words">{project.name}</span>
+          </button>
           {project.role !== null && (
-            <Link href={manage(scope)} aria-label={`Manage ${project.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
+            <Link href={manage(scope)} aria-label={`Manage ${project.name}`} className="relative z-10 flex min-h-touch shrink-0 items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
               Manage
             </Link>
           )}
         </div>
+        {(tag || !merged) && (
+          <div className="relative z-10 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {tag}
+            {!merged && <span className="text-sm text-ink-muted">{headlineCredits(project.spend.monthCredits)} this month</span>}
+          </div>
+        )}
       </div>
 
       {(project.note ?? project.notBuilt?.note) && <p className="text-ink-body">{project.note ?? project.notBuilt?.note}</p>}
 
       {project.progress && (
         <div className="relative flex flex-col gap-2">
-          <div className="flex flex-wrap justify-between gap-2">
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1">
             <span className="font-medium">{progressLine(project.progress)}</span>
             <span className="text-ink-muted">
               {/* Never "0 of an estimated 0" (R2-9): no estimate yet reads as what has been spent. */}
@@ -253,14 +334,14 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
             </span>
           </div>
           {project.progress.of > 0 && <Bar live className="h-2.5" value={percent(project.progress.done ?? project.progress.step, project.progress.of)} label={progressLine(project.progress)} />}
-          <Link href={paths.run(project.progress.runId)} className="relative z-10 self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+          <Link href={paths.run(project.progress.runId)} className="relative z-10 flex min-h-touch items-center self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
             Watch the work
           </Link>
         </div>
       )}
 
       {atVerdict && project.ideaId && (
-        <Link href={paths.idea(project.ideaId)} className="relative z-10 self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+        <Link href={paths.idea(project.ideaId)} className="relative z-10 flex min-h-touch items-center self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
           Read the verdict
         </Link>
       )}
@@ -268,7 +349,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
       {project.apps.length > 0 && (
         <ul aria-label={`Apps in ${project.name}`} className="relative flex flex-col gap-2">
           {project.apps.map((app) => (
-            <AppRow key={app.id} app={app} />
+            <AppRow key={app.id} app={app} merged={merged} />
           ))}
         </ul>
       )}
@@ -278,18 +359,30 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
   );
 }
 
-function AppRow({ app }: { app: TreeApp }) {
+function AppRow({ app, merged }: { app: TreeApp; merged: boolean }) {
   const archived = isArchived(app);
   const chips: Chip[] = archived ? [{ label: "Archived", tone: "neutral" }] : appChips(app);
+  const unmeasured = app.visitsToday === null && !app.lastVisitAt;
   return (
     <li className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3 max-sm:px-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={paths.app(app.id)} className="relative z-10 flex items-center gap-2 rounded-xs font-semibold text-ink hover:text-primary-hover touch:min-h-touch">
-          <Icon name="app" tinted className="size-4" />
-          {app.name}
-        </Link>
-        <ChipRow chips={chips} />
-      </div>
+      {merged ? (
+        // The project is this app: its tags, and the way to its page, without saying its name twice.
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ChipRow chips={chips} />
+          <Link href={paths.app(app.id)} title={app.name} className="relative z-10 flex min-h-touch items-center gap-1.5 rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+            <Icon name="app" className="size-4" />
+            Open the app
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Link href={paths.app(app.id)} className="relative z-10 flex min-h-touch min-w-0 items-center gap-2 self-start rounded-xs font-semibold text-ink hover:text-primary-hover">
+            <Icon name="app" className="size-4 shrink-0" />
+            <span className="min-w-0 break-words">{app.name}</span>
+          </Link>
+          <ChipRow chips={chips} />
+        </div>
+      )}
       {!archived && appNote(app) && <p className="text-sm text-ink-body">{appNote(app)}</p>}
       {/* Two figures, always side by side. Null visits means nothing has been measured yet: unknown, never zero — "—", with why under it. */}
       <div className="grid grid-cols-2 gap-4">
@@ -297,8 +390,8 @@ function AppRow({ app }: { app: TreeApp }) {
           plain
           label={app.visitsToday !== null || !app.lastVisitAt ? "Visits today" : "Last visit"}
           value={app.visitsToday !== null ? formatNumber(app.visitsToday) : app.lastVisitAt ? timeAgo(app.lastVisitAt) : NO_VALUE}
-          tone={app.visitsToday === null && !app.lastVisitAt ? "muted" : "ink"}
-          caption={app.visitsToday === null && !app.lastVisitAt ? "Not measured yet" : undefined}
+          tone={unmeasured ? "muted" : "ink"}
+          caption={unmeasured ? "Not measured yet" : undefined}
         />
         <Stat plain label="Credits this month" value={headlineNumber(app.spend.monthCredits)} />
       </div>
@@ -306,10 +399,21 @@ function AppRow({ app }: { app: TreeApp }) {
   );
 }
 
+/** Three dots that rise in turn: someone is at work. */
+function WorkingDots() {
+  return (
+    <span aria-hidden className="flex shrink-0 gap-1">
+      <span className="size-1.5 animate-bob rounded-full bg-primary motion-reduce:animate-none" />
+      <span className="size-1.5 animate-bob rounded-full bg-primary animate-delay-1 motion-reduce:animate-none" />
+      <span className="size-1.5 animate-bob rounded-full bg-primary animate-delay-2 motion-reduce:animate-none" />
+    </span>
+  );
+}
+
 /**
- * The people on a node: each employee as a chip in its own colour, with what it is doing now;
- * contractors as one spinning line, since they are a burst and not a roster. Selecting a chip
- * scopes the conversation to that employee.
+ * The people on a node: each employee as a chip, with what it is doing now; contractors as one
+ * spinning chip, since they are a burst and not a roster. Selecting a chip scopes the conversation
+ * to that employee.
  */
 export function Workers({ workers, scope, trail, selection, onSelect }: { workers: Worker[]; scope: string; trail: string[]; selection: Selection | null; onSelect: (s: Selection) => void }) {
   const { employees, contractors } = splitWorkers(workers);
@@ -328,7 +432,7 @@ export function Workers({ workers, scope, trail, selection, onSelect }: { worker
       </div>
       {busy.map((w) => (
         <span key={w.id} className="flex items-center gap-2 text-sm text-ink-muted">
-          <TypingDots />
+          <WorkingDots />
           {activityLine(w.name, w.activity ?? "")}
         </span>
       ))}

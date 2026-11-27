@@ -13,6 +13,8 @@ import { serviceLabel } from "../workforce/workforceModel";
 
 export const NODE = { width: 216, height: 60 } as const;
 const GAP = { column: 112, row: 20, margin: 24 } as const;
+/** How far a graph given room may spread: its nodes widen to this, its columns part to this. */
+const ROOM = { node: 264, column: 280 } as const;
 
 /** Edge types whose target sits to the right of their source. */
 const FORWARD = new Set(["owns", "depends-on", "data-flows-to"]);
@@ -35,13 +37,20 @@ export interface PlacedEdge {
 }
 
 export interface Layout {
+  /** How wide each node is drawn: wider when the graph has room. */
+  nodeWidth: number;
   nodes: PlacedNode[];
   edges: PlacedEdge[];
   width: number;
   height: number;
 }
 
-export function layoutGraph(nodes: OntologyNode[], edges: OntologyEdge[]): Layout {
+/**
+ * `room`: the width the drawing has. Given room, the graph spreads to fill it — nodes wider (so fewer
+ * names are cut), columns further apart — up to a limit; without it, or with less room than it needs,
+ * it is drawn at its narrowest and the frame scales or scrolls it.
+ */
+export function layoutGraph(nodes: OntologyNode[], edges: OntologyEdge[], room?: number): Layout {
   const ids = new Set(nodes.map((n) => n.id));
   const live = edges.filter((e) => ids.has(e.from) && ids.has(e.to) && e.from !== e.to);
   const out = new Map<string, string[]>();
@@ -102,41 +111,58 @@ export function layoutGraph(nodes: OntologyNode[], edges: OntologyEdge[]): Layou
     }
   }
 
+  const count = Math.max(1, ranks.length);
+  const narrowest = GAP.margin * 2 + count * NODE.width + (count - 1) * GAP.column;
+  const spare = room ? Math.max(0, room - narrowest) : 0;
+  // Spare room goes first to the nodes (their names), then to the space between columns.
+  const nodeWidth = Math.min(ROOM.node, NODE.width + Math.floor(spare / count));
+  const left = spare - (nodeWidth - NODE.width) * count;
+  const column = count > 1 ? Math.min(ROOM.column, GAP.column + Math.floor(Math.max(0, left) / (count - 1))) : GAP.column;
+
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const placed: PlacedNode[] = [];
   const at = new Map<string, PlacedNode>();
   let height = 0;
-  ranks.forEach((r, column) => {
+  ranks.forEach((r, c) => {
     (columns.get(r) ?? []).forEach((id, i) => {
       const node = byId.get(id);
       if (!node) return;
-      const p = { node, rank: column, order: i, x: GAP.margin + column * (NODE.width + GAP.column), y: GAP.margin + i * (NODE.height + GAP.row) };
+      const p = { node, rank: c, order: i, x: GAP.margin + c * (nodeWidth + column), y: GAP.margin + i * (NODE.height + GAP.row) };
       placed.push(p);
       at.set(id, p);
       height = Math.max(height, p.y + NODE.height + GAP.margin);
     });
   });
-  const width = GAP.margin * 2 + ranks.length * NODE.width + Math.max(0, ranks.length - 1) * GAP.column;
+  const width = GAP.margin * 2 + ranks.length * nodeWidth + Math.max(0, ranks.length - 1) * column;
 
+  // Lines between the same two nodes (either way) are drawn side by side, never one on top of the other.
+  const pairKey = (e: OntologyEdge) => [e.from, e.to].sort().join("\u0000");
+  const pairs = new Map<string, number>();
+  for (const e of live) pairs.set(pairKey(e), (pairs.get(pairKey(e)) ?? 0) + 1);
+  const seen = new Map<string, number>();
   const placedEdges = live.flatMap((edge): PlacedEdge[] => {
     const a = at.get(edge.from);
     const b = at.get(edge.to);
     if (!a || !b) return [];
-    const ay = a.y + NODE.height / 2;
-    const by = b.y + NODE.height / 2;
+    const key = pairKey(edge);
+    const k = seen.get(key) ?? 0;
+    seen.set(key, k + 1);
+    const shift = (k - ((pairs.get(key) ?? 1) - 1) / 2) * 10;
+    const ay = a.y + NODE.height / 2 + shift;
+    const by = b.y + NODE.height / 2 + shift;
     if (a.x === b.x) {
-      const x = a.x + NODE.width;
+      const x = a.x + nodeWidth;
       const bend = x + 48;
       return [{ edge, d: `M ${x} ${ay} C ${bend} ${ay}, ${bend} ${by}, ${x} ${by}`, mid: { x: bend - 12, y: (ay + by) / 2 } }];
     }
     const rightward = a.x < b.x;
-    const x1 = rightward ? a.x + NODE.width : a.x;
-    const x2 = rightward ? b.x : b.x + NODE.width;
+    const x1 = rightward ? a.x + nodeWidth : a.x;
+    const x2 = rightward ? b.x : b.x + nodeWidth;
     const dx = (x2 - x1) / 2;
     return [{ edge, d: `M ${x1} ${ay} C ${x1 + dx} ${ay}, ${x2 - dx} ${by}, ${x2} ${by}`, mid: { x: (x1 + x2) / 2, y: (ay + by) / 2 } }];
   });
 
-  return { nodes: placed, edges: placedEdges, width: Math.max(width, NODE.width + GAP.margin * 2), height: Math.max(height, NODE.height + GAP.margin * 2) };
+  return { nodeWidth, nodes: placed, edges: placedEdges, width: Math.max(width, nodeWidth + GAP.margin * 2), height: Math.max(height, NODE.height + GAP.margin * 2) };
 }
 
 const TYPES: Record<string, string> = {

@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from "react";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { formatDate } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -32,9 +33,9 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
   return (
     <section aria-labelledby={`${scope}-what`} className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 id={`${scope}-what`} className="text-lg font-semibold">
+        <h3 id={`${scope}-what`} className="font-display text-base font-semibold">
           What this is
-        </h2>
+        </h3>
         <p className="text-ink-body">What {name} is, said once. Everything beneath it reads this, unless a lower level says it differently.</p>
       </div>
       {refused && <Outcome ok={false}>{refused}</Outcome>}
@@ -60,7 +61,7 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
                     <ContextForm scope={scope} entry={entry} onDone={() => setReplacing(null)} onRefused={setRefused} />
                   </li>
                 ) : (
-                  <ContextRow key={entry.key} entry={entry} scope={scope} label={keyName(entry.key)} canWrite={canWrite} nameOf={nameOf} onChange={() => setReplacing(entry)} />
+                  <ContextRow key={entry.key} entry={entry} scope={scope} name={name} label={keyName(entry.key)} canWrite={canWrite} nameOf={nameOf} onChange={() => setReplacing(entry)} />
                 ),
               )}
             </ul>
@@ -116,13 +117,15 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
   );
 }
 
-function ContextRow({ entry, scope, label, canWrite, nameOf, onChange }: { entry: CascadeValue; scope: string; label: string; canWrite: boolean; nameOf: (path: string) => string; onChange: () => void }) {
+function ContextRow({ entry, scope, name, label, canWrite, nameOf, onChange }: { entry: CascadeValue; scope: string; name: string; label: string; canWrite: boolean; nameOf: (path: string) => string; onChange: () => void }) {
   const [remove, removing] = useRemoveCascadeMutation();
   const [problem, setProblem] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const here = entry.setAtPath === scope;
   const replaced = entry.overrides.filter((p) => p !== scope);
 
   const drop = async () => {
+    setConfirming(false);
     setProblem(null);
     try {
       await remove({ scope, kind: "context", key: entry.key }).unwrap();
@@ -142,17 +145,30 @@ function ContextRow({ entry, scope, label, canWrite, nameOf, onChange }: { entry
         {entry.setAt ? `Set ${formatDate(entry.setAt)}` : "Set"}
         {here && replaced.length > 0 ? ` · Replaces what ${replaced.map(nameOf).join(" and ")} says` : ""}
       </span>
-      {canWrite && (
-        <span className="flex flex-wrap gap-1">
-          <Button size="sm" variant="ghost" onClick={onChange}>
+      {canWrite && !confirming && (
+        <span className="flex flex-wrap gap-2 pt-1">
+          <Button size="sm" variant="outline" onClick={onChange}>
             {here ? "Change" : "Say it differently here"}
           </Button>
           {here && (
-            <Button size="sm" variant="ghost" disabled={removing.isLoading} onClick={() => void drop()}>
+            <Button size="sm" variant="outline" disabled={removing.isLoading} onClick={() => setConfirming(true)}>
               {replaced.length > 0 ? `Remove it; ${nameOf(replaced[0] ?? "")}'s applies again` : "Remove it"}
             </Button>
           )}
         </span>
+      )}
+      {confirming && (
+        <ConfirmCard
+          role="alertdialog"
+          focus
+          label={`Remove ${label}?`}
+          question={`Remove ${label} from ${name}?`}
+          detail={replaced.length > 0 ? `What ${nameOf(replaced[0] ?? "")} says applies here again.` : `Nothing is said about ${label.toLowerCase()} here once it is gone.`}
+          confirm="Yes, remove it"
+          cancel="Keep it"
+          onConfirm={() => void drop()}
+          onCancel={() => setConfirming(false)}
+        />
       )}
       {problem && <Outcome ok={false}>{problem}</Outcome>}
     </li>
@@ -180,7 +196,7 @@ function ContextForm({ scope, entry, onDone, onRefused }: { scope: string; entry
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={entry ? `Change ${contextLabel(entry.key)}` : "Say something about this level"} className="flex flex-col gap-2.5 rounded-xs border border-primary bg-primary-tint p-4" noValidate>
+    <form onSubmit={(e) => void submit(e)} aria-label={entry ? `Change ${contextLabel(entry.key)}` : "Say something about this level"} className="flex flex-col gap-3 rounded-sm border bg-ground p-4" noValidate>
       {entry ? (
         <p className="font-semibold">{contextLabel(entry.key)}</p>
       ) : (

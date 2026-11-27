@@ -33,7 +33,7 @@
       "kind": "demo",
       "highlight": {
         "selector": "#chart-panel",
-        "note": "What travels moves along its line, labelled: outbound mail, prompts, signed-in people."
+        "note": "What travels moves along its line; point at one to name it: outbound mail, prompts, signed-in people."
       }
     }
   ]

@@ -51,7 +51,7 @@ export function RenameNode({ level, id, name, slug, tree, onDone }: { level: Man
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={`Rename the ${word(level)}`} className="flex flex-col gap-2" noValidate>
+    <form onSubmit={(e) => void submit(e)} aria-label={`Rename the ${word(level)}`} className="flex max-w-form flex-col gap-2" noValidate>
       <Field id={fieldId} label="Name" hint={`Its address stays ${slug}: an address never changes once it is made.`} problem={value.length > 0 ? problem : null}>
         <Input id={fieldId} value={value} maxLength={NAME_LIMIT + 1} onChange={(e) => setValue(e.target.value)} aria-describedby={`${fieldId}-hint`} aria-invalid={!!problem} />
       </Field>
@@ -147,7 +147,7 @@ export function DeleteNode({ level, id, name, tree, onDeleted }: { level: Manage
           onNo={() => setConfirming(false)}
         />
       ) : (
-        <Button size="sm" variant="ghost" className="self-start text-attention-text" disabled={state.isLoading} onClick={() => setConfirming(true)}>
+        <Button size="sm" variant="outline" className="self-start border-attention-text text-attention-text" disabled={state.isLoading} onClick={() => setConfirming(true)}>
           Delete {name}
         </Button>
       )}
@@ -196,13 +196,13 @@ export function CreateChild({ level, parent, parentName, onCreated, onCancel }: 
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={`Add a ${word(level)} to ${parentName}`} className="flex flex-col gap-3 rounded-md border border-primary-line bg-primary-tint p-4" noValidate>
+    <form onSubmit={(e) => void submit(e)} aria-label={`Add a ${word(level)} to ${parentName}`} className="flex flex-col gap-4 rounded-md border bg-ground p-5 max-sm:p-4" noValidate>
       <h3 className="font-display text-base font-semibold">
         A new {word(level)} in {parentName}
       </h3>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field id={ids.name} label="Name" problem={typed.length > NAME_LIMIT ? `A name is at most ${NAME_LIMIT} characters.` : null}>
-          <Input ref={first} id={ids.name} value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="flex max-w-form flex-col gap-4">
+        <Field id={ids.name} label="Name" hint="What everyone reads. It can be renamed at any time." problem={typed.length > NAME_LIMIT ? `A name is at most ${NAME_LIMIT} characters.` : null}>
+          <Input ref={first} id={ids.name} value={name} onChange={(e) => setName(e.target.value)} aria-describedby={`${ids.name}-hint`} />
         </Field>
         <Field id={ids.slug} label="Its address" hint={`${parent}/${shown || "…"}. It cannot be changed once it is made.`} problem={slugProblem}>
           <Input
