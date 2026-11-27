@@ -79,12 +79,12 @@
         },
         {
           "wait": {
-            "text": "Here is Northwind at a glance"
+            "text": "apps are under Northwind"
           }
         }
       ],
       "highlight": {
-        "text": "Here is Northwind at a glance",
+        "text": "apps are under Northwind",
         "note": "Answered, and nothing asked to start: the narrowing held."
       }
     }
