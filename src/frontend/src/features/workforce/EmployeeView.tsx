@@ -75,7 +75,11 @@ export function EmployeeView({ employeeId }: { employeeId: string }) {
 
   const crumbs: Crumb[] = [];
   if (tree.data?.organisation) crumbs.push({ label: tree.data.organisation.name, href: active.entered ? paths.homeOf(tree.data.organisation.slug) : paths.home() });
-  if (detail) for (const name of namesFor(tree.data, detail.employee.scope).slice(1)) crumbs.push({ label: name });
+  // Every level above is a place to go: its own page under Manage.
+  if (detail) {
+    const parts = detail.employee.scope.split("/");
+    namesFor(tree.data, detail.employee.scope).slice(1).forEach((name, i) => crumbs.push({ label: name, href: paths.manage(parts.slice(0, i + 2).join("/")) }));
+  }
   crumbs.push({ label: detail?.employee.name ?? "Employee" });
 
   return (

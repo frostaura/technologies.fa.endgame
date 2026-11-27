@@ -47,7 +47,10 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   const crumbs: Crumb[] = [];
   const org = active.organisation;
   if (org) crumbs.push({ label: org.name, href: paths.home() });
-  if (idea?.scope) for (const name of namesFor(tree.data, idea.scope).slice(1)) crumbs.push({ label: name });
+  if (idea?.scope) {
+    const parts = idea.scope.split("/");
+    namesFor(tree.data, idea.scope).slice(1).forEach((name, i) => crumbs.push({ label: name, href: paths.manage(parts.slice(0, i + 2).join("/")) }));
+  }
   crumbs.push({ label: idea?.title ?? "Idea" });
 
   return (

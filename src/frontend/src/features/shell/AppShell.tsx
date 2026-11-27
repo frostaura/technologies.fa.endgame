@@ -181,6 +181,8 @@ function SidePanel({ children }: { children: ReactNode }) {
           "flex flex-col gap-5 md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start rail:!flex rail:gap-4",
           // Every block a page puts here is drawn as a card that ends with its content.
           "[&>*]:min-w-0 [&>*]:rounded-md [&>*]:border [&>*]:bg-surface [&>*]:p-5 [&>*]:shadow-card max-sm:[&>*]:p-4",
+          // A fieldset's legend would sit on the card's edge: it is the card's title instead.
+          "[&>fieldset>legend]:float-left [&>fieldset>legend]:mb-3 [&>fieldset>legend]:w-full [&>fieldset>legend+*]:clear-both",
           fits && "lg:sticky lg:top-6",
         )}>
         {children}
