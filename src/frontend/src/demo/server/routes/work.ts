@@ -38,7 +38,7 @@ export function answerApproval(world: World, approvalId: string, decision: "appr
   }
   if (a.answer === "approved") {
     const act = a.onApprove;
-    // What the conversation started, said in its own log so the conversation follows it (`work.started`, ARCH-011).
+    // What the conversation started, said in its own log so the conversation follows it (`work.started`, ARCH-012).
     const started = (run: { run: { id: string; title: string } } | undefined, workKind: string) => {
       if (r && run && r.run.kind === "conversation") append(world, r, "message", { kind: "work.started", runId: run.run.id, workKind, title: run.run.title });
     };

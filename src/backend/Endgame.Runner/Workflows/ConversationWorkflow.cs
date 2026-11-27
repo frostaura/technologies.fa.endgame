@@ -42,7 +42,7 @@ public sealed class ConversationWorkflow : IWorkflow
             ["workKind"] = kind,
             ["title"] = title,
         }, ct);
-        // "Answer only" (ARCH-011): the tools that start work or change a setting are not given at all, so none can be asked for.
+        // "Answer only" (ARCH-012): the tools that start work or change a setting are not given at all, so none can be asked for.
         ITool[] tools = answerOnly
             ? [new ReadOrganisationTool(run.ControlPlane, scope)]
             :
@@ -124,7 +124,7 @@ public sealed class ConversationWorkflow : IWorkflow
     /// <summary>The question when the owner sent files and no words.</summary>
     public const string FilesOnly = "(The owner sent the attached files without a message. Say briefly what they are, and answer what they most likely want to know about them.)";
 
-    /// <summary>Said in the task when the person asked for an answer only (ARCH-011).</summary>
+    /// <summary>Said in the task when the person asked for an answer only (ARCH-012).</summary>
     public const string AnswerOnlyLine = "The owner asked for an answer only in this message: start no work and change nothing. If they ask for something to be done, say what you would start, and that they can ask for it to be done in another message.";
 
     /// <summary>

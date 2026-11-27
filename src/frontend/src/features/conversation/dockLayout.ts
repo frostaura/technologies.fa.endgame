@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useState } from "react";
 
 /**
- * How the docked conversation is drawn on a desktop (ARCH-011): narrow or wide, open or collapsed
+ * How the docked conversation is drawn on a desktop (ARCH-012): narrow or wide, open or collapsed
  * to a rail, or across the whole width. Width and collapsed are remembered per person on this
  * device — a convenience, never state anyone else reads — so it opens as they left it.
  */

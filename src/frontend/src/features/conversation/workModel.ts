@@ -5,7 +5,7 @@ import { deriveRun, num, planItemLabel, str, type DerivedApproval, type DerivedR
 import { outcomeOf } from "../runs/timeline";
 
 /**
- * A run's log, read for the work card in the conversation (ARCH-011): the plan as parts with a
+ * A run's log, read for the work card in the conversation (ARCH-012): the plan as parts with a
  * state each, the tasks under each part with who holds them, what the tools did summarised in
  * groups, the researchers side by side, and who is doing the work. One pass over the log on top of
  * {@link deriveRun}; the card memoises it by the log, which only ever grows.

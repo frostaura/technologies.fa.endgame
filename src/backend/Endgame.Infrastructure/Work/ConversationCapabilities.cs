@@ -34,7 +34,7 @@ public sealed record NarrowingView(bool NoWebSearch, bool AnswerOnly);
 
 public sealed record AttachmentLimitsView(int MaxFiles, long MaxFileBytes, long MaxMessageBytes, bool Images, IReadOnlyList<string> Extensions);
 
-/// <summary><c>GET /api/conversations/capabilities</c>: what whoever answers here can use (ARCH-011; <c>ConversationCapabilities</c> in types.ts).</summary>
+/// <summary><c>GET /api/conversations/capabilities</c>: what whoever answers here can use (ARCH-012; <c>ConversationCapabilities</c> in types.ts).</summary>
 public sealed record ConversationCapabilitiesView(
     string Scope,
     AnswererView Answerer,

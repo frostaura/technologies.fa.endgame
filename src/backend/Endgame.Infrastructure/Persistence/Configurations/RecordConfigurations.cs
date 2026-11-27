@@ -501,7 +501,7 @@ internal sealed class ConversationAttachmentConfiguration : IEntityTypeConfigura
         builder.Status("conversation_attachments", "kind", Work.ConversationAttachments.Kinds);
         builder.ToTable(t => t.HasCheckConstraint("ck_conversation_attachments_bytes", $"bytes > 0 AND bytes <= {Work.ConversationAttachments.MaxFileBytes}"));
         builder.ToTable(t => t.HasCheckConstraint("ck_conversation_attachments_sent", "run_id IS NULL OR conversation_id IS NOT NULL"));
-        // Deleted with its conversation (ARCH-011).
+        // Deleted with its conversation (ARCH-012).
         builder.HasOne<ConversationRecord>().WithMany()
             .HasForeignKey(a => new { a.OrganisationId, a.ConversationId })
             .HasPrincipalKey(c => new { c.OrganisationId, c.Id })

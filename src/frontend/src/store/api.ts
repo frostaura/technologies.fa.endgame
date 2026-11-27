@@ -293,7 +293,7 @@ export const api = createApi({
       providesTags: (_r, _e, { scope, employeeId }) => [{ type: "Conversation", id: employeeId ? `${scope}#${employeeId}` : scope }],
       extraOptions: guarded(g.conversationGuard, "the conversation"),
     }),
-    /** What whoever answers at a scope can use: tools, skills, services, web search, assistants, file limits (ARCH-011). */
+    /** What whoever answers at a scope can use: tools, skills, services, web search, assistants, file limits (ARCH-012). */
     getConversationCapabilities: build.query<ConversationCapabilities, { scope: string; employeeId?: string }>({
       query: ({ scope, employeeId }) => `conversations/capabilities?scope=${encodeURIComponent(scope)}${employeeId ? `&employeeId=${encodeURIComponent(employeeId)}` : ""}`,
       providesTags: (_r, _e, { scope, employeeId }) => [{ type: "Conversation", id: `capabilities:${employeeId ? `${scope}#${employeeId}` : scope}` }],

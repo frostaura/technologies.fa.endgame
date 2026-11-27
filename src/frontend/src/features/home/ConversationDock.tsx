@@ -31,7 +31,7 @@ import { useDraftFiles } from "../conversation/useDraftFiles";
 import { WorkCard } from "../conversation/WorkCard";
 import { deriveWork } from "../conversation/workModel";
 
-/** What "@" carried here from another page: the words, so they are not lost on the way (ARCH-011). */
+/** What "@" carried here from another page: the words, so they are not lost on the way (ARCH-012). */
 let carriedDraft: string | null = null;
 
 const LEVEL: Record<Selection["kind"], string> = { organisation: "Organisation", division: "Division", project: "Project", app: "App", employee: "Employee" };
@@ -40,7 +40,7 @@ const LEVEL: Record<Selection["kind"], string> = { organisation: "Organisation",
 const AnnounceContext = createContext<(text: string) => void>(() => undefined);
 
 /**
- * The conversation at a level (ARCH-011): a pane with its header, the thread, and the composer
+ * The conversation at a level (ARCH-012): a pane with its header, the thread, and the composer
  * pinned at its foot. On a desktop it is docked at the right edge (narrow, wide, collapsed or full
  * width); in a page (a tablet, an app's or an employee's page) it is a framed panel of its own
  * height; on a phone it fills the shell's sheet. What was said before is read from the control
@@ -444,9 +444,9 @@ function OwnBubble({ who, text, attachments, sending = false }: { who: string; t
   );
 }
 
-function ReplyBubble({ by, children }: { by: string; children: ReactNode }) {
+function ReplyBubble({ by, live = false, children }: { by: string; live?: boolean; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div data-reply={live ? "live" : "earlier"} className="flex flex-col gap-1">
       <Sender name={by} />
       <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">{children}</div>
     </div>
@@ -513,7 +513,7 @@ function Steps({ steps, runId, toolCalls }: { steps: string[]; runId: string; to
     <div data-steps="" className="flex flex-col gap-1 text-sm">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3">
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch min-w-0 items-center gap-2 rounded-xs text-left text-ink-muted hover:text-ink">
-          <Icon name="plan" className="size-4 shrink-0 text-teal" />
+          <Icon name="plan" className="size-4 shrink-0 text-ink-muted" />
           <span className="line-clamp-1">{steps.join(" · ")}</span>
           <ChevronDown aria-hidden className={cn("size-4 shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
         </button>
@@ -522,7 +522,7 @@ function Steps({ steps, runId, toolCalls }: { steps: string[]; runId: string; to
         </Link>
       </div>
       {open && (
-        <div className="flex flex-col gap-1 border-l-2 border-teal-tint pb-1 pl-4">
+        <div className="flex flex-col gap-1 border-l-2 border-border pb-1 pl-4">
           <ol className="flex flex-col gap-0.5 text-ink-body">
             {steps.map((s) => (
               <li key={s}>{s}</li>
@@ -562,9 +562,9 @@ function Notice({ text, budget, finished = false }: { text: string; budget: bool
 export function TypingDots({ label }: { label?: string }) {
   return (
     <span aria-hidden={label ? undefined : true} role={label ? "status" : undefined} aria-label={label} className="flex gap-1">
-      <span className="size-1.5 animate-bob rounded-full bg-violet motion-reduce:animate-none" />
-      <span className="size-1.5 animate-bob rounded-full bg-violet animate-delay-1 motion-reduce:animate-none" />
-      <span className="size-1.5 animate-bob rounded-full bg-violet animate-delay-2 motion-reduce:animate-none" />
+      <span className="size-1.5 animate-bob rounded-full bg-primary motion-reduce:animate-none" />
+      <span className="size-1.5 animate-bob rounded-full bg-primary animate-delay-1 motion-reduce:animate-none" />
+      <span className="size-1.5 animate-bob rounded-full bg-primary animate-delay-2 motion-reduce:animate-none" />
     </span>
   );
 }
@@ -624,7 +624,7 @@ function Replies({ runId, answerer, onRetry }: { runId: string; answerer: string
     <>
       {work.steps.length > 0 && <Steps steps={work.steps} runId={runId} toolCalls={work.tools.total} />}
       {replies.length > 0 && (
-        <ReplyBubble by={by ?? "Endgame"}>
+        <ReplyBubble by={by ?? "Endgame"} live>
           {replies.map((m) => (
             <Markdown key={m.seq} text={m.text} />
           ))}

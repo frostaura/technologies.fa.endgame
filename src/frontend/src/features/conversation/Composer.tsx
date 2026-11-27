@@ -335,7 +335,7 @@ export function Composer(p: ComposerProps) {
             disabled={!canSend}
             aria-label="Send"
             data-ready={canSend || undefined}
-            className="ml-1 flex min-h-touch min-w-touch items-center justify-center rounded-full bg-primary text-primary-ink shadow-press transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:border disabled:border-dashed disabled:border-border-strong disabled:bg-surface disabled:text-ink-muted disabled:shadow-none motion-reduce:transition-none"
+            className="ml-1 flex min-h-touch min-w-touch items-center justify-center rounded-full bg-primary text-primary-ink shadow-press transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:border disabled:border-border-strong disabled:bg-ground disabled:text-ink-muted disabled:shadow-none motion-reduce:transition-none"
           >
             <ArrowUp aria-hidden className="size-5" strokeWidth={2.5} />
           </button>

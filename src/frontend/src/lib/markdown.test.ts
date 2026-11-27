@@ -57,7 +57,7 @@ describe("markdownToPlain", () => {
   });
 });
 
-describe("tables, quotes, headings and code (ARCH-011)", () => {
+describe("tables, quotes, headings and code (ARCH-012)", () => {
   it("reads a pipe table with its alignment, a quote, a heading's level and a fence's language", () => {
     const blocks = parseMarkdown("## Cost\n\n| App | Credits |\n|:---|---:|\n| Court booking | 296 |\n| Tutor \\| Match | 88 |\n\n> Said before\n> twice\n\n```ts\nconst a = 1;\n```");
     expect(blocks.map((b) => b.kind)).toEqual(["heading", "table", "quote", "code"]);

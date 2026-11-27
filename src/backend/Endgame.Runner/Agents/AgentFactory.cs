@@ -108,7 +108,7 @@ public sealed class AgentFactory(RunnerOptions options)
     /// </summary>
     public AgentDefinition Answerer(RunContext run, string id, string prompt) => Researcher(run, id, prompt) with { Tools = new ToolRegistry([]) };
 
-    /// <param name="noWebSearch">The person asked for no web search in this message (ARCH-011): web search is denied by the run's own rule, ahead of the cascade, and no call may search.</param>
+    /// <param name="noWebSearch">The person asked for no web search in this message (ARCH-012): web search is denied by the run's own rule, ahead of the cascade, and no call may search.</param>
     public AgentDefinition Conversation(RunContext run, IEnumerable<ITool> tools, bool noWebSearch = false) => Base(run, "assistant", options.ChatTaskType) with
     {
         SystemPrompt = RunnerResources.Prompt("conversation", new Dictionary<string, string>

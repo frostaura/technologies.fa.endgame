@@ -12,7 +12,7 @@ namespace Endgame.Infrastructure.Work;
 
 public sealed record ConversationTurn(Guid ConversationId, string Scope, RunView Run);
 
-/// <summary>What one message asks whoever answers not to do (ARCH-011): only ever less than the rules allow, never more.</summary>
+/// <summary>What one message asks whoever answers not to do (ARCH-012): only ever less than the rules allow, never more.</summary>
 /// <param name="NoWebSearch">Do not search the web for this one.</param>
 /// <param name="AnswerOnly">Answer only: start no work and change nothing.</param>
 public sealed record MessageNarrowing(bool? NoWebSearch = null, bool? AnswerOnly = null)

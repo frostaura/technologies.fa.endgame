@@ -100,7 +100,7 @@ routes by task type itself (`ARCH-003`).
   rule that never asked (R6-1). A tool call declined at its approval carries the same two fields
   (`ApprovalDetail.Declined`: "change part of the app"). The decision is replayed from its event, so a resumed session never asks
   again.
-- **A message may be content parts (ARCH-011).** A message's `content` is a string, or parts — `{ type: text, text }`
+- **A message may be content parts (ARCH-012).** A message's `content` is a string, or parts — `{ type: text, text }`
   and `{ type: image_url, image_url: { url } }` — when a conversation turn carries files. `AgentDefinition.TaskContent`
   is the first message's parts; the workflow builds it on every run, a resumed one too, and the loop uses it in place of
   the task's words. The `agent.start` event keeps only the task's words and what each part was (`parts: [{ type,
@@ -344,7 +344,7 @@ acts only a person can do, with where each is done. A conversation is never held
 pause still applies), and the Runner answers conversations in a lane of their own (`RunLanes`, `ConversationConcurrency`,
 default 2, beside `Concurrency` for every other kind), so chats and long runs never wait on each other.
 
-**Files, narrowing and the work a turn starts (ARCH-011).** When the owner message names `attachments`, the workflow reads
+**Files, narrowing and the work a turn starts (ARCH-012).** When the owner message names `attachments`, the workflow reads
 them from `GET /internal/runs/{id}/attachments?taskType=<the agent's task type>` and makes the first message parts: the
 task's words, then each text file and PDF as a block headed `Attached file: <name> (<kind, pages>)` in a fence longer
 than any run of backticks in it (saying when its text was cut at 200,000 characters, or that nothing could be read from

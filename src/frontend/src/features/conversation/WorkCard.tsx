@@ -1,6 +1,11 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronDown, Circle, Eye, LoaderCircle, RotateCcw, Search, TriangleAlert, X } from "lucide-react";
+import { Check, ChevronDown, Circle, Eye, LoaderCircle, RotateCcw, Search, X } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
+import { Spinner } from "@/components/states";
+import { Chip, PersonChip } from "@/components/ui/chip";
+import { useActiveTree } from "@/lib/useActiveOrganisation";
+import { fullRequest, shortRunName } from "../runs/runHeading";
+import { employeeIds } from "./scopeModel";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
@@ -20,7 +25,7 @@ import { useRunStream } from "../runs/useRunStream";
 import { deriveWork, partStateLabel, tallySentence, TASK_ROLE_LABEL, type PartState, type Researcher, type WorkPart, type WorkView } from "./workModel";
 
 /**
- * Work a message started, live in the conversation (ARCH-011): what it is and who is doing it, the
+ * Work a message started, live in the conversation (ARCH-012): what it is and who is doing it, the
  * credits it has used against its estimate, the plan as parts with a state each — the part being
  * worked on open, its tasks and what its tools did beneath it — the researchers side by side for
  * research, approvals inside it, and the result with what to do next. Driven by the run's own
@@ -36,7 +41,8 @@ export function WorkCard({ runId, kind }: { runId: string; kind?: string }) {
   const done = isTerminal(status);
   const what = kind || (run?.kind === "research" ? "research" : run?.kind ?? "");
   const research = what === "research" || work.researchers.length > 0;
-  const title = run?.title ?? (research ? "Research" : "The work");
+  const title = run?.title ? shortRunName(run.title).replace(/^(Build|Research|Change|Conversation|Task): /, "") : research ? "Research" : "The work";
+  const asked = run?.title ? fullRequest(run.title, log.events) : null;
   const estimate = work.run.plannedEstimateCredits ?? work.run.firstEstimateCredits ?? run?.estimateCredits ?? null;
   const spent = done && run ? run.spentCredits : work.run.settledCredits;
 
@@ -54,7 +60,7 @@ export function WorkCard({ runId, kind }: { runId: string; kind?: string }) {
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-eyebrow font-semibold uppercase text-ink-muted">{heading(what, research)}</span>
-            <Title title={title} />
+            <Title title={title} asked={asked} />
           </div>
           <StatusChip status={status} waiting={work.pending.length > 0} />
         </div>
@@ -101,19 +107,19 @@ function heading(what: string, research: boolean): string {
 }
 
 const STATUS: Record<string, { label: string; tone: BadgeTone }> = {
-  queued: { label: "Starting", tone: "quiet" },
-  running: { label: "Working", tone: "primary" },
-  waiting: { label: "Waiting for you", tone: "attention-strong" },
-  paused: { label: "Paused", tone: "quiet" },
-  finished: { label: "Finished", tone: "success" },
-  failed: { label: "Stopped", tone: "attention" },
-  cancelled: { label: "Cancelled", tone: "quiet" },
+  queued: { label: "Starting", tone: "neutral" },
+  running: { label: "Working", tone: "info" },
+  waiting: { label: "Waiting for you", tone: "warn" },
+  paused: { label: "Paused", tone: "warn" },
+  finished: { label: "Finished", tone: "good" },
+  failed: { label: "Stopped", tone: "bad" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
 };
 
 function StatusChip({ status, waiting }: { status: RunStatus | null; waiting: boolean }) {
   const s = STATUS[waiting && !isTerminal(status) ? "waiting" : (status ?? "queued")] ?? STATUS.queued;
   return (
-    <Badge tone={s?.tone ?? "quiet"} data-status-chip="" className="shrink-0">
+    <Badge tone={s?.tone ?? "neutral"} data-status-chip="" className="shrink-0">
       {status === "running" && !waiting && <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />}
       {s?.label}
     </Badge>
@@ -121,21 +127,17 @@ function StatusChip({ status, waiting }: { status: RunStatus | null; waiting: bo
 }
 
 function Workers({ work }: { work: WorkView }) {
+  const idOf = useEmployeeIds();
   const employees = work.workers.filter((w) => w.kind === "employee");
   const contractors = work.workers.filter((w) => w.kind === "contractor");
   if (employees.length === 0 && contractors.length === 0) return null;
   return (
-    <span className="flex min-w-0 items-center gap-2" data-workers="">
-      {employees.length > 0 && (
-        <span className="flex -space-x-1.5">
-          {employees.slice(0, 4).map((w) => (
-            <Avatar key={w.name} name={w.name} size="xs" className="ring-2 ring-surface" />
-          ))}
-        </span>
-      )}
-      <span className="min-w-0 truncate">
-        {[employees.length > 0 ? employees.map((w) => w.name).join(", ") : null, contractors.length > 0 ? plural(contractors.length, contractorRole(contractors[0]?.role ?? null)) : null].filter(Boolean).join(" · ")}
-      </span>
+    <span className="flex min-w-0 flex-wrap items-center gap-1.5" data-workers="">
+      {employees.slice(0, 3).map((w) => (
+        <PersonChip key={w.name} name={w.name} id={idOf(w.name)} className="min-h-8" />
+      ))}
+      {employees.length > 3 && <Chip>{`${employees.length - 3} more`}</Chip>}
+      {contractors.length > 0 && <Chip>{plural(contractors.length, contractorRole(contractors[0]?.role ?? null))}</Chip>}
     </span>
   );
 }
@@ -194,14 +196,15 @@ function spentLine(spent: number, estimate: number | null): string {
 // The plan
 // ---------------------------------------------------------------------------------------------
 
-const STATE_STYLE: Record<PartState, { dot: string; bar: string; text: string; tag: string }> = {
-  waiting: { dot: "border-border-strong bg-surface text-ink-muted", bar: "bg-quiet", text: "text-ink-muted", tag: "bg-quiet text-quiet-text" },
-  working: { dot: "border-primary bg-primary text-primary-ink", bar: "bg-primary bg-stripe animate-sheen motion-reduce:animate-none", text: "text-primary-hover", tag: "bg-primary-tint text-primary-hover" },
-  checking: { dot: "border-primary bg-surface text-primary", bar: "bg-primary-soft", text: "text-primary-hover", tag: "bg-primary-tint text-primary-hover" },
-  repair: { dot: "border-attention bg-attention-tint text-attention-text", bar: "bg-attention-dash", text: "text-attention-text", tag: "bg-attention-tint text-attention-text" },
-  passed: { dot: "border-success bg-success text-primary-ink", bar: "bg-success", text: "text-success-text", tag: "bg-success-tint text-success-text" },
-  "needs-look": { dot: "border-violet bg-violet-tint text-violet-text", bar: "bg-violet", text: "text-violet-text", tag: "bg-violet-tint text-violet-text" },
-  failed: { dot: "border-attention-text bg-attention-text text-primary-ink", bar: "bg-attention-text", text: "text-attention-text", tag: "bg-attention-chip text-attention-text" },
+/** Each part's state in the status vocabulary (ARCH-011): its tag's tone, its step's dot, its share of the track. */
+const STATE_STYLE: Record<PartState, { dot: string; bar: string; tone: BadgeTone }> = {
+  waiting: { dot: "border-border-strong bg-surface text-ink-muted", bar: "bg-quiet", tone: "neutral" },
+  working: { dot: "border-primary bg-primary text-primary-ink", bar: "bg-primary bg-stripe animate-sheen motion-reduce:animate-none", tone: "info" },
+  checking: { dot: "border-primary bg-surface text-primary", bar: "bg-primary-soft", tone: "info" },
+  repair: { dot: "border-warn bg-warn-tint text-warn-text", bar: "bg-warn", tone: "warn" },
+  passed: { dot: "border-success bg-success text-primary-ink", bar: "bg-success", tone: "good" },
+  "needs-look": { dot: "border-warn bg-surface text-warn-text", bar: "bg-warn", tone: "warn" },
+  failed: { dot: "border-attention bg-attention text-primary-ink", bar: "bg-attention", tone: "bad" },
 };
 
 function StateIcon({ state }: { state: PartState }) {
@@ -257,20 +260,20 @@ function Plan({ work, technical }: { work: WorkView; technical: boolean }) {
   );
 }
 
-/** The work's title on one line; the whole of what was asked one tap away. */
-function Title({ title }: { title: string }) {
+/** The work's short name on one line; the whole of what was asked one tap away. */
+function Title({ title, asked }: { title: string; asked: string | null }) {
   const [all, setAll] = useState(false);
-  const long = title.length > 60;
   return (
     <>
-      <h3 className={cn("font-sans text-sm font-semibold text-ink", !all && "line-clamp-1")} title={title}>
+      <h3 className="line-clamp-1 font-sans text-sm font-semibold text-ink" title={title}>
         {title}
       </h3>
-      {long && (
+      {asked && (
         <button type="button" onClick={() => setAll((a) => !a)} aria-expanded={all} className={cn("self-start rounded-xs text-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
-          {all ? "Show less" : "Show what was asked"}
+          {all ? "Hide what was asked" : "Show what was asked"}
         </button>
       )}
+      {asked && all && <p className="max-w-prose whitespace-pre-line text-sm text-ink-body">{asked}</p>}
     </>
   );
 }
@@ -283,7 +286,7 @@ function ReviewRow({ state }: { state: NonNullable<WorkView["review"]> }) {
         <StateIcon state={s} />
       </span>
       <span className="flex-1 text-sm text-ink">Security review</span>
-      <span className={cn("text-xs font-semibold", STATE_STYLE[s].text)}>{state === "passed" ? "Passed" : state === "repair" ? "Fixing what it found" : "Being checked"}</span>
+      <Badge tone={STATE_STYLE[s].tone}>{state === "passed" ? "Passed" : state === "repair" ? "Fixing what it found" : "Being checked"}</Badge>
     </li>
   );
 }
@@ -303,7 +306,7 @@ const StepperRow = memo(function StepperRow({ part, index, total, open, onOpen, 
             </span>
             {part.label}
           </span>
-          <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold", STATE_STYLE[part.state].tag)}>{partStateLabel(part.state, part.repairs)}</span>
+          <Badge tone={STATE_STYLE[part.state].tone}>{partStateLabel(part.state, part.repairs)}</Badge>
           <ChevronDown aria-hidden className={cn("size-4 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />
         </button>
         {open && (
@@ -319,6 +322,7 @@ const StepperRow = memo(function StepperRow({ part, index, total, open, onOpen, 
 /** Under a part: its tasks with who holds each and how it went, what the checker said, and what the tools did. */
 function PartBody({ part, technical }: { part: WorkPart; technical: boolean }) {
   const [actions, setActions] = useState(false);
+  const idOf = useEmployeeIds();
   const sentence = tallySentence(part.tools);
   return (
     <div className="flex flex-col gap-1.5 text-sm">
@@ -327,7 +331,7 @@ function PartBody({ part, technical }: { part: WorkPart; technical: boolean }) {
           {part.tasks.map((t) => (
             <li key={t.id} className="flex min-w-0 items-center gap-2">
               <span className="w-14 shrink-0 text-xs font-semibold uppercase tracking-wide text-ink-muted">{TASK_ROLE_LABEL[t.role]}</span>
-              {t.holder ? <Avatar name={t.holder} size="xs" /> : null}
+              {t.holder ? <Avatar name={t.holder} seed={idOf(t.holder)} size="xs" /> : null}
               <span className="min-w-0 flex-1 truncate text-ink-body">{t.holder ?? "Not taken yet"}</span>
               <span className={cn("shrink-0 text-xs", t.status === "done" ? "text-success-text" : t.status === "failed" ? "text-attention-text" : t.status === "working" ? "text-primary-hover" : "text-ink-muted")}>
                 {t.status === "done" ? "Done" : t.status === "failed" ? "Did not succeed" : t.status === "working" ? "Working" : "Waiting"}
@@ -374,10 +378,10 @@ function Researchers({ researchers }: { researchers: Researcher[] }) {
       <ul className={cn("grid gap-2", researchers.length >= 3 ? "grid-cols-3" : researchers.length === 2 ? "grid-cols-2" : "grid-cols-1")}>
         {researchers.map((r) => (
           <li key={r.id} data-researcher={r.state} className={cn("flex min-w-0 flex-col gap-1.5 rounded-xs border bg-surface px-2.5 py-2", r.state === "working" && "border-primary-line")}>
-            <span className="flex items-center gap-1.5 text-xs font-semibold">
-              {r.state === "working" ? <LoaderCircle aria-hidden className="size-3.5 animate-spin text-primary motion-reduce:animate-none" /> : r.state === "done" ? <Check aria-hidden className="size-3.5 text-success" strokeWidth={3} /> : <TriangleAlert aria-hidden className="size-3.5 text-attention-text" />}
-              <span className={r.state === "working" ? "text-primary-hover" : r.state === "done" ? "text-success-text" : "text-attention-text"}>{r.state === "working" ? "Looking" : r.state === "done" ? "Reported" : "Stopped"}</span>
-            </span>
+            <Badge tone={r.state === "working" ? "info" : r.state === "done" ? "good" : "bad"} className="self-start">
+              {r.state === "working" ? <Spinner className="size-3" /> : r.state === "done" ? <Check aria-hidden className="size-3" strokeWidth={3} /> : null}
+              {r.state === "working" ? "Looking" : r.state === "done" ? "Reported" : "Stopped"}
+            </Badge>
             <span className="line-clamp-3 text-xs text-ink">{r.title}</span>
             <span className="text-xs tabular-nums text-ink-muted">
               {r.maxSearches ? `${Math.min(r.searches, r.maxSearches)} of ${r.maxSearches} searches` : plural(r.searches, "search", "searches")}
@@ -412,4 +416,11 @@ function Result({ work, runId, status, research }: { work: WorkView; runId: stri
       {actions}
     </section>
   );
+}
+
+/** A person's stable id from their name, read from the organisation, so their avatar is their colour everywhere (ARCH-011). */
+function useEmployeeIds(): (name: string) => string {
+  const tree = useActiveTree().data;
+  const ids = useMemo(() => (tree ? employeeIds(tree) : new Map<string, string>()), [tree]);
+  return (name: string) => ids.get(name) ?? name;
 }

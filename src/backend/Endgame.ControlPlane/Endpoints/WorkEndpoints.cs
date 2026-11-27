@@ -50,7 +50,7 @@ public sealed record AnswerRequest(string? Decision, string? Note);
 /// <param name="IdleMinutes">Optional: minutes idle before the app sleeps (1-1440).</param>
 public sealed record AppSettingsRequest(string? Running, string? Access, int? IdleMinutes);
 
-/// <param name="AttachmentIds">Files uploaded with <c>POST /api/conversations/attachments</c>, sent with this message (ARCH-011).</param>
+/// <param name="AttachmentIds">Files uploaded with <c>POST /api/conversations/attachments</c>, sent with this message (ARCH-012).</param>
 /// <param name="Narrow">What this one message asks not to be done; never a widening. Enforced by the Runner.</param>
 public sealed record ConversationRequest(string? Scope, string? Message, Guid? EmployeeId, Guid? ConversationId, IReadOnlyList<Guid>? AttachmentIds = null, MessageNarrowing? Narrow = null);
 

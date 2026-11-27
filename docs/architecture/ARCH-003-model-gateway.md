@@ -69,7 +69,7 @@ gateway is not built yet; this is the design it must follow.
     exactly 2,000, answered in 2,383 with valid JSON and stopped. A reply cut at its limit with no content at all is
     returned to the loop as a cut-off, never retried as an empty reply at the same cap.
 
-14. **Images are what the catalogue says a model reads, and they are reserved by count, not by size (ARCH-011).** Each
+14. **Images are what the catalogue says a model reads, and they are reserved by count, not by size (ARCH-012).** Each
     catalogue entry carries `InputModalities`, OpenRouter's `architecture.input_modalities` limited to what Endgame sends
     (`text`, `image`; empty means text only; anything else, or a list without `text`, stops the host). A route takes images
     only when **every** model on it does, since any of them may serve the call (`ModelGatewayOptions.AcceptsImages`); a

@@ -3,7 +3,7 @@ import { decide } from "./scripts";
 import { chain, organisation, type World } from "./world";
 
 /**
- * The conversation's files and "what it can use here" in the demo (ARCH-011), as the control plane
+ * The conversation's files and "what it can use here" in the demo (ARCH-012), as the control plane
  * does them (`ConversationAttachments.cs`, `ConversationCapabilities.cs`): the same limits, the same
  * checks by a file's bytes, the same refusals in the same words, and capabilities read from the
  * world as it is. A file is kept in the page; a small one (under 512 KB) is kept with the world too,

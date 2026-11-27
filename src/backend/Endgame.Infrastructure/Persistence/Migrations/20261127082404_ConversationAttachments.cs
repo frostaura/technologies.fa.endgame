@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Endgame.Infrastructure.Persistence.Migrations
 {
-    /// <summary>The files a conversation message carries (ARCH-011), in the database, under the tenant row-level security every organisation's table has.</summary>
+    /// <summary>The files a conversation message carries (ARCH-012), in the database, under the tenant row-level security every organisation's table has.</summary>
     public partial class ConversationAttachments : Migration
     {
         /// <inheritdoc />

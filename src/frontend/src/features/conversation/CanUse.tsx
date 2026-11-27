@@ -12,7 +12,7 @@ import { serviceLabel, tierLabel, toolLabel } from "../workforce/workforceModel"
 import { limitsSentence } from "./attachments";
 
 /**
- * "What it can use here" (ARCH-011): who answers at this level and how strongly it thinks, the
+ * "What it can use here" (ARCH-012): who answers at this level and how strongly it thinks, the
  * tools it may use (in the hire page's words), the work it can start, the skills the builders here
  * load, the services the apps here have, web search under the autonomy rules, and the
  * organisation's AI assistants — all read from the control plane. The two narrowings for one
@@ -161,7 +161,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Pill({ children, tone = "on" }: { children: ReactNode; tone?: "on" | "ask" | "off" }) {
   return (
-    <li className={cn("rounded-full border px-2.5 py-0.5 text-xs", tone === "on" ? "border-border bg-ground text-ink-body" : tone === "ask" ? "border-violet-line bg-violet-tint text-violet-text" : "border-border bg-surface text-ink-muted line-through")}>
+    <li className={cn("rounded-full border px-2.5 py-0.5 text-xs", tone === "on" ? "border-border bg-ground text-ink-body" : tone === "ask" ? "border-primary-line bg-surface text-primary-hover" : "border-border bg-surface text-ink-muted line-through")}>
       {children}
     </li>
   );

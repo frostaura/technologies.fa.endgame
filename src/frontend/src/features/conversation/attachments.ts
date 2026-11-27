@@ -7,7 +7,7 @@ import type { AttachmentLimits, ConversationAttachment } from "@/store/types";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 
 /**
- * Files on a message (ARCH-011): checked here against the limits the control plane states, so a
+ * Files on a message (ARCH-012): checked here against the limits the control plane states, so a
  * file that cannot go is said at once, then uploaded as soon as it is added; the control plane
  * checks every one again by its bytes. Content is read back through the same transport as every
  * other request, so the demo build serves it too.

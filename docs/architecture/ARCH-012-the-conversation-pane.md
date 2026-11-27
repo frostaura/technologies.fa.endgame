@@ -1,8 +1,8 @@
-# ARCH-011 — The conversation pane
+# ARCH-012 — The conversation pane
 
 | Field | Value |
 | --- | --- |
-| **ID** | ARCH-011 |
+| **ID** | ARCH-012 |
 | **Title** | The conversation pane: layout, composer, attachments, "what it can use here", and the work card |
 | **Status** | Current |
 | **Covers** | Console `features/conversation/`, `features/home/ConversationDock.tsx`; control plane `POST/GET /api/conversations*`, `conversation_attachments`; Runner `ConversationWorkflow`; the model gateway's input modalities; the demo's conversation fakes |
@@ -26,7 +26,18 @@ and a link.
   collapsed it is a 3.5 rem rail with the avatar and an "Open conversation" button. Full width
   hides the page and centres the thread at `prose` width. Width, collapsed and full width are
   remembered per person (`localStorage`, keyed by user id) — per-device convenience, not state.
+- **Beside a page's side cards** (the shell's side panel, ARCH-011): the pane is always its own
+  full-height column at the right edge of the frame; side cards stay in the page column. From
+  `3xl` (1,600 px) they sit beside the page, between it and the pane; from 1,024 to 1,599 px, while
+  the pane is open, they move under the page's main column, two across, so the page never has less
+  than about 640 px; with the pane collapsed to its rail they go back beside the page from 1,024 px.
+  At `4xl` the frame (header, page, cards and pane) is capped at 2,200 px and centred.
 - **Tablet:** the pane stays in the page (as built in round 4), restyled as the same framed panel.
+- **Phone on its side** (`rail:`): the conversation is the sheet, which comes in from the right.
+- **The look** is the design system's (ARCH-011): neutral surfaces and the one accent; states as the
+  five-tone status tag (Waiting → neutral; Working on it now, Being checked → info; Passed → good;
+  Sent back for repair, Needs a look → warn; Did not pass → bad); people as `PersonChip`s coloured
+  from their id; `Spinner` for anything under way.
 - **Phone:** the full-screen sheet of round 4 (follows the latest, "New reply", "Sending…" /
   "Working on it"), with the same header, thread and composer inside it.
 - **Empty state:** who answers here and what it can do at this level, then three suggested prompts

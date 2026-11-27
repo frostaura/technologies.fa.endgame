@@ -321,7 +321,7 @@ public sealed class ConversationRecord : IScopedRecord
 }
 
 /// <summary>
-/// A file a person attached to a conversation message (ARCH-011): uploaded before the message is sent, at the scope (and
+/// A file a person attached to a conversation message (ARCH-012): uploaded before the message is sent, at the scope (and
 /// with the employee) of the conversation it will be sent in, then linked to that conversation and its run. Its bytes are
 /// kept here, in the database, because the control plane has no file store and backups already cover the database.
 /// Always read through a projection: <see cref="Content"/> is loaded only when the file itself is asked for.

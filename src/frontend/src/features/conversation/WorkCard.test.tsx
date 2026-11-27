@@ -53,7 +53,7 @@ function stream() {
 describe("the work card", () => {
   it("shows the plan as a track, the part being worked on open with who holds its task, and the credits against the estimate", async () => {
     renderWithStore(<WorkCard runId="w1" kind="change" />);
-    await screen.findByText("Change: let members join a waitlist");
+    await screen.findByText("let members join a waitlist");
     const send = stream();
     act(() => {
       FakeEventSource.latest().open();
@@ -82,7 +82,7 @@ describe("the work card", () => {
 
   it("asks inside the card, and ends with the outcome and what to do next", async () => {
     renderWithStore(<WorkCard runId="w1" kind="change" />);
-    await screen.findByText("Change: let members join a waitlist");
+    await screen.findByText("let members join a waitlist");
     const send = stream();
     act(() => {
       FakeEventSource.latest().open();
@@ -120,7 +120,7 @@ describe("a long build stays smooth", () => {
         <WorkCard runId="w1" kind="change" />
       </Profiler>,
     );
-    await screen.findByText("Change: let members join a waitlist");
+    await screen.findByText("let members join a waitlist");
     const send = stream();
     const items = Array.from({ length: 8 }, (_, i) => ({ id: `r${i + 1}`, text: `Part ${i + 1}`, detail: "" }));
     act(() => {

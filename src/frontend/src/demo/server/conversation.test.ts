@@ -7,7 +7,7 @@ import { buildWorld } from "../world/scenarios";
 import { ORG } from "../world/default";
 import type { World } from "./world";
 
-/** The demo's conversation, files and capabilities (ARCH-011), held to the control plane's rules and words. */
+/** The demo's conversation, files and capabilities (ARCH-012), held to the control plane's rules and words. */
 
 const call = (w: World, method: string, p: string, body: Record<string, unknown> = {}) => {
   const [pathname, query] = p.split("?");

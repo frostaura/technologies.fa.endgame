@@ -399,7 +399,7 @@ public sealed class ReadOrganisationTool(ControlPlaneClient controlPlane, string
 
 /// <summary>
 /// Told when a conversation's tool has started a piece of work: the started run's id, what kind of work it is
-/// (<c>research</c>, <c>change</c> or <c>retry</c>) and its title, so the conversation can follow it (ARCH-011).
+/// (<c>research</c>, <c>change</c> or <c>retry</c>) and its title, so the conversation can follow it (ARCH-012).
 /// </summary>
 public delegate Task WorkStarted(Guid runId, string workKind, string title, CancellationToken cancellationToken);
 

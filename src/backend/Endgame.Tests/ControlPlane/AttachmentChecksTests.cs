@@ -10,7 +10,7 @@ using Microsoft.Extensions.Configuration;
 namespace Endgame.Tests.ControlPlane;
 
 /// <summary>
-/// A file attached to a conversation is judged by its bytes, never by its name or the type a browser claims (ARCH-011):
+/// A file attached to a conversation is judged by its bytes, never by its name or the type a browser claims (ARCH-012):
 /// what is accepted, what is refused, and what the model gateway makes of an image in a prompt.
 /// </summary>
 public sealed class AttachmentChecksTests

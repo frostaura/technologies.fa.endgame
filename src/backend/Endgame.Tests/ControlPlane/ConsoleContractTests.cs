@@ -81,7 +81,7 @@ public sealed class ConsoleContractTests(PostgresServer postgres) : IAsyncLifeti
         HasKeys(credits["notCharged"], "credits", "repairs");
         HasKeys(credits["overdraft"], "frostauraLimit", "ownLimit");
 
-        // ConversationAttachment, ConversationRequest's attachmentIds and narrow, ConversationHistory's turns (ARCH-011).
+        // ConversationAttachment, ConversationRequest's attachmentIds and narrow, ConversationHistory's turns (ARCH-012).
         using var form = new MultipartFormDataContent { { new StringContent("frostaura"), "scope" }, { new ByteArrayContent("Notes for the call."u8.ToArray()), "file", "notes.txt" } };
         var attachment = await ControlPlaneApp.Created(owner.PostAsync("/api/conversations/attachments", form));
         HasKeys(attachment, "id", "name", "contentType", "kind", "bytes", "pages", "characters", "runId");

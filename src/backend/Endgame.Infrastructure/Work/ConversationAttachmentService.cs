@@ -32,7 +32,7 @@ public sealed record AttachmentLoad(int Files, int Images, long Characters, long
 }
 
 /// <summary>
-/// Stores, serves and links the files a conversation message carries (ARCH-011). An upload belongs to the person who made
+/// Stores, serves and links the files a conversation message carries (ARCH-012). An upload belongs to the person who made
 /// it, at the scope and with the employee of the conversation it will be sent in, until it is sent; then it belongs to the
 /// conversation and is read by whoever may read the conversation. Unsent uploads of a person older than
 /// <see cref="ConversationAttachments.UnsentLifetime"/> are cleared when that person next uploads.

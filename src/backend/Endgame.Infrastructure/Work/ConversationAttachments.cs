@@ -11,7 +11,7 @@ namespace Endgame.Infrastructure.Work;
 public sealed record InspectedFile(string Name, string Kind, string ContentType, long Bytes, int? Width, int? Height, int? Pages, int? Characters, string? Text);
 
 /// <summary>
-/// The files a conversation message may carry (ARCH-011): the limits, the kinds, and the check of each file by its bytes,
+/// The files a conversation message may carry (ARCH-012): the limits, the kinds, and the check of each file by its bytes,
 /// never by its name or the type the browser claims. An image is read only as far as its header (its size in pixels, no
 /// decoding); a PDF only for its text, with PdfPig, bounded in characters and in time; a text file only when it is valid
 /// UTF-8 with no NUL byte. Anything else — SVG, archives, programs, a name the bytes contradict — is refused in a plain

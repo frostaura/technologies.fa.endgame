@@ -12,7 +12,7 @@ using Endgame.Runner.Workflows;
 namespace Endgame.Tests.Harness;
 
 /// <summary>
-/// A conversation turn that carries files and narrowings (ARCH-011): the first message as content parts through the kernel,
+/// A conversation turn that carries files and narrowings (ARCH-012): the first message as content parts through the kernel,
 /// replay and compaction; the turn's files given to the model; "no web search" and "answer only" enforced; and the work a
 /// turn started written into its log so the console can follow it.
 /// </summary>

@@ -276,7 +276,7 @@ export interface World {
   pricing: PricingView;
   /** Counters for invented ids. */
   counter: number;
-  /** Files on conversation messages (ARCH-011); absent from a world saved before there were any. */
+  /** Files on conversation messages (ARCH-012); absent from a world saved before there were any. */
   attachments?: DemoAttachment[];
   /** What each level says about itself ("What this is"): the cascade's context values. */
   context?: { path: string; key: string; value: unknown; setAt: string }[];

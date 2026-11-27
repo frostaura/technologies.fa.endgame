@@ -10,7 +10,7 @@ using Npgsql;
 namespace Endgame.Tests.ControlPlane;
 
 /// <summary>
-/// Files a person attaches to a conversation message, end to end on the real control plane and Postgres (ARCH-011): who may
+/// Files a person attaches to a conversation message, end to end on the real control plane and Postgres (ARCH-012): who may
 /// upload, read and remove one, how it is served, the limits a message is held to when it is sent, what the estimate and the
 /// history make of it, and what the Runner is given.
 /// </summary>

@@ -26,7 +26,7 @@ describe("Markdown", () => {
     expect(screen.getByRole("link", { name: "Credits" }).getAttribute("target")).toBeNull();
   });
 
-  it("draws a table, and a link to something in the organisation as a chip with its kind (ARCH-011)", () => {
+  it("draws a table, and a link to something in the organisation as a chip with its kind (ARCH-012)", () => {
     const { container } = render(<Markdown text={"| App | Credits |\n|---|---:|\n| Court booking | 296 |\n\nAsk [Kasper](/employees/e1) about [Court booking](/apps/a1)."} />);
     expect(screen.getByRole("columnheader", { name: "App" })).toBeTruthy();
     expect(screen.getByRole("cell", { name: "296" }).className).toContain("text-right");

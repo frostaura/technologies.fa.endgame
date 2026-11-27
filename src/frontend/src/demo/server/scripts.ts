@@ -1153,7 +1153,7 @@ defineScript("conversation", (world, run) => {
   s.wait(400);
   cycle(s, run, { agent: "conversation", employeeId: who?.id ?? null, taskType: who?.jobDescription.modelTier ?? "chat", credits: 0.018 });
   const lower = text.toLowerCase();
-  // Files sent with the message are read first: the reply says what it took from each (ARCH-011).
+  // Files sent with the message are read first: the reply says what it took from each (ARCH-012).
   const files = String(p.files ?? "")
     .split("\n")
     .filter(Boolean)

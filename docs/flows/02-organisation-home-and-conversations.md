@@ -798,7 +798,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - A message may carry files (TALK-19): up to 10, 10 MB each, 25 MB in all — images (PNG, JPEG, WebP, GIF), PDFs and text files, checked by their bytes, stored with the conversation in the database and deleted with it. Images reach the model as pictures only where every model on the answering route takes images; otherwise an image is refused before sending. Text and a PDF's text reach it as named blocks.
 - A message may be narrowed for itself alone (TALK-20): "Don’t search the web" (where whoever answers can search and the rules let it) and "Answer only: start no work" (where it can start work). The Runner enforces both; nothing widens what the autonomy rules allow.
 - Work a message starts (an idea's research, a change, a try again) is named in the turn's log (`message` with `kind: "work.started"`) and followed in the conversation by a live work card (TALK-21). The history lists each turn's run with its tool count and the work it started, so cards come back after a reload.
-- The pane (ARCH-011): on a desktop it is docked at the right edge, full height under a header that stays put, narrow or wide, collapsible to a rail, or full width (TALK-23); on a tablet, an app's page and an employee's page it is a framed pane of its own height; on a phone it fills the sheet opened by **Talk**.
+- The pane (ARCH-012): on a desktop it is docked at the right edge, full height under a header that stays put, narrow or wide, collapsible to a rail, or full width (TALK-23); on a tablet, an app's page and an employee's page it is a framed pane of its own height; on a phone it fills the sheet opened by **Talk**.
 
 ### TALK-01 Talk to the whole organisation
 - **Who:** Builder or above at the organisation (to send); Viewer (to read).
@@ -821,7 +821,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   - `HomeView.test.tsx`: "scopes the breadcrumb and the conversation to the selected node, and streams the reply"
   - `ConversationDock.test.tsx`: "says who it is talking to and at which level, with its log, its composer pinned beneath"
   - `composer.test.tsx`: "sends on Enter, keeps a new line on Shift+Enter"
-  - `Markdown.test.tsx`: "draws a table, and a link to something in the organisation as a chip with its kind (ARCH-011)"
+  - `Markdown.test.tsx`: "draws a table, and a link to something in the organisation as a chip with its kind (ARCH-012)"
   - `IdeasAndConversationsTests.A_conversation_persists_per_scope_and_returns_runs`
   - `WorkflowTests.A_conversation_answers_from_its_read_tools_and_asks_before_starting_an_idea`
   - `RunnerContractTests.The_conversation_reads_the_organisation_through_its_own_tool`

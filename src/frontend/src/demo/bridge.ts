@@ -34,7 +34,7 @@ export type Action =
   | { press: string | { key: string } }
   | { wait: number | Target }
   | { clock: ClockArgs }
-  /** Files added to the conversation's composer, as a person picking them would (ARCH-011): text, or bytes in base64. */
+  /** Files added to the conversation's composer, as a person picking them would (ARCH-012): text, or bytes in base64. */
   | { attach: { files: { name: string; text?: string; base64?: string }[] } };
 
 export interface ClockArgs {

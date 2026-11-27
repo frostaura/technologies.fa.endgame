@@ -374,13 +374,13 @@ export interface ConversationRequest {
   employeeId?: string;
   /** Continue a given conversation; by default the latest one at the scope is continued. */
   conversationId?: string;
-  /** Files uploaded with `POST /api/conversations/attachments`, sent with this message (ARCH-011). */
+  /** Files uploaded with `POST /api/conversations/attachments`, sent with this message (ARCH-012). */
   attachmentIds?: string[];
   /** Narrowings for this one message; never a widening. Enforced by the Runner. */
   narrow?: MessageNarrowing;
 }
 
-/** What one message may be asked not to do (ARCH-011). */
+/** What one message may be asked not to do (ARCH-012). */
 export interface MessageNarrowing {
   /** Do not search the web for this one. */
   noWebSearch?: boolean;
@@ -403,7 +403,7 @@ export interface ConversationAttachment {
   runId: string | null;
 }
 
-/** The limits and kinds of files a message may carry (ARCH-011). */
+/** The limits and kinds of files a message may carry (ARCH-012). */
 export interface AttachmentLimits {
   maxFiles: number;
   maxFileBytes: number;
@@ -414,7 +414,7 @@ export interface AttachmentLimits {
   extensions: string[];
 }
 
-/** `GET /api/conversations/capabilities?scope=&employeeId=`: what whoever answers here can use (ARCH-011). */
+/** `GET /api/conversations/capabilities?scope=&employeeId=`: what whoever answers here can use (ARCH-012). */
 export interface ConversationCapabilities {
   scope: string;
   answerer: {

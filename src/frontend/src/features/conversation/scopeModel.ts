@@ -3,7 +3,7 @@ import type { Tree, TreeApp, TreeProject, Worker } from "@/store/types";
 import type { Selection } from "@/store/uiSlice";
 
 /**
- * What the conversation reads from the tree for the level it is at (ARCH-011): the apps and
+ * What the conversation reads from the tree for the level it is at (ARCH-012): the apps and
  * employees beneath it (for "@"), and three things worth asking, built from what is really there.
  */
 
@@ -117,4 +117,21 @@ export function targetsOf(contents: ScopeContents, selection: { scope: string; e
     .map((e) => ({ key: `e:${e.worker.id}`, label: e.worker.name, detail: e.worker.role, kind: "employee", scope: e.scope, trail: e.trail, employeeId: e.worker.id }));
   const apps: Target[] = contents.apps.filter((a) => a.scope !== selection.scope).map((a) => ({ key: `a:${a.app.id}`, label: a.app.name, detail: `App in ${a.project.name}`, kind: "app", scope: a.scope, trail: a.trail }));
   return [...employees, ...apps];
+}
+
+/** Every employee's id by name in the organisation: the run log names who holds a task, the avatar's colour needs their id. */
+export function employeeIds(tree: Tree): Map<string, string> {
+  const out = new Map<string, string>();
+  const add = (workers: Worker[]) => {
+    for (const w of workers) if (w.kind === "employee" && !out.has(w.name)) out.set(w.name, w.id);
+  };
+  if (tree.organisation) add(tree.organisation.workers);
+  for (const d of tree.divisions) {
+    add(d.workers);
+    for (const p of d.projects) {
+      add(p.workers);
+      for (const a of p.apps) add(a.workers);
+    }
+  }
+  return out;
 }
