@@ -18,6 +18,15 @@ export const SHORT_QUERY = "(max-height: 600px)";
 /** A device with a precise pointer that hovers: keyboard hints and the scan-to-follow QR are for it, not for a touch screen. */
 export const MOUSE_QUERY = "(hover: hover) and (pointer: fine)";
 
+/**
+ * The PDFs' step pictures (`tools/print-crop.ts`, `PrintPage`): every picture prints at one scale,
+ * `mmPerPx` millimetres to the console's CSS pixel, so its 12 px text prints at 7 pt. `columnMm` is
+ * the page's text column (A4 less its two 12.7 mm margins); a crop is never wider than the column
+ * holds at that scale, nor taller than `maxHeightPx`. A crop up to `besidePx` wide sits beside its
+ * step's words; a wider one goes under them.
+ */
+export const PRINT_SHOT = { mmPerPx: 0.206, columnMm: 184, maxWidthPx: 890, maxHeightPx: 640, besidePx: 500 } as const;
+
 export const academy = {
   fontSize: {
     cover: ["88px", { lineHeight: "0.98", letterSpacing: "-0.045em" }],
@@ -65,6 +74,8 @@ export const academy = {
     about: "minmax(0, 42rem) minmax(0, 1fr)",
     /** A contents line in the PDFs: the id, the title (hanging under itself when it wraps), the page. */
     contents: "4.5rem 1fr auto",
+    /** A step in the PDFs beside its picture: the words take what the picture, at its print size, leaves. */
+    "print-step": "minmax(0, 1fr) auto",
   },
   /** The PDF cover: the mark, the title block in the middle, the colophon at the foot. */
   gridTemplateRows: { cover: "auto 1fr auto" },

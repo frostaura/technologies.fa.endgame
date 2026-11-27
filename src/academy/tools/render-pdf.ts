@@ -12,6 +12,8 @@ import { roles } from "../../frontend/src/lib/tokens.ts";
  * Those page numbers come from a first pass: Chromium writes each flow's anchor (`#flow-<ID>`) as a
  * named destination on the page it landed on, which `flowPages` reads back; the second pass prints
  * them. The numbers sit at the end of contents lines that already exist, so they move nothing.
+ * Both carry bookmarks (the outline Chromium builds from the print route's headings: each path and
+ * each flow) and are tagged, and each step picture is embedded once however often it appears.
  *
  *   node tools/render-pdf.ts [siteDir]
  */
@@ -51,10 +53,8 @@ function objects(pdf: Buffer): Map<number, string> {
   return out;
 }
 
-/** Each flow's page, 1-based, from the named destinations Chromium writes for `#flow-<ID>` anchors. */
-export function flowPages(pdf: Buffer): Record<string, number> {
-  const objs = objects(pdf);
-  // The page objects, in order: walk the page tree from its root.
+/** The page objects, in order: the page tree walked from its root. */
+function pageList(objs: Map<number, string>): number[] {
   const pages: number[] = [];
   const rootRef = [...objs.values()].map((b) => /\/Type\s*\/Catalog[\s\S]*?\/Pages (\d+) 0 R/.exec(b)?.[1]).find(Boolean);
   const walk = (n: number) => {
@@ -65,6 +65,20 @@ export function flowPages(pdf: Buffer): Record<string, number> {
     } else pages.push(n);
   };
   if (rootRef) walk(Number(rootRef));
+  return pages;
+}
+
+/** How many pages, and how many bookmarks (outline items: each has a title and a parent). */
+export function summary(pdf: Buffer): { pages: number; bookmarks: number } {
+  const objs = objects(pdf);
+  const bookmarks = [...objs.values()].filter((b) => /\/Title\s*[(<]/.test(b) && /\/Parent \d+ 0 R/.test(b)).length;
+  return { pages: pageList(objs).length, bookmarks };
+}
+
+/** Each flow's page, 1-based, from the named destinations Chromium writes for `#flow-<ID>` anchors. */
+export function flowPages(pdf: Buffer): Record<string, number> {
+  const objs = objects(pdf);
+  const pages = pageList(objs);
   const index = new Map(pages.map((p, i) => [p, i + 1]));
   const out: Record<string, number> = {};
   for (const body of objs.values()) {
@@ -97,6 +111,8 @@ async function render(page: Page, route: string, title: string): Promise<Buffer>
     displayHeaderFooter: true,
     headerTemplate: HEADER(title),
     footerTemplate: FOOTER,
+    outline: true,
+    tagged: true,
   });
 }
 
@@ -122,7 +138,8 @@ async function main() {
       await second.close();
       writeFileSync(path.join(dir, file), pdf);
       if (errors.length) throw new Error(`${file}: ${errors.join("; ")}`);
-      process.stdout.write(`Rendered ${path.join(path.relative(process.cwd(), dir), file)} (${Object.keys(pages).length} flows with page numbers)\n`);
+      const { pages: count, bookmarks } = summary(pdf);
+      process.stdout.write(`Rendered ${path.join(path.relative(process.cwd(), dir), file)}: ${(pdf.length / 1024 / 1024).toFixed(1)} MB, ${count} pages, ${bookmarks} bookmarks, ${Object.keys(pages).length} flows with page numbers\n`);
       await page.close();
     }
   } finally {
