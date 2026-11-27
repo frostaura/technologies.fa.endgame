@@ -27,14 +27,19 @@ function anchorToTrigger(el: HTMLElement | null) {
     const column = el?.parentElement;
     const press = lastPress;
     if (!el || !column || !press || Date.now() - press.at > 2000) return;
-    const box = column.getBoundingClientRect();
+    // The column's content box: the card lines up with the trigger inside the column's own padding.
+    const outer = column.getBoundingClientRect();
+    const pad = getComputedStyle(column);
+    const left = outer.left + parseFloat(pad.paddingLeft || "0") + parseFloat(pad.borderLeftWidth || "0");
+    const right = outer.right - parseFloat(pad.paddingRight || "0") - parseFloat(pad.borderRightWidth || "0");
+    const box = { left, right, width: right - left };
     const width = Math.min(el.getBoundingClientRect().width, box.width);
     const trigger = press.rect;
     if (trigger.right < box.left || trigger.left > box.right) return;
-    const right = trigger.left + trigger.width / 2 > box.left + box.width / 2;
-    const offset = right ? Math.max(0, box.right - trigger.right) : Math.max(0, trigger.left - box.left);
-    const room = box.width - width;
-    if (right) {
+    const atRight = trigger.left + trigger.width / 2 > box.left + box.width / 2;
+    const offset = atRight ? Math.max(0, box.right - trigger.right) : Math.max(0, trigger.left - box.left);
+    const room = Math.max(0, box.width - width);
+    if (atRight) {
       el.style.marginLeft = "auto";
       el.style.marginRight = `${Math.min(offset, room)}px`;
     } else el.style.marginLeft = `${Math.min(offset, room)}px`;
