@@ -48,7 +48,7 @@ const NOW = new Date("2026-11-25T10:00:00Z");
  * crisp, and a crop whose smallest text is 14 px is drawn at 0.71. Together with the quality that
  * is what keeps academy.pdf a download (under 15 MB) rather than a payload.
  */
-const PRINT_QUALITY = Number(process.env.PRINT_QUALITY ?? 0.45);
+const PRINT_QUALITY = Number(process.env.PRINT_QUALITY ?? 0.4);
 const PRINT_TEXT_PX = Number(process.env.PRINT_TEXT_PX ?? 10);
 export const printScale = (font: number) => (font > 0 ? Math.min(1, Math.max(0.7, PRINT_TEXT_PX / font)) : 0.8);
 /**

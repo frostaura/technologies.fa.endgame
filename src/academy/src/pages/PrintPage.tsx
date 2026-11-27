@@ -52,8 +52,11 @@ const indented = (pic: Paper) => (printedMm(pic) ?? 0) <= PRINT_SHOT.columnMm - 
  * heading's painted text, and a space where a variable font's line wraps is never painted, so
  * "switch organisation" became "switchorganisation". A space set in the (static) monospace face,
  * at the size of a word space, and kept at the line's end (the heading is pre-wrap), is painted.
+ * Each such space costs the tagged PDF an element, so a title too short to wrap (`fits` letters
+ * at its size across the column) keeps plain spaces.
  */
-function Spaced({ text }: { text: string }) {
+function Spaced({ text, fits = 0 }: { text: string; fits?: number }) {
+  if (text.length <= fits) return text;
   const words = text.split(" ");
   return words.map((w, i) => (
     <Fragment key={i}>
@@ -221,7 +224,7 @@ export function PrintPage({ operator }: { operator: boolean }) {
               <article key={f.id} id={`flow-${f.id}`} className={`${n ? "mt-10 border-t pt-6" : "mt-6"}`}>
                 <div className="break-inside-avoid">
                   <p className="font-mono text-xs font-semibold text-primary-link">{f.id}</p>
-                  <h3 className="mt-1 whitespace-pre-wrap font-display text-2xl font-semibold"><Spaced text={f.title} /></h3>
+                  <h3 className="mt-1 whitespace-pre-wrap font-display text-2xl font-semibold"><Spaced text={f.title} fits={44} /></h3>
                   {f.whatYouLearn && <p className="mt-2 text-base text-ink-body"><Inline text={sentence(f.whatYouLearn)} plainIds /></p>}
                   {f.who && <p className="mt-2 text-xs text-ink-muted">Who: <Inline text={f.who} plainIds /> · Starts at: <Inline text={f.startsAt} plainIds /></p>}
                   {first && <ol className="mt-4">{first.words ?? first.item}</ol>}

@@ -139,7 +139,7 @@ async function main() {
       writeFileSync(path.join(dir, file), pdf);
       if (errors.length) throw new Error(`${file}: ${errors.join("; ")}`);
       const { pages: count, bookmarks } = summary(pdf);
-      process.stdout.write(`Rendered ${path.join(path.relative(process.cwd(), dir), file)}: ${(pdf.length / 1024 / 1024).toFixed(1)} MB, ${count} pages, ${bookmarks} bookmarks, ${Object.keys(pages).length} flows with page numbers\n`);
+      process.stdout.write(`Rendered ${path.join(path.relative(process.cwd(), dir), file)}: ${(pdf.length / 1e6).toFixed(1)} MB, ${count} pages, ${bookmarks} bookmarks, ${Object.keys(pages).length} flows with page numbers\n`);
       await page.close();
     }
   } finally {
