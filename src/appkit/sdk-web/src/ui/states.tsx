@@ -28,24 +28,36 @@ export function EmptyState({ title, children, className }: { title: string; chil
 
 export function FailedState({
   error,
+  message,
   onRetry,
   title = "This could not be loaded",
   className,
+  children,
 }: {
-  error: ApiError;
+  /** The failed call: its message is shown. */
+  error?: ApiError;
+  /** Or the reason in words, when there is no call behind it. */
+  message?: string;
   onRetry?: () => void;
   /** What failed, e.g. "The note was not saved". */
   title?: string;
   className?: string;
+  /** Further actions beside "Try again". */
+  children?: React.ReactNode;
 }) {
   return (
     <div role="alert" className={cn("flex flex-col items-start gap-3 rounded-md bg-attention-tint p-6", className)}>
       <p className="font-display text-base font-semibold text-attention-text">{title}</p>
-      <p className="text-sm text-ink">{error.message}</p>
-      {onRetry ? (
-        <Button variant="outline" size="sm" onClick={onRetry}>
-          Try again
-        </Button>
+      <p className="text-sm text-ink">{message ?? error?.message}</p>
+      {onRetry || children ? (
+        <div className="flex flex-wrap items-center gap-3 max-sm:w-full max-sm:flex-col max-sm:items-stretch">
+          {onRetry ? (
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              Try again
+            </Button>
+          ) : null}
+          {children}
+        </div>
       ) : null}
     </div>
   );

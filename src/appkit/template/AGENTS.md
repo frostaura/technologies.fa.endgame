@@ -60,7 +60,10 @@ The example feature is **Notes**; replace it with the real product, keeping its 
 - **The app's name** is written once, in `web/src/appName.ts` (and `web/index.html`'s `<title>`). Each
   page names itself with `usePageTitle("All notes")`, which titles the tab "All notes · Notes".
 - **Errors in the UI:** `api()` throws `ValidationError` (show `errors` by field),
-  `NotSignedInError` (go to `signInUrl`), `NotFoundError`, `BudgetExhaustedError`.
+  `NotSignedInError` (go to `signInUrl`), `NotFoundError`, `BudgetExhaustedError`. A page that throws while it
+  renders is caught by the kit's `AppErrorBoundary`, mounted in `main.tsx` and around the routes in `App.tsx`: it shows
+  "Something went wrong on this page" with a way back and keeps the header. Keep both; never remove them to "fix" a
+  test — a boundary showing is a bug in the page, to be fixed there.
 - **Reads stay current by themselves:** after any successful write through `api()` (POST, PUT,
   PATCH, DELETE), every `useApiQuery` on screen re-reads, keeping its data shown meanwhile. Do not
   hand-wire refreshes between pages or lists; write through `api()` and every read follows.

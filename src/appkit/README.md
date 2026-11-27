@@ -22,6 +22,9 @@ What the web SDK does for every app, so no app has to:
 - **Navigation is testable.** `renderApp(<App />, { at: "/", base? })` from `@endgame/appkit/testing`
   renders the real app with a router based on the page's `<base>`; `jsonResponse()` and
   `setBase()` are there too.
+- **A page that breaks never blanks the app.** `AppErrorBoundary` (from `/ui`) shows "Something went
+  wrong on this page" with "Try again" and "Back to the start", keeping the header; the template mounts it
+  at the root and around the routed page, and `createRoot(root, rootOptions)` leaves its one report the only one.
 - **Screens are predictable.** Every app uses the same `data-testid` forms (`page-<view>`,
   `<entity>-item`, `save-<entity>`, …), listed in `template/AGENTS.md`.
 
