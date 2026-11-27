@@ -577,7 +577,10 @@ async function perform(action: Action) {
     const want = norm(action.select.value);
     if (el.tagName === "SELECT") {
       const list = el as HTMLSelectElement;
-      const option = [...list.options].find((o) => norm(o.textContent) === want || norm(o.value) === want) ?? [...list.options].find((o) => norm(o.textContent).startsWith(want));
+      const pick = () => [...list.options].find((o) => norm(o.textContent) === want || norm(o.value) === want) ?? [...list.options].find((o) => norm(o.textContent).startsWith(want));
+      // A list filled from the control plane (the levels of the tree) may still be filling in.
+      let option = pick();
+      for (const until = performance.now() + 3000; !option && performance.now() < until; option = pick()) await sleep(100);
       if (!option) throw new Error(`The list ${JSON.stringify(action.select.into)} has no ${action.select.value}.`);
       setValue(el, option.value);
     } else {

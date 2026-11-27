@@ -44,6 +44,12 @@
       "reason": "On a phone the working chip reads “3 contractors · researching”, so the words “contractor” only begin a word there; the laptop's chip is the word itself."
     },
     {
+      "flow": "RUN-05",
+      "step": 2,
+      "size": "phone",
+      "reason": "Caught up instantly, as the phone's check plays it, the resumed run has not yet ticked to “Working” when the spotlight looks; played live, as a learner plays it, it has (checked by hand at 390 × 640)."
+    },
+    {
       "flow": "RUN-07",
       "variation": 2,
       "step": 2,

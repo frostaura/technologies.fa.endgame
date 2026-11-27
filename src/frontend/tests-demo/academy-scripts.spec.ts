@@ -141,6 +141,9 @@ for (const { script, variation, name } of plays) {
       await page.setViewportSize({ width: size.width, height: size.height });
       await page.goto(`/technologies.fa.endgame/demo/index.html?embed=1`);
       await page.waitForFunction(() => "endgameDemo" in window);
+      // A fresh world for each console: the world is kept in the tab's storage, and the laptop's play
+      // has already changed it (an app deleted, a run started again).
+      await call("reset");
       await call("goto", { route: script.start, persona: script.persona, scenario: script.scenario });
       const here: Record<number, string> = {};
       routes[size.name] = here;
