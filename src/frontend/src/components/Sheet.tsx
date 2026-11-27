@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,11 @@ import { useVisibleViewport } from "@/lib/useVisibleViewport";
  * (`full`); on a tablet it can come in from the side (`side`). It is a modal dialog — named by its
  * title, the focus kept inside it and given back when it closes, closed by Escape, by its own close
  * button or by tapping the page behind it — and the page behind does not scroll while it is open.
+ *
+ * ONE sheet family (ARCH-011): a bottom sheet has a grab handle, is at most 85% of the visible height, ends
+ * with a cue while there is more to scroll, and has its close button at the same inset as every other sheet.
+ * On a phone on its side it is a panel at the right sized to what it holds. Pages and other lanes use this
+ * component for any sheet; none draws its own.
  *
  * `keepMounted` keeps what it holds alive while it is closed (hidden, not removed): a conversation
  * keeps streaming its reply and its draft. Its height follows the part of the screen above the
@@ -45,6 +50,8 @@ export function Sheet({
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const more = useMoreBelow(body, open && !fill);
   useVisibleViewport(open);
   useScrollLock(open);
 
@@ -88,7 +95,7 @@ export function Sheet({
           "absolute flex flex-col bg-surface text-ink shadow-raised outline-none",
           // A phone on its side has no height to spare: a bottom sheet comes in from the side instead.
           side === "bottom" &&
-            "inset-x-0 bottom-0 max-h-sheet rounded-t-lg pb-safe-b motion-safe:animate-sheet rail:inset-x-auto rail:inset-y-0 rail:right-0 rail:max-h-none rail:w-full rail:max-w-dock rail:rounded-none rail:border-l rail:pr-safe-r rail:pt-safe-t",
+            "inset-x-0 bottom-0 max-h-sheet rounded-t-lg pb-safe-b motion-safe:animate-sheet rail:inset-x-auto rail:bottom-auto rail:right-2 rail:top-2 rail:w-full rail:max-w-popover rail:rounded-lg rail:border rail:pb-0 rail:pr-safe-r",
           side === "full" && "inset-0 pb-safe-b pt-safe-t motion-safe:animate-sheet",
           side === "side" && "inset-y-0 right-0 w-full max-w-dock border-l pb-safe-b pt-safe-t motion-safe:animate-slide",
         )}
@@ -109,7 +116,7 @@ export function Sheet({
             <CloseButton title={title} onClose={onClose} />
           </div>
         )}
-        <div data-sheet-body="" className={cn("relative min-h-0 flex-1", fill ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-contain px-4 pb-4 pt-3")}>
+        <div ref={body} data-sheet-body="" data-more={more || undefined} className={cn("relative min-h-0 flex-1", fill ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-contain px-4 pb-4 pt-3", more && "shadow-cue")}>
           {/* With no title row, the close button sits in the corner of what the sheet holds, which leaves room for it. */}
           {hideTitle && <CloseButton title={title} onClose={onClose} className="absolute right-1 top-1 z-10" />}
           {children}
@@ -119,6 +126,25 @@ export function Sheet({
     </div>,
     document.body,
   );
+}
+
+/** Whether the sheet's body has more below what shows: the cue at its foot. */
+function useMoreBelow(el: RefObject<HTMLDivElement | null>, on: boolean) {
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const node = el.current;
+    if (!node || !on) return;
+    const measure = () => setMore(node.scrollHeight - node.scrollTop - node.clientHeight > 4);
+    measure();
+    node.addEventListener("scroll", measure, { passive: true });
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    ro?.observe(node);
+    return () => {
+      node.removeEventListener("scroll", measure);
+      ro?.disconnect();
+    };
+  }, [el, on]);
+  return on && more;
 }
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';

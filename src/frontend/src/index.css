@@ -42,6 +42,20 @@
     @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-ground;
   }
 
+  /* A heading or region the console moves the focus to (a page's title, "Skip to the content") is not a
+     control: it takes the focus without drawing a ring that would make it look selectable. */
+  [tabindex="-1"]:focus-visible {
+    @apply ring-0 ring-offset-0;
+  }
+
+  /* The browser's own disclosure triangle never shows: a fold is the shared Disclosure (ARCH-011). */
+  summary {
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
   /* Every animation in the design is decoration; under reduced motion none of it runs, and
      everything simply appears in its final state. */
   @media (prefers-reduced-motion: reduce) {

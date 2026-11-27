@@ -79,40 +79,62 @@ export function Disclosure({
     return () => el.removeEventListener("endgame:reveal", reveal);
   }, []);
 
-  // Closed, it is a card naming what it holds; open, that line becomes a quiet bar above what it holds,
-  // which keeps its own card and heading — never a card inside a card.
+  // ONE fold (ARCH-011): always a card that fills its column. Its header row is the same open or closed — the
+  // title, the line about it while closed, a chevron at the right — and what it holds opens inside the same
+  // card under a rule. A card that what it holds draws for itself is flattened into it: never a card in a card.
   const toggle = (
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={bodyId}
-        onClick={() => setOpen((x) => !x)}
-        className={cn(
-          "flex min-h-touch w-full items-center gap-3 rounded-md text-left",
-          open ? "px-1" : "border bg-surface px-4 py-3 shadow-card",
-          !open && tone === "attention" && "border-attention-line bg-attention-wash",
-        )}
-      >
-        {icon && <span className="flex shrink-0">{icon}</span>}
-        <span className="flex min-w-0 flex-1 flex-col">
-          {/* Open, every fold's row is the same section heading — whether or not what it holds had its own. */}
-          <span className={cn("font-display font-semibold text-ink", open ? "text-lg" : "text-base")}>{title}</span>
-          {summary && !open && <span className="text-sm text-ink-muted">{summary}</span>}
-        </span>
-        <ChevronDown aria-hidden className={cn("size-5 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />
-      </button>
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-controls={bodyId}
+      onClick={() => setOpen((x) => !x)}
+      className="flex min-h-touch w-full items-center gap-3 px-4 py-3 text-left hover:bg-ground max-sm:px-4"
+    >
+      {icon && <span className="flex shrink-0">{icon}</span>}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="font-display text-base font-semibold text-ink">{title}</span>
+        {summary && !open && <span className="text-sm text-ink-muted">{summary}</span>}
+      </span>
+      <ChevronDown aria-hidden className={cn("size-5 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+    </button>
   );
   const Heading = echo ? (`h${echo}` as "h2") : null;
 
   return (
-    <section ref={root} aria-label={title} data-fold="" data-open={open || undefined} className={cn("flex flex-col gap-2", className)}>
+    <section
+      ref={root}
+      aria-label={title}
+      data-fold=""
+      data-open={open || undefined}
+      className={cn(
+        "flex w-full min-w-0 flex-col self-stretch overflow-hidden rounded-md border bg-surface shadow-card",
+        tone === "attention" && "border-attention-line",
+        className,
+      )}
+    >
       {Heading ? <Heading className="flex">{toggle}</Heading> : toggle}
-      <div ref={body} id={bodyId} data-fold-body="" hidden={!open} className={open ? "flex flex-col gap-4 [&_[data-fold-echo]]:hidden" : "hidden"}>
+      <div
+        ref={body}
+        id={bodyId}
+        data-fold-body=""
+        hidden={!open}
+        className={cn(
+          open ? "flex flex-col gap-4 border-t px-4 pb-4 pt-4 [&_[data-fold-echo]]:hidden" : "hidden",
+          FLATTEN,
+        )}
+      >
         {children}
       </div>
     </section>
   );
 }
+
+/**
+ * What a fold holds may already be a card (a section that is a card on a desktop, where the fold is not drawn):
+ * inside the fold it loses its own edge, fill, shadow and padding, so the fold is the only card.
+ */
+const FLATTEN =
+  "[&>[class*='shadow-card']]:!rounded-none [&>[class*='shadow-card']]:!border-0 [&>[class*='shadow-card']]:!bg-transparent [&>[class*='shadow-card']]:!p-0 [&>[class*='shadow-card']]:!shadow-none [&>[data-fold]]:!shadow-none";
 
 const HEADINGS = "h1, h2, h3, h4";
 

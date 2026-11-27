@@ -1,16 +1,25 @@
 import * as React from "react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** The one look for a text box, a select and a text area. */
-export const inputClass = "min-h-touch w-full min-w-0 rounded-xs border border-border-field bg-surface px-3 text-ink";
+export const inputClass = "min-h-touch w-full min-w-0 rounded-xs border border-border-field bg-surface px-3 text-sm text-ink disabled:cursor-not-allowed disabled:bg-quiet disabled:text-ink-muted touch:text-base";
 
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
   <input ref={ref} className={cn(inputClass, className)} {...props} />
 ));
 Input.displayName = "Input";
 
+/**
+ * The house select: the browser's own control underneath (so a phone opens its own picker, and a keyboard works
+ * as it always does), drawn in the house look — the field's edge, the house chevron, never the OS chrome.
+ * `className` sizes it (its width); the box inside fills it.
+ */
 export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(({ className, ...props }, ref) => (
-  <select ref={ref} className={cn(inputClass, className)} {...props} />
+  <span data-select="" className={cn("relative flex w-full min-w-0", className)}>
+    <select ref={ref} className={cn(inputClass, "appearance-none truncate pr-9")} {...props} />
+    <ChevronDown aria-hidden className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+  </span>
 ));
 Select.displayName = "Select";
 
