@@ -8,6 +8,7 @@ import { Bar } from "@/components/states";
 import { Chip as ChipView, PersonChip } from "@/components/ui/chip";
 import { NO_VALUE, Stat } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
+import { useShowAll } from "@/components/ui/page";
 import { buttonVariants } from "@/components/ui/button";
 import { formatCredits, formatNumber, headlineCredits, headlineNumber, percent, plural, timeAgo } from "@/lib/format";
 import { effectiveRole, roleRank } from "@/lib/roles";
@@ -23,10 +24,12 @@ import { useMasonry } from "./masonry";
 import { activityLine, appChips, appNote, contractorsLabel, progressLine, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
 
 /**
- * The chart's geometry. A division column is never narrower than the side panel (22 rem) and the
+ * The chart's geometry. A division column is never narrower than 20 rem, a tablet still takes two, and the
  * chart takes as many columns as its width holds, up to four.
  */
-const COLUMN = { min: 352, gap: 24, max: 4 } as const;
+const COLUMN = { min: 320, gap: 24, max: 4 } as const;
+/** How many of a division's projects the chart shows before "Show all". */
+const PROJECTS_SHOWN = 6;
 
 interface Props {
   tree: Tree;
@@ -58,7 +61,7 @@ export function AddDivision({ tree }: { tree: Tree }) {
 /** How tall a division will draw, before it is measured: its header, and a card's worth for each project and app. */
 function estimate(division: TreeDivision): number {
   let h = 88 + (division.workers.length > 0 ? 54 : 0);
-  for (const p of division.projects) h += 120 + p.apps.length * 150 + (p.progress ? 70 : 0) + (p.workers.length > 0 ? 54 : 0);
+  for (const p of division.projects.slice(0, PROJECTS_SHOWN)) h += 120 + p.apps.length * 150 + (p.progress ? 70 : 0) + (p.workers.length > 0 ? 54 : 0);
   return h;
 }
 
@@ -145,6 +148,8 @@ function DivisionColumn({
     return () => el.removeEventListener("endgame:reveal", reveal);
   }, []);
   const projects = division.projects;
+  // A division with many projects shows its first few on the chart and "Show all": one long division never strands the rest.
+  const { shown, control } = useShowAll(projects, PROJECTS_SHOWN, "projects");
   const hasWorkers = division.workers.length > 0;
   return (
     <div className={cn("flex min-w-0 flex-col", RISE, stagger(index + 2))}>
@@ -229,11 +234,16 @@ function DivisionColumn({
                 </p>
               </Branch>
             ) : (
-              projects.map((project, i) => (
-                <Branch key={project.id} at="card" last={i === projects.length - 1}>
+              shown.map((project, i) => (
+                <Branch key={project.id} at="card" last={!control && i === shown.length - 1}>
                   <ProjectCard project={project} scope={`${scope}/${project.slug}`} trail={[...trail, project.name]} selection={selection} onSelect={onSelect} manage={manage} />
                 </Branch>
               ))
+            )}
+            {control && (
+              <Branch at="chips" last>
+                {control}
+              </Branch>
             )}
           </ol>
         )}

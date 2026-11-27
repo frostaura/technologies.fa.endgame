@@ -206,4 +206,17 @@ describe("the chart's shape", () => {
     expect(badges).toHaveLength(3);
     for (const b of badges) expect(b.className).toContain("bg-ink");
   });
+
+  it("shows a long division's first six projects and Show all, the wire ending at Show all", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const many = Array.from({ length: 12 }, (_, i) => project(`p${i}`, `Project ${i}`));
+    const tree = { ...TREE, divisions: [division("d1", "Tools", many), division("d2", "Kit", [])] } as unknown as Tree;
+    renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    const tools = screen.getByRole("list", { name: "In Tools" });
+    expect(within(tools).getAllByRole("article")).toHaveLength(6);
+    const more = within(tools).getByRole("button", { name: "Show all 12 projects" });
+    expect(more.closest("li")?.querySelector("[data-wire]")?.className).toContain("h-8");
+    fireEvent.click(more);
+    expect(within(tools).getAllByRole("article")).toHaveLength(12);
+  });
 });
