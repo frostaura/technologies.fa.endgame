@@ -121,3 +121,14 @@ export function capNote(app: AppDetail, budgets: CascadeValue[] | undefined, nam
   return `No cap of its own; ${nameOf(cap.setAtPath)}'s ${formatCredits(number(cap) ?? 0)} applies`;
 }
 
+
+/**
+ * Why a visitor cannot use the app just now, or null when they can. Asleep is not a reason: the first
+ * visit wakes it.
+ */
+export function notOpenable(app: AppDetail): string | null {
+  if (app.notBuilt || !app.publishedAt) return "Nothing is published yet, so its visitors are told it is not ready.";
+  if (app.paused || app.running === "paused" || app.health.state === "paused") return "It is paused, so its visitors see a holding page until it is restored.";
+  if (app.status === "failed" || app.status === "stopped") return "It is not running, so its visitors are told it is unavailable.";
+  return null;
+}

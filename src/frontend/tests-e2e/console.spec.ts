@@ -287,7 +287,11 @@ test.describe("app and credits", () => {
     await page.goto("/");
     await page.getByRole("link", { name: "Booking desk" }).click();
     await expect(page.getByRole("heading", { name: "Booking desk", exact: true })).toBeVisible();
-    await expect(page.getByText("https://northwind.example.test/booking · also at https://endgame.example.test/northwind/software/booking")).toBeVisible();
+    // One address, short, with its copy button; the other behind "Also at".
+    const address = page.getByTestId("app-address");
+    await expect(address).toContainText("northwind.example.test/booking");
+    await address.getByText("Also at").click();
+    await expect(address).toContainText("endgame.example.test/northwind/software/booking");
     await expect(page.getByText("Slowest 1 in 20: 540 ms")).toBeVisible();
     await page.getByRole("radio", { name: /Sleeps when unused/ }).check();
     await expect(page.getByRole("radio", { name: /Sleeps when unused/ })).toBeChecked();

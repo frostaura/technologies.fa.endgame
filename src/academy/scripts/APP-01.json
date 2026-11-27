@@ -26,8 +26,8 @@
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "text": "· also at",
-        "note": "Its subdomain address, then its path address: two addresses, one app."
+        "text": "Also at",
+        "note": "Its subdomain address, with a button that copies it; the same app also answers at its path address, under “Also at”."
       }
     },
     {

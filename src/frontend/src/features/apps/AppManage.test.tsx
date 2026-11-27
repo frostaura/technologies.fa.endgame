@@ -77,7 +77,7 @@ describe("what the app may spend", () => {
     stub();
     renderWithStore(<AppView appId="a1" />);
     const section = within(await screen.findByRole("region", { name: "What it may spend" }));
-    expect(await section.findByText("400 credits a month, from Tools")).toBeTruthy();
+    expect((await section.findByTestId("monthly_credits-now")).textContent).toBe("400 credits a month, from Tools");
     expect(section.getByText("None is set on it or above it, so FrostAura's standard allowance applies.")).toBeTruthy();
     expect(screen.getByText("No cap of its own; Tools's 400 credits applies")).toBeTruthy();
   });
