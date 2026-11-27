@@ -19,6 +19,12 @@ public static class HostingConventions
     public const string SessionHeader = "X-Endgame-Session";
 
     /// <summary>
+    /// The app's name in the organisation tree, percent-encoded UTF-8 (<see cref="Uri.EscapeDataString(string)"/>: header
+    /// values are Latin-1). The app kit writes it into the page's title and an <c>endgame-app-name</c> meta element (PLATFORM-API §5).
+    /// </summary>
+    public const string AppNameHeader = "X-Endgame-App-Name";
+
+    /// <summary>
     /// On Edge's control listener only (the evaluator's calls and probes): <c>1</c> sends the request to the app's
     /// preview instance (<c>app-&lt;id:N&gt;-pv</c>, its own throwaway database) instead of the app.
     /// </summary>

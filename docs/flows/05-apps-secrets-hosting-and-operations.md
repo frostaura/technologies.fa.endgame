@@ -828,7 +828,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Learn first:** KIT-01
 - **What you learn:** being signed in is not the same as having access.
 - **You know it worked when:** the refusal page below appears.
-- **Steps:** Edge answers 403 with "You don't have access to this app" and "You are signed in, but your account has no access to this app. Ask its owner for access."
+- **Steps:** Edge answers 403 with "You don’t have access to this app" and "You are signed in, but your account has no access to this app. Ask its owner for access.", with **"Sign in as someone else"** (and **"Go to Endgame"** for a member signed in on the platform's host).
 - **Variations and refusals:** none.
 - **Where:** `Pages/UnavailablePage.cs` (Forbidden)
 - **Reachable from:** UI
@@ -1188,8 +1188,9 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Steps:** Edge serves one of these pages:
   - Took over 30 seconds: "This app is taking longer than usual" / "It is still starting. Please try again in a few seconds." (Retry-After 3)
   - No room to start it: "This app could not start just now" / "Endgame is very busy at the moment. Please try again in a minute."
-  - Nothing published: "This app isn't ready yet" / "It has an address, but its first version has not been published. Please check back soon."
+  - Nothing published: "This app isn’t ready yet" / "It has an address, but its first version has not been published. Please check back soon."
   - Anything else: "This app is temporarily unavailable" / "Endgame could not reach it just now. Please try again in a moment."
+  - Each offers **"Try again"**, a plain link to the same address; the slow page also tries again by itself after 3 seconds and says so ("This page tries again by itself in a few seconds."). The not-ready page adds, for its owner, "Is this your app? **Open it in Endgame**".
 - **Variations and refusals:** an archived or unknown app is denied, which serves the Forbidden page.
 - **Where:** `Pages/UnavailablePage.cs`; `AppGate.ReasonFor`
 - **Reachable from:** UI
@@ -1204,7 +1205,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** a cap holds for everything beneath it; nothing is lost, and the app returns when the budget is raised or the month turns.
 - **You know it worked when:** visitors see the page below, and the app page's Health reads paused with "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it." — on the chart too.
 - **Steps:**
-  1. Edge serves "This app is paused" / "It has used this month's budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns." It never wakes the app.
+  1. Edge serves "This app is paused" / "It has used this month’s budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns.", with **"Try again"** and "Is this your app? **Raise its budget in Endgame**". It never wakes the app.
   2. The app page and its chart row read health `paused` (never "Healthy"), with `paused { reason: budget_exhausted, note }` — from the same routing table Edge serves. At the overdraft limit the reason is `overdraft_limit` and the note "Paused: the organisation reached its overdraft limit. A top-up restores it at once." (HOST-04).
   3. Raising or removing the budget (APP-11), a top-up, or the month turning restores the app. A person's budget, overdraft or top-up change has Edge read the new table before the request answers, so the app is back at once.
 - **Variations and refusals:** none.

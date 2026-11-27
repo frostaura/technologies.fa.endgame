@@ -9,7 +9,7 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "text": "This app isn't ready yet",
+        "text": "This app isn’t ready yet",
         "note": "An address, and no published version yet."
       }
     },
@@ -18,8 +18,8 @@
       "kind": "demo",
       "goto": "/__app/0b0e0000-0000-4000-8000-000000000000/path/",
       "highlight": {
-        "text": "This app is temporarily unavailable",
-        "note": "An address Edge does not know, or the access check unavailable."
+        "text": "There is no app at this address",
+        "note": "An address Edge knows no app at: its own page (404), with the way to Endgame — never the console."
       }
     },
     {

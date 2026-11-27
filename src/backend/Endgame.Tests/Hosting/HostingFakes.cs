@@ -23,12 +23,13 @@ internal static class Routes
         string? version = "v1",
         bool paused = false,
         string? pausedReason = null,
+        string? name = null,
         params string[] hooks)
     {
         var scope = $"{org}/{division}/{project}/{app}";
         return new RouteView(id ?? Guid.NewGuid(), Guid.NewGuid(), scope, $"/{scope}/", $"{org}.{Domain}", $"/{division}/{project}/{app}/",
             target, "running", false, new SleepSetting(sleepMode, idleMinutes, "default", "default"), version, access, paused,
-            paused ? pausedReason ?? PausedReasons.OverdraftLimit : null, hooks);
+            paused ? pausedReason ?? PausedReasons.OverdraftLimit : null, hooks, name);
     }
 
     /// <summary>An app as the edge holds it.</summary>

@@ -9,7 +9,7 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "text": "It has used this month's budget.",
+        "text": "It has used this month’s budget.",
         "note": "“This app is paused”, served by the edge: the app is never woken."
       }
     },

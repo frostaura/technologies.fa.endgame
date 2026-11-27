@@ -23,6 +23,11 @@ public sealed record RoutingTable(DateTimeOffset GeneratedAt, IReadOnlyList<Rout
 /// <param name="Paused">True when the app must not be served: the edge shows the holding page. Nothing is deleted.</param>
 /// <param name="PausedReason">One of <see cref="PausedReasons"/> when paused; null otherwise.</param>
 /// <param name="Hooks">The app's declared webhook names: the edge admits <c>POST hooks/&lt;name&gt;</c> for these alone, even on a private app. Absent is none.</param>
+/// <param name="Name">
+/// The app's name in the organisation tree — the one name a person sees for it: in the console, on the
+/// identity pages, in e-mails, and (sent as <see cref="HostingConventions.AppNameHeader"/>) in the app's own
+/// header and tab title. A person can rename it. Absent from an older control plane, when the app is told nothing.
+/// </param>
 public sealed record RouteView(
     Guid AppId,
     Guid OrganisationId,
@@ -38,7 +43,8 @@ public sealed record RouteView(
     string? Access,
     bool Paused,
     string? PausedReason,
-    IReadOnlyList<string>? Hooks);
+    IReadOnlyList<string>? Hooks,
+    string? Name = null);
 
 /// <summary>Why the routing table pauses an app.</summary>
 public static class PausedReasons

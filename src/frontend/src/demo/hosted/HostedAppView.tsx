@@ -13,17 +13,42 @@ import {
   renderOutagePage,
   OUTAGE,
   renderUnavailablePage,
+  retryAfter,
   UNAVAILABLE_COPY,
   type AppAuthInfo,
   type AuthAction,
   type AuthPageConfig,
 } from "./edgePages";
-import { addressesOf, addressFor, resolve, restOf } from "./gate";
+import { addressesOf, addressFor, noAppLinks, resolve, restOf } from "./gate";
 import { personOf } from "./readingList";
 import { HostedAppPage } from "./AppPages";
 import type { HostedContext, HostedVisitor } from "./types";
 
 export type { HostedApp, HostedAppState, HostedContext, HostedVisitor, PasskeyPrompt } from "./types";
+
+/** The platform's own origin in the demo's world (the path form's host). */
+export const DEMO_PLATFORM_ORIGIN = "https://endgame.example";
+
+/**
+ * An app id the Edge knows nothing about: its "There is no app at this address" page (404), drawn the
+ * full height of the window as any Edge page is. "Go to Endgame" opens the console.
+ */
+export function HostedUnknownApp({ appId, openConsole }: { appId: string; openConsole: (route: string) => void }): JSX.Element {
+  return (
+    <div className="flex min-h-screen flex-col bg-ground" data-testid="hosted-unknown">
+      <EdgeDocument
+        html={renderUnavailablePage("NoApp", noAppLinks(DEMO_PLATFORM_ORIGIN))}
+        docKey={`unknown:${appId}`}
+        title={`${UNAVAILABLE_COPY.NoApp.title} · Endgame`}
+        onAction={async (action) => {
+          if (action.kind !== "follow") return;
+          const url = new URL(action.href, DEMO_PLATFORM_ORIGIN);
+          openConsole(url.pathname + url.search);
+        }}
+      />
+    </div>
+  );
+}
 
 /** How long a sleeping app takes to wake when the demo does not say. */
 export const DEFAULT_WAKE_MS = 2000;
@@ -66,6 +91,15 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
 
   const site = new URL(addresses.pathHome).host;
 
+  // "This page tries again by itself": the slow page asks the Edge again after its Retry-After.
+  const [retries, setRetries] = useState(0);
+  const slow = outcome.kind === "unavailable" && outcome.reason === "Slow";
+  useEffect(() => {
+    if (!slow) return;
+    const timer = setTimeout(() => setRetries((n) => n + 1), (retryAfter("Slow") ?? 3) * 1000);
+    return () => clearTimeout(timer);
+  }, [slow, retries]);
+
   /** Signed in or registered: the demo remembers who, and the page goes to `returnTo`. */
   function finish(next: HostedVisitor, returnTo: string) {
     ctx.onVisitorChange(next);
@@ -74,8 +108,11 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
 
   async function answer(action: AuthAction, config: AuthPageConfig | null): Promise<void> {
     if (action.kind === "follow") {
-      const target = restOf(addresses, new URL(action.href, resolved.address).href);
+      const url = new URL(action.href, resolved.address);
+      const target = restOf(addresses, url.href);
       if (target) ctx.navigate(target.rest);
+      // The console's own addresses ("Go to Endgame", the app's page, credits) open the console.
+      else if (url.origin === new URL(addresses.pathHome).origin) (ctx.openConsole ?? (() => ctx.exit()))(url.pathname + url.search);
       return;
     }
     if (!config) return;
@@ -173,7 +210,7 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
     let prepare: ((doc: Document) => void) | undefined;
     let config: AuthPageConfig | null = null;
     if (outcome.kind === "unavailable") {
-      html = renderUnavailablePage(outcome.reason);
+      html = renderUnavailablePage(outcome.reason, outcome.links);
       tabTitle = `${UNAVAILABLE_COPY[outcome.reason].title} · Endgame`;
     } else if (outcome.kind === "outage") {
       html = renderOutagePage();
@@ -198,7 +235,7 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
     body = (
       <EdgeDocument
         html={html}
-        docKey={`${resolved.address}|${app.name}|${app.organisationName}|${app.access}`}
+        docKey={`${resolved.address}|${app.name}|${app.organisationName}|${app.access}|${retries}`}
         title={tabTitle}
         prepare={prepare}
         onAction={(action) => answer(action, config)}

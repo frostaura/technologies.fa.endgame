@@ -50,10 +50,10 @@ public sealed class AuthPages(IHttpClientFactory http, AccessGate access, IOptio
                 context.Response.Redirect($"{addresses.PathHome}{HostingConventions.AuthPath.TrimStart('/')}/{page.Trim('/')}?returnTo={Uri.EscapeDataString(returnTo)}");
                 return;
             case SignIn or SignUp:
-                await WritePageAsync(context, app, page.Trim('/'), returnTo, addresses, shape);
+                await WritePageAsync(context, app, page.Trim('/'), returnTo, addresses, shape, PageChrome.AssetsAt(appAddress));
                 return;
             case Handoff:
-                await RedeemAsync(context, app, addresses, shape);
+                await RedeemAsync(context, app, addresses, shape, PageChrome.AssetsAt(appAddress));
                 return;
             case SignOut:
                 await SignOutAsync(context, app);
@@ -91,7 +91,7 @@ public sealed class AuthPages(IHttpClientFactory http, AccessGate access, IOptio
     /// minute is 410) into this host's own app-session cookie. The visitor is sent where the
     /// control plane says — checked again to be inside this app's address on this host.
     /// </summary>
-    private async Task RedeemAsync(HttpContext context, EdgeApp app, AppAddresses addresses, string shape)
+    private async Task RedeemAsync(HttpContext context, EdgeApp app, AppAddresses addresses, string shape, string assets)
     {
         var code = context.Request.Query["code"].ToString();
         HandoffRedeemed? redeemed = null;
@@ -128,7 +128,7 @@ public sealed class AuthPages(IHttpClientFactory http, AccessGate access, IOptio
             await AuthPage.WriteMessageAsync(context, failed ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status410Gone,
                 failed ? "Sign-in is unavailable just now" : "This sign-in link has expired",
                 failed ? "Endgame could not finish signing you in. Please try again in a moment." : "Sign-in links work once, for a minute. Sign in again to continue.",
-                $"{addresses.Home(shape)}{HostingConventions.AuthPath.TrimStart('/')}/{SignIn}?returnTo={Uri.EscapeDataString(addresses.Home(shape))}", "Sign in again", MarkUrl(addresses));
+                $"{addresses.Home(shape)}{HostingConventions.AuthPath.TrimStart('/')}/{SignIn}?returnTo={Uri.EscapeDataString(addresses.Home(shape))}", "Sign in again", assets);
             return;
         }
 
@@ -185,11 +185,7 @@ public sealed class AuthPages(IHttpClientFactory http, AccessGate access, IOptio
         access.Forget();
     }
 
-    // The console serves the mark on the platform's host; on a subdomain that path is the app's.
-    private static string MarkUrl(AppAddresses addresses) =>
-        addresses.PlatformOrigin is { } origin ? new Uri(origin, UnavailablePage.MarkPath).AbsoluteUri : UnavailablePage.MarkPath;
-
-    private static Task WritePageAsync(HttpContext context, EdgeApp app, string page, string returnTo, AppAddresses addresses, string shape)
+    private static Task WritePageAsync(HttpContext context, EdgeApp app, string page, string returnTo, AppAddresses addresses, string shape, string assets)
     {
         var config = new
         {
@@ -204,7 +200,7 @@ public sealed class AuthPages(IHttpClientFactory http, AccessGate access, IOptio
             signInUrl = $"{addresses.Home(shape)}{HostingConventions.AuthPath.TrimStart('/')}/{SignIn}?returnTo={Uri.EscapeDataString(returnTo)}",
             signUpUrl = $"{addresses.Home(shape)}{HostingConventions.AuthPath.TrimStart('/')}/{SignUp}?returnTo={Uri.EscapeDataString(returnTo)}",
         };
-        return AuthPage.WriteAsync(context, page, JsonSerializer.Serialize(config, Json), MarkUrl(addresses));
+        return AuthPage.WriteAsync(context, page, JsonSerializer.Serialize(config, Json), assets);
     }
 }
 

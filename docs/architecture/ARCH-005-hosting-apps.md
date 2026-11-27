@@ -47,7 +47,7 @@ slowdown; each holds 40 to 55 MB idle. A stopped app holds no memory.
   next visit after it starts the app again. Nothing restarts a crashed app without a visit, and the page says
   exactly that: its owner has been told; try again in a minute.
 - **An app has its address before its first version.** It is in the routing table from the moment it is created
-  or placed (the control plane tells Edge at once); Edge answers "This app isn't ready yet" — after the access
+  or placed (the control plane tells Edge at once); Edge answers "This app isn’t ready yet" — after the access
   check, so a visitor who may not open it is sent to sign in or refused exactly as for a published app.
 
 ## Addresses — what every generated app must do

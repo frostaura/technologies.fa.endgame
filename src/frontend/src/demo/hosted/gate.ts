@@ -9,7 +9,7 @@
  * 4. Back in `AppGate` — an admitted visitor to a crashed app gets the crashed page; to a sleeping
  *    one, a wait while it wakes (the Edge has no "waking" page: the request simply takes longer).
  */
-import { escapeDataString, HANDOFF_EXPIRED, unavailableStatus, type AuthPageConfig, type AuthPageName, type Unavailable } from "./edgePages";
+import { escapeDataString, HANDOFF_EXPIRED, unavailableStatus, type AuthPageConfig, type AuthPageName, type PageLinks, type Unavailable } from "./edgePages";
 import type { HostedApp, HostedVisitor } from "./types";
 
 export const AUTH_PATH = "_endgame/auth";
@@ -136,8 +136,8 @@ export function authRest(page: AuthPageName | "sign-out", returnTo?: string): st
 export type GateOutcome =
   /** Forwarded to the app. `session` is who the app is told is signed in; `wake` when it must be woken first. */
   | { kind: "app"; session: "member" | "end-user" | null; wake: boolean }
-  /** One of `UnavailablePage`'s pages. */
-  | { kind: "unavailable"; reason: Unavailable; status: number }
+  /** One of `UnavailablePage`'s pages, with where it may send the visitor next. */
+  | { kind: "unavailable"; reason: Unavailable; status: number; links: PageLinks }
   /** `AuthPage`'s sign-in or sign-up page, with its config. */
   | { kind: "auth"; page: AuthPageName; config: AuthPageConfig }
   /** `AuthPage.WriteMessageAsync` for a hand-off that cannot be redeemed. */
@@ -189,8 +189,29 @@ export function accessCheck(
   return isSignedIn(visitor) ? { decision: "deny" } : { decision: "sign-in" };
 }
 
-function unavailable(reason: Unavailable): Extract<GateOutcome, { kind: "unavailable" }> {
-  return { kind: "unavailable", reason, status: unavailableStatus(reason) };
+/**
+ * `AppGate.Links`: the same address again; the console — on the path form it shares the host, on the
+ * subdomain it is the platform's origin; a member's console session (only ever on the platform's
+ * host); and the app's sign-out, returning to its sign-in.
+ */
+export function pageLinks(request: GateRequest): PageLinks {
+  const addresses = addressesOf(request.app);
+  const home = homeOf(addresses, request.form);
+  const here = new URL(addressFor(addresses, request.form, request.rest.replace(/^\/+/, "")));
+  const appAddress = prefixOf(home);
+  const signIn = `${appAddress}/${AUTH_PATH}/sign-in?returnTo=${escapeDataString(`${appAddress}/`)}`;
+  const member = request.visitor.kind === "member" || request.visitor.kind === "member-without-access";
+  return {
+    here: here.pathname + here.search,
+    console: request.form === "path" ? "" : new URL(addresses.pathHome).origin,
+    member: member && request.form === "path",
+    switchAccount: `${appAddress}/${AUTH_PATH}/sign-out?returnTo=${escapeDataString(signIn)}`,
+    appId: request.app.id,
+  };
+}
+
+function unavailable(reason: Unavailable, links: PageLinks): Extract<GateOutcome, { kind: "unavailable" }> {
+  return { kind: "unavailable", reason, status: unavailableStatus(reason), links };
 }
 
 /** One request through the Edge. */
@@ -200,9 +221,10 @@ export function decide(request: GateRequest): GateOutcome {
   if (app.state === "outage") return { kind: "outage" };
   const addresses = addressesOf(app);
   const home = homeOf(addresses, form);
+  const links = pageLinks(request);
 
-  if (app.state === "paused") return unavailable(app.pausedReason === "budget" ? "BudgetSpent" : "Paused");
-  if (app.state === "not-published") return unavailable("NotReady");
+  if (app.state === "paused") return unavailable(app.pausedReason === "budget" ? "BudgetSpent" : "Paused", links);
+  if (app.state === "not-published") return unavailable("NotReady", links);
 
   const rest = request.rest.replace(/^\/+/, "");
   const q = rest.indexOf("?");
@@ -257,14 +279,22 @@ export function decide(request: GateRequest): GateOutcome {
     const original = appAddress + inApp + query;
     return { kind: "redirect", location: `${new URL(home).origin}${appAddress}/${AUTH_PATH}/sign-in?returnTo=${escapeDataString(original)}` };
   }
-  if (check.decision === "deny") return unavailable("Forbidden");
+  if (check.decision === "deny") return unavailable("Forbidden", links);
 
-  if (app.state === "crashed") return unavailable("Crashed");
+  if (app.state === "crashed") return unavailable("Crashed", links);
   // `AppGate.ReasonFor`: a wake that did not finish — over 30 seconds, no room on the host, or anything else.
-  if (app.state === "slow") return unavailable("Slow");
-  if (app.state === "busy") return unavailable("Busy");
-  if (app.state === "unreachable") return unavailable("Temporary");
+  if (app.state === "slow") return unavailable("Slow", links);
+  if (app.state === "busy") return unavailable("Busy", links);
+  if (app.state === "unreachable") return unavailable("Temporary", links);
   return { kind: "app", session: check.session, wake: app.state === "asleep" && request.awake !== true };
+}
+
+/**
+ * `AppGate` on an organisation's app host, at an address no app has: the no-app page (404). The
+ * demo only knows the platform's origin, not which address was asked for.
+ */
+export function noAppLinks(platformOrigin: string): PageLinks {
+  return { here: "/", console: platformOrigin, address: null };
 }
 
 export interface Resolved {
@@ -288,5 +318,5 @@ export function resolve(request: GateRequest): Resolved {
     form = next.form;
     rest = next.rest;
   }
-  return { outcome: unavailable("Temporary"), address: addressFor(addresses, form, rest), form, rest };
+  return { outcome: unavailable("Temporary", pageLinks({ ...request, form, rest })), address: addressFor(addresses, form, rest), form, rest };
 }

@@ -61,7 +61,7 @@ saying why not.
   `/api/app-auth/{appId}/*`; other methods get `401` with that address in `Location`. On the
   organisation subdomain the page moves to the platform's host, where a member's session lives, and
   the session comes back through `_endgame/auth/handoff` as the subdomain's own cookie (UC-110).
-- **A5 — Not shared with them.** A signed-in person without access: "You don't have access" (403).
+- **A5 — Not shared with them.** A signed-in person without access: "You don’t have access" (403).
 - **A6 — The control plane cannot answer the access check** (down, an error, no such endpoint).
   Private and shared apps are closed (503), never opened.
 - **A7 — Paused.** At the overdraft limit, or with a monthly budget above the app spent, the holding

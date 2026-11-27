@@ -658,6 +658,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
   3. The page reads **"Sign in to {App}"**, then "{App} belongs to {Org}."
   4. It shows **"Members of {Org}"**: "Sign in with the passkey you use for Endgame." and **"Sign in with a passkey"**.
   5. For shared or public apps only, it adds **"Using this app"**: "Sign in with the passkey you created for this app.", **"Sign in with your passkey"**, and "New here? **Create your sign-in**".
+  6. For a public app only (it opens signed out too), the page ends with **"Back to {App}"**, a link to where the visitor was going.
 - **You know it worked when:** the **"Sign in to {App}"** page shows.
 - **Variations and refusals:**
   - Control plane unreachable: "This app is temporarily unavailable" (503).
@@ -780,7 +781,7 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Steps:**
   1. Signed out, the visitor is sent to the subdomain's sign-in page, which immediately redirects to the same page on the platform's host with an absolute `returnTo`.
   2. If already signed in there, the page asks for a hand-off and is sent straight back without seeing anything.
-  3. Otherwise they sign in (ACC-03 or ACC-06). The server answers with a one-time `{subdomain}_endgame/auth/handoff?code=…` link that lasts one minute.
+  3. Otherwise they sign in (ACC-03 or ACC-06). The page says where they are, in one line under its lead: "Endgame keeps your sign-in at its own address, so you sign in here and go straight back to {subdomain host}." (By design: a member's Endgame session lives on the platform's host, ARCH-004/005.) The server answers with a one-time `{subdomain}_endgame/auth/handoff?code=…` link that lasts one minute.
   4. Edge on the subdomain redeems the code, sets a cookie for that host only, and redirects into the app.
 - **You know it worked when:** the app opens on the subdomain address.
 - **Variations and refusals:**
@@ -817,14 +818,15 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **What you learn:** being signed in is not the same as having access.
 - **Steps:**
   1. Someone signed in to Endgame, with no role on the app, opens its address.
-  2. Edge's check answers deny. The page reads **"You don't have access to this app"**, "You are signed in, but your account has no access to this app. Ask its owner for access." (403) — true of a private app as of an unshared one.
+  2. Edge's check answers deny. The page reads **"You don’t have access to this app"**, "You are signed in, but your account has no access to this app. Ask its owner for access." (403) — true of a private app as of an unshared one.
+  3. Its ways onward: **"Sign in as someone else"** (the app's sign-out, which comes back to its sign-in page) and, for a member signed in to Endgame on the platform's host, **"Go to Endgame"** first.
 - **You know it worked when:** that page shows.
 - **Variations and refusals:**
   - The same wording is used when the app is private and sharing is irrelevant.
   - Not verified from code: an archived app answers deny even to anonymous visitors, if Edge still routes it.
 - **Where:** `AppGate.RefuseAsync`, `UnavailablePage.cs`.
 - **Reachable from:** UI
-- **Covered by tests:** `AppAccessTests` private-app test; `EdgeRoutingTests.Every_page_is_plain_language_and_branded`.
+- **Covered by tests:** `AppAccessTests` private-app test; `UnavailablePageTests.Every_page_is_plain_language_in_the_consoles_faces_and_offers_a_way_onward`.
 
 ### ACC-11 Sign out of an app
 - **Who:** app end user; member
@@ -889,7 +891,8 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Learn first:** ACC-01
 - **What you learn:** running out of credits pauses an app without losing anything.
 - **Steps:**
-  1. Budget spent: **"This app is paused"**, "It has used this month's budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns." It is a 503 and the app is never woken.
+  1. Budget spent: **"This app is paused"**, "It has used this month’s budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns." It is a 503 and the app is never woken.
+  2. The page offers **"Try again"** (the same address), and for the app's owner "Is this your app? **Raise its budget in Endgame**", a link to the app's page in the console. Past the overdraft limit the link is **"Top up the credits in Endgame"**, to Credits. On an organisation subdomain these links name the platform's own host; with none configured they are left out.
 - **You know it worked when:** after a raised budget, or a top-up, the app opens again.
 - **Variations and refusals:** past the overdraft limit: **"This app is paused"**, "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up." (503).
 - **Where:** `AppGate.InvokeAsync`, `UnavailablePage.cs`.
@@ -908,13 +911,14 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
   2. The page then loads, with a wake-time header added.
 - **You know it worked when:** the app loads after a short delay.
 - **Variations and refusals** (each a 503 page):
-  - Timed out: **"This app is taking longer than usual"**, "It is still starting. Please try again in a few seconds." (Retry-After 3).
+  - Timed out: **"This app is taking longer than usual"**, "It is still starting. Please try again in a few seconds." (Retry-After 3). It says "This page tries again by itself in a few seconds." and does so (a refresh after 3 seconds).
   - No room on the host: **"This app could not start just now"**, "Endgame is very busy at the moment. Please try again in a minute."
   - Crashed: **"This app has stopped for a moment"**, "Something went wrong inside it, and its owner has been told. Please try again in a minute: the next visit starts it again."
   - The app fails mid-request: the crashed page, or **"This app is temporarily unavailable"**.
+  - Every one of these pages offers **"Try again"**: a plain link to the same address.
 - **Where:** `AppGate.cs`, `Runtime/AppRuntime.cs`, `UnavailablePage.cs`.
 - **Reachable from:** UI
-- **Covered by tests:** `AppRuntimeTests`; `EdgeRoutingTests.Every_page_is_plain_language_and_branded`.
+- **Covered by tests:** `AppRuntimeTests`; `UnavailablePageTests.Every_page_is_plain_language_in_the_consoles_faces_and_offers_a_way_onward`.
 
 ### ACC-16 Visit an unpublished or unreachable app
 - **Who:** any visitor
@@ -922,17 +926,18 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Needs:** nothing
 - **Level:** Core
 - **Learn first:** ACC-01
-- **What you learn:** an address can exist before the app's first version does.
+- **What you learn:** an address can exist before the app's first version does; an organisation's app address with no app is never the console.
 - **Steps:**
-  - Not published: **"This app isn't ready yet"**, "It has an address, but its first version has not been published. Please check back soon." — to whoever may open it. A visitor who may not is sent to sign in or refused first, exactly as for a published app. An app has its address from the moment it is created or placed: Edge is told at once.
-  - Unknown to Edge, or the access check unavailable: **"This app is temporarily unavailable"**, "Endgame could not reach it just now. Please try again in a moment."
+  - Not published: **"This app isn’t ready yet"**, "It has an address, but its first version has not been published. Please check back soon." — to whoever may open it, with **"Try again"** and "Is this your app? **Open it in Endgame**". A visitor who may not is sent to sign in or refused first, exactly as for a published app. An app has its address from the moment it is created or placed: Edge is told at once.
+  - No app at the address, on an organisation's subdomain: **"There is no app at this address"**, "Nothing is published here. Check the address you were given, or ask the person who shared it.", the address asked for, and **"Go to Endgame"** (404). On the platform's own host an unknown address is the console's, which shows its own not-found page.
+  - The access check unavailable, or an app Edge has not loaded yet: **"This app is temporarily unavailable"**, "Endgame could not reach it just now. Please try again in a moment."
   - Paths under `_platform` from the public side: 404.
   - Declared webhooks (`POST hooks/{name}`) reach even a private app without a session.
 - **You know it worked when:** the matching page shows.
 - **Variations and refusals:** none further.
-- **Where:** `AppGate.cs`.
+- **Where:** `AppGate.cs`, `UnavailablePage.cs`.
 - **Reachable from:** UI
-- **Covered by tests:** `EdgePipelineTests.Platform_callbacks_are_never_routed…`, `Declared_webhooks_and_only_those_reach_a_private_app…`; `EdgeRoutingTests.Availability_follows_the_version_and_the_pause`; `EdgePipelineTests.A_private_unpublished_app_asks_a_stranger_to_sign_in_and_tells_a_member_it_is_not_ready`; `WalkTwoServerTests.A_new_app_is_in_the_routing_table_unpublished_and_Edge_is_told_at_once`.
+- **Covered by tests:** `EdgePipelineTests.An_organisation_app_host_is_never_served_the_console…`, `Platform_callbacks_are_never_routed…`, `Declared_webhooks_and_only_those_reach_a_private_app…`; `EdgeRoutingTests.Availability_follows_the_version_and_the_pause`; `EdgePipelineTests.A_private_unpublished_app_asks_a_stranger_to_sign_in_and_tells_a_member_it_is_not_ready`; `WalkTwoServerTests.A_new_app_is_in_the_routing_table_unpublished_and_Edge_is_told_at_once`.
 
 ---
 

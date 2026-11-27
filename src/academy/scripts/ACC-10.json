@@ -17,7 +17,7 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "text": "You don't have access to this app",
+        "text": "You don’t have access to this app",
         "note": "Edge's check answered deny: 403."
       }
     }
@@ -33,7 +33,7 @@
           "step": 1,
           "kind": "demo",
           "highlight": {
-            "text": "You don't have access to this app",
+            "text": "You don’t have access to this app",
             "note": "Court booking was shared with them, then made private: the same refusal."
           }
         }

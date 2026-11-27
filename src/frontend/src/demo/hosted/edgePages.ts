@@ -3,23 +3,29 @@
  * copied from the platform's own source, so a visitor in the demo sees exactly what a visitor of a
  * hosted app sees:
  *
- * - `src/backend/Endgame.Edge/Pages/PageChrome.cs`   → {@link PAGE_CHROME_STYLE}
- * - `src/backend/Endgame.Edge/Pages/UnavailablePage.cs` → {@link UNAVAILABLE_COPY}, {@link renderUnavailablePage}
+ * - `src/backend/Endgame.Edge/Pages/PageChrome.cs`   → {@link PAGE_CHROME_STYLE}, {@link fontFaces}, {@link renderDocument}
+ * - `src/backend/Endgame.Edge/Pages/UnavailablePage.cs` → {@link UNAVAILABLE_COPY}, {@link pageActions}, {@link pageNote}, {@link renderUnavailablePage}
  * - `src/backend/Endgame.Edge/Pages/AuthPage.cs`     → {@link renderAuthPage}, {@link renderMessagePage}, {@link applyAuthInfo}
  * - `src/backend/Endgame.Edge/Access/AuthPages.cs`   → {@link HANDOFF_EXPIRED}, {@link HANDOFF_FAILED}
  *
  * TOKEN-RULE EXEMPTION. The CSS below carries sizes and spacing of its own because it is a verbatim
  * copy of the platform's page chrome, not the console's styling; it is rendered inside an isolated
- * document and never reaches the console's DOM. Its colours are the console's own role values
- * (PageChrome.cs says so itself), so they are read from `@/lib/tokens` rather than written out here,
- * and `hosted.test.ts` proves the result is byte-for-byte the C# string.
+ * document and never reaches the console's DOM. Its colours and shadow are the console's own role
+ * values (PageChrome.cs says so itself), so they are read from `@/lib/tokens` rather than written out
+ * here, and `hosted.test.tsx` proves the result is byte-for-byte the C# string.
+ *
+ * The Edge serves the pages' typefaces and mark itself, under the app's address; the demo has no
+ * server, so {@link DEMO_ASSETS} hands the same files over as `data:` URLs (the console's own
+ * fontsource files, and the mark drawn from the tokens).
  *
  * What is deliberately not ported: the per-response CSP nonce, and the pages' scripts (passkey
  * ceremonies through `navigator.credentials` and `fetch` to the control plane). The demo has no
  * server, so `HostedAppView` drives the same DOM changes the script would make ({@link applyAuthInfo})
  * and answers the forms with the demo's simulated flows. Every visible word stays.
  */
-import { roles } from "@/lib/tokens";
+import sansFont from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
+import displayFont from "@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2?url";
+import { roles, shadow } from "@/lib/tokens";
 
 // ---------------------------------------------------------------------------------------------
 // Encoding, as the C# does it
@@ -62,72 +68,126 @@ export function escapeDataString(value: string): string {
 
 const r = roles;
 
+/** `PageChrome.AssetsPath` and its files. */
+export const ASSETS_PATH = "/_endgame/assets";
+export const MARK_FILE = "endgame-mark.svg";
+export const SANS_FILE = "inter-latin-wght-normal.woff2";
+export const DISPLAY_FILE = "space-grotesk-latin-wght-normal.woff2";
+
 /** `PageChrome.Style`, exactly. */
 export const PAGE_CHROME_STYLE = `  :root {
-    --ground: ${r.ground}; --surface: ${r.surface}; --ink: ${r.ink.DEFAULT}; --ink-body: ${r.ink.body}; --ink-muted: ${r.ink.muted}; --border: ${r.border.DEFAULT}; --border-strong: ${r.border.strong};
-    --primary: ${r.primary.DEFAULT}; --primary-hover: ${r.primary.hover}; --primary-ink: ${r.primary.ink}; --primary-tint: ${r.primary.tint}; --danger: ${r.attention.text}; --danger-tint: ${r.attention.tint};
-    --radius-lg: 24px; --radius: 12px; --space: 16px; --measure: 32rem;
-    --shadow-card: 0 1px 2px rgb(11 16 32 / 0.04), 0 8px 24px -12px rgb(11 16 32 / 0.10);
+    --ground: ${r.ground}; --surface: ${r.surface}; --ink: ${r.ink.DEFAULT}; --ink-body: ${r.ink.body}; --ink-muted: ${r.ink.muted}; --border: ${r.border.DEFAULT}; --border-strong: ${r.border.strong}; --border-field: ${r.border.field};
+    --primary: ${r.primary.DEFAULT}; --primary-hover: ${r.primary.hover}; --primary-link: ${r.primary.link}; --primary-ink: ${r.primary.ink}; --danger: ${r.attention.text}; --danger-tint: ${r.attention.tint};
+    --radius-card: 24px; --radius-button: 14px; --radius-control: 8px; --space: 16px; --measure: 34rem; --touch: 44px;
+    --shadow-card: ${shadow.card};
     --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
     --font-display: "Space Grotesk Variable", "Space Grotesk", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center;
          padding: max(calc(var(--space) * 1.5), env(safe-area-inset-top)) max(calc(var(--space) * 1.5), env(safe-area-inset-right))
                   max(calc(var(--space) * 1.5), env(safe-area-inset-bottom)) max(calc(var(--space) * 1.5), env(safe-area-inset-left));
          -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
-         background: var(--ground); color: var(--ink); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+         background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 1rem; line-height: 1.5; -webkit-font-smoothing: antialiased; }
   main { width: 100%; max-width: var(--measure); background: var(--surface); border: 1px solid var(--border);
-         border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding: calc(var(--space) * 2.5); }
-  .mark { display: block; margin-bottom: calc(var(--space) * 1.5); }
-  .wordmark { display: inline-block; margin-bottom: calc(var(--space) * 1.5); font-family: var(--font-display); font-weight: 600; color: var(--primary); }
-  h1 { margin: 0 0 calc(var(--space) * 0.75); font-family: var(--font-display); font-size: 1.5rem; letter-spacing: -0.01em; line-height: 1.2; }
-  h2 { margin: 0 0 calc(var(--space) * 0.5); font-size: 0.95rem; font-weight: 600; }
-  p { margin: 0; color: var(--ink-muted); line-height: 1.6; }
-  section { margin-top: calc(var(--space) * 1.75); padding-top: calc(var(--space) * 1.5); border-top: 1px solid var(--border); }
-  section > p { margin-bottom: var(--space); font-size: 0.9rem; }
-  label { display: block; margin-bottom: calc(var(--space) * 0.75); font-size: 0.875rem; font-weight: 500; color: var(--ink-body); }
-  input { display: block; width: 100%; margin-top: calc(var(--space) * 0.35); padding: calc(var(--space) * 0.6) calc(var(--space) * 0.75);
-          border: 1px solid var(--border-strong); border-radius: var(--radius); font: inherit; color: var(--ink); background: var(--surface); }
+         border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: calc(var(--space) * 2.5); }
+  .mark { display: block; width: 40px; height: 40px; margin-bottom: calc(var(--space) * 1.25); }
+  h1 { margin: 0 0 calc(var(--space) * 0.75); font-family: var(--font-display); font-size: 1.875rem; font-weight: 600; letter-spacing: -0.025em; line-height: 1.2; text-wrap: pretty; }
+  h2 { margin: 0 0 calc(var(--space) * 0.25); font-size: 1rem; font-weight: 600; line-height: 1.4; }
+  p { margin: 0; color: var(--ink-body); line-height: 1.6; text-wrap: pretty; }
+  .address { margin-top: calc(var(--space) * 0.75); font-family: var(--font-mono); font-size: 0.875rem; color: var(--ink); overflow-wrap: anywhere; }
+  section { margin-top: calc(var(--space) * 1.5); padding-top: calc(var(--space) * 1.5); border-top: 1px solid var(--border); }
+  section > p { margin-bottom: var(--space); font-size: 0.9375rem; }
+  label { display: block; margin-bottom: var(--space); font-size: 0.875rem; font-weight: 500; color: var(--ink); }
+  input { display: block; width: 100%; min-height: var(--touch); margin-top: calc(var(--space) * 0.375); padding: 0 calc(var(--space) * 0.75);
+          border: 1px solid var(--border-field); border-radius: var(--radius-control); font: inherit; color: var(--ink); background: var(--surface); }
   input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-  .actions { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 0.75); }
-  button, .button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 calc(var(--space) * 1.25);
-           border-radius: var(--radius); border: 1px solid var(--primary); background: var(--primary); color: var(--primary-ink);
-           font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .actions { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 0.5); margin-top: calc(var(--space) * 1.5); }
+  section .actions, form .actions { margin-top: 0; }
+  button, .button { display: inline-flex; align-items: center; justify-content: center; min-height: var(--touch); padding: 0 var(--space);
+           border-radius: var(--radius-button); border: 1px solid var(--primary); background: var(--primary); color: var(--primary-ink);
+           font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; text-decoration: none; }
   button:hover, .button:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
-  button.secondary { background: var(--surface); color: var(--primary); border-color: var(--border-strong); }
-  button.secondary:hover { background: var(--primary-tint); }
+  button.secondary, .button.secondary { border-radius: var(--radius-control); border-color: var(--border-strong); background: var(--surface); color: var(--ink-body); font-weight: 400; }
+  button.secondary:hover, .button.secondary:hover { background: var(--ground); border-color: var(--border-strong); }
   button[disabled] { opacity: 0.6; cursor: progress; }
-  a { color: var(--primary); }
-  .note { margin-top: var(--space); font-size: 0.875rem; }
-  .error { margin-top: var(--space); padding: calc(var(--space) * 0.75); border-radius: var(--radius); background: var(--danger-tint); color: var(--danger); font-size: 0.9rem; }
+  a { color: var(--primary-link); text-underline-offset: 2px; }
+  .note { margin-top: var(--space); font-size: 0.875rem; color: var(--ink-muted); }
+  .note a { font-weight: 500; }
+  .error { margin-top: var(--space); padding: calc(var(--space) * 0.75); border-radius: var(--radius-control); background: var(--danger-tint); color: var(--danger); font-size: 0.9rem; }
   [hidden] { display: none !important; }
+  /* Worked by touch: a link inside a sentence is a thumb's height too. */
+  @media (pointer: coarse) {
+    .note a { display: inline-flex; align-items: center; min-height: var(--touch); }
+  }
   /* A phone: the card keeps its edge but gives its room to the words; every action is a full-width tap target. */
   @media (max-width: 30rem) {
     body { place-items: start center; padding: max(var(--space), env(safe-area-inset-top)) max(calc(var(--space) * 0.75), env(safe-area-inset-right))
            max(var(--space), env(safe-area-inset-bottom)) max(calc(var(--space) * 0.75), env(safe-area-inset-left)); }
-    main { padding: calc(var(--space) * 1.5) calc(var(--space) * 1.25); border-radius: var(--radius); }
-    h1 { font-size: 1.375rem; }
+    main { padding: calc(var(--space) * 1.75) calc(var(--space) * 1.25); }
+    h1 { font-size: 1.5rem; }
     .actions { flex-direction: column; }
     .actions > button, .actions > .button { width: 100%; }
     section { margin-top: calc(var(--space) * 1.25); padding-top: calc(var(--space) * 1.25); }
-    .note a { display: inline-flex; align-items: center; min-height: 44px; }
+    .note a { display: inline-flex; align-items: center; min-height: var(--touch); }
   }`;
 
+/** Where a page's asset is: the Edge's `{assets}/{file}`, or the demo's `data:` URL. */
+export type AssetUrl = (file: string) => string;
+
+/** The Edge's assets under a path (`PageChrome.AssetsAt`). */
+export const assetsAt =
+  (assets: string): AssetUrl =>
+  (file) =>
+    `${assets}/${file}`;
+
 /**
- * The Endgame mark (`public/brand/endgame-mark.svg`), as a `data:` URL so the demo loads nothing.
- * Its colours are the token layer's: primary, primary-ink and the lit node.
+ * The Endgame mark (`public/brand/endgame-mark.svg`, which the Edge carries as an asset), as a
+ * `data:` URL so the demo loads nothing. Its colours are the token layer's: primary, primary-ink and the lit node.
  */
 export const MARK_URL = `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Endgame"><rect width="64" height="64" rx="16" fill="${r.primary.DEFAULT}"/><path d="M21 17v30M21 17h24M21 32h18M21 47h12" fill="none" stroke="${r.primary.ink}" stroke-width="5.5" stroke-linecap="round"/><circle cx="45" cy="17" r="5" fill="${r.primary.ink}"/><circle cx="39" cy="32" r="5" fill="${r.primary.ink}"/><circle cx="33" cy="47" r="5" fill="${r.live}"/></svg>`,
 )}`;
+
+/** The demo's assets: the console's own typefaces and the mark, inlined. */
+export const DEMO_ASSETS: AssetUrl = (file) => (file === SANS_FILE ? sansFont : file === DISPLAY_FILE ? displayFont : MARK_URL);
+
+/** `PageChrome.Fonts`, exactly. */
+export function fontFaces(url: AssetUrl): string {
+  return `  @font-face { font-family: "Inter Variable"; font-style: normal; font-display: swap; font-weight: 100 900; src: url("${url(SANS_FILE)}") format("woff2"); }
+  @font-face { font-family: "Space Grotesk Variable"; font-style: normal; font-display: swap; font-weight: 300 700; src: url("${url(DISPLAY_FILE)}") format("woff2"); }`;
+}
+
+/** `PageChrome.Document`. */
+export function renderDocument(title: string, url: AssetUrl, body: string, head = "", styleAttributes = "", scripts = ""): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">${head}
+<title>${htmlEncode(title)} · Endgame</title>
+<style${styleAttributes}>
+${fontFaces(url)}
+${PAGE_CHROME_STYLE}
+</style>
+</head>
+<body>
+<main>
+<img class="mark" src="${htmlEncode(url(MARK_FILE))}" alt="Endgame" width="40" height="40">
+${body}
+</main>${scripts}
+</body>
+</html>`;
+}
 
 // ---------------------------------------------------------------------------------------------
 // UnavailablePage.cs
 // ---------------------------------------------------------------------------------------------
 
 /** Why the edge is answering instead of the app (`enum Unavailable`). */
-export type Unavailable = "Crashed" | "Paused" | "BudgetSpent" | "Busy" | "NotReady" | "Slow" | "Temporary" | "Forbidden";
+export type Unavailable = "Crashed" | "Paused" | "BudgetSpent" | "Busy" | "NotReady" | "Slow" | "Temporary" | "Forbidden" | "NoApp";
 
 /** `UnavailablePage.Copy`: title and message for each reason. */
 export const UNAVAILABLE_COPY: Record<Unavailable, { title: string; message: string }> = {
@@ -135,58 +195,113 @@ export const UNAVAILABLE_COPY: Record<Unavailable, { title: string; message: str
     title: "This app has stopped for a moment",
     message: "Something went wrong inside it, and its owner has been told. Please try again in a minute: the next visit starts it again.",
   },
+  // "lost — it": a no-break space before the dash keeps it off the start of a line.
   Paused: {
     title: "This app is paused",
-    message: "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up.",
+    message: "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up.",
   },
   BudgetSpent: {
     title: "This app is paused",
-    message: "It has used this month's budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns.",
+    message: "It has used this month’s budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns.",
   },
   Busy: { title: "This app could not start just now", message: "Endgame is very busy at the moment. Please try again in a minute." },
   NotReady: {
-    title: "This app isn't ready yet",
+    title: "This app isn’t ready yet",
     message: "It has an address, but its first version has not been published. Please check back soon.",
   },
   Slow: { title: "This app is taking longer than usual", message: "It is still starting. Please try again in a few seconds." },
   Forbidden: {
-    title: "You don't have access to this app",
+    title: "You don’t have access to this app",
     message: "You are signed in, but your account has no access to this app. Ask its owner for access.",
+  },
+  NoApp: {
+    title: "There is no app at this address",
+    message: "Nothing is published here. Check the address you were given, or ask the person who shared it.",
   },
   Temporary: { title: "This app is temporarily unavailable", message: "Endgame could not reach it just now. Please try again in a moment." },
 };
 
-/** `UnavailablePage.StatusFor`. */
-export function unavailableStatus(reason: Unavailable): number {
-  return reason === "Forbidden" ? 403 : 503;
+/** `UnavailablePage`'s words for the ways onward. */
+export const ONWARD = {
+  tryAgain: "Try again",
+  goToEndgame: "Go to Endgame",
+  signInAsSomeoneElse: "Sign in as someone else",
+  yourApp: "Is this your app?",
+  retriesItself: "This page tries again by itself in a few seconds.",
+  topUp: "Top up the credits in Endgame",
+  raiseBudget: "Raise its budget in Endgame",
+  openIt: "Open it in Endgame",
+} as const;
+
+/** `PageLinks`: where a page may send the visitor next. */
+export interface PageLinks {
+  /** The address asked for, as a path on this host: "Try again". */
+  here: string;
+  /** The console's origin with no trailing slash ("" on the platform's own host); null when this host cannot name it. */
+  console: string | null;
+  /** The visitor carries a member's console session here. */
+  member?: boolean;
+  /** The app's sign-out, returning to its sign-in. */
+  switchAccount?: string | null;
+  appId?: string | null;
+  /** The no-app page's address (host and path). */
+  address?: string | null;
 }
 
-/** `UnavailablePage.Render`: the mark from `markUrl`, or the wordmark when none is known. */
-export function renderUnavailablePage(reason: Unavailable, markUrl: string | null = MARK_URL): string {
+/** `UnavailablePage.StatusFor`. */
+export function unavailableStatus(reason: Unavailable): number {
+  return reason === "Forbidden" ? 403 : reason === "NoApp" ? 404 : 503;
+}
+
+/** `UnavailablePage.RetryAfter`. */
+export function retryAfter(reason: Unavailable): number | null {
+  return reason === "Slow" ? 3 : reason === "Busy" || reason === "Crashed" || reason === "Temporary" ? 15 : null;
+}
+
+/** `UnavailablePage.Actions`: the buttons, first one primary. */
+export function pageActions(reason: Unavailable, links: PageLinks): { label: string; href: string }[] {
+  if (reason === "Forbidden") {
+    return [
+      ...(links.member && links.console !== null ? [{ label: ONWARD.goToEndgame, href: `${links.console}/` }] : []),
+      ...(links.switchAccount ? [{ label: ONWARD.signInAsSomeoneElse, href: links.switchAccount }] : []),
+    ];
+  }
+  if (reason === "NoApp") return links.console !== null ? [{ label: ONWARD.goToEndgame, href: `${links.console}/` }] : [];
+  return [{ label: ONWARD.tryAgain, href: links.here }];
+}
+
+/** `UnavailablePage.Note`: the quiet line under the buttons. */
+export function pageNote(reason: Unavailable, links: PageLinks): { words: string; linkText: string | null; href: string | null } | null {
+  const c = links.console;
+  if (reason === "Slow") return { words: ONWARD.retriesItself, linkText: null, href: null };
+  if (reason === "Paused" && c !== null) return { words: ONWARD.yourApp, linkText: ONWARD.topUp, href: `${c}/credits` };
+  if (reason === "BudgetSpent" && c !== null && links.appId) return { words: ONWARD.yourApp, linkText: ONWARD.raiseBudget, href: `${c}/apps/${links.appId}` };
+  if (reason === "NotReady" && c !== null && links.appId) return { words: ONWARD.yourApp, linkText: ONWARD.openIt, href: `${c}/apps/${links.appId}` };
+  return null;
+}
+
+/** `UnavailablePage.Render`. */
+export function renderUnavailablePage(reason: Unavailable, links: PageLinks, url: AssetUrl = DEMO_ASSETS): string {
   const { title, message } = UNAVAILABLE_COPY[reason];
-  const mark =
-    markUrl === null
-      ? `<span class="wordmark">Endgame</span>`
-      : `<img class="mark" src="${htmlEncode(markUrl)}" alt="Endgame" width="48" height="48">`;
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex">
-<title>${htmlEncode(title)} · Endgame</title>
-<style>
-${PAGE_CHROME_STYLE}
-</style>
-</head>
-<body>
-<main>
-${mark}
-<h1>${htmlEncode(title)}</h1>
-<p>${htmlEncode(message)}</p>
-</main>
-</body>
-</html>`;
+  let body = `<h1>${htmlEncode(title)}</h1>\n<p>${htmlEncode(message)}</p>`;
+  if (reason === "NoApp" && links.address) body += `\n<p class="address">${htmlEncode(links.address)}</p>`;
+  const actions = pageActions(reason, links);
+  if (actions.length > 0) {
+    body += `\n<nav class="actions" aria-label="What to do next">`;
+    actions.forEach((a, i) => {
+      body += `<a class="${i === 0 ? "button" : "button secondary"}" href="${htmlEncode(a.href)}">${htmlEncode(a.label)}</a>`;
+    });
+    body += "</nav>";
+  }
+  const note = pageNote(reason, links);
+  if (note) {
+    body +=
+      note.linkText === null || note.href === null
+        ? `\n<p class="note">${htmlEncode(note.words)}</p>`
+        : `\n<p class="note">${htmlEncode(note.words)} <a href="${htmlEncode(note.href)}">${htmlEncode(note.linkText)}</a></p>`;
+  }
+  const head = reason === "Slow" ? `\n<meta http-equiv="refresh" content="${retryAfter(reason)}">` : "";
+  return renderDocument(title, url, body, head);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -198,6 +313,7 @@ export type AuthPageName = "sign-in" | "sign-up";
 /** `AuthPage.Body("sign-up")`, exactly. */
 export const SIGN_UP_BODY = `<h1 id="title">Create your sign-in</h1>
 <p id="lead">Checking what this app offers…</p>
+<p id="via" class="note" hidden></p>
 <form id="sign-up" hidden>
   <section>
     <label>E-mail address<input id="email" name="email" type="email" autocomplete="email" required></label>
@@ -212,11 +328,13 @@ export const SIGN_UP_BODY = `<h1 id="title">Create your sign-in</h1>
   <p>This deployment allows signing in without a passkey, for testing only.</p>
   <div class="actions"><button id="dev-visitor-up" type="button" class="secondary">Continue without a passkey</button></div>
 </section>
-<p id="error" class="error" role="alert" hidden></p>`;
+<p id="error" class="error" role="alert" hidden></p>
+<p id="back" class="note" hidden><a id="back-link" href="#">Back to the app</a></p>`;
 
 /** `AuthPage.Body("sign-in")`, exactly. */
 export const SIGN_IN_BODY = `<h1 id="title">Sign in</h1>
 <p id="lead">Checking what this app offers…</p>
+<p id="via" class="note" hidden></p>
 <section id="members" hidden>
   <h2 id="members-title">Members</h2>
   <p>Sign in with the passkey you use for Endgame.</p>
@@ -237,43 +355,23 @@ export const SIGN_IN_BODY = `<h1 id="title">Sign in</h1>
     <button id="dev-visitor" type="button" class="secondary" hidden>As a visitor</button>
   </div>
 </section>
-<p id="error" class="error" role="alert" hidden></p>`;
+<p id="error" class="error" role="alert" hidden></p>
+<p id="back" class="note" hidden><a id="back-link" href="#">Back to the app</a></p>`;
 
-/** `AuthPage.Shell`, without the nonce and with the scripts left out (see the note at the top). */
-function shell(title: string, markUrl: string, body: string): string {
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex">
-<title>${htmlEncode(title)} · Endgame</title>
-<style>
-${PAGE_CHROME_STYLE}
-</style>
-</head>
-<body>
-<main>
-<img class="mark" src="${htmlEncode(markUrl)}" alt="Endgame" width="48" height="48">
-${body}
-</main>
-
-</body>
-</html>`;
-}
-
-/** `AuthPage.WriteAsync`: the sign-in or sign-up page, before its script has run. */
-export function renderAuthPage(page: AuthPageName, markUrl: string = MARK_URL): string {
+/** `AuthPage.WriteAsync`: the sign-in or sign-up page, before its script has run (no nonce, no scripts: see the note at the top). */
+export function renderAuthPage(page: AuthPageName, url: AssetUrl = DEMO_ASSETS): string {
   const title = page === "sign-up" ? "Create your sign-in" : "Sign in";
-  return shell(title, markUrl, page === "sign-up" ? SIGN_UP_BODY : SIGN_IN_BODY);
+  return renderDocument(title, url, page === "sign-up" ? SIGN_UP_BODY : SIGN_IN_BODY);
 }
 
-/** `AuthPage.WriteMessageAsync`: a title, a message and one link onward. */
-export function renderMessagePage(title: string, message: string, link: string, linkText: string, markUrl: string = MARK_URL): string {
-  const body = `<h1>${htmlEncode(title)}</h1>
-<p>${htmlEncode(message)}</p>
-<p class="note"><a class="button" href="${htmlEncode(link)}">${htmlEncode(linkText)}</a></p>`;
-  return shell(title, markUrl, body);
+/** `AuthPage.MessageBody`. */
+export function messageBody(title: string, message: string, link: string, linkText: string): string {
+  return `<h1>${htmlEncode(title)}</h1>\n<p>${htmlEncode(message)}</p>\n<nav class="actions" aria-label="What to do next"><a class="button" href="${htmlEncode(link)}">${htmlEncode(linkText)}</a></nav>`;
+}
+
+/** `AuthPage.WriteMessageAsync`: a title, a message and one way onward. */
+export function renderMessagePage(title: string, message: string, link: string, linkText: string, url: AssetUrl = DEMO_ASSETS): string {
+  return renderDocument(title, url, messageBody(title, message, link, linkText));
 }
 
 /** The outage Worker's page (`src/ops/outage-worker/worker.js`, `outagePage`), in the Edge pages' shell. */
@@ -283,8 +381,8 @@ export const OUTAGE = {
   message: "It can't be reached right now. Nothing you have made has been lost — please try again in a few minutes.",
 } as const;
 
-export function renderOutagePage(markUrl: string = MARK_URL): string {
-  return shell(OUTAGE.title, markUrl, `<h1>${htmlEncode(OUTAGE.title)}</h1>\n<p>${htmlEncode(OUTAGE.message)}</p>`);
+export function renderOutagePage(url: AssetUrl = DEMO_ASSETS): string {
+  return renderDocument(OUTAGE.title, url, `<h1>${htmlEncode(OUTAGE.title)}</h1>\n<p>${htmlEncode(OUTAGE.message)}</p>`);
 }
 
 /** `AuthPages.RedeemAsync`: an unknown, used or older-than-a-minute hand-off code (410). */
@@ -338,6 +436,8 @@ export const authText = {
   publicLead: (appName: string) => `Anyone may use ${appName}. A passkey on this device signs you in — there is no password.`,
   belongsLead: (appName: string, organisationName: string) => `${appName} belongs to ${organisationName}.`,
   membersTitle: (organisationName: string) => `Members of ${organisationName}`,
+  via: (host: string) => `Endgame keeps your sign-in at its own address, so you sign in here and go straight back to ${host}.`,
+  back: (appName: string) => `Back to ${appName}`,
   unavailableLead: "Sign-in is unavailable just now.",
   passkeyClosed: "The passkey prompt was closed or timed out. Nothing was changed.",
   generic: "That did not work. Please try again.",
@@ -398,6 +498,17 @@ export function applyAuthInfo(doc: Document, config: AuthPageConfig, info: AppAu
 
   const visitors = info.signUp === true;
   setText("title", config.page === "sign-up" ? authText.signUpTitle(info.appName) : authText.signInTitle(info.appName));
+  // On the organisation subdomain the visitor was sent here, to the platform's host: say where they are, and why.
+  if (config.handoff) {
+    setText("via", authText.via(new URL(config.returnTo).host));
+    show("via");
+  }
+  // A public app opens signed out too: signing in can wait.
+  if (visitors && info.invitationRequired !== true) {
+    setText("back-link", authText.back(info.appName));
+    setHref("back-link", config.returnTo);
+    show("back");
+  }
   if (config.page === "sign-up") {
     if (!visitors) {
       setText("lead", authText.privateLead(info.appName, info.organisationName));

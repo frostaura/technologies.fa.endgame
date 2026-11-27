@@ -15,6 +15,7 @@ namespace Endgame.Edge.Routing;
 /// <param name="IdleAfter">How long with no request before the app sleeps; null when always on.</param>
 /// <param name="PausedReason">Why the app is paused (<see cref="PausedReasons"/>), when <paramref name="Availability"/> is paused.</param>
 /// <param name="Hooks">The declared webhook names: only <c>POST hooks/&lt;name&gt;</c> for these skips the access check.</param>
+/// <param name="Name">The app's name in the tree, sent to the app as <see cref="HostingConventions.AppNameHeader"/>; null when the table gave none.</param>
 public sealed record EdgeApp(
     Guid AppId,
     Guid OrganisationId,
@@ -27,7 +28,8 @@ public sealed record EdgeApp(
     TimeSpan? IdleAfter,
     string Availability,
     string? PausedReason = null,
-    IReadOnlySet<string>? Hooks = null)
+    IReadOnlySet<string>? Hooks = null,
+    string? Name = null)
 {
     /// <summary>True when <paramref name="name"/> is one of the app's declared webhooks.</summary>
     public bool DeclaresHook(string name) => Hooks is { } hooks && hooks.Contains(name);
@@ -171,7 +173,7 @@ public sealed partial class RouteSnapshot
             : AppAvailability.Available;
         var pausedReason = route.Paused ? route.PausedReason ?? PausedReasons.OverdraftLimit : null;
         app = new EdgeApp(route.AppId, route.OrganisationId, route.Scope!, pathPrefix, route.Host.ToLowerInvariant(), hostPrefix, route.Target, access, idle, availability,
-            pausedReason, hooks);
+            pausedReason, hooks, string.IsNullOrWhiteSpace(route.Name) ? null : route.Name.Trim());
         return null;
     }
 

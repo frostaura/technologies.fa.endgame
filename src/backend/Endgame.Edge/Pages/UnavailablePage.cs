@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 
 namespace Endgame.Edge.Pages;
 
@@ -28,82 +29,170 @@ public enum Unavailable
 
     /// <summary>Signed in, without access to this app.</summary>
     Forbidden,
+
+    /// <summary>An organisation's app host, at an address where no app is (404).</summary>
+    NoApp,
 }
 
 /// <summary>
-/// The page a visitor sees when an app cannot answer: plain language, the Endgame mark, and never
-/// a word about the machinery (CLAUDE.md rule 12 — no containers, servers or networks).
+/// Where a page may send the visitor next.
+/// </summary>
+/// <param name="Assets">The page's typefaces and mark (<see cref="PageChrome.AssetsAt"/>).</param>
+/// <param name="Here">The address the visitor asked for, as a path on this host: "Try again".</param>
+/// <param name="Console">The console's origin with no trailing slash (empty on the platform's own host), or null when this host cannot name it.</param>
+/// <param name="Member">The visitor carries a member's console session here.</param>
+/// <param name="SwitchAccount">The app's sign-out, returning to its sign-in: "Sign in as someone else". Null with no app.</param>
+/// <param name="AppId">The app, for the owner's link to its page in the console. Null with no app.</param>
+/// <param name="Address">The address shown on the no-app page (host and path).</param>
+public sealed record PageLinks(string Assets, string Here, string? Console, bool Member = false, string? SwitchAccount = null, Guid? AppId = null, string? Address = null);
+
+/// <summary>
+/// The page a visitor sees when an app cannot answer, or when there is no app at an organisation's
+/// address: plain language, the Endgame mark, a way onward, and never a word about the machinery
+/// (CLAUDE.md rule 12 — no containers, servers or networks). Who sees each, and what helps them:
+/// <list type="bullet">
+/// <item>Crashed, busy, slow, temporary — anyone admitted. Trying again is what helps; a slow wake tries again by itself after its <c>Retry-After</c>.</item>
+/// <item>Paused, budget spent — anyone, before the access check. Trying again (once it is restored); for its owner, the place in Endgame that restores it.</item>
+/// <item>Not ready — whoever may open it. Trying again; for its owner, the app's page in Endgame.</item>
+/// <item>Forbidden — someone signed in as the wrong person: signing in as someone else; a member, also back to Endgame.</item>
+/// <item>No app — anyone: the address they asked for, and the way to Endgame.</item>
+/// </list>
 /// </summary>
 public static class UnavailablePage
 {
-    public const string MarkPath = "/brand/endgame-mark.svg";
+    public const string TryAgain = "Try again";
+    public const string GoToEndgame = "Go to Endgame";
+    public const string SignInAsSomeoneElse = "Sign in as someone else";
+    public const string YourApp = "Is this your app?";
+    public const string RetriesItself = "This page tries again by itself in a few seconds.";
 
     public static int StatusFor(Unavailable reason) => reason switch
     {
         Unavailable.Forbidden => StatusCodes.Status403Forbidden,
+        Unavailable.NoApp => StatusCodes.Status404NotFound,
         _ => StatusCodes.Status503ServiceUnavailable,
+    };
+
+    /// <summary>Seconds before trying again helps; null when it would not.</summary>
+    public static int? RetryAfter(Unavailable reason) => reason switch
+    {
+        Unavailable.Slow => 3,
+        Unavailable.Busy or Unavailable.Crashed or Unavailable.Temporary => 15,
+        _ => null,
     };
 
     public static (string Title, string Message) Copy(Unavailable reason) => reason switch
     {
         Unavailable.Crashed => ("This app has stopped for a moment",
             "Something went wrong inside it, and its owner has been told. Please try again in a minute: the next visit starts it again."),
+        // "lost — it": a no-break space before the dash keeps it off the start of a line.
         Unavailable.Paused => ("This app is paused",
-            "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up."),
+            "Its organisation has used up its credits. Nothing has been lost — it will be back as soon as they are topped up."),
         Unavailable.BudgetSpent => ("This app is paused",
-            "It has used this month's budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns."),
+            "It has used this month’s budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns."),
         Unavailable.Busy => ("This app could not start just now",
             "Endgame is very busy at the moment. Please try again in a minute."),
-        Unavailable.NotReady => ("This app isn't ready yet",
+        Unavailable.NotReady => ("This app isn’t ready yet",
             "It has an address, but its first version has not been published. Please check back soon."),
         Unavailable.Slow => ("This app is taking longer than usual",
             "It is still starting. Please try again in a few seconds."),
-        Unavailable.Forbidden => ("You don't have access to this app",
+        Unavailable.Forbidden => ("You don’t have access to this app",
             "You are signed in, but your account has no access to this app. Ask its owner for access."),
+        Unavailable.NoApp => ("There is no app at this address",
+            "Nothing is published here. Check the address you were given, or ask the person who shared it."),
         _ => ("This app is temporarily unavailable",
             "Endgame could not reach it just now. Please try again in a moment."),
     };
 
-    /// <summary>The page, with the mark loaded from <paramref name="markUrl"/> when one is known.</summary>
-    public static string Render(Unavailable reason, string? markUrl)
+    /// <summary>The buttons, first one primary: (label, address).</summary>
+    public static IReadOnlyList<(string Label, string Href)> Actions(Unavailable reason, PageLinks links)
     {
-        var (title, message) = Copy(reason);
-        var mark = markUrl is null
-            ? "<span class=\"wordmark\">Endgame</span>"
-            : $"<img class=\"mark\" src=\"{WebUtility.HtmlEncode(markUrl)}\" alt=\"Endgame\" width=\"48\" height=\"48\">";
-        return $$"""
-            <!doctype html>
-            <html lang="en">
-            <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-            <meta name="robots" content="noindex">
-            <title>{{WebUtility.HtmlEncode(title)}} · Endgame</title>
-            <style>
-            {{PageChrome.Style}}
-            </style>
-            </head>
-            <body>
-            <main>
-            {{mark}}
-            <h1>{{WebUtility.HtmlEncode(title)}}</h1>
-            <p>{{WebUtility.HtmlEncode(message)}}</p>
-            </main>
-            </body>
-            </html>
-            """;
+        var actions = new List<(string Label, string Href)>();
+        switch (reason)
+        {
+            case Unavailable.Forbidden:
+                if (links.Member && links.Console is { } console)
+                {
+                    actions.Add((GoToEndgame, console + "/"));
+                }
+
+                if (links.SwitchAccount is { } other)
+                {
+                    actions.Add((SignInAsSomeoneElse, other));
+                }
+
+                break;
+            case Unavailable.NoApp:
+                if (links.Console is { } endgame)
+                {
+                    actions.Add((GoToEndgame, endgame + "/"));
+                }
+
+                break;
+            default:
+                actions.Add((TryAgain, links.Here));
+                break;
+        }
+
+        return actions;
     }
 
-    public static async Task WriteAsync(HttpContext context, Unavailable reason, string? markUrl)
+    /// <summary>The quiet line under the buttons: (words, link text, address); link text and address null for words alone.</summary>
+    public static (string Words, string? LinkText, string? Href)? Note(Unavailable reason, PageLinks links) => reason switch
+    {
+        Unavailable.Slow => (RetriesItself, null, null),
+        Unavailable.Paused when links.Console is { } console => (YourApp, "Top up the credits in Endgame", console + "/credits"),
+        Unavailable.BudgetSpent when links.Console is { } console && links.AppId is { } app => (YourApp, "Raise its budget in Endgame", $"{console}/apps/{app:D}"),
+        Unavailable.NotReady when links.Console is { } console && links.AppId is { } app => (YourApp, "Open it in Endgame", $"{console}/apps/{app:D}"),
+        _ => null,
+    };
+
+    /// <summary>The page.</summary>
+    public static string Render(Unavailable reason, PageLinks links)
+    {
+        var (title, message) = Copy(reason);
+        var body = new StringBuilder();
+        body.Append($"<h1>{WebUtility.HtmlEncode(title)}</h1>\n<p>{WebUtility.HtmlEncode(message)}</p>");
+        if (reason == Unavailable.NoApp && links.Address is { Length: > 0 } address)
+        {
+            body.Append($"\n<p class=\"address\">{WebUtility.HtmlEncode(address)}</p>");
+        }
+
+        var actions = Actions(reason, links);
+        if (actions.Count > 0)
+        {
+            body.Append("\n<nav class=\"actions\" aria-label=\"What to do next\">");
+            for (var i = 0; i < actions.Count; i++)
+            {
+                body.Append($"<a class=\"{(i == 0 ? "button" : "button secondary")}\" href=\"{WebUtility.HtmlEncode(actions[i].Href)}\">{WebUtility.HtmlEncode(actions[i].Label)}</a>");
+            }
+
+            body.Append("</nav>");
+        }
+
+        if (Note(reason, links) is { } note)
+        {
+            var (words, linkText, href) = note;
+            body.Append(linkText is null || href is null
+                ? $"\n<p class=\"note\">{WebUtility.HtmlEncode(words)}</p>"
+                : $"\n<p class=\"note\">{WebUtility.HtmlEncode(words)} <a href=\"{WebUtility.HtmlEncode(href)}\">{WebUtility.HtmlEncode(linkText)}</a></p>");
+        }
+
+        // A slow wake refreshes itself once trying again can help, and says so.
+        var head = reason == Unavailable.Slow ? $"\n<meta http-equiv=\"refresh\" content=\"{RetryAfter(reason)}\">" : "";
+        return PageChrome.Document(title, links.Assets, body.ToString(), head);
+    }
+
+    public static async Task WriteAsync(HttpContext context, Unavailable reason, PageLinks links)
     {
         var response = context.Response;
         response.Clear();
         response.StatusCode = StatusFor(reason);
         response.ContentType = "text/html; charset=utf-8";
         response.Headers.CacheControl = "no-store";
-        if (reason is Unavailable.Busy or Unavailable.Slow or Unavailable.Crashed or Unavailable.Temporary)
+        if (RetryAfter(reason) is { } seconds)
         {
-            response.Headers.RetryAfter = reason == Unavailable.Slow ? "3" : "15";
+            response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         if (HttpMethods.IsHead(context.Request.Method))
@@ -111,6 +200,6 @@ public static class UnavailablePage
             return;
         }
 
-        await response.WriteAsync(Render(reason, markUrl), context.RequestAborted);
+        await response.WriteAsync(Render(reason, links), context.RequestAborted);
     }
 }

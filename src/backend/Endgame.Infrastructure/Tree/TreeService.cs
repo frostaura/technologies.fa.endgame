@@ -47,8 +47,9 @@ public sealed record SleepSetting(string Mode, int IdleMinutes, string ModeSetAt
 /// <param name="Paused">True when the app must not be served: Edge shows the holding page. Nothing is deleted.</param>
 /// <param name="PausedReason"><c>overdraft_limit</c> (the organisation's balance is past its overdraft limit) or <c>budget_exhausted</c> (a monthly budget on the app's chain is spent); null when not paused.</param>
 /// <param name="Hooks">The app's declared webhook names: Edge admits <c>POST hooks/&lt;name&gt;</c> for these, even on a private app.</param>
+/// <param name="Name">The app's name in the tree: the one name its header, its tab title and the identity pages show (Edge sends it to the app).</param>
 public sealed record RouteView(Guid AppId, Guid OrganisationId, string Scope, string PathBase, string Host, string HostPathBase, string Target, string Status, bool Sleeping, SleepSetting Sleep, string? Version,
-    string Access, bool Paused, string? PausedReason, IReadOnlyList<string> Hooks);
+    string Access, bool Paused, string? PausedReason, IReadOnlyList<string> Hooks, string Name);
 
 public sealed record RoutingTable(DateTimeOffset GeneratedAt, IReadOnlyList<RouteView> Routes);
 
@@ -318,7 +319,7 @@ public sealed class TreeService(
             var tail = $"/{row.Division}/{row.Project}/{row.App.Slug}/";
             routes.Add(new RouteView(row.App.Id, row.App.OrganisationId, path.ToString(), $"/{path}/", $"{row.Org}.{addresses.Value.OrganisationDomain}", tail,
                 $"http://app-{row.App.Id:N}:8080", row.App.Status, row.App.Status == NodeStatuses.Sleeping, sleep, row.App.CurrentVersion,
-                access, paused is not null, paused, hooks[row.App.Id].Order(StringComparer.Ordinal).ToList()));
+                access, paused is not null, paused, hooks[row.App.Id].Order(StringComparer.Ordinal).ToList(), row.App.Name));
         }
 
         session.Clear();

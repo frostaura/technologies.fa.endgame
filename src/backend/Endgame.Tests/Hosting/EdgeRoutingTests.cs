@@ -90,6 +90,18 @@ public sealed class RouteSnapshotTests
     }
 
     [Fact]
+    public void The_apps_name_in_the_tree_is_carried_and_a_blank_one_is_none()
+    {
+        Assert.Equal("Dive Seat Sheet", Snapshot(Routes.View(name: " Dive Seat Sheet ")).Apps.Single().Name);
+        Assert.Null(Snapshot(Routes.View(name: "  ")).Apps.Single().Name);
+        Assert.Null(Snapshot(Routes.View()).Apps.Single().Name);
+        // A rename is a change of the routes: the edge picks it up.
+        var named = Routes.View(name: "A");
+        Assert.Equal(RouteSnapshot.VersionOf(new RoutingTable(DateTimeOffset.UtcNow, [named])), RouteSnapshot.VersionOf(new RoutingTable(DateTimeOffset.UtcNow, [named with { }])));
+        Assert.NotEqual(RouteSnapshot.VersionOf(new RoutingTable(DateTimeOffset.UtcNow, [named])), RouteSnapshot.VersionOf(new RoutingTable(DateTimeOffset.UtcNow, [named with { Name = "B" }])));
+    }
+
+    [Fact]
     public void Tests_may_compress_an_idle_minute()
     {
         var app = RouteSnapshot.From(new RoutingTable(DateTimeOffset.UtcNow, [Routes.View(idleMinutes: 2)]), Reserved, secondsPerIdleMinute: 1).Apps.Single();
@@ -216,19 +228,87 @@ public sealed class UnavailablePageTests
     // CLAUDE.md rule 12: normal mode never names infrastructure.
     private static readonly string[] Forbidden = ["container", "docker", "server", "network", "proxy", "502", "503", "repository", "stack", "image"];
 
+    private static readonly Guid AppId = Guid.Parse("6f0b1c2d-0000-4000-8000-000000000001");
+
+    private static readonly PageLinks Everything = new(
+        "/acme/apps/notes/web/_endgame/assets", "/acme/apps/notes/web/books?page=2", "", Member: true,
+        SwitchAccount: "/acme/apps/notes/web/_endgame/auth/sign-out?returnTo=x", AppId: AppId, Address: "acme.endgame.test/nothing/here");
+
     [Theory]
     [MemberData(nameof(Reasons))]
-    public void Every_page_is_plain_language_and_branded(Unavailable reason)
+    public void Every_page_is_plain_language_in_the_consoles_faces_and_offers_a_way_onward(Unavailable reason)
     {
-        var html = UnavailablePage.Render(reason, UnavailablePage.MarkPath);
+        var html = UnavailablePage.Render(reason, Everything);
         var (title, message) = UnavailablePage.Copy(reason);
         foreach (var word in Forbidden)
         {
             Assert.DoesNotContain(word, title + " " + message, StringComparison.OrdinalIgnoreCase);
         }
 
-        Assert.Contains("src=\"/brand/endgame-mark.svg\"", html, StringComparison.Ordinal);
-        Assert.Contains(WebUtility.HtmlEncode(title), html, StringComparison.Ordinal);
+        Assert.Contains("<img class=\"mark\" src=\"/acme/apps/notes/web/_endgame/assets/endgame-mark.svg\"", html, StringComparison.Ordinal);
+        Assert.Contains("url(\"/acme/apps/notes/web/_endgame/assets/space-grotesk-latin-wght-normal.woff2\")", html, StringComparison.Ordinal);
+        Assert.Contains("url(\"/acme/apps/notes/web/_endgame/assets/inter-latin-wght-normal.woff2\")", html, StringComparison.Ordinal);
+        Assert.Contains($"<h1>{WebUtility.HtmlEncode(title)}</h1>", html, StringComparison.Ordinal);
+        Assert.Contains("<nav class=\"actions\" aria-label=\"What to do next\"><a class=\"button\" href=", html, StringComparison.Ordinal);
+        // Typographic apostrophes: "isn’t", never "isn't".
+        Assert.DoesNotContain("'", title + message, StringComparison.Ordinal);
+        Assert.DoesNotContain("&#39;", html, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(Unavailable.Crashed)]
+    [InlineData(Unavailable.Busy)]
+    [InlineData(Unavailable.Slow)]
+    [InlineData(Unavailable.Temporary)]
+    [InlineData(Unavailable.Paused)]
+    [InlineData(Unavailable.BudgetSpent)]
+    [InlineData(Unavailable.NotReady)]
+    public void Where_trying_again_can_help_try_again_is_a_plain_link_to_the_same_address(Unavailable reason) =>
+        Assert.Contains("<nav class=\"actions\" aria-label=\"What to do next\"><a class=\"button\" href=\"/acme/apps/notes/web/books?page=2\">Try again</a></nav>",
+            UnavailablePage.Render(reason, Everything), StringComparison.Ordinal);
+
+    [Fact]
+    public void A_slow_wake_tries_again_by_itself_after_its_retry_after_and_says_so()
+    {
+        var html = UnavailablePage.Render(Unavailable.Slow, Everything);
+        Assert.Equal(3, UnavailablePage.RetryAfter(Unavailable.Slow));
+        Assert.Contains("<meta http-equiv=\"refresh\" content=\"3\">", html, StringComparison.Ordinal);
+        Assert.Contains("<p class=\"note\">This page tries again by itself in a few seconds.</p>", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("http-equiv", UnavailablePage.Render(Unavailable.Busy, Everything), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Forbidden_offers_signing_in_as_someone_else_and_a_member_the_way_back_to_endgame()
+    {
+        Assert.Contains("<a class=\"button\" href=\"/\">Go to Endgame</a><a class=\"button secondary\" href=\"/acme/apps/notes/web/_endgame/auth/sign-out?returnTo=x\">Sign in as someone else</a>",
+            UnavailablePage.Render(Unavailable.Forbidden, Everything), StringComparison.Ordinal);
+        var visitor = UnavailablePage.Render(Unavailable.Forbidden, Everything with { Member = false });
+        Assert.Contains("<a class=\"button\" href=\"/acme/apps/notes/web/_endgame/auth/sign-out?returnTo=x\">Sign in as someone else</a>", visitor, StringComparison.Ordinal);
+        Assert.DoesNotContain("Go to Endgame", visitor, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_owner_is_pointed_at_the_place_in_endgame_that_fixes_it_and_only_when_this_host_can_name_it()
+    {
+        Assert.Contains("<p class=\"note\">Is this your app? <a href=\"https://endgame.test/credits\">Top up the credits in Endgame</a></p>",
+            UnavailablePage.Render(Unavailable.Paused, Everything with { Console = "https://endgame.test" }), StringComparison.Ordinal);
+        Assert.Contains($"<a href=\"/apps/{AppId:D}\">Raise its budget in Endgame</a>", UnavailablePage.Render(Unavailable.BudgetSpent, Everything), StringComparison.Ordinal);
+        Assert.Contains($"<a href=\"/apps/{AppId:D}\">Open it in Endgame</a>", UnavailablePage.Render(Unavailable.NotReady, Everything), StringComparison.Ordinal);
+        foreach (var reason in new[] { Unavailable.Paused, Unavailable.BudgetSpent, Unavailable.NotReady })
+        {
+            Assert.DoesNotContain("class=\"note\"", UnavailablePage.Render(reason, Everything with { Console = null }), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void There_is_no_app_at_this_address_is_a_404_naming_the_address()
+    {
+        Assert.Equal(404, UnavailablePage.StatusFor(Unavailable.NoApp));
+        var html = UnavailablePage.Render(Unavailable.NoApp, new PageLinks(PageChrome.AssetsPath, "/x", "https://endgame.test", Address: "acme.endgame.test/community/<no-such-app>/web/"));
+        Assert.Contains("<h1>There is no app at this address</h1>", html, StringComparison.Ordinal);
+        Assert.Contains("<p class=\"address\">acme.endgame.test/community/&lt;no-such-app&gt;/web/</p>", html, StringComparison.Ordinal);
+        Assert.Contains("<a class=\"button\" href=\"https://endgame.test/\">Go to Endgame</a>", html, StringComparison.Ordinal);
+        Assert.Contains("src=\"/_endgame/assets/endgame-mark.svg\"", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -241,8 +321,15 @@ public sealed class UnavailablePageTests
     }
 
     [Fact]
-    public void Without_a_mark_address_the_page_shows_the_wordmark() =>
-        Assert.Contains("class=\"wordmark\"", UnavailablePage.Render(Unavailable.Crashed, null), StringComparison.Ordinal);
+    public void The_pages_assets_are_the_edges_own()
+    {
+        foreach (var file in new[] { PageChrome.MarkFile, PageChrome.SansFile, PageChrome.DisplayFile })
+        {
+            using var stream = typeof(PageChrome).Assembly.GetManifestResourceStream($"Endgame.Edge.Pages.Assets.{file}");
+            Assert.NotNull(stream);
+            Assert.True(stream.Length > 300);
+        }
+    }
 
     public static TheoryData<Unavailable> Reasons()
     {
@@ -271,6 +358,8 @@ public sealed class EdgeShippedRoutesTests
 
         var routes = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(root, "src", "backend", "Endgame.Edge", "appsettings.json")))!["ReverseProxy"]!["Routes"]!.AsObject();
         var console = routes["console"]!["Order"]!.GetValue<int>();
+        // An organisation's app host is never served the console: the gate knows it by this cluster.
+        Assert.Equal(AppGate.ConsoleCluster, routes["console"]!["ClusterId"]!.GetValue<string>());
         foreach (var path in new[] { "/mcp", "/mcp/{**rest}" })
         {
             var route = routes.Select(r => r.Value!).Single(r => r["Match"]!["Path"]!.GetValue<string>() == path);
