@@ -941,7 +941,8 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   1. The heading reads "How much {name} does on its own", with "Set once for the organisation, narrowed for a division, project or app. The credit budget is the limit that is always on."
   2. Pick a level under **"Level"** (indented with "— ").
   3. Each value says "Set here", "Inherited from {name}", "Not set anywhere: auto-mode by default" or "Not set anywhere: off".
-  4. The side panel: "One rule, used everywhere", and "What never changes": "The credit budget is always on.", "No one may make an app public but a person.", "Nothing is built over a red line.", "Repairing its own mistake is never billed."
+  4. "Rules for each stage" is one table: a row per stage ("Every stage", "Research", "Planning", "Building", "Checking the work", "Security review", "The conversation") and a column each for "May not", "Asks you first" and "May do", with where the stage's rules were set under its name. A tool with several rules in a list is one line ("Run commands and tests, limited"); technical mode lists each rule beneath it as the harness reads it. A list with nothing in it shows "—"; a stage with no rules at all reads "No rules set for this stage".
+  5. The side panel: "One rule, used everywhere", and "What never changes": "The credit budget is always on.", "No one may make an app public but a person.", "Nothing is built over a red line.", "Repairing its own mistake is never billed."
 - **You know it worked when:** the origin labels show.
 - **Variations and refusals:** non-admins see "You can read these. An Admin or the Owner sets them." and disabled controls. Loading and failure: "The autonomy settings could not be loaded".
 - **Where:** `features/autonomy/AutonomyView.tsx`; `GET /api/autonomy`.
@@ -973,7 +974,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Level:** Core. **Learn first:** AUTO-02.
 - **What you learn:** checkpoints only stop work in checkpoints mode.
 - **Steps:**
-  1. Toggle one of:
+  1. Toggle one of (each switch sits before its title, and where the value was set at the row's end):
      - **"Before work starts"** ("Wait for your word once the estimate is known."), see RUN-08;
      - **"Before the plan is carried out"** ("Show you the plan and wait for you to agree it."), see BLD-04;
      - **"Before anyone is hired"** ("Every hire waits for you, even inside the budget."), see BLD-02.
@@ -1001,36 +1002,36 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 
 ### AUTO-05 Set rules for a stage
 - **Who:** Admin.
-- **Starts at:** `/autonomy`, **"Rules for each stage"**. The cards are: "Every stage", "Research", "Planning", "Building", "Checking the work", "Security review", "The conversation".
+- **Starts at:** `/autonomy`, **"Rules for each stage"**: a row per stage, "Every stage", "Research", "Planning", "Building", "Checking the work", "Security review", "The conversation".
 - **Needs:** Admin.
 - **Level:** Advanced. **Learn first:** AUTO-01.
 - **What you learn:** a stage's own rules add to those for every stage, and the nearest level's rules win.
 - **Steps:**
-  1. Press **"Set rules here"**, or **"Change"** if rules are already set here.
+  1. Press **"Set rules here"**, or **"Change"** if rules are already set here, at the end of the stage's row. Its editor opens across the row.
   2. In each of the lists **"May not"**, **"Asks you first"** and **"May do"**:
      - in normal mode, pick a tool from **"Choose…"** and press **"Add"**;
-     - in technical mode, type `tool` or `tool(pattern)` (placeholder "tool or tool(pattern)") and press **"Add"** or Enter;
+     - in technical mode, type `tool` or `tool(pattern)` (each list's placeholder is an example: "run(rm -rf *)", "run(npm install*)", "edit_file") and press **"Add"** or Enter;
      - remove a rule with the × chip.
   3. Press **"Save for {level}"**, or **"Cancel"**.
-- **You know it worked when:** the card shows your rules and "Set here". Overriding a higher level shows "Replaces the rules set at …".
+- **You know it worked when:** the stage's row shows your rules and "Set here". Overriding a higher level shows "Replaces the rules set at …".
 - **What it changes:** every agent's permission check at that stage. "May not" is refused whatever else applies. "May do" is allowed.
 - **Variations and refusals:**
   - Refused: "The rules were not saved: {reason} They are as they were." (400 for a malformed rule or stage).
   - **"Asks you first" asks.** A matching call raises an approval (RUN-07) and the work waits for your answer, even though nobody watches the run; declined, the step is not taken and the work goes on without it. **"Search the web"** (`web_search`) is the AI model's own ability, and the same rules hold for it: under "May not" it is not offered at all, and under "Asks you first" each step asks once before its first search and works without searching if declined. On the run page a step a rule refused reads "An action was refused by your rules"; one you declined reads "You declined: search the web for …" (RUN-02). The rule set's separate `checkpoints` list is kept as it was ("Also stops for you at: …") and is API/MCP only.
-  - Empty list labels: "Nothing extra is refused", "Nothing waits for you", "Only what the job allows".
+  - An empty list shows "—" under its column; a tool named by two rules in one list is said once.
 - **Where:** `AutonomyView.tsx` `StageRules`; `PUT /api/autonomy/rule-sets`; `PermissionPolicy.Decide`.
 - **Reachable from:** UI (deny, ask, allow); API/MCP `rule_set_set` (adds `checkpoints`).
 - **Covered by tests:** `AutonomyView.test.tsx` ("sets a stage's rules here and removes them again", "technical mode shows the rules as the harness reads them"); `PermissionTests` (all, including `An_asks_you_first_rule_raises_an_approval_even_unattended_and_a_decline_carries_the_note`).
 
 ### AUTO-06 Remove the rules set here
 - **Who:** Admin.
-- **Starts at:** **"Remove here"** on a stage card.
+- **Starts at:** **"Remove here"** at the end of a stage's row.
 - **Needs:** rules set at this level.
 - **Level:** Advanced. **Learn first:** AUTO-05.
 - **What you learn:** removing rules lets the inherited ones apply again.
 - **Steps:**
   1. Press **"Remove here"**. There is no confirmation.
-  2. The card shows the inherited rules or "No rules set for this stage".
+  2. The row shows the inherited rules or "No rules set for this stage".
 - **You know it worked when:** "Set here" disappears.
 - **Variations and refusals:** refused: "Not removed: …"; 404 if nothing is set.
 - **Where:** `DELETE /api/autonomy/rule-sets`.
