@@ -115,7 +115,10 @@ header in both modes, and the rail layout on a phone on its side.
 
 - The apps an Endgame app factory builds are on this system through the app kit (`@endgame/appkit/ui`): the same tokens
   (the 3:1 `border-field`, the five status tones), one `AppHeader`, and page layouts (`PageHeader`, `PageLayout`,
-  `CardGrid`, `FormCard` + `FormActions`, `Checklist`, `NotFoundState`) that a list, a form and a record are built from. The
+  `CardGrid`, `FormCard` + `FormActions`, `Checklist`, `NotFoundState`) that a list, a form and a record are built from. On a phone the
+  kit's `AppHeader` is two compact rows (the name beside an avatar that opens the person's name and "Sign out"; then the
+  places, scrolling sideways, never wrapping), and a form's field errors live in the kit's `useFormErrors`, which clears a
+  field's error as soon as it is changed and focuses the first wrong field on a failed submit. The
   template's `AGENTS.md` ("What good looks like") is the builder's checklist; `pageShapes.test.tsx` (the kit's
   `expectPageShape`) and ESLint's `endgame/use-kit-fields` fail an app below it. The demo's reading list
   (`src/demo/hosted/kit.tsx`) carries the same class strings.

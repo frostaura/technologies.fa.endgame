@@ -35,6 +35,43 @@ describe("the header", () => {
     expect(screen.getByRole("link", { name: "Sign out" })).toBeTruthy();
   });
 
+  it("on a phone, keeps who is signed in and the way out behind the avatar, a 44px button", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse(200, { user: { id: "1", email: "ada@example.test", displayName: "Ada Diver" } }));
+    render(<AppHeader home={<a href="./">Dive Club Lost and Found</a>} />);
+    const account = await screen.findByRole("button", { name: "Your account" });
+    expect(account.className).toContain("size-11");
+    expect(account.closest(".sm\\:hidden")).toBeTruthy();
+    // The header's own name, sign-out and avatar are the wider screens'; on a phone the menu stands in for them.
+    expect(screen.getByRole("link", { name: "Sign out" }).className).toContain("max-sm:hidden");
+    expect(account.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("user-menu")).toBeNull();
+
+    fireEvent.click(account);
+    expect(account.getAttribute("aria-expanded")).toBe("true");
+    const menu = screen.getByTestId("user-menu");
+    expect(account.getAttribute("aria-controls")).toBe(menu.id);
+    expect(menu.textContent).toContain("Ada Diver");
+    expect(menu.textContent).toContain("ada@example.test");
+    const signOut = screen.getAllByRole("link", { name: "Sign out" }).find((l) => menu.contains(l));
+    expect(signOut?.className).toContain("min-h-11");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByTestId("user-menu")).toBeNull();
+    expect(document.activeElement).toBe(account);
+
+    fireEvent.click(account);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByTestId("user-menu")).toBeNull();
+  });
+
+  it("cuts a long app name short on a phone, keeping the avatar on its row", () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse(200, { user: null }));
+    render(<AppHeader home={<a href="./">Dive Club Lost and Found</a>} />);
+    const home = screen.getByRole("link", { name: "Dive Club Lost and Found" });
+    expect(home.className).toContain("max-sm:basis-0");
+    expect(home.querySelector(".truncate")?.textContent).toBe("Dive Club Lost and Found");
+  });
+
   it("offers sign-in to a visitor", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse(200, { user: null }));
     render(<AppHeader home={<a href="./">Books</a>} />);

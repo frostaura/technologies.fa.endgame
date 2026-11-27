@@ -28,16 +28,28 @@ export const PAGE_FRAME = "mx-auto w-full max-w-page px-4 sm:px-6 lg:px-8";
  * The app's one header: its name (linking home), its navigation, and who is signed in with the way out. Every app has the
  * same one, at the same height. `home` is the app's own link to its first page, holding the app's name:
  * `<AppHeader home={<Link to="/">{APP_NAME}</Link>}>` with `<NavItem>`s as children when the app has more than one place to go.
+ *
+ * On a desktop or tablet it is one row. On a phone it is two compact rows: the app's name (cut short if long) and the
+ * person's avatar, which opens who is signed in and "Sign out"; then the places, on one line that scrolls sideways when
+ * they do not fit — never wrapping.
  */
-export function AppHeader({ home, children, className }: { home: React.ReactElement; children?: React.ReactNode; className?: string }) {
+export function AppHeader({
+  home,
+  children,
+  className,
+}: {
+  home: React.ReactElement<{ children?: React.ReactNode }>;
+  children?: React.ReactNode;
+  className?: string;
+}) {
   return (
     <header className={cn("sticky top-0 z-20 border-b bg-surface pt-safe-t", className)} data-slot="app-header">
-      <div className={cn(PAGE_FRAME, "flex min-h-16 flex-wrap items-center gap-x-6 gap-y-1 py-2")}>
-        <Slot className="flex min-h-11 min-w-0 shrink items-center truncate font-display text-lg font-semibold text-ink hover:text-primary">
-          {home}
+      <div className={cn(PAGE_FRAME, "flex min-h-16 flex-wrap items-center gap-x-6 gap-y-1 py-2 max-sm:gap-x-3")}>
+        <Slot className="flex min-h-11 min-w-0 shrink items-center font-display text-lg font-semibold text-ink hover:text-primary max-sm:flex-1 max-sm:basis-0">
+          {React.cloneElement(home, undefined, <span className="truncate">{home.props.children}</span>)}
         </Slot>
         {children ? (
-          <nav aria-label="Main" className="flex min-w-0 items-center gap-1 overflow-x-auto max-sm:order-last max-sm:-mx-2 max-sm:w-full">
+          <nav aria-label="Main" className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto max-sm:order-last max-sm:-mx-2 max-sm:w-full">
             {children}
           </nav>
         ) : null}
@@ -61,10 +73,15 @@ export function NavItem({ children }: { children: React.ReactElement }) {
   );
 }
 
-/** Who is signed in — their initial and name — and "Sign out"; or "Sign in" for a visitor. The same in every app. */
+const AVATAR = "flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-tint font-semibold text-primary-hover";
+
+/**
+ * Who is signed in — their initial and name — and "Sign out"; or "Sign in" for a visitor. The same in every app. On a phone
+ * the name and "Sign out" wait behind the avatar, a 44px button that opens them.
+ */
 export function UserMenu() {
   const me = useCurrentUser();
-  if (me.status === "loading") return <span aria-hidden className="block h-9 w-24 animate-pulse rounded-sm bg-ground" />;
+  if (me.status === "loading") return <span aria-hidden className="block h-9 w-24 animate-pulse rounded-sm bg-ground max-sm:size-11 max-sm:rounded-full" />;
   if (me.status === "failed") return <span className="text-sm text-attention-text">Could not check who is signed in</span>;
   if (me.data === null) {
     return (
@@ -75,16 +92,73 @@ export function UserMenu() {
   }
   const name = me.data.displayName || me.data.email;
   return (
-    <div className="flex min-w-0 items-center gap-3 text-sm">
-      <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-tint font-semibold text-primary-hover">
+    <div className="relative flex min-w-0 items-center gap-3 text-sm">
+      <span aria-hidden className={cn(AVATAR, "max-sm:hidden")}>
         {initial(name)}
       </span>
       <span className="max-w-48 truncate font-medium text-ink max-sm:sr-only" data-testid="signed-in-as">
         {name}
       </span>
-      <Button asChild variant="outline" size="sm">
+      <Button asChild variant="outline" size="sm" className="max-sm:hidden">
         <a href={signOutUrl()}>Sign out</a>
       </Button>
+      <AccountMenu name={name} email={me.data.email} />
+    </div>
+  );
+}
+
+/** The phone's account button: the avatar, opening who is signed in and "Sign out". Escape or a tap outside closes it. */
+function AccountMenu({ name, email }: { name: string; email: string }) {
+  const [open, setOpen] = React.useState(false);
+  const button = React.useRef<HTMLButtonElement>(null);
+  const panel = React.useRef<HTMLDivElement>(null);
+  const id = React.useId();
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      button.current?.focus();
+    };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && !panel.current?.contains(target) && !button.current?.contains(target)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [open]);
+
+  return (
+    <div className="sm:hidden">
+      <button
+        ref={button}
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((now) => !now)}
+        className="flex size-11 items-center justify-center rounded-full hover:bg-ground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+      >
+        <span aria-hidden className={cn(AVATAR, "size-9")}>
+          {initial(name)}
+        </span>
+        <span className="sr-only">Your account</span>
+      </button>
+      {open ? (
+        <div id={id} ref={panel} data-testid="user-menu" className="absolute right-0 top-full z-30 mt-2 flex w-64 flex-col gap-1 rounded-md border bg-surface p-2 shadow-raised">
+          <div className="flex min-w-0 flex-col border-b px-3 pb-3 pt-2">
+            <span className="truncate font-semibold text-ink">{name}</span>
+            {email && email !== name ? <span className="truncate text-ink-muted">{email}</span> : null}
+          </div>
+          <a href={signOutUrl()} className="flex min-h-11 items-center rounded-sm px-3 font-semibold text-ink hover:bg-ground">
+            Sign out
+          </a>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -35,6 +35,21 @@ describe("NewNotePage", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("takes the focus to the first wrong field, and clears its error as soon as it is corrected", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json(200, { user: ada }));
+    renderPage();
+    const title = await screen.findByTestId("note-title");
+    const when = screen.getByTestId("note-happens-at");
+    fireEvent.change(when, { target: { value: "2120-01-01T08:00" } });
+    fireEvent.click(screen.getByTestId("save-note"));
+    expect(document.activeElement).toBe(title);
+    expect(when.getAttribute("aria-invalid")).toBe("true");
+    fireEvent.change(title, { target: { value: "Reef dive" } });
+    expect(title.getAttribute("aria-invalid")).toBeNull();
+    expect(document.getElementById("title-error")).toBeNull();
+    expect(when.getAttribute("aria-invalid")).toBe("true");
+  });
+
   it("shows the server's field errors beside the field", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(json(200, { user: ada }))
@@ -44,6 +59,9 @@ describe("NewNotePage", () => {
     fireEvent.click(screen.getByTestId("save-note"));
     expect((await screen.findByRole("alert")).textContent).toBe("The Title field is required.");
     expect(screen.getByTestId("note-title").getAttribute("aria-invalid")).toBe("true");
+    // The server's "Title" is the field named "title": changing it clears the error.
+    fireEvent.change(screen.getByTestId("note-title"), { target: { value: "Hello" } });
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("opens the saved note", async () => {

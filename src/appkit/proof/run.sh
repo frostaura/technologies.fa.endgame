@@ -24,6 +24,8 @@ NET_EDGE=test-appkit-edge      # ordinary: the platform's published ports
 APP=test-appkit-app            # the platform reaches the app at http://test-appkit-app:8080
 DB=test-appkit-proof-pg
 PLATFORM=test-appkit-platform
+# The app's name in the tree, as Edge sends it: long, as real names are, so the header is seen cutting it short on a phone.
+APP_NAME="Dive Club Lost and Found"
 DB_PASSWORD="proof-$(python3 -c 'import secrets; print(secrets.token_hex(8))')"
 
 case "$(uname -m)" in
@@ -65,7 +67,7 @@ docker run -d --name "$DB" --network "$NET_APP" --tmpfs /var/lib/postgresql/data
 
 docker run -d --name "$PLATFORM" --network "$NET_EDGE" \
   -p "127.0.0.1:$PLATFORM_PORT:8080" -p "127.0.0.1:$PATH_PORT:8082" -p "127.0.0.1:$HOST_PORT:8083" \
-  -e DEV_APP_URL="http://$APP:8080" -e DEV_PATH_PREFIX=/acme/labs/demo/notes -e DEV_HOST_PREFIX=/labs/demo/notes -e DEV_APP_TOKEN=dev-app-token \
+  -e DEV_APP_URL="http://$APP:8080" -e DEV_APP_NAME="$APP_NAME" -e DEV_PATH_PREFIX=/acme/labs/demo/notes -e DEV_HOST_PREFIX=/labs/demo/notes -e DEV_APP_TOKEN=dev-app-token \
   "$PLATFORM_IMAGE" > /dev/null
 docker network connect "$NET_APP" "$PLATFORM"
 
