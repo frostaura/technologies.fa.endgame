@@ -10,7 +10,7 @@
       "kind": "demo",
       "highlight": {
         "selector": "header",
-        "note": "The header: the mark, where you are, Normal / Technical, the credits pill, the bell, your account and Sign out."
+        "note": "The header: the mark, where you are, Normal / Technical, the Credits chip, the bell, your account and Sign out (below 1,100 px the mode and Sign out are in the account menu)."
       }
     },
     {
@@ -35,7 +35,7 @@
   ],
   "variations": [
     {
-      "title": "The balance at or below zero turns the pill amber",
+      "title": "At the overdraft limit the Credits chip's dot turns red",
       "persona": "owner",
       "scenario": "at-overdraft-limit",
       "start": "/",
@@ -45,7 +45,7 @@
           "kind": "demo",
           "highlight": {
             "text": "credits left",
-            "note": "Northwind is at its overdraft limit: the pill turns amber and still leads to Credits."
+            "note": "Northwind is at its overdraft limit: the Credits chip's dot turns red, and it still leads to Credits."
           }
         }
       ]
