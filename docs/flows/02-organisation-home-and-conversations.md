@@ -525,7 +525,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Needs:** the role above.
 - **Level:** Core · **Learn first:** TREE-02 · **What you learn:** the display name can change; the address never does.
 - **Steps:**
-  1. The field **"Name"** holds the current name, with the hint "Its address stays {slug}: an address never changes once it is made."
+  1. The field **"Name"** holds the current name, with the hint "Its address stays {slug}: an address never changes once it is made." For an app the hint reads "Renaming it never changes its address."
   2. Type the new name and press **"Save the name"**. The outline shows it at once and "It is called {name} now." appears.
   3. The chart and the breadcrumb follow the new name.
 - **You know it worked when:** the outline, the chart and the breadcrumb show the new name.

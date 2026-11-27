@@ -57,7 +57,7 @@ export function RenameNode({ level, id, name, slug, tree, onDone }: { level: Man
         The field grows with its panel and Save sits at its end, on the field's own line (console-desktop 13). Where the
         two do not fit side by side (a phone, a narrow side column), Save wraps under the field.
       */}
-      <Field id={fieldId} label="Name" hint={`Its address stays ${slug}: an address never changes once it is made.`} problem={value.length > 0 ? problem : null}>
+      <Field id={fieldId} label="Name" hint={level === "app" ? "Renaming it never changes its address." : `Its address stays ${slug}: an address never changes once it is made.`} problem={value.length > 0 ? problem : null}>
         <div data-rename-row="" className="flex flex-wrap items-center gap-2">
           <Input id={fieldId} value={value} maxLength={NAME_LIMIT + 1} onChange={(e) => setValue(e.target.value)} aria-describedby={`${fieldId}-hint`} aria-invalid={!!problem} className="flex-1 basis-56" />
           <Button type="submit" className="shrink-0" disabled={!!problem || typed === name || state.isLoading}>
