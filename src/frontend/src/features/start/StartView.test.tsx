@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { autonomyFixture, ideaFixture } from "@/test/fixtures";
-import { nextSteps, researchPromise, roomFor, shortfall } from "./startModel";
+import { exampleIdeas, nextSteps, researchPromise, roomFor, shortfall } from "./startModel";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { StartView } from "./StartView";
 
@@ -215,5 +215,27 @@ describe("roomFor and shortfall (D63)", () => {
 
   it("names the work after research as it is: build, check, review — there is no design stage (D17)", () => {
     expect(nextSteps(null, null).map(([t]) => t)).toContain("Build, check, review");
+  });
+});
+
+describe("ideas to start from", () => {
+  const tree = { divisions: [{ archived: false, projects: [{ archived: false, apps: [{ name: "Court booking" }, { name: "Court booking" }, { name: "Old", archived: true }] }, { apps: [{ name: "Stock Counter" }] }] }, { archived: true, projects: [{ apps: [{ name: "Gone" }] }] }] } as never;
+
+  it("takes the organisation's own suggestions first, then one idea around each app it runs", () => {
+    const out = exampleIdeas([{ title: "Waiting list", idea: "When a course is full, take names." }], tree);
+    expect(out.map((e) => e.from)).toEqual(["Suggested from your portfolio", "Around Court booking", "Around Stock Counter"]);
+    expect(out[1]?.idea).toContain("Court booking");
+  });
+
+  it("never names an archived app, and offers nothing when there is nothing to start from", () => {
+    expect(exampleIdeas([], tree).map((e) => e.from)).toEqual(["Around Court booking", "Around Stock Counter"]);
+    expect(exampleIdeas([], { divisions: [] } as never)).toEqual([]);
+  });
+
+  it("fills the idea when one is pressed", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/ideas/suggestions": json([{ id: "s1", scope: "acme", runId: "r", status: "open", ideaId: null, createdAt: "2026-11-24T10:00:00Z", title: "Ladder", idea: "A league ladder for Wednesday nights.", gap: "g", whyUs: "w", reuses: [] }]) });
+    renderWithStore(<StartView />);
+    fireEvent.click(await screen.findByRole("button", { name: /A league ladder for Wednesday nights/ }));
+    expect((screen.getByLabelText("The idea") as HTMLTextAreaElement).value).toBe("A league ladder for Wednesday nights.");
   });
 });

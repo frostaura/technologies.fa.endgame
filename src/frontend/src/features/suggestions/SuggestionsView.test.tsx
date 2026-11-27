@@ -108,4 +108,11 @@ describe("SuggestionsView", () => {
     expect(within(card).getByText("Bookings")).toBeTruthy();
     expect(within(card).queryByText(/\(service\)/)).toBeNull();
   });
+
+  it("names a thing it would reuse once, however often research listed it", async () => {
+    stub(json([{ ...SUGGESTIONS[0], reuses: ["Bookings", "Bookings", "email"] }]));
+    renderWithStore(<SuggestionsView />);
+    const card = (await screen.findByRole("list", { name: "Suggested ideas" })).querySelector('[data-suggestion="s1"]') as HTMLElement;
+    expect(within(card).getAllByText("Bookings")).toHaveLength(1);
+  });
 });
