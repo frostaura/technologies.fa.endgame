@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 import plugin from "tailwindcss/plugin";
-import { blur, coarseQuery, cssVariables, layout, motion, radius, railQuery, screens, shortQuery, surfaces, tailwindColors, typography, viewportQueries } from "./src/lib/tokens";
+import { blur, coarseQuery, cssVariables, layout, motion, radius, railQuery, screens, shortQuery, surfaces, tableAt, tableTracks, tailwindColors, typography, viewportQueries } from "./src/lib/tokens";
 
 /**
  * The Tailwind theme. It holds no values: every colour, radius, shadow, typeface and motion comes
@@ -19,7 +19,7 @@ const config: Config = {
       colors: tailwindColors(),
       borderColor: { DEFAULT: "rgb(var(--color-border) / <alpha-value>)" },
       borderRadius: radius,
-      boxShadow: { card: "var(--shadow-card)", raised: "var(--shadow-raised)", press: "var(--shadow-press)", toggle: "var(--shadow-toggle)" },
+      boxShadow: { card: "var(--shadow-card)", raised: "var(--shadow-raised)", press: "var(--shadow-press)", toggle: "var(--shadow-toggle)", cue: "var(--shadow-cue)", menu: "var(--shadow-menu)" },
       fontFamily: {
         sans: [...typography.fontFamily.sans],
         display: [...typography.fontFamily.display],
@@ -77,6 +77,33 @@ const config: Config = {
     // `rail:` — a phone on its side: the side rail, the one-line header, two columns. Registered last, so it wins.
     plugin(({ addVariant }) => {
       addVariant("rail", `@media ${railQuery}`);
+    }),
+    // The one table (`components/ui/table.tsx`): a list of cards in a narrow box, a table from its threshold up —
+    // measured on the table's own box (a container query), so it switches wherever it has the room.
+    plugin(({ addComponents, theme }) => {
+      const wide = (at: string) => ({
+        [`@container table (min-width: ${tableAt[at as keyof typeof tableAt]})`]: {
+          [`.table-frame[data-at="${at}"] > .table-head, .table-frame[data-at="${at}"] .table-row`]: {
+            display: "grid",
+            gridTemplateColumns: "var(--table-cols)",
+            alignItems: "center",
+          },
+          [`.table-frame[data-at="${at}"] .table-cell`]: { display: "block" },
+          [`.table-frame[data-at="${at}"] .table-cell-label`]: { display: "none" },
+          [`.table-frame[data-at="${at}"] [data-kind="figure"]`]: { textAlign: "right", fontVariantNumeric: "tabular-nums" },
+          [`.table-frame[data-at="${at}"] [data-kind="action"]`]: { display: "flex", justifyContent: "flex-end" },
+        },
+      });
+      addComponents({
+        ".table-frame": { containerType: "inline-size", containerName: "table" },
+        ".table-head": { display: "none" },
+        ".table-row": { display: "flex", flexDirection: "column", rowGap: theme("spacing.1.5") },
+        ".table-cell": { display: "grid", gridTemplateColumns: `${tableTracks.cardLabel} minmax(0, 1fr)`, columnGap: theme("spacing.3"), alignItems: "baseline" },
+        ".table-cell[data-primary], .table-cell[data-kind='action']": { display: "block" },
+        ...wide("narrow"),
+        ...wide("medium"),
+        ...wide("wide"),
+      });
     }),
     // `delay-*` for animations, read from the same stagger scale.
     plugin(({ matchUtilities, theme }) => {

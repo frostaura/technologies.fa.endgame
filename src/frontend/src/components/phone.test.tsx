@@ -30,7 +30,7 @@ function pretend(next: Size | null) {
     media: query,
     get matches() {
       const s = size ?? { width: 1440, height: 900 };
-      if (query === viewportQueries.phone) return s.width < breakpoints.sm || (s.height < breakpoints.short && s.width < breakpoints.lg);
+      if (query === viewportQueries.phone) return s.width < breakpoints.sm || (s.height < breakpoints.short && s.width > s.height && s.width >= breakpoints.railMin && s.width < breakpoints.lg);
       if (query === viewportQueries.desktop) return s.width >= breakpoints.lg;
       return false;
     },
