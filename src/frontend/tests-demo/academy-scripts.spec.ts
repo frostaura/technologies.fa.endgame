@@ -169,7 +169,15 @@ for (const { script, variation, name } of plays) {
           failed = `an action failed: ${(e instanceof Error ? e.message : String(e)).split("\n")[0] ?? ""}`;
         }
         counted.steps += 1;
-        const state = (await call("state")) as { route: string };
+        // The address once what the step started has been answered (a delete, then home): a
+        // caught-up play reaches its spotlight before the control plane has.
+        let state = (await call("state")) as { route: string; answering: boolean };
+        for (let i = 0, still = 0; i < 30 && (state.answering || still < 2); i++) {
+          await page.waitForTimeout(100);
+          const again = (await call("state")) as { route: string; answering: boolean };
+          still = !again.answering && again.route === state.route ? still + 1 : 0;
+          state = again;
+        }
         here[step.step] = state.route;
         // The ring as the learner sees it a moment later: drawn and still (two reads 150 ms apart agree; at most 2 s).
         let ring = (await call("ring")) as RingState;
