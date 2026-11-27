@@ -35,7 +35,7 @@ public static partial class EvaluationGate
     /// reason it failed is how the evaluator showed the work — a requirement it marked met with nothing code can verify, or
     /// no verdict at all — which a builder cannot repair: the work is checked again instead (<c>BuildWorkflow</c>).
     /// </summary>
-    public static JsonObject Apply(PlanContract plan, PlanItem item, JsonObject answer, IReadOnlyList<string> calls, IReadOnlyList<string>? missingTestIds = null, IReadOnlyList<string>? signedOutCalls = null, IReadOnlyList<ScreenTest>? screenTests = null, string? testsProblem = null, IReadOnlyList<AppAttempt>? attempts = null)
+    public static JsonObject Apply(PlanContract plan, PlanItem item, JsonObject answer, IReadOnlyList<string> calls, IReadOnlyList<string>? missingTestIds = null, IReadOnlyList<string>? signedOutCalls = null, IReadOnlyList<ScreenTest>? screenTests = null, string? testsProblem = null, IReadOnlyList<AppAttempt>? attempts = null, IReadOnlyList<FormField>? formFields = null)
     {
         signedOutCalls ??= [];
         screenTests ??= [];
@@ -63,8 +63,21 @@ public static partial class EvaluationGate
             failing.Add("testids:" + string.Join(",", missingTestIds.Order(StringComparer.Ordinal)));
         }
 
+        // A form holds up against bad input (R7-1): for each form field the part adds, the field's own bad-input test, run by
+        // code, passed. Decided from the tests code ran, whatever the evaluator wrote — and, over an evaluator that said it all
+        // works, a code-decided fault the escalation guard can stop on instead of looping (BuildWorkflow.NeedsLook).
+        var formFailures = FormInputs.Check(formFields ?? [], screenTests, testsProblem);
+        if (formFailures.Count > 0)
+        {
+            gated["faults"] = new JsonArray(Json.Strings(gated, "faults").Concat(formFailures.Select(f => f.Fault)).Distinct(StringComparer.Ordinal).Select(f => (JsonNode)f).ToArray());
+            gated["passed"] = false;
+            failing.AddRange(formFailures.Select(f => $"form:{f.Field.TestId}:{f.Kind}"));
+        }
+
+        var claimedWorking = Json.Bool(answer, "passed") == true && evaluatorFaults == 0;
+        var formOverruled = claimedWorking ? FormInputs.Overruled(formFailures) : [];
         var requirements = plan.RequirementsOf(item);
-        gated["overruled"] = new JsonArray();
+        gated["overruled"] = formOverruled.DeepClone();
         if (requirements.Count == 0)
         {
             Finish(gated, answer, failing, evaluatorFaults, notChecked, onlyShowing: notChecked);
@@ -75,7 +88,7 @@ public static partial class EvaluationGate
         var marks = (gated["requirements"] as JsonArray ?? []).OfType<JsonObject>().ToList();
         var checkedOut = new JsonArray();
         // Requirements the evaluator marked met that code's own check decided were not: the escalation guard's evidence (R7-4).
-        var overruled = new JsonArray();
+        var overruled = formOverruled;
         var allMet = true;
         var onlyShowing = true;
         // A part for people who do not sign in may be shown with signed-out calls throughout; any other, signed in only.
@@ -145,7 +158,7 @@ public static partial class EvaluationGate
         gated["requirements"] = checkedOut;
         gated["overruled"] = overruled;
         gated["faults"] = new JsonArray(faults.Distinct(StringComparer.Ordinal).Select(f => (JsonNode)f).ToArray());
-        gated["passed"] = Json.Bool(answer, "passed") == true && allMet && counted.Count > 0 && missingTestIds is not { Count: > 0 };
+        gated["passed"] = Json.Bool(answer, "passed") == true && allMet && counted.Count > 0 && missingTestIds is not { Count: > 0 } && formFailures.Count == 0;
         Finish(gated, answer, failing, evaluatorFaults, notChecked, onlyShowing);
         return gated;
     }
@@ -376,7 +389,8 @@ public static partial class EvaluationGate
         gated["failing"] = passed ? new JsonArray() : new JsonArray(failing.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Select(f => (JsonNode)f).ToArray());
         // Checked again, not repaired: the evaluator said it works (or gave no verdict), and code could not verify how it was shown.
         var claimedWorking = Json.Bool(answer, "passed") == true && evaluatorFaults == 0;
-        gated["recheck"] = !passed && onlyShowing && !failing.Any(f => f.StartsWith("testids:", StringComparison.Ordinal)) && (claimedWorking || notChecked);
+        // A form that broke, or has no bad-input test, is the builder's to fix: never a question of how the work was shown.
+        gated["recheck"] = !passed && onlyShowing && !failing.Any(f => f.StartsWith("testids:", StringComparison.Ordinal) || f.StartsWith("form:", StringComparison.Ordinal)) && (claimedWorking || notChecked);
     }
 
     private static string ScreenFault(PlanRequirement requirement, IReadOnlyList<ScreenTest> named, IReadOnlyList<string> counted, bool signedOutPart, bool dataShown, IReadOnlyList<ScreenTest> tests, string? problem)

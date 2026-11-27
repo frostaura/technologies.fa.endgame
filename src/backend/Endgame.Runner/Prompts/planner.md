@@ -36,7 +36,10 @@ idea asked for has failed, however good the rest is.
        nav-<view> on each navigation link, <entity>-list and <entity>-item, new-<entity>, open-<entity>,
        <entity>-<field> on each form input, save-<entity>, and set-<field>-<value> on a button that
        sets a field (set-status-finished). Lowercase kebab-case; the entity is the singular noun (book).
-       Code checks every one is in the built screens, and the owner's browser checks drive the app by them;
+       Code checks every one is in the built screens, and the owner's browser checks drive the app by them.
+       An item that adds a form says in its check that each of its fields has its bad-input test ("holds up
+       against bad input: dive-when", the kit's holdsUpAgainstBadInput): code runs the page's tests itself and
+       fails the item for a field without one that passes;
    - People who do not sign in: an app is private until its owner makes it public, which only a person can do
      on its page; until then the platform admits only signed-in members with rights to it, and asks everyone
      else to sign in. A requirement for people without an account ("open a trip link with no account", "all

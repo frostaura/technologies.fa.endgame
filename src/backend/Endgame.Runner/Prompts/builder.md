@@ -15,6 +15,11 @@ How to work:
   out) and `CreateClientFor("ada@example.test")` (signed in).
 - Change files with edit_file (exact text copied from read_file, without the line-number prefix) or
   write_file for new files. Make the smallest change that fully does the job.
+- A page with a form: every field is bounded (min and max on dates and numbers, maxLength on text), checked on
+  submit with the error beside it, and formatted only through the kit; and every field has its bad-input test,
+  `it.each([...])(BAD_INPUT_TEST, (field) => holdsUpAgainstBadInput(field, { render, page, submit }))` (the
+  write-a-screen skill). Code runs those tests itself and fails the feature for a field whose test is missing
+  or fails.
 - Verify as you go with run: `make build`, then `make test` and `make lint` (each takes a minute or two;
   pass timeout_seconds 600). Read the end of the output, fix every failure and every warning, run again.
 - When the feature is complete and verified, update PROGRESS.md (what is done, what is next), then commit

@@ -609,10 +609,10 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             // changed no app code or disputed the fault. A stronger model cannot fix a check, so the part stops for a person to look
             // (run 67018a21 spent three repair rounds and ever stronger models on a correct app this way).
             var what = StuckOn(plan, item, Json.Strings(lastEvaluation, "failing"), "by the factory’s own check");
-            await FinishTaskAsync(run, taskId, "failed", $"Stopped: the check needs a look. The checker found it working, the factory's own reading of its calls disagreed twice, and the repair between found nothing in the app to change, so it was not sent to another repair. {what}.", cancellationToken);
+            await FinishTaskAsync(run, taskId, "failed", $"Stopped: the check needs a look. The checker found it working, the factory's own {ReadingOf(lastEvaluation)} disagreed twice, and the repair between found nothing in the app to change, so it was not sent to another repair. {what}.", cancellationToken);
             return WorkflowOutcome.Failure($"'{item.Deliverable}' stopped before another repair round: code's gate decided {string.Join(", ", Json.Strings(lastEvaluation, "failing"))} over an evaluator that marked it met, twice, with a repair between that changed no application code or disputed it — the check needs a look. The calls it read are on the judgement (trigger): {string.Join(" ", Json.Strings(lastEvaluation, "faults"))}")
                 with
-            { ForOwner = $"\"{item.Text.TrimEnd('.')}\" was stopped because the check needs a look: the checker who used the app found it working, the factory’s own reading of the same calls disagreed twice, and the repair between found nothing in the app to change. Nothing in it was shown not to work, so it was not sent to another repair on a stronger model, and the app was not {(change ? "changed" : "published")}. Technical mode shows the calls the check read. Its work so far is saved and the repair was not charged; “Try again” carries on from it." };
+            { ForOwner = $"\"{item.Text.TrimEnd('.')}\" was stopped because the check needs a look: the checker who used the app found it working, the factory’s own {(ReadingOf(lastEvaluation) == "reading of its calls" ? "reading of the same calls" : "run of the page’s own tests")} disagreed twice, and the repair between found nothing in the app to change. Nothing in it was shown not to work, so it was not sent to another repair on a stronger model, and the app was not {(change ? "changed" : "published")}. Technical mode shows the calls the check read. Its work so far is saved and the repair was not charged; “Try again” carries on from it." };
         }
 
         if (Json.Bool(lastEvaluation, "passed") != true && stoppedEarly)
@@ -718,7 +718,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                 // The check needs a look: attached, the calls code read for each requirement it decided over the evaluator's "met".
                 judgement["needsLook"] = true;
                 judgement["trigger"] = evaluation["trigger"]?.DeepClone();
-                judgement["summary"] = NeedsLookSummary(item, shown);
+                judgement["summary"] = NeedsLookSummary(item, shown, evaluation);
             }
         }
 
@@ -916,7 +916,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
     /// <summary>
     /// The gate over the calls the named evaluators made, the test ids on the screens, and — when a requirement about a screen
-    /// is marked met — the app's own front-end tests, run by code (<see cref="ScreenTests"/>).
+    /// is marked met, or the part adds a form (<see cref="FormInputs"/>) — the app's own front-end tests, run by code
+    /// (<see cref="ScreenTests"/>).
     /// </summary>
     private static async Task<JsonObject> GateAsync(RunContext run, PlanContract plan, PlanItem item, JsonObject answer, IWorkspace workspace, IReadOnlyList<string> evaluators, CancellationToken cancellationToken)
     {
@@ -926,10 +927,12 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var marks = (answer["requirements"] as JsonArray ?? []).OfType<JsonObject>().ToList();
         // Not for the check of what worked before: a regression is shown by the data the part reads in the running app (KeepCheck).
         var screenClaimed = item.Id != KeepItem && plan.RequirementsOf(item).Any(r => PlanRequirement.IsAboutScreen(r.Text) && marks.Any(m => Json.Str(m, "id") == r.Id && Json.Bool(m, "met") == true));
-        var tests = screenClaimed ? await ScreenTests.RunAsync(workspace, cancellationToken) : ScreenTests.Outcome.NotRun;
+        // A part that adds a form: code runs the page's tests itself and needs each field's bad-input test to pass (R7-1).
+        var fields = item.Id != KeepItem ? await FormInputs.FindAsync(workspace, item, cancellationToken) : [];
+        var tests = screenClaimed || fields.Count > 0 ? await ScreenTests.RunAsync(workspace, cancellationToken) : ScreenTests.Outcome.NotRun;
         // Every signed-in call in the order made, for the check of coming back later (R3-5).
         var attempts = evaluators.SelectMany(e => CallAppTool.AttemptsIn(log, e)).ToList();
-        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken), signedOut, tests.Tests, tests.Problem, attempts);
+        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken), signedOut, tests.Tests, tests.Problem, attempts, fields);
     }
 
     /// <summary>The second look at the same build: what code refused, word for word, and how each requirement is shown.</summary>
@@ -1413,11 +1416,20 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     [System.Text.RegularExpressions.GeneratedRegex(@"\b(could ?n[o']t find (a|any) (fault|bug|problem)|found no (fault|bug|problem)|no (fault|bug) in the code|made no (code )?changes|nothing (remained |left )?to (fix|change)|(was|is) already (contract-)?correct|already (works|working)|(the )?code (doesn't|does not) do that|the check (is|was) wrong|nothing in the (code|app) to (fix|change))", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex Disputes();
 
-    private static string NeedsLookSummary(PlanItem item, IReadOnlyList<JsonObject> requirements)
+    private static string NeedsLookSummary(PlanItem item, IReadOnlyList<JsonObject> requirements, JsonObject evaluation)
     {
         var shown = requirements.Count(r => Json.Bool(r, "met") == true);
         var count = requirements.Count == 0 ? "" : $" ({shown} of {requirements.Count} of your requirements shown working in the running app)";
-        return $"Not sent back for repair: the check needs a look. The checker found it working, the factory's own reading of its calls disagreed twice, and the repair between found nothing in the app to change, so nothing in it was shown not to work: {item.Text.TrimEnd('.')}{count}.";
+        return $"Not sent back for repair: the check needs a look. The checker found it working, the factory's own {ReadingOf(evaluation)} disagreed twice, and the repair between found nothing in the app to change, so nothing in it was shown not to work: {item.Text.TrimEnd('.')}{count}.";
+    }
+
+    /// <summary>What code read to decide over the checker: its calls, or — for a form's bad-input check alone — the page's own tests.</summary>
+    private static string ReadingOf(JsonObject? evaluation)
+    {
+        var trigger = (evaluation?["trigger"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        return trigger.Count > 0 && trigger.All(t => (Json.Str(t, "id") ?? "").StartsWith("form:", StringComparison.Ordinal))
+            ? "run of the page's own tests"
+            : "reading of its calls";
     }
 
     private static string UnverifiedSummary(PlanItem item, IReadOnlyList<JsonObject> requirements)
@@ -1450,10 +1462,25 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     private static string StuckOn(PlanContract plan, PlanItem item, IReadOnlyList<string> failing, string how = "in the running app")
     {
         var texts = failing.Select(f => f.Split(':')[0]).Select(id => plan.RequirementsOf(item).FirstOrDefault(r => r.Id == id)?.Text.TrimEnd('.')).OfType<string>().Distinct().ToList();
-        return texts.Count == 0
-            ? "its check could not be completed"
-            : $"“{string.Join("” and “", texts)}” could not be shown working {how}";
+        // A form field that did not hold up against bad input (form:dive-when:broken), said as the owner reads it.
+        var forms = FormFieldsIn(failing);
+        var parts = new List<string>();
+        if (texts.Count > 0)
+        {
+            parts.Add($"“{string.Join("” and “", texts)}” could not be shown working {how}");
+        }
+
+        if (forms.Count > 0)
+        {
+            parts.Add($"the form did not hold up against a bad value in {(forms.Count == 1 ? "its field" : "its fields")} “{string.Join("” and “", forms)}”");
+        }
+
+        return parts.Count == 0 ? "its check could not be completed" : string.Join(", and ", parts);
     }
+
+    /// <summary>The form fields among a gated answer's failures (<c>form:dive-when:broken</c> → <c>dive-when</c>).</summary>
+    private static List<string> FormFieldsIn(IEnumerable<string> failing) =>
+        failing.Where(f => f.StartsWith("form:", StringComparison.Ordinal)).Select(f => f.Split(':')[1]).Distinct(StringComparer.Ordinal).ToList();
 
     /// <summary>The check task's own line: done, and what follows. The judgement beside it carries the result in full.</summary>
     private static string CheckDone(PlanItem item, bool passed, int round, int rounds, bool stops, bool unverified)
@@ -1506,6 +1533,17 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         if (Json.Strings(last, "missingTestIds") is { Count: > 0 } ids)
         {
             findings.Add($"- The screens lack the test ids {string.Join(", ", ids)}: add each as data-testid on its element.");
+        }
+
+        // A form that did not hold up against bad input: code ran the page's tests and decided it (R7-1).
+        foreach (var failed in Json.Strings(last, "failing").Where(f => f.StartsWith("form:", StringComparison.Ordinal)))
+        {
+            var (field, kind) = (failed.Split(':')[1], failed.Split(':')[2]);
+            var fault = faults.FirstOrDefault(f => f.Contains($" field {field} (", StringComparison.Ordinal));
+            var todo = kind == FormInputs.Broken
+                ? "Fix the page, not the test: bound the field (min and max), check what was typed on submit with the error beside the field, and format only through the kit's helpers, which never throw."
+                : $"Add the field's test with the kit's helper, titled \"{FormInputs.TitlePrefix}{field}\" (it.each with BAD_INPUT_TEST), and make the page pass it.";
+            findings.Add($"- The form's field {field} did not hold up against bad input.{(fault is null ? "" : $" Code's check: {OutputText.Truncate(fault, 700)}")} What to do: {todo}");
         }
 
         // What this part's earlier rounds did, in their own words, and the files they changed: read those first.

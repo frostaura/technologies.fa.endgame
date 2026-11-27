@@ -57,7 +57,11 @@ What to do, in this order:
    listed for this item (above) is on the element the kit's convention names (search for data-testid="…"),
    and the tests select by it. A missing test id, a link to a page no route renders, or a navigation with no
    test is a fault.
-7. Look for what the builder might have skipped: the four states of every read (loading, failed,
+7. A form's fields are fed bad input by their own tests (titled "holds up against bad input: <field>"): code runs
+   the app's front-end tests itself and fails the item for a field without one that passes, so you need not cite
+   them. Read the page for what they cannot see — a date or number formatted without the kit's formatDate /
+   formatDateTime / formatNumber, an input without min and max — and name it as a fault.
+8. Look for what the builder might have skipped: the four states of every read (loading, failed,
    empty, loaded), validation field by field, sign-in where it is needed, owners checked on reads and
    writes, no URL starting with "/", and tests that really test the behaviour.
 

@@ -580,6 +580,12 @@ export const CHECK_LINES = {
   stoppedEarly: "Stopped early: the same requirement failed the same way three times.",
   needsLook: "The check needs a look: the checker found it working, the factory’s own reading of its calls disagreed twice, and the repair between found nothing in the app to change. Nothing in it was shown not to work, so no stronger model was tried.",
   shownByTest: (title: string | null) => (title ? `Shown by the screen's own test: “${title}”.` : "Shown by the screen's own test."),
+  needsLookForm:
+    "The check needs a look: the checker found it working, the factory’s own run of the page’s tests disagreed twice, and the repair between found nothing in the app to change. Nothing in it was shown not to work, so no stronger model was tried.",
+  /** Code ran the page's own tests and a form field's bad-input test failed (`form:<field>:broken`, R7-1). */
+  formBroke: "Its form did not hold up when a field was given a bad value, such as a date no calendar has: the page must stay whole and say what is wrong beside the field.",
+  /** A form field with no bad-input test that passed (`form:<field>:untested`). */
+  formUntested: "Its form has a field nobody has yet tried with a bad value, such as a date no calendar has, so it is not known to hold up.",
 } as const;
 
 /** How a requirement failed (`EvaluationGate`'s `failing`: `r4:unshown`), in the owner's words. */
@@ -661,9 +667,13 @@ export function evaluationDetail(p: Record<string, unknown>, mode: Mode, withSum
       if (saw) lines.push(`What the checker saw: “${saw}”`);
     }
   }
+  // A form that did not hold up against bad input: code ran the page's tests (R7-1). Said once, whichever fields it was.
+  if (failing.some((f) => f.startsWith("form:") && f.endsWith(":broken"))) lines.push(CHECK_LINES.formBroke);
+  if (failing.some((f) => f.startsWith("form:") && f.endsWith(":untested"))) lines.push(CHECK_LINES.formUntested);
   for (const r of requirements) if (r.met === true) for (const t of strings(r, "tests")) lines.push(CHECK_LINES.shownByTest(plainOrNull(testTitle(t))));
   if (p.stoppedEarly === true) lines.push(CHECK_LINES.stoppedEarly);
-  if (p.needsLook === true) lines.push(CHECK_LINES.needsLook);
+  const formLook = triggers(p).length > 0 && triggers(p).every((t) => t.id.startsWith("form:"));
+  if (p.needsLook === true) lines.push(formLook ? CHECK_LINES.needsLookForm : CHECK_LINES.needsLook);
   return lines.join("\n") || null;
 }
 

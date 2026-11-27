@@ -182,6 +182,37 @@ check such a requirement by the data call plus the screen's test named by its ti
 running on exactly this: the evaluator cited the passing test "leads with readiness, above the share link and the kit
 list" every round, and the gate, counting calls alone, refused it.
 
+**A form holds up against bad input — decided from the page's own tests, run by code.** A factory-built "Club dives" app
+went completely blank on its "Add a dive" page — a form with a `datetime-local` field and a live preview card beside it, the
+pattern the kit's new-note page teaches — when a six-digit year (`202612-12-12T08:00`, typed into the field's year segment)
+reached `Intl.DateTimeFormat(…).format(new Date(value))` and threw `RangeError` while rendering (R7-1). The gate had passed
+it: until then the evaluator could do nothing with a built app's front end but read its code, run `make test` and `make
+lint`, and call the API (`call_app`, `check_preview`, `call_webhook`, `sent_emails`); it has no browser, and code ran the
+app's front-end tests only to count a test named for a requirement about a screen. Nothing fed a page a value, so no check
+could see a page break. Now, for every form field a part's plan names (`FormInputs.IsFieldId`: an `<entity>-<field>` test id,
+not a page, link, list, item or button) that `web/src` writes on an input, select or textarea (`FormInputs.FindAsync` reads
+the element and its `type`: text, number, date — `date`, `datetime-local`, `month`, `week` — or select; a checkbox, radio,
+time or file is not asked), code runs the app's front-end suite itself (`ScreenTests.Command`) and needs the field's own
+bad-input test — titled `holds up against bad input: <test id>` (the kit's `BAD_INPUT_TEST`), written with the kit's
+`holdsUpAgainstBadInput` (`@endgame/appkit/testing`) — to have passed. That helper feeds the field a six-digit year and a date
+before any limit, a number far past any, an option that is not there, a blank required field and text past its `maxLength`,
+and fails unless the page stays on screen (no throw, no error boundary) and, on submit, refuses each it cannot take beside the
+field. A field with no such passing test fails the part `form:<id>:untested` ("…has no test that feeds it a bad value…", with
+how to write one); one whose test failed fails it `form:<id>:broken` ("The form broke on a bad value in its date field
+dive-when: … failed when code ran the app's front-end tests…"). Both are the builder's to fix — never a second look — and
+go to repair with "Fix the page, not the test". Over an evaluator that said it all works the failure is `overruled`, with the
+tests that decided it as its trigger, so the escalation guard below stops a part whose repair changed only tests and whose
+form fault then repeats, rather than escalating it (the console then says "the factory’s own run of the page’s tests
+disagreed twice"); with `SameFailureThrice` it cannot loop. A part with no form is not asked, and its tests are not run for
+it; nor is the check of what worked before (`keep`). It is a check of test results, never of the evidence's wording: the
+fixtures are the fragile and robust pages with the reports vitest wrote when their suites were really run against the kit
+(`Fixtures/form-fragile-add-a-dive.json` fails, `form-robust-add-a-dive.json` passes; `FormInputsTests`,
+`WorkflowTests.A_form_that_breaks_on_a_bad_date_fails_its_part_by_the_tests_code_ran`). The planner is told an item with a
+form says each field's test in its check, the builder and the `write-a-screen` skill how to write it, the evaluator that code
+runs them. The kit keeps the page itself from blanking — `AppErrorBoundary` at the root and around the routed page,
+formatting through `formatDate`, `formatDateTime` and `formatNumber`, which never throw, and `endgame/no-unsafe-format`
+(TEST-050).
+
 **Something a person has of their own is checked by coming back later.** A built "Dive Trip Ready" asked a returning,
 signed-in diver to join again and stored a second row for the same person; every requirement had been shown once, by one
 call, and nothing came back. A requirement where a signed-in person makes or joins something of their own
@@ -236,8 +267,9 @@ working" — instead of a fourth round on a stronger model. Failures of the eval
 counted as "the same". The fault that lists the calls made says each shape once, ids folded to `{id}`.
 
 **The check needs a look — the escalation guard.** A fault the gate's code decides over an evaluator that marked the
-requirement met (`overruled` on the gated answer: today the check of coming back later, `not-met`, with the call sequence
-that decided it — `member-a PUT api/dives/{id}/signup → 201 (id …)`) goes to repair like any other. But when the repair
+requirement met (`overruled` on the gated answer: the check of coming back later, `not-met`, with the call sequence
+that decided it — `member-a PUT api/dives/{id}/signup → 201 (id …)`; and a form's bad-input check over an evaluator that
+said it all works, `form:<field>` `broken` or `untested`, with the tests code ran) goes to repair like any other. But when the repair
 that follows changed no application code (only tests, documents or nothing, read from its own `edit_file`/`write_file`
 calls in the log; `BuildWorkflow.IsApplicationCode`) or its builder's reply disputes the fault ("I couldn't find a fault in
 the code, so I made no changes"; `DisputesTheFault`), and the same code-decided fault then repeats with nothing else

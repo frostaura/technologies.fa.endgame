@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
-import { jsonResponse as json } from "@endgame/appkit/testing";
+import { BAD_INPUT_TEST, holdsUpAgainstBadInput, jsonResponse as json } from "@endgame/appkit/testing";
 import { describe, expect, it, vi } from "vitest";
 import NewNotePage from "./NewNotePage";
 
@@ -106,5 +106,12 @@ describe("NewNotePage", () => {
     fireEvent.change(await screen.findByTestId("note-title"), { target: { value: "Hi" } });
     fireEvent.click(screen.getByTestId("save-note"));
     expect((await screen.findByRole("alert")).textContent).toContain("The note was not saved");
+  });
+
+  // Every form field is fed what a person can put there — a six-digit year, a blank title, text past its limit — and the
+  // page must stay whole and say what is wrong beside the field. The factory runs these itself (ARCH-006).
+  it.each(["note-title", "note-happens-at", "note-body"])(BAD_INPUT_TEST, async (field) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => json(200, { user: ada }));
+    await holdsUpAgainstBadInput(field, { render: renderPage, page: "page-new-note", submit: "save-note" });
   });
 });

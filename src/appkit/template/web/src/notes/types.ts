@@ -14,8 +14,9 @@ export interface NoteDetail extends NoteSummary {
   happensAt: string | null;
 }
 
-/** `Note.TitleMax`. */
+/** `Note.TitleMax` and `Note.BodyMax`. */
 export const TITLE_MAX = 200;
+export const BODY_MAX = 10_000;
 
 /**
  * The years a note's date may name (`Note.HappensFrom` … `HappensUntil`), as the date input's own `min` and `max`. The input

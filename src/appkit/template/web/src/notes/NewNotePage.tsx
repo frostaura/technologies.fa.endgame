@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { api, ApiError, checkDateInput, formatDateTime, NotSignedInError, signInUrl, signUpUrl, useCurrentUser, ValidationError } from "@endgame/appkit";
+import { api, ApiError, checkDateInput, formatDateTime, formatNumber, NotSignedInError, signInUrl, signUpUrl, useCurrentUser, ValidationError } from "@endgame/appkit";
 import { Button, Card, CardContent, CardHeader, CardTitle, FailedState, FieldError, Input, Label, LoadingState, Textarea } from "@endgame/appkit/ui";
 import { usePageTitle } from "../usePageTitle";
-import { HAPPENS_AT_LIMITS, TITLE_MAX, type NoteDetail } from "./types";
+import { BODY_MAX, HAPPENS_AT_LIMITS, TITLE_MAX, type NoteDetail } from "./types";
 
 /** Writing needs a signed-in person; everyone else is offered the platform's sign-in. */
 export default function NewNotePage() {
@@ -57,6 +57,7 @@ function NewNoteForm() {
     const errors: Record<string, string[]> = {};
     if (!title.trim()) errors.Title = ["Give the note a title."];
     else if (title.trim().length > TITLE_MAX) errors.Title = [`Keep the title to ${TITLE_MAX} characters.`];
+    if (body.length > BODY_MAX) errors.Body = [`Keep the note to ${formatNumber(BODY_MAX)} characters.`];
     const when = checkDateInput(happensAt, HAPPENS_AT_LIMITS);
     if (when.error) errors.HappensAt = [when.error];
     setFieldErrors(errors);
@@ -78,6 +79,7 @@ function NewNoteForm() {
 
   const titleError = fieldErrors.Title?.[0];
   const happensAtError = fieldErrors.HappensAt?.[0];
+  const bodyError = fieldErrors.Body?.[0];
   // A desktop uses its width: the form, and beside it the note as it will read. A phone has the form alone.
   return (
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
@@ -123,7 +125,17 @@ function NewNoteForm() {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="body">Body</Label>
-              <Textarea id="body" name="body" data-testid="note-body" value={body} onChange={(e) => setBody(e.target.value)} />
+              <Textarea
+                id="body"
+                name="body"
+                data-testid="note-body"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                maxLength={BODY_MAX}
+                invalid={!!bodyError}
+                aria-describedby="body-error"
+              />
+              <FieldError id="body-error">{bodyError}</FieldError>
             </div>
             {failure && <FailedState title="The note was not saved" error={failure} />}
             <div>

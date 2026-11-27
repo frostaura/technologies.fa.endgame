@@ -56,6 +56,16 @@ each one exists in `web/src` as `data-testid="…"`; a missing one fails the ite
 - Test each state with Vitest and Testing Library, mocking `fetch` (`jsonResponse` from
   `@endgame/appkit/testing`; see `NotesPage.test.tsx`): loading, empty, loaded (check the links' `href`), failed
   (an alert with the reason, never the empty text). Select by test id: `getByTestId("book-item")`.
+- **Every form field holds up against bad input, and has the test that proves it.** For each input, select and textarea
+  a form carries (its `<entity>-<field>` test id), one test titled exactly `holds up against bad input: <test id>`, written
+  with the kit's helper — `it.each(["dive-site", "dive-when"])(BAD_INPUT_TEST, (field) => holdsUpAgainstBadInput(field, { render:
+  renderPage, page: "page-new-dive", submit: "save-dive" }))` from `@endgame/appkit/testing` (see `NewNotePage.test.tsx`). It
+  feeds the field what a person can put there — a six-digit year in a date (a browser keeps one typed into the year segment),
+  a date before any sane limit, a number far past any, an option that is not there, a blank required field, text past its
+  `maxLength` — and fails unless the page stays on screen and, on submit, refuses each beside the field (`aria-invalid` and the
+  error its `aria-describedby` names) before anything is sent. The factory runs the app's tests itself and fails a part whose
+  form field has no such passing test. Make the page pass it — bounded fields, a check on submit, formatting through the kit
+  — never weaken the test.
 - **Every link or button that moves between pages has a navigation test** in `App.test.tsx`: render the real app
   with `renderApp(<App />, { at: "/" })`, click it (`fireEvent.click(await screen.findByTestId("new-book"))`), and
   find the page it lands on (`await screen.findByTestId("page-new-book")`) with its form. Loading the address

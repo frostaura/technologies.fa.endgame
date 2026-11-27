@@ -136,6 +136,27 @@ never repeated on one screen. The plan item names the test ids its screens carry
 checks that each one is in `web/src` as `data-testid="…"`. Tests select by them
 (`getByTestId("note-item")`), as the template's do.
 
+## Bad-input tests — every form field has one
+
+A page that works for the values its author typed can still go blank on one a person gives it: a browser keeps a
+six-digit year typed into a date field's year segment, and a preview that formats it throws. Every input, select and
+textarea a form carries (its `<entity>-<field>` test id) has a test titled `holds up against bad input: <test id>`, made
+with the kit's helper from `@endgame/appkit/testing`:
+
+```ts
+it.each(["note-title", "note-happens-at", "note-body"])(BAD_INPUT_TEST, async (field) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => json(200, { user: ada }));
+  await holdsUpAgainstBadInput(field, { render: renderPage, page: "page-new-note", submit: "save-note" });
+});
+```
+
+`holdsUpAgainstBadInput` feeds the field what a person can put there — a six-digit year and a date before any sane limit,
+a number far past any, an option that is not there, a blank required field, text past its `maxLength` — and fails unless
+the page stays on screen (no throw, no error boundary) and, on submit, each value the field cannot take is refused beside
+it (`aria-invalid` and the error its `aria-describedby` names). So every field carries its limits (`required`,
+`maxLength`, `min`/`max`) and the form checks them on submit before sending. The factory runs the app's front-end tests
+itself and fails a part whose form field has no such passing test (`NewNotePage.test.tsx` is the example).
+
 ## Navigation tests — every link between pages has one
 
 A page can render when its address is loaded directly and still not appear when a link routes to
@@ -154,7 +175,7 @@ make migration name=AddSomething
 ```
 
 A change is done when `make lint` and `make test` pass with zero warnings, there is a test for the
-behaviour (back end and front end) and a navigation test for each new link between pages, the
+behaviour (back end and front end), a navigation test for each new link between pages, a bad-input test for each form field, the
 screens carry their test ids, and `docs/` says what changed — `docs/app.md`'s table names every endpoint by its
 operation id with "Signed in?" Yes or No, exactly as the code has it (`AppRulesTests` fails otherwise).
 
