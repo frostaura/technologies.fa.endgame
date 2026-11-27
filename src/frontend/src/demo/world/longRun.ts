@@ -1,6 +1,7 @@
-import type { RunEvent } from "@/store/types";
+import type { Idea, RunEvent } from "@/store/types";
 import type { DemoRun } from "../server/world";
 import { uuidFor } from "../server/world";
+import { clampWords } from "../server/http";
 
 /**
  * A long build that did not succeed, shaped like the longest real run read from a development stack (about 2,000 events and
@@ -10,6 +11,7 @@ import { uuidFor } from "../server/world";
  */
 
 export const LONG_RUN_ID = uuidFor("run:long:rowing-outings");
+export const LONG_IDEA_ID = uuidFor("idea:long:rowing-outings");
 
 const REQUEST =
   "A sign-up sheet for the rowing club's Saturday outings: members sign in, see the next outings, and claim a seat in a boat once, so the coach knows who is coming. Coming back later shows the member their own seat, and they can give it up. Any signed-in member can also add a new outing to the schedule.";
@@ -83,13 +85,13 @@ export function longBuildRun(scope: string): DemoRun {
   push("approval.answered", { approvalId: "long-plan", answer: "approved" }, 26);
   push("plan.accepted", { summary, items, requirements, by: "owner" });
   say("builder", "The plan", `${summary} 5 parts, each built, then checked in the running app against what you asked for. All 5 things the idea asks for are covered.`);
-  push("estimate.made", { credits: 56, stage: "plan" });
+  push("estimate.made", { credits: 56, stage: "plan", reason: "Re-estimated after planning: 5 parts.", previousCredits: 20 });
   for (const p of PARTS) push("task.created", { taskId: `long-task-${p.id}`, title: p.text }, 0);
 
   const checkTask = (p: (typeof PARTS)[number], round: number, passed: boolean, last = false) => {
     const id = `long-check-${p.id}-${round}`;
     push("task.created", { taskId: id, title: `Check: ${p.text}` });
-    push("task.claimed", { taskId: id, holder: "Nadia", summary: `Check: ${p.text}` });
+    push("task.claimed", { taskId: id, employeeId: null, holder: "QA engineer", holderKind: "role", summary: `Check: ${p.text}` });
     return () => {
       const of = `The check of “${p.text.replace(/\.$/, "")}”${round === 0 ? "" : ` after repair ${round}`} is finished`;
       push("task.done", { taskId: id, summary: passed ? `${of}: it works.` : last ? `${of}: it still does not work, and no repair follows.` : `${of}: it goes back for repair, at no charge.` });
@@ -101,7 +103,7 @@ export function longBuildRun(scope: string): DemoRun {
   const two = PARTS[1];
   if (!one || !two) throw new Error("The long run needs its parts.");
   begin(`builder-${one.id}-0`, `Build this one feature of the plan: [${one.id}] ${one.detail}`, "build");
-  push("task.claimed", { taskId: `long-task-${one.id}`, holder: "Theo", summary: one.text });
+  push("task.claimed", { taskId: `long-task-${one.id}`, employeeId: null, holder: "Software engineer", holderKind: "role", summary: one.text });
   work(`builder-${one.id}-0`, "build", 70, 0.05);
   reply(`builder-${one.id}-0`, `Done — the ${one.id} item is built, verified and committed.`);
   let done = checkTask(one, 0, true);
@@ -117,7 +119,7 @@ export function longBuildRun(scope: string): DemoRun {
 
   // Part 2: built, then sent back three times; each repair on a stronger model, none of it charged.
   begin(`builder-${two.id}-0`, `Build this one feature of the plan: [${two.id}] ${two.detail}`, "build");
-  push("task.claimed", { taskId: `long-task-${two.id}`, holder: "Theo", summary: two.text });
+  push("task.claimed", { taskId: `long-task-${two.id}`, employeeId: null, holder: "Software engineer", holderKind: "role", summary: two.text });
   work(`builder-${two.id}-0`, "build", 70, 0.05);
   reply(`builder-${two.id}-0`, `Done — the ${two.id} item is built, verified and committed.`);
   for (let round = 0; round <= 3; round += 1) {
@@ -154,10 +156,34 @@ export function longBuildRun(scope: string): DemoRun {
 
   const startedAt = new Date(start).toISOString();
   const finishedAt = new Date(clock).toISOString();
-  const title = `Build: ${REQUEST.slice(0, 117)}...`;
+  const title = `Build: ${clampWords(REQUEST, 120)}`;
   return {
     run: { id: LONG_RUN_ID, kind: "build", title, scope, status: "failed", startedAt, finishedAt, lastSeq: events.length, ideaId: null, estimateCredits: 56, firstEstimateCredits: 20, planEstimateCredits: 56, spentCredits: total, employeeId: null, conversationId: null, budgetExhausted: false, outcome: "failed", summary: `'${two.text}' still failed its check after 3 repair rounds.`, createdAt: startedAt, canTryAgain: false },
     events,
     playback: null,
+  };
+}
+
+/**
+ * The idea the long build was decided from: built by a person, its build the decision's run — so the build that stopped is
+ * the idea's latest attempt and can be tried again, from the run page or the conversation (#40).
+ */
+export function longRunIdea(scope: string): Idea {
+  const at = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 - 4 * 60 * 60 * 1000).toISOString();
+  return {
+    id: LONG_IDEA_ID,
+    title: clampWords(REQUEST, 120),
+    text: REQUEST,
+    constraints: [],
+    status: "decided",
+    runId: "",
+    scope,
+    research: { estimatedCredits: 12, spentCredits: 9.6, by: null },
+    verdict: null,
+    decision: { choice: "build", at, by: "Mara Ellison", overruled: false, runId: LONG_RUN_ID, via: "person" },
+    record: { total: 0, build: 0, change: 0, doNotBuild: 0, overruled: [] },
+    redLine: null,
+    history: [],
+    tryAgain: null,
   };
 }

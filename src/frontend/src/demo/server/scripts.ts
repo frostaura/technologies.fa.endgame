@@ -2,8 +2,9 @@ import type { Employee } from "@/store/types";
 import { storyFor, type PlanItemStory, type Story } from "../world/story";
 import { append, defineScript, settle, Script } from "./engine";
 import { contractor, ensureNode, hireEmployee, newApp, notify, setStage, startRun } from "./mutations";
-import { titleOf } from "./http";
-import { appAt, chain, newId, node, orgOf, organisation, setting, spentBelow, uuidFor, type DemoRun, type World } from "./world";
+import { clampWords, oneLine, quotedWords, titleOf } from "./http";
+import { canTryAgain } from "./tryAgain";
+import { appAt, chain, newId, node, orgOf, organisation, runRecord, setting, spentBelow, uuidFor, type DemoRun, type World } from "./world";
 
 /**
  * The scripts runs play, modelled on real run logs captured from a development stack (a research
@@ -142,7 +143,9 @@ function cycle(
   };
   const result = (w: World, r: DemoRun) =>
     append(w, r, "tool.result", { name: tool.name, agent: o.agent, callId: toolCall, edited: !reading, content: tool.result, credits: 0, isError: false, verified: tool.name === "run", errorKind: null, failureKey: null });
-  if (!o.stage || reading) {
+  // With no stage, a step no rule set can reach; with one, every call is checked when it is made — a reading tool too, since
+  // a stage's rules may ask before it (web search under "asks you first", AUTO-05).
+  if (!o.stage) {
     s.event("tool.permitted", { name: tool.name, rule: reading ? "default:read-only" : tool.name === "run" ? "stage:build:allow run(make *)" : "default:workspace-write", agent: o.agent, paths: tool.paths ?? [], callId: toolCall, reason: reading ? "Reading is allowed." : "Writing inside the workspace is allowed.", command: tool.command ?? null });
     s.wait(250 + (call % 4) * 120);
     s.event("tool.result", { name: tool.name, agent: o.agent, callId: toolCall, edited: !reading, content: tool.result, credits: 0, isError: false, verified: tool.name === "run", errorKind: null, failureKey: null });
@@ -152,13 +155,13 @@ function cycle(
   const key = `tool:${toolCall}`;
   // An "asks you first" rule raises an approval and the work waits for the answer, even unattended (AUTO-05).
   s.ask((w, r) => {
-    const d = decide(w, r.run.scope, stage, tool.name, target, false);
+    const d = decide(w, r.run.scope, stage, tool.name, target, reading);
     if (d.verdict !== "ask") return null;
     return { title: askTitle(tool.name), detail: RULES_ASK, technical: `${tool.name}: ${target}. ${d.reason} Checkpoint: ${d.checkpoint ?? d.rule}.`, onApprove: { kind: "continue" }, onDecline: "continues", key };
   });
   s.wait(250 + (call % 4) * 120);
   s.effect((w, r) => {
-    const d = decide(w, r.run.scope, stage, tool.name, target, false);
+    const d = decide(w, r.run.scope, stage, tool.name, target, reading);
     if (d.verdict === "deny") {
       // A rule that refused without asking (`AgentLoop.ExecuteAsync`): "refused by your rules".
       append(w, r, "tool.denied", { name: tool.name, agent: o.agent, callId: toolCall, rule: d.rule, reason: d.reason, paths: tool.paths ?? [], command: tool.command ?? null, by: "rule", declined: null });
@@ -308,7 +311,7 @@ defineScript("research", (world, run) => {
   for (let round = 0; round < 3; round += 1) {
     for (const strand of story.strands) {
       s.wait(900);
-      cycle(s, run, { agent: `contractor-${strand.id}`, employeeId: null, taskType: "research", credits: 0.41 + round * 0.07, tool: { name: "web_search", args: { query: `${story.name} ${strand.id === "existing" ? "alternatives" : strand.id === "gap" ? "complaints reviews" : "people pay for"} ${round + 1}` }, result: `${3 + round} results: ${strand.sources.map((u) => u.replace(/^https?:\/\//, "")).join(", ")}` } });
+      cycle(s, run, { agent: `contractor-${strand.id}`, employeeId: null, taskType: "research", credits: 0.41 + round * 0.07, tool: { name: "web_search", args: { query: `${story.name} ${strand.id === "existing" ? "alternatives" : strand.id === "gap" ? "complaints reviews" : "people pay for"} ${round + 1}` }, result: `${3 + round} results: ${strand.sources.map((u) => u.replace(/^https?:\/\//, "")).join(", ")}` }, stage: "research" });
     }
     if (round === 0) budgetStop(s, "research", releaseContractors(story, run));
   }
@@ -496,7 +499,7 @@ function checkTask(s: Script, run: DemoRun, projectPath: string, qa: Pipeline["q
     return ["Tasks"];
   });
   s.event("task.created", { taskId: id, title });
-  s.event("task.claimed", { taskId: id, holder: qa.name, summary: title });
+  s.event("task.claimed", { taskId: id, employeeId: qa.id, holder: qa.name, holderKind: "employee", summary: title });
   return (passed: boolean, last = false) => {
     s.event("task.done", { taskId: id, summary: checkDone(item, passed, round, last) });
     s.effect((w) => {
@@ -536,6 +539,10 @@ interface Pipeline {
   plannerTask: string;
   /** The new version's commit message, for a change. */
   versionMessage: string | null;
+  /** The estimate the plan's re-estimate replaces (`Estimator.Latest`), when there was one. */
+  previousCredits: number | null;
+  /** A part whose check "needs a look" (`BuildWorkflow.NeedsLook`): code's gate disagreed with the checker twice, so it stops. */
+  needsLook: string | null;
 }
 
 /** Where a build goes, in the Runner's words (`BuildWorkflow.WhereItGoes`): always a new app, in a new project of its own. */
@@ -575,6 +582,9 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
   const items = o.items.map((i) => ({ id: i.id, text: i.text, detail: i.detail, check: i.check, covers: i.covers }));
   const planEvent = { summary: o.summary, items, requirements: o.requirements, leftOut: o.leftOut };
   const planKey = `plan:${run.run.id}`;
+  // How heavy each model call is: 1 as measured, more for work that runs over its estimate (a scenario's `costScale`).
+  const scale = typeof run.playback?.params.costScale === "number" ? run.playback.params.costScale : 1;
+  const cyc = (c: Parameters<typeof cycle>[2]) => cycle(s, run, { ...c, credits: Math.round(c.credits * scale * 100000) / 100000 });
 
   // The plan --------------------------------------------------------------------------------
   if (o.planCarried) {
@@ -599,7 +609,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       ["api/Program.cs", "var builder = WebApplication.CreateBuilder(args); …"],
     ] as const) {
       s.wait(400);
-      cycle(s, run, { agent: "planner", employeeId: eng.id, taskType: "plan", credits: 0.031, tool: { name: "read_file", args: { path: file }, result, paths: [file] }, scope: projectPath });
+      cyc({ agent: "planner", employeeId: eng.id, taskType: "plan", credits: 0.031, tool: { name: "read_file", args: { path: file }, result, paths: [file] }, scope: projectPath });
     }
     s.wait(1200).event("plan.proposed", { agent: "planner", ...planEvent }, `${prefix}:plan`);
     s.effect((w) => setStage(w, projectPath, "planning", null));
@@ -629,7 +639,8 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
   // The estimate, refined by the plan: in every autonomy mode a plan that would break the budget does not begin (RUN-09).
   const planCredits = typeof run.playback?.params.planEstimate === "number" ? run.playback.params.planEstimate : prefix === "change" ? 9 : 90;
   if (!o.planCarried) {
-    s.wait(200).event("estimate.made", { basis: `the starting figure for ${prefix} runs (fewer than 3 finished runs to learn from), scaled to a plan of ${items.length} items`, stage: "plan", source: "runner", credits: planCredits, samples: 0 });
+    // Said with the figure it replaces and why (`Estimator.AfterPlanning`): "about 10" becoming "about 15" with no word reads as a mistake.
+    s.wait(200).event("estimate.made", { basis: `the starting figure for ${prefix} runs (fewer than 3 finished runs to learn from), scaled to a plan of ${items.length} items`, stage: "plan", source: "runner", credits: planCredits, samples: 0, reason: `Re-estimated after planning: ${items.length} part${items.length === 1 ? "" : "s"}.`, ...(o.previousCredits !== null ? { previousCredits: o.previousCredits } : {}) });
     s.effect((w, r) => {
       r.run.estimateCredits = planCredits;
       const room = headroomAt(w, r.run.scope);
@@ -667,7 +678,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
     if (!item.keep) {
       const builder = `builder-${item.id}-0`;
       s.wait(600).event("message", { kind: "agent.start", task: `Build this one feature of the plan, completely, then commit it.\n\nThe feature: [${item.id}] ${item.detail}\nIt will be checked by: ${item.check}`, agent: builder, taskType: "build" }, `${prefix}:part-${index + 1}`);
-      s.event("task.claimed", { taskId, holder: eng.name, summary: item.text });
+      s.event("task.claimed", { taskId, employeeId: eng.id, holder: eng.name, holderKind: "employee", summary: item.text });
       s.effect((w) => {
         const t = w.tasks.find((x) => x.id === taskId);
         if (t) Object.assign(t, { status: "in_progress", holderRunId: run.run.id, holderEmployeeId: eng.id, employeeId: eng.id, claimedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
@@ -676,16 +687,16 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       });
       for (const f of files) {
         s.wait(500);
-        cycle(s, run, { agent: builder, employeeId: eng.id, taskType: "build", credits: 0.024, tool: { name: "read_file", args: { path: f }, result: `    1\t// ${f}`, paths: [f] }, scope: projectPath });
+        cyc({ agent: builder, employeeId: eng.id, taskType: "build", credits: 0.024, tool: { name: "read_file", args: { path: f }, result: `    1\t// ${f}`, paths: [f] }, scope: projectPath });
         s.wait(400);
-        cycle(s, run, { agent: builder, employeeId: eng.id, taskType: "build", credits: 0.041, tool: { name: "edit_file", args: { path: f }, result: `Edited ${f}.`, paths: [f] }, scope: projectPath, stage: "build" });
+        cyc({ agent: builder, employeeId: eng.id, taskType: "build", credits: 0.041, tool: { name: "edit_file", args: { path: f }, result: `Edited ${f}.`, paths: [f] }, scope: projectPath, stage: "build" });
       }
       s.wait(500);
-      cycle(s, run, { agent: builder, employeeId: eng.id, taskType: "build", credits: 0.036, tool: { name: "run", args: { command: "make test" }, result: "Vitest 17 passed · xUnit 14 passed\nexit code 0", command: "make test" }, scope: projectPath, stage: "build" });
-      cycle(s, run, { agent: builder, employeeId: eng.id, taskType: "build", credits: 0.028, tool: { name: "git_commit", args: { message: `${item.id}: ${item.text.slice(0, 50)}` }, result: `Committed ${uuidFor(`${run.run.id}:${item.id}`).slice(0, 7)}.` }, scope: projectPath, stage: "build" });
+      cyc({ agent: builder, employeeId: eng.id, taskType: "build", credits: 0.036, tool: { name: "run", args: { command: "make test" }, result: "Vitest 17 passed · xUnit 14 passed\nexit code 0", command: "make test" }, scope: projectPath, stage: "build" });
+      cyc({ agent: builder, employeeId: eng.id, taskType: "build", credits: 0.028, tool: { name: "git_commit", args: { message: `${item.id}: ${item.text.slice(0, 50)}` }, result: `Committed ${uuidFor(`${run.run.id}:${item.id}`).slice(0, 7)}.` }, scope: projectPath, stage: "build" });
       s.event("message", { kind: "agent.reply", agent: builder, final: true, reply: `Done — the ${item.id} item is built, verified and committed.` }, `${prefix}:part-${index + 1}-built`);
     } else {
-      s.wait(600).event("task.claimed", { taskId, holder: qa.name, summary: item.text }, `${prefix}:part-${index + 1}`);
+      s.wait(600).event("task.claimed", { taskId, employeeId: qa.id, holder: qa.name, holderKind: "employee", summary: item.text }, `${prefix}:part-${index + 1}`);
       s.effect((w) => {
         const t = w.tasks.find((x) => x.id === taskId);
         if (t) Object.assign(t, { status: "in_progress", holderRunId: run.run.id, holderEmployeeId: qa.id, employeeId: qa.id, claimedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
@@ -698,16 +709,19 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
     s.event("message", { kind: "agent.start", task: item.keep ? "Evaluate the item now (round 0, built on build): nothing new was built for it; check again, in the running app, each part the app had before." : "Evaluate the item now (round 0, built on build).", agent: evaluator, taskType: "evaluate" });
     s.effect((w) => working(w, qa.id, run));
     s.wait(400);
-    cycle(s, run, { agent: evaluator, employeeId: qa.id, taskType: "evaluate", credits: 0.05, tool: { name: "git_diff", args: {}, result: `${Math.max(1, files.length)} files changed` }, scope: projectPath });
-    cycle(s, run, { agent: evaluator, employeeId: qa.id, taskType: "evaluate", credits: 0.06, tool: { name: "run", args: { command: "make test", timeout_seconds: 600 }, result: "exit code 0", command: "make test" }, scope: projectPath });
+    cyc({ agent: evaluator, employeeId: qa.id, taskType: "evaluate", credits: 0.05, tool: { name: "git_diff", args: {}, result: `${Math.max(1, files.length)} files changed` }, scope: projectPath });
+    cyc({ agent: evaluator, employeeId: qa.id, taskType: "evaluate", credits: 0.06, tool: { name: "run", args: { command: "make test", timeout_seconds: 600 }, result: "exit code 0", command: "make test" }, scope: projectPath });
     const covered = item.covers.length;
-    const failsHere = (o.sentBack && o.sentBack.item === item.id) || (o.fail && index === o.items.length - 1);
+    // The check "needs a look" (`BuildWorkflow.NeedsLook`): the checker found it working, code's own reading disagreed twice,
+    // and the repair between found nothing to change, so it stops rather than going to another repair.
+    const look = o.needsLook === item.id;
+    const failsHere = (o.sentBack && o.sentBack.item === item.id) || (o.fail && index === o.items.length - 1) || look;
     if (failsHere) {
       const fault = o.sentBack?.item === item.id ? o.sentBack : { item: item.id, fault: "The check named in the plan does not pass.", evidence: "make test fails: 2 of 17 Vitest tests fail on the empty state." };
       // The requirement it was sent back for: the last it delivers, quoted with what the checker saw.
       const unmetId = item.covers[item.covers.length - 1] ?? null;
       const unmet = unmetId ? { id: unmetId, evidence: fault.evidence } : null;
-      cycle(s, run, { agent: evaluator, employeeId: qa.id, taskType: "evaluate", credits: 0.07, tool: { name: "check_preview", args: { path: "" }, result: fault.evidence }, scope: projectPath });
+      cyc({ agent: evaluator, employeeId: qa.id, taskType: "evaluate", credits: 0.07, tool: { name: "check_preview", args: { path: "" }, result: fault.evidence }, scope: projectPath });
       s.event("evaluation.failed", { item: item.id, text: item.text, tier: "build", round: 0, requirements: judged(o, item, unmet), failing: unmetId ? [`${unmetId}:not-met`] : ["item:faults"], faults: [fault.fault], evidence: fault.evidence, repairCharged: false, summary: `Sent back for repair, at no charge: ${item.text.replace(/\.$/, "")} (${Math.max(0, covered - 1)} of ${covered} of your requirements shown working in the running app).` }, `${prefix}:sent-back`);
       finishCheck(false);
       s.event("message", { data: { faults: [fault.fault], passed: false, evidence: fault.evidence }, kind: "workflow.step", step: `item:${item.id}:round:0`, agent: "workflow" });
@@ -718,7 +732,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       const fixFile = files[0] ?? "api/Bookings/BookingsEndpoints.cs";
       for (let k = 0; k < 3; k += 1) {
         s.wait(500);
-        cycle(s, run, { agent: repair, employeeId: eng.id, taskType: "build-t1", credits: 0.11, model: STRONG, billable: false, tool: { name: k === 2 ? "run" : "edit_file", args: k === 2 ? { command: "make test" } : { path: fixFile }, result: k === 2 ? "exit code 0" : "Edited.", paths: [fixFile], ...(k === 2 ? { command: "make test" } : {}) }, scope: projectPath });
+        cyc({ agent: repair, employeeId: eng.id, taskType: "build-t1", credits: 0.11, model: STRONG, billable: false, tool: { name: k === 2 ? "run" : "edit_file", args: k === 2 ? { command: "make test" } : { path: fixFile }, result: k === 2 ? "exit code 0" : "Edited.", paths: [fixFile], ...(k === 2 ? { command: "make test" } : {}) }, scope: projectPath });
       }
       s.event("message", { kind: "agent.reply", agent: repair, final: true, reply: `Repaired the ${item.id} item and committed it.` });
       s.effect((w) => {
@@ -732,10 +746,26 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
         }
         return ["Credits", "Employee"];
       });
-      if (o.fail) {
+      if (o.fail || look) {
         s.wait(800);
         const finishRecheck = checkTask(s, run, projectPath, qa, item, 1);
-        cycle(s, run, { agent: `evaluator-${item.id}-1`, employeeId: qa.id, taskType: "evaluate", credits: 0.06, tool: { name: "run", args: { command: "make test" }, result: "exit code 1" }, scope: projectPath });
+        cyc({ agent: `evaluator-${item.id}-1`, employeeId: qa.id, taskType: "evaluate", credits: 0.06, tool: { name: "run", args: { command: "make test" }, result: "exit code 1" }, scope: projectPath });
+        const what = item.text.replace(/\.$/, "");
+        if (look) {
+          const reading = "run of the page’s own tests";
+          s.event("evaluation.failed", { item: item.id, text: item.text, tier: "build-t1", round: 1, requirements: judged(o, item, unmet && { ...unmet, evidence: "The checker found it working in the running app; the page's own tests still fail the same way." }), failing: unmetId ? [`${unmetId}:not-met`] : ["item:faults"], faults: [fault.fault], evidence: "The checker found it working in the running app; the page's own tests still fail the same way.", final: true, needsLook: true, trigger: { kind: "tests", tests: ["web/src/bookings/BookingPage.test.tsx > shows the waiting list"] }, summary: `Not sent back for repair: the check needs a look. The checker found it working, the factory's own ${reading} disagreed twice, and the repair between found nothing in the app to change, so nothing in it was shown not to work: ${what}.` });
+          finishRecheck(false, true);
+          s.event("task.failed", { taskId, reason: `Stopped: the check needs a look. The checker found it working, the factory's own ${reading} disagreed twice, and the repair between found nothing in the app to change, so it was not sent to another repair. ${what}.` });
+          s.effect((w, r) => {
+            const t = w.tasks.find((x) => x.id === taskId);
+            if (t) t.status = "failed";
+            setStage(w, projectPath, prefix === "change" ? "live" : "paused", prefix === "change" ? null : "The build stopped: a part's check needs a look.");
+            stop(w, r, `"${what}" was stopped because the check needs a look: the checker who used the app found it working, the factory’s own run of the page’s own tests disagreed twice, and the repair between found nothing in the app to change. Nothing in it was shown not to work, so it was not sent to another repair on a stronger model, and the app was not ${prefix === "change" ? "changed" : "published"}. Technical mode shows the calls the check read. Its work so far is saved and the repair was not charged; “Try again” carries on from it.`, `'${item.detail}' stopped before another repair round: the check needs a look.`);
+            return ["Tasks", "Tree", "App", "Run", "Idea"];
+          }, `${prefix}:failed`);
+          failed = true;
+          return;
+        }
         s.event("evaluation.failed", { item: item.id, text: item.text, tier: "build-t1", round: 1, requirements: judged(o, item, unmet && { ...unmet, evidence: "The repair did not pass either: the same 2 tests fail." }), failing: unmetId ? [`${unmetId}:not-met`] : ["item:faults"], faults: [fault.fault], evidence: "The repair did not pass either: the same 2 tests fail.", final: true, summary: `Sent back for repair again, at no charge: ${item.text.replace(/\.$/, "")}.` });
         finishRecheck(false, true);
         s.event("task.failed", { taskId, reason: "Still did not work after 3 rounds of repair, each on a stronger model; the repairs were not charged." });
@@ -745,7 +775,6 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
           setStage(w, projectPath, prefix === "change" ? "live" : "paused", prefix === "change" ? null : "The build stopped: one part did not pass its check after a repair.");
           const a = appAt(w, appPath);
           if (a && prefix === "build") Object.assign(a, { status: "draft", running: "starting", health: "unknown", healthSummary: "Never published: the build did not succeed." });
-          const what = item.text.replace(/\.$/, "");
           stop(w, r, `"${what}" still did not work after 3 rounds of repair, each on a stronger model, so the app was not ${prefix === "change" ? "changed" : "published"}. Its work so far is saved and the repairs were not charged; “Try again” carries on from it.`, `'${item.detail}' still failed its check after 3 repair rounds: ${fault.fault}`);
           return ["Tasks", "Tree", "App", "Run", "Idea"];
         }, `${prefix}:failed`);
@@ -754,7 +783,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
       }
       const finishRecheck = checkTask(s.wait(600), run, projectPath, qa, item, 1);
       s.event("message", { kind: "agent.start", task: "Evaluate the item now (round 1, built on build-t1).", agent: `evaluator-${item.id}-1`, taskType: "evaluate" });
-      cycle(s, run, { agent: `evaluator-${item.id}-1`, employeeId: qa.id, taskType: "evaluate", credits: 0.06, tool: { name: "run", args: { command: "make test" }, result: "exit code 0" }, scope: projectPath });
+      cyc({ agent: `evaluator-${item.id}-1`, employeeId: qa.id, taskType: "evaluate", credits: 0.06, tool: { name: "run", args: { command: "make test" }, result: "exit code 0" }, scope: projectPath });
       s.event("message", { kind: "agent.reply", agent: `evaluator-${item.id}-1`, final: true, reply: JSON.stringify({ passed: true }) });
       s.event("evaluation.passed", { item: item.id, text: item.text, tier: "build-t1", round: 1, requirements: judged(o, item, null), failing: [], faults: [], evidence: `Re-checked after the repair: ${fault.fault.replace(/\.$/, "")} no longer happens; make test and make lint pass.`, summary: `Checked and working: ${item.text.replace(/\.$/, "")} (${covered} of ${covered} of your requirements shown working in the running app).` }, `${prefix}:repaired`);
       finishRecheck(true);
@@ -788,7 +817,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
   });
   for (const f of ["api/Program.cs", "api/Bookings/BookingsEndpoints.cs", "web/src/App.tsx"]) {
     s.wait(400);
-    cycle(s, run, { agent: "security-reviewer-0", employeeId: o.reviewerId, taskType: "evaluate", credits: 0.045, tool: { name: "read_file", args: { path: f }, result: `    1\t// ${f}`, paths: [f] }, scope: projectPath });
+    cyc({ agent: "security-reviewer-0", employeeId: o.reviewerId, taskType: "evaluate", credits: 0.045, tool: { name: "read_file", args: { path: f }, result: `    1\t// ${f}`, paths: [f] }, scope: projectPath });
   }
   const finding = o.finding;
   if (finding) {
@@ -801,11 +830,11 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
     s.wait(600).event("message", { kind: "agent.start", task: `The security review found problems that block publishing. Fix each one, verify with make lint and make test, and commit.\n\n${JSON.stringify([finding])}`, agent: "builder-security-repair" });
     for (let k = 0; k < 3; k += 1) {
       s.wait(500);
-      cycle(s, run, { agent: "builder-security-repair", employeeId: eng.id, taskType: "build", credits: 0.09, billable: false, tool: { name: k === 2 ? "run" : "edit_file", args: k === 2 ? { command: "make test" } : { path: finding.file }, result: k === 2 ? "exit code 0" : `Edited ${finding.file}.`, paths: [finding.file] }, scope: projectPath });
+      cyc({ agent: "builder-security-repair", employeeId: eng.id, taskType: "build", credits: 0.09, billable: false, tool: { name: k === 2 ? "run" : "edit_file", args: k === 2 ? { command: "make test" } : { path: finding.file }, result: k === 2 ? "exit code 0" : `Edited ${finding.file}.`, paths: [finding.file] }, scope: projectPath });
     }
     s.event("message", { kind: "agent.reply", agent: "builder-security-repair", final: true, reply: "Fixed what the security review found, and committed it." });
     s.wait(700).event("message", { kind: "agent.start", task: "Review the app now against your checklist, then reply with the JSON object.", agent: "security-reviewer-1", taskType: "evaluate" });
-    cycle(s, run, { agent: "security-reviewer-1", employeeId: o.reviewerId, taskType: "evaluate", credits: 0.05, tool: { name: "read_file", args: { path: finding.file }, result: "    94\t… b.Id == id && b.AddedById == user.Id …", paths: [finding.file] }, scope: projectPath });
+    cyc({ agent: "security-reviewer-1", employeeId: o.reviewerId, taskType: "evaluate", credits: 0.05, tool: { name: "read_file", args: { path: finding.file }, result: "    94\t… b.Id == id && b.AddedById == user.Id …", paths: [finding.file] }, scope: projectPath });
   }
   s.event("message", { kind: "agent.reply", agent: finding ? "security-reviewer-1" : "security-reviewer-0", final: true, reply: JSON.stringify({ passed: true, findings: [] }) });
   s.event("message", { from: "security-reviewer", kind: "security.review", passed: true, findings: [] });
@@ -845,14 +874,24 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
   s.event("run.finished", { totals: {}, outcome: "succeeded", summary: prefix === "change" ? `${o.name} is changed and its new version is running.` : `${o.name} is built and running privately.` }, `${prefix}:finished`);
 }
 
-/** The parts an earlier attempt finished, read from its own journal (`BuildWorkflow.CarryOverAsync`). */
-function carriedFrom(world: World, retryOf: unknown): { planCarried: boolean; carried: string[] } {
+/**
+ * What an earlier attempt agreed and finished, read from its own journal (`BuildWorkflow.CarryOverAsync`): the plan it agreed,
+ * kept as it was, and the parts that passed their check — a part's "passed" step, or its passing judgement.
+ */
+function carriedFrom(world: World, retryOf: unknown): { planCarried: boolean; carried: string[]; plan: { summary: string; items: Part[]; requirements: { id: string; text: string }[] } | null; placed: Record<string, unknown> | null } {
   const earlier = typeof retryOf === "string" ? world.runs.find((r) => r.run.id === retryOf) : undefined;
-  if (!earlier) return { planCarried: false, carried: [] };
-  const agreed = earlier.events.some((e) => e.type === "plan.accepted");
-  if (!agreed) return { planCarried: false, carried: [] };
-  const passed = earlier.events.filter((e) => e.type === "message" && e.payload.kind === "workflow.step" && /^item:[^:]+$/.test(String(e.payload.step ?? "")) && (e.payload.data as { passed?: unknown } | undefined)?.passed === true).map((e) => String(e.payload.step).slice(5));
-  return { planCarried: true, carried: [...new Set(passed)] };
+  if (!earlier) return { planCarried: false, carried: [], plan: null, placed: null };
+  const placement = earlier.events.find((e) => e.type === "message" && e.payload.kind === "workflow.step" && e.payload.step === "placement")?.payload.data;
+  const placed = placement && typeof placement === "object" ? (placement as Record<string, unknown>) : null;
+  const agreed = [...earlier.events].reverse().find((e) => e.type === "plan.accepted");
+  if (!agreed) return { planCarried: false, carried: [], plan: null, placed };
+  const stepped = earlier.events.filter((e) => e.type === "message" && e.payload.kind === "workflow.step" && /^item:[^:]+$/.test(String(e.payload.step ?? "")) && (e.payload.data as { passed?: unknown } | undefined)?.passed === true).map((e) => String(e.payload.step).slice(5));
+  const judged = earlier.events.filter((e) => e.type === "evaluation.passed" && e.payload.needsLook !== true && typeof e.payload.item === "string").map((e) => String(e.payload.item));
+  const raw = Array.isArray(agreed.payload.items) ? (agreed.payload.items as Record<string, unknown>[]) : [];
+  const items: Part[] = raw.map((i) => ({ id: String(i.id ?? ""), text: String(i.text ?? ""), detail: String(i.detail ?? ""), check: String(i.check ?? ""), covers: Array.isArray(i.covers) ? i.covers.map(String) : [] }));
+  const requirements = Array.isArray(agreed.payload.requirements) ? (agreed.payload.requirements as { id: string; text: string }[]) : [];
+  const plan = items.length ? { summary: String(agreed.payload.summary ?? ""), items, requirements } : null;
+  return { planCarried: true, carried: [...new Set([...stepped, ...judged])].filter((id) => items.length === 0 || items.some((i) => i.id === id)), plan, placed };
 }
 
 defineScript("build", (world, run) => {
@@ -865,7 +904,9 @@ defineScript("build", (world, run) => {
   const placement = ((idea?.verdict ?? {}) as { placement?: { division?: string; project?: string; name?: string } }).placement;
   const researchedAt = world.runs.find((r) => r.run.id === idea?.runId)?.run.scope ?? "";
   // Placement is said once, from the world before it: a division this run created is still new when its steps are rebuilt.
-  const placed = run.events.find((e) => e.type === "message" && e.payload.kind === "workflow.step" && e.payload.step === "placement")?.payload.data as
+  // A try again carries on where the earlier attempt was placed (its journal), never placing the work a second time.
+  const earlier = carriedFrom(world, p.retryOf);
+  const placed = (run.events.find((e) => e.type === "message" && e.payload.kind === "workflow.step" && e.payload.step === "placement")?.payload.data ?? earlier.placed ?? undefined) as
     | { divisionCreated?: boolean; projectPath?: string; appPath?: string; name?: string; beside?: string | null }
     | undefined;
   const placedAt = placed?.projectPath ?? (run.run.scope.split("/").length >= 3 ? run.run.scope.split("/").slice(0, 3).join("/") : null);
@@ -881,7 +922,7 @@ defineScript("build", (world, run) => {
   const divisionExists = placed ? placed.divisionCreated !== true : !!node(world, divisionPath);
   const owner = run.events.find((e) => e.type === "message" && e.payload.from === "owner")?.payload ?? {};
   const changes = Array.isArray(owner.changes) ? owner.changes.filter((c): c is string => typeof c === "string" && c.trim().length > 0) : [];
-  const { planCarried, carried } = carriedFrom(world, p.retryOf);
+  const { planCarried, carried } = earlier;
   const s = new Script();
   const eng = { key: `${projectPath}:engineer`, name: pick(["Arlo", "Juniper", "Felix", "Rosa"], projectPath), role: "Software engineer" };
   const qa = { key: `${projectPath}:qa`, name: pick(["Bea", "Otto", "Nell", "Ivo"], projectPath), role: "QA engineer" };
@@ -944,18 +985,19 @@ defineScript("build", (world, run) => {
   }
   s.mark("build:hired");
   const agreed = changes.length ? `\n\nAgreed after research, and part of what is built:\n${changes.map((c) => `- ${c}`).join("\n")}` : "";
-  const requirements = [...story.plan.requirements, ...changes.map((c, i) => ({ id: `C${i + 1}`, text: c }))];
-  const items: Part[] = story.plan.items.map((i, k) => (k === 0 && changes.length ? { ...i, covers: [...i.covers, ...changes.map((_c, n) => `C${n + 1}`)] } : i));
+  // The plan an earlier attempt agreed is the plan, kept as it was; otherwise the story's, with what was agreed after research.
+  const requirements = earlier.plan ? earlier.plan.requirements : [...story.plan.requirements, ...changes.map((c, i) => ({ id: `C${i + 1}`, text: c }))];
+  const items: Part[] = earlier.plan ? earlier.plan.items : story.plan.items.map((i, k) => (k === 0 && changes.length ? { ...i, covers: [...i.covers, ...changes.map((_c, n) => `C${n + 1}`)] } : i));
   pipeline(s, world, run, {
     prefix: "build",
     name: story.name,
     where: whereItGoes({ name: story.name, division: story.division.name, divisionCreated: !divisionExists, beside: free.beside }),
     projectPath,
     appPath,
-    summary: story.plan.summary,
+    summary: earlier.plan?.summary || story.plan.summary,
     requirements,
     items,
-    leftOut: story.plan.leftOut,
+    leftOut: earlier.plan ? [] : story.plan.leftOut,
     sentBack: story.sentBack,
     finding: story.finding,
     fail: p.fail === true,
@@ -966,6 +1008,8 @@ defineScript("build", (world, run) => {
     reviewerId: world.employees.find((e) => orgOf(e.scope) === org && e.standing === "security-reviewer")?.id ?? null,
     plannerTask: `Plan the app described below. It starts from the app kit's template (the Notes example), which it replaces.\n\nThe idea, word for word:\n${idea?.text ?? story.name}${agreed}`,
     versionMessage: null,
+    previousCredits: p.retryOf ? (run.run.estimateCredits ?? null) : typeof p.startEstimate === "number" ? p.startEstimate : 120,
+    needsLook: typeof p.needsLook === "string" ? p.needsLook : null,
   });
   return patchTotals(s, run);
 });
@@ -990,7 +1034,7 @@ function changeItems(request: string): Part[] {
     .map((a) => a.trim())
     .filter((a) => a.split(/\s+/).length >= 3);
   if (asks.length < 2) return [changeItem(first, 1)];
-  return asks.slice(0, 4).map((a, i) => changeItem(i === 0 || !lead ? a : `${lead}${a}`, i + 1));
+  return asks.slice(0, 5).map((a, i) => changeItem(i === 0 || !lead ? a : `${lead}${a}`, i + 1));
 }
 
 /** One part of a change, built where the app keeps it. */
@@ -1018,7 +1062,8 @@ defineScript("change", (world, run) => {
   const name = node(world, projectPath)?.name ?? app?.name ?? "The app";
   const owner = run.events.find((e) => e.type === "message" && e.payload.from === "owner")?.payload ?? {};
   const request = String(owner.text ?? run.run.title.replace(/^Change: /, ""));
-  const { planCarried, carried } = carriedFrom(world, p.retryOf);
+  const earlier = carriedFrom(world, p.retryOf);
+  const { planCarried, carried } = earlier;
   const eng = employeeAt(world, projectPath, "Software engineer");
   const qa = employeeAt(world, projectPath, "QA engineer");
   const s = new Script();
@@ -1044,8 +1089,8 @@ defineScript("change", (world, run) => {
   }
   const before = app ? earlierParts(world, app.id) : [];
   const kept = before.map((text, i) => ({ id: `k${i + 1}`, text: `${text}.` }));
-  const items: Part[] = changeItems(request);
-  if (kept.length) {
+  const items: Part[] = earlier.plan ? earlier.plan.items.map((i) => (i.id === "keep" ? { ...i, keep: true } : i)) : changeItems(request);
+  if (kept.length && !earlier.plan) {
     items.push({ id: "keep", text: "Everything the app did before still works", detail: "No new work: the app as changed is checked again against each part it already had.", check: "Each part the app had before is shown working in the running app, signed in, with the app's own tests passing.", covers: kept.map((k) => k.id), keep: true });
   }
   pipeline(s, world, run, {
@@ -1068,6 +1113,8 @@ defineScript("change", (world, run) => {
     reviewerId: world.employees.find((e) => orgOf(e.scope) === orgOf(appPath) && e.standing === "security-reviewer")?.id ?? null,
     plannerTask: `Plan a change to ${name}, an app that is already built and running. PROGRESS.md lists what it does now, part by part. Change only what the request asks for, and keep everything it does now working; a change is usually one to three items.\n\nThe change, word for word:\n${request}`,
     versionMessage: request.split("\n")[0]?.replace(/\.$/, "") ?? null,
+    previousCredits: (run.events.find((e) => e.type === "estimate.made" && typeof e.payload.credits === "number")?.payload.credits as number | undefined) ?? run.run.estimateCredits ?? null,
+    needsLook: typeof p.needsLook === "string" ? p.needsLook : null,
   });
   return patchTotals(s, run);
 });
@@ -1137,8 +1184,9 @@ defineScript("conversation", (world, run) => {
   const scope = run.run.scope;
   const s = new Script();
   const who = typeof p.employeeId === "string" ? world.employees.find((e) => e.id === p.employeeId) : undefined;
+  const from: Record<string, string> = who ? { from: "assistant", by: who.name, employeeId: who.id } : { from: "assistant" };
   // An employee answers as itself; otherwise Endgame's own assistant does (TALK-05).
-  const said = (paragraphs: string[]) => say(s, who ? { from: "assistant", by: who.name, employeeId: who.id } : { from: "assistant" }, paragraphs);
+  const said = (paragraphs: string[]) => say(s, from, paragraphs);
   s.event("run.started", { holder: "runner-demo-1" });
   s.wait(500);
   // The model call is refused for budget: the conversation says so itself, with the way to more credits (TALK-15).
@@ -1149,9 +1197,10 @@ defineScript("conversation", (world, run) => {
     append(w, r, "run.finished", { outcome: "failed", summary: "The credit budget ran out, so the work stopped. Top up or raise the budget, then try it again; what was finished is kept.", totals: { credits: 0, modelCalls: 0, nonBillableCredits: 0 } });
     return ["Run", "Conversation"];
   }, "conversation:budget-stopped");
-  cycle(s, run, { agent: "conversation", employeeId: who?.id ?? null, taskType: who?.jobDescription.modelTier ?? "chat", credits: 0.012, tool: { name: "read_organisation", args: { scope, what: "overview" }, result: `${node(world, scope)?.name ?? scope}: read.` } });
+  cycle(s, run, { agent: "conversation", employeeId: who?.id ?? null, taskType: who?.jobDescription.modelTier ?? "chat", credits: 0.012, tool: { name: "read_organisation", args: { scope, what: "contents" }, result: contentsRead(world, scope) } });
   s.wait(400);
   cycle(s, run, { agent: "conversation", employeeId: who?.id ?? null, taskType: who?.jobDescription.modelTier ?? "chat", credits: 0.018 });
+  s.mark("conversation:thinking");
   const lower = text.toLowerCase();
   // Files sent with the message are read first: the reply says what it took from each (ARCH-012).
   const files = String(p.files ?? "")
@@ -1169,49 +1218,57 @@ defineScript("conversation", (world, run) => {
   const retryAsk = !answerOnly && /\b(try (it |that |this )?again|try the .* again|retry|start .* again)\b/.test(lower);
   const changeAsk = !answerOnly && !retryAsk && !asked && (atApp || /\b(change|update)\b.*\bapp\b/.test(lower)) && /(let |add |change |make |should |show |allow |remove |cancel|rename|update )/.test(lower);
   const ideaAsk = !answerOnly && !retryAsk && !asked && !changeAsk && /(idea|build|make (us |me )?an? |could we|new app|we need an? |start researching)/.test(lower);
+  // What approving said, once it is answered: what it started, or the control plane's refusal of it, or the owner's no.
+  const afterAnswer = (words: { started: string; declined: string; refused: (why: string) => string }) => {
+    s.wait(900).effect((w, r) => {
+      const a = w.approvals.filter((x) => x.runId === r.run.id).pop();
+      if (!a || a.answer === null || a.answer === "expired") return;
+      const outcome = a.outcome;
+      const line = a.answer === "rejected" ? words.declined : outcome && "refused" in outcome ? words.refused(outcome.refused) : words.started;
+      append(w, r, "message", { ...from, text: line });
+      return ["Run", "Conversation"];
+    });
+  };
+  // `ApprovalWording.Quote`: the owner's own words this turn, in quotes; the model's only when the owner wrote none.
+  const ownerWords = (model: string) => quotedWords(text.trim() ? text : model, 140);
   if (retryAsk) {
-    const stopped = world.runs
-      .filter((r) => (r.run.scope === scope || r.run.scope.startsWith(`${scope}/`)) && (r.run.status === "failed" || r.run.status === "cancelled") && (r.run.kind === "research" || r.run.kind === "build" || r.run.kind === "task"))
-      .pop();
-    if (!stopped) said([`Nothing in ${node(world, scope)?.name ?? scope} has stopped that can be tried again: every piece of work here finished or is still under way.`]);
+    // `read_organisation 'runs'`: the stopped work beneath the scope that can still be tried again (`ReadModels.CanTryAgainAsync`).
+    // Once asked, the work it named stays the work, whatever happens to it meanwhile: the steps are rebuilt from the world.
+    const named = world.approvals.find((a) => a.runId === run.run.id && a.onApprove.kind === "try-again")?.onApprove;
+    const stopped = named?.kind === "try-again" ? runRecord(world, named.runId) : world.runs.filter((r) => (r.run.scope === scope || r.run.scope.startsWith(`${scope}/`)) && canTryAgain(world, r)).pop();
+    if (!stopped) said([`Nothing in ${node(world, scope)?.name ?? scope} has stopped that can be tried again: every piece of work here finished, is still under way, or was already tried again.`]);
     else {
-      said([`"${stopped.run.title}" stopped before it finished. Trying it again carries on from where it stopped, with its estimate shown first; it needs your yes.`]);
-      s.approval({ title: `Try again: ${stopped.run.title}?`, detail: SIGN_OFF, technical: `try_again: ${stopped.run.id}. No rule allows try_again here. Checkpoint: try_again.`, onApprove: { kind: "try-again", runId: stopped.run.id, scope }, onDecline: "continues" }, "conversation:approval");
-      s.wait(400).effect(() => undefined);
-      if (p.answer === "rejected") said(["Understood — I have not started it again. Say the word if you change your mind."]);
-      else if (p.answer === "approved") said(["It has started again, carrying on from where it stopped; its estimate is the first thing in its own work."]);
+      const short = shortTitle(stopped.run.title);
+      said([`“${short}” stopped before it finished. Trying it again carries on from where it stopped, with its estimate shown first; it needs your yes.`]);
+      s.approval({ title: short ? `${tryAgainLead(stopped)}: “${short}”` : tryAgainLead(stopped), detail: "Approving starts it again as new work, its estimate shown first, keeping what was already built and agreed. If you decline, nothing is started.", technical: `try_again: ${stopped.run.id}. No rule allows try_again here. Checkpoint: try_again.`, onApprove: { kind: "try-again", runId: stopped.run.id, scope }, onDecline: "continues" }, "conversation:approval");
+      afterAnswer({ started: "It has started again, carrying on from where it stopped; its estimate is the first thing in its own work.", declined: "Understood — I have not started it again. Say the word if you change your mind.", refused: (why) => `I could not start it again: ${why}` });
     }
   } else if (changeAsk) {
     const request = text.replace(/^(please|can you|could you|could we)\s+/i, "").trim();
     const target = atApp ? scope : (world.apps.find((a) => a.path.startsWith(`${scope}/`) && lower.includes(a.name.toLowerCase()))?.path ?? scope);
+    const name = appAt(world, target)?.name ?? node(world, target)?.name ?? "the app";
     said([`I can ask the factory to change ${appAt(world, target)?.name ?? "the app"}: a plan for it first, then each part built and checked in the running app, and everything it does now checked again before the new version goes out. It needs your yes.`]);
-    // `ChangeAppTool.ApprovalTitle`: the app by name and the request without its closing mark.
-    s.approval({ title: `Change ${appAt(world, target)?.name ?? node(world, target)?.name ?? "the app"}: ${clip(request.replace(/[.?!]+$/, ""))}?`, detail: SIGN_OFF, technical: `change_app: ${target}: ${request}. No rule allows change_app here. Checkpoint: change_app.`, onApprove: { kind: "change-app", scope: target, request }, onDecline: "continues" }, "conversation:approval");
-    s.wait(400).effect(() => undefined);
-    if (p.answer === "rejected") said(["Understood — I have not asked for the change. Nothing about the app has changed."]);
-    else if (p.answer === "approved") said(["The change has started. Its estimate is shown first in its own work, then the plan, each part as it is built and checked, and the new version."]);
+    // `ChangeAppTool.ApprovalTitle`: the app by its name, the owner's own words quoted, no "?" after them (`AgentLoop.Question`).
+    s.approval({ title: `Change ${name}: ${ownerWords(request)}`, detail: `Approving starts this change to ${name}: its estimate is shown first, then a plan, the change built and checked in the running app, and a new version. If you decline, nothing changes.`, technical: `change_app: ${target}: ${request}. No rule allows change_app here. Checkpoint: change_app.`, onApprove: { kind: "change-app", scope: target, request }, onDecline: "continues" }, "conversation:approval");
+    afterAnswer({ started: "The change has started. Its estimate is shown first in its own work, then the plan, each part as it is built and checked, and the new version.", declined: "Understood — I have not asked for the change. Nothing about the app has changed.", refused: (why) => `The change could not be started: ${why} Nothing about the app has changed.` });
   } else if (ideaAsk) {
     const ideaText = text.replace(/^(please|can you|could you|could we|let'?s)\s+/i, "").replace(/^(start researching|build|make|start)\s+(us\s+|me\s+)?/i, "");
     said(["That sounds worth looking into. Before anything is built, research checks who already does it, what they leave undone and whether people would pay.", "I have asked to start researching it; it needs your yes first."]);
     s.approval(
       {
-        title: `Start researching an idea: ${clip(ideaText)}?`,
-        detail: SIGN_OFF,
+        title: `Start researching an idea: ${ownerWords(ideaText)}`,
+        detail: "Approving starts research on this idea, its estimate shown first; the verdict comes back to you to decide on. If you decline, nothing is started.",
         technical: `start_idea: ${ideaText}. No rule allows start_idea here. Checkpoint: start_idea.`,
         onApprove: { kind: "start-idea", text: ideaText.charAt(0).toUpperCase() + ideaText.slice(1), scope: scope.split("/").slice(0, 2).join("/") },
         onDecline: "continues",
       },
       "conversation:approval",
     );
-    s.wait(400).effect(() => undefined);
-    if (p.answer === "rejected") said(["Understood — I have not started it. Say the word if you change your mind."]);
-    else if (p.answer === "approved") said(["Research has started. You will see it on the org chart, and the verdict will wait for you there."]);
+    afterAnswer({ started: "Research has started. You will see it on the org chart, and the verdict will wait for you there.", declined: "Understood — I have not started it. Say the word if you change your mind.", refused: (why) => `The research could not be started: ${why}` });
   } else if (asked) {
     said([`I can change that for ${node(world, scope)?.name ?? scope}. A setting changes only with your yes, and applies here and to everything beneath it that does not set its own.`]);
-    s.approval({ title: settingTitle(asked.key, asked.value), detail: SIGN_OFF, technical: `adjust_setting: ${asked.key}=${asked.value}. No rule allows adjust_setting here. Checkpoint: adjust_setting.`, onApprove: { kind: "setting", key: asked.key, value: asked.value, scope }, onDecline: "continues" }, "conversation:approval");
-    s.wait(400).effect(() => undefined);
-    if (p.answer === "rejected") said(["Left as it was."]);
-    else if (p.answer === "approved") said(["Done. The change applies here and to everything beneath it that does not set its own."]);
+    s.approval({ title: settingTitle(asked.key, asked.value), detail: `Approving makes this change now: ${settingDone(asked.key, asked.value, node(world, scope)?.name ?? "here")} If you decline, nothing changes.`, technical: `adjust_setting: ${asked.key}=${asked.value}. No rule allows adjust_setting here. Checkpoint: adjust_setting.`, onApprove: { kind: "setting", key: asked.key, value: asked.value, scope }, onDecline: "continues" }, "conversation:approval");
+    afterAnswer({ started: "Done. The change applies here and to everything beneath it that does not set its own.", declined: "Left as it was.", refused: (why) => `It could not be changed: ${why}` });
   } else if (text.trim() || files.length === 0) {
     said(answer(world, scope, lower, who));
   }
@@ -1219,13 +1276,61 @@ defineScript("conversation", (world, run) => {
   return patchTotals(s, run);
 });
 
+/** `SettingWords.Describe`'s second half: what is true once the setting is changed, naming the place. */
+function settingDone(key: string, value: string, place: string): string {
+  const on = value === "true";
+  switch (key) {
+    case "autonomy":
+      return value === "checkpoints" ? `${place} now stops for your sign-off at the checkpoints that are on.` : `${place} now works in auto-mode.`;
+    case "checkpoint.start":
+      return `The “Before work starts” checkpoint is now ${on ? "on" : "off"} in ${place}.`;
+    case "checkpoint.plan":
+      return `The “Before the plan is carried out” checkpoint is now ${on ? "on" : "off"} in ${place}.`;
+    case "checkpoint.hire":
+      return `The “Before anyone is hired” checkpoint is now ${on ? "on" : "off"} in ${place}.`;
+    case "sleep.mode":
+      return value === "always_on" ? `Apps in ${place} now stay on, even when nobody is using them.` : `Apps in ${place} now sleep when nobody is using them.`;
+    case "sleep.idle_minutes":
+      return `Apps in ${place} now sleep after ${value} idle minutes.`;
+    case "workforce.idle_days":
+      return `Employees in ${place} who have had no work for ${value} days are now flagged.`;
+    default:
+      return "The setting is changed.";
+  }
+}
+
+/** `ApprovalWording.ShortTitle`: a run's title without the factory's leading word, a dangling "..." dropped, cut at a word at 80. */
+export function shortTitle(title: string): string {
+  let t = oneLine(title).replace(/^(Build|Change|Research): /, "");
+  if (t.endsWith("...")) t = t.slice(0, -3).trimEnd();
+  return clampWords(t, 80);
+}
+
+/** `ApprovalWording.TryAgainLead`, from the stopped run's kind. */
+function tryAgainLead(r: DemoRun): string {
+  if (r.run.kind === "build") return "Try the build again";
+  if (r.run.kind === "research") return "Try the research again";
+  if (r.run.kind === "task") return "Try the change again";
+  return "Try again";
+}
+
+/** What `read_organisation 'contents'` returns: every division, project and app beneath the scope, each with its id. */
+function contentsRead(world: World, scope: string): string {
+  const under = (path: string, level: string) => world.nodes.filter((n) => n.level === level && n.path.startsWith(`${path}/`) && n.path.split("/").length === path.split("/").length + 1);
+  const app = (path: string) => world.apps.filter((a) => a.path.startsWith(`${path}/`)).map((a) => ({ id: a.id, name: a.name, path: a.path, state: a.running === "paused" ? "paused" : a.health === "down" ? "down" : a.publishedAt ? (a.running === "asleep" ? "sleeping" : "live") : "not-built" }));
+  const level = scope.split("/").length;
+  const divisions = level === 1 ? under(scope, "division") : [];
+  const view = {
+    scope,
+    name: node(world, scope)?.name ?? scope,
+    divisions: divisions.map((d) => ({ id: d.id, name: d.name, path: d.path, projects: under(d.path, "project").map((p) => ({ id: p.id, name: p.name, path: p.path, apps: app(p.path) })) })),
+    ...(level === 1 ? {} : { apps: app(scope) }),
+  };
+  return JSON.stringify(view);
+}
+
 /** `ApprovalDetail.For`: why an approval asked, in the owner's words; the tool line goes in `technical`. */
 const RULES_ASK = "Your rules for this stage ask for your sign-off before this is done. If you decline, it is not done and the work carries on without it.";
-const SIGN_OFF = "This waits for your sign-off before it is done. If you decline, it is not done and nothing changes.";
-
-function clip(t: string) {
-  return t.length > 300 ? `${t.slice(0, 148)} … ${t.slice(-148)}` : t;
-}
 
 /** What the reply says it read, file by file: a PDF by its pages, a picture as looked at, text as read. */
 function filesRead(files: { name: string; kind: string; pages: string }[]): string {
@@ -1256,6 +1361,8 @@ function answer(world: World, scope: string, q: string, who: Employee | undefine
     const memory = (about.length ? about : mine).slice(0, 2);
     return [`I'm ${who.name}, the ${who.role.toLowerCase()} for ${name}. ${who.jobDescription.mandate}`, memory.length ? `What I keep in mind: ${memory.map((m) => m.body).join(" ")}` : "Ask me about my work, or tell me what to change."];
   }
+  const rich = richAnswer(world, scope, q, who);
+  if (rich) return rich;
   if (/spen|cost|credit|money|budget/.test(q)) {
     const sp = spentBelow(world, scope);
     return [`${name} has spent ${Math.round(sp.ai + sp.hosting)} credits this month: ${Math.round(sp.ai)} on work by the workforce and ${Math.round(sp.hosting)} on keeping apps running.`, "The credits page breaks it down by division, project and app, with the caps set on each."];
@@ -1272,6 +1379,112 @@ function answer(world: World, scope: string, q: string, who: Employee | undefine
   }
   if (who) return [`I'm ${who.name}, the ${who.role.toLowerCase()} for ${name}. ${who.jobDescription.mandate}`, "Ask me about my work, or tell me what to change."];
   return [`Here is ${name} at a glance: ${world.nodes.filter((x) => x.path.startsWith(`${scope}/`) && x.level === "project").length} projects and ${world.apps.filter((a) => a.path.startsWith(scope)).length} apps.`, "Ask me what anyone is working on, what it has cost, or describe an idea and I'll ask to start researching it."];
+}
+
+/**
+ * Replies drawn as rich Markdown where it helps (`Prompts/conversation.md`): a heading for a long answer in parts, lists, a
+ * table to compare, fenced code with its language for a config, bold, and links to apps, employees, work and ideas by id
+ * (`/apps/{id}`, `/employees/{id}`, `/runs/{id}`, `/ideas/{id}`), which the console draws as chips. Null for a question none
+ * of these fits, which is answered in plain sentences.
+ */
+function richAnswer(world: World, scope: string, q: string, who: Employee | undefined): string[] | null {
+  const name = node(world, scope)?.name ?? scope;
+  const apps = world.apps.filter((a) => a.path === scope || a.path.startsWith(`${scope}/`));
+  const appChip = (a: { id: string; name: string }) => `[${a.name}](/apps/${a.id})`;
+  const people = world.employees.filter((e) => e.kind === "employee" && e.status !== "released" && (e.scope === scope || e.scope.startsWith(`${scope}/`) || scope.startsWith(`${e.scope}/`)));
+  const personChip = (e: Employee) => `[${e.name}](/employees/${e.id})`;
+  const credits = (n: number) => (Math.round(n * 10) / 10).toLocaleString("en-GB", { maximumFractionDigits: 1 });
+  const builtLast = (path: string) => world.runs.filter((r) => r.run.kind === "build" && r.run.status === "finished" && (r.run.scope === path || path.startsWith(`${r.run.scope}/`) || r.run.scope.startsWith(`${path}/`))).pop();
+
+  // What each app cost: a table.
+  if (/\b(compare|each app|every app|per app|app by app|by app|all the apps|which app)\b/.test(q) && /spen|cost|credit|money|expensive/.test(q)) {
+    if (apps.length === 0) return null;
+    const rows = apps
+      .map((a) => ({ a, sp: spentBelow(world, a.path) }))
+      .sort((x, y) => y.sp.ai + y.sp.hosting - (x.sp.ai + x.sp.hosting));
+    const table = ["| App | Work | Keeping it running | This month |", "| --- | ---: | ---: | ---: |", ...rows.map(({ a, sp }) => `| ${appChip(a)} | ${credits(sp.ai)} | ${credits(sp.hosting)} | **${credits(sp.ai + sp.hosting)}** |`)].join("\n");
+    const top = rows[0];
+    const total = rows.reduce((n, r) => n + r.sp.ai + r.sp.hosting, 0);
+    return [
+      `Here is what each app under ${name} has cost this month, in credits:`,
+      table,
+      top ? `**${top.a.name}** cost the most, ${credits(top.sp.ai + top.sp.hosting)} of the ${credits(total)} in all. The credits page breaks each figure down further.` : "",
+    ].filter(Boolean);
+  }
+
+  // The whole picture: a long answer in parts, with headings, lists and chips.
+  if (/\b(full picture|everything|at a glance|overview|sum (it |this )?up|summar[iy])/.test(q)) {
+    const live = apps.filter((a) => a.publishedAt && a.health !== "down" && a.running !== "paused");
+    const trouble = apps.filter((a) => a.health === "down" || a.running === "paused");
+    // Verdicts wait at the organisation, or where the idea was placed.
+    const ideas = world.ideas.filter((i) => i.status === "verdict" && (i.scope ? i.scope === scope || i.scope.startsWith(`${scope}/`) : scope.split("/").length === 1));
+    const working = world.runs.filter((r) => (r.run.scope === scope || r.run.scope.startsWith(`${scope}/`)) && (r.run.status === "running" || r.run.status === "waiting" || r.run.status === "queued") && r.run.kind !== "conversation");
+    const sp = spentBelow(world, scope);
+    return [
+      `## ${name} at a glance`,
+      `${name} runs **${apps.length} ${apps.length === 1 ? "app" : "apps"}**, ${live.length} of them live, and has spent **${credits(sp.ai + sp.hosting)} credits** this month.`,
+      `### Apps\n${apps.map((a) => `- ${appChip(a)} — ${a.health === "down" ? "**down**: it crashed, and its last good version can be restored" : a.running === "paused" ? "**paused**: a budget above it is spent" : !a.publishedAt ? "not built yet" : a.running === "asleep" ? "live, asleep until someone opens it" : "live and healthy"}`).join("\n")}`,
+      people.length ? `### Who works here\n${people.slice(0, 6).map((e) => `- ${personChip(e)}, ${e.role.toLowerCase()}${e.status === "working" ? ", working now" : ""}`).join("\n")}` : "",
+      `### What is under way\n${working.length ? working.map((r) => `- [${r.run.kind === "research" ? "the research" : r.run.kind === "build" ? "the build" : "the change"}](/runs/${r.run.id}): ${shortTitle(r.run.title)}`).join("\n") : "- Nothing is running right now."}`,
+      ideas.length ? `### Waiting for you\n${ideas.slice(0, 4).map((i) => `- [the idea](/ideas/${i.id}) “${shortTitle(i.title)}” has its verdict, and waits for your decision`).join("\n")}` : "",
+      trouble.length ? `**Worth a look first:** ${trouble.map((a) => appChip(a)).join(" and ")}.` : "Nothing needs fixing right now.",
+    ].filter(Boolean);
+  }
+
+  // What waits for a person: a list of chips.
+  if (/\b(waiting for me|waits for me|needs me|need me|needs you|what needs|to decide|my decision)\b/.test(q)) {
+    const ideas = world.ideas.filter((i) => i.status === "verdict");
+    const asks = world.approvals.filter((a) => a.answer === null).map((a) => ({ a, r: runRecord(world, a.runId) })).filter((x) => x.r && x.r.run.kind !== "conversation");
+    if (ideas.length === 0 && asks.length === 0) return ["Nothing is waiting for you right now."];
+    return [
+      `${ideas.length + asks.length} ${ideas.length + asks.length === 1 ? "thing waits" : "things wait"} for you:`,
+      [...ideas.map((i) => `- **A verdict:** [the idea](/ideas/${i.id}) “${shortTitle(i.title)}”`), ...asks.map(({ a, r }) => `- **An approval** in [the ${r?.run.kind === "research" ? "research" : r?.run.kind === "build" ? "build" : "work"}](/runs/${r?.run.id}): ${a.title}`)].join("\n"),
+      "Each opens where you decide it.",
+    ];
+  }
+
+  // A config: fenced code with its language.
+  if (/\b(config|configuration|settings file|as yaml|as json|yaml|json)\b/.test(q)) {
+    const a = apps.find((x) => q.includes(x.name.toLowerCase())) ?? apps[0];
+    if (!a) return null;
+    const budget = world.budgets.find((b) => b.path === a.path)?.cap ?? a.capCredits ?? null;
+    return [
+      `How ${appChip(a)} is set up, as its settings read:`,
+      ["```yaml", `name: ${a.name}`, `address: https://${a.path.split("/").slice(-2, -1)[0] ?? "app"}.${a.path.split("/")[0] ?? ""}.endgame.example`, `who-can-open-it: ${a.access}`, `running: ${a.runningSetting === "always-on" ? "always-on" : "sleep-when-idle"}`, `sleep-after-idle-minutes: ${a.idleMinutes ?? 30}`, `monthly-budget-credits: ${budget ?? "none"}`, `people-registered: ${a.endUsers}`, "```"].join("\n"),
+      "Change **who can open it** and **running** on the app's own page; a budget on the Credits page.",
+    ];
+  }
+
+  // Where something is kept: a long path in inline code, which wraps rather than running off the bubble.
+  if (/\bwhere (does|do|is|are)\b.*\b(keep|kept|store|stored|live|lives|code|file)/.test(q)) {
+    const a = apps.find((x) => q.includes(x.name.toLowerCase())) ?? apps[0];
+    if (!a) return null;
+    const last = builtLast(a.path);
+    return [
+      `${appChip(a)} keeps its bookings in its own database, which only it can read. The rule that a court is booked once lives in \`${a.path}/api/Bookings/Persistence/Migrations/20261104093012_AddLeagueBlockBookingsAndAWaitingListForFullCourts.Designer.cs\`, and the screen in \`web/src/bookings/BookingPage.tsx\`.`,
+      last ? `It was last built by [the build](/runs/${last.run.id}); its history on the app's page lists every version since.` : "Its history on the app's page lists every version.",
+    ];
+  }
+
+  // The team: people as chips.
+  if (/\b(the team|who builds|who looks after|who works on|who checks)\b/.test(q) && people.length) {
+    // The division's own lead answers for all of it; above a division, each division has its own.
+    const lead = people.find((e) => /lead/i.test(e.role) && (e.scope === scope || scope.startsWith(`${e.scope}/`)) && e.scope.split("/").length === 2);
+    const role = (e: Employee) => e.role.replace(/^\w/, (c) => c.toLowerCase()).replace(/^qa\b/i, "QA");
+    return [
+      `${people.length === 1 ? "One person works" : `${people.length} people work`} on ${name}:`,
+      people.slice(0, 8).map((e) => `- ${personChip(e)}${e.name === e.role ? "" : ` — ${role(e)}`}: ${e.jobDescription.mandate}`).join("\n"),
+      lead ? `${personChip(lead)} answers for all of it.` : `Ask any of them here, or open their record for what they remember.`,
+    ];
+  }
+
+  if (who && /\b(what did you (change|build|do)|your work|last week)\b/.test(q)) {
+    // Its own work: what it did by name, and the builds and changes of the place it looks after.
+    const mine = world.runs.filter((r) => r.run.kind !== "conversation" && (r.events.some((e) => e.payload.employeeId === who.id) || ((r.run.kind === "build" || r.run.kind === "task") && (r.run.scope === who.scope || r.run.scope.startsWith(`${who.scope}/`))))).slice(-3);
+    if (mine.length === 0) return null;
+    return [`What I worked on most recently:`, mine.map((r) => `- [${r.run.kind === "build" ? "the build" : r.run.kind === "task" ? "the change" : "the work"}](/runs/${r.run.id}): ${shortTitle(r.run.title)}`).join("\n")];
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -13,6 +13,7 @@ import "./world/scenarios.s3";
 import "./world/scenarios.s4";
 import "./world/scenarios.s5";
 import "./world/scenarios.verdicts";
+import "./world/scenarios.talk";
 import { installDevice } from "./device";
 import { pristine } from "./pristine";
 
@@ -131,7 +132,7 @@ export function seekTo(target: string | number) {
     for (let left = target; left > 0; left -= 250) tick(world, Math.min(250, left));
     Object.assign(clock, was);
   } else {
-    seek(world, target, (w, id) => answerApproval(w, id, "approve", "demo"));
+    seek(world, target, (w, id) => answerApproval(w, id, "approve", w.users.find((u) => u.id === w.sessionUserId)?.displayName ?? "demo"));
   }
   changed(["Tree", "Run", "Idea", "App", "Credits", "Notifications", "Employee", "Tasks", "Versions"]);
 }

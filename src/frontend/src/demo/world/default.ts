@@ -334,7 +334,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     proposed.set(id, scope);
     const i: Idea = {
       id,
-      title: text.length > 120 ? `${text.slice(0, 117)}...` : text,
+      title: titleOf(text),
       text,
       constraints,
       status: "verdict",
@@ -479,7 +479,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
     ["message", { via: "console", from: "owner", text: w.ideas.find((i) => i.id === IDS.ideaTides)?.text ?? "", change: null, constraints: "Readable from across the room" }],
     ["estimate.made", { credits: 12, basis: "research", reason: "The measured starting figure for research runs, used until 3 have finished here to learn from. It can never cost more than 111.09 credits, the most its steps could cost; it is charged at what it actually costs.", ceiling: 111.09 }],
   ]));
-  w.runs.push(liveRun(IDS.runBuildReadingList, "build", "Build: A reading list for the supper club: members sign in, add books with a title, author and a one-line note, mark a book as rea...", ORG, IDS.ideaReadingList, 120, "build", { ideaId: IDS.ideaReadingList, story: "reading-list" }, [
+  w.runs.push(liveRun(IDS.runBuildReadingList, "build", `Build: ${titleOf(w.ideas.find((i) => i.id === IDS.ideaReadingList)?.text ?? "")}`, ORG, IDS.ideaReadingList, 120, "build", { ideaId: IDS.ideaReadingList, story: "reading-list" }, [
     ["message", { from: "owner", note: null, text: w.ideas.find((i) => i.id === IDS.ideaReadingList)?.text ?? "", verdict: "build", decidedBy: "person", overruled: false, constraints: "Members sign in\nWorks on a phone" }],
   ]));
   void MONTH_DAY;

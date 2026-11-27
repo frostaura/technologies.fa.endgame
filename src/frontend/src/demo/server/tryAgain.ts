@@ -1,6 +1,6 @@
 import type { Idea, RetryEstimate, Run, TryAgainOffer } from "@/store/types";
 import { append } from "./engine";
-import { conflict, invalid, problem, Refusal } from "./http";
+import { clampWords, conflict, invalid, problem, Refusal } from "./http";
 import { startRun } from "./mutations";
 import { appAt, newId, orgOf, runRecord, uuidFor, type DemoApp, type DemoRun, type World } from "./world";
 
@@ -233,7 +233,7 @@ export function startChange(world: World, app: DemoApp, request: string, by: { i
   refusePaused(world, app.path.split("/").slice(0, 3).join("/"));
   const estimate = changeEstimate(world, app);
   const line = (text.split("\n")[0] ?? "").trim();
-  const title = `Change: ${line.length <= 110 ? line : `${line.slice(0, 107)}...`}`;
+  const title = `Change: ${clampWords(line, 110)}`;
   const r = startRun(world, { id: uuidFor(`run:change:${app.id}:${world.counter++}`), kind: "task", title, scope: app.path, ideaId: null, estimateCredits: estimate.credits, employeeId: null, conversationId: null }, "change", { appId: app.id, ...params });
   append(world, r, "message", { from: "owner", kind: "change", text, userId: by?.id ?? null, via });
   append(world, r, "estimate.made", { credits: estimate.credits, basis: "change", reason: estimate.basis });

@@ -118,13 +118,36 @@ export function isEmail(v: string | undefined): v is string {
   return v.length >= 4 && v.length <= 254 && at > 0 && at === v.lastIndexOf("@") && at < v.length - 1 && !/\s/.test(v);
 }
 
-/** A title made from text as the control plane makes one: its first line, cut at 120 to 117 + "...". */
 /** A copy of a record without one of its keys (a view leaving out what the world keeps for itself). */
 export function omit<T extends object, K extends keyof T>(value: T, key: K): Omit<T, K> {
   return Object.fromEntries(Object.entries(value).filter(([k]) => k !== key)) as Omit<T, K>;
 }
 
+/** `Words.OneLine`: every line joined into one, runs of whitespace collapsed to a single space. */
+export function oneLine(text: string | null | undefined): string {
+  return (text ?? "").split(/\s+/).filter(Boolean).join(" ");
+}
+
+/**
+ * `Words.Clamp`: one line, at most `max` characters, cut at a word boundary with "…" — never mid-word, never "...".
+ * Backs up to the last space unless that would leave less than half.
+ */
+export function clampWords(text: string | null | undefined, max: number): string {
+  const line = oneLine(text);
+  if (line.length <= max) return line;
+  let cut = line.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  if (space >= Math.floor(max / 2)) cut = cut.slice(0, space);
+  return `${cut.replace(/[ ,;:\-–—.]+$/, "")}…`;
+}
+
+/** `Words.Quoted`: the same, in typographic quotes, quotes already around it not doubled. */
+export function quotedWords(text: string | null | undefined, max: number): string {
+  const inner = oneLine(text).replace(/^["“”'‘’ ]+|["“”'‘’ ]+$/g, "");
+  return `“${clampWords(inner, max)}”`;
+}
+
+/** A title made from text as the control plane makes one (`ReadModels.IdeaTitle`): its first line, cut at a word at 120. */
 export function titleOf(text: string): string {
-  const first = (text.split("\n")[0] ?? "").trim();
-  return first.length > 120 ? `${first.slice(0, 117)}...` : first;
+  return clampWords(text.split("\n")[0] ?? "", 120);
 }
