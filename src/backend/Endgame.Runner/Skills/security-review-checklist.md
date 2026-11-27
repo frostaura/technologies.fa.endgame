@@ -5,7 +5,9 @@ trigger: Reviewing an app before it is published, for misuse of the platform's s
 # Security review checklist
 
 Check every item against the code; a finding blocks publishing. Report each as pass or finding, with the
-file and line and what to change.
+file and line and what to change. The one exception: a document that says less than the code does (`docs/app.md` says
+an endpoint needs no sign-in while the code requires it) is reported with `"kind": "docs"`; it is corrected, and never
+withholds the app by itself. A secret in a document is never that: it is a leak.
 
 ## Secrets
 - No key, token, password or connection string in code, config, tests, docs or the front end (search for

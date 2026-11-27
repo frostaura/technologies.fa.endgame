@@ -951,79 +951,252 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
     }
 
+    /// <summary>
+    /// How many repairs of the security review's findings a build gets, each unbilled. The first always; a second only when
+    /// the first demonstrably cleared what it was given and the review then found something different and no larger
+    /// (<see cref="SecurityFindings.Narrower"/>). The gate allows a part three repair rounds; one for security could not be
+    /// defended once a live run (d09672a3) was withheld after a repair that had fixed its finding.
+    /// </summary>
+    public const int SecurityRepairRounds = 2;
+
+    /// <summary>The hard stop: never more reviews than one after each repair, whatever the findings do.</summary>
+    public const int MaxSecurityReviews = SecurityRepairRounds + 1;
+
+    /// <summary>How the security repair's brief begins (<c>Prompts/security-repair.md</c>).</summary>
+    public const string SecurityRepairLead = "The security review found problems that block publishing.";
+
+    /// <summary>How the brief to correct the app's documents begins (<c>Prompts/security-docs.md</c>).</summary>
+    public const string SecurityDocsFixLead = "The security review found nothing in the app's code that blocks publishing";
+
+    /// <summary>
+    /// The security review (ARCH-006, <i>The security review</i>). A finding blocks publishing unless it is only about a
+    /// document that says less than the code does (<see cref="SecurityFindings.IsDocumentation"/>): that is corrected once, for
+    /// free, and never withholds the app by itself — run d09672a3 was withheld on exactly such a line. A blocking finding is
+    /// repaired, unbilled; a further repair is earned only by a narrower, different finding, up to
+    /// <see cref="SecurityRepairRounds"/>; never more than <see cref="MaxSecurityReviews"/> reviews.
+    /// </summary>
     private static async Task<WorkflowOutcome?> ReviewAsync(RunContext run, PlanContract plan, IWorkspace workspace, Crew crew, CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < 2; attempt++)
+        var repairs = 0;
+        var docsFixed = false;
+        IReadOnlyList<JsonObject> repaired = [];
+        JsonObject? last = null;
+        var stop = "";
+        for (var attempt = 0; attempt < MaxSecurityReviews; attempt++)
         {
-            var key = $"security:{attempt}";
-            var findings = run.Journal.Get(key);
-            if (findings is null)
+            var (findings, stopped) = await ReviewOnceAsync(run, workspace, crew, attempt, repairs, repaired, cancellationToken);
+            if (stopped is not null)
             {
-                // The organisation's standing security reviewer does it, and the work is attributed to them: their own task.
-                var reviewTask = await ClaimTaskAsync(run, key, crew.ProjectPath, attempt == 0 ? "Review the app's security before it is published" : "Check the security fixes before the app is published",
-                    "Secrets, sign-in, data, model calls and outbound calls, against the security review checklist.", crew.Reviewer, cancellationToken);
-                var reviewer = await WorkflowSupport.RunAgentAsync(run, AgentFactory.As(run, run.Agents.SecurityReviewer(run, workspace.Root) with { Id = $"security-reviewer-{attempt}" }, crew.Reviewer, crew.ReviewerMemory, canRemember: true, crew.ProjectPath), workspace,
-                    "Review the app now against your checklist, then reply with the JSON object.", cancellationToken);
-                if (WorkflowOutcome.FromAgent(reviewer) is { } stopped)
-                {
-                    return stopped;
-                }
-
-                findings = (reviewer.CutOff ? null : WorkflowSupport.JsonAnswer(reviewer.FinalText))
-                    ?? new JsonObject { ["passed"] = false, ["findings"] = new JsonArray(new JsonObject { ["problem"] = reviewer.CutOff ? "The review's report was too long to finish, so the app is not cleared." : "The review gave no report, so the app is not cleared." }) };
-                await run.Journal.RecordAsync(key, findings, cancellationToken);
-                await run.AppendAsync(HarnessEvents.Message, new JsonObject
-                {
-                    ["from"] = "security-reviewer",
-                    ["kind"] = "security.review",
-                    ["passed"] = Passed(findings),
-                    ["findings"] = findings["findings"]?.DeepClone(),
-                    ["employeeId"] = crew.Reviewer?.ToString(),
-                    ["taskId"] = reviewTask?.ToString(),
-                }, cancellationToken);
-                var count = (findings["findings"] as JsonArray ?? []).Count;
-                await FinishTaskAsync(run, reviewTask, "done", Passed(findings) ? "Nothing found that blocks publishing." : $"Found {count} problem{(count == 1 ? "" : "s")} that block publishing.", cancellationToken);
-                await Workforce.SayAsync(run, "security-reviewer", Passed(findings) ? "Security review passed" : "Security review found problems",
-                    Passed(findings)
-                        ? "The security review checked secrets, sign-in, data, model calls and outbound calls, and found nothing that blocks publishing."
-                        : attempt == 0
-                            ? $"The security review found {count} problem{(count == 1 ? "" : "s")} that would block publishing; they are being fixed now, at no charge."
-                            : $"The security review still found {count} problem{(count == 1 ? "" : "s")} after the fix, so the app is not published.",
-                    cancellationToken, attempt == 0 ? "security.reviewed" : "security.rechecked");
+                return stopped;
             }
 
-            if (Passed(findings))
+            last = findings;
+            if (Passed(findings!))
             {
                 return null;
             }
 
-            if (attempt == 1)
+            var blocking = SecurityFindings.Blocking(findings);
+            if (blocking.Count == 0)
+            {
+                // Only documents that say less than the code does: corrected for free, never a reason to withhold the app.
+                if (docsFixed)
+                {
+                    return null;
+                }
+
+                docsFixed = true;
+                var (onlyDocuments, stopped2) = await FixDocumentsAsync(run, workspace, crew, SecurityFindings.Documentation(findings), cancellationToken);
+                if (stopped2 is not null)
+                {
+                    return stopped2;
+                }
+
+                if (onlyDocuments)
+                {
+                    return null;
+                }
+
+                // The correction changed more than documents: what it changed is reviewed like any other change.
+                stop = "documents";
+                continue;
+            }
+
+            // A repair is followed by a review, always: none is made that no review is left to check.
+            var earned = repairs < SecurityRepairRounds && attempt + 1 < MaxSecurityReviews && (attempt == 0 || SecurityFindings.Narrower(repaired, blocking));
+            if (!earned)
             {
                 break;
             }
 
-            // One repair of the findings, on the agent's own work, not billed: the engineer's task.
-            var fixTask = await ClaimTaskAsync(run, "security-fix", crew.ProjectPath, "Fix what the security review found", "Each finding fixed, verified with make lint and make test, and committed.", crew.Engineer, cancellationToken);
-            var builder = AgentFactory.As(run, run.Agents.Builder(run, "builder-security-repair", run.Options.BuildTiers[Math.Min(1, run.Options.BuildTiers.Count - 1)], repair: true, workspace.Root), crew.Engineer, crew.EngineerMemory, canRemember: true, crew.ProjectPath);
-            var fix = await WorkflowSupport.RunAgentAsync(run, builder, workspace,
-                $"The security review found problems that block publishing. Fix each one, verify with make lint and make test, and commit.\n\n{(findings["findings"] ?? new JsonArray()).ToJsonString(Json.Compact)}\n\nThe plan, for context:\n{plan.Render()}", cancellationToken);
-            if (WorkflowOutcome.FromAgent(fix) is { } stopped2)
+            var stopped3 = await RepairFindingsAsync(run, plan, workspace, crew, repairs, blocking, repaired, cancellationToken);
+            if (stopped3 is not null)
             {
-                return stopped2;
+                return stopped3;
             }
 
-            if (fix.State.Commits.Count == 0)
-            {
-                await workspace.CommitAsync("Fix the security review's findings", builder.AuthorName, builder.AuthorEmail, cancellationToken);
-            }
-
-            await FinishTaskAsync(run, fixTask, "done", "The security review's findings were fixed, at no charge, and go back for a second review.", cancellationToken);
+            repairs++;
+            repaired = blocking;
         }
 
-        var list = (run.Journal.Get("security:1")?["findings"] as JsonArray ?? []).OfType<JsonObject>().Select(f => $"{Json.Str(f, "file")}: {Json.Str(f, "problem")}");
+        var left = SecurityFindings.Blocking(last);
+        if (left.Count == 0 && stop == "documents")
+        {
+            return WorkflowOutcome.Failure("Publishing is blocked: the correction of the app's documents also changed its code, and no security review was left to check it.")
+                with
+            { ForOwner = "The security review found nothing in the app that blocks publishing, but the correction of its documents also changed the app, and that change could not be reviewed again, so the app was not published. Its work is saved, and “Try again” carries on from it." };
+        }
+
+        var list = (left.Count > 0 ? left : SecurityFindings.All(last)).Select(f => $"{Json.Str(f, "file")}: {Json.Str(f, "problem")}");
         return WorkflowOutcome.Failure($"Publishing is blocked by the security review: {string.Join("; ", list)}")
             with
-        { ForOwner = "The security review still found problems after one repair, so the app was not published. Its work is saved, technical mode lists each finding, and “Try again” carries on from it." };
+        { ForOwner = $"The security review still found problems after {(repairs == 1 ? "one repair" : $"{repairs} repairs")}, so the app was not published. Its work is saved, technical mode lists each finding, and “Try again” carries on from it." };
+    }
+
+    /// <summary>One review by the organisation's standing security reviewer, journaled, attributed to them as their own task.</summary>
+    private static async Task<(JsonObject? Findings, WorkflowOutcome? Stopped)> ReviewOnceAsync(RunContext run, IWorkspace workspace, Crew crew, int attempt, int repairs, IReadOnlyList<JsonObject> repaired, CancellationToken cancellationToken)
+    {
+        var key = $"security:{attempt}";
+        if (run.Journal.Get(key) is { } recorded)
+        {
+            return (recorded, null);
+        }
+
+        var reviewTask = await ClaimTaskAsync(run, key, crew.ProjectPath, attempt == 0 ? "Review the app's security before it is published" : "Check the security fixes before the app is published",
+            "Secrets, sign-in, data, model calls and outbound calls, against the security review checklist.", crew.Reviewer, cancellationToken);
+        var reviewer = await WorkflowSupport.RunAgentAsync(run, AgentFactory.As(run, run.Agents.SecurityReviewer(run, workspace.Root) with { Id = $"security-reviewer-{attempt}" }, crew.Reviewer, crew.ReviewerMemory, canRemember: true, crew.ProjectPath), workspace,
+            "Review the app now against your checklist, then reply with the JSON object.", cancellationToken);
+        if (WorkflowOutcome.FromAgent(reviewer) is { } stopped)
+        {
+            return (null, stopped);
+        }
+
+        var findings = (reviewer.CutOff ? null : WorkflowSupport.JsonAnswer(reviewer.FinalText))
+            ?? new JsonObject { ["passed"] = false, ["findings"] = new JsonArray(new JsonObject { ["problem"] = reviewer.CutOff ? "The review's report was too long to finish, so the app is not cleared." : "The review gave no report, so the app is not cleared." }) };
+        await run.Journal.RecordAsync(key, findings, cancellationToken);
+        var passed = Passed(findings);
+        var blocking = SecurityFindings.Blocking(findings);
+        var documents = SecurityFindings.Documentation(findings);
+        await run.AppendAsync(HarnessEvents.Message, new JsonObject
+        {
+            ["from"] = "security-reviewer",
+            ["kind"] = "security.review",
+            ["passed"] = passed,
+            ["findings"] = findings["findings"]?.DeepClone(),
+            ["blocking"] = passed ? 0 : blocking.Count,
+            ["employeeId"] = crew.Reviewer?.ToString(),
+            ["taskId"] = reviewTask?.ToString(),
+        }, cancellationToken);
+        var count = blocking.Count;
+        var plural = count == 1 ? "" : "s";
+        var lines = documents.Count == 1 ? "One line of its documents says" : $"{documents.Count} lines of its documents say";
+        // What follows this review, as the workflow will decide it: a pass, a free correction of documents, a repair, or the end.
+        var repairFollows = count > 0 && repairs < SecurityRepairRounds && (attempt == 0 || SecurityFindings.Narrower(repaired, blocking)) && attempt + 1 < MaxSecurityReviews;
+        await FinishTaskAsync(run, reviewTask, "done",
+            passed ? "Nothing found that blocks publishing."
+            : count == 0 ? $"Nothing in the app blocks publishing; {lines.ToLowerInvariant()} less than the code does, and are corrected."
+            : $"Found {count} problem{plural} that block publishing.", cancellationToken);
+        await Workforce.SayAsync(run, "security-reviewer", passed || count == 0 ? "Security review passed" : "Security review found problems",
+            passed
+                ? "The security review checked secrets, sign-in, data, model calls and outbound calls, and found nothing that blocks publishing."
+                : count == 0
+                    ? $"The security review found nothing in the app that blocks publishing. {lines} less than the code does, and {(documents.Count == 1 ? "it is" : "they are")} being corrected now, at no charge."
+                    : !repairFollows
+                        ? $"The security review still found {count} problem{plural} after the fix, so the app is not published."
+                        : attempt == 0
+                            ? $"The security review found {count} problem{plural} that would block publishing; {(count == 1 ? "it is" : "they are")} being fixed now, at no charge."
+                            : $"The fix cleared what the security review found before. It found {count} different problem{plural}, which {(count == 1 ? "is" : "are")} being fixed now, at no charge.",
+            cancellationToken, attempt switch { 0 => "security.reviewed", 1 => "security.rechecked", _ => null });
+        return (findings, null);
+    }
+
+    /// <summary>
+    /// One unbilled repair of the blocking findings, the engineer's own task. The brief (<c>security-repair.md</c>) says to bring
+    /// the app's documents in line with every endpoint the repair changes — run d09672a3's repair fixed the code and left
+    /// <c>docs/app.md</c> saying the opposite. A second repair is told what the first did and what the review found after it.
+    /// </summary>
+    private static async Task<WorkflowOutcome?> RepairFindingsAsync(RunContext run, PlanContract plan, IWorkspace workspace, Crew crew, int repair, IReadOnlyList<JsonObject> blocking, IReadOnlyList<JsonObject> repaired, CancellationToken cancellationToken)
+    {
+        var suffix = repair == 0 ? "" : $"-{repair}";
+        var fixTask = await ClaimTaskAsync(run, repair == 0 ? "security-fix" : $"security-fix:{repair}", crew.ProjectPath, "Fix what the security review found", "Each finding fixed, verified with make lint and make test, and committed.", crew.Engineer, cancellationToken);
+        var builder = AgentFactory.As(run, run.Agents.Builder(run, $"builder-security-repair{suffix}", run.Options.BuildTiers[Math.Min(1 + repair, run.Options.BuildTiers.Count - 1)], repair: true, workspace.Root), crew.Engineer, crew.EngineerMemory, canRemember: true, crew.ProjectPath);
+        var log = repair == 0 ? [] : await run.LogReader.ReadAllAsync(cancellationToken);
+        var fix = await WorkflowSupport.RunAgentAsync(run, builder, workspace, SecurityRepairBrief(plan, repair, blocking, repaired, log), cancellationToken);
+        if (WorkflowOutcome.FromAgent(fix) is { } stopped)
+        {
+            return stopped;
+        }
+
+        if (fix.State.Commits.Count == 0)
+        {
+            await workspace.CommitAsync("Fix the security review's findings", builder.AuthorName, builder.AuthorEmail, cancellationToken);
+        }
+
+        await FinishTaskAsync(run, fixTask, "done", "The security review's findings were fixed, at no charge, and go back for another review.", cancellationToken);
+        return null;
+    }
+
+    /// <summary>The security repair's brief: the findings word for word, the app's documents to bring in line, and what came before.</summary>
+    public static string SecurityRepairBrief(PlanContract plan, int repair, IReadOnlyList<JsonObject> blocking, IReadOnlyList<JsonObject> repaired, IReadOnlyList<RunEvent> log)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(blocking);
+        ArgumentNullException.ThrowIfNull(repaired);
+        ArgumentNullException.ThrowIfNull(log);
+        var earlier = "";
+        if (repair > 0)
+        {
+            var agent = repair == 1 ? "builder-security-repair" : $"builder-security-repair-{repair - 1}";
+            var reply = log.LastOrDefault(e => e.Type == HarnessEvents.Message && Json.Str(e.Payload, "kind") == MessageKinds.AgentReply && Json.Bool(e.Payload, "final") == true && Json.Str(e.Payload, HarnessEvents.AgentField) == agent);
+            var files = EditedFiles(log, agent);
+            earlier = $"\n\nThe last repair cleared what the review found before it: {SecurityFindings.Render(repaired)}\nWhat the review found after it, above, is different: fix that, and keep what the last repair did."
+                + (reply is null ? "" : $"\nWhat the last repair said it did: {OutputText.Truncate((Json.Str(reply.Payload, "reply") ?? "").ReplaceLineEndings(" ").Trim(), 800)}")
+                + (files.Count == 0 ? "" : $"\nThe files it changed: {string.Join(", ", files)}");
+        }
+
+        return RunnerResources.Prompt("security-repair", new Dictionary<string, string>
+        {
+            ["round"] = (repair + 1).ToString(CultureInfo.InvariantCulture),
+            ["rounds"] = SecurityRepairRounds.ToString(CultureInfo.InvariantCulture),
+            ["findings"] = SecurityFindings.Render(blocking),
+            ["earlier"] = earlier,
+            ["plan"] = plan.Render(),
+        });
+    }
+
+    /// <summary>
+    /// The one free correction of the app's documents, when that is all the review found. Whether it changed only documents is
+    /// read from its own edits in the log, so a resumed run decides the same; anything more is reviewed like any change.
+    /// </summary>
+    private static async Task<(bool OnlyDocuments, WorkflowOutcome? Stopped)> FixDocumentsAsync(RunContext run, IWorkspace workspace, Crew crew, IReadOnlyList<JsonObject> documents, CancellationToken cancellationToken)
+    {
+        const string Agent = "builder-security-docs";
+        var fixTask = await ClaimTaskAsync(run, "security-docs", crew.ProjectPath, "Correct what the app's documents say about its security", "Each document the review named says what the code does, and nothing else is changed.", crew.Engineer, cancellationToken);
+        var builder = AgentFactory.As(run, run.Agents.Builder(run, Agent, run.Options.BuildTiers[0], repair: true, workspace.Root), crew.Engineer, crew.EngineerMemory, canRemember: true, crew.ProjectPath);
+        var fix = await WorkflowSupport.RunAgentAsync(run, builder, workspace, RunnerResources.Prompt("security-docs", new Dictionary<string, string> { ["findings"] = SecurityFindings.Render(documents) }), cancellationToken);
+        if (WorkflowOutcome.FromAgent(fix) is { } stopped)
+        {
+            return (false, stopped);
+        }
+
+        if (fix.State.Commits.Count == 0)
+        {
+            await workspace.CommitAsync("Correct the app's documents", builder.AuthorName, builder.AuthorEmail, cancellationToken);
+        }
+
+        var files = EditedFiles(await run.LogReader.ReadAllAsync(cancellationToken), Agent);
+        var onlyDocuments = files.All(f => SecurityFindings.IsDocumentation(new JsonObject { ["file"] = f }));
+        await FinishTaskAsync(run, fixTask, "done", onlyDocuments ? "The app's documents now say what its code does, at no charge." : "The documents were corrected, and the other changes go back for review.", cancellationToken);
+        return (onlyDocuments, null);
+    }
+
+    /// <summary>The files an agent changed with edit_file or write_file, from the run's log, in order.</summary>
+    public static IReadOnlyList<string> EditedFiles(IReadOnlyList<RunEvent> log, string agent)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        return log.Where(e => e.Type == HarnessEvents.ToolRequested && Json.Str(e.Payload, HarnessEvents.AgentField) == agent && Json.Str(e.Payload, "name") is "edit_file" or "write_file")
+            .Select(e => Json.ParseArguments(e.Payload["arguments"]).Args is { } args ? Json.Str(args, "path") : null)
+            .OfType<string>().Select(p => p.Trim()).Where(p => p.Length > 0).Distinct(StringComparer.Ordinal).ToList();
     }
 
     private static bool Passed(JsonObject findings) =>

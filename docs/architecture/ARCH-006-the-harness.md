@@ -232,6 +232,23 @@ judgement) with a plain outcome — "failed its check three times in a row for t
 working" — instead of a fourth round on a stronger model. Failures of the evaluator's own free-form faults are never
 counted as "the same". The fault that lists the calls made says each shape once, ids folded to `{id}`.
 
+## The security review
+
+After every part has passed, the organisation's standing security reviewer checks the app against its checklist
+(`security-review-checklist`); a finding blocks publishing (`BuildWorkflow.ReviewAsync`, `SecurityFindings`), with two
+rules learned from the live "Dive Seat Sheet" retry (run `d09672a3`), whose parts all passed first time and which was not
+published: its first review found a real fault (a read of the person's own record without sign-in), the one repair fixed
+the code and left `docs/app.md` saying "Signed in? No" for that endpoint, and the second review failed on that line alone.
+
+| Rule | Enforced by |
+| --- | --- |
+| The repair's brief (`Prompts/security-repair.md`) tells the builder to bring the app's documents in line with every endpoint it changes — its `docs/app.md` row ("Signed in?"), `docs/data.md`, the endpoint's `WithDescription`. An app on the current kit cannot drift at all: its `AppRulesTests` fails `make test` when `docs/app.md`'s table and the code disagree (`AppChecks`). | `SecurityRepairBrief` |
+| A finding only about documentation — in a document (`docs/…`, a `.md` file), not called `code` by the reviewer, not about a secret — is not a blocker: the documents are corrected once, unbilled (`builder-security-docs`, `Prompts/security-docs.md`), and the app is published without another review when the correction changed documents only (read from its own edits in the log). A correction that changed more is reviewed like any change. A key in a document still blocks. | `SecurityFindings.IsDocumentation`, `FixDocumentsAsync` |
+| A blocking finding is repaired, unbilled. A second repair (`SecurityRepairRounds` = 2) is earned only when the first demonstrably cleared what it was given — no finding now is one of those, by file, checklist section and line within `SameLineWindow` — and what is left is different and no larger; it is told what the first did. A finding that comes back, or more findings, end it. Hard stop: `MaxSecurityReviews` = 3, and no repair is made that no review is left to check. | `SecurityFindings.Narrower`, `ReviewAsync` |
+
+Replayed from the run's own log (`Fixtures/run-d09672a3-security-review.json`), the build now ends published after a free
+correction of `docs/app.md`, with the same two reviews (`WorkflowTests.Replaying_the_real_runs_reviews_ends_published…`).
+
 ## Checkpoints, asked rules and the person's answer
 
 - **An "asks you first" rule asks.** A rule set's `ask` rule raises an approval even in an unattended run: the rule is

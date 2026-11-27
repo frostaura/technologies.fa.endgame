@@ -38,7 +38,7 @@ public sealed class HarnessBoundaryTests
     {
         var skills = RunnerResources.Skills().All.Select(s => s.Name).ToList();
         Assert.Equal(["add-an-endpoint", "add-an-entity", "build-on-the-app-kit", "security-review-checklist", "write-a-migration", "write-a-screen"], skills);
-        foreach (var prompt in new[] { "builder", "planner", "evaluator", "research-contractor", "research-judge", "security-reviewer", "conversation", "task", "repair" })
+        foreach (var prompt in new[] { "builder", "planner", "evaluator", "research-contractor", "research-judge", "security-reviewer", "security-repair", "security-docs", "conversation", "task", "repair" })
         {
             Assert.False(string.IsNullOrWhiteSpace(RunnerResources.Prompt(prompt)));
         }

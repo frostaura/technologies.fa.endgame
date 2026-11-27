@@ -275,6 +275,15 @@ public sealed partial class WorkflowTests
 
         public int Screens { get; set; }
 
+        /// <summary>The security review numbered n answers this instead of the default finding (a real run's findings, say).</summary>
+        public Func<int, JsonObject?> ReviewAnswer { get; set; } = _ => null;
+
+        /// <summary>For a builder whose task is the given text: the one edit it makes (path, old, new), instead of the default.</summary>
+        public Func<string, (string Path, string Old, string New)?> BuilderEdit { get; set; } = _ => null;
+
+        /// <summary>The tasks the builders were given, in order (their first message).</summary>
+        public List<string> BuilderTasks { get; } = [];
+
         public ScriptedModel Model() => new() { Fallback = Answer };
 
         private ModelReply Answer(ChatCall call)
@@ -343,6 +352,12 @@ public sealed partial class WorkflowTests
 
             if (system.Contains("security reviewer", StringComparison.Ordinal))
             {
+                if (ReviewAnswer(Reviews) is { } own)
+                {
+                    Reviews++;
+                    return ScriptedModel.Text(own.ToJsonString());
+                }
+
                 var passed = ReviewPasses(Reviews++);
                 return ScriptedModel.Text(new JsonObject
                 {
@@ -354,8 +369,16 @@ public sealed partial class WorkflowTests
 
             // The builder.
             OnBuilder?.Invoke(call);
+            var brief = call.Messages.FirstOrDefault(m => m!["role"]!.GetValue<string>() == "user")?["content"]?.ToString() ?? "";
+            if (turn == 0)
+            {
+                BuilderTasks.Add(brief);
+            }
+
+            var edit = BuilderEdit(brief);
             return turn switch
             {
+                0 when edit is { } own => ScriptedModel.Tools(("edit_file", new { path = own.Path, old_string = own.Old, new_string = own.New }, null)),
                 0 => ScriptedModel.Tools(("edit_file", new { path = "api/Program.cs", old_string = "api.MapNotes();", new_string = $"api.MapNotes(); // {Guid.NewGuid():N}" }, null)),
                 1 => ScriptedModel.Tools(("run", new { command = "make test" }, null)),
                 _ => ScriptedModel.Text("Built and tested."),

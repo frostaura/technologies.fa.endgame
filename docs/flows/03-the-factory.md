@@ -648,7 +648,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
      - "\"{part}\" still did not work after 3 rounds of repair, each on a stronger model, so the app was not published. Its work so far is saved and the repairs were not charged; “Try again” carries on from it."
      - "\"{part}\" could not be checked: “{requirement}” could not be shown working in a way the factory’s own check can verify, even after a second look at the same build. Nothing in it was shown not to work, so it was not sent for repair, and the app was not published. Its work so far is saved; “Try again” carries on from it." (BLD-07)
      - "\"{part}\" failed its check three times in a row for the same reason — “{requirement}” could not be shown working in the running app — so it was stopped rather than repaired again, and the app was not published. Its work so far is saved and the repairs were not charged; “Try again” carries on from it."
-     - "The security review still found problems after one repair, so the app was not published. Its work is saved, technical mode lists each finding, and “Try again” carries on from it."
+     - "The security review still found problems after one repair, so the app was not published. Its work is saved, technical mode lists each finding, and “Try again” carries on from it." ("after 2 repairs" when a second was earned)
      - "You declined the plan, so nothing was built. “Try again” plans it afresh."
      - "The work stopped on an unexpected fault, which has been recorded. Nothing was lost; use “Try again” to carry on from where it stopped." (other kinds: "…Nothing was lost.")
   3. **"Outcome"** repeats the reason. Technical mode shows the technical summary.
@@ -872,16 +872,19 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Starts at:** a build run.
 - **Needs:** every part passed.
 - **Level:** Core. **Learn first:** BLD-07.
-- **What you learn:** a security finding blocks publishing.
+- **What you learn:** a security finding blocks publishing; a document that only says less than the code does never does.
 - **Steps:**
   1. The group "Reviewed the app for misuse of the platform" runs.
   2. "Security review · Security review passed" ("…found nothing that blocks publishing.") or "Security review found problems" ("…they are being fixed now, at no charge.").
-  3. On findings: "Fixed what the security review found, at no charge", then "Reviewed the fixes".
+  3. On findings: "Fixed what the security review found, at no charge", then "Reviewed the fixes". The fix is told to bring the app's documents in line with every endpoint it changes.
 - **You know it worked when:** "Security review passed".
-- **Variations and refusals:** still failing: "The security review still found {n} problems after the fix, so the app is not published." and the run fails.
-- **Where:** `BuildWorkflow.ReviewAsync`.
+- **Variations and refusals:**
+  - Only a document says less than the code does (it says an endpoint needs no sign-in that requires it): "Security review passed" with "The security review found nothing in the app that blocks publishing. One line of its documents says less than the code does, and it is being corrected now, at no charge."; the group "Corrected what the app’s documents say, at no charge" runs, and the app is published.
+  - The fix cleared its finding and the next review finds a different, smaller one: "The fix cleared what the security review found before. It found {n} different problem(s), which are being fixed now, at no charge." — once more at most.
+  - Still failing (the same finding, or more): "The security review still found {n} problems after the fix, so the app is not published." and the run fails.
+- **Where:** `BuildWorkflow.ReviewAsync`, `SecurityFindings`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.A_security_finding_blocks_publishing_after_one_repair`, `…The_security_review_is_the_reviewers_work…`.
+- **Covered by tests:** `WorkflowTests.A_security_finding_blocks_publishing_after_one_repair`, `…The_security_review_is_the_reviewers_work…`, `…Replaying_the_real_runs_reviews_ends_published_after_a_free_fix_of_the_document`, `…A_second_review_that_finds_a_different_narrower_problem…`, `…A_finding_in_a_document_about_a_secret_still_blocks_publishing`; `timeline.test.ts` (the agents' titles).
 
 ### BLD-10 See the app published privately
 - **Who:** Viewer or above.

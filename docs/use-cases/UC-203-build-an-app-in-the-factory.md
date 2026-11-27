@@ -46,8 +46,10 @@
    failure only of how the check showed the work is looked at again once, free, and never repaired: still refused after
    that second look, the part stops (`unverified`), and the owner is told it could not be checked.
 7. **Progress.** A passed item is recorded in `PROGRESS.md` and committed.
-8. **Security review.** The organisation's standing security reviewer (its model calls carry that employee's id) checks the app against the checklist skill; a finding gets one unbilled repair,
-   and a finding that remains blocks publishing.
+8. **Security review.** The organisation's standing security reviewer (its model calls carry that employee's id) checks the app against the checklist skill; a finding gets an unbilled repair,
+   told to bring the app's documents in line with what it changes, and a second only when the first cleared its finding and
+   the next is different and narrower (at most two, three reviews); a finding that remains blocks publishing. A finding
+   only about a document that says less than the code does never blocks: the documents are corrected once, unbilled.
 9. **Publish.** Built and started privately through Dock, with its own database, which no evaluation ever touched. Only
    the owner can make it public. A recurring job the app now
    declares (a schedule, seen in the ontology) raises an operations hire (trigger `recurring`).

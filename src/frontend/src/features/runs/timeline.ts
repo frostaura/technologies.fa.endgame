@@ -142,7 +142,9 @@ function named(verb: string, label: string): string {
  * part of the plan, `evaluator-…` its check, `security-reviewer-1` the second review.
  */
 export function factoryAgentTitle(agent: string, planItem: (id: string) => string | null): string | null {
-  if (agent === "builder-security-repair") return "Fixed what the security review found, at no charge";
+  // A second repair of the review's findings (builder-security-repair-1) reads as the first; the documents' correction is its own.
+  if (/^builder-security-repair(-\d+)?$/.test(agent)) return "Fixed what the security review found, at no charge";
+  if (agent === "builder-security-docs") return "Corrected what the app’s documents say, at no charge";
   const review = agent.match(/^security-reviewer-(\d+)$/);
   if (review) return review[1] === "0" ? "Reviewed the app for misuse of the platform" : "Reviewed the fixes";
   const part = agent.match(/^(builder|evaluator)-(.+)-(\d+)$/);
@@ -169,6 +171,7 @@ const UNDER_WAY: [RegExp, string][] = [
   [/^Wrote /, "Writing "],
   [/^Drew up /, "Drawing up "],
   [/^Fixed /, "Fixing "],
+  [/^Corrected /, "Correcting "],
   [/^Found /, "Finding "],
   [/^Searched /, "Searching "],
   [/^Read /, "Reading "],

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RunEvent } from "@/store/types";
-import { buildTimeline, groupTitle, outcomeOf, type TimelineGroup, type TimelineItem } from "./timeline";
+import { buildTimeline, factoryAgentTitle, groupTitle, outcomeOf, type TimelineGroup, type TimelineItem } from "./timeline";
 
 let seq = 0;
 const at = "2026-11-24T10:00:00Z";
@@ -167,5 +167,16 @@ describe("titles and outcomes", () => {
     expect(outcomeOf('{"headline":"Do not build"}')).toBe("Do not build");
     expect(outcomeOf("Done. Then more.")).toBe("Done.");
     expect(outcomeOf("Here it is {not json}")).toBe("Here it is");
+  });
+});
+
+describe("the security review's agents, by what they did (R6-6)", () => {
+  const none = () => null;
+  it("names every repair of the findings, the second as the first, and the correction of the app's documents", () => {
+    expect(factoryAgentTitle("builder-security-repair", none)).toBe("Fixed what the security review found, at no charge");
+    expect(factoryAgentTitle("builder-security-repair-1", none)).toBe("Fixed what the security review found, at no charge");
+    expect(factoryAgentTitle("builder-security-docs", none)).toBe("Corrected what the app’s documents say, at no charge");
+    expect(factoryAgentTitle("security-reviewer-0", none)).toBe("Reviewed the app for misuse of the platform");
+    expect(factoryAgentTitle("security-reviewer-2", none)).toBe("Reviewed the fixes");
   });
 });
