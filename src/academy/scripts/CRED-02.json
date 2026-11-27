@@ -17,7 +17,7 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "label": "No cap here; the cap on Technologies, 450 credits, holds",
+        "selector": "[aria-label='No cap here; the cap on Technologies, 450 credits, holds']",
         "note": "A meter where a level has its own cap; where it has none, ↑ and the cap above that holds it."
       }
     },
