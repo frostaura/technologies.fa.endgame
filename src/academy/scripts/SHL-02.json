@@ -9,8 +9,8 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "text": "System status is technical detail",
-        "note": "In normal mode the services are not named."
+        "text": "Is Endgame working?",
+        "note": "In normal mode the services are not named: the page says in plain words whether Endgame is working."
       }
     },
     {

@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { Fragment, useId, useState, type FormEvent } from "react";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { TAP } from "@/lib/touch";
 import { Link } from "@/components/Link";
@@ -134,7 +134,9 @@ function SecretsBody({ list, tree, where, notice, onNotice }: { list: SecretList
           <ul aria-label="Set beneath" className="flex flex-col divide-y overflow-hidden rounded-md border bg-surface shadow-card">
             {list.setBelow.map((b) => (
               <li key={`${b.setAtPath}#${b.name}`} className="grid grid-cols-grow-end items-center gap-x-4 px-5 py-2.5">
-                <code className="break-all font-mono text-sm">{b.name}</code>
+                <code className="break-words font-mono text-sm">
+                  <SecretName name={b.name} />
+                </code>
                 <Link href={paths.secrets(b.setAtPath)} className={cn("text-sm", LINK, TAP)}>
                   {nameOf(b.setAtPath)}
                 </Link>
@@ -172,7 +174,9 @@ function SecretRow({ secret, scope, nameOf, notice, onNotice }: { secret: Secret
     <li className="flex flex-col gap-3 px-5 py-4">
       <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3 sm:grid-cols-grow-end">
         <div className="flex min-w-0 flex-col gap-1">
-          <code className="break-all font-mono font-semibold">{secret.name}</code>
+          <code className="break-words font-mono font-semibold">
+            <SecretName name={secret.name} />
+          </code>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
             {setHere ? (
               <Badge tone="info">Set here</Badge>
@@ -310,5 +314,22 @@ function SecretForm({ scope, fixedName, existing = [], at, onNotice, onSaved }: 
         {saving ? "Saving…" : replacing ? "Replace the secret" : "Save the secret"}
       </Button>
     </form>
+  );
+}
+
+/** A secret's name, which breaks only after an underscore — never mid-word, "RESERVATIONS_PARTNER_TO/KEN" (console-small 30). */
+function SecretName({ name }: { name: string }) {
+  const parts = name.split("_");
+  return (
+    <>
+      {parts.map((part, i) => (
+        // Fragments, not spans: the name stays one run of text, read and found whole.
+        <Fragment key={i}>
+          {part}
+          {i < parts.length - 1 && "_"}
+          {i < parts.length - 1 && <wbr />}
+        </Fragment>
+      ))}
+    </>
   );
 }

@@ -5,10 +5,9 @@ import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatNumber, timeAgo } from "@/lib/format";
+import { formatNumber, plural, timeAgo } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { cn } from "@/lib/utils";
-import { useViewport } from "@/lib/useViewport";
 import { useAppSelector } from "@/store";
 import { useGetNotificationsQuery, useMarkAllReadMutation, useMarkReadMutation } from "@/store/api";
 import type { NotificationItem } from "@/store/types";
@@ -99,7 +98,7 @@ function Feed({ items, older, onOlder, children }: { items: NotificationItem[]; 
       </ul>
       {hidden > 0 && (
         <Button variant="secondary" className="self-center" onClick={onOlder}>
-          Show older ({formatNumber(Math.min(hidden, PHONE_PAGE))} of {formatNumber(hidden)})
+          {hidden <= PHONE_PAGE ? `Show ${plural(hidden, "older notice")}` : `Show ${formatNumber(PHONE_PAGE)} older of ${formatNumber(hidden)}`}
         </Button>
       )}
     </>
@@ -119,8 +118,9 @@ function Row({ organisation, item, onNavigate, compact = false }: { organisation
   // An answered notice is settled: its title already says what happened, so it is never new and has nothing to mark (D40).
   const unread = !item.read && !item.resolved;
   const settled = settledLabel(item);
-  // Narrow (a phone, or the bell's popover), the time and "Mark read" end the tag line instead of taking a column.
-  const inline = useViewport() === "phone" || compact;
+  // Every row has one shape at every size (real-stack 16): the time at the top right beside the title, and the
+  // tags with "Mark read" at the end of the line under it. Only the bell's narrow popover puts the time on the tag line.
+  const inline = compact;
   const read = async () => {
     setProblem(null);
     try {
@@ -134,20 +134,28 @@ function Row({ organisation, item, onNavigate, compact = false }: { organisation
       data-notification={item.id}
       data-read={item.read || item.resolved}
       data-resolved={item.resolved}
-      className={cn("grid min-w-0 gap-x-3 gap-y-1 py-3", inline ? "grid-cols-dot-grow" : "grid-cols-dot-grow-end", compact ? "px-3" : "px-4 sm:px-5")}
+      className={cn("grid min-w-0 grid-cols-dot-grow gap-x-3 gap-y-1 py-3", compact ? "px-3" : "px-4 sm:px-5")}
     >
-      <span className={cn("mt-2 size-2 rounded-full", unread ? "bg-primary" : "bg-transparent")}>{unread && <span className="sr-only">Unread</span>}</span>
+      {/* The dot sits on the title's first line: a line box of the title's height, the dot centred in it (real-stack 18). */}
+      <span className="flex h-6 items-center touch:mt-2.5">
+        <span className={cn("size-2 rounded-full", unread ? "bg-primary" : "bg-transparent")}>{unread && <span className="sr-only">Unread</span>}</span>
+      </span>
       <div className="flex min-w-0 flex-col gap-1">
+        {/* The title, and the time at the end of its first line, in every row (real-stack 16). */}
+        <div className="flex min-w-0 items-start justify-between gap-x-3">
         <Link
           href={notificationHref(item)}
           onClick={() => {
             if (unread) void read();
             onNavigate?.();
           }}
-          className={cn("break-words hover:text-primary-hover", TAP, unread ? "font-semibold text-ink" : "font-medium text-ink-body")}
+          // Worked by touch the title is a thumb's height: its words at the top with even room above and below one line.
+          className={cn("min-w-0 break-words hover:text-primary-hover", TAP, "touch:items-start touch:py-2.5", unread ? "font-semibold text-ink" : "font-medium text-ink-body")}
         >
           {lines.title}
         </Link>
+        {!inline && <Time at={item.createdAt} />}
+        </div>
         {lines.line && <p className="break-words text-sm text-ink-body">{lines.line}</p>}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5">
           <Badge tone={!item.resolved && item.severity === "urgent" ? "warn" : "neutral"}>{lines.kind}</Badge>
@@ -157,7 +165,8 @@ function Row({ organisation, item, onNavigate, compact = false }: { organisation
           {technical && lines.technical && <code className="basis-full break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
           {/* "Mark read" ends the tag's line, at every width; narrow, the time joins it instead of taking a column of its own. */}
           {(inline || unread) && (
-            <span className="ml-auto flex items-center gap-1">
+            // The negative margin is the span's, not the button's: a button pulled outside its own box is cut to fit it ("Mark r…").
+            <span className="-mr-2 ml-auto flex shrink-0 items-center gap-1">
               {inline && <Time at={item.createdAt} />}
               {unread && <MarkRead onClick={() => void read()} />}
             </span>
@@ -169,14 +178,13 @@ function Row({ organisation, item, onNavigate, compact = false }: { organisation
           </p>
         )}
       </div>
-      {!inline && <Time at={item.createdAt} />}
     </li>
   );
 }
 
 function Time({ at }: { at: string }) {
   return (
-    <time dateTime={at} title={at} className="whitespace-nowrap pt-0.5 text-xs text-ink-muted">
+    <time dateTime={at} title={at} className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-ink-muted touch:pt-3">
       {timeAgo(at)}
     </time>
   );
@@ -184,7 +192,7 @@ function Time({ at }: { at: string }) {
 
 function MarkRead({ onClick }: { onClick: () => void }) {
   return (
-    <Button size="sm" variant="quiet" className="-mr-2" onClick={onClick}>
+    <Button size="sm" variant="quiet" onClick={onClick}>
       Mark read
     </Button>
   );

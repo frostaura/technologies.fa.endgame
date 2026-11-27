@@ -136,7 +136,7 @@ describe("App — the session decides what renders", () => {
     window.history.replaceState(null, "", "/system");
     stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/system/status": "pending" });
     renderWithStore(<App />);
-    expect(await screen.findByRole("heading", { name: "System status is technical detail" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Is Endgame working?" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Switch to technical mode" }));
     expect(await screen.findByRole("heading", { name: "System status" })).toBeTruthy();
     expect(window.localStorage.getItem("endgame.mode")).toBe("technical");

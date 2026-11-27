@@ -1,6 +1,6 @@
 import { organisationsOf, useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { ConfirmCard } from "@/components/ui/confirm";
-import { useId, useState, type FormEvent } from "react";
+import { Fragment, useId, useState, type FormEvent } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Check, Copy } from "lucide-react";
 import { OneTime } from "@/components/OneTime";
@@ -18,7 +18,7 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { platformOrigin, useGetMeQuery, useGetTokensQuery, useRevokeTokenMutation } from "@/store/api";
 import { createToken } from "@/store/sensitive";
 import type { AccessToken, AccessTokenCreated, TokenRole, Tree } from "@/store/types";
-import { PageHeader, SECTION } from "@/components/ui/page";
+import { PageHeader, SECTION, useShowAll } from "@/components/ui/page";
 import { AppShell } from "../shell/AppShell";
 
 const EXPIRY: { days: number | null; label: string }[] = [
@@ -86,13 +86,7 @@ export function AssistantsView() {
                     Make a key here, then give it and the address beside to your assistant.
                   </Empty>
                 ) : (
-                  <ul aria-label="Keys" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-                    {[...view.data]
-                      .sort((x, y) => Number(live(y)) - Number(live(x)))
-                      .map((t) => (
-                        <TokenRow key={t.id} token={t} technical={technical} organisation={orgName(t.organisation)} />
-                      ))}
-                  </ul>
+                  <KeyList tokens={view.data} technical={technical} organisation={orgName} />
                 )}
               </>
             )}
@@ -102,6 +96,28 @@ export function AssistantsView() {
     </AppShell>
   );
 }
+
+/**
+ * The keys, live ones first: the first ten, then "Show all {n} keys" — fifty keys are never one 5,000-pixel
+ * column beside a short form.
+ */
+function KeyList({ tokens, technical, organisation }: { tokens: AccessToken[]; technical: boolean; organisation: (slug: string) => string }) {
+  const sorted = [...tokens].sort((x, y) => Number(live(y)) - Number(live(x)));
+  const { shown, control } = useShowAll(sorted, KEYS_SHOWN, "keys");
+  return (
+    <>
+      <ul aria-label="Keys" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
+        {shown.map((t) => (
+          <TokenRow key={t.id} token={t} technical={technical} organisation={organisation(t.organisation)} />
+        ))}
+      </ul>
+      {control}
+    </>
+  );
+}
+
+/** How many keys the list opens on. */
+const KEYS_SHOWN = 10;
 
 /** A key that still works; a revoked or expired one is retired, drawn quietly after the live ones. */
 function live(t: AccessToken): boolean {
@@ -310,16 +326,16 @@ function Address({ label, value }: { label: string; value: string }) {
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
-      <code className="rounded-xs bg-ground px-3 py-2 font-mono text-xs leading-relaxed break-normal">
+      {/* Each segment is kept whole — an app's id never splits at its hyphens (real-stack 55) — and the address breaks only after a "/". */}
+      <code className="overflow-x-auto rounded-xs bg-ground px-2 py-2 font-mono text-xs leading-relaxed break-normal">
         {parts.map((part, i) => (
-          <span key={i}>
-            {part}
-            {i < parts.length - 1 && (
-              <>
-                /<wbr />
-              </>
-            )}
-          </span>
+          <Fragment key={i}>
+            <span className="whitespace-nowrap">
+              {part}
+              {i < parts.length - 1 && "/"}
+            </span>
+            {i < parts.length - 1 && <wbr />}
+          </Fragment>
         ))}
       </code>
     </div>

@@ -40,6 +40,16 @@ describe("AssistantsView", () => {
     expect(screen.getByRole("heading", { level: 1, name: "MCP access tokens" })).toBeTruthy();
   });
 
+  it("opens on the first ten keys and shows the rest on asking, so fifty keys are never one long column", async () => {
+    const many = Array.from({ length: 14 }, (_, n) => ({ ...TOKENS[0], id: `k${n}`, name: `Build agent ${n + 1}` }));
+    stub(json(many));
+    renderWithStore(<AssistantsView />);
+    const list = await screen.findByRole("list", { name: "Keys" });
+    expect(list.querySelectorAll("li[data-token]")).toHaveLength(10);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 14 keys" }));
+    expect(list.querySelectorAll("li[data-token]")).toHaveLength(14);
+  });
+
   it("says when a revoked key was revoked, never an end it will not reach (D7)", async () => {
     const revoked = { ...TOKENS[0], id: "t3", name: "Lost laptop", revokedAt: "2026-11-24T10:00:00Z", active: false };
     stub(json([revoked]));

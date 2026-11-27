@@ -123,28 +123,32 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
           )}
         </section>
 
-        <div className={cn("flex min-w-0 flex-col gap-6", RISE, stagger(2))}>
-          <StatRow cols={2} label="How the month went" className="max-sm:grid-cols-1 rail:grid-cols-1 3xl:grid-cols-1">
-            {credits.estimates && credits.estimates.pieces > 0 ? (
+        {/* At 1600 and wider this column stays in view beside the long tree, rather than ending in a void halfway down it. */}
+        <div className={cn("flex min-w-0 flex-col gap-6 3xl:sticky 3xl:top-6", RISE, stagger(2))}>
+          {/* A caption is one short line; what it means is said once, in a sentence under the figures. */}
+          <section aria-label="How the month went" className="flex flex-col gap-2.5">
+            <StatRow cols={2} className="max-sm:grid-cols-1 3xl:grid-cols-1">
+              {credits.estimates && credits.estimates.pieces > 0 ? (
+                <Stat label="Estimates against what it cost" value={estimateFigure(credits.estimates)} caption={`Across ${plural(credits.estimates.pieces, "piece")} of work`} />
+              ) : (
+                <Stat label="Estimates against what it cost" value={NO_VALUE} tone="muted" caption="Not scored yet" />
+              )}
               <Stat
-                label="Estimates against what it cost"
-                value={estimateFigure(credits.estimates)}
-                caption={`${estimateHeadline(credits.estimates)}. Across ${plural(credits.estimates.pieces, "piece")} of work this month. ${estimateSpread(credits.estimates)} The largest miss was ${formatNumber(credits.estimates.largestMissPercent)}%.`}
+                label="What you were not charged for"
+                value={formatCredits(credits.notCharged.credits)}
+                tone="good"
+                caption={credits.notCharged.repairs > 0 ? plural(credits.notCharged.repairs, "repair") : "No repairs this month"}
               />
-            ) : (
-              <Stat label="Estimates against what it cost" value={NO_VALUE} tone="muted" caption="No work has finished this month, so no estimate has been scored yet." />
-            )}
-            <Stat
-              label="What you were not charged for"
-              value={formatCredits(credits.notCharged.credits)}
-              tone="good"
-              caption={
-                credits.notCharged.repairs > 0
-                  ? `${plural(credits.notCharged.repairs, "repair")} where an employee got it wrong the first time. Fixing its own mistake is never billed.`
-                  : "No repairs this month. Fixing its own mistake is never billed."
-              }
-            />
-          </StatRow>
+            </StatRow>
+            <p className="max-w-prose px-1 text-sm text-ink-body">
+              {credits.estimates && credits.estimates.pieces > 0
+                ? `${estimateHeadline(credits.estimates)} this month. ${estimateSpread(credits.estimates)} The largest miss was ${formatNumber(credits.estimates.largestMissPercent)}%.`
+                : "No work has finished this month, so no estimate has been scored yet."}{" "}
+              {credits.notCharged.repairs > 0
+                ? `${plural(credits.notCharged.repairs, "repair")}, where an employee got it wrong the first time, cost you nothing: fixing its own mistake is never billed.`
+                : "Fixing its own mistake is never billed."}
+            </p>
+          </section>
           <Fold title="Top-ups" summary={credits.topUps.length === 0 ? "None yet" : plural(credits.topUps.length, "top-up")}>
             <TopUpLedger topUps={credits.topUps} />
           </Fold>
@@ -288,13 +292,14 @@ function BudgetRow({
         </span>
       </Cell>
       <Cell col="spent">
-        {/* One baseline per row: a row with no cap keeps the bar's room, empty, so the figures line up. */}
-        <span className="flex min-w-0 flex-col gap-1">
-          <span className="whitespace-nowrap tabular-nums text-ink-body">{formatNumber(line.spentCredits)}</span>
+        {/* One baseline per row: the figure and its bar side by side, the figure right-aligned so the digits line up;
+            a row with no cap keeps the bar's room, empty. */}
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="w-14 shrink-0 whitespace-nowrap text-right tabular-nums text-ink-body">{formatNumber(line.spentCredits)}</span>
           {capped ? (
-            <Bar value={used} label={`${formatNumber(line.spentCredits)} of ${formatNumber(line.capCredits ?? 0)} used`} tone={over ? "attention" : "primary"} className="h-1.5" />
+            <Bar value={used} label={`${formatNumber(line.spentCredits)} of ${formatNumber(line.capCredits ?? 0)} used`} tone={over ? "attention" : "primary"} className="h-1.5 min-w-0 flex-1" />
           ) : (
-            <span aria-hidden className="block h-1.5" />
+            <span aria-hidden className="block h-1.5 min-w-0 flex-1" />
           )}
         </span>
       </Cell>

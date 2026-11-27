@@ -217,3 +217,135 @@ test.describe("God mode", () => {
     await expect(panel.getByRole("region", { name: "Every organisation at a glance" })).toBeVisible();
   });
 });
+
+/** The texts that start a new line anywhere but just after `after`: each is walked a character at a time. */
+async function breaksNotAfter(codes: ReturnType<Page["locator"]>, after: string) {
+  return codes.evaluateAll((els, ch) =>
+    els.flatMap((code) => {
+      const bad: string[] = [];
+      const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+      let prev: { top: number; ch: string } | null = null;
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.textContent ?? "";
+        for (let i = 0; i < text.length; i++) {
+          const r = document.createRange();
+          r.setStart(node, i);
+          r.setEnd(node, i + 1);
+          const top = Math.round(r.getBoundingClientRect().top);
+          if (prev && top > prev.top + 2 && prev.ch !== ch) bad.push(code.textContent ?? "");
+          prev = { top, ch: text[i] ?? "" };
+        }
+      }
+      return bad;
+    }),
+  after);
+}
+
+/** Whether an element's text is cut: what it holds is wider than its box. */
+async function cut(page: Page, selector: string) {
+  return page.locator(selector).evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent ?? ""));
+}
+
+test.describe("round three", () => {
+  test("every notice is one shape: the time on the title's line, 'Mark read' whole at the tag line's end (real-stack 16–18)", async ({ page }) => {
+    for (const width of [375, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await open(page, "default", "/notifications");
+      const rows = page.getByRole("main").locator('li[data-notification][data-read="false"]');
+      expect(await rows.count()).toBeGreaterThan(3);
+      const rights = new Set<number>();
+      for (const row of await rows.all()) {
+        const title = await row.getByRole("link").first().boundingBox();
+        const time = await row.locator("time").boundingBox();
+        expect(Math.abs((time?.y ?? 0) - (title?.y ?? 0)), `${width}: the time is not on the title's line`).toBeLessThanOrEqual(14);
+        const mark = row.getByRole("button", { name: "Mark read" });
+        expect(await mark.evaluate((b) => b.scrollWidth <= b.clientWidth && !(b.textContent ?? "").includes("…")), `${width}: "Mark read" is cut`).toBe(true);
+        const box = await mark.boundingBox();
+        rights.add(Math.round((box?.x ?? 0) + (box?.width ?? 0)));
+        // The dot sits on the title's first line.
+        const dot = await row.locator("span.rounded-full.size-2").boundingBox();
+        const first = await row.getByRole("link").first().evaluate((a) => {
+          const r = document.createRange();
+          r.selectNodeContents(a);
+          const rect = r.getClientRects()[0];
+          return rect ? rect.top + rect.height / 2 : 0;
+        });
+        expect(Math.abs((dot?.y ?? 0) + (dot?.height ?? 0) / 2 - first), `${width}: the dot is off the title's first line`).toBeLessThanOrEqual(4);
+      }
+      expect(rights.size, `${width}: "Mark read" ends at different places`).toBe(1);
+    }
+  });
+
+  test("credits: no caption is cut, and a row's figure sits on its name's line", async ({ page }) => {
+    for (const width of [375, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await open(page, "default", "/credits");
+      expect(await cut(page, "main span.truncate.text-sm"), `${width}: a caption is cut`).toEqual([]);
+    }
+    const row = page.getByRole("list", { name: "Budgets" }).locator(':scope > li[data-level="division"]').first();
+    const name = await row.locator('[data-primary] span.min-w-0').first().boundingBox();
+    const spent = await row.locator('[data-kind="text"] span.tabular-nums').first().boundingBox();
+    expect(Math.abs((name?.y ?? 0) + (name?.height ?? 0) / 2 - ((spent?.y ?? 0) + (spent?.height ?? 0) / 2))).toBeLessThanOrEqual(4);
+  });
+
+  test("System in normal mode answers in plain words and uses the page (console-desktop 49)", async ({ page }) => {
+    await open(page, "status-unhealthy");
+    await expect(page.getByRole("heading", { name: "Is Endgame working?" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Part of Endgame is not answering" })).toBeVisible();
+    await expect(page.getByRole("main")).not.toContainText("Runner");
+    const answer = await page.getByRole("region", { name: "Whether Endgame is working" }).boundingBox();
+    expect(answer?.width ?? 0).toBeGreaterThan(1000);
+    await expect(page.getByRole("button", { name: "Switch to technical mode" })).toBeVisible();
+  });
+
+  test("sign-in keeps its gutter on a phone, and its two columns share a top on a desktop (real-stack 59, console-desktop 51)", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await open(page, "fresh-install", undefined, "signed-out");
+    const card = await page.getByRole("heading", { name: "Sign in" }).locator("xpath=ancestor::div[contains(@class,'shadow-card')][1]").boundingBox();
+    expect(card?.x ?? 0).toBeGreaterThanOrEqual(16);
+    expect(375 - (card?.x ?? 0) - (card?.width ?? 0)).toBeGreaterThanOrEqual(16);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await open(page, "fresh-install", undefined, "signed-out");
+    const mark = await page.locator("img[src$='endgame-mark.svg']").first().boundingBox();
+    const lead = await page.getByRole("complementary", { name: "What Endgame does" }).getByRole("heading").first().boundingBox();
+    expect(Math.abs((mark?.y ?? 0) + (mark?.height ?? 0) / 2 - ((lead?.y ?? 0) + (lead?.height ?? 0) / 2))).toBeLessThanOrEqual(8);
+    // No small-caps grey label: the aside opens on a heading in ink.
+    expect(await page.getByRole("complementary", { name: "What Endgame does" }).getByRole("heading").first().evaluate((p) => getComputedStyle(p).textTransform)).toBe("none");
+  });
+
+  test("the operator with no organisation sees the organisations and what waits, not an empty screen", async ({ page }) => {
+    await open(page, "operator-no-organisation", undefined, "operator");
+    const table = page.getByRole("list", { name: "The organisations" });
+    await expect(table).toBeVisible();
+    expect(await table.locator(":scope > li").count()).toBeGreaterThan(2);
+    await expect(page.getByRole("list", { name: "Waiting requests" })).toBeVisible();
+  });
+
+  test("God mode's prices use the width: three fields a row, the changes under the form (console-desktop 53)", async ({ page }) => {
+    await open(page, "god-mode", undefined, "operator");
+    const form = await page.locator("form").filter({ hasText: "Save the prices" }).boundingBox();
+    const changes = await page.getByRole("list", { name: "Price changes" }).boundingBox();
+    expect(changes?.y ?? 0).toBeGreaterThan((form?.y ?? 0) + (form?.height ?? 0));
+    const tops = await page.locator("form").filter({ hasText: "Save the prices" }).locator("input").evaluateAll((els) => els.slice(0, 3).map((e) => Math.round(e.getBoundingClientRect().top)));
+    expect(new Set(tops).size).toBe(1);
+  });
+
+  test("a secret's name breaks only after an underscore (console-small 30)", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    await open(page, "default", "/secrets?scope=northwind/technologies/court-booking");
+    const breaks = await breaksNotAfter(page.getByRole("main").locator("code"), "_");
+    expect(breaks, "a name broke inside a word").toEqual([]);
+    await noSideways(page);
+  });
+
+  test("an assistant's address breaks only after a slash, never inside an app's id (real-stack 55)", async ({ page }) => {
+    for (const width of [375, 1512, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await open(page, "default", "/assistants");
+      const codes = page.getByRole("list", { name: "App addresses" }).locator("code");
+      expect(await codes.count()).toBeGreaterThan(2);
+      expect(await breaksNotAfter(codes, "/"), `${width}: an address broke inside a segment`).toEqual([]);
+      expect(await codes.evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth).length), `${width}: an address scrolls`).toBe(0);
+    }
+  });
+});

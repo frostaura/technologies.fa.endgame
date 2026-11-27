@@ -371,6 +371,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   2. Home shows the panel "God mode", "You run Endgame for FrostAura. Every organisation is one step away.", and "List them, set one up for an invited Owner, top one up or enter it. Each entry is written where that organisation’s Owner can read it."
   3. The button "Every organisation" goes to `/operator` (OP-01).
   4. Beside it, every organisation at a glance: "Organisations", "Top-ups asked for" (with "Waiting for your answer" when any are) and "Below zero" ("—" until they are read).
+  5. Under the panel, "The organisations": one table with "Organisation", "Standing" ("In credit", "Below zero", "At its limit"), "Balance" and "Last active"; beside it (under it on narrower screens), "Waiting for your answer": each open top-up request ("{organisation} asks for {n} credits", its note and how long ago) and the link "Answer them in God mode" — or "No request is waiting".
 - **You know it worked when:** the coral "God mode" band is visible.
 - **Variations and refusals:** an operator who holds a role in an organisation (FrostAura's own, where top-up requests reach them) lands on that organisation's home instead, under the same band.
 - **Where:** `HomeView.tsx`, `operator/OperatorHome.tsx`, `shell/GodModeBand.tsx`.
@@ -1226,17 +1227,18 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Steps:**
   1. The breadcrumb reads "{organisation} / Notifications".
   2. Heading "Notifications", with: "What needs you, newest first. The urgent ones — a cap reached, credits at zero, the overdraft, an app that stopped, a security finding — are e-mailed too, when e-mail is set up."
-  3. The feed shows "Nothing unread." or "{n} unread", plus "Mark all read". At every size it shows every unread notice and the newest ten, newest first and grouped under the day they came ("Today", "Yesterday", then the date), then **"Show older ({k} of {n})"**, which adds ten more each time.
+  3. The feed shows "Nothing unread." or "{n} unread", plus "Mark all read". At every size it shows every unread notice and the newest ten, newest first and grouped under the day they came ("Today", "Yesterday", then the date), then **"Show {k} older of {n}"** (or **"Show {n} older notice(s)"** when ten or fewer are left), which adds ten more each time.
   4. Each row shows:
      - a blue dot when unread (read aloud as "Unread"), with the title in bold — the only way unread is marked; a read row has neither;
-     - the title as a link, cut at a word and never inside a quotation;
+     - the title as a link, cut at a word and never inside a quotation — where the server cut it inside one, the quotation is closed after the "…"; its quotation marks are always curly, a quotation inside one single ("‘Done by’"), and a run's raw label inside a quoted title ("Change Web: ", "Build: ") is dropped;
      - one line of detail, cut the same way — a notice raised before details were written plainly, whose detail is a raw tool line ("adjust_setting: …", "try_again: …") with no technical line beside it, shows no detail in normal mode; technical mode shows that line;
      - a tag: "Verdict", "Approval", "Hire", "Budget", "Credits", "Overdraft", "App", "Security" or "Top-up request" (anything else "Update"); amber for an urgent one not yet answered, grey otherwise;
      - "Answered" (green) when what it asked is already answered — or "Closed" (grey) for an approval whose work ended before anyone answered it; such a row has no dot and no "Mark read", and its title is plain;
      - "Also e-mailed" when it was;
      - in technical mode, the raw kind;
      - "Mark read", a quiet button at the end of the tag line, when unread — at every width;
-     - how long ago, in its own column at the row's end (on a phone and in the bell's list, at the end of the tag line, before "Mark read").
+     - how long ago, at the end of the title's first line, in every row at every width (in the bell's narrow list, at the end of the tag line, before "Mark read");
+     - the detail's figures written the console's way ("361 of 450 credits", "−402"), without the scope path the title already names.
   5. An aside "What you are told about" (on a phone a folded row, "Verdicts, approvals, hires, budgets, credits, apps and security") lists: "A verdict waiting for your call", "An approval the work is waiting on", "A hire proposed", "A budget at 80% and at its cap", "Credits at zero, halfway to the overdraft limit, and at it", "An app that stopped working", "A security review that found a problem", "For FrostAura’s operators: an Owner asking for a top-up". It adds: "Owners and Admins are told about what their grant covers; others see an empty feed."
 - **You know it worked when:** the page lists your notices, newest first.
 - **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …", "Auto-mode chose to build: …" (a verdict auto-mode acted on) — and it no longer counts as unread. An approval whose run ended before anyone answered it is closed with the run (expired, never "declined") and reads "No longer waiting: “{question}” — the work ended before it was answered"; it is not on the "Needs you" strip, and its row reads "Closed" rather than "Answered". Such a row has no unread dot and no "Mark read", here and in the bell's popover.
@@ -1365,15 +1367,15 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Who:** anyone.
 - **Starts at:** `/system` while in normal mode.
 - **Needs:** —
-- **Level:** Core · **Learn first:** SYS-01 · **What you learn:** service health is technical detail.
+- **Level:** Core · **Learn first:** SYS-01 · **What you learn:** normal mode answers whether Endgame is working; naming its services is technical detail.
 - **Steps:**
-  1. The breadcrumb reads "System". The page shows "System status is technical detail", "It names the services Endgame runs on, so it is shown in technical mode only." and "Switch to technical mode".
+  1. The breadcrumb reads "System". The page is titled "Is Endgame working?" and answers in plain words, never naming a service: "Everything is working" (tagged Healthy) or "Part of Endgame is not answering" (tagged Needs attention, with what that means while it lasts), the figures "Parts answering" ("7 of 8"), "Last checked" and "Checked again", and beside it "Which part, and why" with "Switch to technical mode".
   2. Selecting the button switches mode and shows SYS-03 in place.
 - **You know it worked when:** the heading "System status" appears.
 - **Variations and refusals:** none further.
-- **Where:** `App.tsx` (`SystemRoute`).
+- **Where:** `features/status/SystemRoute.tsx` (`SystemRoute`, `PlainStatus`).
 - **Reachable from:** UI.
-- **Covered by tests:** `App.test.tsx` (as SYS-01).
+- **Covered by tests:** `App.test.tsx` (as SYS-01), `SystemRoute.test.tsx`.
 
 ### SYS-03 Read system status
 - **Who:** anyone in technical mode.

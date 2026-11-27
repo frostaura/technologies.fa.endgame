@@ -47,16 +47,82 @@ const KIND: Record<string, string> = {
 export function notificationLines(n: NotificationItem): { kind: string; title: string; line: string | null; technical: string | null } {
   const { detail, technical } = plainDetail(n.detail, n.technical);
   const line = meaningfulLine(detail, 2000);
-  return { kind: KIND[n.kind] ?? "Update", title: noticeTitle(n.title), line: line ? excerpt(line, 150) : null, technical };
+  return { kind: KIND[n.kind] ?? "Update", title: noticeTitle(n.title), line: line ? excerpt(plainFigures(withoutScope(line, n.scope)), 150) : null, technical };
+}
+
+/** "… spent this month at northwind/technologies." — the title already names the place, so its path is dropped (rule 12). */
+function withoutScope(line: string, scope: string | undefined): string {
+  if (!scope) return line;
+  return line.split(` at ${scope}`).join("").replace(/\s+([.,;])/g, "$1");
+}
+
+/** The server's figures as the console writes them (ARCH-011): "361.0" is "361", "-402" is "−402" with a true minus. */
+export function plainFigures(text: string): string {
+  return text.replace(/(\d)\.0\b(?!\.\d)/g, "$1").replace(/(^|[\s(])-(?=\d)/g, "$1−");
 }
 
 /** An expired approval's title (R3-2): the question is what is cut when it is long, never why it stopped waiting. */
 const EXPIRED_TITLE = /^(No longer waiting: “)(.*)(” — the work ended before it was answered)$/;
 
-function noticeTitle(title: string): string {
+export function noticeTitle(raw: string): string {
+  const title = curlyQuotes(raw);
   const expired = EXPIRED_TITLE.exec(title);
-  if (expired) return `${expired[1]}${excerpt(expired[2] ?? "", 60, false)}${expired[3]}`;
-  return excerpt(title, 90);
+  if (expired) return `${expired[1]}${excerpt(withoutRunKind(expired[2] ?? ""), 60, false)}${expired[3]}`;
+  return closeQuotes(excerpt(withoutRunKind(title), 90));
+}
+
+/**
+ * A run's own name quoted in a title, "Change Web: Each service record…" or "Build: A packing checklist…": the
+ * kind and the part are the server's labels, not words (real-stack 19), so the quotation starts at what was asked.
+ */
+function withoutRunKind(text: string): string {
+  return text.replace(/(^|[“‘])(?:Change|Build|Research)(?: [A-Z][\w-]*)?: (?=\S)/g, "$1");
+}
+
+/**
+ * Straight quotation marks as the house writes them: an outer pair curly double, a pair inside it curly single,
+ * so a title never mixes "straight" and “curly” marks.
+ */
+export function curlyQuotes(text: string): string {
+  let out = "";
+  // How many double quotations are open; a straight mark inside one is a single quotation.
+  let depth = 0;
+  let single = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i] ?? "";
+    if (c === "“") depth++;
+    if (c === "”") depth = Math.max(0, depth - 1);
+    if (c !== '"') {
+      out += c;
+      continue;
+    }
+    const opening = i === 0 || /[\s(“‘[]/.test(text[i - 1] ?? "");
+    if (depth > 0 && opening) {
+      out += "‘";
+      single++;
+    } else if (single > 0 && !opening) {
+      out += "’";
+      single--;
+    } else if (opening) {
+      out += "“";
+      depth++;
+    } else {
+      out += "”";
+      depth = Math.max(0, depth - 1);
+    }
+  }
+  return out;
+}
+
+/** Every quotation a cut title left open is closed after its "…", innermost first. */
+function closeQuotes(text: string): string {
+  const stack: string[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i] ?? "";
+    if (c === "“" || c === "‘") stack.push(c === "“" ? "”" : "’");
+    else if ((c === "”" || (c === "’" && !/\w/.test(text[i + 1] ?? ""))) && stack.length > 0) stack.pop();
+  }
+  return text + stack.reverse().join("");
 }
 
 /** The server's title for an approval its run closed before anyone answered it (`NotificationService`, R3-2). */

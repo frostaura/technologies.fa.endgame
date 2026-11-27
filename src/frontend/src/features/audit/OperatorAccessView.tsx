@@ -9,7 +9,9 @@ import { useAppSelector } from "@/store";
 import { useGetOperatorAccessQuery } from "@/store/api";
 import type { OperatorAction } from "@/store/types";
 import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { AppShell } from "../shell/AppShell";
+import { adminLine } from "./operatorLogModel";
 
 /** The log's columns. "When" holds a date and a time of day on one line, wider than a date column alone. */
 const LOG_COLUMNS: Column[] = [
@@ -52,8 +54,7 @@ function describeAction(action: OperatorAction): string {
     case "pricing.changed":
       return "Changed the prices for every organisation";
     default:
-      // Everything else an operator changed inside the organisation, as an Admin, carries its own title.
-      return action.action.startsWith("admin.") && text("title") ? `As an Admin: ${text("title")}` : "Acted on the organisation";
+      return adminLine(action.action, text("title"));
   }
 }
 
@@ -70,7 +71,7 @@ export function OperatorAccessView() {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
 
   return (
-    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Operator access" }]}>
+    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Operator access" }]} aside={org ? <WhatIsLogged /> : undefined}>
       <PageHeader
         className={RISE}
         icon="god-mode"
@@ -137,5 +138,23 @@ export function OperatorAccessView() {
         </>
       )}
     </AppShell>
+  );
+}
+
+/** The side panel: what the log holds and who reads it, so an empty log still says what it would show. */
+function WhatIsLogged() {
+  return (
+    <section aria-labelledby="logged-title" className={cn("flex flex-col gap-2.5", RISE)}>
+      <h2 id="logged-title" className="text-base font-semibold">
+        What is written here
+      </h2>
+      <ul className="flex list-disc flex-col gap-1 pl-5 text-ink-body">
+        <li>Every time someone from FrostAura enters the organisation</li>
+        <li>Every change they make in it, as an Admin</li>
+        <li>Top-ups, the deepest overdraft and the prices</li>
+        <li>How it was screened against the red lines when it was set up</li>
+      </ul>
+      <p className="text-sm text-ink-muted">Only the Owner can read it.</p>
+    </section>
   );
 }
