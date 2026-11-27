@@ -4,7 +4,9 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * The one button (ARCH-011). Three heights — `sm` 32, `md` 40, `lg` 48 — each at least 44 wherever the
+ * The one button (ARCH-011). A label never runs out of its column: a button is at most as wide as its
+ * container, and a label too long for that (an app's 200-character name) is cut with an ellipsis, the whole of
+ * it in the tooltip. Three heights — `sm` 32, `md` 40, `lg` 48 — each at least 44 wherever the
  * screen is worked by touch; one corner radius (`rounded-xs`); one label size per height; five variants;
  * one disabled look (a grey fill and muted words, never a faded colour). A pill is a chip, never a button.
  *
@@ -17,7 +19,7 @@ import { cn } from "@/lib/utils";
  * `icon`: a square button holding only an icon (it carries an `aria-label`).
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xs font-semibold transition-colors duration-150 motion-reduce:transition-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-transparent disabled:bg-quiet disabled:text-ink-muted disabled:shadow-none aria-disabled:pointer-events-none aria-disabled:border-transparent aria-disabled:bg-quiet aria-disabled:text-ink-muted",
+  "inline-flex max-w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xs font-semibold transition-colors duration-150 motion-reduce:transition-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-transparent disabled:bg-quiet disabled:text-ink-muted disabled:shadow-none aria-disabled:pointer-events-none aria-disabled:border-transparent aria-disabled:bg-quiet aria-disabled:text-ink-muted",
   {
     variants: {
       variant: {
@@ -50,9 +52,14 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   asChild?: boolean;
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, asChild = false, type, ...props }, ref) => {
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, asChild = false, type, children, title, ...props }, ref) => {
   const Comp = asChild ? Slot : "button";
-  return <Comp ref={ref} type={asChild ? undefined : (type ?? "button")} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+  const words = !asChild && typeof children === "string";
+  return (
+    <Comp ref={ref} type={asChild ? undefined : (type ?? "button")} title={title ?? (words && children.length > 40 ? children : undefined)} className={cn(buttonVariants({ variant, size }), className)} {...props}>
+      {words ? <span className="min-w-0 truncate">{children}</span> : children}
+    </Comp>
+  );
 });
 Button.displayName = "Button";
 
