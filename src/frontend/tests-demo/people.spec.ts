@@ -53,7 +53,9 @@ test.describe("the people pages on a wide desktop", () => {
     const before = await place();
     await group.getByRole("button", { name: "Edit the job" }).click();
     await expect(page.getByRole("form", { name: "Edit Kasper's job" })).toBeVisible();
-    expect(await place()).toEqual(before);
+    // Rounded document positions can differ by a pixel when the page scrolls a fraction as the form opens.
+    const after = await place();
+    for (const k of ["x", "y", "w", "h"] as const) expect(Math.abs(after[k] - before[k]), k).toBeLessThanOrEqual(1);
     expect(before.h).toBeLessThanOrEqual(48);
     expect(problems).toEqual([]);
   });
