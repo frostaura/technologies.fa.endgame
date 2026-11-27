@@ -733,7 +733,7 @@ function EverySource({ sources }: { sources: string[] }) {
         Every source ({formatNumber(sources.length)})
         <ChevronDown aria-hidden className={cn("size-4 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />
       </button>
-      <ul id={id} hidden={!open} className="flex flex-col gap-0.5">
+      <ul id={id} hidden={!open} className={open ? "flex flex-col gap-0.5" : "hidden"}>
         {sources.map((u) => (
           <li key={u} className="min-w-0">
             <SourceLink url={u} />

@@ -7,6 +7,7 @@ import { Disclosure } from "@/components/Fold";
 import { buttonVariants } from "@/components/ui/button";
 import { useViewport } from "@/lib/useViewport";
 import { cn } from "@/lib/utils";
+import { MENU, MENU_ITEM } from "@/components/ui/layout";
 
 export interface QuickLink {
   key: string;
@@ -46,12 +47,14 @@ function WideLinks({ links, className }: { links: QuickLink[]; className?: strin
     const room = box.clientWidth - 8;
     const widths = [...row.children].map((c) => (c as HTMLElement).offsetWidth);
     if (room <= 0 || widths.every((w) => w === 0)) return setFit(links.length);
+    // All of them, if all of them fit with no "More"; otherwise as many as fit beside "More".
+    const total = widths.reduce((sum, w, i) => sum + w + (i > 0 ? GAP : 0), 0);
+    if (total <= room) return setFit(widths.length);
     let used = 0;
     let n = 0;
     for (const w of widths) {
       const next = used + (n > 0 ? GAP : 0) + w;
-      const rest = n + 1 < widths.length ? MORE_WIDTH + GAP : 0;
-      if (next + rest > room) break;
+      if (next + GAP + MORE_WIDTH > room) break;
       used = next;
       n += 1;
     }
@@ -62,8 +65,11 @@ function WideLinks({ links, className }: { links: QuickLink[]; className?: strin
     measure();
     const box = nav.current;
     if (!box || typeof ResizeObserver === "undefined") return;
+    // The links' own widths change once the web fonts arrive: measure again then, and whenever the ruler changes.
     const ro = new ResizeObserver(measure);
     ro.observe(box);
+    if (ruler.current) ro.observe(ruler.current);
+    void document.fonts?.ready.then(measure);
     return () => ro.disconnect();
   }, [measure, signature]);
 
@@ -125,11 +131,11 @@ function MoreMenu({ links }: { links: QuickLink[] }) {
         More
         <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
       </button>
-      <div ref={panel} id={id} data-fold-body="" hidden={!open} className="absolute right-0 top-full z-30 mt-2 min-w-60 rounded-md border bg-surface p-1 shadow-raised">
+      <div ref={panel} id={id} data-fold-body="" hidden={!open} className={cn(MENU, "absolute right-0 top-full min-w-60")}>
         <ul className="flex flex-col">
           {links.map((l) => (
             <li key={l.key}>
-              <Link href={l.href} onClick={() => setOpen(false)} className={cn(ITEM, "w-full justify-start")}>
+              <Link href={l.href} onClick={() => setOpen(false)} className={MENU_ITEM}>
                 <Icon name={l.icon} className="size-4" />
                 {l.label}
               </Link>

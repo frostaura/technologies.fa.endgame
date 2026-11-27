@@ -18,5 +18,5 @@ export const LINK = "font-medium text-primary-link underline decoration-primary-
  * at most `max-h-popover` tall and scrolling inside — its items are whole rows, so it never ends half-way
  * through one. Items are `MENU_ITEM`.
  */
-export const MENU = "z-40 mt-2 flex max-h-popover min-w-48 flex-col overflow-y-auto overscroll-contain rounded-md border border-border-strong bg-surface p-1.5 shadow-menu";
+export const MENU = "z-40 mt-2 flex [&[hidden]]:hidden max-h-popover min-w-48 flex-col overflow-y-auto overscroll-contain rounded-md border border-border-strong bg-surface p-1.5 shadow-menu";
 export const MENU_ITEM = "flex min-h-10 w-full shrink-0 items-center gap-2 rounded-xs px-3 text-left text-sm text-ink hover:bg-ground touch:min-h-touch";
