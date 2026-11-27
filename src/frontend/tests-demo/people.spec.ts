@@ -36,7 +36,7 @@ test.describe("the people pages on a wide desktop", () => {
     const problems = await open(page, "s4-employee-long-record");
     await expect(page.getByRole("heading", { level: 1, name: "Kasper" })).toBeVisible();
     await expect(page.getByRole("list", { name: "Memory entries" }).getByRole("listitem")).toHaveCount(10);
-    await expect(page.getByRole("table", { name: "Tasks" }).locator("tbody tr")).toHaveCount(10);
+    await expect(page.getByRole("list", { name: "Tasks" }).getByRole("listitem")).toHaveCount(10);
     await expect(page.getByRole("button", { name: "Show all 40 pieces of work" })).toBeVisible();
     // Was 16,162 px on the real stack with ~60 memory cards (real-stack 50).
     expect(await height(page)).toBeLessThan(3200);
