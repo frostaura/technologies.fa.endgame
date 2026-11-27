@@ -21,6 +21,14 @@ public sealed class Note
     public required string AuthorName { get; init; }
 
     public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>When what the note is about happens, if it says: optional, within <see cref="HappensFrom"/> to <see cref="HappensUntil"/>.</summary>
+    public DateTimeOffset? HappensAt { get; set; }
+
+    /// <summary>The years a note's date may name. A date field lets far more through (a six-digit year): both sides refuse it.</summary>
+    public const string HappensFrom = "2000-01-01T00:00:00Z";
+
+    public const string HappensUntil = "2099-12-31T23:59:59Z";
 }
 
 internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>

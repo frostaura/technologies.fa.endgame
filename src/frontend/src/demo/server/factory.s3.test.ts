@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dispatch } from "./index";
 import { seek } from "./engine";
 import { answerApproval } from "./routes/work";
+import { learned } from "./tryAgain";
 import { buildWorld } from "../world/scenarios";
 import { IDS, ORG } from "../world/default";
 import type { World } from "./world";
@@ -160,5 +161,19 @@ describe("the conversation", () => {
     expect(reply?.payload.by).toBe("Kasper");
     const history = (await call(w, "GET", `conversations?scope=${encodeURIComponent(kasper?.scope ?? "")}&employeeId=${kasper?.id ?? ""}`)).body as { messages: { from: string; by: string | null }[] };
     expect(history.messages.map((m) => m.by)).toEqual(expect.arrayContaining(["Mara Ellison", "Kasper"]));
+  });
+});
+
+describe("the price of what is left (R7-3)", () => {
+  it("says what is left when every part is built and checked, and reads as before with one or every part left", () => {
+    const w = as();
+    const none = learned(w, ORG, "build", 0, 5);
+    expect(none.basis).toContain("Every part is built and checked. What is left is the security review and publishing");
+    expect(none.basis).not.toContain("Only 0");
+    // Priced as one part's share of the whole.
+    expect(none.credits).toBe(Math.ceil((learned(w, ORG, "build", 5, 5).credits / 5) * 100) / 100);
+    expect(learned(w, ORG, "change", 0, 2).basis).toContain("What is left is the security review and the new version");
+    expect(learned(w, ORG, "build", 1, 5).basis).toContain("Only 1 of its 5 parts is left to build");
+    expect(learned(w, ORG, "build", 5, 5).basis).not.toContain("left to build");
   });
 });

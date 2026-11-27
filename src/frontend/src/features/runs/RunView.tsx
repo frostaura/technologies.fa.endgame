@@ -15,7 +15,7 @@ import { paths } from "@/lib/router";
 import { plainOrNull } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
-import { useControlRunMutation, useGetRunQuery } from "@/store/api";
+import { useControlRunMutation, useGetAppQuery, useGetRunQuery } from "@/store/api";
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
@@ -158,6 +158,8 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
             </code>
           )}
         </div>
+        {/* A build or change that finished leads to what it built: the app itself, and its page here (R7-2). */}
+        {status === "finished" && derived.app && (run.kind === "build" || run.kind === "task") && <BuiltAppActions appId={derived.app.id} />}
         {!terminal && (
           <div className="flex flex-wrap items-center gap-2">
             {status === "paused" ? (
@@ -241,6 +243,26 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
 
       <Trace events={log.events} mode={mode} derived={derived} stream={log.stream} terminal={terminal} />
     </>
+  );
+}
+
+/**
+ * The way to the app a finished build or change made: "Open {app}" (the app itself, in a new tab, at the address its page
+ * shows) and "Manage {app}" (its page in the console). Shown once the app is read; an app that cannot be read offers neither.
+ */
+function BuiltAppActions({ appId }: { appId: string }) {
+  const app = useGetAppQuery(appId);
+  if (!app.data) return null;
+  const { name, addresses } = app.data;
+  return (
+    <div role="group" aria-label="The app it built" className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:flex-col max-sm:items-stretch">
+      <a href={addresses.subdomain ?? addresses.path} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants(), "max-sm:w-full")}>
+        Open {name}
+      </a>
+      <Link href={paths.app(appId)} className={cn(buttonVariants({ variant: "outline" }), "max-sm:w-full")}>
+        Manage {name}
+      </Link>
+    </div>
   );
 }
 

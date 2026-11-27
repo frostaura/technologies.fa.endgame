@@ -41,6 +41,21 @@
     {
       "step": 3,
       "kind": "demo",
+      "act": [
+        {
+          "wait": {
+            "text": "Open Club Reading List"
+          }
+        }
+      ],
+      "highlight": {
+        "text": "Manage Club Reading List",
+        "note": "A finished build leads to its app: open it, or manage it here."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
       "goto": "/",
       "highlight": {
         "text": "Club Reading List",

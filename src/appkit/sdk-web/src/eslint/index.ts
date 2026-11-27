@@ -179,13 +179,60 @@ const noLocationRead: Rule.RuleModule = {
   },
 };
 
+/** The browser's formatters that throw on a value they cannot show (`RangeError: Invalid time value`). */
+const INTL_FORMATTERS = new Set(["DateTimeFormat", "NumberFormat", "RelativeTimeFormat", "DurationFormat"]);
+
+/** `x.toLocale…String()`: on an invalid `Date` it throws as the formatter does. */
+const LOCALE_METHODS = new Set(["toLocaleString", "toLocaleDateString", "toLocaleTimeString"]);
+
+/**
+ * Dates and numbers are formatted through the kit's helpers — `formatDate`, `formatDateTime`, `formatNumber` from
+ * `@endgame/appkit` — never the browser's formatters directly. `Intl.DateTimeFormat(...).format(date)` and
+ * `date.toLocaleString()` throw `RangeError: Invalid time value` on an invalid date, and a browser lets one through: a
+ * `datetime-local` field takes a six-digit year typed into its year segment. A throw while a page renders unmounts it (R7-1);
+ * the helpers answer a stated fallback instead.
+ */
+const noUnsafeFormat: Rule.RuleModule = {
+  meta: {
+    type: "problem",
+    docs: { description: "Disallow the browser's date and number formatters; use the kit's formatDate, formatDateTime and formatNumber." },
+    schema: [],
+    messages: {
+      intl:
+        "Intl.{{name}} throws RangeError on a value it cannot show (an invalid date: a six-digit year a date field lets through), " +
+        "and a throw while a page renders blanks it. Use formatDate, formatDateTime or formatNumber from @endgame/appkit: they never throw.",
+      locale:
+        "{{method}}() throws RangeError on an invalid date, and a throw while a page renders blanks it. " +
+        "Use formatDate, formatDateTime or formatNumber from @endgame/appkit: they never throw.",
+    },
+  },
+  create(context) {
+    const intl = (node: Node) => {
+      if (node.type !== "NewExpression" && node.type !== "CallExpression") return;
+      const callee = node.callee as Node;
+      if (callee.type !== "MemberExpression" || callee.object.type !== "Identifier" || callee.object.name !== "Intl") return;
+      const name = propertyName(callee);
+      if (name && INTL_FORMATTERS.has(name)) context.report({ node, messageId: "intl", data: { name } });
+    };
+    return {
+      NewExpression: intl,
+      CallExpression(node: Node) {
+        intl(node);
+        if (node.type !== "CallExpression") return;
+        const method = propertyName(node.callee as Node);
+        if (method && LOCALE_METHODS.has(method)) context.report({ node, messageId: "locale", data: { method } });
+      },
+    };
+  },
+};
+
 /**
  * `import endgame from "@endgame/appkit/eslint"` → `plugins: { endgame }`, rules
- * `endgame/no-root-relative-url` and `endgame/no-location-read`.
+ * `endgame/no-root-relative-url`, `endgame/no-location-read` and `endgame/no-unsafe-format`.
  */
 const plugin: ESLint.Plugin = {
   meta: { name: "@endgame/appkit", version: "0.1.0" },
-  rules: { "no-root-relative-url": noRootRelativeUrl, "no-location-read": noLocationRead },
+  rules: { "no-root-relative-url": noRootRelativeUrl, "no-location-read": noLocationRead, "no-unsafe-format": noUnsafeFormat },
 };
 
 export default plugin;

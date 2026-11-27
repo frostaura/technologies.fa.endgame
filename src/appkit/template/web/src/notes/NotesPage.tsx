@@ -1,8 +1,8 @@
 import { Link } from "react-router";
-import { useApiQuery } from "@endgame/appkit";
+import { formatDateTime, useApiQuery } from "@endgame/appkit";
 import { Button, Card, CardContent, CardHeader, CardTitle, EmptyState, FailedState, LoadingState } from "@endgame/appkit/ui";
 import { usePageTitle } from "../usePageTitle";
-import { formatWhen, type NoteSummary } from "./types";
+import type { NoteSummary } from "./types";
 
 /**
  * Every note. Loading, failed, empty and loaded each look different — a failure is never "no notes".
@@ -40,7 +40,7 @@ export function NotesPage() {
                     <CardTitle>{note.title}</CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-ink-muted">
-                    {note.authorName} · {formatWhen(note.createdAt)}
+                    {note.authorName} · {formatDateTime(note.createdAt)}
                   </CardContent>
                 </Card>
               </Link>

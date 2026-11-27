@@ -21,6 +21,9 @@ export default defineConfig([
       // Read the address from the router (useParams, useSearchParams, useLocation), never window.location:
       // a page that reads location is not re-rendered when a link moves to it.
       "endgame/no-location-read": "error",
+      // Dates and numbers through formatDate / formatDateTime / formatNumber from @endgame/appkit, never toLocale*String or
+      // Intl's formatters: those throw on a value a browser lets through (a six-digit year), and a throw blanks the page.
+      "endgame/no-unsafe-format": "error",
       // One token layer: arbitrary Tailwind values (p-[13px], text-[#fff]) bypass it.
       "no-restricted-syntax": [
         "error",

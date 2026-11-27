@@ -22,6 +22,17 @@ What the web SDK does for every app, so no app has to:
 - **Navigation is testable.** `renderApp(<App />, { at: "/", base? })` from `@endgame/appkit/testing`
   renders the real app with a router based on the page's `<base>`; `jsonResponse()` and
   `setBase()` are there too.
+- **A page that breaks never blanks the app.** `AppErrorBoundary` (from `/ui`) shows "Something went
+  wrong on this page" with "Try again" and "Back to the start", keeping the header; the template mounts it
+  at the root and around the routed page, and `createRoot(root, rootOptions)` leaves its one report the only one.
+- **Dates and numbers never throw.** `formatDate`, `formatDateTime` and `formatNumber` answer a stated
+  fallback ("No date yet") for anything they cannot show — the browser's formatters throw on a date a field
+  lets through (a six-digit year) — and `checkDateInput` / `checkNumberInput` turn what a person typed into
+  a value or a field error. `endgame/no-unsafe-format` fails `toLocale*String` and `Intl`'s formatters.
+- **Forms are tested against bad input.** `holdsUpAgainstBadInput(field, { render, page, submit })` from
+  `/testing`, in a test titled `BAD_INPUT_TEST`, feeds a field what a person can give it (a six-digit year,
+  a huge number, a blank required field, …) and fails unless the page stays whole and refuses it beside the
+  field; the factory runs these for every form field a part adds.
 - **Screens are predictable.** Every app uses the same `data-testid` forms (`page-<view>`,
   `<entity>-item`, `save-<entity>`, …), listed in `template/AGENTS.md`.
 

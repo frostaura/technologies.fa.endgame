@@ -1,0 +1,90 @@
+{
+ "about": "R7-1: the robust 'Add a dive' page, a form with a datetime-local field and a live preview card beside it (the pattern the kit template's new-note page teaches), with its tests, and the JSON report vitest wrote when its front-end suite was really run against the app kit (holdsUpAgainstBadInput). Paths are rewritten to the workspace's /workspace/web.",
+ "page": {
+  "path": "web/src/dives/NewDivePage.tsx",
+  "source": "import { useState, type FormEvent } from \"react\";\nimport { useNavigate } from \"react-router\";\nimport { api, checkDateInput, formatDateTime, ValidationError } from \"@endgame/appkit\";\nimport { Button, Card, CardContent, CardHeader, CardTitle, FieldError, Input, Label } from \"@endgame/appkit/ui\";\n\nconst WHEN = { min: \"2000-01-01T00:00\", max: \"2099-12-31T23:59\" } as const;\n\n/** Add a dive: the form, and beside it the dive as it will read. */\nexport default function NewDivePage() {\n  const navigate = useNavigate();\n  const [site, setSite] = useState(\"\");\n  const [when, setWhen] = useState(\"\");\n  const [errors, setErrors] = useState<Record<string, string[]>>({});\n\n  async function submit(event: FormEvent) {\n    event.preventDefault();\n    const found: Record<string, string[]> = {};\n    if (!site.trim()) found.Site = [\"Name the dive site.\"];\n    else if (site.trim().length > 120) found.Site = [\"Keep the site to 120 characters.\"];\n    const checked = checkDateInput(when, { ...WHEN, required: true });\n    if (checked.error) found.When = [checked.error];\n    setErrors(found);\n    if (Object.keys(found).length > 0) return;\n    try {\n      const dive = await api<{ id: string }>(\"dives\", { method: \"POST\", body: { site, when: checked.date?.toISOString() } });\n      navigate(`/dives/${dive.id}`);\n    } catch (error) {\n      if (error instanceof ValidationError) setErrors(error.errors);\n    }\n  }\n\n  return (\n    <section data-testid=\"page-new-dive\" className=\"grid grid-cols-1 gap-6 lg:grid-cols-3\">\n      <Card className=\"lg:col-span-2\">\n        <CardHeader>\n          <CardTitle>Add a dive</CardTitle>\n        </CardHeader>\n        <CardContent>\n          <form className=\"flex flex-col gap-4\" onSubmit={submit} noValidate>\n            <Label htmlFor=\"site\">Dive site</Label>\n            <Input\n              id=\"site\"\n              name=\"site\"\n              data-testid=\"dive-site\"\n              required\n              aria-required=\"true\"\n              maxLength={120}\n              value={site}\n              onChange={(e) => setSite(e.target.value)}\n              invalid={!!errors.Site}\n              aria-describedby=\"site-error\"\n            />\n            <FieldError id=\"site-error\">{errors.Site?.[0]}</FieldError>\n            <Label htmlFor=\"when\">When</Label>\n            <Input\n              id=\"when\"\n              name=\"when\"\n              type=\"datetime-local\"\n              data-testid=\"dive-when\"\n              min={WHEN.min}\n              max={WHEN.max}\n              value={when}\n              onChange={(e) => setWhen(e.target.value)}\n              invalid={!!errors.When}\n              aria-describedby=\"when-error\"\n            />\n            <FieldError id=\"when-error\">{errors.When?.[0]}</FieldError>\n            <Button type=\"submit\" data-testid=\"save-dive\">\n              Save dive\n            </Button>\n          </form>\n        </CardContent>\n      </Card>\n      <Card aria-label=\"How it will read\">\n        <CardHeader>\n          <CardTitle>{site || \"Untitled dive\"}</CardTitle>\n          <p>{formatDateTime(when, { fallback: \"No date yet\" })}</p>\n        </CardHeader>\n      </Card>\n    </section>\n  );\n}\n"
+ },
+ "test": {
+  "path": "web/src/dives/NewDivePage.test.tsx",
+  "source": "import { fireEvent, render, screen } from \"@testing-library/react\";\nimport { MemoryRouter, Route, Routes } from \"react-router\";\nimport { BAD_INPUT_TEST, holdsUpAgainstBadInput, jsonResponse } from \"@endgame/appkit/testing\";\nimport { describe, expect, it, vi } from \"vitest\";\nimport NewDivePage from \"./NewDivePage\";\n\nconst renderPage = () =>\n  render(\n    <MemoryRouter initialEntries={[\"/dives/new\"]}>\n      <Routes>\n        <Route path=\"/dives/new\" element={<NewDivePage />} />\n        <Route path=\"/dives/:id\" element={<p>opened dive</p>} />\n      </Routes>\n    </MemoryRouter>,\n  );\n\ndescribe(\"NewDivePage\", () => {\n  it(\"saves a dive and opens it\", async () => {\n    vi.spyOn(globalThis, \"fetch\").mockResolvedValue(jsonResponse(201, { id: \"d1\" }));\n    renderPage();\n    fireEvent.change(screen.getByTestId(\"dive-site\"), { target: { value: \"Blue Hole\" } });\n    fireEvent.change(screen.getByTestId(\"dive-when\"), { target: { value: \"2026-12-12T08:00\" } });\n    fireEvent.click(screen.getByTestId(\"save-dive\"));\n    expect(await screen.findByText(\"opened dive\")).toBeTruthy();\n  });\n\n  it.each([\"dive-site\", \"dive-when\"])(BAD_INPUT_TEST, async (field) => {\n    vi.spyOn(globalThis, \"fetch\").mockResolvedValue(jsonResponse(201, { id: \"d1\" }));\n    await holdsUpAgainstBadInput(field, { render: renderPage, page: \"page-new-dive\", submit: \"save-dive\" });\n  });\n});\n"
+ },
+ "report": {
+  "numTotalTestSuites": 2,
+  "numPassedTestSuites": 2,
+  "numFailedTestSuites": 0,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 3,
+  "numPassedTests": 3,
+  "numFailedTests": 0,
+  "numPendingTests": 0,
+  "numTodoTests": 0,
+  "snapshot": {
+   "added": 0,
+   "failure": false,
+   "filesAdded": 0,
+   "filesRemoved": 0,
+   "filesRemovedList": [],
+   "filesUnmatched": 0,
+   "filesUpdated": 0,
+   "matched": 0,
+   "total": 0,
+   "unchecked": 0,
+   "uncheckedKeysByFile": [],
+   "unmatched": 0,
+   "updated": 0,
+   "didUpdate": false
+  },
+  "startTime": 1795759180069,
+  "success": true,
+  "testResults": [
+   {
+    "assertionResults": [
+     {
+      "ancestorTitles": [
+       "NewDivePage"
+      ],
+      "fullName": "NewDivePage saves a dive and opens it",
+      "status": "passed",
+      "title": "saves a dive and opens it",
+      "duration": 34.053499999999985,
+      "failureMessages": [],
+      "meta": {},
+      "tags": [],
+      "benchmarks": []
+     },
+     {
+      "ancestorTitles": [
+       "NewDivePage"
+      ],
+      "fullName": "NewDivePage holds up against bad input: dive-site",
+      "status": "passed",
+      "title": "holds up against bad input: dive-site",
+      "duration": 13.284166000000027,
+      "failureMessages": [],
+      "meta": {},
+      "tags": [],
+      "benchmarks": []
+     },
+     {
+      "ancestorTitles": [
+       "NewDivePage"
+      ],
+      "fullName": "NewDivePage holds up against bad input: dive-when",
+      "status": "passed",
+      "title": "holds up against bad input: dive-when",
+      "duration": 12.704083000000026,
+      "failureMessages": [],
+      "meta": {},
+      "tags": [],
+      "benchmarks": []
+     }
+    ],
+    "startTime": 1795759180373,
+    "endTime": 1795759180432.704,
+    "status": "passed",
+    "message": "",
+    "name": "/workspace/web/src/dives/NewDivePage.test.tsx"
+   }
+  ]
+ }
+}

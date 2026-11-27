@@ -189,4 +189,10 @@ describe("what a try again keeps (R3 walk, item 6a)", () => {
     expect(keptText({ what: "build", credits: 30, basis: "", parts: 4, partsDone: 1 } as never)).toBe("1 of its 4 parts is already built and checked; it is kept, not built or charged again.");
     expect(keptText({ what: "build", credits: 30, basis: "", parts: 4, partsDone: 2 } as never)).toBe("2 of its 4 parts are already built and checked; they are kept, not built or charged again.");
   });
+
+  it("says plainly what is left when every part is built and checked (R7-3)", () => {
+    expect(keptText({ what: "build", credits: 4, basis: "", parts: 5, partsDone: 5 } as never)).toBe("Every part is built and checked. What is left is the security review and publishing.");
+    expect(keptText({ what: "change", credits: 5, basis: "", parts: 2, partsDone: 2 } as never)).toBe("Every part is built and checked. What is left is the security review and the new version.");
+    expect(keptText({ what: "build", credits: 20, basis: "", parts: 5, partsDone: 0 } as never)).toBe("The plan agreed before is kept, and all 5 of its parts are built.");
+  });
 });

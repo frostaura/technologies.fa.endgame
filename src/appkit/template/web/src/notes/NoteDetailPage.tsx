@@ -1,9 +1,9 @@
 import { Link, useParams } from "react-router";
-import { NotFoundError, useApiQuery } from "@endgame/appkit";
+import { formatDateTime, NotFoundError, useApiQuery } from "@endgame/appkit";
 import { Card, CardContent, CardHeader, CardTitle, EmptyState, FailedState, LoadingState } from "@endgame/appkit/ui";
 import { usePageTitle } from "../usePageTitle";
 import { FollowNote } from "./FollowNote";
-import { formatWhen, type NoteDetail } from "./types";
+import type { NoteDetail } from "./types";
 
 /** One note, by id. Lazy-loaded: its code arrives only when someone opens a note. */
 export default function NoteDetailPage() {
@@ -28,8 +28,9 @@ export default function NoteDetailPage() {
           <CardHeader>
             <CardTitle className="text-2xl">{note.data.title}</CardTitle>
             <p className="text-sm text-ink-muted">
-              {note.data.authorName} · {formatWhen(note.data.createdAt)}
+              {note.data.authorName} · {formatDateTime(note.data.createdAt)}
             </p>
+            {note.data.happensAt && <p className="text-sm font-semibold text-ink">Happens {formatDateTime(note.data.happensAt)}</p>}
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {note.data.body ? <p className="whitespace-pre-wrap">{note.data.body}</p> : <p className="text-ink-muted">No body.</p>}

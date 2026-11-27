@@ -34,6 +34,18 @@ describe("addresses", () => {
     expect(result?.messages).toEqual([]);
   });
 
+  it("fails a date or number formatted by the browser's formatters, which throw on a bad value (R7-1)", async () => {
+    for (const code of [
+      'export const when = (iso: string) => new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso));\n',
+      "export const when = (iso: string) => new Date(iso).toLocaleString();\n",
+    ]) {
+      const [result] = await eslint.lintText(code, { filePath: "src/example.ts" });
+      expect(result?.messages.map((m) => m.ruleId)).toContain("endgame/no-unsafe-format");
+    }
+    const [kit] = await eslint.lintText('import { formatDateTime } from "@endgame/appkit";\nexport const when = (iso: string) => formatDateTime(iso);\n', { filePath: "src/example.ts" });
+    expect(kit?.messages).toEqual([]);
+  });
+
   it("passes the same call written the kit's way", async () => {
     const [result] = await eslint.lintText('import { api } from "@endgame/appkit";\nexport const go = () => api("notes");\n', {
       filePath: "src/example.ts",

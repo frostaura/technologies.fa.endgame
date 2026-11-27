@@ -522,6 +522,8 @@ function historicBuild(app: DemoApp, startedAt: string, publishedAt: string): De
   const events: RunEvent[] = [];
   const push = (type: string, payload: Record<string, unknown>, at: string) => events.push(ev(events.length + 1, type, payload, at));
   push("run.started", { holder: "runner-demo-1" }, startedAt);
+  // The placement step the Runner's journal writes: what the run page reads to lead to the app it built (R7-2).
+  push("message", { kind: "workflow.step", agent: "workflow", step: "placement", data: { name: app.name, appId: app.id, appPath: app.path, projectPath: project, division: project.split("/").slice(0, 2).join("/"), divisionCreated: false } }, startedAt);
   push("message", { from: "builder", text: `${app.name} will live in its division, as the project ${app.name}.`, title: "Placed", milestone: "placed" }, startedAt);
   push("plan.accepted", { by: "auto-mode", summary: `${app.name}, in three parts.`, items: [{ id: "backend", text: "What it keeps, and who may change it.", detail: "api: entities, migration, endpoints, tests.", check: "make test passes." }, { id: "frontend", text: "The screens, phone first.", detail: "web: pages and tests.", check: "make test passes." }, { id: "docs", text: "Its documents.", detail: "docs/*.md", check: "The docs describe the app." }] }, startedAt);
   for (const item of ["backend", "frontend", "docs"]) push("evaluation.passed", { item, tier: "build", round: 0, faults: [], evidence: "make test and make lint exit 0.", summary: "Checked and passed." }, publishedAt);

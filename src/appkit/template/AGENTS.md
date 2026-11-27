@@ -60,7 +60,20 @@ The example feature is **Notes**; replace it with the real product, keeping its 
 - **The app's name** is written once, in `web/src/appName.ts` (and `web/index.html`'s `<title>`). Each
   page names itself with `usePageTitle("All notes")`, which titles the tab "All notes · Notes".
 - **Errors in the UI:** `api()` throws `ValidationError` (show `errors` by field),
-  `NotSignedInError` (go to `signInUrl`), `NotFoundError`, `BudgetExhaustedError`.
+  `NotSignedInError` (go to `signInUrl`), `NotFoundError`, `BudgetExhaustedError`. A page that throws while it
+  renders is caught by the kit's `AppErrorBoundary`, mounted in `main.tsx` and around the routes in `App.tsx`: it shows
+  "Something went wrong on this page" with a way back and keeps the header. Keep both; never remove them to "fix" a
+  test — a boundary showing is a bug in the page, to be fixed there.
+- **Dates and numbers — only through the kit, never throwing.** Show them with `formatDate`, `formatDateTime` and
+  `formatNumber` from `@endgame/appkit`, never `toLocaleString()`, `toLocaleDateString()` or `Intl.DateTimeFormat(…).format(…)`
+  (ESLint `endgame/no-unsafe-format` fails the build). The reason: the browser's formatters throw `RangeError: Invalid time
+  value` on an invalid date, a browser lets one through — a `datetime-local` field keeps a six-digit year typed into its year
+  segment (`202612-12-12T08:00`) — and a throw while a page renders blanks it. The kit's helpers answer a fallback you can
+  name (`formatDateTime(when, { fallback: "No date yet" })`). Every `date`/`datetime-local` input carries `min` and `max`, and
+  the form checks what was typed on submit with `checkDateInput(value, { min, max })` (numbers: `checkNumberInput`, with
+  their own `min`/`max`), showing the error beside the field and sending nothing: a browser does not stop a person typing past
+  `min` and `max`. The server checks the same limits (`[Range]`). The example is the note's "When it happens" field
+  (`web/src/notes/NewNotePage.tsx`, `Note.HappensAt`).
 - **Reads stay current by themselves:** after any successful write through `api()` (POST, PUT,
   PATCH, DELETE), every `useApiQuery` on screen re-reads, keeping its data shown meanwhile. Do not
   hand-wire refreshes between pages or lists; write through `api()` and every read follows.
@@ -123,6 +136,27 @@ never repeated on one screen. The plan item names the test ids its screens carry
 checks that each one is in `web/src` as `data-testid="…"`. Tests select by them
 (`getByTestId("note-item")`), as the template's do.
 
+## Bad-input tests — every form field has one
+
+A page that works for the values its author typed can still go blank on one a person gives it: a browser keeps a
+six-digit year typed into a date field's year segment, and a preview that formats it throws. Every input, select and
+textarea a form carries (its `<entity>-<field>` test id) has a test titled `holds up against bad input: <test id>`, made
+with the kit's helper from `@endgame/appkit/testing`:
+
+```ts
+it.each(["note-title", "note-happens-at", "note-body"])(BAD_INPUT_TEST, async (field) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => json(200, { user: ada }));
+  await holdsUpAgainstBadInput(field, { render: renderPage, page: "page-new-note", submit: "save-note" });
+});
+```
+
+`holdsUpAgainstBadInput` feeds the field what a person can put there — a six-digit year and a date before any sane limit,
+a number far past any, an option that is not there, a blank required field, text past its `maxLength` — and fails unless
+the page stays on screen (no throw, no error boundary) and, on submit, each value the field cannot take is refused beside
+it (`aria-invalid` and the error its `aria-describedby` names). So every field carries its limits (`required`,
+`maxLength`, `min`/`max`) and the form checks them on submit before sending. The factory runs the app's front-end tests
+itself and fails a part whose form field has no such passing test (`NewNotePage.test.tsx` is the example).
+
 ## Navigation tests — every link between pages has one
 
 A page can render when its address is loaded directly and still not appear when a link routes to
@@ -141,7 +175,7 @@ make migration name=AddSomething
 ```
 
 A change is done when `make lint` and `make test` pass with zero warnings, there is a test for the
-behaviour (back end and front end) and a navigation test for each new link between pages, the
+behaviour (back end and front end), a navigation test for each new link between pages, a bad-input test for each form field, the
 screens carry their test ids, and `docs/` says what changed — `docs/app.md`'s table names every endpoint by its
 operation id with "Signed in?" Yes or No, exactly as the code has it (`AppRulesTests` fails otherwise).
 
