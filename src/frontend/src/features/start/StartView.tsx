@@ -4,9 +4,11 @@ import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
-import { Select } from "@/components/ui/field";
+import { Input, Select, Textarea } from "@/components/ui/field";
+import { Alert } from "@/components/ui/alert";
+import { LINK } from "@/components/ui/layout";
 import { PageHeader, SideCard } from "@/components/ui/page";
-import { NO_VALUE, Stat } from "@/components/ui/stat";
+import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { estimateFigure, estimateHeadline } from "@/lib/estimates";
 import { formatCredits, formatNumber, isValidSlug, plural, slugify } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
@@ -149,7 +151,7 @@ export function StartView() {
       {unplaced ? (
         <section data-state="refused" className="flex w-full max-w-form flex-col items-start gap-3 py-4 lg:py-8">
           <PageHeader title="Organisations are set up by FrostAura" lead="An idea lives in an organisation, and you hold no role in one yet. FrostAura sets one up for each person it invites; if someone already works here, ask them to give you a role." />
-          <Link href={paths.home()} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
+          <Link href={paths.home()} className={cn(LINK, TAP)}>
             Back to the org chart
           </Link>
         </section>
@@ -159,7 +161,7 @@ export function StartView() {
             title="Only a Builder or above starts an idea"
             lead={`${active.role ? `You are ${article(active.role)} ${ROLE_NAME[active.role]} in ${org.name}` : `You hold no role over the whole of ${org.name}`}, and no division gives you more. An Admin or the Owner can make you a Builder; until then, you can follow everything that is being built.`}
           />
-          <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
+          <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn(LINK, TAP)}>
             Back to the org chart
           </Link>
         </section>
@@ -178,14 +180,14 @@ export function StartView() {
                 <label htmlFor={ids.idea} className="font-medium">
                   The idea
                 </label>
-                <textarea
+                <Textarea
                   ref={ideaBox}
                   id={ids.idea}
                   required
                   rows={5}
                   value={idea}
                   onChange={(e) => setIdea(e.target.value)}
-                  className="min-h-32 resize-y rounded-xs border border-border-field bg-surface px-3.5 py-3 text-base leading-relaxed 3xl:min-h-56"
+                  className="min-h-32 resize-y py-3 text-base leading-relaxed 3xl:min-h-56"
                 />
               </div>
 
@@ -212,7 +214,7 @@ export function StartView() {
                 <label htmlFor={ids.other} className="mt-2 text-sm text-ink-muted">
                   Anything else, in your own words
                 </label>
-                <input id={ids.other} value={other} onChange={(e) => setOther(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3.5" />
+                <Input id={ids.other} value={other} onChange={(e) => setOther(e.target.value)} />
               </fieldset>
             </div>
 
@@ -223,14 +225,14 @@ export function StartView() {
                   <label htmlFor={ids.org} className="font-medium">
                     Your organisation
                   </label>
-                  <input
+                  <Input
                     id={ids.org}
                     required
                     value={orgName}
                     onChange={(e) => setOrgName(e.target.value)}
                     aria-describedby={ids.orgHint}
                     aria-invalid={orgName.length > 0 && !isValidSlug(slug)}
-                    className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 text-base"
+                    className="min-h-12 text-base"
                   />
                   <span id={ids.orgHint} className={cn("text-sm", orgName.length > 0 && !isValidSlug(slug) ? "text-attention-text" : "text-ink-muted")}>
                     {orgName.length > 0 && !isValidSlug(slug)
@@ -271,9 +273,9 @@ export function StartView() {
               </div>
 
               {submitError && (
-                <p id="start-error" role="alert" data-state="failed" className="order-5 rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
-                  Research did not start: {submitError} Nothing was charged.
-                </p>
+                <div id="start-error" data-state="failed" className="order-5">
+                  <Alert tone="bad" title={`Research did not start: ${submitError} Nothing was charged.`} />
+                </div>
               )}
 
               {/* On a phone the start stays in view above the bottom bar, however long the idea is. */}
@@ -294,7 +296,7 @@ export function StartView() {
                 </span>
               </div>
               {org && (
-                <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn("order-7 self-start rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
+                <Link href={active.entered ? paths.homeOf(org.slug) : paths.home()} className={cn(LINK, "order-7 self-start", TAP)}>
                   Back to the org chart
                 </Link>
               )}
@@ -355,11 +357,11 @@ function EstimatePanel({ state, scope, firstRun }: { state: EstimateState; scope
           {short}
           {!firstRun &&
             (credits.data?.neverToppedUp ? (
-              <Link href={paths.credits()} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+              <Link href={paths.credits()} className={cn(LINK, "self-start")}>
                 Ask for a top-up
               </Link>
             ) : (
-              <Link href={paths.credits()} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+              <Link href={paths.credits()} className={cn(LINK, "self-start")}>
                 See credits
               </Link>
             ))}
@@ -420,7 +422,7 @@ function Costs({ scope, estimate }: { scope: string; estimate: number | null }) 
   const c = credits.data;
   const room = roomFor(c, scope);
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+    <StatRow cols={2}>
       <Stat
         plain
         label="This idea"
@@ -436,7 +438,7 @@ function Costs({ scope, estimate }: { scope: string; estimate: number | null }) 
       {c.estimates && c.estimates.pieces > 0 && (
         <Stat plain className="col-span-2" label="Estimates here" value={estimateFigure(c.estimates)} caption={`${estimateHeadline(c.estimates)}, across ${plural(c.estimates.pieces, "piece")} of work.`} />
       )}
-    </div>
+    </StatRow>
   );
 }
 
@@ -462,7 +464,7 @@ function Examples({ organisation, tree, onPick }: { organisation: string; tree: 
           </li>
         ))}
       </ul>
-      <Link href={paths.suggestions(organisation)} className={cn("self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
+      <Link href={paths.suggestions(organisation)} className={cn(LINK, "self-start", TAP)}>
         Ideas from your portfolio
       </Link>
     </SideCard>
