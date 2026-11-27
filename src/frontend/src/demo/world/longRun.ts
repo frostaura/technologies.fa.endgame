@@ -59,10 +59,20 @@ export function longBuildRun(scope: string): DemoRun {
           ? { name: "read_file", args: { path: file }, result: `    1\t// ${file}` }
           : k === 2 || k === 3
             ? { name: "edit_file", args: { path: file }, result: `Edited ${file}.` }
-            : { name: "run", args: { command: "make test" }, result: `Vitest ${12 + i} passed · xUnit 9 passed\nexit code 0` };
+            : // A repair's first test run still has the fault in it: one test fails, as on the real stack.
+              repairing(agent) && i === 4
+              ? { name: "run", args: { command: "make test" }, result: "Vitest 1 failed | 10 passed\nexit code 1" }
+              : { name: "run", args: { command: "make test" }, result: `Vitest ${12 + i} passed · xUnit 9 passed\nexit code 0` };
       cycle(agent, taskType, Math.round(credits * (0.8 + (i % 4) * 0.1) * 1000) / 1000, tool, billable);
+      // The harness reports a builder's progress every ten actions, as `AgentLoop.ProgressText` writes it.
+      if (agent.startsWith("builder-") && (i + 1) % 10 === 0) {
+        actions += 10;
+        push("message", { agent, from: "builder", title: "Still building", text: `Still building. Since the last update it read 4 parts of the app, made 4 changes and ran 2 checks; ${actions} actions so far.`, progress: actions });
+      }
     }
   };
+  const repairing = (agent: string) => /^builder-.+-[1-9]$/.test(agent);
+  let actions = 0;
   const say = (from: string, title: string, text: string, milestone?: string) => push("message", { from, title, text, ...(milestone ? { milestone } : {}) });
   const reply = (agent: string, text: string) => push("message", { kind: "agent.reply", agent, final: true, text });
   const begin = (agent: string, task: string, taskType: string) => push("message", { kind: "agent.start", agent, task, taskType });

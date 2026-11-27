@@ -94,7 +94,8 @@ describe("RunView", () => {
     expect(within(part).getByText("Checked and passed: this part")).toBeTruthy();
     const tasks = screen.getByRole("list", { name: "Tasks" });
     expect(within(tasks).getByText("In progress")).toBeTruthy();
-    expect(screen.getByText("3 credits")).toBeTruthy();
+    // The spent tile and the part's own charged figure: the same 3, so the page adds up.
+    expect(screen.getAllByText("3 credits")).toHaveLength(2);
     expect(screen.getByText("An action was refused by your rules")).toBeTruthy();
     // Normal mode never names infrastructure.
     const steps = screen.getByRole("list", { name: "Steps" });

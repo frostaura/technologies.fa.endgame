@@ -50,7 +50,7 @@
       "step": 4,
       "kind": "demo",
       "highlight": {
-        "text": "Estimate against actual",
+        "text": "Against estimate",
         "note": "The estimate scored against what it actually cost."
       }
     },
@@ -58,8 +58,8 @@
       "step": 5,
       "kind": "demo",
       "highlight": {
-        "text": "Where the credits go",
-        "note": "Repairing a mistake of its own is never billed."
+        "testId": "parts-add-up",
+        "note": "Each part shows what it was charged, and together they make the spent figure; what repairs used is said apart, never billed."
       }
     },
     {

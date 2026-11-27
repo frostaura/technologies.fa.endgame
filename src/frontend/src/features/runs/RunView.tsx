@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { ChevronDown } from "lucide-react";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { Disclosure, Fold } from "@/components/Fold";
@@ -13,6 +13,7 @@ import { Alert, STATES, StatusTag } from "@/components/ui/alert";
 import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { SECTION, SideCard, TITLE, useShowAll } from "@/components/ui/page";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { LINK } from "@/components/ui/layout";
 import { capitalise, formatCredits, formatDate, headlineCredits, formatNumber, formatTime, plural, share } from "@/lib/format";
 import { ESTIMATE_FLOOR, spentAgainst } from "@/lib/estimates";
 import { RISE } from "@/lib/motion";
@@ -27,14 +28,15 @@ import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
 import { usePageConversation } from "../conversation/pageConversation";
-import { accuracy, deriveRun, estimateName, EXPIRED, isStartDeclined, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type PlanItem, type StepTone } from "./runModel";
+import { accuracy, deriveRun, EXPIRED, isStartDeclined, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type PlanItem, type StepTone } from "./runModel";
 import { distinctReplies } from "../home/conversationModel";
 import { actionCount, buildTimeline, groupCredits, PART_FINISH, PART_START, type TimelineGroup, type TimelineItem, type TimelineStep } from "./timeline";
 import { useRunStream } from "./useRunStream";
 import { ApprovalCard } from "./ApprovalCard";
 import { ANSWER_CUT_OFF } from "./retryModel";
 import { TryAgain } from "./TryAgain";
-import { curlyQuotes, fullRequest, shortRunName } from "./runHeading";
+import { curlyQuotes, fullRequest, kindWord, shortRunName } from "./runHeading";
+import { hasLooseTasks, partOfTask, partTasks, TASK_STATUS, taskPhrases } from "./runTasks";
 
 const STATUS: Record<RunStatus, { label: string; tone: BadgeTone }> = {
   queued: { label: "Waiting to start", tone: "neutral" },
@@ -51,16 +53,6 @@ const DECLINED = { label: "You declined to start this", tone: "neutral" as Badge
 /** A plan the owner declined: their own decision, never a red "did not succeed". */
 const PLAN_DECLINED = { label: "Declined by you", tone: "neutral" as BadgeTone };
 
-/** What the work is, said before its name. */
-const KIND: Record<Run["kind"], string> = {
-  research: "Research",
-  build: "Build",
-  factory: "Build",
-  task: "Work on an app",
-  conversation: "Conversation",
-  review: "Review",
-  suggest: "Suggestions",
-};
 
 /** The events that change a run's state: once one arrives after a control, the log is the status again. */
 const STATE_EVENTS = new Set(["run.paused", "run.resumed", "run.finished"]);
@@ -84,9 +76,29 @@ const TONE_CLASS: Record<StepTone, string> = {
 
 /**
  * Every row of the timeline is one grid — mark | who and what | cost | time — so cost and time sit in the same two columns
- * on every row, and a column can be read straight down. On a phone the time and the cost share one right-hand column.
+ * on every row, and a column can be read straight down. On a phone the words take the whole width beside the mark, and the
+ * time and the cost are one quiet line under them (`MetaLine`), rather than a column that leaves the words a third of it.
  */
-const ROW = "grid grid-cols-step items-start gap-x-3 sm:grid-cols-step-wide";
+const ROW = "grid grid-cols-lead-grow items-start gap-x-3 sm:grid-cols-step-wide";
+
+/** The page's own width at which the plan stands beside the steps: room for the steps' grid and the plan's 32rem. */
+const SPLIT_AT = 1180;
+
+/** Whether an element's own box is at least `px` wide, kept as it resizes. */
+function useBoxWider(ref: RefObject<HTMLElement | null>, px: number): boolean {
+  const [wider, setWider] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setWider(el.getBoundingClientRect().width >= px);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, px]);
+  return wider;
+}
 
 /** A media query as state: the side panel is beside the page only where the page keeps room for itself. */
 function useMinWidth(px: number): boolean {
@@ -114,8 +126,12 @@ export function RunView({ runId }: { runId: string }) {
   const name = view.kind === "loaded" ? shortRunName(view.data.title) : "Work";
   // The conversation at the level the work belongs to (its app, project or division), docked beside it (ARCH-012).
   const talk = usePageConversation(view.kind === "loaded" && view.data.scope ? { scope: view.data.scope } : null);
+  // Beside the page: the tasks the plan does not show, when there are any; otherwise the page has the width to itself.
+  const events = useAppSelector((s) => s.runs[runId]?.events);
+  const asideDerived = useMemo(() => deriveRun(events ?? []), [events]);
+  const aside = view.kind === "loaded" && beside && hasLooseTasks(asideDerived) ? <TasksCard derived={asideDerived} /> : undefined;
   return (
-    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: name }]} aside={view.kind === "loaded" && beside ? <RunAside runId={runId} /> : undefined} talk={talk}>
+    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: name }]} aside={aside} talk={talk}>
       {view.kind === "loading" && <RunSkeleton />}
       {view.kind === "failed" && (
         <Failed title={view.status === 404 ? "This work could not be found" : "This work could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />
@@ -178,6 +194,7 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
   const said = reply ?? plainOrNull(derived.finishedSummary) ?? (derived.finishedSummary ? lastPlain : null);
   const outcome = mode === "technical" ? [derived.finishedSummary, derived.finishedDetail ?? run.detail].filter(Boolean).join("\n\n") || null : said && curlyQuotes(said);
   const badge = declined ? DECLINED : planDeclined ? PLAN_DECLINED : STATUS[status];
+  const kind = kindWord(run);
   // The figure shown before the work began, and the plan's re-estimate beside it (R2-8); a log with no estimate yet
   // leaves the run's own single figure standing in.
   // The server gives both (firstEstimateCredits, planEstimateCredits); an older one only the latest, so the log is read.
@@ -187,6 +204,8 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
   // cost (spentCredits); the run's figure stands in until the log has caught up.
   const spent = log.events.length > 0 && caughtUp ? derived.settledCredits : run.spentCredits;
   const request = useMemo(() => fullRequest(run.title, log.events), [run.title, log.events]);
+  const split = useRef<HTMLDivElement>(null);
+  const wide = useBoxWider(split, SPLIT_AT);
 
   const act = async (action: "pause" | "resume" | "cancel") => {
     setControlError(null);
@@ -233,30 +252,69 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
         busy={controlState.isLoading}
         onConfirm={() => void act("cancel")}
         onCancel={() => setConfirmCancel(false)}
-        className="-mt-2 max-sm:-order-1"
+        className="max-sm:-order-1"
       />
     ) : null;
 
   const stopped = terminal && status !== "finished" && (run.budgetExhausted || run.canTryAgain);
   // A cancel or a decline is said once, by the offer to start again: its closing line ("Cancelled.") adds nothing.
   const shownOutcome = stopped && (declined || planDeclined || status === "cancelled") ? null : outcome;
-  const tasks = hasTasks(run, derived) ? <TasksCard derived={derived} runStatus={run.status} /> : null;
+  const tasks = hasLooseTasks(derived) ? <TasksCard derived={derived} /> : null;
+  // Only research ends in a verdict: a build run started from an idea carries its ideaId too, and offers none. Research that
+  // stopped has no verdict to read, so the link says what is there: the idea (D59). It closes the card that says how the work
+  // ended, rather than standing above it as a second card saying the same.
+  const ideaLink =
+    terminal && run.kind === "research" && run.ideaId ? (
+      <Link href={paths.idea(run.ideaId)} className="group flex flex-wrap items-center justify-between gap-3 font-semibold text-ink touch:min-h-touch">
+        <span className="flex items-center gap-2">
+          <Icon name="research" className="text-ink" />
+          {status === "finished" ? "The verdict is ready" : "See the idea"}
+        </span>
+        <span className="text-primary-link group-hover:text-primary-hover">{status === "finished" ? "Read it" : "Open it"}</span>
+      </Link>
+    ) : null;
+
+  const endCard =
+    shownOutcome || stopped || ideaLink ? (
+      <EndCard tone={status === "failed" && !declined && !planDeclined && !run.budgetExhausted ? "bad" : "plain"} outcome={shownOutcome} technical={mode === "technical"} after={ideaLink}>
+        {stopped && <StoppedPanel run={run} derived={derived} declined={declined} />}
+      </EndCard>
+    ) : null;
+  const cost = (
+    <div className="flex flex-col gap-2">
+      <CostPanel estimate={estimate} planned={planned} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} declined={declined} finished={terminal} narrow={wide} />
+      <CreditsNote />
+    </div>
+  );
+  const plan = derived.plan ? (
+    <Fold title="The plan" summary={planSummary(derived.plan)} icon={<Icon name="plan" />}>
+      <PlanPanel plan={derived.plan} mode={mode} publicOnlyNote={derived.publicOnlyNote} terminal={terminal} tasks={derived.tasks} />
+    </Fold>
+  ) : null;
+  const trace = <Trace events={log.events} mode={mode} derived={derived} stream={log.stream} status={status} replaying={!caughtUp} declined={declined || planDeclined} />;
 
   return (
     <>
-      {/* A phone puts the heading first, what waits for an answer straight under it, then the controls (the order
-          classes: the header lets go of its box there, so its parts take their own places in the page). */}
-      <header className={cn("flex flex-wrap items-end justify-between gap-x-6 gap-y-4 max-sm:contents", RISE)}>
-        <div className="flex min-w-0 max-w-prose flex-col gap-2 max-sm:-order-3">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Badge tone={badge.tone}>{badge.label}</Badge>
-            <span className="text-sm text-ink-muted">{KIND[run.kind]}</span>
-            <StreamBadge stream={log.stream} status={status} />
+      {/* The status and the title, with the controls on the title's row; the request and the times under them. A phone puts
+          the heading first, what waits for an answer straight under it, then the controls (the order classes: the header lets
+          go of its box there, so its parts take their own places in the page). */}
+      <header className={cn("flex flex-col gap-2 max-sm:contents", RISE)}>
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 max-sm:contents">
+          <div className="flex min-w-0 max-w-prose flex-col gap-2 max-sm:-order-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Badge tone={badge.tone}>{badge.label}</Badge>
+              {kind && <span className="text-sm text-ink-muted">{kind}</span>}
+              <StreamBadge stream={log.stream} status={status} />
+            </div>
+            <h1 className={cn(TITLE, "break-words [text-wrap:balance]")} title={run.title}>
+              {curlyQuotes(shortRunName(run.title))}
+            </h1>
           </div>
-          <h1 className={cn(TITLE, "break-words")} title={run.title}>
-            {shortRunName(run.title)}
-          </h1>
-          {request && <Request text={request} />}
+          {actions && <div className="shrink-0 max-sm:-order-1">{actions}</div>}
+        </div>
+        {cancelCard}
+        <div className="flex min-w-0 max-w-prose flex-col gap-2 max-sm:-order-3 max-sm:-mt-4">
+          {request && <Request text={curlyQuotes(request)} />}
           <p className="text-sm text-ink-muted">
             Started {formatDate(run.startedAt)}, {formatTime(run.startedAt)}
             {terminal && run.finishedAt && ` · ended ${sameDay(run.startedAt, run.finishedAt) ? "" : `${formatDate(run.finishedAt)}, `}${formatTime(run.finishedAt)}`}
@@ -268,9 +326,7 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
             </code>
           )}
         </div>
-        {actions && <div className="max-sm:-order-1">{actions}</div>}
       </header>
-      {cancelCard}
 
       {controlError && (
         <p role="alert" className="rounded-xs bg-attention-tint px-4 py-3 text-attention-text">
@@ -289,46 +345,32 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
 
       <Approvals runId={run.id} approvals={derived.approvals} />
 
-      {/* Only research ends in a verdict: a build run started from an idea carries its ideaId too, and offers none.
-          Research that stopped has no verdict to read, so the link says what is there: the idea (D59). */}
-      {terminal && run.kind === "research" && run.ideaId && (
-        <Link
-          href={paths.idea(run.ideaId)}
-          className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-surface px-5 py-4 font-semibold text-ink shadow-card transition hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-        >
-          <span className="flex items-center gap-2">
-            <Icon name="research" className="text-ink" />
-            {status === "finished" ? "The verdict is ready" : "See the idea"}
-          </span>
-          <span className="text-primary-link">{status === "finished" ? "Read it" : "Open it"}</span>
-        </Link>
-      )}
-
-      {(shownOutcome || stopped) && (
-        <EndCard tone={status === "failed" && !declined && !planDeclined && !run.budgetExhausted ? "bad" : "plain"} outcome={shownOutcome} technical={mode === "technical"}>
-          {stopped && <StoppedPanel run={run} derived={derived} declined={declined} />}
-        </EndCard>
-      )}
-
-      <CostPanel estimate={estimate} planned={planned} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} declined={declined} finished={terminal} />
-
-      {/* From 1600 the plan stands beside the steps; narrower, it comes first. */}
-      <div className="flex flex-col gap-6 3xl:grid 3xl:grid-cols-run-wide 3xl:items-start">
-        {(derived.plan || inline) && (
-          <div className="flex min-w-0 flex-col gap-6 3xl:col-start-2 3xl:row-start-1">
-            {derived.plan && (
-              <Fold title="The plan" summary={planSummary(derived.plan)} icon={<Icon name="plan" />}>
-                <PlanPanel plan={derived.plan} mode={mode} publicOnlyNote={derived.publicOnlyNote} terminal={terminal} />
-              </Fold>
-            )}
+      {/* Where the page has the room, two columns: how it ended and the steps at the left, the figures and the plan at the
+          right; narrower, one column in that order of reading. The room is the page's own width, measured, not the window's:
+          beside the docked conversation a 1920 window leaves the page far less. */}
+      <div ref={split} data-split={wide || undefined} className={cn("flex flex-col gap-6", wide && "grid grid-cols-run-wide items-start")}>
+        {wide ? (
+          <>
+            <div className="col-start-1 row-start-1 flex min-w-0 flex-col gap-6">
+              {endCard}
+              {trace}
+            </div>
+            <div className="col-start-2 row-start-1 flex min-w-0 flex-col gap-6">
+              {cost}
+              {plan}
+              {inline && tasks}
+            </div>
+          </>
+        ) : (
+          <>
+            {endCard}
+            {cost}
+            {plan}
             {inline && tasks}
-          </div>
+            {trace}
+          </>
         )}
-        <div className="flex min-w-0 flex-col 3xl:col-start-1 3xl:row-start-1">
-          <Trace events={log.events} mode={mode} derived={derived} stream={log.stream} status={status} replaying={!caughtUp} declined={declined || planDeclined} />
-        </div>
       </div>
-      {inline && <CreditsNote />}
     </>
   );
 }
@@ -390,8 +432,8 @@ function StreamBadge({ stream, status }: { stream: StreamStatus; status: RunStat
   if (status !== "running" && status !== "waiting" && status !== "queued") return null;
   if (stream === "open")
     return (
-      <span className="flex items-center gap-2 text-sm text-ink-body">
-        <span aria-hidden className="size-2 animate-pulse rounded-full bg-success motion-reduce:animate-none" />
+      <span className="flex items-center gap-1.5 text-sm text-ink-muted">
+        <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-success motion-reduce:animate-none" />
         Live
       </span>
     );
@@ -404,17 +446,24 @@ function StreamBadge({ stream, status }: { stream: StreamStatus; status: RunStat
  * How the work ended, in one card: what it says it did (the outcome), and, when it stopped, why and how to start it again.
  * Never a card inside a card. A failure is edged in red; a cancel, a decline or a finish is a plain card.
  */
-function EndCard({ tone, outcome, technical, children }: { tone: "bad" | "plain"; outcome: string | null; technical: boolean; children?: ReactNode }) {
+function EndCard({ tone, outcome, technical, children, after }: { tone: "bad" | "plain"; outcome: string | null; technical: boolean; children?: ReactNode; after?: ReactNode }) {
+  const parts = [
+    outcome ? (
+      <div key="outcome" className="flex flex-col gap-2">
+        <h2 className={SECTION}>Outcome</h2>
+        {technical ? <p className="max-w-prose whitespace-pre-line break-words text-ink-body">{outcome}</p> : <Markdown text={outcome} className="max-w-prose text-ink-body" />}
+      </div>
+    ) : null,
+    children ? <div key="children">{children}</div> : null,
+    after ? <div key="after">{after}</div> : null,
+  ].filter(Boolean);
   return (
     <section aria-label="How it ended" data-tone={tone} className={cn("flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card max-sm:p-4", tone === "bad" && "border-attention-line")}>
-      {outcome && (
-        <div className="flex flex-col gap-2">
-          <h2 className={SECTION}>Outcome</h2>
-          {technical ? <p className="max-w-prose whitespace-pre-line break-words text-ink-body">{outcome}</p> : <Markdown text={outcome} className="max-w-prose text-ink-body" />}
+      {parts.map((part, i) => (
+        <div key={i} className={cn("flex flex-col", i > 0 && "border-t pt-4")}>
+          {part}
         </div>
-      )}
-      {outcome && children && <hr className="border-border" />}
-      {children}
+      ))}
     </section>
   );
 }
@@ -444,7 +493,7 @@ function StoppedPanel({ run, derived, declined }: { run: Run; derived: DerivedRu
   );
 }
 
-function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, declined, finished }: { estimate: number | null; planned: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number; declined: boolean; finished: boolean }) {
+function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, declined, finished, narrow = false }: { estimate: number | null; planned: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number; declined: boolean; finished: boolean; narrow?: boolean }) {
   const replanned = planned !== null && estimate !== null && Math.abs(planned - estimate) >= 0.005 ? planned : null;
   // Spending is held against the latest figure: the plan's, once there is one.
   const against = replanned ?? estimate;
@@ -452,7 +501,7 @@ function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, dec
     <Stat
       label="Estimate"
       value={estimate !== null ? headlineCredits(estimate) : NO_VALUE}
-      caption={estimate === null ? "Not yet made" : replanned !== null ? `Shown before the work began; ${formatNumber(replanned)} once planned` : "Shown before the work began"}
+      caption={estimate === null ? "Not yet made" : replanned !== null ? `${formatNumber(replanned)} once planned` : "Before it began"}
     />
   );
   // Work declined at its start never began: there is nothing to score its estimate against (D19).
@@ -460,32 +509,34 @@ function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, dec
     return (
       <StatRow cols={2} label="Cost">
         {estimateTile}
-        <Stat label="Charged" value={formatCredits(spent)} caption="You declined to start it, so nothing was done." />
+        <Stat label="Charged" value={formatCredits(spent)} caption="Never begun" />
       </StatRow>
     );
   // The one rule for a spent figure (spentAgainst): finished work says "Spent" with no bar; under a 1-credit estimate,
   // no percentage and no alarm. Above it, the percentage names which estimate it is held against (R2-8).
   const spentFigure = spentAgainst(spent, against, finished);
-  const spentCaption = against === null ? "Settled from each call’s own cost" : against >= ESTIMATE_FLOOR ? `${share(spent, against)}% of ${estimateName(against, estimate, replanned)}` : spentFigure.caption;
+  // Captions are one line in a quarter of the row: a few words, with the figure they compare against.
+  const spentCaption = against === null ? "Each call at its own cost" : against >= ESTIMATE_FLOOR ? `${share(spent, against)}% of ${formatNumber(against)}${replanned !== null ? " planned" : ""}` : spentFigure.caption;
   const tiny = scored !== null && scored.estimated < ESTIMATE_FLOOR;
   const scoredWord = scored ? accuracy(scored.estimated, scored.actual) : null;
   // Four slots, always, in the same order: what was estimated, what is spent, the third figure (held now; scored once done), and what was not charged.
   return (
-    <StatRow cols={4} meters={spentFigure.meter !== null} label="Cost" className="lg:grid-cols-4">
+    // Two by two in the side column of a wide page (and on a phone); four across in a page's full width.
+    <StatRow cols={narrow ? 2 : 4} meters={spentFigure.meter !== null} label="Cost" className={narrow ? undefined : "lg:grid-cols-4"}>
       {estimateTile}
       <Stat label={spentFigure.label} value={formatCredits(spent)} caption={spentCaption} meter={spentFigure.meter} />
       {scored && scoredWord ? (
         // The figure slot holds a figure ("79% under"); a cost exactly on the estimate says so in a word; an estimate too small
         // to measure against holds none.
         <Stat
-          label="Estimate against actual"
+          label="Against estimate"
           value={tiny ? NO_VALUE : scoredWord === "on the estimate" ? "Exact" : scoredWord}
-          caption={tiny ? `${capitalise(scoredWord)}: cost ${formatNumber(scored.actual)}` : `${scoredWord === "on the estimate" ? "On the estimate. " : ""}Against ${estimateName(scored.estimated, estimate, replanned)}: cost ${formatNumber(scored.actual)}`}
+          caption={tiny ? capitalise(scoredWord) : `Cost ${formatNumber(scored.actual)} against ${formatNumber(scored.estimated)}`}
         />
       ) : (
-        <Stat label="Held for calls in flight" value={formatCredits(reserved)} caption="Reserved before each call, released when it settles" />
+        <Stat label="Held for calls" value={formatCredits(reserved)} caption="Until settled" />
       )}
-      <Stat label="Not charged" value={formatCredits(notCharged)} caption="Repairs of the work’s own mistakes, never billed" />
+      <Stat label="Not charged" value={formatCredits(notCharged)} caption="Repairs, never billed" />
     </StatRow>
   );
 }
@@ -562,7 +613,7 @@ function itemState(item: PlanItem, terminal: boolean): { label: string; tone: Ba
  * The plan as a contract: each item in the owner's words, with whether it passed its check, the tag in one place on every
  * item. The files, endpoints and test commands behind each item are technical detail, shown in technical mode.
  */
-function PlanPanel({ plan, mode, publicOnlyNote, terminal }: { plan: DerivedPlan; mode: Mode; publicOnlyNote: string | null; terminal: boolean }) {
+function PlanPanel({ plan, mode, publicOnlyNote, terminal, tasks }: { plan: DerivedPlan; mode: Mode; publicOnlyNote: string | null; terminal: boolean; tasks: readonly DerivedTask[] }) {
   const technical = mode === "technical";
   const passed = plan.items.filter((i) => i.result === "passed").length;
   // A change's last part re-checks what the app already did: those are not things the owner just asked for.
@@ -612,6 +663,7 @@ function PlanPanel({ plan, mode, publicOnlyNote, terminal }: { plan: DerivedPlan
                 {!technical && plainOrNull(item.outcome) && <span className="col-start-2 break-words text-sm text-ink-body">{inPart(item.outcome ?? "", label)}</span>}
                 {check && <span className="col-start-2 break-words text-sm text-ink-muted">{technical ? `Check: ${check}` : `How it is checked: ${check}`}</span>}
                 {evidence && <span className="col-start-2 break-words text-sm text-ink-body">{evidence}</span>}
+                <PartTasks tasks={partTasks(item, tasks)} />
               </li>
             );
           })}
@@ -659,13 +711,15 @@ interface Section {
   label: string | null;
   items: TimelineItem[];
   state: { label: string; tone: BadgeTone };
+  /** What the part was charged, and what its repairs used that was never billed. */
   credits: number;
+  freeCredits: number;
   first: string;
   last: string;
 }
 
 /** Lines of the timeline, gathered by the part of the plan they belong to, in the order the work reached them. */
-function sectionsOf(items: TimelineItem[], plan: DerivedPlan, mode: Mode, tasks: DerivedTask[], status: RunStatus, declined: boolean): Section[] {
+function sectionsOf(items: TimelineItem[], plan: DerivedPlan, mode: Mode, tasks: DerivedTask[], status: RunStatus, declined: boolean, partCredits: Map<string, { charged: number; free: number }>): Section[] {
   const byKey = new Map<string, Section>();
   const order: string[] = [];
   const terminal = isTerminal(status);
@@ -675,12 +729,11 @@ function sectionsOf(items: TimelineItem[], plan: DerivedPlan, mode: Mode, tasks:
     if (!section) {
       const index = plan.items.findIndex((i) => i.id === key);
       const heading = key === PART_START ? "Getting ready" : key === PART_FINISH ? "Review and finish" : `Part ${formatNumber(index + 1)} of ${formatNumber(plan.items.length)}`;
-      section = { key, heading, label: index >= 0 ? (planItemLabel(plan, key, mode) ?? key) : null, items: [], state: { label: "Done", tone: "good" }, credits: 0, first: item.at, last: item.at };
+      section = { key, heading, label: index >= 0 ? (planItemLabel(plan, key, mode) ?? key) : null, items: [], state: { label: "Done", tone: "good" }, credits: partCredits.get(key)?.charged ?? 0, freeCredits: partCredits.get(key)?.free ?? 0, first: item.at, last: item.at };
       byKey.set(key, section);
       order.push(key);
     }
     section.items.push(item);
-    if (item.kind === "group") section.credits += item.credits;
     if (item.at && (!section.last || item.at > section.last)) section.last = item.at;
     if (item.at && (!section.first || item.at < section.first)) section.first = item.at;
   }
@@ -705,7 +758,11 @@ function Trace({ events, mode, derived, stream, status, replaying, declined }: {
   const plan = derived.plan;
   const parts = useMemo(() => (plan ? plan.items.map((i) => ({ id: i.id, text: i.text })) : []), [plan]);
   const timeline = useMemo(() => buildTimeline(events, mode, (id: string) => planItemLabel(plan, id, mode), parts), [events, mode, plan, parts]);
-  const sections = useMemo(() => (plan && parts.length > 0 ? sectionsOf(timeline.items, plan, mode, derived.tasks, status, declined) : null), [plan, parts, timeline, mode, derived.tasks, status, declined]);
+  const sections = useMemo(() => (plan && parts.length > 0 ? sectionsOf(timeline.items, plan, mode, derived.tasks, status, declined, timeline.partCredits) : null), [plan, parts, timeline, mode, derived.tasks, status, declined]);
+  // The parts' figures are each part's own calls as charged; together they are the spent figure, and what repairs used is
+  // said apart, so the page adds up.
+  const charged = sections ? sections.reduce((n, x) => n + x.credits, 0) : 0;
+  const free = sections ? sections.reduce((n, x) => n + x.freeCredits, 0) : 0;
   const terminal = isTerminal(status);
   const count =
     mode === "technical"
@@ -721,6 +778,12 @@ function Trace({ events, mode, derived, stream, status, replaying, declined }: {
           {replaying ? "" : count}
         </span>
       </div>
+      {!replaying && sections && charged + free > 0 && (
+        <p data-testid="parts-add-up" className="text-sm text-ink-muted">
+          {`Each part shows what it was charged; together ${formatCredits(charged)}${terminal ? "" : " so far"}`}
+          {free > 0 ? `, and ${formatNumber(free)} more its repairs used, never billed.` : "."}
+        </p>
+      )}
       {replaying ? (
         <Loading label="Reading what the work did" className="flex flex-col gap-2">
           <Skeleton className="h-14 rounded-sm" />
@@ -768,7 +831,8 @@ function PartSection({ section, last, technical }: { section: Section; last: boo
     return () => el.removeEventListener("endgame:reveal", reveal);
   }, []);
   const lines = section.items.reduce((n, item) => n + (item.kind === "group" ? 1 : (item.repeat ?? 1)), 0);
-  const credits = section.credits > 0 ? formatCredits(section.credits) : null;
+  const credits = section.credits > 0 || section.freeCredits > 0 ? formatCredits(section.credits) : null;
+  const free = section.freeCredits > 0 ? `+${formatNumber(section.freeCredits)} not charged` : null;
   return (
     <li data-part={section.key} data-open={open || undefined} className="border-b last:border-b-0">
       <button type="button" aria-expanded={open} onClick={() => setToggled(!open)} className={cn(ROW, "min-h-touch w-full bg-surface px-4 py-3 text-left hover:bg-ground sm:px-5", open && "border-b")}>
@@ -788,8 +852,9 @@ function PartSection({ section, last, technical }: { section: Section; last: boo
             <Badge tone={section.state.tone}>{section.state.label}</Badge>
             <span>{plural(lines, "line")}</span>
           </span>
+          <MetaLine credits={credits} free={free} at={section.first} until={section.last} />
         </span>
-        <Meta credits={credits} at={section.first} until={section.last} />
+        <Meta credits={credits} free={free} at={section.first} until={section.last} />
       </button>
       <div ref={body} data-fold-body="" hidden={!open}>
         <PartWords.Provider value={section.label}>{(open || !technical) && <Rows items={section.items} label={`Steps: ${section.heading}`} />}</PartWords.Provider>
@@ -798,12 +863,26 @@ function PartSection({ section, last, technical }: { section: Section; last: boo
   );
 }
 
-/** The two right-hand columns: what it cost, and when. */
-function Meta({ credits, at, until }: { credits: string | null; at: string | null; until?: string }) {
+/** On a phone: when, and what it cost, on one line under the words. */
+function MetaLine({ credits, free, at, until }: { credits: string | null; free?: string | null; at: string | null; until?: string }) {
+  const parts = [at ? (until && until !== at && formatTime(until) !== formatTime(at) ? `${formatTime(at)} to ${formatTime(until)}` : formatTime(at)) : null, credits, free ?? null].filter(Boolean);
+  if (parts.length === 0) return null;
   return (
-    <span className="flex flex-col items-end gap-0.5 text-sm tabular-nums text-ink-muted sm:contents">
-      <span className="whitespace-nowrap text-right text-ink-body sm:pt-0.5">{credits}</span>
-      <span className="text-right max-sm:order-first sm:pt-0.5">
+    <span data-meta-line="" className="text-sm tabular-nums text-ink-muted sm:hidden">
+      {parts.join(" · ")}
+    </span>
+  );
+}
+
+/** The two right-hand columns: what it cost, and when. Not drawn on a phone, where `MetaLine` says both under the words. */
+function Meta({ credits, free, at, until }: { credits: string | null; free?: string | null; at: string | null; until?: string }) {
+  return (
+    <span className="text-sm tabular-nums text-ink-muted max-sm:hidden sm:contents">
+      <span className="flex flex-col items-end gap-0.5 pt-0.5 text-right">
+        <span className="whitespace-nowrap text-ink-body">{credits}</span>
+        {free && <span className="whitespace-nowrap text-xs">{free}</span>}
+      </span>
+      <span className="pt-0.5 text-right">
         {at && <time dateTime={at}>{formatTime(at)}</time>}
         {until && until !== at && formatTime(until) !== formatTime(at ?? "") && (
           <>
@@ -878,8 +957,9 @@ function inPart(text: string, label: string | null): string {
 function StepRow({ item }: { item: TimelineStep }) {
   const [whole, setWhole] = useState(false);
   const words = useContext(PartWords);
-  const title = inPart(item.title, words);
-  const detail = item.detail && inPart(item.detail, words);
+  // A step quotes the work's own words; straight quotes are set as typographic ones, as the heading and outcome are.
+  const title = curlyQuotes(inPart(item.title, words));
+  const detail = item.detail && curlyQuotes(inPart(item.detail, words));
   const phone = useContext(OnPhone);
   const long = !!detail && (detail.length > (phone ? LONG_DETAIL / 2 : LONG_DETAIL) || detail.split("\n").length > 3);
   return (
@@ -891,8 +971,8 @@ function StepRow({ item }: { item: TimelineStep }) {
         <span className="flex min-w-0 items-baseline gap-2">
           <span className="min-w-0 break-words font-medium">{title}</span>
           {item.repeat && item.repeat > 1 && (
-            <span className="shrink-0 text-sm tabular-nums text-ink-muted" title={`Said ${item.repeat} times in a row`}>
-              ×{formatNumber(item.repeat)}
+            <span className="shrink-0 whitespace-nowrap text-sm tabular-nums text-ink-muted" title={item.progress ? `The latest of ${item.repeat} updates` : `Said ${item.repeat} times in a row`}>
+              {item.progress ? `latest of ${formatNumber(item.repeat)}` : `×${formatNumber(item.repeat)}`}
             </span>
           )}
         </span>
@@ -907,6 +987,7 @@ function StepRow({ item }: { item: TimelineStep }) {
             <pre className="max-h-96 overflow-auto rounded-xs bg-ground p-3 font-mono text-xs">{item.raw}</pre>
           </Disclosure>
         )}
+        <MetaLine credits={item.credits} at={item.at || null} />
       </div>
       <Meta credits={item.credits} at={item.at || null} />
     </li>
@@ -931,6 +1012,7 @@ const GROUP_STATUS: Record<TimelineGroup["status"], { label: string; tone: Badge
 /** A sub-agent's piece of the work: one line with its outcome, its own steps folded beneath. */
 function GroupRow({ group }: { group: TimelineGroup }) {
   const credits = groupCredits(group);
+  const free = group.freeCredits > 0 ? `${formatNumber(group.freeCredits)} not charged` : null;
   const words = useContext(PartWords);
   // A check that found the part not working did its job, but what it found is a send-back, never a green "Done".
   const status = group.status === "done" && group.outcome && /^Found (it does not work|\d+ problems?)/.test(group.outcome) ? { label: "Sent back", tone: "warn" as BadgeTone } : GROUP_STATUS[group.status];
@@ -952,8 +1034,9 @@ function GroupRow({ group }: { group: TimelineGroup }) {
             {group.searches > 0 && <span className="text-ink-muted">{plural(group.searches, "search", "searches")}</span>}
             <span className="text-primary-link">{open ? "Hide its steps" : `Show its ${plural(group.items.length, "step")}`}</span>
           </span>
+          <MetaLine credits={credits} free={free} at={group.at || null} />
         </span>
-        <Meta credits={credits} at={group.at || null} />
+        <Meta credits={credits} free={free} at={group.at || null} />
       </button>
       {open && group.items.length > 0 && (
         <ol aria-label={`Steps: ${group.title}`} className="ml-8 flex flex-col border-l-2 border-border sm:ml-10">
@@ -970,144 +1053,118 @@ function GroupRow({ group }: { group: TimelineGroup }) {
 // Beside the page: the tasks, and where the credits go
 // ---------------------------------------------------------------------------------------------
 
-function RunAside({ runId }: { runId: string }) {
-  const log = useAppSelector((s) => s.runs[runId]);
-  const run = useGetRunQuery(runId).data;
-  const events = log?.events;
-  const derived = useMemo(() => deriveRun(events ?? []), [events]);
-  return (
-    <>
-      {run && hasTasks(run, derived) && <TasksCard derived={derived} runStatus={run.status} />}
-      <CreditsNote />
-    </>
-  );
-}
 
-/** Research and a conversation are never broken into tasks: their page has no empty "Tasks" card. */
-function hasTasks(run: Run, derived: DerivedRun): boolean {
-  return derived.tasks.length > 0 || (run.kind !== "research" && run.kind !== "conversation");
-}
-
+/** Where the credits go, said once under the figures: one line and the way to the credits page, never a card of its own. */
 function CreditsNote() {
   const active = useActiveOrganisation();
   return (
-    <SideCard title="Where the credits go">
-      <p className="text-ink-body">Credits are held before each step and settled from what it really cost. Repairing a mistake of its own is never billed.</p>
+    <p data-testid="credits-note" className="max-w-prose text-sm text-ink-muted">
+      Held before each call, settled at its real cost; repairs of its own mistakes are never billed.
       {active.organisation && (
-        <Link href={paths.credits()} className={cn(buttonVariants({ variant: "secondary" }), "self-start")}>
-          See credits
-        </Link>
+        <>
+          {" "}
+          <Link href={paths.credits()} className={LINK}>
+            See credits
+          </Link>
+        </>
       )}
-    </SideCard>
+    </p>
   );
 }
 
-const TASK_STATUS: Record<DerivedTask["status"], { label: string; tone: BadgeTone }> = {
-  open: { label: "To do", tone: "neutral" },
-  working: { label: "In progress", tone: "info" },
-  done: { label: "Done", tone: "good" },
-  failed: { label: "Did not succeed", tone: "bad" },
-};
-
-interface TaskGroup {
-  key: string;
-  /** The part of the plan the tasks are for, or null for tasks that are not one part's. */
-  label: string | null;
-  tasks: { task: DerivedTask; role: string }[];
-}
 
 /**
- * The tasks gathered under the part of the plan each is for: a part's tasks are its build and its checks, so each line
- * says which ("Build", "Check", "Check after repair 2") rather than repeating the part's words.
+ * A part's tasks under it in the plan, on one line ("Build: done by Rosa · Check: done · Check 2: in progress, Kasper"), and
+ * what each came to on request — so the plan is the one place a part's progress is read, never repeated in a side card.
  */
-function taskGroups(tasks: DerivedTask[], plan: DerivedPlan | null): TaskGroup[] {
-  const groups = new Map<string, TaskGroup>();
-  const loose: TaskGroup = { key: "", label: null, tasks: [] };
-  for (const task of tasks) {
-    const check = task.summary.startsWith("Check: ");
-    const words = check ? task.summary.slice("Check: ".length) : task.summary;
-    const item = plan?.items.find((i) => i.text === words);
-    if (!item || !plan) {
-      loose.tasks.push({ task, role: task.summary });
-      continue;
-    }
-    const index = plan.items.indexOf(item);
-    let group = groups.get(item.id);
-    if (!group) {
-      group = { key: item.id, label: `${formatNumber(index + 1)}. ${planItemLabel(plan, item.id, "normal") ?? item.id}`, tasks: [] };
-      groups.set(item.id, group);
-    }
-    const checks = group.tasks.filter((t) => t.role.startsWith("Check")).length;
-    group.tasks.push({ task, role: check ? (checks === 0 ? "Check" : `Check ${formatNumber(checks + 1)}`) : item.id === "keep" ? "Check again" : "Build" });
-  }
-  const ordered = plan ? plan.items.map((i) => groups.get(i.id)).filter((g): g is TaskGroup => !!g) : [];
-  return loose.tasks.length > 0 ? [...ordered, loose] : ordered;
+function PartTasks({ tasks }: { tasks: { task: DerivedTask; role: string }[] }) {
+  const [open, setOpen] = useState(false);
+  if (tasks.length === 0) return null;
+  const notes = tasks.filter((t) => t.task.note);
+  return (
+    <div data-testid="part-tasks" className="col-start-2 flex min-w-0 flex-col gap-1.5">
+      <p className="text-sm text-ink-muted">
+        {taskPhrases(tasks).map((t, i) => (
+          <span key={t.key} className={cn(t.failed && "text-attention-text")}>
+            {i > 0 && <span aria-hidden> · </span>}
+            {t.text}
+          </span>
+        ))}
+        {notes.length > 0 && (
+          <>
+            {" "}
+            <button type="button" aria-expanded={open} onClick={() => setOpen((x) => !x)} className="rounded-xs font-semibold text-primary-link hover:text-primary-hover touch:min-h-touch">
+              {open ? "Hide what they found" : notes.length === 1 ? "What it found" : `What each found (${formatNumber(notes.length)})`}
+            </button>
+          </>
+        )}
+      </p>
+      {open && (
+        <ul aria-label="What each task found" className="flex flex-col gap-1.5 border-l-2 border-border pl-3">
+          {notes.map(({ task, role }) => (
+            <li key={task.id} className="max-w-prose break-words text-sm text-ink-body">
+              <span className="font-medium text-ink">{role}.</span> {task.note}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
-function TasksCard({ derived, runStatus }: { derived: DerivedRun; runStatus: RunStatus | undefined }) {
-  const done = derived.tasks.filter((t) => t.status === "done").length;
-  const groups = useMemo(() => taskGroups(derived.tasks, derived.plan), [derived.tasks, derived.plan]);
-  // A long plan shows its first parts and "Show all": the card never outgrows the page beside it.
-  const shown = useShowAll(groups, 4, "parts");
+/** The tasks the plan does not show: a review, or the tasks of work with no plan yet. One compact line each. */
+function TasksCard({ derived }: { derived: DerivedRun }) {
+  const loose = useMemo(() => derived.tasks.filter((t) => !partOfTask(t, derived.plan)), [derived.tasks, derived.plan]);
+  const done = loose.filter((t) => t.status === "done").length;
+  // A long list shows its first few and "Show all": the card never outgrows the page beside it.
+  const shown = useShowAll(loose, 6, "tasks");
   return (
-    <Fold title="Tasks" summary={derived.tasks.length === 0 ? "None yet" : `${formatNumber(done)} of ${plural(derived.tasks.length, "task")} done`}>
+    <Fold title="Tasks" summary={`${formatNumber(done)} of ${plural(loose.length, "task")} done`}>
       <SideCard>
         <div className="flex items-baseline justify-between gap-3">
           <h2 id="tasks-title" className="text-base font-semibold">
             Tasks
           </h2>
-          {derived.tasks.length > 0 && <span className="text-sm text-ink-muted">{`${formatNumber(done)} of ${formatNumber(derived.tasks.length)} done`}</span>}
+          <span className="text-sm text-ink-muted">{`${formatNumber(done)} of ${formatNumber(loose.length)} done`}</span>
         </div>
-        {derived.tasks.length === 0 ? (
-          <p data-state="empty" className="text-ink-muted">
-            {isTerminal(derived.status ?? runStatus) ? "This work was not broken into tasks." : "No tasks yet. They appear here as the work is broken down."}
-          </p>
-        ) : (
-          <ul aria-label="Tasks" className="flex flex-col gap-3">
-            {shown.shown.map((g) => (
-              <li key={g.key} className="flex min-w-0 flex-col gap-1">
-                {g.label && (
-                  <span title={g.label} className="truncate text-sm font-medium text-ink">
-                    {g.label}
-                  </span>
-                )}
-                <ul aria-label={g.label ?? "Other tasks"} className="flex flex-col">
-                  {g.tasks.map(({ task, role }) => (
-                    <TaskRow key={task.id} task={task} role={role} />
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul aria-label="Tasks" className="flex flex-col">
+          {shown.shown.map((task) => (
+            <TaskRow key={task.id} task={task} />
+          ))}
+        </ul>
         {shown.control}
       </SideCard>
     </Fold>
   );
 }
 
-/** One task, one line: its state in a fixed column, what it is, who has it; what it came to on request. */
-function TaskRow({ task, role }: { task: DerivedTask; role: string }) {
+/**
+ * One task: what it is, with its state at the right edge, and who has it under it; what it came to on request. The state never
+ * takes the words' room: they wrap to two lines rather than being cut.
+ */
+function TaskRow({ task }: { task: DerivedTask }) {
   const s = TASK_STATUS[task.status];
   const [open, setOpen] = useState(false);
   const more = !!task.note;
   const line = (
     <>
-      <span className="flex min-w-0">
-        <Badge tone={s.tone}>{s.label}</Badge>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="line-clamp-2 break-words text-sm text-ink" title={task.summary}>
+          {task.summary}
+        </span>
+        {(task.holder || more) && (
+          <span className="flex items-center gap-1 text-xs text-ink-muted">
+            {task.holder}
+            {more && <ChevronDown aria-hidden className={cn("size-3.5 transition-transform motion-reduce:transition-none", open && "rotate-180")} />}
+          </span>
+        )}
       </span>
-      <span title={role} className="min-w-0 truncate text-sm text-ink">
-        {role}
-      </span>
-      <span title={task.holder ?? undefined} className="max-w-24 truncate text-right text-sm text-ink-muted">
-        {task.holder}
-      </span>
-      <span aria-hidden className="flex justify-end">
-        {more && <ChevronDown className={cn("size-4 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />}
-      </span>
+      <Badge tone={s.tone} className="shrink-0">
+        {s.label}
+      </Badge>
     </>
   );
-  const ROWCLASS = "grid min-h-10 w-full grid-cols-task items-center gap-x-2 py-1.5 text-left touch:min-h-touch";
+  const ROWCLASS = "flex w-full items-start gap-3 py-2 text-left touch:min-h-touch";
   return (
     <li data-task={task.id} data-status={task.status} className="flex flex-col border-t first:border-t-0">
       {more ? (
@@ -1117,7 +1174,7 @@ function TaskRow({ task, role }: { task: DerivedTask; role: string }) {
       ) : (
         <span className={ROWCLASS}>{line}</span>
       )}
-      {open && task.note && <p className="grid grid-cols-task gap-x-2 pb-2 text-sm text-ink-body"><span aria-hidden /><span className="col-span-3">{task.note}</span></p>}
+      {open && task.note && <p className="pb-2 text-sm text-ink-body">{task.note}</p>}
     </li>
   );
 }

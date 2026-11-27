@@ -76,7 +76,7 @@ describe("RunView after the real-stack walk", () => {
       ["estimate.made", { credits: 12.3 }],
       ["model.replied", { settledCredits: 16 }],
     ]);
-    expect(stat("Spent so far").textContent).toContain("130% of the estimate");
+    expect(stat("Spent so far").textContent).toContain("130% of 12");
     expect(within(stat("Spent so far")).getByRole("img").getAttribute("aria-label")).toBe("130% of the 12 estimated");
   });
 
@@ -91,9 +91,9 @@ describe("RunView after the real-stack walk", () => {
     await waitFor(() => expect(screen.queryByText("Spent so far")).toBeNull());
     expect(stat("Spent").textContent).toContain("0.11 credits");
     expect(within(stat("Spent")).queryByRole("img")).toBeNull();
-    const scored = stat("Estimate against actual");
+    const scored = stat("Against estimate");
     expect(scored.textContent).not.toContain("%");
-    expect(scored.textContent).toContain("Under 1 credit, as estimated: cost 0.11");
+    expect(scored.textContent).toContain("Under 1 credit, as estimated");
   });
 
   it("R2-8: the estimate shown before the work began stands, with the plan's re-estimate beside it, and each share names its figure", async () => {
@@ -105,9 +105,8 @@ describe("RunView after the real-stack walk", () => {
     ]);
     const tile = stat("Estimate");
     expect(tile.textContent).toContain("10 credits");
-    expect(tile.textContent).toContain("Shown before the work began");
     expect(tile.textContent).toContain("4.8 once planned");
-    expect(stat("Spent so far").textContent).toContain("50% of the 4.8 estimated once planned");
+    expect(stat("Spent so far").textContent).toContain("50% of 4.8 planned");
     cleanup();
     FakeEventSource.instances = [];
     await open({ ...RUN, kind: "build", estimateCredits: 4.8 });
@@ -117,7 +116,7 @@ describe("RunView after the real-stack walk", () => {
       ["model.replied", { settledCredits: 5.4 }],
       ["estimate.scored", { expectedCredits: 4.8, actualCredits: 5.4 }],
     ]);
-    expect(stat("Estimate against actual").textContent).toContain("Against the 4.8 estimated once planned: cost 5.4");
+    expect(stat("Against estimate").textContent).toContain("Cost 5.4 against 4.8");
   });
 
   it("R2-8: the server's two figures stand over the log", async () => {
@@ -125,7 +124,7 @@ describe("RunView after the real-stack walk", () => {
     feed([["model.replied", { settledCredits: 2.4 }]]);
     expect(stat("Estimate").textContent).toContain("10 credits");
     expect(stat("Estimate").textContent).toContain("4.8 once planned");
-    expect(stat("Spent so far").textContent).toContain("50% of the 4.8 estimated once planned");
+    expect(stat("Spent so far").textContent).toContain("50% of 4.8 planned");
   });
 
   it("R2-8: a run with one estimate (or the old single field) reads as before", async () => {
@@ -133,7 +132,8 @@ describe("RunView after the real-stack walk", () => {
     feed([["model.replied", { settledCredits: 6 }]]);
     expect(stat("Estimate").textContent).toContain("12 credits");
     expect(stat("Estimate").textContent).not.toContain("once planned");
-    expect(stat("Spent so far").textContent).toContain("50% of the estimate shown before the work began");
+    expect(stat("Spent so far").textContent).toContain("50% of 12");
+    expect(stat("Estimate").textContent).toContain("Before it began");
   });
 
   it("R2-6: a run stopped because an answer was too long to finish says so, and offers Try again", async () => {
@@ -208,7 +208,7 @@ describe("RunView after the real-stack walk", () => {
     ]);
     expect(screen.getByText("You declined to start this")).toBeTruthy();
     expect(screen.queryByText("Did not succeed")).toBeNull();
-    expect(screen.queryByText("Estimate against actual")).toBeNull();
+    expect(screen.queryByText("Against estimate")).toBeNull();
     expect(screen.getByText("You answered: declined")).toBeTruthy();
     expect(screen.getByText("Not this month")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("try-again").textContent).toContain("You declined to start this at its estimate"));
@@ -232,7 +232,7 @@ describe("RunView after the real-stack walk", () => {
     expect(screen.getByText("You declined to start this")).toBeTruthy();
     expect(screen.queryByText("Cancelled")).toBeNull();
     expect(screen.queryByText("Did not succeed")).toBeNull();
-    expect(screen.queryByText("Estimate against actual")).toBeNull();
+    expect(screen.queryByText("Against estimate")).toBeNull();
     expect(screen.getByText("You answered: declined")).toBeTruthy();
     expect(screen.getByText("Not this month")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("try-again").textContent).toContain("You declined to start this at its estimate"));

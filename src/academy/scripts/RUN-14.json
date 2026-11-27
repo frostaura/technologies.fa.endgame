@@ -9,8 +9,8 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "text": "Tasks",
-        "note": "Each part of the plan is a task, claimed by a named employee."
+        "testId": "part-tasks",
+        "note": "Each part of the plan lists its tasks — its build and its checks — and who took each on."
       }
     },
     {
@@ -27,8 +27,8 @@
         }
       ],
       "highlight": {
-        "text": "Done",
-        "note": "Tasks move to “Done” with their summaries as the build goes on."
+        "text": "What each found",
+        "note": "Tasks move to “done” as the build goes on; what each found opens under the part."
       }
     }
   ]
