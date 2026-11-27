@@ -36,5 +36,7 @@ factory checks each exists in `web/src` as `data-testid="…"`.
 
 `make lint` and `make test` must pass with zero warnings. A change is done when there is a test for the
 behaviour on each side it touches, a navigation test (`renderApp(<App />, { at: "/" })`, then click) for each link
-or button that moves between pages, and `docs/` says what changed. Commit each finished feature on its
+or button that moves between pages, and `docs/` says what changed: `docs/app.md`'s table names every endpoint with
+"Signed in?" Yes or No as the code has it, and the template's `AppRulesTests` checks that and that every endpoint taking
+the signed-in person requires sign-in. Commit each finished feature on its
 own with `commit`, then update `PROGRESS.md`.

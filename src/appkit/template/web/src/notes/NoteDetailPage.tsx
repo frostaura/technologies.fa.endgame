@@ -33,7 +33,7 @@ export default function NoteDetailPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {note.data.body ? <p className="whitespace-pre-wrap">{note.data.body}</p> : <p className="text-ink-muted">No body.</p>}
-            <FollowNote noteId={note.data.id} />
+            <FollowNote noteId={note.data.id} followers={note.data.followers} />
           </CardContent>
         </Card>
       )}

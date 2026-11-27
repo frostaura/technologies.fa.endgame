@@ -19,21 +19,29 @@
 9. After a successful write through `api()`, every mounted read re-reads without flashing to loading; a failed re-read shows as failed; a read or a failed write re-reads nothing.
 10. Reading the address from `window.location` fails lint (navigations away stay allowed); a click on a link between pages shows the page it routes to, under a path prefix too.
 11. The template carries the test-id convention in `template/AGENTS.md`, and its tests select by those ids.
+12. An app's own tests hold it to the security review's checklist and to its own document (`AppChecks`, run by the
+    template's `AppRulesTests`): every endpoint that takes the signed-in person requires sign-in (only the kit's
+    `getCurrentUser` takes an optional user), and `docs/app.md`'s table names every endpoint with "Signed in?" Yes or No
+    exactly as the code has it. The template's own example — reading whether you follow a note — requires sign-in, and
+    how many follow is on the note (R6-5, R6-6).
 
 ## Tests
 
 | Level | Where | What it proves |
 | --- | --- | --- |
-| Unit + integration (.NET, 48) | `src/appkit/sdk-dotnet/Endgame.AppKit.Tests` | 2–7, against a real PostgreSQL and the in-memory dev platform |
+| Unit + integration (.NET, 56) | `src/appkit/sdk-dotnet/Endgame.AppKit.Tests` | 2–7 and 12 (`AppChecksTests`), against a real PostgreSQL and the in-memory dev platform |
 | Unit (web SDK, 83) | `src/appkit/sdk-web/src/**/*.test.ts(x)` | `api()`/errors, router base, sign-in URLs, hooks' three states, 9 (two reads re-read after one write), the ESLint rules (RuleTester), `renderApp` (10), token layer |
-| Template (.NET, 10) | `src/appkit/template/api.tests` | Notes API end to end; pages under a prefix; health; OpenAPI ids |
-| Template (web, 21) | `src/appkit/template/web/src/**/*.test.ts(x)` | 8, 10, 11 — each page's states by test id; navigation by clicking through the real app (`App.test.tsx`); both lint rules are wired into the app's config |
+| Template (.NET, 17) | `src/appkit/template/api.tests` | Notes API end to end; a person's own record (`NoteFollowTests`); 12 (`AppRulesTests`); pages under a prefix; health; OpenAPI ids |
+| Template (web, 25) | `src/appkit/template/web/src/**/*.test.ts(x)` | 8, 10, 11 — each page's states by test id; navigation by clicking through the real app (`App.test.tsx`); both lint rules are wired into the app's config |
 | Browser proof (10) | `src/appkit/proof` (`make -C src/appkit proof`) | 1 and 7 on the real image, desktop and phone, through the dev edge, at four-segment addresses (`/acme/labs/demo/notes/`, `acme.localhost/labs/demo/notes/`) |
 | Browser proof, real Edge (8 + 1 skipped) | `src/appkit/proof/edge.sh` (run by `make e2e-stack`) | 1 on an app Dock built from the untouched template, through the real stack's Edge: the edge's own sign-in page with the development sign-in, and on the subdomain the hand-off. 7 is the dev platform's state view, so it is skipped there; `TEST-090` checks telemetry in the real control plane. |
 
 ## Fixture variation
 
 - Contract checks: the same app with `.WithName` or `.WithDescription` removed fails start-up (ApiContractTests); with them it starts.
+- App checks: the template's `AppRulesTests` failed on the template before R6-5 (its follow read took `EndgameUser?`, and
+  its document said "To follow"); one endpoint changed from `EndgameUser` to `EndgameUser?`, or one "Yes" turned to "No"
+  in `docs/app.md`, fails it again (AppChecksTests).
 - Base rewrite: the same index served with prefix `null`, `/acme/labs/demo` and `/acme/labs/demo/` yields `/`, `/acme/labs/demo/`, `/acme/labs/demo/` (HostingTests).
 - Signature: changing the key, the body or the clock by 6 minutes each fails verification.
 - Reads after a write: the test that two mounted reads both re-read after one `PATCH` failed on the kit before the change (each read only once per mount); the same write answered `400` re-reads nothing.

@@ -8,15 +8,18 @@ export interface NoteSummary {
 
 export interface NoteDetail extends NoteSummary {
   body: string;
+  /** How many people follow it: what anyone may see is on the note itself. */
+  followers: number;
 }
 
-/** Whether the signed-in person follows a note: their own record, read on every visit (AGENTS.md, "A person's own record"). */
+/**
+ * Whether the signed-in person follows a note: their own record, read on every visit (AGENTS.md, "A person's own record").
+ * Reading it requires sign-in, so the page asks only once it knows someone is signed in.
+ */
 export interface NoteFollow {
   id: string | null;
-  signedIn: boolean;
   following: boolean;
   since: string | null;
-  followers: number;
 }
 
 export const formatWhen = (iso: string) =>

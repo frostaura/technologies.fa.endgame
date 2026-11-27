@@ -64,6 +64,7 @@ public static partial class EvaluationGate
         }
 
         var requirements = plan.RequirementsOf(item);
+        gated["overruled"] = new JsonArray();
         if (requirements.Count == 0)
         {
             Finish(gated, answer, failing, evaluatorFaults, notChecked, onlyShowing: notChecked);
@@ -73,6 +74,8 @@ public static partial class EvaluationGate
         var faults = Json.Strings(gated, "faults").ToList();
         var marks = (gated["requirements"] as JsonArray ?? []).OfType<JsonObject>().ToList();
         var checkedOut = new JsonArray();
+        // Requirements the evaluator marked met that code's own check decided were not: the escalation guard's evidence (R7-4).
+        var overruled = new JsonArray();
         var allMet = true;
         var onlyShowing = true;
         // A part for people who do not sign in may be shown with signed-out calls throughout; any other, signed in only.
@@ -115,6 +118,10 @@ public static partial class EvaluationGate
                 var kind = back is not null ? back.Value.Kind : mark is null ? Unchecked : marked ? Unshown : NotMet;
                 onlyShowing &= kind != NotMet;
                 failing.Add($"{requirement.Id}:{kind}");
+                if (marked && kind == NotMet && back is { } decided)
+                {
+                    overruled.Add(new JsonObject { ["id"] = requirement.Id, ["kind"] = kind, ["calls"] = new JsonArray(decided.Calls.Select(c => (JsonNode)c).ToArray()) });
+                }
                 faults.Add(back is not null ? back.Value.Fault : mark is null
                     ? $"Requirement {requirement.Id} (\"{requirement.Text}\") was not checked in the running app."
                     : !marked
@@ -136,6 +143,7 @@ public static partial class EvaluationGate
         }
 
         gated["requirements"] = checkedOut;
+        gated["overruled"] = overruled;
         gated["faults"] = new JsonArray(faults.Distinct(StringComparer.Ordinal).Select(f => (JsonNode)f).ToArray());
         gated["passed"] = Json.Bool(answer, "passed") == true && allMet && counted.Count > 0 && missingTestIds is not { Count: > 0 };
         Finish(gated, answer, failing, evaluatorFaults, notChecked, onlyShowing);
@@ -150,10 +158,11 @@ public static partial class EvaluationGate
     /// calls themselves, in the order made, never from the evidence's words (R6: run 67018a21 failed a correct app on a read
     /// that was in the log but not in the prose). A repeat counts only within one <see cref="Episode"/>: giving the record up
     /// ends it, and a join after that is a fresh one, rightly a new record. Null when it was shown; otherwise how it failed
-    /// (<see cref="NotMet"/> for a second record, which the builder must fix; <see cref="Unshown"/> when it was never shown)
-    /// and the fault, in words.
+    /// (<see cref="NotMet"/> for a second record, which the builder must fix; <see cref="Unshown"/> when it was never shown),
+    /// the fault, in words, and the calls that decided it, in order (<c>member-a PUT api/… → 201 (id s2)</c>) — the call sequence
+    /// a "check needs a look" judgement carries (<c>BuildWorkflow.NeedsLook</c>).
     /// </summary>
-    public static (string Kind, string Fault)? ComingBack(PlanRequirement requirement, string evidence, IReadOnlyList<AppAttempt> attempts)
+    public static (string Kind, string Fault, IReadOnlyList<string> Calls)? ComingBack(PlanRequirement requirement, string evidence, IReadOnlyList<AppAttempt> attempts)
     {
         ArgumentNullException.ThrowIfNull(requirement);
         ArgumentNullException.ThrowIfNull(evidence);
@@ -166,42 +175,57 @@ public static partial class EvaluationGate
             .ToList();
         if (episodes.Count == 0)
         {
-            return (Unshown, $"{head}: make the call as one member, then make the same call again as that same member while it is still theirs (every call_app signs them in afresh, as coming back does), and read it back. Code found no write its evidence names made twice by the same member with the same body, with nothing given up between (writes cited: {CallList(writes.Select(w => w.Call).Distinct(StringComparer.Ordinal).ToList())}).");
+            return (Unshown, $"{head}: make the call as one member, then make the same call again as that same member while it is still theirs (every call_app signs them in afresh, as coming back does), and read it back. Code found no write its evidence names made twice by the same member with the same body, with nothing given up between (writes cited: {CallList(writes.Select(w => w.Call).Distinct(StringComparer.Ordinal).ToList())}).", []);
         }
 
         foreach (var episode in episodes)
         {
             var first = attempts[episode.Writes[0]];
             var firstId = IdOf(first.Body);
-            foreach (var again in episode.Writes.Skip(1).Select(i => attempts[i]))
+            foreach (var at in episode.Writes.Skip(1))
             {
+                var again = attempts[at];
                 var againId = IdOf(again.Body);
                 var duplicate = again.Status == 201 || (Ok(again.Status) && firstId is not null && againId is not null && firstId != againId);
                 if (duplicate)
                 {
-                    return (NotMet, SecondRecord(head, first, firstId is not null && againId is not null ? $"id {firstId}, then id {againId}" : $"HTTP {first.Status}, then HTTP {again.Status}"));
+                    return (NotMet, SecondRecord(head, first, firstId is not null && againId is not null ? $"id {firstId}, then id {againId}" : $"HTTP {first.Status}, then HTTP {again.Status}"), Sequence(episode, attempts, at));
                 }
 
                 if (!Ok(again.Status) && again.Status != 409)
                 {
-                    return (NotMet, $"{head}, and it failed: {first.Persona} made {first.Call}, then, signed in again, made it again and the app answered HTTP {again.Status}. Coming back must find the record they already have (the same record, or 409), never fail.");
+                    return (NotMet, $"{head}, and it failed: {first.Persona} made {first.Call}, then, signed in again, made it again and the app answered HTTP {again.Status}. Coming back must find the record they already have (the same record, or 409), never fail.", Sequence(episode, attempts, at));
                 }
             }
 
             // A repeat answered with no record of its own (204, an empty 200) is held to what the person's reads show next.
             if (firstId is not null && episode.Writes.Skip(1).Any(i => IdOf(attempts[i].Body) is null && Ok(attempts[i].Status)))
             {
-                var other = episode.Reads(attempts).Select(i => IdOf(attempts[i].Body)).FirstOrDefault(id => id is not null && id != firstId);
-                if (other is not null)
+                var read = episode.Reads(attempts).Select(i => (At: i, Id: IdOf(attempts[i].Body))).FirstOrDefault(r => r.Id is not null && r.Id != firstId);
+                if (read.Id is not null)
                 {
-                    return (NotMet, SecondRecord(head, first, $"id {firstId}, then, read back after the repeat, id {other}"));
+                    return (NotMet, SecondRecord(head, first, $"id {firstId}, then, read back after the repeat, id {read.Id}"), Sequence(episode, attempts, read.At));
                 }
             }
         }
 
         return episodes.Any(e => e.Reads(attempts).Any(i => i > e.Writes[^1]))
             ? null
-            : (Unshown, $"{head}: after making the same call again, read what the person has, as that member, while it is still theirs (before giving it up), so one record and no duplicate is seen. Code found no read of it by that member after the repeat (it reads the calls that were made, in order).");
+            : (Unshown, $"{head}: after making the same call again, read what the person has, as that member, while it is still theirs (before giving it up), so one record and no duplicate is seen. Code found no read of it by that member after the repeat (it reads the calls that were made, in order).", []);
+    }
+
+    /// <summary>
+    /// The calls that decided a fault of coming back: that member's calls of the record, from the first write through the one
+    /// that failed it, in order — what someone looking at the check reads to see whether code read them right.
+    /// </summary>
+    private static List<string> Sequence(Episode episode, IReadOnlyList<AppAttempt> attempts, int through)
+    {
+        var ids = episode.Ids(attempts);
+        return Enumerable.Range(episode.Writes[0], through - episode.Writes[0] + 1)
+            .Select(i => attempts[i])
+            .Where(a => a.Persona == episode.Persona && (OfRecord(a.Path, episode.Path, ids) || a.Path.StartsWith(episode.Path, StringComparison.Ordinal)))
+            .Select(a => $"{a.Persona} {a.Call} → {a.Status}{(IdOf(a.Body) is { } id ? $" (id {id})" : "")}")
+            .ToList();
     }
 
     private static string SecondRecord(string head, AppAttempt first, string ids) =>

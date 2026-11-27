@@ -41,7 +41,7 @@ public sealed partial class WorkflowTests
         Assert.All(StrandCalls(model), c => Assert.Equal(0, c.MaxSearches));
         Assert.Empty(cp.Approvals);
         // Each refusal is an event the run page shows ("refused by your rules"), and the model is told it may not search.
-        Assert.Equal(3, cp.Events.Count(e => e.Type == "tool.denied" && e.Payload["name"]?.GetValue<string>() == "web_search"));
+        Assert.Equal(3, cp.Events.Count(e => e.Type == "tool.denied" && e.Payload["name"]?.GetValue<string>() == "web_search" && e.Payload["by"]?.GetValue<string>() == "rule"));
         Assert.All(StrandCalls(model), c => Assert.Contains(c.Messages.OfType<JsonObject>(), m => m["content"]?.ToString().StartsWith("Web search is not available for this step", StringComparison.Ordinal) == true));
     }
 
@@ -66,6 +66,14 @@ public sealed partial class WorkflowTests
         });
         Assert.All(StrandCalls(model), c => Assert.Equal(approve ? 7 : 0, c.MaxSearches));
         Assert.Equal(3, cp.Events.Count(e => e.Type == (approve ? "tool.permitted" : "tool.denied") && e.Payload["name"]?.GetValue<string>() == "web_search"));
+        if (!approve)
+        {
+            // R6-1: a search the owner declined by hand is said as theirs ("You declined: search the web for …").
+            Assert.Equal(
+                ["search the web for evidence people will pay", "search the web for existing products", "search the web for what they leave undone"],
+                cp.Events.Where(e => e.Type == "tool.denied").Select(e => e.Payload["declined"]!.GetValue<string>()).Order(StringComparer.Ordinal));
+            Assert.All(cp.Events.Where(e => e.Type == "tool.denied"), e => Assert.Equal("owner", e.Payload["by"]!.GetValue<string>()));
+        }
     }
 
     [Fact]

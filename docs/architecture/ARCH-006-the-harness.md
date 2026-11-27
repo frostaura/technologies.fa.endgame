@@ -93,9 +93,12 @@ routes by task type itself (`ARCH-003`).
   workflow gives it a budget.
 - **Web search is permission-checked like a tool.** It is the route's own capability, not a tool call, so before a session's
   first model call the loop asks the policy about `web_search` (read-only, the agent's stage). Allowed: nothing is logged.
-  "May not": `tool.denied` (call id `capability:web_search`), the session's calls carry `maxSearches: 0`, and a nudge tells
-  the model it may not search. "Asks you first": one approval for the step ("Let this step search the web: {title}?",
-  `continues`); declined, the same as "may not". The decision is replayed from its event, so a resumed session never asks
+  "May not": `tool.denied` (call id `capability:web_search`, `by: "rule"`), the session's calls carry `maxSearches: 0`, and a
+  nudge tells the model it may not search. "Asks you first": one approval for the step ("Let this step search the web:
+  {title}?", `continues`); declined, the same as "may not", but `by: "owner"` with `declined` ("search the web for what
+  they leave undone", `WebSearch.Declined`), so the run page says "You declined: …" and keeps "refused by your rules" for a
+  rule that never asked (R6-1). A tool call declined at its approval carries the same two fields
+  (`ApprovalDetail.Declined`: "change part of the app"). The decision is replayed from its event, so a resumed session never asks
   again.
 - **Bookkeeping is not for people.** The loop's own `message` events carry a `kind` and no `text` (`reply`, `detail`,
   `nudge`, `note` instead); sub-agent events carry a `title`, a plain `brief` and a one-sentence `summary`, the raw report in
@@ -201,7 +204,12 @@ given up. The first live build after this check — "Dive Seat Sheet", run `6701
 repair rounds on both counts: it compared a first join with a join made after the seat was given up (201 X, 200 X,
 DELETE, 201 Y), and it asked for the read in the prose although it was in the call log. Its four failed evaluations are
 replayed from the run's own log in `ComingBackRealRunTests` and all pass. The app kit's convention it holds apps to is in
-the template's `AGENTS.md` ("A person's own record").
+the template's `AGENTS.md` ("A person's own record"). Reading that record requires sign-in like the writes, and what anyone
+may see — how many joined — is a field of the public resource: the security review's checklist says so, and the kit's own
+example once did not (R6-5: a build copied its `EndgameUser?` read for "GET dives/{id}/signup", and the review blocked
+publishing on it). The template's `AppRulesTests` (`AppChecks`) now fails any app, the template included, whose endpoint
+takes the person without `.RequireUser()`, and `KitConventionTests` fails the platform if the kit, the checklist and the
+planner's and builder's guidance stop saying the same.
 
 **A refusal of how the work was shown is checked again, not sent to the builder.** When the evaluator said the item
 works (no faults of its own) or gave no verdict at all, and the only reason it failed is that code could not verify how a
@@ -226,6 +234,37 @@ next repair is told plainly to change its approach; when three do, the part stop
 judgement) with a plain outcome — "failed its check three times in a row for the same reason — “…” could not be shown
 working" — instead of a fourth round on a stronger model. Failures of the evaluator's own free-form faults are never
 counted as "the same". The fault that lists the calls made says each shape once, ids folded to `{id}`.
+
+**The check needs a look — the escalation guard.** A fault the gate's code decides over an evaluator that marked the
+requirement met (`overruled` on the gated answer: today the check of coming back later, `not-met`, with the call sequence
+that decided it — `member-a PUT api/dives/{id}/signup → 201 (id …)`) goes to repair like any other. But when the repair
+that follows changed no application code (only tests, documents or nothing, read from its own `edit_file`/`write_file`
+calls in the log; `BuildWorkflow.IsApplicationCode`) or its builder's reply disputes the fault ("I couldn't find a fault in
+the code, so I made no changes"; `DisputesTheFault`), and the same code-decided fault then repeats with nothing else
+failing, the part stops (`BuildWorkflow.NeedsLook`): the judgement is `final`, `needsLook`, with `trigger` — each overruled
+requirement and the calls code read — and the owner is told the check needs a look and that nothing in it was shown not to
+work. It is never repaired again nor escalated: a stronger model cannot fix the factory's own check. It takes precedence over
+the three-in-a-row stop. Run `67018a21` spent three repair rounds on ever stronger models and about 44 unbilled credits on a
+correct app whose gate was wrong (seq 1287 and 1749 decided "a second record"; the repair between changed only tests);
+replayed from its log (`CheckNeedsLookTests`, the fixture now holding each round's failing kinds and each repair's files and
+reply), it stops before round 3.
+
+## The security review
+
+After every part has passed, the organisation's standing security reviewer checks the app against its checklist
+(`security-review-checklist`); a finding blocks publishing (`BuildWorkflow.ReviewAsync`, `SecurityFindings`), with two
+rules learned from the live "Dive Seat Sheet" retry (run `d09672a3`), whose parts all passed first time and which was not
+published: its first review found a real fault (a read of the person's own record without sign-in), the one repair fixed
+the code and left `docs/app.md` saying "Signed in? No" for that endpoint, and the second review failed on that line alone.
+
+| Rule | Enforced by |
+| --- | --- |
+| The repair's brief (`Prompts/security-repair.md`) tells the builder to bring the app's documents in line with every endpoint it changes — its `docs/app.md` row ("Signed in?"), `docs/data.md`, the endpoint's `WithDescription`. An app on the current kit cannot drift at all: its `AppRulesTests` fails `make test` when `docs/app.md`'s table and the code disagree (`AppChecks`). | `SecurityRepairBrief` |
+| A finding only about documentation — in a document (`docs/…`, a `.md` file), not called `code` by the reviewer, not about a secret — is not a blocker: the documents are corrected once, unbilled (`builder-security-docs`, `Prompts/security-docs.md`), and the app is published without another review when the correction changed documents only (read from its own edits in the log). A correction that changed more is reviewed like any change. A key in a document still blocks. | `SecurityFindings.IsDocumentation`, `FixDocumentsAsync` |
+| A blocking finding is repaired, unbilled. A second repair (`SecurityRepairRounds` = 2) is earned only when the first demonstrably cleared what it was given — no finding now is one of those, by file, checklist section and line within `SameLineWindow` — and what is left is different and no larger; it is told what the first did. A finding that comes back, or more findings, end it. Hard stop: `MaxSecurityReviews` = 3, and no repair is made that no review is left to check. | `SecurityFindings.Narrower`, `ReviewAsync` |
+
+Replayed from the run's own log (`Fixtures/run-d09672a3-security-review.json`), the build now ends published after a free
+correction of `docs/app.md`, with the same two reviews (`WorkflowTests.Replaying_the_real_runs_reviews_ends_published…`).
 
 ## Checkpoints, asked rules and the person's answer
 

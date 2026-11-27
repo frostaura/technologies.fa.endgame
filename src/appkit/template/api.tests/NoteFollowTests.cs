@@ -10,7 +10,8 @@ namespace App.Tests;
 /// <summary>
 /// A person's own record (AGENTS.md), by its example: following a note. It is keyed by the platform's stable user id, so
 /// someone who leaves and comes back — a new session, the same person — is found again: they see "following", and
-/// following again answers the follow they have, never a second one. The database's unique index holds that too.
+/// following again answers the follow they have, never a second one. The database's unique index holds that too. Reading
+/// it requires sign-in, like every read of someone's own record; how many follow a note is on the note itself.
 /// </summary>
 public sealed class NoteFollowTests(EndgameAppFactory<Program> app) : IClassFixture<EndgameAppFactory<Program>>
 {
@@ -40,7 +41,7 @@ public sealed class NoteFollowTests(EndgameAppFactory<Program> app) : IClassFixt
         // Later: a new session for the same person. The page reads their own record, and finds it.
         using var later = app.CreateClientFor("ada@example.test");
         var back = await later.GetFromJsonAsync<NoteFollowView>($"/api/notes/{note}/follow");
-        Assert.Equal((first.Id, true, 1), (back!.Id, back.Following, back.Followers));
+        Assert.Equal((first.Id, true), (back!.Id, back.Following));
 
         // Asked to follow again (an old tab, a second click), they get the follow they already have.
         var again = await later.PutAsync($"/api/notes/{note}/follow", null);
@@ -53,22 +54,34 @@ public sealed class NoteFollowTests(EndgameAppFactory<Program> app) : IClassFixt
     }
 
     [Fact]
-    public async Task Each_person_has_their_own_and_signed_out_nobody_follows()
+    public async Task Each_person_has_their_own_and_how_many_follow_is_on_the_note_for_anyone()
     {
         var note = await NoteAsync();
         using var ada = app.CreateClientFor("ada@example.test");
         using var grace = app.CreateClientFor("grace@example.test");
         await ada.PutAsync($"/api/notes/{note}/follow", null);
         var graces = await grace.GetFromJsonAsync<NoteFollowView>($"/api/notes/{note}/follow");
-        Assert.Equal((false, 1), (graces!.Following, graces.Followers));
+        Assert.Equal((false, (Guid?)null), (graces!.Following, graces.Id));
         Assert.Equal(HttpStatusCode.Created, (await grace.PutAsync($"/api/notes/{note}/follow", null)).StatusCode);
 
-        var signedOut = await app.CreateClient().GetFromJsonAsync<NoteFollowView>($"/api/notes/{note}/follow");
-        Assert.Equal((false, false, 2), (signedOut!.SignedIn, signedOut.Following, signedOut.Followers));
-        Assert.Equal(HttpStatusCode.Unauthorized, (await app.CreateClient().PutAsync($"/api/notes/{note}/follow", null)).StatusCode);
+        // The count anyone may see is the note's own field, read signed out like the note.
+        var read = await app.CreateClient().GetFromJsonAsync<NoteDetail>($"/api/notes/{note}");
+        Assert.Equal(2, read!.Followers);
 
         var stopped = await (await ada.DeleteAsync($"/api/notes/{note}/follow")).Content.ReadFromJsonAsync<NoteFollowView>();
-        Assert.Equal((false, 1), (stopped!.Following, stopped.Followers));
+        Assert.False(stopped!.Following);
+        Assert.Equal(1, (await app.CreateClient().GetFromJsonAsync<NoteDetail>($"/api/notes/{note}"))!.Followers);
+    }
+
+    [Fact]
+    public async Task Signed_out_nobody_reads_writes_or_gives_up_a_follow()
+    {
+        // A read of someone's own record requires sign-in, like the writes (the security review's checklist).
+        var note = await NoteAsync();
+        using var signedOut = app.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await signedOut.GetAsync($"/api/notes/{note}/follow")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await signedOut.PutAsync($"/api/notes/{note}/follow", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await signedOut.DeleteAsync($"/api/notes/{note}/follow")).StatusCode);
     }
 
     [Fact]

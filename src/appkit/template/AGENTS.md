@@ -16,7 +16,7 @@ The example feature is **Notes**; replace it with the real product, keeping its 
 | `api.tests/` | xUnit tests against the real app, its own database and the dev platform (`EndgameAppFactory<Program>`). |
 | `web/src/<feature>/` | Pages and their tests. `types.ts` mirrors the API's records. |
 | `web/src/App.tsx` | Routes. Pages other than the first are `lazy()`. |
-| `docs/` | What the app is and why it is built this way. Keep it current (see `docs/README.md`). |
+| `docs/` | What the app is and why it is built this way. Keep it current (see `docs/README.md`); `docs/app.md` lists every endpoint and whether it needs signing in, and `make test` checks that against the code. |
 | `vendor/` | The app kit packages. **Never edit.** The platform upgrades them. |
 
 ## The five rules — never break these
@@ -45,7 +45,11 @@ The example feature is **Notes**; replace it with the real product, keeping its 
   with field errors. Store `EndgameUser.Id` as an owner, never an email; a record that is a person's own is found
   again by it (see "A person's own record").
 - **Signed-in only:** add `.RequireUser()` and take `EndgameUser user`. Browsers are sent to sign
-  in; API calls get 401 with `signInUrl`. Take `EndgameUser?` where signing in is optional.
+  in; API calls get 401 with `signInUrl`. **An endpoint that takes the person requires sign-in**: anything
+  that writes, or reads something that is the person's own, is `.RequireUser()` — never an `EndgameUser?`
+  that answers one way signed in and another signed out. What anyone may see (a count, a total) is a field
+  of the public resource it belongs to. Only the kit's own `getCurrentUser` takes `EndgameUser?`. This is
+  the security review's rule, and `make test` checks it (`api.tests/AppRulesTests.cs`).
 - **Front end:** primitives from `@endgame/appkit/ui`; classes from the token layer only
   (`bg-surface`, `text-ink-muted`, `text-primary`). No hex colours, no `p-[13px]`, no fonts or
   scripts from other hosts. Light, calm, one accent. Use the width on large screens (columns, a
@@ -82,10 +86,15 @@ platform's stable id; never the email, never the session) and **found again on r
    at once, re-read, and answer the row that won.
 3. **The page reads the person's own record every time it opens** (`GET …/follow` → `{ following, id }`), and shows it —
    "Following", their ticks, "You are on this trip" — never offers to join again.
+4. **Reading it requires sign-in, like the writes** (`.RequireUser()` on the GET too). The page asks for it only once
+   `useCurrentUser()` says someone is signed in, and offers "Sign in to follow" otherwise. What anyone may see — how many
+   follow, how many seats are taken — is a field of the public resource (`NoteDetail.Followers` on `getNote`), never
+   answered beside someone's own record.
 
 The example is `NoteFollow` (`api/Notes/NoteFollow.cs`, the follow endpoints in `NotesEndpoints.cs`,
 `web/src/notes/FollowNote.tsx`) with its tests (`api.tests/NoteFollowTests.cs`, `NoteDetailPage.test.tsx`): a person who
-comes back is found again, and following again leaves one follow. The factory checks every such requirement by coming back
+comes back is found again, following again leaves one follow, and signed out the follow is never read (401) while the
+note still says how many follow it. The factory checks every such requirement by coming back
 later: the same member, signed in afresh, does it again and reads it back, and a second record fails the check.
 
 ## Test ids — every screen carries them
@@ -133,7 +142,8 @@ make migration name=AddSomething
 
 A change is done when `make lint` and `make test` pass with zero warnings, there is a test for the
 behaviour (back end and front end) and a navigation test for each new link between pages, the
-screens carry their test ids, and `docs/` says what changed.
+screens carry their test ids, and `docs/` says what changed — `docs/app.md`'s table names every endpoint by its
+operation id with "Signed in?" Yes or No, exactly as the code has it (`AppRulesTests` fails otherwise).
 
 ## When start-up fails
 

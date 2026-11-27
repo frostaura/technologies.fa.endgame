@@ -313,4 +313,28 @@ public static class ApprovalDetail
         ArgumentNullException.ThrowIfNull(asked);
         return asked.Rule.StartsWith("cascade:", StringComparison.Ordinal) ? Endgame.Domain.Access.ApprovalWords.ByRule : Endgame.Domain.Access.ApprovalWords.ByDefault;
     }
+
+    /// <summary>Whether a refusal is the owner's own answer at an approval (<c>checkpoint:…:rejected</c>), not a rule that never asked.</summary>
+    public static bool DeclinedByOwner(string? rule) =>
+        rule is not null && rule.StartsWith("checkpoint:", StringComparison.Ordinal) && rule.EndsWith(":rejected", StringComparison.Ordinal);
+
+    /// <summary>
+    /// What the owner declined, from the question they answered no to, for the run page's "You declined: …" (R6-1): "Let the agent
+    /// change part of the app?" → "change part of the app"; any other title as it reads, its first letter lower-cased.
+    /// </summary>
+    public static string Declined(string title)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        var text = title.Trim().TrimEnd('?', '.', ' ');
+        foreach (var lead in new[] { "Let the agent ", "Let this step " })
+        {
+            if (text.StartsWith(lead, StringComparison.Ordinal))
+            {
+                text = text[lead.Length..];
+                break;
+            }
+        }
+
+        return text.Length == 0 ? "this step" : char.ToLowerInvariant(text[0]) + text[1..];
+    }
 }

@@ -21,7 +21,7 @@ function serve(routes: Record<string, unknown>) {
   });
 }
 
-const api = { me: { user: ada }, notes: [groceries], "notes/n1": { ...groceries, body: "Milk" } };
+const api = { me: { user: ada }, notes: [groceries], "notes/n1": { ...groceries, body: "Milk", followers: 0 } };
 
 describe("moving between pages", () => {
   it("home → “New note” shows the form", async () => {

@@ -1,5 +1,5 @@
 {
- "about": "Run 67018a21 (Dive Seat Sheet), trimmed from its event stream: the plan's requirements, the dive-signups-api part, and for each of its four failed evaluations the two looks' answers and their call_app results in order. The app was correct throughout.",
+ "about": "Run 67018a21 (Dive Seat Sheet), trimmed from its event stream: the plan's requirements, the dive-signups-api part, and for each of its four failed evaluations the two looks' answers and their call_app results in order. The app was correct throughout. Each evaluation also keeps how code's gate failed it on the day (failing), and each repair round the files it changed and the head of its reply (repairs).",
  "plan": {
   "summary": "Build a sign-up sheet for club boat dives, replacing the Notes template. Members see upcoming dives on the home page, open one to claim a seat, and can give it up later. Coming back finds their seat already there. Any signed-in member can also add a new dive to the schedule.",
   "requirements": [
@@ -177,6 +177,9 @@
       }
      ]
     }
+   ],
+   "failing": [
+    "r3:unshown"
    ]
   },
   {
@@ -320,6 +323,9 @@
       }
      ]
     }
+   ],
+   "failing": [
+    "r3:not-met"
    ]
   },
   {
@@ -459,6 +465,9 @@
       }
      ]
     }
+   ],
+   "failing": [
+    "r3:not-met"
    ]
   },
   {
@@ -597,7 +606,36 @@
       }
      ]
     }
+   ],
+   "failing": [
+    "r3:unshown"
    ]
+  }
+ ],
+ "repairs": [
+  {
+   "agent": "builder-dive-signups-api-1",
+   "round": 1,
+   "files": [
+    "api.tests/DiveSignUpTests.cs"
+   ],
+   "reply": "## Summary\n\n**What changed:** Added a GET read *after* the repeat PUT in `api.tests/DiveSignUpTests.cs` (in the test `A_member_who_comes_back_finds_their_seat_and_joining_again_makes_no_second_one`).\n\n**The fix:** The evaluator said \"Code found no read its evidence names after the repeat.\" The test previously did a GET before the second PUT but not after. I added:\n\n```csharp\n// Coming back later: a read after the repeat shows one record, not a duplicate.\nvar afterRepeat = await later.GetFromJsonAsync<DiveSignUpView>($\"/api/dives/{dive}/signup\");\nAssert.Equal((first.Id, true, 1), (afterRepeat!.Id, afterRepeat.SignedUp, afterRepeat.SignUpCount));\nAssert.Equal(first.Since, afterRepeat.Since);\n```\n\nThis proves that after the member joins again (repeat PUT returning 200), a subsequent GET shows the same record — same id, `signedUp: true`, `signUpCount: 1`, same `since` — confirming one record, no duplicate.\n\n**Verification:**\n- `make test` — 18 API tests + 26 web tests, 0 failures\n- `make lint` — 0 warnings (ESLint, tsc, dotnet format)"
+  },
+  {
+   "agent": "builder-dive-signups-api-2",
+   "round": 2,
+   "files": [
+    "api.tests/ProbeTests.cs",
+    "api.tests/DiveSignUpTests.cs",
+    "PROGRESS.md"
+   ],
+   "reply": "Build clean, tests pass (19 API + 26 web), working tree clean. The hook is satisfied — nothing remained to fix.\n\nSummary (repair round 2): The dive sign-up feature was already contract-correct, so I made the regression proof airtight at the database level. In `api.tests/DiveSignUpTests.cs`, the come-back-later test now fetches the single `dive_sign_ups` row after a two-session repeat join and asserts it is the one seat (`row.Id == first.Id`) keyed by the member's stable `EndgameUser.Id`; a new concurrent-double-join test fires two simultaneous PUTs and asserts exactly one row results (one 201, one 200, same id). `PROGRESS.md` reflects this.\n\nHow each requirement is shown:\n- **r1** — signed-out `PUT`/`DELETE …/signup` return 401 (`Each_member_has_their_own_seat…`).\n- **r3** — first `PUT …/signup` → 201 `signedUp:true`; `Assert.Single` + `row.Id == first.Id` prove a repeat join never makes a second record.\n- **r4** — new-session `GET …/signup` returns the same id, `signedUp:true`, `signUpCount:1`, with `row.PersonId == adaId`.\n- **r5** — `DELETE …/signup` → `signedUp:false`, safe to repeat.\n\nVerified with `make build`, `make test` (19 API + 26 web, all passing), and `make lint` — all"
+  },
+  {
+   "agent": "builder-dive-signups-api-3",
+   "round": 3,
+   "files": [],
+   "reply": "I couldn't find a fault in the code, so I made no changes and there is nothing new to commit. The working tree is clean and the earlier commit stands.\n\nThe check said member-a's second PUT made a second record, with ids `…6193…` then `…c198…`. The code doesn't do that. The evaluator's own run also showed the repeat PUT returning 200 with the same id, and `signUpCount:1` afterwards. The two different ids are most likely explained by a DELETE (give up the seat) between the two PUTs. A fresh join after giving up is meant to make a new row. I couldn't confirm that from the evidence.\n\nWhat the code does for each requirement:\n- **r1 (members sign in):** `joinDive` and `leaveDive` are marked `.RequireUser()`. The signed-out PUT test shows 401.\n- **r3 (join once to claim a seat):** `JoinAsync` in `api/Dives/DivesEndpoints.cs` looks for a row by `DiveId` and `PersonId`, where `PersonId` is `EndgameUser.Id`. If it finds one, it answers 200 with that row. Otherwise it adds one and answers 201. If two joins race, it catches the unique-index violation, re-reads, and answers 200 with the row that won.\n- **Database refusal:** the unique index on (`DiveId`, `PersonId`) is `IX_dive_sign_ups_DiveId_"
   }
  ]
 }

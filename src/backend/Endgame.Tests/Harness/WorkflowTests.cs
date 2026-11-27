@@ -275,6 +275,18 @@ public sealed partial class WorkflowTests
 
         public int Screens { get; set; }
 
+        /// <summary>The security review numbered n answers this instead of the default finding (a real run's findings, say).</summary>
+        public Func<int, JsonObject?> ReviewAnswer { get; set; } = _ => null;
+
+        /// <summary>For a builder whose task is the given text: the one edit it makes (path, old, new), instead of the default.</summary>
+        public Func<string, (string Path, string Old, string New)?> BuilderEdit { get; set; } = _ => null;
+
+        /// <summary>When set, the calls the evaluator makes to the running app, one a turn, instead of the one default read.</summary>
+        public IReadOnlyList<object>? EvaluatorCalls { get; set; }
+
+        /// <summary>The tasks the builders were given, in order (their first message).</summary>
+        public List<string> BuilderTasks { get; } = [];
+
         public ScriptedModel Model() => new() { Fallback = Answer };
 
         private ModelReply Answer(ChatCall call)
@@ -330,7 +342,12 @@ public sealed partial class WorkflowTests
                     return ScriptedModel.Tools(("run", new { command = "make test" }, null));
                 }
 
-                if (turn == 1 && calls)
+                if (EvaluatorCalls is { } script && calls && turn <= script.Count)
+                {
+                    return ScriptedModel.Tools(("call_app", script[turn - 1], null));
+                }
+
+                if (EvaluatorCalls is null && turn == 1 && calls)
                 {
                     return ScriptedModel.Tools(("call_app", new { method = "GET", path = "api/recipes?mine=true", @as = "member-a" }, null));
                 }
@@ -343,6 +360,12 @@ public sealed partial class WorkflowTests
 
             if (system.Contains("security reviewer", StringComparison.Ordinal))
             {
+                if (ReviewAnswer(Reviews) is { } own)
+                {
+                    Reviews++;
+                    return ScriptedModel.Text(own.ToJsonString());
+                }
+
                 var passed = ReviewPasses(Reviews++);
                 return ScriptedModel.Text(new JsonObject
                 {
@@ -354,8 +377,16 @@ public sealed partial class WorkflowTests
 
             // The builder.
             OnBuilder?.Invoke(call);
+            var brief = call.Messages.FirstOrDefault(m => m!["role"]!.GetValue<string>() == "user")?["content"]?.ToString() ?? "";
+            if (turn == 0)
+            {
+                BuilderTasks.Add(brief);
+            }
+
+            var edit = BuilderEdit(brief);
             return turn switch
             {
+                0 when edit is { } own => ScriptedModel.Tools(("edit_file", new { path = own.Path, old_string = own.Old, new_string = own.New }, null)),
                 0 => ScriptedModel.Tools(("edit_file", new { path = "api/Program.cs", old_string = "api.MapNotes();", new_string = $"api.MapNotes(); // {Guid.NewGuid():N}" }, null)),
                 1 => ScriptedModel.Tools(("run", new { command = "make test" }, null)),
                 _ => ScriptedModel.Text("Built and tested."),
@@ -381,10 +412,10 @@ public sealed partial class WorkflowTests
         return (cp, ws, new FakeDock());
     }
 
-    private static Task RunBuildAsync(FakeControlPlane cp, ScriptedModel model, FakeWorkspace ws, FakeDock dock, CancellationToken cancellationToken = default)
+    private static Task RunBuildAsync(FakeControlPlane cp, ScriptedModel model, FakeWorkspace ws, FakeDock dock, CancellationToken cancellationToken = default, IAppCaller? caller = null)
     {
         var options = new RunnerOptions();
-        return EstimateTests.Executor(cp, model, ws, [new BuildWorkflow(new Estimator(options), new StubProbe(), new StubCaller())], dock, options)
+        return EstimateTests.Executor(cp, model, ws, [new BuildWorkflow(new Estimator(options), new StubProbe(), caller ?? new StubCaller())], dock, options)
             .ExecuteAsync(cp.Info(), "runner-test", () => false, cancellationToken);
     }
 

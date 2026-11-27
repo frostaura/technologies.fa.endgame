@@ -117,6 +117,15 @@ describe("describeEvent", () => {
     expect(describeEvent(e(12, "mystery.event"), "normal")).toBeNull();
   });
 
+  it("says the owner declined what they declined at an approval, never that a rule refused it (R6-1)", () => {
+    const declined = e(14, "tool.denied", { name: "web_search", rule: "checkpoint:frostaura:web_search:rejected", by: "owner", declined: "search the web for what they leave undone" });
+    expect(describeEvent(declined, "normal")).toMatchObject({ title: "You declined: search the web for what they leave undone", detail: "It was not done. The work continues without it." });
+    expect(describeEvent(declined, "technical")?.title).toBe("Declined by you: web_search");
+    // An older decline carried only its rule.
+    expect(describeEvent(e(15, "tool.denied", { name: "edit_file", rule: "checkpoint:frostaura:edit_file(docs/app.md):rejected" }), "normal")?.title).toBe("You declined: a step the work asked you about");
+    expect(describeEvent(denied, "normal")?.title).toBe("An action was refused by your rules");
+  });
+
   it("shows the tool, the rule that decided, the model and its cost in technical mode", () => {
     expect(describeEvent(denied, "technical")).toMatchObject({ title: "Denied: shell.exec", detail: "Rule: protected floor · No shell" });
     expect(describeEvent(e(13, "tool.permitted", { tool: "web.search", rule: "research may search" }), "technical")?.detail).toBe("Rule: research may search");

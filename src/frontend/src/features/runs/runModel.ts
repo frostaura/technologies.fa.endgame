@@ -434,6 +434,31 @@ export function formatCredits(n: number): string {
   return rounded.toLocaleString("en-GB");
 }
 
+
+/**
+ * Whether a refusal was the owner's own answer at an approval — `by: "owner"`, or, in an older run's log, a
+ * `checkpoint:…:rejected` rule — rather than a rule that refused without asking (R6-1).
+ */
+export function declinedByOwner(p: Record<string, unknown>): boolean {
+  const by = str(p, "by");
+  if (by) return by === "owner";
+  const rule = str(p, "rule") ?? "";
+  return rule.startsWith("checkpoint:") && rule.endsWith(":rejected");
+}
+
+/**
+ * A refusal in normal mode, said truthfully: "You declined: search the web for …" when the owner answered no, and
+ * "An action was refused by your rules" only when a rule refused it without asking (R6-1).
+ */
+export function refusalStep(p: Record<string, unknown>): Pick<TraceStep, "tone" | "icon" | "title" | "detail"> {
+  if (!declinedByOwner(p)) {
+    return { tone: "attention", icon: "secrets", title: "An action was refused by your rules", detail: "It was not carried out. The work continues without it." };
+  }
+  const said = str(p, "declined") ?? (str(p, "name") === "web_search" ? "search the web" : "a step the work asked you about");
+  const title = `You declined: ${said}`;
+  return { tone: "attention", icon: "verdict", title: isPlain(title) ? title : "You declined a step the work asked you about", detail: "It was not done. The work continues without it." };
+}
+
 /**
  * One event as a step. Normal mode speaks plainly and never names infrastructure — no tool names,
  * models, containers or repositories — and leaves the mechanics (single model and tool calls) to
@@ -498,10 +523,14 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
       if (!technical) return null;
       return { ...base, tone: "money", icon: "secrets", title: `Allowed: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: str(p, "rule") ? `Rule: ${str(p, "rule")}` : null };
     case "tool.denied":
-      if (!technical) {
-        return { ...base, tone: "attention", icon: "secrets", title: "An action was refused by your rules", detail: "It was not carried out. The work continues without it." };
-      }
-      return { ...base, tone: "attention", icon: "secrets", title: `Denied: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: [str(p, "rule") && `Rule: ${str(p, "rule")}`, str(p, "reason")].filter(Boolean).join(" · ") || null };
+      if (!technical) return { ...base, ...refusalStep(p) };
+      return {
+        ...base,
+        tone: "attention",
+        icon: "secrets",
+        title: `${declinedByOwner(p) ? "Declined by you" : "Denied"}: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`,
+        detail: [str(p, "rule") && `Rule: ${str(p, "rule")}`, str(p, "reason")].filter(Boolean).join(" · ") || null,
+      };
     case "tool.result":
       if (!technical) return null;
       return { ...base, tone: "quiet", icon: "build", title: `Result: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: str(p, "content") ?? str(p, "result") };
@@ -541,6 +570,7 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
 export const CHECK_LINES = {
   rechecked: "Checked again by a second checker, at no charge.",
   stoppedEarly: "Stopped early: the same requirement failed the same way three times.",
+  needsLook: "The check needs a look: the checker found it working, the factory’s own reading of its calls disagreed twice, and the repair between found nothing in the app to change. Nothing in it was shown not to work, so no stronger model was tried.",
   shownByTest: (title: string | null) => (title ? `Shown by the screen's own test: “${title}”.` : "Shown by the screen's own test."),
 } as const;
 
@@ -549,7 +579,15 @@ const FAILED_HOW: Record<string, string> = {
   "not-met": "it does not work yet.",
   unshown: "the checker said it works, but nothing it gave shows it in the running app.",
   unchecked: "it was not checked in the running app.",
+  overruled: "the checker found it working; only the factory’s own reading of its calls disagreed.",
 };
+
+/** The requirements a "check needs a look" judgement was decided over (`trigger`), each with the calls code read. */
+function triggers(p: Record<string, unknown>): { id: string; calls: string[] }[] {
+  const t = p.trigger;
+  if (!Array.isArray(t)) return [];
+  return t.filter((x): x is Record<string, unknown> => !!x && typeof x === "object").map((x) => ({ id: str(x, "id") ?? "", calls: strings(x, "calls") }));
+}
 
 function strings(payload: Record<string, unknown>, key: string): string[] {
   const v = payload[key];
@@ -590,6 +628,7 @@ export function evaluationDetail(p: Record<string, unknown>, mode: Mode, withSum
       failing.length > 0 ? `Failing: ${failing.join(", ")}` : null,
       p.rechecked === true ? "Rechecked: a second evaluator looked at the same build, not billed." : null,
       p.stoppedEarly === true ? "Stopped early: the same failure three checks running, so no further repair round." : null,
+      ...(p.needsLook === true ? triggers(p).map((t) => `Needs a look (${t.id}): ${t.calls.join(" · ")}`) : []),
     ];
     return lines.filter(Boolean).join("\n") || null;
   }
@@ -598,9 +637,10 @@ export function evaluationDetail(p: Record<string, unknown>, mode: Mode, withSum
   if (withSummary && summary) lines.push(summary);
   if (p.rechecked === true) lines.push(CHECK_LINES.rechecked);
   const unmet = requirements.filter((r) => r.met !== true);
+  const overruled = new Set(p.needsLook === true ? triggers(p).map((t) => t.id) : []);
   for (const r of unmet) {
     const id = str(r, "id") ?? "";
-    const how = failing.find((f) => f.startsWith(`${id}:`))?.split(":")[1] ?? (r.met === false && str(r, "evidence") ? "not-met" : "unchecked");
+    const how = overruled.has(id) ? "overruled" : (failing.find((f) => f.startsWith(`${id}:`))?.split(":")[1] ?? (r.met === false && str(r, "evidence") ? "not-met" : "unchecked"));
     const text = (str(r, "text") ?? "").replace(/[.!?]+$/, "");
     const saw = plainSentences(str(r, "evidence"));
     const quoted = text && isPlain(text) ? `“${text}”: ` : "A requirement: ";
@@ -615,6 +655,7 @@ export function evaluationDetail(p: Record<string, unknown>, mode: Mode, withSum
   }
   for (const r of requirements) if (r.met === true) for (const t of strings(r, "tests")) lines.push(CHECK_LINES.shownByTest(plainOrNull(testTitle(t))));
   if (p.stoppedEarly === true) lines.push(CHECK_LINES.stoppedEarly);
+  if (p.needsLook === true) lines.push(CHECK_LINES.needsLook);
   return lines.join("\n") || null;
 }
 
