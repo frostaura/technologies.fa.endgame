@@ -23,8 +23,8 @@ export function FlowList({ flows, numbered = false, next, first, hideReach = fal
           <a href={href(`/flow/${first.id}`)} className="group flex items-start gap-3 bg-primary-tint/60 px-4 py-4 transition-colors hover:bg-primary-tint sm:gap-4 sm:px-6">
             {numbered && <span className="w-6 shrink-0" aria-hidden="true" />}
             <ProgressDot state={stateOf(progress, first.id)} className="mt-0.5" />
-            <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:gap-4">
-              <span className="whitespace-nowrap font-mono text-xs font-semibold leading-6 text-primary-link sm:w-20 sm:shrink-0">{first.id}</span>
+            <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:gap-3">
+              <span className="whitespace-nowrap font-mono text-xs font-semibold leading-6 text-primary-link sm:w-16 sm:shrink-0">{first.id}</span>
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="text-eyebrow font-semibold uppercase text-primary-link">Learn first</span>
@@ -45,8 +45,8 @@ export function FlowList({ flows, numbered = false, next, first, hideReach = fal
               {/* Number, mark and title share the title's first line. */}
               {numbered && <span className="w-6 shrink-0 text-right text-sm font-medium leading-6 tabular-nums text-ink-muted">{i + 1}</span>}
               <ProgressDot state={stateOf(progress, f.id)} className="mt-0.5" />
-              <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:gap-4">
-                <span className="whitespace-nowrap font-mono text-xs font-semibold leading-6 text-primary-link sm:w-20 sm:shrink-0">{f.id}</span>
+              <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:gap-3">
+                <span className="whitespace-nowrap font-mono text-xs font-semibold leading-6 text-primary-link sm:w-16 sm:shrink-0">{f.id}</span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="min-w-0 break-words text-base font-medium leading-6 text-ink group-hover:text-primary-link">{f.title}</span>

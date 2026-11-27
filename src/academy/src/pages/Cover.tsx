@@ -136,7 +136,7 @@ function PathRows({ className = "" }: { className?: string }) {
                   <span className="font-display text-lg font-semibold text-ink group-hover:text-primary-link">{level}</span>
                   <span className="text-xs tabular-nums text-ink-muted">{t.flows.length} flows</span>
                 </span>
-                <span className="mt-0.5 line-clamp-2 text-sm text-ink-muted">{LEVEL_BLURB[level]}</span>
+                <span className="mt-0.5 block text-pretty text-sm text-ink-muted">{LEVEL_BLURB[level]}</span>
               </span>
               <ProgressRing done={s.done} total={s.total} label={`${level}: ${s.done} of ${s.total} flows done`} />
             </a>

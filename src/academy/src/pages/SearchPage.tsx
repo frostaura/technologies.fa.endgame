@@ -23,7 +23,7 @@ export function SearchPage({ q, operator }: { q: string; operator: boolean }) {
         {hits.map((h) => (
           <li key={h.flow.id}>
             <a href={href(`/flow/${h.flow.id}`)} className="group flex flex-col gap-1 px-4 py-4 hover:bg-ground sm:flex-row sm:gap-4 sm:px-6">
-              <span className="whitespace-nowrap font-mono text-xs font-semibold leading-6 text-primary-link sm:w-20 sm:shrink-0">{h.flow.id}</span>
+              <span className="whitespace-nowrap font-mono text-xs font-semibold leading-6 text-primary-link sm:w-16 sm:shrink-0">{h.flow.id}</span>
               <span className="min-w-0 flex-1">
                 <span className="block text-base font-medium leading-6 text-ink group-hover:text-primary-link">{highlight(h.flow.title, h.terms)}</span>
                 <span className="mt-1 block text-sm text-ink-muted"><Inline text={snippet(h.flow, h.terms)} plainIds mark={h.terms} /></span>

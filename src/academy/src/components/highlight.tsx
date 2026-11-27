@@ -7,5 +7,5 @@ export function highlight(text: string, terms: string[] | undefined, key = "h"):
   const re = new RegExp(`(${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
   const parts = text.split(re);
   if (parts.length === 1) return text;
-  return parts.map((part, i) => (i % 2 ? <mark key={`${key}-${i}`} className="rounded-xxs bg-primary-tint px-0.5 text-ink">{part}</mark> : <Fragment key={`${key}-${i}`}>{part}</Fragment>));
+  return parts.map((part, i) => (i % 2 ? <mark key={`${key}-${i}`} className="rounded-xxs bg-primary-tint text-ink">{part}</mark> : <Fragment key={`${key}-${i}`}>{part}</Fragment>));
 }
