@@ -369,7 +369,7 @@ export function defaultWorld(scenario = "default", persona = "owner"): World {
   for (const i of w.ideas.filter((x) => x.verdict)) w.runs.push(historicResearch(i, a, storyFor(i.text, i.id === IDS.ideaReadingList ? "reading-list" : null).strands, proposed.get(i.id) ?? ORG));
 
   // Finished builds behind the live apps ------------------------------------------------------
-  for (const x of w.apps) w.runs.push(historicBuild(x, a(Number(new Date(T).getTime() - new Date(x.publishedAt ?? a(0)).getTime()) / 60000 + 25), x.publishedAt ?? a(0)));
+  for (const x of w.apps) w.runs.push(historicBuild(x, w.nodes.find((n) => n.path === x.path.split("/").slice(0, 2).join("/"))?.name ?? "its division", a(Number(new Date(T).getTime() - new Date(x.publishedAt ?? a(0)).getTime()) / 60000 + 25), x.publishedAt ?? a(0)));
 
   // Versions for Court booking and Shift Rota -----------------------------------------------
   // As the control plane lists them (`AppVersionService.ListAsync`, R2-4): only versions that were live, each with its
@@ -516,15 +516,15 @@ function historicResearch(i: Idea, a: (m: number) => string, strands: { id: stri
   return { run: { id: i.runId, kind: "research", title: `Research: ${i.title}`, scope, status: "finished", startedAt: a(start), finishedAt: a(start - 1), lastSeq: events.length, ideaId: i.id, estimateCredits: 12, spentCredits: 9.8, employeeId: null, conversationId: null, budgetExhausted: false, outcome: "succeeded", summary: "Research finished; the verdict waits for your decision.", createdAt: a(start), canTryAgain: false }, events, playback: null };
 }
 
-function historicBuild(app: DemoApp, startedAt: string, publishedAt: string): DemoRun {
+function historicBuild(app: DemoApp, division: string, startedAt: string, publishedAt: string): DemoRun {
   const id = uuidFor(`run:build:${app.path}`);
   const project = app.path.split("/").slice(0, 3).join("/");
   const events: RunEvent[] = [];
   const push = (type: string, payload: Record<string, unknown>, at: string) => events.push(ev(events.length + 1, type, payload, at));
   push("run.started", { holder: "runner-demo-1" }, startedAt);
   // The placement step the Runner's journal writes: what the run page reads to lead to the app it built (R7-2).
-  push("message", { kind: "workflow.step", agent: "workflow", step: "placement", data: { name: app.name, appId: app.id, appPath: app.path, projectPath: project, division: project.split("/").slice(0, 2).join("/"), divisionCreated: false } }, startedAt);
-  push("message", { from: "builder", text: `${app.name} will live in its division, as the project ${app.name}.`, title: "Placed", milestone: "placed" }, startedAt);
+  push("message", { kind: "workflow.step", agent: "workflow", step: "placement", data: { name: app.name, appId: app.id, appPath: app.path, projectPath: project, division: project.split("/").slice(0, 2).join("/"), divisionName: division, divisionCreated: false, newApp: true } }, startedAt);
+  push("message", { from: "builder", text: `${app.name} is a new app. It will live in ${division} as a new project of its own.`, title: "Placed", milestone: "placed" }, startedAt);
   push("plan.accepted", { by: "auto-mode", summary: `${app.name}, in three parts.`, items: [{ id: "backend", text: "What it keeps, and who may change it.", detail: "api: entities, migration, endpoints, tests.", check: "make test passes." }, { id: "frontend", text: "The screens, phone first.", detail: "web: pages and tests.", check: "make test passes." }, { id: "docs", text: "Its documents.", detail: "docs/*.md", check: "The docs describe the app." }] }, startedAt);
   for (const item of ["backend", "frontend", "docs"]) push("evaluation.passed", { item, tier: "build", round: 0, faults: [], evidence: "make test and make lint exit 0.", summary: "Checked and passed." }, publishedAt);
   push("message", { from: "security-reviewer", text: "The security review checked secrets, sign-in, data, model calls and outbound calls, and found nothing that blocks publishing.", title: "Security review passed", milestone: "security:0" }, publishedAt);

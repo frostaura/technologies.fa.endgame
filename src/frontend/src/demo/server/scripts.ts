@@ -515,6 +515,8 @@ interface Part extends PlanItemStory {
 interface Pipeline {
   prefix: "build" | "change";
   name: string;
+  /** Where the work goes, first on the plan's approval (`BuildWorkflow.WhereItGoes`). */
+  where: string;
   projectPath: string;
   appPath: string;
   summary: string;
@@ -534,6 +536,23 @@ interface Pipeline {
   plannerTask: string;
   /** The new version's commit message, for a change. */
   versionMessage: string | null;
+}
+
+/** Where a build goes, in the Runner's words (`BuildWorkflow.WhereItGoes`): always a new app, in a new project of its own. */
+function whereItGoes(o: { name: string; division: string; divisionCreated: boolean; beside: string | null }) {
+  const home = o.divisionCreated ? `a new division, ${o.division},` : o.division;
+  return `${o.name} is a new app. It will live in ${home} as a new project of its own${o.beside ? `, beside ${o.beside}` : ""}.`;
+}
+
+/** The first free project address under a division for a slug (`BuildWorkflow.NewNodeAsync`), and whose project took the slug. */
+function freeProject(world: World, divisionPath: string, slug: string): { path: string; beside: string | null } {
+  const taken = node(world, `${divisionPath}/${slug}`);
+  for (let n = 1; n <= 20; n++) {
+    const suffix = n === 1 ? "" : `-${n}`;
+    const path = `${divisionPath}/${(slug.length + suffix.length > 40 ? slug.slice(0, 40 - suffix.length).replace(/-+$/, "") : slug) + suffix}`;
+    if (!node(world, path)) return { path, beside: taken?.name ?? null };
+  }
+  throw new Error(`No free address for a new project under ${divisionPath}.`);
 }
 
 /** "The builder · The plan", in the Runner's words (`BuildWorkflow.PlanAnnouncement`). */
@@ -589,7 +608,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
     s.ask((w, r) => {
       const on = setting(w, r.run.scope, "autonomy")?.value === "checkpoints" && setting(w, r.run.scope, "checkpoint.plan")?.value === "true";
       if (!on) return null;
-      return { title: prefix === "change" ? "Accept this plan for the change?" : "Accept this plan?", detail: planAnnouncement(o), onApprove: { kind: "continue" }, onDecline: "stops", key: planKey };
+      return { title: prefix === "change" ? "Accept this plan for the change?" : "Accept this plan?", detail: `${o.where} ${planAnnouncement(o)}`, onApprove: { kind: "continue" }, onDecline: "stops", key: planKey };
     }, `${prefix}:waiting-on-plan`);
     s.wait(300).effect((w, r) => {
       const asked = w.approvals.filter((a) => a.runId === r.run.id && a.key === planKey).pop();
@@ -845,16 +864,20 @@ defineScript("build", (world, run) => {
   // a run that carries on from an earlier attempt is already placed. Read from the idea, never from the tree the run changes.
   const placement = ((idea?.verdict ?? {}) as { placement?: { division?: string; project?: string; name?: string } }).placement;
   const researchedAt = world.runs.find((r) => r.run.id === idea?.runId)?.run.scope ?? "";
-  const placedAt = run.run.scope.split("/").length >= 3 ? run.run.scope.split("/").slice(0, 3).join("/") : null;
+  // Placement is said once, from the world before it: a division this run created is still new when its steps are rebuilt.
+  const placed = run.events.find((e) => e.type === "message" && e.payload.kind === "workflow.step" && e.payload.step === "placement")?.payload.data as
+    | { divisionCreated?: boolean; projectPath?: string; appPath?: string; name?: string; beside?: string | null }
+    | undefined;
+  const placedAt = placed?.projectPath ?? (run.run.scope.split("/").length >= 3 ? run.run.scope.split("/").slice(0, 3).join("/") : null);
   const divisionSlug = placedAt?.split("/")[1] ?? (researchedAt.split("/").length === 2 ? researchedAt.split("/")[1] : null) ?? placement?.division ?? base.division.slug;
   const divisionPath = `${org}/${divisionSlug}`;
-  const projectPath = placedAt ?? `${divisionPath}/${placement?.project ?? base.project}`;
-  const existingProject = node(world, projectPath);
+  // A new idea is a new product (R9-1): a new project of its own, never one whose address the verdict's slug happens to
+  // take; a taken address gets the next free one, and the owner hears whose project it sits beside.
+  const free = placedAt ? { path: placedAt, beside: placed?.beside ?? null } : freeProject(world, divisionPath, placement?.project ?? base.project);
+  const projectPath = free.path;
   const divisionName = node(world, divisionPath)?.name ?? (divisionSlug === base.division.slug ? base.division.name : divisionSlug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "));
-  const story: Story = { ...base, name: existingProject?.name ?? placement?.name ?? base.name, division: { slug: divisionSlug, name: divisionName } };
-  const appPath = `${projectPath}/web`;
-  // Placement is said once, from the world before it: a division this run created is still new when its steps are rebuilt.
-  const placed = run.events.find((e) => e.type === "message" && e.payload.kind === "workflow.step" && e.payload.step === "placement")?.payload.data as { divisionCreated?: boolean } | undefined;
+  const story: Story = { ...base, name: placed?.name ?? (placedAt ? node(world, placedAt)?.name : undefined) ?? placement?.name ?? base.name, division: { slug: divisionSlug, name: divisionName } };
+  const appPath = placed?.appPath ?? `${projectPath}/web`;
   const divisionExists = placed ? placed.divisionCreated !== true : !!node(world, divisionPath);
   const owner = run.events.find((e) => e.type === "message" && e.payload.from === "owner")?.payload ?? {};
   const changes = Array.isArray(owner.changes) ? owner.changes.filter((c): c is string => typeof c === "string" && c.trim().length > 0) : [];
@@ -886,7 +909,7 @@ defineScript("build", (world, run) => {
   if (!p.retryOf) {
     s.wait(500).event("message", {
       from: "builder",
-      text: divisionExists ? `${story.name} will live in ${story.division.name}, as the project ${story.name}.` : `${story.name} will live in a new division, ${story.division.name}, as the project ${story.name}.`,
+      text: whereItGoes({ name: story.name, division: story.division.name, divisionCreated: !divisionExists, beside: free.beside }),
       title: "Placed",
       milestone: "placed",
     });
@@ -906,7 +929,7 @@ defineScript("build", (world, run) => {
     return ["Tree", "App", "Ontology"];
   }, "build:placed");
   if (!p.retryOf) {
-    s.event("message", { data: { name: story.name, appId: uuidFor(`app:${appPath}`), appPath, division: divisionPath, projectPath, divisionCreated: !divisionExists }, kind: "workflow.step", step: "placement", agent: "workflow" });
+    s.event("message", { data: { name: story.name, appId: uuidFor(`app:${appPath}`), appPath, division: divisionPath, divisionName: story.division.name, projectPath, projectName: story.name, beside: free.beside, divisionCreated: !divisionExists, newApp: true }, kind: "workflow.step", step: "placement", agent: "workflow" });
     const hires: { who: { key: string; name: string; role: string }; scope: string; limit: number; reason: string; step: string }[] = [];
     if (!divisionExists) hires.push({ who: lead, scope: divisionPath, limit: 100, reason: "A new division was created for this work, and every division has someone answerable for it.", step: `hire:division:${divisionPath}` });
     if (!hadEngineer) hires.push({ who: eng, scope: projectPath, limit: 1500, reason: `${story.name} is entering its build, and somebody must build and maintain it.`, step: `hire:stage:build:${projectPath}` });
@@ -926,6 +949,7 @@ defineScript("build", (world, run) => {
   pipeline(s, world, run, {
     prefix: "build",
     name: story.name,
+    where: whereItGoes({ name: story.name, division: story.division.name, divisionCreated: !divisionExists, beside: free.beside }),
     projectPath,
     appPath,
     summary: story.plan.summary,
@@ -1012,6 +1036,7 @@ defineScript("change", (world, run) => {
   pipeline(s, world, run, {
     prefix: "change",
     name,
+    where: `This changes ${name}, the app already built and running in ${node(world, projectPath.split("/").slice(0, 2).join("/"))?.name ?? "its division"}. Nothing else is touched.`,
     projectPath,
     appPath,
     summary: `A change to ${name}: ${request.split("\n")[0]?.replace(/\.$/, "")}, built and checked in the running app, then everything ${name} did before checked again`,
