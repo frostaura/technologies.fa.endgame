@@ -96,18 +96,18 @@ Shared vocabulary used below:
 - **Who:** Admin or Owner.
 - **Level:** Core
 - **Learn first:** HIRE-02.
-- **What you learn:** declining closes this proposal, and the same need can be raised again later.
+- **What you learn:** declining closes this proposal, and the same need can be raised again later — for a recurring contractor role the platform raised, not for 30 days.
 - **Starts at:** `/hires/<id>`.
 - **Needs:** Admin. The proposal is open.
 - **Steps:**
-  1. Press "Decline". The form asks "Decline this hire? The same need can be raised again later."
+  1. Press "Decline". The form asks "Decline this hire? The same need can be raised again later." For a recurring contractor role the platform proposed (HIRE-08), it adds "It will not be proposed again here for 30 days, until <date>, however many more contractors are briefed. You can still ask for this hire yourself before then."
   2. Optionally add a note.
-  3. Press "Yes, decline". The badge becomes "Declined", and the panel reads "This hire was declined by <name> on <date>." with the note.
+  3. Press "Yes, decline". The badge becomes "Declined", and the panel reads "This hire was declined by <name> on <date>." with the note; for such a recurring role, also "It will not be proposed again here before <date>. You can ask for this hire yourself at any time."
 - **You know it worked when:** the badge reads "Declined" and the panel names you.
-- **Variations and refusals:** the same refusals and rollback as HIRE-03. A declined need key no longer blocks a new proposal for that need, because the server ignores declined proposals when matching keys.
+- **Variations and refusals:** the same refusals and rollback as HIRE-03. **A decline of a recurring role holds** (R5-3): for `WorkforceLimits.DeclinedHireHoldDays` (30, the window the recurrence is counted in) the platform proposes nothing for that role at that place, however many more contractors are briefed — a finish returns no `promotion`, and a raise of the same need key answers with the declined proposal (`created: false`). The proposal carries `holdDays` while open and `proposedAgainFrom` once a person declined it. A person asking for the hire (HIRE-07, HIRE-09) is never held; a proposal the platform withdrew holds nothing; another role, or the same role at another place, is not affected. Other needs (a stage, a division) are not held: a declined need key does not block their next proposal.
 - **Where:** `HireView.tsx`. `POST /api/hires/{id}/decline`. `HireService.DeclineAsync`.
 - **Reachable from:** UI. Also MCP `hire_decide`.
-- **Covered by tests:** `HireView.test.tsx` ("declines, and a refused decision rolls back…"). `workforce.spec.ts` ("a proposal is edited and declined").
+- **Covered by tests:** `HireView.test.tsx` ("declines, and a refused decision rolls back…", "says before a decline, and after it, when a recurring role can be proposed again"). `workforce.spec.ts` ("a proposal is edited and declined"). `DeclinedHireHoldTests`.
 
 ### HIRE-05 Change a proposal before deciding
 - **Who:** Admin or Owner.
@@ -187,8 +187,8 @@ Shared vocabulary used below:
   3. The proposal reports to the briefer and copies the briefer's tools, services and thinking power.
   4. It is then auto-hired or waits, as in HIRE-06.
 - **You know it worked when:** a proposal with the trigger "A contractor role keeps recurring…" appears on `/hires`.
-- **Variations and refusals:** none beyond HIRE-06.
-- **Where:** `HireService.FinishContractorAsync`.
+- **Variations and refusals:** as HIRE-06; and a role a person declined in the last 30 days is not proposed again (HIRE-04): the finish returns no `promotion`.
+- **Where:** `HireService.FinishContractorAsync`, `HireService.RaiseAsync` (the hold).
 - **Reachable from:** system only.
 - **Covered by tests:** `WorkforceTests.Contractors_work_on_the_chart_hand_back_what_they_learned_and_a_recurring_role_is_proposed_as_a_hire`.
 

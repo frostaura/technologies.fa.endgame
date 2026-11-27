@@ -481,6 +481,8 @@ export const hireGuard: Guard<Hire> = obj<Hire>({
   employeeId: ns,
   createdAt: s,
   withdrawn: withDefault(bool, false),
+  holdDays: withDefault(nn, null),
+  proposedAgainFrom: withDefault(ns, null),
 });
 
 export const hiresGuard: Guard<Hire[]> = arr(hireGuard);

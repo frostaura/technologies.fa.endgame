@@ -84,6 +84,27 @@ describe("HireView", () => {
     expect(screen.getByText("Hire proposed")).toBeTruthy();
   });
 
+  it("says before a decline, and after it, when a recurring role can be proposed again (R5-3)", async () => {
+    const recurring = hireFixture({ trigger: "promotion", raisedBy: "runner", needKey: "promotion:n:gap researcher", holdDays: 30 });
+    stub(json(recurring), {
+      "POST /api/hires/h1/decline": json({ ...recurring, status: "declined", holdDays: null, proposedAgainFrom: "2026-12-27T10:00:00Z", decision: { via: "person", by: "Owner", at: "2026-11-27T10:00:00Z", note: null } }),
+    });
+    renderWithStore(<HireView hireId="h1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Decline" }));
+    const form = screen.getByRole("form", { name: "Confirm declining" });
+    expect(within(form).getByText(/^It will not be proposed again here for 30 days, until .*2026, however many more contractors are briefed\. You can still ask for this hire yourself before then\.$/)).toBeTruthy();
+    fireEvent.click(within(form).getByRole("button", { name: "Yes, decline" }));
+    expect(await screen.findByText(/^It will not be proposed again here before 27 Dec 2026\. You can ask for this hire yourself at any time\.$/)).toBeTruthy();
+  });
+
+  it("promises no hold for a need a decline does not hold", async () => {
+    stub(json(hireFixture({ holdDays: null })));
+    renderWithStore(<HireView hireId="h1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Decline" }));
+    expect(screen.getByText("Decline this hire? The same need can be raised again later.")).toBeTruthy();
+    expect(screen.queryByText(/will not be proposed again/)).toBeNull();
+  });
+
   it("edits the proposal optimistically and puts it back when refused", async () => {
     const api = stub(json(hireFixture()), { "PATCH /api/hires/h1": problem(400, "Unknown model tier") });
     renderWithStore(<HireView hireId="h1" />);

@@ -317,7 +317,7 @@ internal static class WorkforceEndpoints
             await access.RequireAsync(principal.Id(), await service.ScopeOfAsync(org, id, ct), MemberRole.Admin, ct);
             return Results.Ok(await service.DeclineAsync(org, id, principal.Id(), note, ct));
         })
-        .WithName("DeclineHire").WithSummary("Declines a proposal. The same need may be raised again later.").Accepts<HireDecisionRequest>("application/json").Produces<HireView>();
+        .WithName("DeclineHire").WithSummary("Declines a proposal. A recurring contractor role the platform raised is not proposed again at that place for 30 days (proposedAgainFrom); a person may still ask for it.").Accepts<HireDecisionRequest>("application/json").Produces<HireView>();
 
         api.MapGet("/ontology", async (string? scope, string? view, ClaimsPrincipal principal, AccessService access, OntologyService ontology, CancellationToken ct) =>
         {

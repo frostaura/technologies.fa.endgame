@@ -101,4 +101,12 @@ public static class WorkforceLimits
     public const int PromotionThreshold = 3;
 
     public const int PromotionWindowDays = 30;
+
+    /// <summary>
+    /// How long a person's decline of a hire the platform raised for a recurring contractor role holds (R5-3): no new
+    /// proposal for the same role at the same place before it lapses, however many more contractors are briefed. The same
+    /// window the recurrence is counted in, so a decline is not undone by the very briefings it was declined over. A person
+    /// asking for the hire themselves is never held.
+    /// </summary>
+    public const int DeclinedHireHoldDays = PromotionWindowDays;
 }

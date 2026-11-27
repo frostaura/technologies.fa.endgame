@@ -1,5 +1,5 @@
 import type { BadgeTone } from "@/components/ui/badge";
-import { formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import type { Mode } from "@/features/runs/runModel";
 import type { EmployeePatch, EmployeeStatus, Hire, HireEdit, HireTrigger, JobDescription, MemoryChange, MemoryEntry, MemoryKind, PersonRef, RecurringRole, TrackRecord, Tree } from "@/store/types";
 
@@ -355,4 +355,15 @@ export function hireBadge(hire: Pick<Hire, "status" | "withdrawn">, proposed = "
   if (hire.status === "accepted") return { label: "Hired", tone: "success" };
   if (hire.status === "declined") return { label: "Declined", tone: "quiet" };
   return { label: proposed, tone: "violet" };
+}
+
+/** What a decline holds (R5-3), said before it is made: no new proposal for this role here until the date, unless the person asks. */
+export function holdLine(days: number, now: Date = new Date()): string {
+  const until = formatDate(new Date(now.getTime() + days * 86_400_000).toISOString());
+  return `It will not be proposed again here for ${days} days, until ${until}, however many more contractors are briefed. You can still ask for this hire yourself before then.`;
+}
+
+/** When a declined recurring role can come up again (R5-3). */
+export function againLine(from: string): string {
+  return `It will not be proposed again here before ${formatDate(from)}. You can ask for this hire yourself at any time.`;
 }

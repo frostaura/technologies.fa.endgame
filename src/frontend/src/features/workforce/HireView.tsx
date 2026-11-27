@@ -18,7 +18,7 @@ import type { Hire, Tree } from "@/store/types";
 import { Fold } from "@/components/Fold";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { JobFields } from "./JobFields";
-import { TRIGGER, draftOf, draftProblem, expectedMonthly, hireBadge, hireEditFrom, nameWithRole, possibleManagers, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
+import { TRIGGER, againLine, draftOf, draftProblem, expectedMonthly, hireBadge, holdLine, hireEditFrom, nameWithRole, possibleManagers, scopeName, serviceLabel, tierLabel, toolLabel } from "./workforceModel";
 
 /** One hire proposal: the drafted job, what it costs a month, and the owner's call. */
 export function HireView({ hireId }: { hireId: string }) {
@@ -169,6 +169,7 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
               ? `Hire ${hire.name} at about ${formatCredits(expectedMonthly(hire))} a month?`
               : "Decline this hire? The same need can be raised again later."}
           </p>
+          {confirming === "decline" && hire.holdDays ? <p className="text-sm text-ink-body">{holdLine(hire.holdDays)}</p> : null}
           {confirming === "accept" && !hire.withinBudget && <p className="text-sm text-attention-text">This is more than the budget has room for this month ({formatCredits(hire.headroomCredits)} left).</p>}
           <label htmlFor="hire-note" className="text-sm text-ink-muted">
             A note for the record (optional)
@@ -204,6 +205,7 @@ function Decided({ hire }: { hire: Hire }) {
             {d ? ` ${d.via === "auto-mode" ? "by auto-mode, inside the budget," : `by ${d.by}`} on ${formatDate(d.at)}.` : "."}
           </p>
           {d?.note && <p className="text-ink-body">“{d.note}”</p>}
+          {hire.proposedAgainFrom && <p className="text-ink-body">{againLine(hire.proposedAgainFrom)}</p>}
         </>
       )}
       {hire.employeeId && (
