@@ -33,7 +33,7 @@ function PlainStatus() {
   const view = toViewState(query);
   return (
     <>
-      <PageHeader className={RISE} icon="health" title="Is Endgame working?" lead="Every part Endgame runs on is asked directly, every ten seconds, whether it is working." />
+      <PageHeader className={RISE} title="Is Endgame working?" lead="Every part Endgame runs on is asked directly, every ten seconds, whether it is working." />
       {view.kind === "loading" && (
         <Loading label="Checking whether Endgame is working" className="flex flex-col gap-4">
           <Skeleton className="h-48 rounded-lg" />

@@ -17,7 +17,6 @@ export function SystemStatusView() {
     <section aria-labelledby="system-status-title" className="flex flex-col gap-6">
       <PageHeader
         titleId="system-status-title"
-        icon="health"
         title="System status"
         lead="Every service, asked directly whether it is healthy."
         actions={

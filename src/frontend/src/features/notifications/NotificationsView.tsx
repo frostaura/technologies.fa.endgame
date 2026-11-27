@@ -17,7 +17,6 @@ export function NotificationsView() {
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Notifications" }]} aside={org ? <WhatYouAreToldAbout /> : undefined}>
       <PageHeader
         className={RISE}
-        icon="notifications"
         title="Notifications"
         lead="What needs you, newest first. The urgent ones — a cap reached, credits at zero, the overdraft, an app that stopped, a security finding — are e-mailed too, when e-mail is set up."
       />

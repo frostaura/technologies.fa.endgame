@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Icon } from "../Icon";
-import type { IconName } from "../iconNames";
 
 /**
  * The page's own building blocks (ARCH-011). The shell (`AppShell`) draws the frame — the header, the
  * page column, the side panel and the width cap — and a page fills it with these:
  *
- * - {@link PageHeader}: the one title style, an optional icon in ink, a line of lead text at a readable
- *   measure, and the page's actions.
+ * - {@link PageHeader}: the one title style — words only, never an icon: a page is told apart by its title and
+ *   the trail above it; icons belong to navigation, side cards and section headings — a line of lead text at
+ *   a readable measure, and the page's actions.
  * - {@link ContentGrid}: independent sections set one under another, and two across from the `3xl` tier
  *   (1600) up, so a wide screen is used rather than left as one long column.
  * - {@link SideCard}: a card in the side panel. The side panel is a column of these; each ends with its
@@ -22,7 +21,6 @@ export const SECTION = "font-display text-lg font-semibold";
 
 export function PageHeader({
   title,
-  icon,
   eyebrow,
   lead,
   actions,
@@ -31,7 +29,6 @@ export function PageHeader({
   children,
 }: {
   title: ReactNode;
-  icon?: IconName;
   eyebrow?: ReactNode;
   lead?: ReactNode;
   actions?: ReactNode;
@@ -43,10 +40,8 @@ export function PageHeader({
     <header className={cn("flex flex-wrap items-end justify-between gap-x-6 gap-y-3", className)}>
       <div className="flex min-w-0 max-w-prose flex-col gap-2">
         {eyebrow && <span className="text-eyebrow font-semibold uppercase text-ink-muted">{eyebrow}</span>}
-        {/* The icon sits on the title's first line, so a title that wraps keeps it at its start, not its middle. */}
-        <h1 id={titleId} className={cn(TITLE, "flex min-w-0 items-start gap-3 break-words")}>
-          {icon && <Icon name={icon} className="mt-1 size-7 shrink-0 text-ink max-sm:mt-0.5 max-sm:size-6" />}
-          <span className="min-w-0">{title}</span>
+        <h1 id={titleId} className={cn(TITLE, "min-w-0 break-words")}>
+          {title}
         </h1>
         {lead && <div className="text-ink-body">{lead}</div>}
         {children}

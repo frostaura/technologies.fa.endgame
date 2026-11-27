@@ -74,7 +74,6 @@ export function OperatorAccessView() {
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Operator access" }]} aside={org ? <WhatIsLogged /> : undefined}>
       <PageHeader
         className={RISE}
-        icon="god-mode"
         title="Operator access"
         lead={`Every time someone from FrostAura entered ${org?.name ?? "your organisation"} or acted on it, newest first. It is never silent, and only the Owner can read it.`}
       />
