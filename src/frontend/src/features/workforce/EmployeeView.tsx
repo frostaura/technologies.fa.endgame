@@ -1,13 +1,15 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ChevronDown, Search } from "lucide-react";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { Avatar } from "@/components/Avatar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
-import { useShowAll } from "@/components/ui/page";
+import { SECTION, TITLE, useShowAll } from "@/components/ui/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { estimateFigure, estimateHeadline } from "@/lib/estimates";
 import { formatCredits, formatNumber, headlineCredits, plural, possessive, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
@@ -42,6 +44,7 @@ import { Fold } from "@/components/Fold";
 import { namesFor } from "../home/treeModel";
 import { useAppDispatch } from "@/store";
 import { JobFields } from "./JobFields";
+import { GROWING } from "./layout";
 import {
   MEMORY_KIND,
   MEMORY_KINDS,
@@ -57,15 +60,21 @@ import {
   memoryChangeLine,
   memoryChangeTitle,
   memoryChangeWhy,
+  personLabels,
   placements,
   possibleManagers,
   scopeName,
   serviceLabel,
   tierLabel,
   toolLabel,
+  workStatus,
 } from "./workforceModel";
 
-/** One employee: who it is, what it may do, how well it has done, what it remembers. */
+/**
+ * One employee, as a profile (ARCH-011): who it is, where it works, its state and the actions on it in
+ * one group; its track record on the figure tiles; then its work and its memory — two across from
+ * 1600 — and the conversation. The job it works to, and the contractors it briefs, are beside the page.
+ */
 export function EmployeeView({ employeeId }: { employeeId: string }) {
   const query = useGetEmployeeQuery(employeeId);
   const view = viewOf(query);
@@ -74,34 +83,35 @@ export function EmployeeView({ employeeId }: { employeeId: string }) {
   const detail = view.kind === "loaded" ? view.data : null;
 
   const crumbs: Crumb[] = [];
-  if (tree.data?.organisation) crumbs.push({ label: tree.data.organisation.name, href: active.entered ? paths.homeOf(tree.data.organisation.slug) : paths.home() });
+  if (tree.data?.organisation)
+    crumbs.push({
+      label: tree.data.organisation.name,
+      href: active.entered ? paths.homeOf(tree.data.organisation.slug) : paths.home(),
+    });
   // Every level above is a place to go: its own page under Manage.
   if (detail) {
     const parts = detail.employee.scope.split("/");
-    namesFor(tree.data, detail.employee.scope).slice(1).forEach((name, i) => crumbs.push({ label: name, href: paths.manage(parts.slice(0, i + 2).join("/")) }));
+    namesFor(tree.data, detail.employee.scope)
+      .slice(1)
+      .forEach((name, i) =>
+        crumbs.push({
+          label: name,
+          href: paths.manage(parts.slice(0, i + 2).join("/")),
+        }),
+      );
   }
   crumbs.push({ label: detail?.employee.name ?? "Employee" });
 
   return (
-    <AppShell
-      crumbs={crumbs}
-      aside={
-        detail ? (
-          <Fold title={`What ${detail.employee.name} remembers`} summary="Its curated memory, and what changed in it">
-            <ErrorBoundary name="The memory">
-              <MemoryPanel employee={detail.employee} tree={tree.data} />
-            </ErrorBoundary>
-          </Fold>
-        ) : undefined
-      }
-    >
+    <AppShell crumbs={crumbs} aside={detail ? <EmployeeAside detail={detail} tree={tree.data} /> : undefined}>
       {view.kind === "loading" && (
         <Loading label="Loading the employee" className="flex flex-col gap-6">
           <div className="flex items-center gap-4">
             <Skeleton className="size-16 rounded-full" />
             <Skeleton className="h-10 w-64" />
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            <Skeleton className="h-28 rounded-md" />
             <Skeleton className="h-28 rounded-md" />
             <Skeleton className="h-28 rounded-md" />
             <Skeleton className="h-28 rounded-md" />
@@ -126,12 +136,14 @@ export function EmployeeView({ employeeId }: { employeeId: string }) {
 function useCan(tree: Tree | undefined, scope: string) {
   const me = useGetMeQuery(undefined);
   const rank = roleRank(effectiveRole(tree, me.data, scope));
-  return { admin: rank >= roleRank("admin"), build: rank >= roleRank("builder") };
+  return {
+    admin: rank >= roleRank("admin"),
+    build: rank >= roleRank("builder"),
+  };
 }
 
 function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | undefined }) {
   const can = useCan(tree, detail.employee.scope);
-  const mode = useAppSelector((s) => s.ui.mode);
   const { employee, trackRecord } = detail;
   const costs = employeeCosts(trackRecord);
   const job = employee.jobDescription;
@@ -140,36 +152,47 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
   // A contractor is not let go: it finishes its brief, or a person stops it (EMP-07).
   const status = contractor && released ? { label: "Finished", tone: STATUS.released.tone } : STATUS[employee.status];
   const kindWord = contractor ? "Contractor" : "Employee";
+  const actions = useActions(employee, tree, can.admin);
 
   return (
     <>
       {/* A phone draws who this is first, then the button that opens the conversation with it (the order classes). */}
-      <div className={cn("flex flex-wrap items-start justify-between gap-5 max-sm:-order-2", RISE)}>
-        <div className="flex min-w-0 items-center gap-4">
+      <header className={cn("flex flex-wrap items-start justify-between gap-x-8 gap-y-4 max-sm:-order-2", RISE)}>
+        <div className="flex min-w-0 items-center gap-4 max-sm:items-start">
           <span className={cn("rounded-full", !released && employee.status === "working" && "animate-halo motion-reduce:animate-none")}>
-            <Avatar name={employee.name} seed={employee.id} size="lg" />
+            <Avatar name={employee.name} seed={employee.id} size="lg" className="max-sm:size-12 max-sm:text-xl" />
           </span>
           <div className="flex min-w-0 flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-3xl font-semibold max-sm:text-2xl">{employee.name}</h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className={cn(TITLE, "break-words")}>{employee.name}</h1>
               <Badge tone={status.tone}>{status.label}</Badge>
               {employee.idle.flagged && !released && <Badge tone="warn">Nothing to do for {plural(employee.idle.afterDays, "day")}</Badge>}
             </div>
             <span className="text-ink-body">
-              {employee.role} · {kindWord} ·{" "}
-              {released && employee.releasedAt ? `${contractor ? "Finished" : "Let go"} ${timeAgo(employee.releasedAt)}` : `${contractor ? "Briefed" : "Hired"} ${timeAgo(employee.createdAt)}`}
+              {employee.role} · {kindWord} · {released && employee.releasedAt ? `${contractor ? "Finished" : "Let go"} ${timeAgo(employee.releasedAt)}` : `${contractor ? "Briefed" : "Hired"} ${timeAgo(employee.createdAt)}`}
               {employee.reportsTo && ` · Reports to ${employee.reportsTo.name}`}
             </span>
-            {employee.currentRun && (
-              <Link href={paths.run(employee.currentRun.id)} className="self-start rounded-xs text-primary-link hover:text-primary-hover">
-                Working now: {employee.currentRun.title}
-              </Link>
-            )}
+            {/* Where it works, always: two people with one name and role are told apart by their place, never by colour alone. */}
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className="text-ink-muted">
+                {released ? "Worked at" : "Works at"}{" "}
+                <Link href={paths.manage(employee.scope)} className="rounded-xs font-medium text-primary-link hover:text-primary-hover">
+                  {scopeName(tree, employee.scope)}
+                </Link>
+              </span>
+              {employee.currentRun && (
+                <Link href={paths.run(employee.currentRun.id)} className="min-w-0 rounded-xs text-primary-link hover:text-primary-hover">
+                  Working now: {employee.currentRun.title}
+                </Link>
+              )}
+            </span>
           </div>
         </div>
-        {employee.kind === "employee" && can.admin && <EmployeeActions employee={employee} tree={tree} />}
-        {contractor && can.admin && !released && <ContractorActions employee={employee} />}
-      </div>
+        {actions.buttons}
+      </header>
+
+      {/* The chosen action's panel, under the header (on a phone too, before the conversation's launcher). */}
+      <div className="flex flex-col gap-4 empty:hidden max-sm:-order-2">{actions.panel}</div>
 
       <StatRow cols={4} label="Track record" className={cn(RISE, stagger(1))}>
         <Stat
@@ -199,12 +222,65 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
         )}
       </StatRow>
 
-      <section aria-labelledby="job-title" className={cn("flex flex-col gap-3.5", RISE, stagger(2))}>
-        <h2 id="job-title" className="text-lg font-semibold">
+      {/*
+        Its work and its memory, two across from 1600 (as `ContentGrid`), with the conversation under the
+        work so neither column runs on beside empty space; the memory spans both rows. On a phone the grid
+        steps aside (`contents`), so the conversation's launcher can take its place near the top.
+      */}
+      <div className={cn("grid grid-cols-1 items-start gap-6 max-sm:contents 3xl:grid-cols-2 3xl:grid-rows-[auto_1fr]", RISE, stagger(2))}>
+        <ErrorBoundary name="Recent work">
+          <RecentWork employee={employee} runs={trackRecord.runs} led={detail.recentRuns ?? []} />
+        </ErrorBoundary>
+        <div className="min-w-0 3xl:col-start-2 3xl:row-span-2 3xl:row-start-1">
+          <Fold title={`What ${employee.name} remembers`} summary="Its curated memory, and what changed in it">
+            <ErrorBoundary name="The memory">
+              <MemoryPanel employee={employee} tree={tree} />
+            </ErrorBoundary>
+          </Fold>
+        </div>
+        {employee.kind === "employee" && !released && tree?.organisation && (
+          <ErrorBoundary name="The conversation">
+            <Talk label={`Talk to ${employee.name}`} launcherClassName="max-sm:-order-1">
+              <section aria-labelledby="talk-title" className="flex min-w-0 flex-col gap-3 3xl:col-start-1">
+                <h2 id="talk-title" className={SECTION}>
+                  Talk to {employee.name}
+                </h2>
+                <div className="rounded-md border bg-surface p-5 shadow-card">
+                  <ConversationDock
+                    tree={tree}
+                    selection={{
+                      scope: employee.scope,
+                      kind: "employee",
+                      trail: [...namesFor(tree, employee.scope), employee.name],
+                      employeeId: employee.id,
+                    }}
+                  />
+                </div>
+              </section>
+            </Talk>
+          </ErrorBoundary>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Beside the page: the job it works to, and the contractors it briefs (or, for a contractor, its brief). */
+function EmployeeAside({ detail, tree }: { detail: EmployeeDetail; tree: Tree | undefined }) {
+  const mode = useAppSelector((s) => s.ui.mode);
+  const { employee } = detail;
+  const job = employee.jobDescription;
+  const contractor = employee.kind === "contractor";
+  return (
+    <>
+      <section aria-labelledby="job-title" className="flex flex-col gap-4">
+        <h2 id="job-title" className="text-base font-semibold">
           Job description
         </h2>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-md border bg-surface px-6 py-5 shadow-card sm:grid-cols-4">
-          <JobRow label="Mandate">{job.mandate || "Not written yet"}</JobRow>
+        <dl className="flex flex-col gap-3.5">
+          <JobRow label="Mandate">
+            <span className="whitespace-pre-line">{job.mandate || "Not written yet"}</span>
+          </JobRow>
           <JobRow label="Works at">{scopeName(tree, job.scope || employee.scope)} and everything beneath it</JobRow>
           <JobRow label="May use">{job.tools.length > 0 ? job.tools.map((t) => toolLabel(t, mode)).join(", ") : "Nothing beyond reading what it is given"}</JobRow>
           <JobRow label="Services">{job.services.length > 0 ? job.services.map((x) => serviceLabel(x, mode)).join(", ") : "None of the platform's services"}</JobRow>
@@ -218,49 +294,39 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
                 : "No cap of its own; the one above holds"}
           </JobRow>
           <JobRow label="Thinking power">{tierLabel(job.modelTier, mode)}</JobRow>
-          {mode === "technical" && <JobRow label="Identifier">{employee.id}</JobRow>}
+          {mode === "technical" && (
+            <JobRow label="Identifier">
+              <code className="break-all font-mono text-sm">{employee.id}</code>
+            </JobRow>
+          )}
         </dl>
       </section>
-
-      <ErrorBoundary name="Recent work">
-        <RecentWork employee={employee} runs={trackRecord.runs} led={detail.recentRuns ?? []} />
-      </ErrorBoundary>
-
       <ContractorsBriefed detail={detail} />
-
-      {employee.kind === "employee" && !released && tree?.organisation && (
-        <ErrorBoundary name="The conversation">
-          <Talk label={`Talk to ${employee.name}`} launcherClassName="max-sm:-order-1">
-          <section aria-labelledby="talk-title" className="flex flex-col gap-3">
-            <h2 id="talk-title" className="text-lg font-semibold">
-              Talk to {employee.name}
-            </h2>
-            <div className="rounded-md border bg-surface p-5 shadow-card">
-              <ConversationDock
-                tree={tree}
-                selection={{ scope: employee.scope, kind: "employee", trail: [...namesFor(tree, employee.scope), employee.name], employeeId: employee.id }}
-              />
-            </div>
-          </section>
-          </Talk>
-        </ErrorBoundary>
-      )}
     </>
   );
 }
 
 function JobRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <>
-      <dt className="text-ink-muted">{label}</dt>
-      <dd className="m-0 sm:col-span-3">{children}</dd>
-    </>
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-sm text-ink-muted">{label}</dt>
+      <dd className="m-0 text-ink">{children}</dd>
+    </div>
   );
 }
 
-type Panel = "edit" | "reassign" | "budget" | "release" | null;
+// ---------------------------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------------------------
 
-function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | undefined }) {
+type Panel = "edit" | "reassign" | "budget" | "release" | "cap" | "stop" | null;
+
+/**
+ * The actions on an employee, as one group in the header, and the panel the chosen one opens under the
+ * header at the page's full width — so opening one never moves the group. On a phone the first action
+ * stands alone and the rest sit behind "More".
+ */
+function useActions(employee: Employee, tree: Tree | undefined, admin: boolean): { buttons: ReactNode; panel: ReactNode } {
   const [update, updating] = useUpdateEmployeeMutation();
   const [act, acting] = useEmployeeActionMutation();
   const [reassign, reassigning] = useReassignEmployeeMutation();
@@ -273,9 +339,18 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
   const [budget, setBudget] = useState(employee.jobDescription.monthlyCreditLimit?.toString() ?? "");
   const busy = updating.isLoading || acting.isLoading || reassigning.isLoading || rehiring.isLoading;
   const released = employee.status === "released";
+  const contractor = employee.kind === "contractor";
   const org = tree?.organisation?.slug ?? employee.scope.split("/")[0] ?? "";
-  const people = useGetEmployeesQuery({ scope: org }, { skip: !org });
+  const people = useGetEmployeesQuery({ scope: org }, { skip: !org || !admin || contractor });
   const managers = possibleManagers(people.data ?? [], employee.id);
+  const labels = personLabels(managers, tree);
+  const ids = {
+    reassign: useId(),
+    manager: useId(),
+    budget: useId(),
+    rehire: useId(),
+    cap: useId(),
+  };
 
   const run = async (work: () => Promise<unknown>, what: string) => {
     setError(null);
@@ -286,128 +361,203 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
       setError(`Could not ${what}: ${describeError(e as never)}`);
     }
   };
-
-  const saveBudget = (event: FormEvent) => {
+  const saveLimit = (event: FormEvent, what: "budget" | "cap") => {
     event.preventDefault();
     const trimmed = budget.trim();
     const n = Number(trimmed);
     if (trimmed !== "" && (!Number.isFinite(n) || n < 0)) {
-      setError("A budget is a number of credits a month, or empty for none of its own.");
+      setError(what === "budget" ? "A budget is a number of credits a month, or empty for none of its own." : "A cap is a number of credits a month, or empty for none of its own.");
       return;
     }
     void run(
-      () => update({ id: employee.id, patch: trimmed === "" ? { clearMonthlyCreditLimit: true } : { jobDescription: { monthlyCreditLimit: n } } }).unwrap(),
-      "change the budget",
+      () =>
+        update({
+          id: employee.id,
+          patch: trimmed === "" ? { clearMonthlyCreditLimit: true } : { jobDescription: { monthlyCreditLimit: n } },
+        }).unwrap(),
+      what === "budget" ? "change the budget" : "change the cap",
     );
   };
+  const toggle = (panel: Panel) => {
+    setError(null);
+    setOpen((x) => (x === panel ? null : panel));
+  };
+
+  if (!admin || (contractor && released)) return { buttons: null, panel: null };
 
   if (released) {
-    return (
-      <form
-        aria-label={`Rehire ${employee.name}`}
-        className="flex w-full flex-col gap-2 rounded-md border bg-surface p-4 sm:w-dock"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run(() => rehire({ id: employee.id, ...(rehireTo !== employee.scope ? { scope: rehireTo } : {}) }).unwrap(), "rehire");
-        }}
-      >
-        <label htmlFor="rehire-to" className="font-medium">
-          Where {employee.name} works again
-        </label>
-        <select id="rehire-to" value={rehireTo} onChange={(e) => setRehireTo(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3">
-          {placements(tree).map((p) => (
-            <option key={p.scope} value={p.scope}>
-              {`${"— ".repeat(p.depth)}${p.label}${p.scope === employee.scope ? " (where it was)" : ""}`}
-            </option>
-          ))}
-        </select>
-        <Button type="submit" className="self-start" disabled={busy}>
-          Rehire {employee.name}
-        </Button>
-        <span className="text-sm text-ink-muted">Its memory comes back with it, so it does not start cold.</span>
-        {error && <ActionError text={error} />}
-      </form>
-    );
+    // Rehiring is the one action left: the header's group is where it says so, with where it works again.
+    return {
+      buttons: (
+        <form
+          aria-label={`Rehire ${employee.name}`}
+          className="flex min-w-0 flex-col gap-1.5 max-sm:w-full sm:items-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(
+              () =>
+                rehire({
+                  id: employee.id,
+                  ...(rehireTo !== employee.scope ? { scope: rehireTo } : {}),
+                }).unwrap(),
+              "rehire",
+            );
+          }}
+        >
+          <label htmlFor={ids.rehire} className="text-sm font-medium">
+            Where {employee.name} works again
+          </label>
+          <span className="flex flex-wrap gap-2 max-sm:w-full">
+            <Select id={ids.rehire} value={rehireTo} onChange={(e) => setRehireTo(e.target.value)} className="w-72 max-sm:w-full">
+              {placements(tree).map((p) => (
+                <option key={p.scope} value={p.scope}>
+                  {`${"— ".repeat(p.depth)}${p.label}${p.scope === employee.scope ? " (where it was)" : ""}`}
+                </option>
+              ))}
+            </Select>
+            <Button type="submit" disabled={busy} className="max-sm:w-full">
+              Rehire {employee.name}
+            </Button>
+          </span>
+          <span className="text-sm text-ink-muted">Its memory comes back with it, so it does not start cold.</span>
+        </form>
+      ),
+      panel: error ? <ActionError text={error} /> : null,
+    };
   }
 
-  const toggle = (panel: Panel) => setOpen((x) => (x === panel ? null : panel));
-  return (
-    <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
-      <div className="flex flex-wrap gap-2.5">
-        <Button variant="outline" aria-expanded={open === "edit"} onClick={() => toggle("edit")} disabled={busy}>
+  const buttons = contractor ? (
+    <ActionGroup
+      first={
+        <Button variant="outline" aria-expanded={open === "cap"} onClick={() => toggle("cap")} disabled={busy} className="max-sm:flex-1">
+          Cap its spending
+        </Button>
+      }
+    >
+      <Button variant="danger-outline" aria-expanded={open === "stop"} onClick={() => toggle("stop")} disabled={busy} className={MENU_ITEM}>
+        Stop this contractor
+      </Button>
+    </ActionGroup>
+  ) : (
+    <ActionGroup
+      first={
+        <Button variant="primary" aria-expanded={open === "edit"} onClick={() => toggle("edit")} disabled={busy} className="max-sm:flex-1">
           Edit the job
         </Button>
-        <Button variant="outline" aria-expanded={open === "reassign"} onClick={() => toggle("reassign")} disabled={busy}>
-          Reassign
+      }
+      note={employee.standing !== null ? "A standing hire is never let go: every organisation keeps one." : null}
+    >
+      <Button variant="outline" aria-expanded={open === "reassign"} onClick={() => toggle("reassign")} disabled={busy} className={MENU_ITEM}>
+        Reassign
+      </Button>
+      <Button variant="outline" aria-expanded={open === "budget"} onClick={() => toggle("budget")} disabled={busy} className={MENU_ITEM}>
+        Change budget
+      </Button>
+      {employee.status === "paused" ? (
+        <Button variant="outline" onClick={() => void run(() => update({ id: employee.id, patch: { status: "idle" } }).unwrap(), "resume")} disabled={busy} className={MENU_ITEM}>
+          Resume
         </Button>
-        <Button variant="outline" aria-expanded={open === "budget"} onClick={() => toggle("budget")} disabled={busy}>
-          Change budget
+      ) : (
+        <Button
+          variant="outline"
+          onClick={() =>
+            void run(
+              () =>
+                update({
+                  id: employee.id,
+                  patch: { status: "paused" },
+                }).unwrap(),
+              "pause",
+            )
+          }
+          disabled={busy}
+          className={MENU_ITEM}
+        >
+          Pause
         </Button>
-        {employee.status === "paused" ? (
-          <Button variant="outline" onClick={() => void run(() => update({ id: employee.id, patch: { status: "idle" } }).unwrap(), "resume")} disabled={busy}>
-            Resume
-          </Button>
-        ) : (
-          <Button variant="outline" onClick={() => void run(() => update({ id: employee.id, patch: { status: "paused" } }).unwrap(), "pause")} disabled={busy}>
-            Pause
-          </Button>
-        )}
-        <Button variant="soft" aria-expanded={open === "release"} onClick={() => toggle("release")} disabled={busy || employee.standing !== null}>
-          Let go
-        </Button>
-      </div>
-      {employee.standing !== null && <span className="text-sm text-ink-muted">A standing hire is never let go: every organisation keeps one.</span>}
+      )}
+      <Button variant="danger-outline" aria-expanded={open === "release"} onClick={() => toggle("release")} disabled={busy || employee.standing !== null} className={MENU_ITEM}>
+        Let go
+      </Button>
+    </ActionGroup>
+  );
 
-      {open === "edit" && <EditJob employee={employee} managers={managers} onDone={() => setOpen(null)} onError={setError} />}
+  const small = "flex w-full max-w-form flex-col gap-3 rounded-md border bg-surface p-5 shadow-card max-sm:p-4";
+  const panel = (
+    <>
+      {open === "edit" && <EditJob employee={employee} managers={managers} tree={tree} onDone={() => setOpen(null)} onError={setError} />}
 
       {open === "reassign" && (
         <form
           aria-label="Reassign"
-          className="flex w-full flex-col gap-2 rounded-md border bg-surface p-4 sm:w-dock"
+          className={small}
           onSubmit={(e) => {
             e.preventDefault();
-            void run(() => reassign({ id: employee.id, scope, reportsTo: manager || null }).unwrap(), "reassign");
+            void run(
+              () =>
+                reassign({
+                  id: employee.id,
+                  scope,
+                  reportsTo: manager || null,
+                }).unwrap(),
+              "reassign",
+            );
           }}
         >
-          <label htmlFor="reassign-to" className="font-medium">
-            Move {employee.name} to
-          </label>
-          <select id="reassign-to" value={scope} onChange={(e) => setScope(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3">
-            {placements(tree).map((p) => (
-              <option key={p.scope} value={p.scope}>
-                {`${"— ".repeat(p.depth)}${p.label}`}
-              </option>
-            ))}
-          </select>
-          <span className="text-sm text-ink-muted">Its memory travels with it.</span>
-          <label htmlFor="reassign-manager" className="font-medium">
-            Reports to
-          </label>
-          <select id="reassign-manager" value={manager} onChange={(e) => setManager(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3">
-            <option value="">Nobody: it answers to you</option>
-            {managers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} · {m.role}
-                {m.id === employee.reportsTo?.id ? " (as now)" : ""}
-              </option>
-            ))}
-          </select>
-          <Button type="submit" className="self-start" disabled={busy || (scope === employee.scope && manager === (employee.reportsTo?.id ?? ""))}>
-            Move
-          </Button>
+          <Field id="reassign-to" label={`Move ${employee.name} to`} hint="Its memory travels with it.">
+            <Select id="reassign-to" value={scope} onChange={(e) => setScope(e.target.value)}>
+              {placements(tree).map((p) => (
+                <option key={p.scope} value={p.scope}>
+                  {`${"— ".repeat(p.depth)}${p.label}`}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field id="reassign-manager" label="Reports to">
+            <Select id="reassign-manager" value={manager} onChange={(e) => setManager(e.target.value)}>
+              <option value="">Nobody: it answers to you</option>
+              {managers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {labels.get(m.id)}
+                  {m.id === employee.reportsTo?.id ? " (as now)" : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <span className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy || (scope === employee.scope && manager === (employee.reportsTo?.id ?? ""))}>
+              Move
+            </Button>
+            <Button variant="ghost" onClick={() => setOpen(null)}>
+              Cancel
+            </Button>
+          </span>
         </form>
       )}
 
-      {open === "budget" && (
-        <form aria-label="Change budget" onSubmit={saveBudget} className="flex w-full flex-col gap-2 rounded-md border bg-surface p-4 sm:w-dock">
-          <label htmlFor="budget" className="font-medium">
-            Credits a month
-          </label>
-          <input id="budget" inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
-          <span className="text-sm text-ink-muted">Counts what the contractors it briefs spend too. Leave it empty to have no budget of its own.</span>
-          <Button type="submit" className="self-start" disabled={busy}>
-            Save budget
-          </Button>
+      {(open === "budget" || open === "cap") && (
+        <form aria-label={open === "budget" ? "Change budget" : "Cap its spending"} onSubmit={(e) => saveLimit(e, open)} className={small}>
+          <div className="grid grid-cols-1 items-end gap-x-5 gap-y-1.5 sm:grid-cols-2">
+            <span className="flex flex-col gap-1.5">
+              <label htmlFor={open === "budget" ? "budget" : "contractor-cap"} className="font-medium">
+                {open === "budget" ? "Credits a month" : "Credits a month, at most"}
+              </label>
+              <Input id={open === "budget" ? "budget" : "contractor-cap"} inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} />
+            </span>
+            <span className="text-sm text-ink-muted">
+              {open === "budget"
+                ? "Counts what the contractors it briefs spend too. Leave it empty to have no budget of its own."
+                : `Held before each of its calls, so it is never passed${employee.briefedBy ? `; ${possessive(employee.briefedBy.name)} own budget still holds too` : ""}. Leave it empty for no cap of its own.`}
+            </span>
+          </div>
+          <span className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy}>
+              {open === "budget" ? "Save budget" : "Save the cap"}
+            </Button>
+            <Button variant="ghost" onClick={() => setOpen(null)}>
+              Cancel
+            </Button>
+          </span>
         </form>
       )}
 
@@ -424,7 +574,66 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
         />
       )}
 
+      {open === "stop" && (
+        <ConfirmCard
+          label="Confirm stopping"
+          question={`Stop ${employee.name}?`}
+          detail="It makes no more calls from its next step. What it has done is kept, and the work that briefed it carries on without it. A stopped contractor cannot be started again."
+          confirm="Yes, stop it"
+          cancel="Keep it working"
+          busy={busy}
+          onConfirm={() => void run(() => act({ id: employee.id, action: "stop" }).unwrap(), "stop it")}
+          onCancel={() => setOpen(null)}
+        />
+      )}
+
       {error && <ActionError text={error} />}
+    </>
+  );
+  return { buttons, panel };
+}
+
+/** An action inside the group: a button in the row on a tablet or a desktop, a full-width row of the menu on a phone. */
+const MENU_ITEM = "max-sm:w-full max-sm:justify-start max-sm:border-transparent max-sm:hover:bg-ground";
+
+/**
+ * The header's actions: one row from a tablet up; on a phone, the first action beside "More", which
+ * opens the rest as a menu card. The rest stay one set of buttons (not a copy), so the academy and a
+ * screen reader find each once; a lesson pointing at one opens the menu (`endgame:reveal`).
+ */
+function ActionGroup({ first, note, children }: { first: ReactNode; note?: string | null; children: ReactNode }) {
+  const [menu, setMenu] = useState(false);
+  const id = useId();
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const reveal = () => setMenu(true);
+    el.addEventListener("endgame:reveal", reveal);
+    return () => el.removeEventListener("endgame:reveal", reveal);
+  }, []);
+  return (
+    <div className="flex min-w-0 flex-col gap-2 max-sm:w-full sm:items-end">
+      <div role="group" aria-label="Actions" className="flex flex-wrap items-center gap-2 max-sm:w-full">
+        {first}
+        <Button variant="outline" aria-expanded={menu} aria-controls={id} onClick={() => setMenu((x) => !x)} className="sm:hidden">
+          More
+          <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", menu && "rotate-180")} />
+        </Button>
+        <div
+          ref={box}
+          id={id}
+          data-fold-body=""
+          className={cn("sm:contents", menu ? "max-sm:flex" : "max-sm:hidden", "w-full flex-col gap-1 rounded-md border bg-surface p-2 shadow-card")}
+          onClick={(e) => {
+            // A choice made from the menu closes it; the panel it opens is under the header.
+            if ((e.target as HTMLElement).closest("button")) setMenu(false);
+          }}
+        >
+          {children}
+        </div>
+      </div>
+      {note && <span className="text-sm text-ink-muted">{note}</span>}
     </div>
   );
 }
@@ -433,7 +642,7 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
  * The whole job, editable (EMP-10): name, role, mandate, what it may use, services, thinking power and
  * manager. The record shows the change at once and puts it back, with the reason, if it is refused.
  */
-function EditJob({ employee, managers, onDone, onError }: { employee: Employee; managers: Employee[]; onDone: () => void; onError: (reason: string | null) => void }) {
+function EditJob({ employee, managers, tree, onDone, onError }: { employee: Employee; managers: Employee[]; tree: Tree | undefined; onDone: () => void; onError: (reason: string | null) => void }) {
   const [update, state] = useUpdateEmployeeMutation();
   const dispatch = useAppDispatch();
   const before = draftOf(employee, employee.jobDescription);
@@ -471,10 +680,10 @@ function EditJob({ employee, managers, onDone, onError }: { employee: Employee; 
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={`Edit ${employee.name}'s job`} className="flex w-full flex-col gap-4 rounded-md border bg-surface p-5 shadow-card" noValidate>
-      <h2 className="text-lg font-semibold">{employee.name}&rsquo;s job</h2>
-      <JobFields draft={draft} onChange={setDraft} managers={managers} allowStandard={!employee.jobDescription.modelTier} budgetLabel="Its own monthly budget" />
-      <span className="flex flex-wrap gap-2">
+    <form onSubmit={(e) => void submit(e)} aria-label={`Edit ${employee.name}'s job`} className="flex w-full flex-col gap-5 rounded-md border bg-surface p-6 shadow-card max-sm:p-4" noValidate>
+      <h2 className={SECTION}>{employee.name}&rsquo;s job</h2>
+      <JobFields draft={draft} onChange={setDraft} managers={managers} tree={tree} allowStandard={!employee.jobDescription.modelTier} budgetLabel="Its own monthly budget" />
+      <span className="flex flex-wrap gap-2 border-t pt-4">
         <Button type="submit" disabled={state.isLoading}>
           Save the job
         </Button>
@@ -491,140 +700,86 @@ function EditJob({ employee, managers, onDone, onError }: { employee: Employee; 
   );
 }
 
-/**
- * Stopping and capping a contractor (EMP-07). Stopping finishes it at once: the model gateway refuses its next call, so it
- * stops at its next step, what it did is kept, and the work that briefed it carries on without it. A cap holds it to a
- * number of credits a month, inside its briefer's own.
- */
-function ContractorActions({ employee }: { employee: Employee }) {
-  const [update, updating] = useUpdateEmployeeMutation();
-  const [act, acting] = useEmployeeActionMutation();
-  const [open, setOpen] = useState<"cap" | "stop" | null>(null);
-  const [cap, setCap] = useState(employee.jobDescription.monthlyCreditLimit?.toString() ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const busy = updating.isLoading || acting.isLoading;
-  const toggle = (panel: "cap" | "stop") => setOpen((x) => (x === panel ? null : panel));
-
-  const run = async (work: () => Promise<unknown>, what: string) => {
-    setError(null);
-    try {
-      await work();
-      setOpen(null);
-    } catch (e) {
-      setError(`Could not ${what}: ${describeError(e as never)}`);
-    }
-  };
-
-  const saveCap = (event: FormEvent) => {
-    event.preventDefault();
-    const trimmed = cap.trim();
-    const n = Number(trimmed);
-    if (trimmed !== "" && (!Number.isFinite(n) || n < 0)) {
-      setError("A cap is a number of credits a month, or empty for none of its own.");
-      return;
-    }
-    void run(() => update({ id: employee.id, patch: trimmed === "" ? { clearMonthlyCreditLimit: true } : { jobDescription: { monthlyCreditLimit: n } } }).unwrap(), "change the cap");
-  };
-
-  return (
-    <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
-      <div className="flex flex-wrap gap-2.5">
-        <Button variant="outline" aria-expanded={open === "cap"} onClick={() => toggle("cap")} disabled={busy}>
-          Cap its spending
-        </Button>
-        <Button variant="soft" aria-expanded={open === "stop"} onClick={() => toggle("stop")} disabled={busy}>
-          Stop this contractor
-        </Button>
-      </div>
-
-      {open === "cap" && (
-        <form aria-label="Cap its spending" onSubmit={saveCap} className="flex w-full flex-col gap-2 rounded-md border bg-surface p-4 sm:w-dock">
-          <label htmlFor="contractor-cap" className="font-medium">
-            Credits a month, at most
-          </label>
-          <input id="contractor-cap" inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
-          <span className="text-sm text-ink-muted">
-            Held before each of its calls, so it is never passed{employee.briefedBy ? `; ${possessive(employee.briefedBy.name)} own budget still holds too` : ""}. Leave it empty for no cap of its own.
-          </span>
-          <Button type="submit" className="self-start" disabled={busy}>
-            Save the cap
-          </Button>
-        </form>
-      )}
-
-      {open === "stop" && (
-        <ConfirmCard
-          label="Confirm stopping"
-          question={`Stop ${employee.name}?`}
-          detail="It makes no more calls from its next step. What it has done is kept, and the work that briefed it carries on without it. A stopped contractor cannot be started again."
-          confirm="Yes, stop it"
-          cancel="Keep it working"
-          busy={busy}
-          onConfirm={() => void run(() => act({ id: employee.id, action: "stop" }).unwrap(), "stop it")}
-          onCancel={() => setOpen(null)}
-        />
-      )}
-
-      {error && <ActionError text={error} />}
-    </div>
-  );
-}
-
 function ActionError({ text }: { text: string }) {
   return (
-    <p role="alert" className="rounded-xs bg-attention-tint px-4 py-3 text-attention-text">
+    <p role="alert" className="max-w-form rounded-xs bg-attention-tint px-4 py-3 text-attention-text">
       {text} Nothing was changed.
     </p>
   );
 }
 
-const TASK_STATUS: Record<TaskItem["status"], string> = {
-  todo: "To do",
-  in_progress: "In progress",
-  blocked: "Blocked",
-  done: "Done",
-  failed: "Did not succeed",
-  cancelled: "Cancelled",
-};
+// ---------------------------------------------------------------------------------------------
+// Work
+// ---------------------------------------------------------------------------------------------
 
-/** A run's status as a person reads it on the employee's page. */
-const LED_STATUS: Record<string, string> = {
-  queued: "Waiting to start",
-  running: "Working",
-  waiting_approval: "Waiting for you",
-  waiting: "Waiting for you",
-  finished: "Finished",
-  paused: "Paused",
-  succeeded: "Finished",
-  failed: "Did not succeed",
-  cancelled: "Cancelled",
-};
+interface WorkRow {
+  id: string;
+  title: string;
+  href: string | null;
+  status: string;
+  when: string;
+  credits: string | null;
+}
 
+function taskRow(t: TaskItem): WorkRow {
+  const s = workStatus(t.status);
+  const when = s.ended ? `Ended ${timeAgo(t.updatedAt)}` : t.claimedAt ? `Started ${timeAgo(t.claimedAt)}` : `Added ${timeAgo(t.createdAt)}`;
+  const credits =
+    t.actualCredits !== null ? `${formatNumber(t.actualCredits)}${t.estimateCredits !== null ? ` of ${formatNumber(t.estimateCredits)} estimated` : ""}` : t.estimateCredits !== null ? `${formatNumber(t.estimateCredits)} estimated` : null;
+  return {
+    id: t.id,
+    title: t.title,
+    href: t.runId ? paths.run(t.runId) : null,
+    status: t.status,
+    when,
+    credits,
+  };
+}
+
+function ledRow(r: LedRun): WorkRow {
+  const s = workStatus(r.status);
+  const when = s.ended && r.finishedAt ? `Ended ${timeAgo(r.finishedAt)}` : `Started ${timeAgo(r.startedAt)}`;
+  return {
+    id: r.id,
+    title: r.title,
+    href: paths.run(r.id),
+    status: r.status,
+    when,
+    credits: null,
+  };
+}
+
+/**
+ * Its recent work as one table in one status vocabulary: the tasks it took (a factory build's items,
+ * checks and reviews included) or, where its work is not split into tasks (research, reviews), the runs
+ * it led (D75). The newest ten, then "Show all".
+ */
 function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs: TrackRecord["runs"]; led: LedRun[] }) {
-  // The tasks it claimed — a factory build's items, checks and reviews included — kept as its work once they are done.
-  const query = useGetTasksQuery({ scope: employee.scope, limit: 50, employeeId: employee.id });
+  const query = useGetTasksQuery({
+    scope: employee.scope,
+    limit: 50,
+    employeeId: employee.id,
+  });
   const view = viewOf(query);
-  const tasks = view.kind === "loaded" ? view.data.filter((t) => (t.employeeId ?? t.holderEmployeeId) === employee.id).slice(0, 12) : [];
-  const runs = [employee.currentRun ? { id: employee.currentRun.id, title: employee.currentRun.title, now: true } : null, employee.lastRunId && employee.lastRunId !== employee.currentRun?.id ? { id: employee.lastRunId, title: "Its last piece of work", now: false } : null].filter(
-    (r): r is { id: string; title: string; now: boolean } => r !== null,
-  );
+  const tasks = useMemo(() => (view.kind === "loaded" ? view.data.filter((t) => (t.employeeId ?? t.holderEmployeeId) === employee.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) : []), [view, employee.id]);
+  const byTasks = tasks.length > 0;
+  const rows = byTasks ? tasks.map(taskRow) : led.map(ledRow);
+  const list = useShowAll(rows, 10, "pieces of work");
+  // Its last piece of work is linked from the heading only where the table does not already hold it.
+  const last = (byTasks || rows.length === 0) && employee.lastRunId && employee.lastRunId !== employee.currentRun?.id ? employee.lastRunId : null;
 
   return (
-    <section aria-labelledby="work-title" className={cn("flex flex-col gap-3.5", RISE, stagger(3))}>
-      <h2 id="work-title" className="text-lg font-semibold">
-        Recent work
-      </h2>
-      {runs.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
-          {runs.map((r) => (
-            <li key={r.id}>
-              <Link href={paths.run(r.id)} className="inline-flex min-h-touch items-center gap-2 rounded-full bg-primary-tint px-4 font-medium text-primary-hover hover:bg-primary-line">
-                {r.now ? `Now: ${r.title}` : r.title}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+    <section aria-labelledby="work-title" className="flex min-w-0 flex-col gap-3.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="work-title" className={SECTION}>
+          Recent work
+        </h2>
+        {last && (
+          <Link href={paths.run(last)} className="rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+            Its last piece of work
+          </Link>
+        )}
+      </div>
       {view.kind === "loading" && (
         <Loading label="Loading recent work" className="flex flex-col gap-2">
           <Skeleton className="h-12 rounded-sm" />
@@ -634,50 +789,68 @@ function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs:
       {view.kind === "failed" && <Failed title="Recent work could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && view.stale && <Stale reason={view.stale.reason} />}
       {view.kind === "loaded" &&
-        (tasks.length === 0 && led.length > 0 ? (
-          // Research and reviews are not split into tasks: the runs it led are its work (D75).
-          <div className="overflow-hidden rounded-md border bg-surface shadow-card">
-            <ul aria-label="Work it led" className="flex flex-col divide-y">
-              {led.map((r) => (
-                <li key={r.id} className="grid grid-cols-1 gap-x-5 gap-y-1 px-5 py-3.5 sm:grid-cols-4">
-                  <Link href={paths.run(r.id)} className="rounded-xs font-medium text-primary-link hover:text-primary-hover sm:col-span-2">
-                    {r.title}
-                  </Link>
-                  <span className="text-ink-body">{LED_STATUS[r.status] ?? r.status}</span>
-                  <span className="text-ink-body sm:text-right">{r.finishedAt ? `Finished ${timeAgo(r.finishedAt)}` : `Started ${timeAgo(r.startedAt)}`}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : tasks.length === 0 ? (
-          <p data-state="empty" className="py-1 text-ink-muted">
+        (rows.length === 0 ? (
+          <p data-state="empty" className="max-w-prose text-ink-muted">
             {worked.finished > 0
               ? `${employee.name} has finished ${plural(worked.finished, "piece")} of work here, none of it split into tasks (research is not).${employee.lastRunId ? " Its last piece of work is linked above." : ""}`
               : `${employee.name} has not taken on any work here yet.`}
           </p>
         ) : (
-          <div className="overflow-hidden rounded-md border bg-surface shadow-card">
-            <ul aria-label="Tasks" className="flex flex-col divide-y">
-              {tasks.map((t) => (
-                <li key={t.id} className="grid grid-cols-1 gap-x-5 gap-y-1 px-5 py-3.5 sm:grid-cols-4">
-                  <span className="font-medium sm:col-span-2">
-                    {t.runId ? (
-                      <Link href={paths.run(t.runId)} className="rounded-xs text-primary-link hover:text-primary-hover">
-                        {t.title}
-                      </Link>
-                    ) : (
-                      t.title
+          <>
+            <div className="overflow-hidden rounded-md border bg-surface shadow-card">
+              <table aria-label={byTasks ? "Tasks" : "Work it led"} className="w-full border-collapse text-left">
+                <thead className="border-b bg-ground text-sm text-ink-muted max-sm:hidden">
+                  <tr>
+                    <th scope="col" className="w-full px-5 py-2.5 font-medium">
+                      Work
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-medium">
+                      Status
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-medium">
+                      When
+                    </th>
+                    {byTasks && (
+                      <th scope="col" className="px-5 py-2.5 text-right font-medium">
+                        Credits
+                      </th>
                     )}
-                  </span>
-                  <span className="text-ink-body">{TASK_STATUS[t.status]}</span>
-                  <span className="text-ink-body sm:text-right">
-                    {t.estimateCredits !== null ? `Estimated ${formatNumber(t.estimateCredits)}` : "No estimate"}
-                    {t.actualCredits !== null ? `, cost ${formatNumber(t.actualCredits)}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {list.shown.map((r) => {
+                    const s = workStatus(r.status);
+                    return (
+                      <tr key={r.id} data-status={r.status} className="align-top max-sm:flex max-sm:flex-col max-sm:gap-1.5 max-sm:px-4 max-sm:py-3.5">
+                        <td className="px-5 py-3 max-sm:p-0">
+                          {r.href ? (
+                            <Link href={r.href} title={r.title} className="line-clamp-2 rounded-xs font-medium text-primary-link hover:text-primary-hover">
+                              {r.title}
+                            </Link>
+                          ) : (
+                            <span title={r.title} className="line-clamp-2 font-medium">
+                              {r.title}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 max-sm:hidden">
+                          <Badge tone={s.tone}>{s.label}</Badge>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-sm text-ink-body max-sm:flex max-sm:items-center max-sm:gap-2 max-sm:p-0">
+                          <Badge tone={s.tone} className="sm:hidden">
+                            {s.label}
+                          </Badge>
+                          {r.when}
+                        </td>
+                        {byTasks && <td className="whitespace-nowrap px-5 py-3 text-right text-sm tabular-nums text-ink-body max-sm:p-0 max-sm:text-left">{r.credits ?? NO_VALUE}</td>}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {list.control}
+          </>
         ))}
     </section>
   );
@@ -687,8 +860,10 @@ function ContractorsBriefed({ detail }: { detail: EmployeeDetail }) {
   const c = detail.trackRecord.contractors;
   if (detail.employee.kind === "contractor") {
     return detail.employee.brief ? (
-      <section className="flex flex-col gap-2 rounded-md border bg-surface px-6 py-5 shadow-card">
-        <h2 className="text-lg font-semibold">Its brief</h2>
+      <section aria-labelledby="brief-title" className="flex flex-col gap-2">
+        <h2 id="brief-title" className="text-base font-semibold">
+          Its brief
+        </h2>
         <p className="whitespace-pre-line text-ink-body">{detail.employee.brief}</p>
         {detail.employee.briefedBy && (
           <Link href={paths.employee(detail.employee.briefedBy.id)} className="self-start rounded-xs text-primary-link hover:text-primary-hover">
@@ -700,7 +875,7 @@ function ContractorsBriefed({ detail }: { detail: EmployeeDetail }) {
   }
   return (
     <section aria-labelledby="contractors-title" className="flex flex-col gap-3">
-      <h2 id="contractors-title" className="text-lg font-semibold">
+      <h2 id="contractors-title" className="text-base font-semibold">
         Contractors it has briefed
       </h2>
       <p className="text-ink-body">
@@ -709,15 +884,15 @@ function ContractorsBriefed({ detail }: { detail: EmployeeDetail }) {
           : `${plural(c.engaged, "contractor")} so far, ${formatNumber(c.working)} working now. They cost ${formatCredits(c.toDateCredits)} in all, ${formatNumber(c.monthCredits)} this month.`}
       </p>
       {detail.contractors.length > 0 && (
-        <ul aria-label="Contractors working now" className="flex flex-col gap-2">
+        <ul aria-label="Contractors working now" className="flex flex-col divide-y rounded-sm border">
           {detail.contractors.map((x) => (
             <li key={x.id}>
-              <Link href={paths.employee(x.id)} className="flex flex-col gap-1 rounded-sm border bg-surface px-4 py-3 text-ink transition-colors hover:bg-violet-tint">
+              <Link href={paths.employee(x.id)} className="flex flex-col gap-1 px-4 py-3 text-ink transition-colors hover:bg-ground">
                 <span className="flex items-center gap-2 font-medium">
-                  <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-violet-line border-t-violet motion-reduce:animate-none" />
+                  <span aria-hidden className="size-3 shrink-0 animate-spin rounded-full border-2 border-border-strong border-t-primary motion-reduce:animate-none" />
                   {x.role}
                 </span>
-                {x.brief && <span className="text-ink-body">{x.brief}</span>}
+                {x.brief && <span className="line-clamp-3 text-sm text-ink-body">{x.brief}</span>}
               </Link>
             </li>
           ))}
@@ -744,6 +919,18 @@ function ContractorsBriefed({ detail }: { detail: EmployeeDetail }) {
 // Memory
 // ---------------------------------------------------------------------------------------------
 
+/** A kind of memory as a filter names it. */
+const KIND_PLURAL: Record<MemoryKind, string> = {
+  fact: "Facts",
+  practice: "How it works here",
+  preference: "Preferences",
+  lesson: "Lessons",
+};
+
+/**
+ * What it remembers: searchable, narrowed by kind, the newest ten and then "Show all"; its last review
+ * and what changed in it under the entries.
+ */
 function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | undefined }) {
   const includeArchived = employee.status === "released";
   const memory = useGetMemoryQuery({ id: employee.id, includeArchived });
@@ -751,17 +938,26 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
   const view = viewOf(memory);
   const changeView = viewOf(changes);
   const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState("");
+  const [kind, setKind] = useState<MemoryKind | null>(null);
   const can = useCan(tree, employee.scope);
   const editable = can.build && !includeArchived && employee.kind === "employee";
   const changeList = changeView.kind === "loaded" ? changeView.data : [];
-  // A long memory shows its first entries and "Show all", so the side panel never runs far past the page.
-  const entries = useShowAll(view.kind === "loaded" ? view.data : [], 8, "entries");
+  const all = useMemo(() => (view.kind === "loaded" ? view.data : []), [view]);
+  const words = search.trim().toLowerCase();
+  const found = all.filter((e) => (!kind || e.kind === kind) && (!words || `${e.title} ${e.body}`.toLowerCase().includes(words)));
+  // A long memory shows its newest entries and "Show all", so the page never runs to a wall of cards.
+  const entries = useShowAll(found, 10, "entries");
+  const kinds = MEMORY_KINDS.filter((k) => all.some((e) => e.kind === k));
+  const searchId = useId();
 
   return (
-    <section aria-label="Memory" className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <h2 className="text-lg font-semibold">What {employee.name} remembers</h2>
-        <p className="text-ink-body">
+    <section aria-label="Memory" className="flex min-w-0 flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 id="memory-title" className={SECTION}>
+          What {employee.name} remembers
+        </h2>
+        <p className="max-w-prose text-ink-body">
           {employee.kind === "contractor"
             ? "A contractor keeps no memory: what it learns goes to the employee who briefed it."
             : includeArchived
@@ -769,6 +965,40 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
               : `Written by ${employee.name} after each task and tidied at every review. You can read, correct or remove any of it.`}
         </p>
       </div>
+
+      {all.length > 5 && (
+        <div className="flex flex-col gap-2.5">
+          <span className="relative flex">
+            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+            <label htmlFor={searchId} className="sr-only">
+              Search what {employee.name} remembers
+            </label>
+            <Input id={searchId} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${formatNumber(all.length)} entries`} className="pl-9" />
+          </span>
+          {kinds.length > 1 && (
+            <div role="group" aria-label="Show entries of one kind" className="no-scrollbar flex flex-wrap gap-2 max-sm:-mx-4 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-4">
+              {[null, ...kinds].map((k) => {
+                const n = k ? all.filter((e) => e.kind === k).length : all.length;
+                return (
+                  <button
+                    key={k ?? "all"}
+                    type="button"
+                    aria-pressed={kind === k}
+                    onClick={() => setKind(k)}
+                    className={cn(
+                      "inline-flex min-h-touch shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm transition-colors",
+                      kind === k ? "border-primary bg-primary-tint font-semibold text-primary-hover" : "bg-surface text-ink-body hover:bg-ground",
+                    )}
+                  >
+                    {k ? KIND_PLURAL[k] : "All"}
+                    <span className="tabular-nums text-ink-muted">{formatNumber(n)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {view.kind === "loading" && (
         <Loading label="Loading the memory" className="flex flex-col gap-2.5">
@@ -783,8 +1013,14 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
           <Empty icon="employee" title="Nothing remembered yet">
             {employee.name} writes down what it learns after each task.
           </Empty>
+        ) : found.length === 0 ? (
+          <p data-state="empty" className="text-ink-muted">
+            Nothing {employee.name} remembers matches
+            {words ? ` “${search.trim()}”` : ""}
+            {kind ? ` among ${KIND_PLURAL[kind].toLowerCase()}` : ""}.
+          </p>
         ) : (
-          <ul aria-label="Memory entries" className="flex flex-col gap-2.5">
+          <ul aria-label="Memory entries" className="flex flex-col divide-y overflow-hidden rounded-md border bg-surface shadow-card">
             {entries.shown.map((entry) => (
               <MemoryRow key={entry.id} entry={entry} employee={employee} tree={tree} changes={changeList} editable={editable} includeArchived={includeArchived} />
             ))}
@@ -792,22 +1028,18 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
         ))}
       {entries.control}
 
-      {employee.kind === "employee" && <ReviewPanel employee={employee} changes={changeView} onRetry={() => void changes.refetch()} editable={editable} />}
-
-      {employee.kind === "employee" && <MemoryHistory changes={changeView} entries={view.kind === "loaded" ? view.data : []} onRetry={() => void changes.refetch()} />}
-
       {editable &&
         (adding ? (
-          <MemoryForm
-            employee={employee}
-            includeArchived={includeArchived}
-            onDone={() => setAdding(false)}
-          />
+          <MemoryForm employee={employee} includeArchived={includeArchived} onDone={() => setAdding(false)} />
         ) : (
           <Button variant="outline" className="self-start" onClick={() => setAdding(true)}>
             Add something {employee.name} should know
           </Button>
         ))}
+
+      {employee.kind === "employee" && <ReviewPanel employee={employee} changes={changeView} onRetry={() => void changes.refetch()} editable={editable} />}
+
+      {employee.kind === "employee" && <MemoryHistory changes={changeView} entries={all} onRetry={() => void changes.refetch()} />}
     </section>
   );
 }
@@ -820,44 +1052,56 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
   const [error, setError] = useState<string | null>(null);
   const pending = entry.id.startsWith("pending-");
 
-  if (editing) return <MemoryForm employee={employee} entry={entry} includeArchived={includeArchived} onDone={() => setEditing(false)} />;
+  if (editing)
+    return (
+      <li className="p-3">
+        <MemoryForm employee={employee} entry={entry} includeArchived={includeArchived} onDone={() => setEditing(false)} />
+      </li>
+    );
 
   const confirmRemove = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
     try {
       // No reason given is sent as none, so the log never quotes one that was not said (D28).
-      await remove({ id: employee.id, entryId: entry.id, why: why.trim() || null, includeArchived }).unwrap();
+      await remove({
+        id: employee.id,
+        entryId: entry.id,
+        why: why.trim() || null,
+        includeArchived,
+      }).unwrap();
     } catch (e) {
       setError(`It was not removed: ${describeError(e as never)}`);
     }
   };
 
   return (
-    <li data-memory={entry.id} className={cn("flex flex-col gap-1.5 rounded-xs border border-border-strong bg-surface px-4 py-3.5", pending && "opacity-70")}>
+    <li data-memory={entry.id} className={cn("flex flex-col gap-1 px-5 py-4 max-sm:px-4", pending && "opacity-70")}>
       <span className="font-semibold">{entry.title}</span>
-      <span className="whitespace-pre-line text-ink-body">{entry.body}</span>
-      <span className="text-xs text-ink-muted">
-        {MEMORY_KIND[entry.kind]} · About {scopeName(tree, entry.scope || employee.scope)} · {pending ? "Saving…" : entryOrigin(entry, changes)}
-        {entry.sourceRunId && (
-          <>
-            {" · "}
-            <Link href={paths.run(entry.sourceRunId)} className="rounded-xs text-primary-link hover:text-primary-hover">
-              the task
-            </Link>
-          </>
+      <span className="max-w-prose whitespace-pre-line text-ink-body">{entry.body}</span>
+      <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <span className="text-xs text-ink-muted">
+          {MEMORY_KIND[entry.kind]} · About {scopeName(tree, entry.scope || employee.scope)} · {pending ? "Saving…" : entryOrigin(entry, changes)}
+          {entry.sourceRunId && (
+            <>
+              {" · "}
+              <Link href={paths.run(entry.sourceRunId)} className="rounded-xs text-primary-link hover:text-primary-hover">
+                the task
+              </Link>
+            </>
+          )}
+        </span>
+        {editable && !pending && !removing && (
+          <span className="-my-1 flex flex-wrap gap-1">
+            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+              Correct
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setRemoving(true)}>
+              Remove
+            </Button>
+          </span>
         )}
       </span>
-      {editable && !pending && !removing && (
-        <span className="flex flex-wrap gap-1">
-          <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-            Correct
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setRemoving(true)}>
-            Remove
-          </Button>
-        </span>
-      )}
       {removing && (
         <ConfirmCard
           label="Confirm removing"
@@ -867,11 +1111,12 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
           busy={removeState.isLoading}
           onSubmit={(e) => void confirmRemove(e)}
           onCancel={() => setRemoving(false)}
+          className="mt-2"
         >
           <label htmlFor={`why-${entry.id}`} className="text-sm font-medium text-ink">
             Why should {employee.name} forget this? (optional)
           </label>
-          <input id={`why-${entry.id}`} value={why} onChange={(e) => setWhy(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
+          <Input id={`why-${entry.id}`} value={why} onChange={(e) => setWhy(e.target.value)} />
         </ConfirmCard>
       )}
       {error && (
@@ -900,8 +1145,23 @@ function MemoryForm({ employee, entry, includeArchived, onDone }: { employee: Em
     }
     setError(null);
     try {
-      if (entry) await correct({ id: employee.id, entryId: entry.id, title: title.trim(), body: body.trim(), kind, includeArchived }).unwrap();
-      else await add({ id: employee.id, title: title.trim(), body: body.trim(), kind, includeArchived }).unwrap();
+      if (entry)
+        await correct({
+          id: employee.id,
+          entryId: entry.id,
+          title: title.trim(),
+          body: body.trim(),
+          kind,
+          includeArchived,
+        }).unwrap();
+      else
+        await add({
+          id: employee.id,
+          title: title.trim(),
+          body: body.trim(),
+          kind,
+          includeArchived,
+        }).unwrap();
       onDone();
     } catch (e) {
       setError(`${entry ? "The correction" : "It"} was not saved: ${describeError(e as never)}`);
@@ -909,25 +1169,24 @@ function MemoryForm({ employee, entry, includeArchived, onDone }: { employee: Em
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={entry ? "Correct this memory" : "Add to the memory"} className="flex flex-col gap-2.5 rounded-xs border border-primary bg-primary-tint p-4">
-      <label htmlFor={`title-${id}`} className="text-sm font-medium">
-        In a few words
-      </label>
-      <input id={`title-${id}`} value={title} onChange={(e) => setTitle(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
-      <label htmlFor={`body-${id}`} className="text-sm font-medium">
-        What {employee.name} should remember
-      </label>
-      <textarea id={`body-${id}`} value={body} onChange={(e) => setBody(e.target.value)} rows={3} className="rounded-xs border border-border-field bg-surface px-3 py-2" />
-      <label htmlFor={`kind-${id}`} className="text-sm font-medium">
-        Kind
-      </label>
-      <select id={`kind-${id}`} value={kind} onChange={(e) => setKind(e.target.value as MemoryKind)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3">
-        {MEMORY_KINDS.map((k) => (
-          <option key={k} value={k}>
-            {MEMORY_KIND[k]}
-          </option>
-        ))}
-      </select>
+    <form onSubmit={(e) => void submit(e)} aria-label={entry ? "Correct this memory" : "Add to the memory"} className="flex w-full max-w-form flex-col gap-3 rounded-md border border-primary bg-surface p-4 shadow-card">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Field id={`title-${id}`} label="In a few words" className="sm:col-span-2">
+          <Input id={`title-${id}`} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+        <Field id={`kind-${id}`} label="Kind">
+          <Select id={`kind-${id}`} value={kind} onChange={(e) => setKind(e.target.value as MemoryKind)}>
+            {MEMORY_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {MEMORY_KIND[k]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <Field id={`body-${id}`} label={`What ${employee.name} should remember`}>
+        <Textarea id={`body-${id}`} value={body} onChange={(e) => setBody(e.target.value)} rows={3} className={GROWING} />
+      </Field>
       <span className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" disabled={adding.isLoading || correcting.isLoading}>
           {entry ? "Save the correction" : "Add it"}
@@ -950,7 +1209,7 @@ function MemoryHistory({ changes, entries, onRetry }: { changes: ViewState<Memor
   const [all, setAll] = useState(false);
   return (
     <section aria-labelledby="memory-history-title" className="flex flex-col gap-2">
-      <h3 id="memory-history-title" className="font-display text-base font-semibold">
+      <h3 id="memory-history-title" className="text-base font-semibold">
         What changed in it
       </h3>
       {changes.kind === "loading" && (
@@ -967,21 +1226,23 @@ function MemoryHistory({ changes, entries, onRetry }: { changes: ViewState<Memor
           </p>
         ) : (
           <>
-            <ol aria-label="Changes to the memory" className="flex flex-col divide-y rounded-xs border border-border-strong">
+            <ol aria-label="Changes to the memory" className="flex flex-col divide-y rounded-md border bg-surface">
               {(all ? changes.data : changes.data.slice(0, 8)).map((c) => {
                 const title = memoryChangeTitle(c, entries);
                 const why = memoryChangeWhy(c);
                 return (
-                  <li key={c.id} className="flex flex-col gap-0.5 px-3 py-2">
-                    <span className="text-sm">
+                  <li key={c.id} className="grid grid-cols-1 gap-x-4 gap-y-0.5 px-4 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <span className="min-w-0 text-sm">
                       <span className="font-medium">{memoryChangeLine(c)}</span>
                       {title ? `: ${title}` : ""}
+                      {why && <span className="block text-xs text-ink-body">“{why}”</span>}
                     </span>
-                    {why && <span className="text-xs text-ink-body">“{why}”</span>}
-                    <span className="flex flex-wrap gap-2 text-xs text-ink-muted">
-                      <time dateTime={c.at}>{timeAgo(c.at)}</time>
+                    <span className="flex flex-wrap gap-x-3 text-xs text-ink-muted sm:justify-end">
+                      <time dateTime={c.at} className="whitespace-nowrap">
+                        {timeAgo(c.at)}
+                      </time>
                       {c.runId && (
-                        <Link href={paths.run(c.runId)} className="rounded-xs text-primary-link hover:text-primary-hover">
+                        <Link href={paths.run(c.runId)} className="whitespace-nowrap rounded-xs text-primary-link hover:text-primary-hover">
                           the work it came from
                         </Link>
                       )}
@@ -1017,34 +1278,38 @@ function ReviewPanel({ employee, changes, onRetry, editable }: { employee: Emplo
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded-sm bg-violet-tint px-4 py-4">
-      {changes.kind === "loading" && (
-        <Loading label="Loading the last review" className="flex flex-col gap-2">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-4 w-56" />
-        </Loading>
-      )}
-      {changes.kind === "failed" && (
-        <div role="alert" data-state="failed" className="flex flex-col gap-1 text-sm text-attention-text">
-          The last review could not be loaded: {changes.reason}
-          <button type="button" onClick={onRetry} className="min-h-touch self-start rounded-xs font-semibold underline">
-            Try again
-          </button>
-        </div>
-      )}
-      {changes.kind === "loaded" && <ReviewLine changes={changes.data} />}
-      {editable && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => void start()} disabled={state.isLoading || queued !== null}>
-            Review now
-          </Button>
-          {queued && (
-            <Link href={paths.run(queued)} className="rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
-              Review started — watch it
-            </Link>
+    <div className="flex flex-col gap-2 border-t pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {changes.kind === "loading" && (
+            <Loading label="Loading the last review" className="flex flex-col gap-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-56" />
+            </Loading>
           )}
+          {changes.kind === "failed" && (
+            <div role="alert" data-state="failed" className="flex flex-col gap-1 text-sm text-attention-text">
+              The last review could not be loaded: {changes.reason}
+              <button type="button" onClick={onRetry} className="min-h-touch self-start rounded-xs font-semibold underline">
+                Try again
+              </button>
+            </div>
+          )}
+          {changes.kind === "loaded" && <ReviewLine changes={changes.data} />}
         </div>
-      )}
+        {editable && (
+          <div className="flex flex-wrap items-center gap-3">
+            {queued && (
+              <Link href={paths.run(queued)} className="rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+                Review started — watch it
+              </Link>
+            )}
+            <Button size="sm" variant="outline" onClick={() => void start()} disabled={state.isLoading || queued !== null}>
+              Review now
+            </Button>
+          </div>
+        )}
+      </div>
       {error && (
         <p role="alert" className="text-sm text-attention-text">
           {error}
@@ -1067,12 +1332,17 @@ function ReviewLine({ changes }: { changes: MemoryChange[] }) {
   return (
     <p className="flex flex-col gap-0.5">
       <span className="font-semibold">Last review, {timeAgo(last.at)}</span>
-      <span className="text-ink-body">{parts.join(", ")}.</span>
-      {last.runId && (
-        <Link href={paths.run(last.runId)} className="self-start rounded-xs text-sm text-primary-link hover:text-primary-hover">
-          See the review
-        </Link>
-      )}
+      <span className="text-sm text-ink-body">
+        {parts.join(", ")}.
+        {last.runId && (
+          <>
+            {" "}
+            <Link href={paths.run(last.runId)} className="rounded-xs font-medium text-primary-link hover:text-primary-hover">
+              See the review
+            </Link>
+          </>
+        )}
+      </span>
     </p>
   );
 }

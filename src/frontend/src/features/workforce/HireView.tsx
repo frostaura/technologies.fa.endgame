@@ -2,7 +2,9 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
-import { SideCard, TITLE } from "@/components/ui/page";
+import { SECTION, SideCard, TITLE } from "@/components/ui/page";
+import { Field, Input, Textarea } from "@/components/ui/field";
+import { GROWING } from "./layout";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { Stat } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
@@ -78,11 +80,11 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
       </section>
 
       {editing ? (
-        <EditHire hire={hire} onDone={() => setEditing(false)} onError={setEditError} />
+        <EditHire hire={hire} tree={tree} onDone={() => setEditing(false)} onError={setEditError} />
       ) : (
         <Fold title="The drafted job description" summary={`${job.monthlyCreditLimit !== null ? `${formatCredits(job.monthlyCreditLimit)} a month` : "No cap of its own"} · reports to ${hire.reportsTo?.name ?? "you"}`}>
         <section aria-labelledby="jd-title" className={cn("flex flex-col gap-3.5", RISE, stagger(1))}>
-          <h2 id="jd-title" className="text-lg font-semibold">
+          <h2 id="jd-title" className={SECTION}>
             The drafted job description
           </h2>
           {editError && (
@@ -90,7 +92,7 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
               {editError} The proposal is as it was.
             </p>
           )}
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-md border bg-surface px-6 py-5 shadow-card sm:grid-cols-4">
+          <dl className="grid grid-cols-1 gap-x-8 gap-y-1 rounded-md border bg-surface px-6 py-5 shadow-card max-sm:px-4 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-y-3.5">
             <Row label="Mandate">{job.mandate || "Not written yet"}</Row>
             <Row label="Works at">{scopeName(tree, job.scope || hire.scope)} and everything beneath it</Row>
             <Row label="May use">{job.tools.length > 0 ? job.tools.map((t) => toolLabel(t, mode)).join(", ") : "Nothing beyond reading what it is given"}</Row>
@@ -125,8 +127,8 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <>
-      <dt className="text-ink-muted">{label}</dt>
-      <dd className="m-0 sm:col-span-3">{children}</dd>
+      <dt className="text-ink-muted max-sm:mt-2.5 max-sm:text-sm max-sm:first:mt-0">{label}</dt>
+      <dd className="m-0 max-w-prose">{children}</dd>
     </>
   );
 }
@@ -150,14 +152,14 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
 
   return (
     <section aria-label="Your decision" className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-3 max-sm:flex-col">
-        <Button size="lg" onClick={() => setConfirming("accept")} disabled={state.isLoading} aria-expanded={confirming === "accept"}>
+      <div className="flex flex-wrap gap-2 max-sm:flex-col">
+        <Button onClick={() => setConfirming("accept")} disabled={state.isLoading} aria-expanded={confirming === "accept"}>
           Hire {hire.name}
         </Button>
-        <Button size="lg" variant="outline" onClick={onEdit} disabled={state.isLoading}>
+        <Button variant="outline" onClick={onEdit} disabled={state.isLoading}>
           Edit the proposal
         </Button>
-        <Button size="lg" variant="ghost" onClick={() => setConfirming("decline")} disabled={state.isLoading} aria-expanded={confirming === "decline"}>
+        <Button variant="ghost" onClick={() => setConfirming("decline")} disabled={state.isLoading} aria-expanded={confirming === "decline"}>
           Decline
         </Button>
       </div>
@@ -177,7 +179,7 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
           <label htmlFor="hire-note" className="text-sm text-ink-muted">
             A note for the record (optional)
           </label>
-          <input id="hire-note" value={note} onChange={(e) => setNote(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
+          <Input id="hire-note" value={note} onChange={(e) => setNote(e.target.value)} />
         </ConfirmCard>
       )}
     </section>
@@ -212,7 +214,7 @@ function Decided({ hire }: { hire: Hire }) {
   );
 }
 
-function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; onError: (reason: string | null) => void }) {
+function EditHire({ hire, tree, onDone, onError }: { hire: Hire; tree: Tree | undefined; onDone: () => void; onError: (reason: string | null) => void }) {
   const [edit, state] = useEditHireMutation();
   const dispatch = useAppDispatch();
   const org = hire.scope.split("/")[0] ?? "";
@@ -260,18 +262,21 @@ function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; o
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label="Edit the proposal" className="flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card" noValidate>
-      <h2 className="text-lg font-semibold">Edit the proposal</h2>
-      <JobFields draft={draft} onChange={setDraft} managers={managers} allowStandard={!hire.jobDescription.modelTier} />
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Field id="hire-cost" label="Expected credits a month" value={cost} onChange={setCost} numeric />
+    <form onSubmit={(e) => void submit(e)} aria-label="Edit the proposal" className="flex flex-col gap-5 rounded-md border bg-surface p-6 shadow-card max-sm:p-4" noValidate>
+      <h2 className={SECTION}>Edit the proposal</h2>
+      <JobFields draft={draft} onChange={setDraft} managers={managers} tree={tree} allowStandard={!hire.jobDescription.modelTier} />
+      <div className="grid grid-cols-1 items-end gap-x-5 gap-y-1.5 md:grid-cols-2">
+        <Field id="hire-cost" label="Expected credits a month">
+          <Input id="hire-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} aria-describedby="hire-cost-hint" />
+        </Field>
+        <span id="hire-cost-hint" className="text-sm text-ink-muted md:flex md:min-h-touch md:items-center">
+          Its own budget caps what it can cost: an expected cost above the budget is saved as the budget.
+        </span>
       </div>
-      <p className="text-sm text-ink-muted">Its own budget caps what it can cost: an expected cost above the budget is saved as the budget.</p>
-      <label htmlFor="hire-reason" className="text-sm font-medium">
-        Why this hire
-      </label>
-      <textarea id="hire-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="rounded-xs border border-border-field bg-surface px-3 py-2" />
-      <span className="flex flex-wrap gap-2">
+      <Field id="hire-reason" label="Why this hire">
+        <Textarea id="hire-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className={GROWING} />
+      </Field>
+      <span className="flex flex-wrap gap-2 border-t pt-4">
         <Button type="submit" disabled={state.isLoading}>
           Save the proposal
         </Button>
@@ -285,17 +290,6 @@ function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; o
         </p>
       )}
     </form>
-  );
-}
-
-function Field({ id, label, value, onChange, numeric = false }: { id: string; label: string; value: string; onChange: (v: string) => void; numeric?: boolean }) {
-  return (
-    <span className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-      </label>
-      <input id={id} value={value} inputMode={numeric ? "numeric" : undefined} onChange={(e) => onChange(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
-    </span>
   );
 }
 

@@ -446,6 +446,79 @@ function recurringUnproposed(w: World) {
   w.notifications = w.notifications.filter((n) => n.subject?.id !== id.lark);
 }
 
+/**
+ * Kasper after a long season (the real stack's busiest record): sixty things remembered across every
+ * kind, and forty pieces of work in every state — long titles, cancelled and failed ones among them —
+ * so the employee page is designed for the messy case, not the tidy one.
+ */
+function longRecord(w: World) {
+  quiet(w);
+  const kasper = emp(w, id.kasper);
+  const run = w.runs.find((r) => r.run.scope.startsWith(COURT) && r.run.status === "finished");
+  kasper.lastRunId = run?.run.id ?? null;
+  const kinds: MemoryEntry["kind"][] = ["fact", "practice", "preference", "lesson"];
+  const topics = [
+    ["League nights hold four courts", "League nights hold four courts for two hours; a block booking takes the minutes from the league's own balance, never from a member's."],
+    ["Reminders go out in local time", "Every reminder is scheduled in the club's own time zone; a job that ran in UTC once texted members an hour early in summer."],
+    ["Confirmations stay two lines", "A booking confirmation says when, and how to change it. No marketing, no emoji, nothing a member has to scroll."],
+    ["Court 3 has no lights", "Court 3 cannot be booked after sunset; the slot list hides its evening slots rather than refusing them at checkout."],
+    ["Odile reads member-facing words", "Any text a member sees goes past Odile before it ships: propose the words in the plan, never in the pull of the change."],
+    ["Juniors book with a guardian", "A junior's booking names the guardian who pays; the guardian's minutes are used, and both get the confirmation."],
+  ];
+  const added: MemoryEntry[] = [];
+  for (let i = 0; i < 60; i += 1) {
+    const [title = "", body = ""] = topics[i % topics.length] ?? [];
+    const round = Math.floor(i / topics.length);
+    added.push({
+      id: uuidFor(`memory:s4:long:${i}`),
+      employeeId: kasper.id,
+      scope: COURT,
+      title: round === 0 ? title : `${title} (season ${round + 1})`,
+      body: round % 3 === 2 ? `${body} Checked again after the change of season: it still holds, and the league table and the waiting list both depend on it, so a change here is a change to three screens at once.` : body,
+      kind: kinds[i % kinds.length] ?? "fact",
+      sourceRunId: i % 2 === 0 ? (run?.run.id ?? null) : null,
+      createdAt: ago(i * 6 * 60 + 30),
+      updatedAt: ago(i * 6 * 60 + 30),
+      lastReviewedAt: null,
+      archived: false,
+    });
+  }
+  w.memory = [...added, ...w.memory];
+  kasper.memoryEntries = w.memory.filter((x) => x.employeeId === kasper.id && !x.archived).length;
+  const titles = [
+    "League block bookings: hold four courts for two hours every Tuesday and Thursday, charged to the league's own balance of playing minutes",
+    "Reminder texts in the club's local time",
+    "Waiting list when every court is taken, offering the next free slot to the first member in line by text and by e-mail",
+    "Shorter booking confirmations",
+    "Guardian pays for a junior's booking",
+    "Hide Court 3's evening slots after sunset",
+  ];
+  const states: ("done" | "in_progress" | "failed" | "cancelled" | "todo" | "blocked")[] = ["done", "done", "done", "cancelled", "done", "failed", "done", "done"];
+  for (let i = 0; i < 40; i += 1) {
+    const status = i === 0 ? "in_progress" : i === 1 ? "todo" : i === 2 ? "blocked" : (states[i % states.length] ?? "done");
+    const estimate = i % 5 === 4 ? null : 2 + (i % 7);
+    const mins = 90 + i * 9 * 60;
+    w.tasks.push({
+      id: uuidFor(`task:s4:long:${i}`),
+      scope: COURT,
+      runId: run?.run.id ?? null,
+      parentTaskId: null,
+      title: `${titles[i % titles.length] ?? ""}${i >= titles.length ? ` (${Math.floor(i / titles.length) + 1})` : ""}`,
+      description: "",
+      status,
+      holderRunId: null,
+      holderEmployeeId: null,
+      employeeId: kasper.id,
+      claimedAt: status === "todo" ? null : ago(mins),
+      estimateCredits: estimate,
+      actualCredits: status === "done" || status === "failed" ? Math.round((estimate ?? 3) * (0.6 + (i % 4) * 0.2) * 10) / 10 : null,
+      dependsOn: [],
+      createdAt: ago(mins + 60),
+      updatedAt: ago(mins - 30),
+    });
+  }
+}
+
 const SCENARIOS_S4: [Scenario, ...string[]][] = [
   [{ name: "s4-recurring-unproposed", title: "A contractor role that keeps coming back, with nobody proposed for it yet", apply: recurringUnproposed, route: `/hires?scope=${TECH}`, featured: FEATURED }],
   [{ name: "s4-hiring", title: "Hiring with a history: one waiting, one hired by auto-mode, one declined", apply: hiring, route: `/hires?scope=${TECH}`, featured: { ...FEATURED, hire: id.solHire, employee: id.sol } }],
@@ -459,6 +532,7 @@ const SCENARIOS_S4: [Scenario, ...string[]][] = [
   [{ name: "s4-employee-at-cap", title: "Kasper has spent his monthly budget", apply: employeeAtCap, route: "/employees/{employee}", featured: FEATURED }],
   [{ name: "s4-idle-sweep", title: "An idle employee held for you, and one auto-mode let go", apply: idleSweep, route: "/", featured: { ...FEATURED, employee: id.ruth } }],
   [{ name: "s4-released-with-memory", title: "Tomas, let go with his memory archived", apply: releasedWithMemory, route: "/employees/{employee}", featured: { ...FEATURED, employee: id.tomas } }],
+  [{ name: "s4-employee-long-record", title: "Kasper after a long season: sixty memories and forty pieces of work", apply: longRecord, route: "/employees/{employee}", featured: FEATURED }],
   [{ name: "s4-memory-to-tidy", title: "Kasper's memory, with a note learned twice", apply: memoryToTidy, route: "/employees/{employee}", featured: FEATURED }],
   [{ name: "s4-credits-at-zero", title: "The balance at exactly zero", apply: (w) => balance(w, 0), route: "/credits", featured: FEATURED }],
   [{ name: "s4-below-zero", title: "Below zero, inside the overdraft", apply: (w) => balance(w, -120), route: "/credits", featured: FEATURED }],

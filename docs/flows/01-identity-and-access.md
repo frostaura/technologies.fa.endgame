@@ -191,8 +191,8 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Learn first:** ID-02
 - **What you learn:** your roles are grants at places in the tree, possibly in more than one organisation, and the console works in one of them at a time.
 - **Steps:**
-  1. The page shows your name, e-mail and, for an operator, "FrostAura operator".
-  2. "Your roles" lists each organisation, with "Working in it now" on the active one, and each grant: "<Role> of the whole organisation" or "<Role> of a division, <path>", with what that role may do. An Admin or Owner sees "People in <Org>".
+  1. The page shows your avatar, name, e-mail and, for an operator, "FrostAura operator"; then three figures — Passkeys, Organisations and Roles — and your passkeys (ID-08) beside your roles.
+  2. "Your roles" lists each organisation as a card, with "Working in it now" on the active one, and each grant: "<Role> of the whole organisation" or "<Role> of a division, <path>", with what that role may do. An Admin or Owner sees "People in <Org>".
   3. In more than one organisation: "You belong to <n> organisations. The console shows one at a time." and **"Working in"** (the header carries the same drop-down on every screen). Choosing another opens its org chart; every screen then reads that organisation. The choice is kept on this device.
 - **You know it worked when:** "Working in it now" moves to the organisation chosen.
 - **Variations and refusals:** no role yet: "You hold no role in any organisation yet. Whoever invited you grants one." (an operator: "As an operator you enter organisations from Every organisation."). Failed read: "Your account could not be loaded". An operator inside an organisation in God mode has no switcher; the entered organisation applies.
@@ -269,8 +269,8 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Steps:**
   1. The heading reads **"People in {name}"**, with the line "Everyone with a role here, and where each grant was set. A grant holds for everything beneath where it is set."
   2. While loading: "Loading the people".
-  3. Each row shows the person's name (with "(you)" against yourself), their e-mail, and the role as a badge or a drop-down.
-  4. Each row says "Set here" or "Set at {node}" — a node above (the Owner and organisation-wide grants hold here too and are listed) or beneath. It also says "Since {date}" or, for a person still to register, **"No passkey yet: their code works until {date}"** (or "No passkey yet, and their code expired on {date}: send a new one"). This is the only way pending invitations are shown.
+  3. At a desktop's width the people are a table with the columns Person, Role, Where it was set and Since; on a phone each is a card. Each row shows the person's name (with "(you)" against yourself), their e-mail, and the role — a drop-down where you may change it, otherwise its name in the same place — and, where you may, a trailing **"Remove"** (PPL-07).
+  4. Each row says "Set here" or "Set at {node}" — a node above (the Owner and organisation-wide grants hold here too and are listed) or beneath — and "Since {date}". People still to register are grouped under **"Invitations waiting"**, with **"No passkey yet: their code works until {date}"** (or "No passkey yet, and their code expired on {date}: send a new one") and "Send a new code" (PPL-05).
   5. Technical mode adds the grant's id.
   6. The side panel **"What each role may do"** lists the four roles with the text above, followed by "A role can be granted at the organisation, a division, a project or an app, and holds for everything beneath it — so one person can be a Builder in one division and a Viewer elsewhere."
 - **You know it worked when:** the list labelled "People" shows rows.
@@ -389,13 +389,13 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 
 ### PPL-07 Remove someone's grant
 - **Who:** admin / owner (Admin grants: Owner only)
-- **Starts at:** People screen, **"Remove {name}"** in a row
+- **Starts at:** People screen, **"Remove"** at the end of a row (its accessible name is "Remove {name}"; under "Invitations waiting" it reads "Remove {name}")
 - **Needs:** the same conditions as PPL-06
 - **Level:** Core
 - **Learn first:** PPL-01
 - **What you learn:** removing a grant at one level leaves grants set elsewhere in place.
 - **Steps:**
-  1. The person clicks **"Remove {name}"**. A confirmation shows: "{name} loses this role at once. Grants set elsewhere stay.", with **"Remove"** and **"Keep them"**.
+  1. The person clicks **"Remove"** in the row. A confirmation shows: "{name} loses this role at once. Grants set elsewhere stay.", with **"Remove"** and **"Keep them"**.
   2. They click **"Remove"**. The row disappears at once and the grant is deleted. Above the list: "{name} no longer has a role in {place}."
 - **You know it worked when:** the row is gone after the list refreshes and the line above the list says so.
 - **Variations and refusals:**

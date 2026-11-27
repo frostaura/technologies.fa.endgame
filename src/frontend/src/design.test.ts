@@ -38,8 +38,6 @@ const RETIRED_HUE_ALLOWANCE: Record<string, number> = {
   "src/features/home/ConversationDock.tsx": 3,
   "src/features/apps/AskChart.tsx": 6,
   "src/features/runs/RunView.tsx": 8,
-  "src/features/workforce/HiresView.tsx": 4,
-  "src/features/workforce/EmployeeView.tsx": 4,
   "src/features/autonomy/AutonomyView.tsx": 1,
 };
 

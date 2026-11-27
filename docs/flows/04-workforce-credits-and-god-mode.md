@@ -22,8 +22,8 @@ Shared vocabulary used below:
 - **Steps:**
   1. Press "Hiring". The page title reads "Hiring for <name>" with the intro "Hires are proposed when the organisation needs someone: a new division, a project reaching a new stage, or a job that keeps coming back. In auto-mode one that fits the budget is taken on at once; otherwise it waits for you here."
   2. The proposals load (up to 200, newest first). The section "Waiting for you" holds open proposals. The section "Decided" holds accepted and declined ones.
-  3. Each card shows a badge ("Waiting for you" / "Hired" / "Declined"), "<Name>, <Role> for <place>" (the role as written; a name that is the role is said once), "About <n> credits a month" plus ", more than the budget has room for" when it does not fit, then the trigger text and the date.
-  4. The aside holds "Contractor roles that keep coming back" (HIRE-07) and "People let go" (EMP-09). An Admin also sees "Ask for a hire" above the proposals (HIRE-09).
+  3. Each section is one card of rows, every row laid out alike: "<Name>, <Role> for <place>" (the role as written; a name that is the role is said once) over the trigger text and the date; "About <n> credits a month", with "More than the budget has room for" under it when an open proposal does not fit; and its state as a tag ("Waiting for you" / "Hired" / "Declined" / "Withdrawn"). Decided proposals are newest first; past ten, "Show all <n> proposals".
+  4. The side panel holds "Contractor roles that keep coming back" (HIRE-07) and "People let go" (EMP-09). An Admin also sees "Ask for a hire" as the page header's action (HIRE-09).
 - **You know it worked when:** the heading "Hiring for <name>" appears with the "Waiting for you" section, or the empty state.
 - **Variations and refusals:**
   - Empty: "No hires have been proposed here" with "When the work here needs someone, a hire is proposed with its job description and what it would cost a month."
@@ -222,17 +222,17 @@ Shared vocabulary used below:
 - **Starts at:** `/employees/<id>`. Reached from the org chart node (button "<Name>’s record and memory"), the ontology graph, "See <Name>’s record", an idle card "Nothing to do", or a notification.
 - **Needs:** Viewer on the employee's level.
 - **Steps:**
-  1. The header shows the avatar (with a halo while working), the name and a status badge ("Free" / "Working" / "Paused" / "Let go").
+  1. The header shows the avatar (with a halo while working), the name and a status badge ("Free" / "Working" / "Paused" / "Let go"). An Admin sees the actions as one group at the header's right: "Edit the job", "Reassign", "Change budget", "Pause" (or "Resume") and "Let go"; on a phone "Edit the job" stands beside "More", which opens the rest. A chosen action opens its panel under the header.
   2. If idle too long, the header adds "Nothing to do for <n> days".
-  3. The line under the name reads "<Role> · Employee · Hired <time ago>" and " · Reports to <name>". A current run adds the link "Working now: <title>".
+  3. The line under the name reads "<Role> · Employee · Hired <time ago>" and " · Reports to <name>". Under it, "Works at <place>" (a link to that place) — so two employees with the same name and role are told apart by where they work, not by the colour of their avatar — and, with a current run, the link "Working now: <title>".
   4. The track record shows four tiles:
      - "Work accepted": "<a> of <b>" or "No work judged yet". Detail "<n> pieces sent back" / "Nothing sent back", plus " · <n> judgements of others’ work".
      - "Repairs not charged": "<n> repairs of its own mistakes, never billed" or "No repairs of its own work".
      - "Cost so far": "Budget <n> a month, <n> used this month", or "<n> this month; no budget of its own, the one above holds"; when contractors spent some of it, ", including the contractors it briefs; <n> of its own" follows the figure. Both figures count the contractors it briefs, as its budget does (`trackRecord.cost`; its own share is `ownToDateCredits` / `ownMonthCredits`).
      - "Estimates": a headline, or "None scored yet" / "Scored once its first estimated work finishes". Detail "Across <n> pieces of work. The largest miss was <n>%." A run nobody owns is scored to whoever its model calls were mostly charged to, a contractor's calls counting as its briefer's — so a researcher is scored on the research it led.
-  5. "Job description" lists Mandate, Works at, May use, Services, Budget ("… a month, including the contractors it briefs") and Thinking power. Technical mode adds "Identifier".
-  6. "Recent work" shows run chips ("Now: <title>", "Its last piece of work") and the runs it led (`recentRuns`, newest first, up to 12: its own, ones it held a task in, ones charged to it, ones it briefed contractors for), and up to 12 tasks with status — with no tasks, the runs it led are listed as "Work it led" (title, "Finished", "Did not succeed", "Working"…, and when), and an employee with finished work but nothing listed reads "{Name} has finished {n} pieces of work here, none of it split into tasks (research is not)." — ("To do", "In progress", "Blocked", "Done", "Did not succeed", "Cancelled") and "Estimated <n>, cost <n>" or "No estimate".
-  7. "Contractors it has briefed" (EMP-07) and "Talk to <Name>" (EMP-08) follow. The memory sits in the aside (MEM-01).
+  5. "Job description", in the side panel, lists Mandate, Works at, May use, Services, Budget ("… a month, including the contractors it briefs") and Thinking power. Technical mode adds "Identifier".
+  6. "Recent work" is a table — Work, Status, When and, for tasks, Credits — in one status vocabulary: "To do", "Waiting to start", "In progress", "Waiting for you", "Paused", "Done", "Did not succeed", "Cancelled" (a cancelled piece of work never reads "Finished"); "When" reads "Started <time ago>", "Added <time ago>" or "Ended <time ago>"; Credits reads "<actual> of <estimate> estimated", "<estimate> estimated" or "—". It lists the tasks it took (up to 50, newest first); with no tasks, the runs it led (`recentRuns`, newest first, up to 12: its own, ones it held a task in, ones charged to it, ones it briefed contractors for) as "Work it led". The newest ten show, then "Show all <n> pieces of work". "Its last piece of work" links the last run from the section's heading when the table does not already hold it. An employee with finished work but nothing listed reads "{Name} has finished {n} pieces of work here, none of it split into tasks (research is not)."
+  7. "What <Name> remembers" (MEM-01) sits beside the work from 1600 px wide, under it below that; "Talk to <Name>" (EMP-08) follows the work, and "Contractors it has briefed" (EMP-07) is in the side panel.
 - **You know it worked when:** the four track-record tiles and the job description are shown.
 - **Variations and refusals:**
   - Not found: "This employee could not be found", "This was not found, or you cannot see it." and "Back to the org chart" (a not-found is an answer, so there is no retry). Other failure: "The employee could not be loaded".
@@ -385,7 +385,7 @@ Shared vocabulary used below:
 - **Starts at:** `/hires?scope=<path>`, the aside **"People let go"** ("Their memory is kept, so rehiring one is not a cold start."), which links to each record; or the record itself.
 - **Needs:** Admin. The record is a released employee.
 - **Steps:**
-  1. On the record, "Where <Name> works again" starts at where it was ("(where it was)"); choose another place if you like.
+  1. On the record, in the header where the actions were, "Where <Name> works again" starts at where it was ("(where it was)"); choose another place if you like.
   2. Press "Rehire <Name>" ("Its memory comes back with it, so it does not start cold.").
   3. The badge becomes "Free" and the archived memory is restored and editable again. Its old manager is kept if that manager is still on the payroll.
 - **You know it worked when:** the badge reads "Free" and "Works at" shows the place chosen.
@@ -444,11 +444,11 @@ Shared vocabulary used below:
 - **Level:** Core
 - **Learn first:** EMP-01.
 - **What you learn:** memory is curated rather than piled up. Each entry says what kind it is, which place it is about, and where it came from.
-- **Starts at:** `/employees/<id>`, aside "What <Name> remembers".
+- **Starts at:** `/employees/<id>`, the section "What <Name> remembers" (beside the work from 1600 px wide; folded on a phone).
 - **Needs:** nothing.
 - **Steps:**
   1. The copy reads "Written by <Name> after each task and tidied at every review. You can read, correct or remove any of it."
-  2. Each entry shows its title, its body, and a line "<kind> · About <place> · <origin>", plus a link "the task" when it came from a run.
+  2. Each entry shows its title, its body, and a line "<kind> · About <place> · <origin>", plus a link "the task" when it came from a run. The newest ten show, then "Show all <n> entries". Past five entries, a search box ("Search <n> entries") and a filter by kind with counts ("All", "Facts", "How it works here", "Preferences", "Lessons") narrow the list; nothing matching reads "Nothing <Name> remembers matches “<words>”".
   3. Kinds: "A fact", "How it works here", "A preference", "A lesson learned".
   4. Origins: "Added by a person", "Corrected by a person", "Corrected at a review", "Merged at a review", "Learned on a task", "Remembered".
 - **You know it worked when:** the entry list, or "Nothing remembered yet", is shown.
@@ -468,7 +468,7 @@ Shared vocabulary used below:
 - **Level:** Core
 - **Learn first:** MEM-01.
 - **What you learn:** you can teach an employee directly, and it reads your entry before its next task.
-- **Starts at:** the memory aside. Press "Add something <Name> should know".
+- **Starts at:** the memory section. Press "Add something <Name> should know".
 - **Needs:** Builder. The employee is on the payroll.
 - **Steps:**
   1. Fill in "In a few words", "What <Name> should remember" and "Kind".
@@ -521,7 +521,7 @@ Shared vocabulary used below:
 - **Level:** Advanced
 - **Learn first:** MEM-01; following a run (another reader's area).
 - **What you learn:** a review merges what repeats, removes what is stale and corrects bad habits, as a run you can watch.
-- **Starts at:** the memory aside, review panel.
+- **Starts at:** the memory section, the review line under the entries.
 - **Needs:** Builder. The employee is on the payroll.
 - **Steps:**
   1. The panel reads "Not reviewed yet. A review merges what repeats, removes what is stale and corrects bad habits.", or "Last review, <time ago>" with "<n> notes merged, <n> removed as out of date, <n> habits corrected." and the link "See the review".
