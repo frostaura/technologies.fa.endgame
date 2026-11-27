@@ -34,7 +34,7 @@ public static class RunKinds
 
 /// <summary>
 /// Why the control plane refuses to record where a build was placed (R9-1): a build starts from a new idea, so the app it
-/// names must be new — never one that another piece of work made, changed, published, or that holds data.
+/// names must be new — never one another idea's build or a change made or changed, one that was published, or one that holds data.
 /// </summary>
 public static class PlacementRefusals
 {

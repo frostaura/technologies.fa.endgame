@@ -82,7 +82,7 @@ for a failed app, or what its own telemetry measured over fifteen minutes (`degr
 failed). The chart's app row carries the app's `status`. An app (and the project holding it) whose latest build ended
 `failed` or `cancelled` with nothing ever published carries `notBuilt { reason: cancelled|failed|budget|plan-declined, note,
 runId, ideaId }`; its project's `stage` is `not-built`. A build run moves to the app it was placed in when its `placement`
-step is logged — refused with `409 placement_taken` (nothing written) when that app is not new: another run was ever on
+step is logged — refused with `409 placement_taken` (nothing written) when that app is not new: a change, a task or another idea's build was ever on
 it, or it was published, has a version or holds end users and no earlier attempt of the same idea is on it (R9-1) — and the gateway charges a run's calls at the run's own scope when that is narrower than the call's.
 `GET /api/credits` and the chart's organisation carry `neverToppedUp`; `POST /api/organisations` answers `balance` (0) and
 `creditsNote`. `PublicRun` adds `detail` and `reason` from its `run.finished`; an idea's `tryAgain.why` adds `start-declined`.

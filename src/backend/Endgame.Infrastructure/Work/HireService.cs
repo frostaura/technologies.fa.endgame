@@ -479,7 +479,7 @@ public sealed class HireService(
             if (builds.FirstOrDefault(b => b.Id == hire.RaisedByRunId) is { } build
                 && (build.AppId is not { } placed || !apps.TryGetValue(placed, out var app) || Runs.RunService.PublishedNothing(app.PublishedAt, build.CreatedAt)))
             {
-                note = Runs.RunService.WithdrawnReason(build.Status, build.AppId is { } a && apps.TryGetValue(a, out var named) ? named.Name : null);
+                note = Runs.RunService.WithdrawnReason(build.Status, build.AppId is { } a && apps.TryGetValue(a, out var named) && named.PublishedAt is null ? named.Name : null);
             }
             else if (await ScopeOfAsync(hire, cancellationToken) is { } scope && await CoveringAsync(scope, hire.Role, cancellationToken) is { } covering && covering.Id != hire.EmployeeId)
             {

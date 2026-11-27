@@ -127,15 +127,16 @@ public sealed class PlacementGuardTests(PostgresServer postgres) : IAsyncLifetim
     }
 
     [Fact]
-    public async Task Try_again_finds_the_same_ideas_own_app_even_once_published_but_never_another_ideas()
+    public async Task Try_again_finds_the_same_ideas_own_app_even_once_published_or_asked_about_but_never_another_ideas()
     {
         await owner.ProjectAsync(Division, "service-log", "Compressor Service Log");
         var own = await owner.AppAsync("frostaura/community/service-log", "web", "Compressor Service Log");
         var first = await BuildOfAsync("A compressor service log.");
         await ControlPlaneApp.Ok(PlaceAsync(first, own, "frostaura/community/service-log/web"));
-        // Published, then stopped before it finished (its recurring jobs failed, say).
+        // Published, then stopped before it finished (its recurring jobs failed, say); someone asked about it meanwhile.
         await ControlPlaneApp.Ok(service.PostAsJsonAsync($"/internal/apps/{own}/published", new { version = "v1" }));
         await FinishAsync(first, "failed");
+        await ControlPlaneApp.Created(service.PostAsJsonAsync("/internal/runs", new { scope = "frostaura/community/service-log/web", kind = "conversation", title = "Ask about it" }));
 
         var again = await ControlPlaneApp.Created(owner.PostAsync($"/api/runs/{first}/retry", null));
         var retry = again["id"]!.GetValue<string>();
@@ -223,7 +224,7 @@ public sealed class PlacementGuardTests(PostgresServer postgres) : IAsyncLifetim
         await FinishAsync(stranded, "failed");
         var withdrawn = await ControlPlaneApp.Ok(owner.GetAsync($"/api/hires/{theo}"));
         Assert.True(withdrawn["withdrawn"]!.GetValue<bool>());
-        Assert.Contains("stopped before anything was built", withdrawn["decision"]!["note"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal("Withdrawn: the build stopped before anything was built. Trying the build again proposes this hire again.", withdrawn["decision"]!["note"]!.GetValue<string>());
 
         // One ended behind the platform's back (rows from before the fix) is withdrawn by the sweep.
         await using (var scope = app.Scope())

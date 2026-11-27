@@ -370,7 +370,7 @@ will live in {Division} as a new project of its own[, beside {project}]."; a cha
 {app}, the app already built and running in {Division}. Nothing else is touched."
 
 Below the model, the control plane refuses to record a build's `placement` step whose app is not new (`RunService`,
-in the append's transaction): any other run was ever on it (a change, a task, a conversation, another idea's build), or it
+in the append's transaction): work that makes or changes an app was ever on it (a change, a task, another idea's build — a conversation about it or a memory review does not count), or it
 was published, has a version or holds end users while no earlier attempt of the same idea is on it. The refusal is
 `409 placement_taken`; nothing is written, the run does not move to the app, and the build stops before any hire,
 workspace or plan. Only an earlier attempt of the same idea ("Try again") finds its own app again. The workspace is the

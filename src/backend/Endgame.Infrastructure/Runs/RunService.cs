@@ -720,7 +720,8 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
             return;
         }
 
-        var reason = WithdrawnReason(outcome, app?.Name);
+        // An app published before this build began is another's: the build is not named after it.
+        var reason = WithdrawnReason(outcome, app?.PublishedAt is null ? app?.Name : null);
         await db.HireProposals
             .Where(h => h.OrganisationId == org && h.RaisedByRunId == run && h.Status == Domain.Workforce.HireStatuses.Proposed)
             .ExecuteUpdateAsync(s => s
@@ -778,20 +779,21 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
 
     /// <summary>
     /// Whether a build may not be placed in this app (R9-1): a build starts from an idea, so its app must be new. The app is
-    /// another's when any other piece of work was ever on it — a change, a task, a conversation, or another idea's build —
-    /// or when it was published, has a version or holds end users' data and no earlier attempt of this same idea made it.
-    /// Only an earlier attempt of the same idea ("Try again") may find its own app again.
+    /// another's when work that makes or changes an app was ever on it — a change or a task, or another idea's build — or
+    /// when it was published, has a version or holds end users' data and no earlier attempt of this same idea is on it.
+    /// Only an earlier attempt of the same idea ("Try again") may find its own app again; a conversation about the app or a
+    /// memory review changes nothing in it, so neither takes it from that idea.
     /// </summary>
     private async Task<bool> PlacementTakenAsync(Guid org, Guid run, Guid? ideaId, Guid appId, bool built, CancellationToken cancellationToken)
     {
         var others = db.Runs.AsNoTracking().Where(r => r.OrganisationId == org && r.AppId == appId && r.Id != run);
-        if (await others.AnyAsync(r => r.Kind != RunKinds.Build || ideaId == null || r.IdeaId != ideaId, cancellationToken))
+        if (await others.AnyAsync(r => r.Kind == RunKinds.Task || (r.Kind == RunKinds.Build && (ideaId == null || r.IdeaId != ideaId)), cancellationToken))
         {
             return true;
         }
 
         var holdsData = built || await db.AppEndUsers.AsNoTracking().AnyAsync(u => u.OrganisationId == org && u.AppId == appId, cancellationToken);
-        return holdsData && !await others.AnyAsync(cancellationToken);
+        return holdsData && !await others.AnyAsync(r => r.Kind == RunKinds.Build && r.IdeaId == ideaId, cancellationToken);
     }
 
     /// <summary>
