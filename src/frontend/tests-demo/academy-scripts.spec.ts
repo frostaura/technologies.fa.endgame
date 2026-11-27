@@ -17,8 +17,8 @@ import { expect, test, type Page } from "@playwright/test";
  *   (`highlight.none`, with its reason);
  * - (c) nothing is written over the console: no caption bubble (the academy sets a step's words in
  *   a strip under its frame);
- * - (d) it is not the step before again: not the same ring with the same caption, and not the same
- *   ring on a step that changed nothing.
+ * - (d) it is not the step before again: a step may ring the same thing as the one before only to
+ *   say something new about it (its caption differs); the same ring with the same caption fails.
  *
  * At run time a highlight that finds nothing goes unlit so a lesson never breaks in front of a
  * learner; here it fails, naming flow, step and size, unless tests-demo/academy-allowlist.json lists
@@ -175,7 +175,6 @@ for (const { script, variation, name } of plays) {
           else if (area(ring.visible) < 0.85 * area(ring.ring)) failed = `only part of the ring shows (${Math.round((100 * area(ring.visible)) / area(ring.ring))}%): what it rings is cut by the edge of its scroll area`;
           // (d) not the step before again.
           else if (previous && near(previous.ring, ring.visible) && previous.note === note) failed = `the same ring and caption as the step before`;
-          else if (previous && near(previous.ring, ring.visible) && !step.act && !step.goto && !step.clock) failed = `the same ring as the step before, on a step that changes nothing`;
           else counted.rings += 1;
         }
         if (step.highlight?.none) counted.marked += 1;

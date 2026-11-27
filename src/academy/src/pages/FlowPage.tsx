@@ -484,9 +484,9 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
       // A phone on its side: the frame takes the whole height (the site's header steps aside), and a
       // slim strip beside it carries the way back, the title, the step's words and the controls.
       <article className="w-full" data-testid="player" data-mode="landscape">
-        <div ref={gridRef} className="flex h-screen-d gap-3 py-2 pl-safe-l pr-safe-r">
-          <div className="min-w-0 flex-1 pl-2">{stage}</div>
-          <aside className="flex w-side-strip shrink-0 flex-col gap-2 py-1 pr-2" aria-label="This step">
+        <div ref={gridRef} className="flex h-screen-d justify-center gap-5 py-2 pl-safe-l pr-safe-r">
+          <div className="w-phone-side shrink-0 pl-2">{stage}</div>
+          <aside className="flex min-w-0 max-w-xl flex-1 flex-col gap-2 py-1 pr-3" aria-label="This step">
             <a href={href(operator ? "/operator" : f.level ? `/path/${f.level}` : "/learn")} className={`${ui.textLink} inline-flex min-h-touch items-center text-sm`}>← {pathTitle ?? "Academy"}</a>
             {title("line-clamp-2 text-base leading-snug")}
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md border bg-surface p-3 text-sm text-ink" data-testid="caption-strip">
@@ -601,7 +601,7 @@ function StepCard({ step, flow, media, labelKind, scripted, active, seen, showSe
             {step.n}
             {seen && !active && <span className="sr-only">, seen</span>}
           </span>
-          <span className="min-w-0 flex-1 pt-0.5 text-base leading-relaxed text-ink [&_strong]:font-semibold">
+          <span className="min-w-0 flex-1 pt-0.5 text-base leading-relaxed text-ink [&_strong]:font-medium">
             <Inline text={step.text} self={flow.id} />
           </span>
         </button>

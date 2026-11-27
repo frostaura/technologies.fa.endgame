@@ -267,7 +267,11 @@ export function revealHidden(target: Target | string): boolean {
   return asked;
 }
 
-async function waitFor(target: Target | string, field = false, ms = 6000, preferControls = false, show = false): Promise<HTMLElement> {
+/**
+ * `sheetsAfter`: from how many milliseconds a phone's sheets are looked in (`lookInSheets`) — never
+ * (Infinity) for a step waiting for something to appear, which must not open a sheet over it.
+ */
+async function waitFor(target: Target | string, field = false, ms = 6000, preferControls = false, show = false, sheetsAfter = Infinity): Promise<HTMLElement> {
   const until = performance.now() + ms;
   // What a step acts on is a control: while one may still be loading, plain text that happens to
   // hold the same words ("…replace it.", "Ask it again…") is not taken for it.
@@ -278,7 +282,7 @@ async function waitFor(target: Target | string, field = false, ms = 6000, prefer
   const unfoldUntil = performance.now() + Math.min(ms, 2500);
   // On a phone, what a desktop shows in its header or in full on home (the mode, your account, a
   // page's link, what needs you) is in a sheet: once the screen has had a moment, each is looked in.
-  const moreFrom = performance.now() + Math.min(ms / 3, 1200);
+  const moreFrom = performance.now() + sheetsAfter;
   let triedMore = false;
   for (;;) {
     const exact = find(target, field, true, show, true);
@@ -306,16 +310,35 @@ async function waitFor(target: Target | string, field = false, ms = 6000, prefer
  */
 const SHEETS = ["[data-needs-summary]", "[data-bottom-nav] [aria-label^='More']"];
 
+/** The sheet `lookInSheets` opened to find what a step acts on: closed again once the act is done, as a person would. */
+let openedSheet: HTMLElement | null = null;
+
+/** Closes the sheet opened to act in, if what was pressed left it open (the mode switch does). */
+async function closeOpenedSheet() {
+  const sheet = openedSheet;
+  openedSheet = null;
+  if (!sheet || !sheet.isConnected || !visible(sheet)) return;
+  sheet.querySelector<HTMLElement>("[aria-label^='Close']")?.click();
+  await sleep(instantNow ? 60 : 250);
+}
+
 /** Opens each sheet in turn and finds what the words name outright in it; closes it again when it holds nothing. */
 async function lookInSheets(target: Target | string, field: boolean, show: boolean): Promise<HTMLElement | null> {
+  const open = () => [...document.querySelectorAll<HTMLElement>("[role=dialog]")].filter(visible);
+  // A sheet already open (the conversation) holds what the step is about: nothing is opened over it.
+  if (open().length) return null;
   for (const selector of SHEETS) {
     const opener = [...document.querySelectorAll<HTMLElement>(selector)].find(visible);
     if (!opener) continue;
     opener.click();
     await sleep(instantNow ? 120 : 350);
     const found = find(target, field, true, show, true);
-    if (found) return found;
-    [...document.querySelectorAll<HTMLElement>("[role=dialog] [aria-label^='Close']")].find(visible)?.click();
+    if (found) {
+      openedSheet = found.closest<HTMLElement>("[role=dialog]");
+      return found;
+    }
+    // Closed by its own Close, and only it.
+    for (const sheet of open()) sheet.querySelector<HTMLElement>("[aria-label^='Close']")?.click();
     await sleep(instantNow ? 60 : 200);
   }
   return null;
@@ -509,13 +532,15 @@ function tabFrom(from: HTMLElement) {
 
 async function perform(action: Action) {
   if ("click" in action) {
-    const el = await waitFor(action.click, false, 6000, true);
+    const el = await waitFor(action.click, false, 6000, true, false, 1200);
     await approach(el);
     focusUnlessEmbedded(el);
     el.click();
+    await sleep(instantNow ? 30 : 200);
+    await closeOpenedSheet();
   } else if ("hover" in action) {
     // The pointer comes to rest on it, as a mouse would: what the page shows on hover (a line's name) appears.
-    const el = await waitFor(action.hover, false, 6000);
+    const el = await waitFor(action.hover, false, 6000, false, false, 1200);
     await approach(el);
     const win = windowOf(el);
     const r = el.getBoundingClientRect();
@@ -525,7 +550,7 @@ async function perform(action: Action) {
     el.dispatchEvent(new win.MouseEvent("mouseover", at));
     el.dispatchEvent(new win.MouseEvent("mouseenter", { ...at, bubbles: false }));
   } else if ("type" in action) {
-    const el = await waitFor(action.type.into, true, 6000, true);
+    const el = await waitFor(action.type.into, true, 6000, true, false, 1200);
     await approach(el);
     focusUnlessEmbedded(el);
     if (instantNow || reduced()) setValue(el, action.type.text);
@@ -538,7 +563,7 @@ async function perform(action: Action) {
       }
     }
   } else if ("select" in action) {
-    const el = await waitFor(action.select.into, true, 6000, true);
+    const el = await waitFor(action.select.into, true, 6000, true, false, 1200);
     await approach(el);
     const want = norm(action.select.value);
     if (el.tagName === "SELECT") {
@@ -618,6 +643,7 @@ export const endgameDemo = {
   async goto(args: { route?: string; persona?: string; scenario?: string }) {
     clearSpotlight();
     forgetSteps();
+    openedSheet = null;
     keepFocusOut(performance.now() + 2000);
     goto(args);
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -631,19 +657,21 @@ export const endgameDemo = {
   async highlight(args: Target & { note?: string; marker?: number; region?: boolean; none?: string }) {
     // The ring of the step before names what that step showed; it goes while this one is found.
     clearSpotlight();
+    openedSheet = null;
     if (args.none) return true;
     const target: Target = { selector: args.selector, testId: args.testId, text: args.text, label: args.label };
     if (!target.selector && !target.testId && !target.text && !target.label) return;
     // A spotlight is guidance, not an action: when nothing matches, the step still goes on, unlit.
     await settled(4000, () => find(target, false, false, true));
-    const el = await waitFor(target, false, 5000, false, true).catch(() => null);
+    // A spotlight looks in a phone's sheets only once what it names has had time to appear on the page.
+    const el = await waitFor(target, false, 5000, false, true, 2500).catch(() => null);
     if (!el) {
       clearSpotlight();
       return false;
     }
     const subject = subjectOf(el, !!args.region);
     reveal(el, !reduced(), subject);
-    showSpotlight(el, { marker: typeof args.marker === "number" ? args.marker : null, region: !!args.region }, () => find(target, false, false, true));
+    showSpotlight(el, { marker: typeof args.marker === "number" ? args.marker : null, region: !!args.region, keep: () => reveal(el, false, subject) }, () => find(target, false, false, true));
     await scrolledToRest(el);
     return true;
   },

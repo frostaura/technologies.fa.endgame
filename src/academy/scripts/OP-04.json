@@ -114,7 +114,7 @@
       "act": [
         {
           "click": {
-            "text": "credits left"
+            "selector": "a[href='/credits']"
           }
         },
         {

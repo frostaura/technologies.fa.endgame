@@ -39,7 +39,7 @@
         }
       ],
       "highlight": {
-        "selector": "nav[aria-label='Where you are']",
+        "selector": "nav[aria-label='Where you are'], button[aria-label^='Where you are']",
         "note": "The breadcrumb becomes the trail: Northwind / Technologies / Court booking. Every step but the last selects that level."
       }
     },

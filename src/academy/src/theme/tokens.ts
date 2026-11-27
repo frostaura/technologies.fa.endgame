@@ -85,8 +85,8 @@ export const academy = {
     again: "10.25rem",
     next: "9rem",
     "next-sm": "5.5rem",
-    /** The strip beside the frame of a phone on its side. */
-    "side-strip": "20rem",
+    /** The phone frame of a phone on its side: the whole height, less the page's edge, at the console's shape (390 × 640) and its bezel. */
+    "phone-side": "calc((100dvh - 1rem) * 0.609 + 0.5rem)",
     /** The search results panel under the header's box: wide enough for a title on two lines, never wider than the window. */
     "search-panel": "min(37.5rem, calc(100vw - 2rem))",
   },

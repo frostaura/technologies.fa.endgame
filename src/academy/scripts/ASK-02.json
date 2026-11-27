@@ -61,7 +61,7 @@
       "step": 5,
       "kind": "demo",
       "highlight": {
-        "text": "credits left",
+        "selector": "a[href='/credits']",
         "note": "The balance is read again: it fell by what the question cost."
       }
     }

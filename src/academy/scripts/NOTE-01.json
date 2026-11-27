@@ -9,7 +9,7 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "selector": "button[aria-label^='Notifications']",
+        "selector": "button[aria-label^='Notifications'], a[aria-label^='Alerts']",
         "note": "The bell counts the unread notices: a coral badge, and a label read out as “Notifications, 7 unread”. It asks again every 30 seconds."
       }
     }
@@ -25,7 +25,7 @@
           "step": 1,
           "kind": "demo",
           "highlight": {
-            "selector": "button[aria-label^='Notifications']",
+            "selector": "button[aria-label^='Notifications'], a[aria-label^='Alerts']",
             "note": "Lena is a Builder: notices go to Owners and Admins, so her bell shows no badge."
           }
         }

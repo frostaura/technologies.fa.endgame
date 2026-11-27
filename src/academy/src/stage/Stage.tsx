@@ -265,7 +265,12 @@ export function Stage({ flow, script, active, run, interactive, onTry, onBack, b
       </div>
       {/* A phone on its side gives the frame the whole height: the step's words are in the strip beside it. */}
       {(mode !== "landscape" || big) && <div className="flex shrink-0 justify-center">{strip}</div>}
-      {nav && <div className="shrink-0" data-print="hide">{nav}</div>}
+      {/* Under the frame and as wide as it (or as wide as the controls need), so the three line up. */}
+      {nav && (
+        <div className="mx-auto w-full shrink-0" style={fit && !big ? { maxWidth: `${Math.max(fit.width, 720)}px` } : undefined} data-print="hide">
+          {nav}
+        </div>
+      )}
     </div>
   );
 }

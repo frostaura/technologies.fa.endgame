@@ -201,8 +201,7 @@ built demo on both consoles the academy frames — 1280 × 800 and 390 × 640 (a
 script on the phone's only) — and fails, naming flow, step and size, when a step: has an action
 that errors or a highlight that finds nothing; ends, on the phone, at another address than on the
 laptop; draws no ring, or a ring that is cut or runs outside the console (unless its highlight is
-`none`); draws a caption bubble; or rings what the step before rang with the same caption, or
-again without doing anything. A demo step with no highlight at all fails the run too: it says what
+`none`); draws a caption bubble; or rings what the step before rang with the same caption. A demo step with no highlight at all fails the run too: it says what
 it is about, or `none` and why. An entry in `tests-demo/academy-allowlist.json`
 (`{ flow, step, reason, variation?, size? }`) excuses a step, and an allow-listed step that passes
 again fails, so the list stays true. Each test records what it checked as its `steps` annotation.

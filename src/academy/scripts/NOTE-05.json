@@ -16,7 +16,7 @@
         }
       ],
       "highlight": {
-        "selector": "button[aria-label^='Notifications']",
+        "selector": "button[aria-label^='Notifications'], a[aria-label^='Alerts']",
         "note": "Mark read: the row loses New and the count drops by one at once, on the page and on the bell. It is read for you alone."
       }
     }

@@ -44,7 +44,7 @@
           "step": 1,
           "kind": "demo",
           "highlight": {
-            "text": "credits left",
+            "selector": "a[href='/credits']",
             "note": "Northwind is at its overdraft limit: the pill turns amber and still leads to Credits."
           }
         }

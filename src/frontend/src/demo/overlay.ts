@@ -147,6 +147,11 @@ export function subjectOf(el: HTMLElement, region = false): HTMLElement {
 function bars(el: Element): { top: number; bottom: number } {
   let top = 0;
   let bottom = window.innerHeight;
+  // Drawn in a layer of its own (a sheet, a dialog, the God-mode band, a bar itself): no bar stands over it.
+  for (let p: Element | null = el; p && p !== document.body; p = p.parentElement) {
+    if (p.ownerDocument !== document) break;
+    if (/fixed|sticky/.test(getComputedStyle(p).position)) return { top, bottom };
+  }
   const header = document.querySelector<HTMLElement>("body > div header, header");
   const nav = document.querySelector<HTMLElement>("[data-bottom-nav]");
   if (header && !header.contains(el) && /sticky|fixed/.test(getComputedStyle(header).position)) top = Math.max(top, header.getBoundingClientRect().bottom);
@@ -187,6 +192,9 @@ export function clipFor(el: Element): Box {
 }
 
 let refind: (() => HTMLElement | null) | null = null;
+/** Brings what is ringed back into view when the page moves it out (a conversation that follows its newest reply down). */
+let keep: (() => void) | null = null;
+let kept = { times: 0, at: 0 };
 let lostSince = 0;
 let number: number | null = null;
 /** Still drawn: in the page, or in an Edge page's frame that is itself still in the page (a removed frame's nodes stay "connected" to its own document). */
@@ -278,6 +286,11 @@ function place() {
   const filling = (Math.min(named.bottom, clip.bottom) - Math.max(named.top, clip.top)) / Math.max(1, clip.bottom - clip.top);
   const seen = Math.max(shownFraction(named, clip), named.bottom - named.top > clip.bottom - clip.top ? filling : 0);
   if (seen < (asRegion ? 0.25 : 0.9)) {
+    // Scrolled away by the page itself after it was shown: brought back, a few times at most.
+    if (keep && kept.times < 3 && now - kept.at > 500) {
+      kept = { times: kept.times + 1, at: now };
+      keep();
+    }
     hide();
     last = { shown: false, ring: box, visible: null, clip, named };
     frame = requestAnimationFrame(place);
@@ -308,13 +321,15 @@ function place() {
  * under its frame starts with the same number); `region` rings a region as it is, where a step
  * shows a state rather than a control. `again` finds the element anew when the screen replaces it.
  */
-export function showSpotlight(el: HTMLElement, options: { marker?: number | null; region?: boolean } = {}, again?: () => HTMLElement | null) {
+export function showSpotlight(el: HTMLElement, options: { marker?: number | null; region?: boolean; keep?: () => void } = {}, again?: () => HTMLElement | null) {
   clearSpotlight();
   tracked = el;
   asRegion = !!options.region;
   number = options.marker ?? null;
   el.setAttribute("data-demo-ringed", "");
   refind = again ?? null;
+  keep = options.keep ?? null;
+  kept = { times: 0, at: performance.now() };
   subjectEl = subjectOf(el, asRegion);
   rung = [...rung.filter((r) => r.subject.isConnected), { subject: subjectEl, named: el }];
   ring = layer("pointer-events-none fixed z-50 rounded-md border-2 border-primary outline outline-1 outline-surface motion-safe:transition-[left,top,width,height] motion-safe:duration-200");
@@ -340,6 +355,7 @@ export function clearSpotlight() {
   tracked = null;
   subjectEl = null;
   refind = null;
+  keep = null;
   lostSince = 0;
   placed = null;
   number = null;

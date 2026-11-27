@@ -32,7 +32,7 @@
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "selector": "nav[aria-label=\"Where you are\"]",
+        "selector": "nav[aria-label='Where you are'], button[aria-label^='Where you are']",
         "note": "Each level in the breadcrumb opens its own secrets."
       }
     },

@@ -16,7 +16,7 @@
         },
         {
           "click": {
-            "selector": "ul[aria-label='Who works on what'] a[href*='employees']"
+            "selector": "[aria-label='Who works on what']:not(button) a[href*='employees']"
           }
         }
       ],
@@ -37,7 +37,7 @@
         },
         {
           "click": {
-            "selector": "ul[aria-label='How data flows'] a[href*='apps']"
+            "selector": "[aria-label='How data flows']:not(button) a[href*='apps']"
           }
         }
       ],
