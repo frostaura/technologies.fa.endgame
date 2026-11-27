@@ -88,6 +88,9 @@ describe("AutonomyView", () => {
     fireEvent.click(within(research()).getByRole("button", { name: "Save for Tools" }));
     await waitFor(() => expect(within(research()).getByText("Set here")).toBeTruthy());
     expect(api.calls.find((c) => c.method === "PUT")?.body).toEqual({ scope: "acme/tools", stage: "research", deny: ["edit_file"], ask: [], allow: [], checkpoints: [] });
+    // Taking them away is part of changing them: one action per row.
+    expect(within(research()).queryByRole("button", { name: "Remove here" })).toBeNull();
+    fireEvent.click(within(research()).getByRole("button", { name: "Change" }));
     fireEvent.click(within(research()).getByRole("button", { name: "Remove here" }));
     await waitFor(() => expect(within(research()).getByText("No rules set for this stage")).toBeTruthy());
   });
