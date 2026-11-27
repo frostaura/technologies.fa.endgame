@@ -166,6 +166,8 @@ defineScenario({
   title: "Learning's build stage asks before the app's description changes, and refuses its decisions file",
   apply: (w) => {
     only(w, IDS.runBuildReadingList);
+    // The docs part edits the decisions file first, so the rule's refusal ("refused by your rules") is on the page before the
+    // owner is asked about the app's description, and stays beside their own "You declined: …" (RUN-02, RUN-07).
     w.ruleSets.push({ path: LEARNING, stage: "build", deny: ["edit_file(docs/decisions.md)"], ask: ["edit_file(docs/app.md)"], allow: [], checkpoints: [] });
   },
   route: "/runs/{run}",

@@ -324,13 +324,21 @@ public sealed class AgentLoop
         }
 
         var allowed = decision.Verdict == PermissionVerdict.Allow;
-        await events.WriteAsync(allowed ? HarnessEvents.ToolPermitted : HarnessEvents.ToolDenied, new JsonObject
+        var verdict = new JsonObject
         {
             ["callId"] = WebSearch.CallId,
             ["name"] = WebSearch.Name,
             ["rule"] = decision.Rule,
             ["reason"] = decision.Reason,
-        }, cancellationToken);
+        };
+        if (!allowed)
+        {
+            // Who refused it: the owner, answering no at an approval (with what they declined), or a rule that never asked (R6-1).
+            verdict["by"] = ApprovalDetail.DeclinedByOwner(decision.Rule) ? "owner" : "rule";
+            verdict["declined"] = ApprovalDetail.DeclinedByOwner(decision.Rule) ? WebSearch.Declined(agent.Title) : null;
+        }
+
+        await events.WriteAsync(allowed ? HarnessEvents.ToolPermitted : HarnessEvents.ToolDenied, verdict, cancellationToken);
         state.SearchAllowed = allowed;
         if (!allowed)
         {
@@ -518,7 +526,7 @@ public sealed class AgentLoop
             decision = await AskAsync(name, tool, arguments!, targets, decision, cancellationToken);
         }
 
-        await events.WriteAsync(decision.Verdict == PermissionVerdict.Allow ? HarnessEvents.ToolPermitted : HarnessEvents.ToolDenied, new JsonObject
+        var verdict = new JsonObject
         {
             ["callId"] = callId,
             ["name"] = name,
@@ -526,7 +534,16 @@ public sealed class AgentLoop
             ["reason"] = decision.Reason,
             ["paths"] = Json.Array(targets.Paths.Select(p => p.Relative)),
             ["command"] = targets.Command is { } c ? OutputText.Truncate(c, 1000) : null,
-        }, cancellationToken);
+        };
+        if (decision.Verdict != PermissionVerdict.Allow)
+        {
+            // Who refused it: the owner, answering no to the question they were asked, or a rule that never asked (R6-1).
+            var byOwner = ApprovalDetail.DeclinedByOwner(decision.Rule);
+            verdict["by"] = byOwner ? "owner" : "rule";
+            verdict["declined"] = byOwner ? ApprovalDetail.Declined(ApprovalTitle(name, tool, arguments!)) : null;
+        }
+
+        await events.WriteAsync(decision.Verdict == PermissionVerdict.Allow ? HarnessEvents.ToolPermitted : HarnessEvents.ToolDenied, verdict, cancellationToken);
         if (decision.Verdict != PermissionVerdict.Allow)
         {
             return ToolOutcome.Error($"Permission denied ({decision.Rule}): {decision.Reason}", "denied");
@@ -572,16 +589,7 @@ public sealed class AgentLoop
         }
 
         var what = targets.Command ?? string.Join(", ", targets.Paths.Select(p => p.Relative));
-        // The title is for the owner (ARCH-004): what will happen if they approve, in words; the tool, its command or its
-        // files are technical detail, kept for the detail line technical mode shows. A tool that knows its own plain words says them.
-        var title = tool is IApprovalTitle plain ? plain.ApprovalTitle(arguments) : name switch
-        {
-            "edit_file" or "write_file" => "Let the agent change part of the app",
-            "run" => "Let the agent run a check on the app",
-            "commit" => "Let the agent save a new version",
-            "tasks" => "Let the agent update its task list",
-            _ => "Let the agent take this step",
-        };
+        var title = ApprovalTitle(name, tool, arguments);
         var answer = await services.Approvals.AskAsync(
             OutputText.Truncate($"{title.TrimEnd('.', '?')}?", 300),
             ApprovalDetail.For(asked),
@@ -593,6 +601,19 @@ public sealed class AgentLoop
             ? new PermissionDecision(PermissionVerdict.Allow, $"checkpoint:{asked.Checkpoint}:approved", $"The owner approved this call.{note}")
             : new PermissionDecision(PermissionVerdict.Deny, $"checkpoint:{asked.Checkpoint}:rejected", $"The owner declined this call, so it was not done.{note} Carry on without it, or finish and say plainly that it was not done.");
     }
+
+    /// <summary>
+    /// The approval's title is for the owner (ARCH-004): what will happen if they approve, in words; the tool, its command or
+    /// its files are technical detail, kept for the detail line technical mode shows. A tool that knows its own plain words says them.
+    /// </summary>
+    private static string ApprovalTitle(string name, ITool tool, JsonObject arguments) => tool is IApprovalTitle plain ? plain.ApprovalTitle(arguments) : name switch
+    {
+        "edit_file" or "write_file" => "Let the agent change part of the app",
+        "run" => "Let the agent run a check on the app",
+        "commit" => "Let the agent save a new version",
+        "tasks" => "Let the agent update its task list",
+        _ => "Let the agent take this step",
+    };
 
     private async Task<(string Text, string Source)?> StopNudgeAsync(AgentState state, string text, CancellationToken cancellationToken)
     {
@@ -720,6 +741,22 @@ public static class WebSearch
     /// </summary>
     public static string ApprovalTitle(string? step) =>
         OutputText.Truncate(string.IsNullOrWhiteSpace(step) ? "Let this step search the web?" : $"Let this step search the web: {Doing(step.Trim().TrimEnd('.', '?'))}?", 300);
+
+    /// <summary>
+    /// What the owner declined when they answered no to <see cref="ApprovalTitle"/>, for "You declined: …" (R6-1): "search the
+    /// web for what they leave undone", "search the web while weighing the evidence…", or "search the web for this step".
+    /// </summary>
+    public static string Declined(string? step)
+    {
+        if (string.IsNullOrWhiteSpace(step))
+        {
+            return "search the web for this step";
+        }
+
+        var doing = Doing(step.Trim().TrimEnd('.', '?'));
+        const string Looking = "looking for ";
+        return OutputText.Truncate(doing.StartsWith(Looking, StringComparison.OrdinalIgnoreCase) ? $"search the web for {doing[Looking.Length..]}" : $"search the web while {doing}", 300);
+    }
 
     private static readonly Dictionary<string, string> Irregular = new(StringComparer.OrdinalIgnoreCase)
     {

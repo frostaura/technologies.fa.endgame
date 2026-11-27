@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RunEvent } from "@/store/types";
-import { buildTimeline, factoryAgentTitle, groupTitle, outcomeOf, type TimelineGroup, type TimelineItem } from "./timeline";
+import { actionCount, buildTimeline, factoryAgentTitle, groupTitle, outcomeOf, type TimelineGroup, type TimelineItem } from "./timeline";
 
 let seq = 0;
 const at = "2026-11-24T10:00:00Z";
@@ -180,3 +180,41 @@ describe("the security review's agents, by what they did (R6-6)", () => {
     expect(factoryAgentTitle("security-reviewer-2", none)).toBe("Reviewed the fixes");
   });
 });
+
+describe("a refusal says who refused it (R6-1)", () => {
+  const decline = (payload: Record<string, unknown>) => {
+    seq = 0;
+    return buildTimeline(
+      [
+        ev("run.started", { holder: "runner-1" }),
+        ev("tool.denied", { callId: "capability:web_search", name: "web_search", rule: "cascade:frostaura:research:deny:web_search", reason: "Denied by the research rule set.", by: "rule" }),
+        ev("tool.denied", { callId: "capability:web_search", name: "web_search", reason: "The owner declined web search for this step.", ...payload }),
+      ],
+      "normal",
+    );
+  };
+
+  it("says the owner declined a search they declined by hand, and keeps “refused by your rules” for a rule that never asked", () => {
+    const t = decline({ rule: "checkpoint:frostaura:web_search:rejected", by: "owner", declined: "search the web for existing products" });
+    expect(flat(t.items)).toEqual([
+      "Work started",
+      "An action was refused by your rules: It was not carried out. The work continues without it.",
+      "You declined: search the web for existing products: It was not done. The work continues without it.",
+    ]);
+    expect(t).toMatchObject({ denials: 1, declined: 1 });
+  });
+
+  it("reads an older run's decline, which carried only its rule, as the owner's too", () => {
+    const t = decline({ rule: "checkpoint:frostaura:web_search:rejected" });
+    expect(flat(t.items)[2]).toBe("You declined: search the web: It was not done. The work continues without it.");
+    expect(t).toMatchObject({ denials: 1, declined: 1 });
+  });
+
+  it("counts the two apart on the step-count line", () => {
+    expect(actionCount(12, 3, 0)).toBe("12 actions taken, 3 refused by your rules");
+    expect(actionCount(12, 0, 1)).toBe("12 actions taken, 1 declined by you");
+    expect(actionCount(12, 2, 1)).toBe("12 actions taken, 2 refused by your rules, 1 declined by you");
+    expect(actionCount(0, 0, 0)).toBe("");
+  });
+});
+

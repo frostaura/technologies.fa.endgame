@@ -80,6 +80,12 @@ function askTitle(tool: string): string {
   return "Let the agent take this step?";
 }
 
+/** What the owner declined, from the question they answered no to (`ApprovalDetail.Declined`): "change part of the app". */
+function declinedPhrase(title: string): string {
+  const text = title.trim().replace(/[?. ]+$/, "").replace(/^Let (the agent|this step) /, "");
+  return text ? text.charAt(0).toLowerCase() + text.slice(1) : "this step";
+}
+
 /** The credits left for work at a scope: the tightest monthly budget on its chain, or the balance down to the overdraft limit. */
 export function headroomAt(world: World, scope: string): number {
   const o = organisation(world, orgOf(scope));
@@ -154,12 +160,14 @@ function cycle(
   s.effect((w, r) => {
     const d = decide(w, r.run.scope, stage, tool.name, target, false);
     if (d.verdict === "deny") {
-      append(w, r, "tool.denied", { name: tool.name, agent: o.agent, callId: toolCall, rule: d.rule, reason: d.reason, paths: tool.paths ?? [], command: tool.command ?? null });
+      // A rule that refused without asking (`AgentLoop.ExecuteAsync`): "refused by your rules".
+      append(w, r, "tool.denied", { name: tool.name, agent: o.agent, callId: toolCall, rule: d.rule, reason: d.reason, paths: tool.paths ?? [], command: tool.command ?? null, by: "rule", declined: null });
       return ["Run"];
     }
     const asked = w.approvals.filter((a) => a.runId === r.run.id && a.key === key).pop();
     if (asked?.answer === "rejected") {
-      append(w, r, "tool.denied", { name: tool.name, agent: o.agent, callId: toolCall, rule: `checkpoint:${d.checkpoint ?? d.rule}:rejected`, reason: "The owner declined this call, so it was not done. Carry on without it, or finish and say plainly that it was not done.", paths: tool.paths ?? [], command: tool.command ?? null });
+      // The owner's own no, with what they declined in the words of the question (`ApprovalDetail.Declined`): "You declined: …".
+      append(w, r, "tool.denied", { name: tool.name, agent: o.agent, callId: toolCall, rule: `checkpoint:${d.checkpoint ?? d.rule}:rejected`, reason: "The owner declined this call, so it was not done. Carry on without it, or finish and say plainly that it was not done.", paths: tool.paths ?? [], command: tool.command ?? null, by: "owner", declined: declinedPhrase(askTitle(tool.name)) });
       return ["Run"];
     }
     permitted(w, r, asked ? { ...d, rule: `checkpoint:${d.checkpoint ?? d.rule}:approved`, reason: "The owner approved this call." } : d);

@@ -1,7 +1,7 @@
 import { formatNumber, plural } from "@/lib/format";
 import { isPlain, plainOrNull } from "@/lib/plain";
 import type { RunEvent } from "@/store/types";
-import { describeEvent, evaluationDetail, formatCredits, num, str, type Mode, type StepTone, type TraceStep } from "./runModel";
+import { declinedByOwner, describeEvent, evaluationDetail, formatCredits, num, refusalStep, str, type Mode, type StepTone, type TraceStep } from "./runModel";
 
 /**
  * The run log as a person reads it. Normal mode speaks plainly: messages as written, each sub-agent
@@ -40,7 +40,10 @@ export interface Timeline {
   actions: number;
   modelCalls: number;
   toolCalls: number;
+  /** Refused by a rule without asking. */
   denials: number;
+  /** Declined by the owner at an approval. */
+  declined: number;
 }
 
 const TOP = "\u0000top";
@@ -412,6 +415,7 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
   let replies = 0;
   let toolCalls = 0;
   let denials = 0;
+  let declined = 0;
   let subagents = 0;
 
   const containerOf = (owner: string): Container => (owner === TOP ? top : (groups.get(owner)?.container ?? ensureGroup(owner, TOP, {}, null).container));
@@ -467,7 +471,11 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
     // Counts first: accurate whatever is drawn.
     if (e.type === "model.replied") modelCalls += 1;
     if (e.type === "tool.requested") toolCalls += 1;
-    if (e.type === "tool.denied") denials += 1;
+    // Refused by a rule without asking, or declined by the owner at an approval: counted apart (R6-1).
+    if (e.type === "tool.denied") {
+      if (declinedByOwner(p)) declined += 1;
+      else denials += 1;
+    }
     if (e.type === "subagent.started") subagents += 1;
     if (kind === "agent.reply") replies += 1;
 
@@ -542,7 +550,7 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
         const open = containerOf(owner).activity;
         const name = str(p, "name") ?? str(p, "tool") ?? open?.names.get(str(p, "callId") ?? "") ?? "";
         if (open && (name === "run" || name === "shell.exec") && open.commands > 0) open.commands -= 1;
-        push(owner, { seq: e.seq, at: e.at, tone: "attention", icon: "secrets", title: "An action was refused by your rules", detail: "It was not carried out. The work continues without it.", credits: null, raw: null });
+        push(owner, { seq: e.seq, at: e.at, ...refusalStep(p), credits: null, raw: null });
         continue;
       }
       case "run.started":
@@ -619,13 +627,16 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
 
   // Older research runs wrote their strands as workflow agents, never as `subagent.started`: each counts as one.
   const briefed = subagents > 0 ? subagents : [...groups.values()].length;
-  return { items: top.items, actions: toolCalls + briefed, modelCalls: modelCalls > 0 ? modelCalls : replies, toolCalls, denials };
+  return { items: top.items, actions: toolCalls + briefed, modelCalls: modelCalls > 0 ? modelCalls : replies, toolCalls, denials, declined };
 }
 
-/** The actions a run took, when it took any: a conversation that only talked has steps but no actions (D15). */
-export function actionCount(actions: number, denials: number): string {
-  if (actions === 0 && denials === 0) return "";
-  return `${plural(actions, "action")} taken${denials > 0 ? `, ${formatNumber(denials)} refused by your rules` : ""}`;
+/**
+ * The actions a run took, when it took any: a conversation that only talked has steps but no actions (D15). What a rule
+ * refused and what the owner declined at an approval are counted apart (R6-1).
+ */
+export function actionCount(actions: number, denials: number, declined = 0): string {
+  if (actions === 0 && denials === 0 && declined === 0) return "";
+  return `${plural(actions, "action")} taken${denials > 0 ? `, ${formatNumber(denials)} refused by your rules` : ""}${declined > 0 ? `, ${formatNumber(declined)} declined by you` : ""}`;
 }
 
 /** Credits spent by a group, as a label. */

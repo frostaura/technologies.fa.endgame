@@ -487,11 +487,11 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Foundation. **Learn first:** RUN-01.
 - **What you learn:** normal mode tells the work in plain words and never names infrastructure.
 - **Steps:**
-  1. The count line reads "{n} actions taken" (", {n} refused by your rules" when any were refused). A run that took no action, such as a conversation that only answered, shows no count.
+  1. The count line reads "{n} actions taken" (", {n} refused by your rules" when a rule refused any without asking, ", {n} declined by you" when you declined any at an approval). A run that took no action, such as a conversation that only answered, shows no count. Technical mode adds " · {n} declined by you" after the denials.
   2. Messages appear as "{speaker} · {title}".
   3. Contractor and agent groups fold away once done, for example "Built: {part}", "Checked: {part}", "Drew up the plan"; "Show its {n} steps" unfolds one. A group still under way is titled in the present tense ("Looking for existing products", "Building: {part}") with "Working"; once the run has ended, a group that never reported back reads "Stopped".
   4. The mechanics are summarised, for example "Read 4 files · Changed 2 files · Ran the tests — 12 passed".
-  5. Refused actions read "An action was refused by your rules" / "It was not carried out. The work continues without it."
+  5. An action a rule refused without asking reads "An action was refused by your rules" / "It was not carried out. The work continues without it." One you declined at an approval reads as yours, in the words of the question: "You declined: search the web for what they leave undone", "You declined: change part of the app" / "It was not done. The work continues without it." (technical mode: "Declined by you: {tool}"). An older run's decline, which carried only its rule, reads "You declined: search the web" or "You declined: a step the work asked you about".
   6. **"Outcome"** shows the closing plain message. A conversation's outcome is its reply, drawn from its markdown (bold, lists, inline code).
 - **You know it worked when:** no ids, file names or model names appear.
 - **Variations and refusals:** a line that would name infrastructure is hidden.
@@ -1011,7 +1011,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **What it changes:** every agent's permission check at that stage. "May not" is refused whatever else applies. "May do" is allowed.
 - **Variations and refusals:**
   - Refused: "The rules were not saved: {reason} They are as they were." (400 for a malformed rule or stage).
-  - **"Asks you first" asks.** A matching call raises an approval (RUN-07) and the work waits for your answer, even though nobody watches the run; declined, the step is not taken and the work goes on without it. **"Search the web"** (`web_search`) is the AI model's own ability, and the same rules hold for it: under "May not" it is not offered at all, and under "Asks you first" each step asks once before its first search and works without searching if declined. The rule set's separate `checkpoints` list is kept as it was ("Also stops for you at: …") and is API/MCP only.
+  - **"Asks you first" asks.** A matching call raises an approval (RUN-07) and the work waits for your answer, even though nobody watches the run; declined, the step is not taken and the work goes on without it. **"Search the web"** (`web_search`) is the AI model's own ability, and the same rules hold for it: under "May not" it is not offered at all, and under "Asks you first" each step asks once before its first search and works without searching if declined. On the run page a step a rule refused reads "An action was refused by your rules"; one you declined reads "You declined: search the web for …" (RUN-02). The rule set's separate `checkpoints` list is kept as it was ("Also stops for you at: …") and is API/MCP only.
   - Empty list labels: "Nothing extra is refused", "Nothing waits for you", "Only what the job allows".
 - **Where:** `AutonomyView.tsx` `StageRules`; `PUT /api/autonomy/rule-sets`; `PermissionPolicy.Decide`.
 - **Reachable from:** UI (deny, ask, allow); API/MCP `rule_set_set` (adds `checkpoints`).

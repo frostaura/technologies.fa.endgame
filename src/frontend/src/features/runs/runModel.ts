@@ -434,6 +434,31 @@ export function formatCredits(n: number): string {
   return rounded.toLocaleString("en-GB");
 }
 
+
+/**
+ * Whether a refusal was the owner's own answer at an approval — `by: "owner"`, or, in an older run's log, a
+ * `checkpoint:…:rejected` rule — rather than a rule that refused without asking (R6-1).
+ */
+export function declinedByOwner(p: Record<string, unknown>): boolean {
+  const by = str(p, "by");
+  if (by) return by === "owner";
+  const rule = str(p, "rule") ?? "";
+  return rule.startsWith("checkpoint:") && rule.endsWith(":rejected");
+}
+
+/**
+ * A refusal in normal mode, said truthfully: "You declined: search the web for …" when the owner answered no, and
+ * "An action was refused by your rules" only when a rule refused it without asking (R6-1).
+ */
+export function refusalStep(p: Record<string, unknown>): Pick<TraceStep, "tone" | "icon" | "title" | "detail"> {
+  if (!declinedByOwner(p)) {
+    return { tone: "attention", icon: "secrets", title: "An action was refused by your rules", detail: "It was not carried out. The work continues without it." };
+  }
+  const said = str(p, "declined") ?? (str(p, "name") === "web_search" ? "search the web" : "a step the work asked you about");
+  const title = `You declined: ${said}`;
+  return { tone: "attention", icon: "verdict", title: isPlain(title) ? title : "You declined a step the work asked you about", detail: "It was not done. The work continues without it." };
+}
+
 /**
  * One event as a step. Normal mode speaks plainly and never names infrastructure — no tool names,
  * models, containers or repositories — and leaves the mechanics (single model and tool calls) to
@@ -498,10 +523,14 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
       if (!technical) return null;
       return { ...base, tone: "money", icon: "secrets", title: `Allowed: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: str(p, "rule") ? `Rule: ${str(p, "rule")}` : null };
     case "tool.denied":
-      if (!technical) {
-        return { ...base, tone: "attention", icon: "secrets", title: "An action was refused by your rules", detail: "It was not carried out. The work continues without it." };
-      }
-      return { ...base, tone: "attention", icon: "secrets", title: `Denied: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: [str(p, "rule") && `Rule: ${str(p, "rule")}`, str(p, "reason")].filter(Boolean).join(" · ") || null };
+      if (!technical) return { ...base, ...refusalStep(p) };
+      return {
+        ...base,
+        tone: "attention",
+        icon: "secrets",
+        title: `${declinedByOwner(p) ? "Declined by you" : "Denied"}: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`,
+        detail: [str(p, "rule") && `Rule: ${str(p, "rule")}`, str(p, "reason")].filter(Boolean).join(" · ") || null,
+      };
     case "tool.result":
       if (!technical) return null;
       return { ...base, tone: "quiet", icon: "build", title: `Result: ${str(p, "name") ?? str(p, "tool") ?? "tool"}`, detail: str(p, "content") ?? str(p, "result") };

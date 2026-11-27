@@ -93,6 +93,9 @@ public sealed class PermissionTests
         var (_, log) = await TestAgents.RunAsync(agent, model, ws);
         var denied = log.Events.Single(e => e.Type == "tool.denied");
         Assert.Equal("unattended:default:ask", denied.Payload["rule"]!.GetValue<string>());
+        // Nobody was asked: a rule refused it.
+        Assert.Equal("rule", denied.Payload["by"]!.GetValue<string>());
+        Assert.Null(denied.Payload["declined"]);
         Assert.Empty(ws.Commands);
         var result = log.Events.Single(e => e.Type == "tool.result");
         Assert.Contains("Permission denied (unattended:default:ask)", result.Payload["content"]!.GetValue<string>(), StringComparison.Ordinal);
@@ -119,6 +122,12 @@ public sealed class PermissionTests
         Assert.Equal(type, decision.Type);
         Assert.Equal(rule, decision.Payload["rule"]!.GetValue<string>());
         Assert.Equal(approve, ws.Files.ContainsKey("/workspace/infra/main.tf"));
+        if (!approve)
+        {
+            // R6-1: the console says the owner declined it, in the words of the question they answered — never "refused by your rules".
+            Assert.Equal("owner", decision.Payload["by"]!.GetValue<string>());
+            Assert.Equal("change part of the app", decision.Payload["declined"]!.GetValue<string>());
+        }
     }
 
     [Fact]

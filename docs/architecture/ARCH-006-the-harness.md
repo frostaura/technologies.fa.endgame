@@ -93,9 +93,12 @@ routes by task type itself (`ARCH-003`).
   workflow gives it a budget.
 - **Web search is permission-checked like a tool.** It is the route's own capability, not a tool call, so before a session's
   first model call the loop asks the policy about `web_search` (read-only, the agent's stage). Allowed: nothing is logged.
-  "May not": `tool.denied` (call id `capability:web_search`), the session's calls carry `maxSearches: 0`, and a nudge tells
-  the model it may not search. "Asks you first": one approval for the step ("Let this step search the web: {title}?",
-  `continues`); declined, the same as "may not". The decision is replayed from its event, so a resumed session never asks
+  "May not": `tool.denied` (call id `capability:web_search`, `by: "rule"`), the session's calls carry `maxSearches: 0`, and a
+  nudge tells the model it may not search. "Asks you first": one approval for the step ("Let this step search the web:
+  {title}?", `continues`); declined, the same as "may not", but `by: "owner"` with `declined` ("search the web for what
+  they leave undone", `WebSearch.Declined`), so the run page says "You declined: …" and keeps "refused by your rules" for a
+  rule that never asked (R6-1). A tool call declined at its approval carries the same two fields
+  (`ApprovalDetail.Declined`: "change part of the app"). The decision is replayed from its event, so a resumed session never asks
   again.
 - **Bookkeeping is not for people.** The loop's own `message` events carry a `kind` and no `text` (`reply`, `detail`,
   `nudge`, `note` instead); sub-agent events carry a `title`, a plain `brief` and a one-sentence `summary`, the raw report in

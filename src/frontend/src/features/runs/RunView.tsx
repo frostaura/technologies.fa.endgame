@@ -497,8 +497,8 @@ function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]
         </h2>
         <span className="text-sm text-ink-muted" data-testid="action-count">
           {mode === "technical"
-            ? `${plural(timeline.modelCalls, "model call")} · ${plural(timeline.toolCalls, "tool call")} · ${plural(timeline.denials, "denial")}`
-            : actionCount(timeline.actions, timeline.denials)}
+            ? `${plural(timeline.modelCalls, "model call")} · ${plural(timeline.toolCalls, "tool call")} · ${plural(timeline.denials, "denial")}${timeline.declined > 0 ? ` · ${timeline.declined} declined by you` : ""}`
+            : actionCount(timeline.actions, timeline.denials, timeline.declined)}
         </span>
       </div>
       {timeline.items.length === 0 ? (

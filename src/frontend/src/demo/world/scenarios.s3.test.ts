@@ -68,6 +68,14 @@ describe("the factory's scenarios", () => {
     expect(said(failed, S3.runChange, "Stopped")).toMatch(/still did not work after 3 rounds of repair, each on a stronger model, so the app was not changed/);
   });
 
+  it("says who refused what: a rule that never asked, and the owner who declined what they were asked (R6-1)", () => {
+    const built = buildWorld("s3-stage-rules", "owner");
+    seek(built.world, "build:finished", (x, id) => answerApproval(x, id, "reject", "Not now."));
+    const denied = run(built.world, IDS.runBuildReadingList)?.events.filter((e) => e.type === "tool.denied") ?? [];
+    expect(denied.find((e) => e.payload.by === "rule")?.payload).toMatchObject({ declined: null });
+    expect(denied.find((e) => e.payload.by === "owner")?.payload).toMatchObject({ declined: "change part of the app" });
+  });
+
   it("asks before the rule-bound file changes, and refuses the one denied", () => {
     const w = world("s3-stage-rules");
     seek(w, "build:finished", (x, id) => answerApproval(x, id, "approve", "test"));

@@ -147,7 +147,7 @@ export const STORIES: Record<string, Story> = {
         {
           id: "docs-and-shell",
           text: "Write down what the app is, what it keeps and the decisions taken, so the next person to change it starts from the truth.",
-          detail: "docs/app.md, docs/data.md, docs/decisions.md and AppShellTests updated for the book routes; PROGRESS.md records the work.",
+          detail: "docs/decisions.md, docs/app.md, docs/data.md and AppShellTests updated for the book routes; PROGRESS.md records the work.",
           check: "make test passes; the docs describe the books app and nothing else.",
           covers: ["R4"],
         },
