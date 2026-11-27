@@ -1013,23 +1013,24 @@ public sealed partial class WorkflowTests
     }
 
     [Fact]
-    public async Task An_evaluator_that_passes_an_item_without_showing_it_in_the_running_app_is_overruled_and_the_item_repaired()
+    public async Task An_evaluator_that_passes_an_item_without_showing_it_in_the_running_app_is_overruled_and_the_item_never_passes()
     {
         var (cp, ws, dock) = BuildRun();
         // The first evaluation says "passed" from the tests alone, never calling the app: the gate fails it. Its second look at
-        // the same build does the same, so only then is the item sent back to the builder.
+        // the same build does the same: still overruled, so the item does not pass — and, since nothing in the app was shown
+        // wrong, it is not sent to the builder either (R6), so the run ends there and nothing is published.
         var factory = new Factory { EvaluatorCallsTheApp = n => n >= 2 };
         var model = factory.Model();
         await RunBuildAsync(cp, model, ws, dock);
-        Assert.True(cp.Run["status"]!.GetValue<string>() == "succeeded", cp.Run["summary"]?.ToString());
+        Assert.Equal("failed", cp.Run["status"]!.GetValue<string>());
         var failed = cp.Payload("evaluation.failed")!;
         Assert.Equal(("recipes-api", 0), (failed["item"]!.GetValue<string>(), failed["round"]!.GetValue<int>()));
         Assert.Contains("never called signed in", failed["faults"]!.ToJsonString(), StringComparison.Ordinal);
         Assert.False(failed["requirements"]![0]!["met"]!.GetValue<bool>());
         Assert.True(failed["rechecked"]!.GetValue<bool>());
-        Assert.StartsWith("Sent back for repair, at no charge: Families can keep their recipes in one place", failed["summary"]!.GetValue<string>(), StringComparison.Ordinal);
-        Assert.Contains(model.Calls, c => c.Repair && c.TaskType == "build-t1");
-        Assert.Equal(2, cp.Types.Count(t => t == "evaluation.passed"));
+        Assert.True(failed["unverified"]!.GetValue<bool>());
+        Assert.DoesNotContain(cp.Types, t => t == "evaluation.passed");
+        Assert.DoesNotContain(model.Calls, c => c.TaskType == "build-t1");
     }
 
     [Fact]

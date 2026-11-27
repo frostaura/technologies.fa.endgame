@@ -39,9 +39,12 @@
    evidence}], faults}`. Code's gate fails the item unless every requirement is met with evidence naming a call that was
    made and every promised test id is written in `web/src` as `data-testid="…"`, and — for a requirement where a signed-in
    person makes or joins something of their own — unless the same member made the same call again and the app answered
-   the record they already had (the same id, or 409, never a second 201 or another id), then read it back (`evaluation.passed` /
+   the record they already had (the same id, or 409, never a second 201 or another id) while it was still theirs, then read
+   it back — decided from the calls made, in order; a join after giving the record up is a fresh one (`evaluation.passed` /
    `evaluation.failed`, with a plain `summary`). The preview and its database are destroyed when the evaluation ends.
-6. **Repair.** A failed item goes back to a builder one tier up, with the faults, not billed; at most three rounds.
+6. **Repair.** A failed item goes back to a builder one tier up, with the faults, not billed; at most three rounds. A
+   failure only of how the check showed the work is looked at again once, free, and never repaired: still refused after
+   that second look, the part stops (`unverified`), and the owner is told it could not be checked.
 7. **Progress.** A passed item is recorded in `PROGRESS.md` and committed.
 8. **Security review.** The organisation's standing security reviewer (its model calls carry that employee's id) checks the app against the checklist skill; a finding gets one unbilled repair,
    and a finding that remains blocks publishing.

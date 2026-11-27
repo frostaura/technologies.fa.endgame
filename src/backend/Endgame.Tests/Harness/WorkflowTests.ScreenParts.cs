@@ -226,15 +226,42 @@ public sealed partial class WorkflowTests
     }
 
     [Fact]
-    public async Task A_part_that_fails_the_same_way_three_times_stops_before_a_fourth_round()
+    public async Task A_check_that_still_cannot_verify_how_it_was_shown_after_its_second_look_is_never_sent_to_the_builder()
     {
+        // R6: every look says it works and never shows it. Nothing in the app was shown wrong, so no builder can repair it:
+        // before, the second look's refusal went to repair like any other failure, three rounds on ever stronger models (run
+        // 67018a21 spent 44 unbilled credits so, on a correct app, and ended its run on the final round for it). Now the part
+        // stops at its first round, saying it could not be checked, and no repair round is run.
         var (cp, ws, dock) = BuildRun();
-        // Every check says it works and never shows it: the same requirement, unshown, round after round.
         var factory = new Factory { EvaluatorCallsTheApp = _ => false };
         var model = factory.Model();
         await RunBuildAsync(cp, model, ws, dock);
         Assert.Equal("failed", cp.Run["status"]!.GetValue<string>());
-        var judgements = Judgements(cp, "recipes-api");
+        var judgement = Assert.Single(Judgements(cp, "recipes-api")).Payload;
+        Assert.Equal("build", judgement["tier"]!.GetValue<string>());
+        Assert.True(judgement["rechecked"]!.GetValue<bool>());
+        Assert.True(judgement["unverified"]!.GetValue<bool>());
+        Assert.True(judgement["final"]!.GetValue<bool>());
+        Assert.Null(judgement["repairCharged"]);
+        Assert.Null(judgement["stoppedEarly"]);
+        Assert.StartsWith("Not sent back for repair: code could not verify how it was shown", judgement["summary"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains(cp.Events, e => e.Payload["agent"]?.GetValue<string>() == "evaluator-recipes-api-0-recheck");
+        Assert.DoesNotContain(model.Calls, c => c.TaskType is "build-t1" or "build-t2" or "build-t3");
+        Assert.DoesNotContain(model.Calls, c => c.Messages[1]!["content"]!.GetValue<string>().StartsWith("The evaluator checked your work", StringComparison.Ordinal));
+        var told = cp.Events.Last(e => e.Type == "message" && e.Payload["milestone"]?.GetValue<string>() == "finished").Payload["text"]!.GetValue<string>();
+        Assert.Contains("“Recipe box for families” could not be shown working in a way the factory’s own check can verify", told, StringComparison.Ordinal);
+        Assert.Contains("even after a second look at the same build. Nothing in it was shown not to work, so it was not sent for repair", told, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_part_that_fails_the_same_way_three_times_stops_before_a_fourth_round()
+    {
+        // The screens never carry the test ids the plan promised: the builder's to fix, the same way round after round.
+        var (cp, ws, dock) = BuildRun(screens: false);
+        var model = new Factory().Model();
+        await RunBuildAsync(cp, model, ws, dock);
+        Assert.Equal("failed", cp.Run["status"]!.GetValue<string>());
+        var judgements = Judgements(cp, "recipes-page");
         Assert.Equal(["build", "build-t1", "build-t2"], judgements.Select(j => j.Payload["tier"]!.GetValue<string>()));
         Assert.True(judgements[2].Payload["stoppedEarly"]!.GetValue<bool>());
         Assert.True(judgements[2].Payload["final"]!.GetValue<bool>());
@@ -242,7 +269,6 @@ public sealed partial class WorkflowTests
         Assert.DoesNotContain(model.Calls, c => c.TaskType == "build-t3");
         var told = cp.Events.Last(e => e.Type == "message" && e.Payload["milestone"]?.GetValue<string>() == "finished").Payload["text"]!.GetValue<string>();
         Assert.Contains("three times in a row for the same reason", told, StringComparison.Ordinal);
-        Assert.Contains("“Recipe box for families” could not be shown working in the running app", told, StringComparison.Ordinal);
         // The third round was told to change its approach.
         Assert.Contains(model.Calls, c => c.TaskType == "build-t2" && c.Messages[1]!["content"]!.GetValue<string>().Contains("failed for the same reason", StringComparison.Ordinal));
     }

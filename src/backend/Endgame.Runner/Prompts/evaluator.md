@@ -38,9 +38,11 @@ What to do, in this order:
    and come back, and every call_app signs the member in afresh, exactly as coming back does. So: make the call as
    one member (POST api/trips/7/members as member-a), then make the SAME call again as the same member with the same
    body, as a person returning who is offered it again would, then read what that member has (GET
-   api/trips/7/members/me). The second call must find the record they already have — the same id, or 409 — never
-   make a second one, and the read must show one. Cite all three calls. Code checks the answers itself: a second
-   201, or another id, fails the requirement however you mark it. Also read the page's code: on return it must read
+   api/trips/7/members/me) — all three before anything gives the record up: a join after giving it up is a fresh
+   one. The second call must find the record they already have — the same id, or 409 — never make a second one,
+   and the read must show one. Cite the call in that requirement's evidence; code reads the repeat and the read
+   from the calls you made, in order, and checks the answers itself: a second 201, or another id, with nothing
+   given up between, fails the requirement however you mark it. Also read the page's code: on return it must read
    the person's own record and show it (joined, their ticks), never offer to join again.
 5. **After every change of state, read every view of that data again.** When a call changes something (a
    book marked finished, a booking cancelled), call again each read that shows it — the list, the item's own

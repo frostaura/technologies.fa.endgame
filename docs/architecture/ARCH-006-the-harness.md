@@ -188,10 +188,20 @@ sign in) is marked "[their own: check coming back later]" for the evaluator, who
 same call again as that member (every `call_app` signs in afresh: same user id, new session), and reads it back. `call_app`
 writes what it sent on its own line (`Sent: …`), and code reads every call back in order (`CallAppTool.AttemptsIn`):
 `EvaluationGate.ComingBack` finds, among the writes the evidence names, one the same member made twice with the same body,
-and holds the second answer to the first record — the same `id` (top level, or inside the one object answered), or 409.
-A second 201 or another id is `not-met` and goes to repair with the reason ("made a second record (id m1, then id m2)");
-no repeat, or no read after it, is `unshown` and checked again. The app kit's convention it holds apps to is in the
-template's `AGENTS.md` ("A person's own record").
+and holds the second answer to the first record — the same `id` (top level, or inside the one object answered), or 409;
+a repeat answered with no record (204, an empty 200) is held to the member's next read of it, which must show the same
+id. A second 201 or another id is `not-met` and goes to repair with the reason ("made a second record (id m1, then id
+m2), with nothing given up between"); no repeat, or no read after it, is `unshown` and checked again. The evidence only
+has to name the write: the repeat and the read are decided from the logged calls, in order, never from the evidence's
+prose. A repeat counts only while the record is still the person's (an *episode*): a successful DELETE of the path by
+that member, or of the record's own path (`…/me`, `…/{its id}`), or a read by them showing it gone (`"id": null`, or a
+404 where the same read answered before) ends it, and a join after that is a fresh one whose new record is right. The
+read back must be that member's, of the record (its path, `…/me` or `…/{id}`), after the repeat and before it was
+given up. The first live build after this check — "Dive Seat Sheet", run `67018a21` — failed a correct app after three
+repair rounds on both counts: it compared a first join with a join made after the seat was given up (201 X, 200 X,
+DELETE, 201 Y), and it asked for the read in the prose although it was in the call log. Its four failed evaluations are
+replayed from the run's own log in `ComingBackRealRunTests` and all pass. The app kit's convention it holds apps to is in
+the template's `AGENTS.md` ("A person's own record").
 
 **A refusal of how the work was shown is checked again, not sent to the builder.** When the evaluator said the item
 works (no faults of its own) or gave no verdict at all, and the only reason it failed is that code could not verify how a
@@ -199,7 +209,13 @@ requirement was shown (`recheck` on the gated answer: every failing requirement 
 ids), the same build gets one second look by a fresh evaluator (`evaluator-<item>-<round>-recheck`, not billed), told what
 code refused, word for word. Its calls and the first look's both count. In run `cafe1c2e` the builder was instead sent to
 repair the evaluator's citation three times — it added a refresh button, then rewrote the page — and the fourth check ran
-out of steps.
+out of steps. **Nor after the second look:** when that look is still refused only on how it was shown (`recheck` again),
+the gated answer is `unverified`, and the part stops there, at whatever round, never repaired and never escalated
+(`BuildWorkflow.Unverified`; the judgement is `final` and `unverified`, its summary "Not sent back for repair: code could
+not verify how it was shown…", and the owner is told it could not be checked, that nothing in it was shown not to work,
+and that "Try again" carries on from it). Before this, the second look's refusal went to the builder like any other: run
+`67018a21` spent three repair rounds and about 44 unbilled credits (43.5) on a correct app this way, and ended on its final round on
+a refusal of evidence.
 
 **Repairs converge.** The gate records how each failing requirement failed (`failing`: `r4:unshown`, `r3:not-met`,
 `item:unchecked`, `testids:…`, `item:faults`). The repair brief (`repair.md`, `BuildWorkflow.RepairBrief`) quotes, per

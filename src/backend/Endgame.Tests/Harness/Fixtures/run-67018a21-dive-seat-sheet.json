@@ -1,0 +1,603 @@
+{
+ "about": "Run 67018a21 (Dive Seat Sheet), trimmed from its event stream: the plan's requirements, the dive-signups-api part, and for each of its four failed evaluations the two looks' answers and their call_app results in order. The app was correct throughout.",
+ "plan": {
+  "summary": "Build a sign-up sheet for club boat dives, replacing the Notes template. Members see upcoming dives on the home page, open one to claim a seat, and can give it up later. Coming back finds their seat already there. Any signed-in member can also add a new dive to the schedule.",
+  "requirements": [
+   {
+    "id": "r1",
+    "text": "Members sign in"
+   },
+   {
+    "id": "r2",
+    "text": "See the next dives"
+   },
+   {
+    "id": "r3",
+    "text": "Join a dive once to claim a seat on the boat"
+   },
+   {
+    "id": "r4",
+    "text": "Coming back later shows the member their own seat"
+   },
+   {
+    "id": "r5",
+    "text": "They can give it up"
+   }
+  ],
+  "items": [
+   {
+    "id": "dive-signups-api",
+    "text": "A signed-in member can join a dive to claim a seat, and the same member coming back later finds their own seat already there.",
+    "detail": "DiveSignUp, a person's own record: PUT, GET and DELETE dives/{id}/signup.",
+    "check": "`make test` passes. Signed in as ada: PUT /api/dives/{id}/signup returns 201 with signedUp:true; GET /api/dives/{id}/signup shows signedUp:true. New session for ada: GET returns same id and signedUp:true (found again). PUT again returns 200 (not 201). DELETE returns signedUp:false. Signed-out PUT returns 401.",
+    "covers": [
+     "r1",
+     "r3",
+     "r4",
+     "r5"
+    ]
+   }
+  ]
+ },
+ "evaluations": [
+  {
+   "seq": 1040,
+   "round": 0,
+   "gateSaid": "Requirement r3 (\"Join a dive once to claim a seat on the boat\") is something a signed-in person makes or joins of their own, so it is shown coming back later: after making the same call again, read what the person has (as that member) and cite that read, so one record and no duplicate is seen. Code found no read its evidence names after the repeat.",
+   "looks": [
+    {
+     "agent": "evaluator-dive-signups-api-0",
+     "answer": {
+      "passed": true,
+      "evidence": "All 18 .NET tests pass (including 5 DiveSignUpTests) and 26 web tests pass; lint and typecheck clean. In the running app: POST api/dives as member-a created a dive; PUT api/dives/{id}/signup as member-a returned 201 with signedUp:true and id 01a21ad0-a103-70e0-b519-65f70ebb9807; GET as member-a (new session) returned the same id with signedUp:true; PUT again returned 200 with the same id; DELETE returned signedUp:false; signed-out PUT returned 401; member-b got their own distinct seat (different id).",
+      "requirements": [
+       {
+        "id": "r1",
+        "met": true,
+        "evidence": "PUT api/dives/{id}/signup as member-a → 201 (signed in); check_preview PUT api/dives/{id}/signup signed out → 401 'Sign in required'"
+       },
+       {
+        "id": "r3",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a → 201 with {signedUp:true, id:01a21ad0-a103-70e0-b519-65f70ebb9807, signUpCount:1}"
+       },
+       {
+        "id": "r4",
+        "met": true,
+        "evidence": "New session GET api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a → {id:01a21ad0-a103-70e0-b519-65f70ebb9807, signedUp:true, signUpCount:1} (same id, found again); PUT again as member-a → 200 (not 201) with same id"
+       },
+       {
+        "id": "r5",
+        "met": true,
+        "evidence": "DELETE api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a → 200 {signedUp:false, id:null, signUpCount:0}; GET after DELETE → {signedUp:false, id:null}"
+       }
+      ],
+      "faults": []
+     },
+     "calls": [
+      {
+       "seq": 873,
+       "content": "HTTP 201 application/json; charset=utf-8 — POST api/dives as member-a (member)\nSent: {\"title\":\"Wreck of the M2\",\"date\":\"2027-06-15T10:00:00Z\",\"location\":\"Harbour slip 2\"}\n\n{\"id\":\"01a21ad0-899d-7fdb-9df0-2b76a032a2a4\",\"title\":\"Wreck of the M2\",\"date\":\"2027-06-15T10:00:00+00:00\",\"location\":\"Harbour slip 2\",\"authorName\":\"Test member (member-a)\",\"createdAt\":\"2026-11-27T02:23:24.0612641+00:00\"}"
+      },
+      {
+       "seq": 879,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a (member)\n\n{\"id\":\"01a21ad0-a103-70e0-b519-65f70ebb9807\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:23:30.051434+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 884,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a (member)\n\n{\"id\":\"01a21ad0-a103-70e0-b519-65f70ebb9807\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:23:30.051434+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 889,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a (member)\n\n{\"id\":\"01a21ad0-a103-70e0-b519-65f70ebb9807\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:23:30.051434+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 894,
+       "content": "HTTP 200 application/json; charset=utf-8 — PUT api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a (member)\n\n{\"id\":\"01a21ad0-a103-70e0-b519-65f70ebb9807\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:23:30.051434+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 899,
+       "content": "HTTP 200 application/json; charset=utf-8 — DELETE api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 904,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 920,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-b (member)\n\n{\"id\":\"01a21ad1-138f-7fc3-bd90-e61d0392fdd3\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:23:59.375669+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 925,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad0-899d-7fdb-9df0-2b76a032a2a4/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":1}"
+      }
+     ]
+    },
+    {
+     "agent": "evaluator-dive-signups-api-0-recheck",
+     "answer": {
+      "passed": true,
+      "evidence": "make test passes (18 API tests, 26 web tests, 0 failures); make lint passes. In the running app: POST api/dives as member-a created a dive (id 01a21ad2-3229-78cc-b1f9-039e6b36017f); PUT api/dives/{id}/signup as member-a returned 201 with signedUp:true and id 01a21ad2-4293-7d45-af82-43b02a326fbd; a new-session GET as member-a returned the same id and signedUp:true; a new-session PUT again returned 200 with the same id; DELETE returned signedUp:false with signUpCount:0; a follow-up GET confirmed signedUp:false; signed-out PUT returned 401; member-b's GET showed signedUp:false with signUpCount:1 (only member-a's seat).",
+      "requirements": [
+       {
+        "id": "r1",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a → 201; the same PUT signed out (check_preview) → 401 'Sign in required'."
+       },
+       {
+        "id": "r3",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a → 201 with {id:'01a21ad2-4293-7d45-af82-43b02a326fbd', signedUp:true, signUpCount:1}."
+       },
+       {
+        "id": "r4",
+        "met": true,
+        "evidence": "New session for member-a: PUT api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup → 200 with the same id 01a21ad2-4293-7d45-af82-43b02a326fbd (no duplicate); then GET api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a → {id:'01a21ad2-4293-7d45-af82-43b02a326fbd', signedUp:true, since unchanged, signUpCount:1} — one record, found again."
+       },
+       {
+        "id": "r5",
+        "met": true,
+        "evidence": "DELETE api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a → 200 with {signedUp:false, signUpCount:0}; follow-up GET api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a confirms signedUp:false."
+       }
+      ],
+      "faults": []
+     },
+     "calls": [
+      {
+       "seq": 989,
+       "content": "HTTP 201 application/json; charset=utf-8 — POST api/dives as member-a (member)\nSent: {\"title\": \"Wreck dive\", \"date\": \"2026-12-20T10:00:00Z\", \"location\": \"Harbour slip\"}\n\n{\"id\":\"01a21ad2-3229-78cc-b1f9-039e6b36017f\",\"title\":\"Wreck dive\",\"date\":\"2026-12-20T10:00:00+00:00\",\"location\":\"Harbour slip\",\"authorName\":\"Test member (member-a)\",\"createdAt\":\"2026-11-27T02:25:12.7458682+00:00\"}"
+      },
+      {
+       "seq": 995,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a (member)\n\n{\"id\":\"01a21ad2-4293-7d45-af82-43b02a326fbd\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:25:16.94746+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1000,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a (member)\n\n{\"id\":\"01a21ad2-4293-7d45-af82-43b02a326fbd\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:25:16.94746+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1005,
+       "content": "HTTP 200 application/json; charset=utf-8 — PUT api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a (member)\n\n{\"id\":\"01a21ad2-4293-7d45-af82-43b02a326fbd\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:25:16.94746+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1010,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a (member)\n\n{\"id\":\"01a21ad2-4293-7d45-af82-43b02a326fbd\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:25:16.94746+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1015,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-b (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":1}"
+      },
+      {
+       "seq": 1020,
+       "content": "HTTP 200 application/json; charset=utf-8 — DELETE api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1030,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad2-3229-78cc-b1f9-039e6b36017f/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 1287,
+   "round": 1,
+   "gateSaid": "Requirement r3 (\"Join a dive once to claim a seat on the boat\") is something a signed-in person makes or joins of their own, so it is shown coming back later, and it failed: member-a made PUT api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup, then, signed in again, made it again and the app made a second record (id 01a21ad6-5792-74a7-991d-8eaadf6e8e4b, then id 01a21ad6-d577-78a3-ad4f-4111248ca9ca). A person's own record is keyed by their user id with a unique index and found again on return, never made twice: the second call answers the record they already have (see AGENTS.md, \"A person's own record\").",
+   "looks": [
+    {
+     "agent": "evaluator-dive-signups-api-1",
+     "answer": {
+      "passed": true,
+      "evidence": "make test passes (18 API + 26 web tests, 0 failures); make lint passes. In the running app: POST api/dives as member-a → 201 (dive 01a21ad4-f103-72e6-ac81-52ccb86ae04b); PUT api/dives/{id}/signup as member-a → 201 with signedUp:true and id 01a21ad5-0218-754f-8dfd-6ddc436403c7; GET same path → 200 with same id and signedUp:true; PUT again (new session) → 200 with same id (not 201); DELETE → 200 with signedUp:false; signed-out PUT → 401; member-b GET shows signedUp:false with signUpCount:1.",
+      "requirements": [
+       {
+        "id": "r1",
+        "met": true,
+        "evidence": "PUT api/dives/{id}/signup signed out (check_preview) → 401 'Sign in required'; PUT as member-a → 201; DELETE as member-a → 200. Endpoints use RequireUser()."
+       },
+       {
+        "id": "r3",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ad4-f103-72e6-ac81-52ccb86ae04b/signup as member-a → 201 with body {signedUp:true, id:'01a21ad5-0218-754f-8dfd-6ddc436403c7', signUpCount:1}"
+       },
+       {
+        "id": "r4",
+        "met": true,
+        "evidence": "GET api/dives/{id}/signup as member-a (new session) → 200 with same id '01a21ad5-0218-754f-8dfd-6ddc436403c7' and signedUp:true; PUT again → 200 (not 201) with same id; member-b GET → signedUp:false confirming data is per-person."
+       },
+       {
+        "id": "r5",
+        "met": true,
+        "evidence": "DELETE api/dives/{id}/signup as member-a → 200 with {signedUp:false, id:null, signUpCount:0}; subsequent GET confirms signedUp:false."
+       }
+      ],
+      "faults": []
+     },
+     "calls": [
+      {
+       "seq": 1131,
+       "content": "HTTP 201 application/json; charset=utf-8 — POST api/dives as member-a (member)\nSent: {\"title\": \"Wreck dive\", \"date\": \"2026-12-15T10:00:00Z\", \"location\": \"Harbour\"}\n\n{\"id\":\"01a21ad4-f103-72e6-ac81-52ccb86ae04b\",\"title\":\"Wreck dive\",\"date\":\"2026-12-15T10:00:00+00:00\",\"location\":\"Harbour\",\"authorName\":\"Test member (member-a)\",\"createdAt\":\"2026-11-27T02:28:12.6759163+00:00\"}"
+      },
+      {
+       "seq": 1137,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ad4-f103-72e6-ac81-52ccb86ae04b/signup as member-a (member)\n\n{\"id\":\"01a21ad5-0218-754f-8dfd-6ddc436403c7\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:28:17.048739+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1142,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad4-f103-72e6-ac81-52ccb86ae04b/signup as member-a (member)\n\n{\"id\":\"01a21ad5-0218-754f-8dfd-6ddc436403c7\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:28:17.048739+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1147,
+       "content": "HTTP 200 application/json; charset=utf-8 — PUT api/dives/01a21ad4-f103-72e6-ac81-52ccb86ae04b/signup as member-a (member)\n\n{\"id\":\"01a21ad5-0218-754f-8dfd-6ddc436403c7\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:28:17.048739+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1152,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad4-f103-72e6-ac81-52ccb86ae04b/signup as member-b (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":1}"
+      },
+      {
+       "seq": 1160,
+       "content": "HTTP 200 application/json; charset=utf-8 — DELETE api/dives/01a21ad4-f103-72e6-ac81-52ccb86ae04b/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1165,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad4-f103-72e6-ac81-52ccb86ae04b/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      }
+     ]
+    },
+    {
+     "agent": "evaluator-dive-signups-api-1-recheck",
+     "answer": {
+      "passed": true,
+      "evidence": "make test (18 API + 26 web tests) and make lint both exit 0. In the running app: POST api/dives as member-a → 201 (dive 01a21ad6-3111-7e36-8f4b-0f4fc4652d7e); PUT api/dives/{id}/signup as member-a → 201 with signedUp:true, id 01a21ad6-5792-74a7-991d-8eaadf6e8e4b; new-session GET as member-a → same id, signedUp:true, signUpCount:1; repeat PUT as member-a → 200 with same id; read after repeat GET as member-a → same id, signedUp:true, signUpCount:1 (one record, no duplicate); DELETE as member-a → signedUp:false; signed-out PUT and DELETE → 401; member-b sees signedUp:false with signUpCount:1 (their own seat is separate).",
+      "requirements": [
+       {
+        "id": "r1",
+        "met": true,
+        "evidence": "PUT api/dives/{id}/signup as member-a → 201; check_preview PUT api/dives/{id}/signup signed out → 401; check_preview DELETE api/dives/{id}/signup signed out → 401"
+       },
+       {
+        "id": "r3",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a → 201 with {id:01a21ad6-5792-74a7-991d-8eaadf6e8e4b, signedUp:true, signUpCount:1}"
+       },
+       {
+        "id": "r4",
+        "met": true,
+        "evidence": "New session GET api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a → same id 01a21ad6-5792-74a7-991d-8eaadf6e8e4b, signedUp:true; repeat PUT → 200 with same id; read after repeat GET api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a → same id, signedUp:true, signUpCount:1 (one record, no duplicate)"
+       },
+       {
+        "id": "r5",
+        "met": true,
+        "evidence": "DELETE api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a → 200 with {signedUp:false, id:null, signUpCount:0}; subsequent GET as member-a confirms signedUp:false"
+       }
+      ],
+      "faults": []
+     },
+     "calls": [
+      {
+       "seq": 1217,
+       "content": "HTTP 201 application/json; charset=utf-8 — POST api/dives as member-a (member)\nSent: {\"title\": \"Wreck of the M2\", \"date\": \"2026-12-15T10:00:00Z\", \"location\": \"Harbour slip 2\"}\n\n{\"id\":\"01a21ad6-3111-7e36-8f4b-0f4fc4652d7e\",\"title\":\"Wreck of the M2\",\"date\":\"2026-12-15T10:00:00+00:00\",\"location\":\"Harbour slip 2\",\"authorName\":\"Test member (member-a)\",\"createdAt\":\"2026-11-27T02:29:34.6095722+00:00\"}"
+      },
+      {
+       "seq": 1226,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1231,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a (member)\n\n{\"id\":\"01a21ad6-5792-74a7-991d-8eaadf6e8e4b\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:29:44.46651+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1236,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a (member)\n\n{\"id\":\"01a21ad6-5792-74a7-991d-8eaadf6e8e4b\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:29:44.46651+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1241,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a (member)\n\n{\"id\":\"01a21ad6-5792-74a7-991d-8eaadf6e8e4b\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:29:44.46651+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1246,
+       "content": "HTTP 200 application/json; charset=utf-8 — PUT api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a (member)\n\n{\"id\":\"01a21ad6-5792-74a7-991d-8eaadf6e8e4b\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:29:44.46651+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1251,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a (member)\n\n{\"id\":\"01a21ad6-5792-74a7-991d-8eaadf6e8e4b\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:29:44.46651+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1256,
+       "content": "HTTP 200 application/json; charset=utf-8 — DELETE api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1262,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1270,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-a (member)\n\n{\"id\":\"01a21ad6-d577-78a3-ad4f-4111248ca9ca\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:30:16.695078+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1275,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ad6-3111-7e36-8f4b-0f4fc4652d7e/signup as member-b (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":1}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 1749,
+   "round": 2,
+   "gateSaid": "Requirement r3 (\"Join a dive once to claim a seat on the boat\") is something a signed-in person makes or joins of their own, so it is shown coming back later, and it failed: member-a made PUT api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup, then, signed in again, made it again and the app made a second record (id 01a21ae0-6193-74b1-aa9b-a213292ee72d, then id 01a21ae0-c198-749a-8b14-510b13671cca). A person's own record is keyed by their user id with a unique index and found again on return, never made twice: the second call answers the record they already have (see AGENTS.md, \"A person's own record\").",
+   "looks": [
+    {
+     "agent": "evaluator-dive-signups-api-2",
+     "answer": {
+      "passed": true,
+      "evidence": "make test passes (19 API tests including all DiveSignUpTests, 26 web tests), make lint clean. In the running app: POST api/dives as member-a → 201 creates a dive; PUT api/dives/{id}/signup as member-a → 201 with signedUp:true and id 01a21adf-07ef-7308-9a27-e1691e8d94a9; GET same path as member-a (new session) → same id, signedUp:true, same since (found again); PUT again → 200 with same id (not 201); DELETE → signedUp:false; signed-out PUT → 401. member-b joins independently with a different id.",
+      "requirements": [
+       {
+        "id": "r1",
+        "met": true,
+        "evidence": "PUT api/dives/{id}/signup signed out → 401 'Sign in required'; signed-in member-a gets 201/200."
+       },
+       {
+        "id": "r3",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ade-ed67-771a-86b3-c31cdbdaf70a/signup as member-a → 201 with {signedUp:true, id:'01a21adf-07ef-7308-9a27-e1691e8d94a9', signUpCount:1}; second PUT as member-a → 200 with same id (safe to repeat, no duplicate)."
+       },
+       {
+        "id": "r4",
+        "met": true,
+        "evidence": "New session GET api/dives/01a21ade-ed67-771a-86b3-c31cdbdaf70a/signup as member-a → {id:'01a21adf-07ef-7308-9a27-e1691e8d94a9', signedUp:true, since:'2026-11-27T02:39:13.903623+00:00'} — same id and since as the original join, proving the seat was found again."
+       },
+       {
+        "id": "r5",
+        "met": true,
+        "evidence": "DELETE api/dives/01a21ade-ed67-771a-86b3-c31cdbdaf70a/signup as member-a → 200 with {signedUp:false, id:null, signUpCount:0}; subsequent GET confirms signedUp:false."
+       }
+      ],
+      "faults": []
+     },
+     "calls": [
+      {
+       "seq": 1594,
+       "content": "HTTP 201 application/json; charset=utf-8 — POST api/dives as member-a (member)\nSent: {\"title\": \"Wreck dive\", \"date\": \"2026-12-15T10:00:00Z\", \"location\": \"Harbour\"}\n\n{\"id\":\"01a21ade-ed67-771a-86b3-c31cdbdaf70a\",\"title\":\"Wreck dive\",\"date\":\"2026-12-15T10:00:00+00:00\",\"location\":\"Harbour\",\"authorName\":\"Test member (member-a)\",\"createdAt\":\"2026-11-27T02:39:07.1116746+00:00\"}"
+      },
+      {
+       "seq": 1600,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ade-ed67-771a-86b3-c31cdbdaf70a/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1605,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ade-ed67-771a-86b3-c31cdbdaf70a/signup as member-a (member)\n\n{\"id\":\"01a21adf-07ef-7308-9a27-e1691e8d94a9\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:39:13.903623+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1610,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ade-ed67-771a-86b3-c31cdbdaf70a/signup as member-a (member)\n\n{\"id\":\"01a21adf-07ef-7308-9a27-e1691e8d94a9\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:39:13.903623+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1615,
+       "content": "HTTP 200 application/json; charset=utf-8 — PUT api/dives/01a21ade-ed67-771a-86b3-c31cdbdaf70a/signup as member-a (member)\n\n{\"id\":\"01a21adf-07ef-7308-9a27-e1691e8d94a9\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:39:13.903623+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1620,
+       "content": "HTTP 200 application/json; charset=utf-8 — DELETE api/dives/01a21ade-ed67-771a-86b3-c31cdbdaf70a/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1630,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ade-ed67-771a-86b3-c31cdbdaf70a/signup as member-b (member)\n\n{\"id\":\"01a21adf-5205-7d3b-94e7-a49e8d074ce4\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:39:32.869302+00:00\",\"signUpCount\":1}"
+      }
+     ]
+    },
+    {
+     "agent": "evaluator-dive-signups-api-2-recheck",
+     "answer": {
+      "passed": true,
+      "evidence": "make test passes (19 backend + 26 frontend tests, 0 failures); make lint clean. In the running app: POST api/dives as member-a → 201 (dive 01a21ae0-4393-7565-bfd3-c76ac9cf2416); PUT api/dives/{id}/signup as member-a → 201 with signedUp:true and id 01a21ae0-6193-74b1-aa9b-a213292ee72d; repeat PUT → 200 with same id; GET after the repeat as member-a → same id, signedUp:true, signUpCount:1 (one record, no duplicate); DELETE → signedUp:false; signed-out PUT → 401; member-b's GET shows signedUp:false with signUpCount:1 (seats are per-person).",
+      "requirements": [
+       {
+        "id": "r1",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup signed out (check_preview) → 401 'Sign in required'; same path as member-a → 201 with signedUp:true"
+       },
+       {
+        "id": "r3",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a → 201 with id 01a21ae0-6193-74b1-aa9b-a213292ee72d, signedUp:true; repeat PUT → 200 with same id; GET api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a after the repeat → same id, signedUp:true, signUpCount:1 — one record, no duplicate"
+       },
+       {
+        "id": "r4",
+        "met": true,
+        "evidence": "GET api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a (new session, same person) returns id 01a21ae0-6193-74b1-aa9b-a213292ee72d, signedUp:true, same since — found again"
+       },
+       {
+        "id": "r5",
+        "met": true,
+        "evidence": "DELETE api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a → 200 with signedUp:false, id:null, signUpCount:0; subsequent GET confirms signedUp:false"
+       }
+      ],
+      "faults": []
+     },
+     "calls": [
+      {
+       "seq": 1683,
+       "content": "HTTP 201 application/json; charset=utf-8 — POST api/dives as member-a (member)\nSent: {\"title\":\"Wreck dive\",\"date\":\"2030-06-01T10:00:00Z\",\"location\":\"Harbour\"}\n\n{\"id\":\"01a21ae0-4393-7565-bfd3-c76ac9cf2416\",\"title\":\"Wreck dive\",\"date\":\"2030-06-01T10:00:00+00:00\",\"location\":\"Harbour\",\"authorName\":\"Test member (member-a)\",\"createdAt\":\"2026-11-27T02:40:34.7079687+00:00\"}"
+      },
+      {
+       "seq": 1689,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1694,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a (member)\n\n{\"id\":\"01a21ae0-6193-74b1-aa9b-a213292ee72d\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:40:42.387023+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1699,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a (member)\n\n{\"id\":\"01a21ae0-6193-74b1-aa9b-a213292ee72d\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:40:42.387023+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1704,
+       "content": "HTTP 200 application/json; charset=utf-8 — PUT api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a (member)\n\n{\"id\":\"01a21ae0-6193-74b1-aa9b-a213292ee72d\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:40:42.387023+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1709,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a (member)\n\n{\"id\":\"01a21ae0-6193-74b1-aa9b-a213292ee72d\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:40:42.387023+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1714,
+       "content": "HTTP 200 application/json; charset=utf-8 — DELETE api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1719,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1730,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-a (member)\n\n{\"id\":\"01a21ae0-c198-749a-8b14-510b13671cca\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:41:06.968056+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1735,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae0-4393-7565-bfd3-c76ac9cf2416/signup as member-b (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":1}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "seq": 1965,
+   "round": 3,
+   "gateSaid": "Requirement r3 (\"Join a dive once to claim a seat on the boat\") is something a signed-in person makes or joins of their own, so it is shown coming back later: after making the same call again, read what the person has (as that member) and cite that read, so one record and no duplicate is seen. Code found no read its evidence names after the repeat.",
+   "looks": [
+    {
+     "agent": "evaluator-dive-signups-api-3",
+     "answer": {
+      "passed": true,
+      "evidence": "make test passes (19 API + 26 web tests, 0 failures); make lint clean. In the running app: POST api/dives created a dive, PUT api/dives/{id}/signup as member-a returned 201 with signedUp:true and id 01a21ae2-2755-70b7-af11-41ffc58e5c9e; GET as member-a returned the same id and signedUp:true; a fresh session GET as member-a returned the same id (found again); PUT again returned 200 with the same id; DELETE returned signedUp:false; signed-out PUT returned 401.",
+      "requirements": [
+       {
+        "id": "r1",
+        "met": true,
+        "evidence": "PUT api/dives/{id}/signup as member-a → 201 (signed-in succeeds); PUT api/dives/{id}/signup signed out (check_preview) → 401 'Sign in required'"
+       },
+       {
+        "id": "r3",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-a → 201 with {signedUp:true, id:01a21ae2-2755-70b7-af11-41ffc58e5c9e, signUpCount:1}"
+       },
+       {
+        "id": "r4",
+        "met": true,
+        "evidence": "New session GET api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-a → {id:01a21ae2-2755-70b7-af11-41ffc58e5c9e, signedUp:true, since:same} — same id found again; PUT again → 200 with same id (never a second one)"
+       },
+       {
+        "id": "r5",
+        "met": true,
+        "evidence": "DELETE api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-a → 200 with {signedUp:false, id:null}; follow-up GET as member-a confirms {signedUp:false, id:null, signUpCount:1} (member-b's seat remains)"
+       }
+      ]
+     },
+     "calls": [
+      {
+       "seq": 1821,
+       "content": "HTTP 201 application/json; charset=utf-8 — POST api/dives as member-a (member)\nSent: {\"title\":\"Wreck of the M2\",\"date\":\"2026-12-15T10:00:00Z\",\"location\":\"Harbour slip 2\"}\n\n{\"id\":\"01a21ae2-17e0-73a7-a3ea-3ab70af94461\",\"title\":\"Wreck of the M2\",\"date\":\"2026-12-15T10:00:00+00:00\",\"location\":\"Harbour slip 2\",\"authorName\":\"Test member (member-a)\",\"createdAt\":\"2026-11-27T02:42:34.5923625+00:00\"}"
+      },
+      {
+       "seq": 1827,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-a (member)\n\n{\"id\":\"01a21ae2-2755-70b7-af11-41ffc58e5c9e\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:42:38.549645+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1832,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-a (member)\n\n{\"id\":\"01a21ae2-2755-70b7-af11-41ffc58e5c9e\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:42:38.549645+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1837,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-a (member)\n\n{\"id\":\"01a21ae2-2755-70b7-af11-41ffc58e5c9e\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:42:38.549645+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1842,
+       "content": "HTTP 200 application/json; charset=utf-8 — PUT api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-a (member)\n\n{\"id\":\"01a21ae2-2755-70b7-af11-41ffc58e5c9e\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:42:38.549645+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1847,
+       "content": "HTTP 200 application/json; charset=utf-8 — DELETE api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1857,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-b (member)\n\n{\"id\":\"01a21ae2-84cb-7368-ad70-3b9e80a4d427\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:43:02.475731+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1862,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-b (member)\n\n{\"id\":\"01a21ae2-84cb-7368-ad70-3b9e80a4d427\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:43:02.475731+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1871,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae2-17e0-73a7-a3ea-3ab70af94461/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":1}"
+      }
+     ]
+    },
+    {
+     "agent": "evaluator-dive-signups-api-3-recheck",
+     "answer": {
+      "passed": true,
+      "evidence": "make test passes (19 API tests including DiveSignUpTests covering come-back-later, repeat-join, unique-violation, signed-out). make lint passes. In the running app: POST api/dives as member-a → 201 creating dive 01a21ae3-75c8-7c81-8be6-77081b27310a; PUT api/dives/{id}/signup as member-a → 201 with id 01a21ae3-8694-7f20-a5a1-81f8abdbae83, signedUp:true; GET same path → same id, signedUp:true; PUT again (new session, same member) → 200 with same id; GET after the repeat → same id, signedUp:true, signUpCount:1 (one record, no duplicate); DELETE → signedUp:false; GET after DELETE → signedUp:false, signUpCount:0; signed-out PUT → 401; member-b GET → signedUp:false (their own seat, not member-a's).",
+      "requirements": [
+       {
+        "id": "r1",
+        "met": true,
+        "evidence": "PUT api/dives/{id}/signup signed out (check_preview) → 401 'Sign in required'; PUT as member-a → 201; PUT as member-b → 201 (each member has their own seat)"
+       },
+       {
+        "id": "r3",
+        "met": true,
+        "evidence": "PUT api/dives/01a21ae3-75c8-7c81-8be6-77081b27310a/signup as member-a → 201 with signedUp:true and id 01a21ae3-8694-7f20-a5a1-81f8abdbae83"
+       },
+       {
+        "id": "r4",
+        "met": true,
+        "evidence": "GET api/dives/{id}/signup as member-a (new session) → same id 01a21ae3-8694-7f20-a5a1-81f8abdbae83, signedUp:true, signUpCount:1; PUT again → 200 with same id; GET after the repeat → same id, signedUp:true, signUpCount:1 (one record, no duplicate)"
+       },
+       {
+        "id": "r5",
+        "met": true,
+        "evidence": "DELETE api/dives/{id}/signup as member-a → 200 with signedUp:false, signUpCount:0; GET after DELETE → signedUp:false, signUpCount:0"
+       }
+      ],
+      "faults": []
+     },
+     "calls": [
+      {
+       "seq": 1911,
+       "content": "HTTP 201 application/json; charset=utf-8 — POST api/dives as member-a (member)\nSent: {\"title\": \"Wreck of the M2\", \"date\": \"2026-12-15T10:00:00Z\", \"location\": \"Harbour slip 2\"}\n\n{\"id\":\"01a21ae3-75c8-7c81-8be6-77081b27310a\",\"title\":\"Wreck of the M2\",\"date\":\"2026-12-15T10:00:00+00:00\",\"location\":\"Harbour slip 2\",\"authorName\":\"Test member (member-a)\",\"createdAt\":\"2026-11-27T02:44:04.1688806+00:00\"}"
+      },
+      {
+       "seq": 1917,
+       "content": "HTTP 201 application/json; charset=utf-8 — PUT api/dives/01a21ae3-75c8-7c81-8be6-77081b27310a/signup as member-a (member)\n\n{\"id\":\"01a21ae3-8694-7f20-a5a1-81f8abdbae83\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:44:08.468199+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1922,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae3-75c8-7c81-8be6-77081b27310a/signup as member-a (member)\n\n{\"id\":\"01a21ae3-8694-7f20-a5a1-81f8abdbae83\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:44:08.468199+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1927,
+       "content": "HTTP 200 application/json; charset=utf-8 — PUT api/dives/01a21ae3-75c8-7c81-8be6-77081b27310a/signup as member-a (member)\n\n{\"id\":\"01a21ae3-8694-7f20-a5a1-81f8abdbae83\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:44:08.468199+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1932,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae3-75c8-7c81-8be6-77081b27310a/signup as member-a (member)\n\n{\"id\":\"01a21ae3-8694-7f20-a5a1-81f8abdbae83\",\"signedIn\":true,\"signedUp\":true,\"since\":\"2026-11-27T02:44:08.468199+00:00\",\"signUpCount\":1}"
+      },
+      {
+       "seq": 1940,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae3-75c8-7c81-8be6-77081b27310a/signup as member-b (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":1}"
+      },
+      {
+       "seq": 1945,
+       "content": "HTTP 200 application/json; charset=utf-8 — DELETE api/dives/01a21ae3-75c8-7c81-8be6-77081b27310a/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      },
+      {
+       "seq": 1950,
+       "content": "HTTP 200 application/json; charset=utf-8 — GET api/dives/01a21ae3-75c8-7c81-8be6-77081b27310a/signup as member-a (member)\n\n{\"id\":null,\"signedIn\":true,\"signedUp\":false,\"since\":null,\"signUpCount\":0}"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

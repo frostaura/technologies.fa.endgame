@@ -203,7 +203,7 @@ public sealed class ComingBackTests
     {
         var gated = Gate(await CallAsync(new FindsAgain(), new Step("GET", Join), new Step("POST", Join, Joined), new Step("POST", Join, Joined)));
         Assert.Contains("r1:unshown", gated["failing"]!.AsArray().Select(f => f!.GetValue<string>()));
-        Assert.Contains("Code found no read its evidence names after the repeat", gated["faults"]!.ToJsonString(), StringComparison.Ordinal);
+        Assert.Contains("Code found no read of it by that member after the repeat", gated["faults"]!.ToJsonString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -223,6 +223,173 @@ public sealed class ComingBackTests
         var attempt = Assert.Single(CallAppTool.AttemptsIn(log, "evaluator-a-0"));
         Assert.Equal(("member-a", 201, Joined), (attempt.Persona, attempt.Status, attempt.Sent));
         Assert.Equal("m1", EvaluationGate.IdOf(attempt.Body));
+    }
+
+    // ---------------------------------------------------------------- a seat of one's own, joined by PUT and given up (R6)
+
+    /// <summary>
+    /// A dive's seats, as the real "Dive Seat Sheet" kept them: joined with <c>PUT api/dives/{n}/signup</c>, read with GET,
+    /// given up with DELETE (or with <c>POST …/signup/leave</c>, which only a read shows). How a join is answered is what each varies.
+    /// </summary>
+    private sealed class SeatApp(string shape) : IAppCaller
+    {
+        private readonly Dictionary<(string Dive, string Person), string> seats = [];
+        private int made;
+
+        public Task<AppCallAnswer> CallAsync(Guid appId, string persona, string role, string method, string path, string? body, CancellationToken cancellationToken)
+        {
+            var parts = path.Split('/');
+            if (parts is not ["api", "dives", var dive, "signup", ..] || parts.Length > 5)
+            {
+                return Done(404, new JsonObject { ["title"] = "No such page" });
+            }
+
+            var key = (dive, persona);
+            var count = seats.Keys.Count(k => k.Dive == dive);
+            if (parts.Length == 5 || method == "DELETE")
+            {
+                seats.Remove(key);
+                return Done(200, new JsonObject { ["id"] = null, ["signedUp"] = false, ["signUpCount"] = seats.Keys.Count(k => k.Dive == dive) });
+            }
+
+            if (method == "GET")
+            {
+                return Done(200, seats.TryGetValue(key, out var mine)
+                    ? new JsonObject { ["id"] = mine, ["signedUp"] = true, ["signUpCount"] = count }
+                    : new JsonObject { ["id"] = null, ["signedUp"] = false, ["signUpCount"] = count });
+            }
+
+            var had = seats.TryGetValue(key, out var seat);
+            if (!had || shape is "joins twice" or "joins twice saying nothing")
+            {
+                // A fresh row, wherever the person already had one.
+                seat = seats[key] = $"s{++made}";
+                if (had && shape == "joins twice saying nothing")
+                {
+                    return Task.FromResult(new AppCallAnswer(204, "", ""));
+                }
+
+                return Done(201, Seat(seat));
+            }
+
+            return shape switch
+            {
+                "says nothing again" => Task.FromResult(new AppCallAnswer(204, "", "")),
+                _ => Done(200, Seat(seat!)),
+            };
+        }
+
+        private JsonObject Seat(string id) => shape == "nested"
+            ? new JsonObject { ["seat"] = new JsonObject { ["id"] = id, ["signedUp"] = true } }
+            : new JsonObject { ["id"] = id, ["signedUp"] = true };
+
+        private static Task<AppCallAnswer> Done(int status, JsonNode body) => Task.FromResult(new AppCallAnswer(status, "application/json", body.ToJsonString()));
+    }
+
+    private const string Seat = "api/dives/7/signup";
+
+    private static readonly PlanContract SeatPlan = PlanContract.FromJson(JsonNode.Parse("""
+        {"summary":"s","requirements":[{"id":"r1","text":"Join a dive once to claim a seat on the boat"}],
+         "items":[{"id":"a","text":"t","detail":"d","check":"c","covers":["r1"]}]}
+        """)!.AsObject())!;
+
+    /// <summary>The gate over the seat plan, with evidence that names the join and nothing else, as the real evaluator wrote it.</summary>
+    private static JsonObject SeatGate(List<RunEvent> log, string evidence = "PUT api/dives/7/signup as member-a → 201 with the seat's id")
+    {
+        var answer = new JsonObject
+        {
+            ["passed"] = true,
+            ["evidence"] = "e",
+            ["faults"] = new JsonArray(),
+            ["requirements"] = new JsonArray(new JsonObject { ["id"] = "r1", ["met"] = true, ["evidence"] = evidence }),
+        };
+        return EvaluationGate.Apply(SeatPlan, SeatPlan.Items[0], answer, CallAppTool.CallsIn(log, "evaluator-a-0"), attempts: CallAppTool.AttemptsIn(log, "evaluator-a-0"));
+    }
+
+    private static List<string> FailingOf(JsonObject gated) => gated["failing"]!.AsArray().Select(f => f!.GetValue<string>()).ToList();
+
+    [Theory]
+    [InlineData("finds again")]
+    [InlineData("nested")]
+    [InlineData("says nothing again")]
+    public async Task A_repeat_that_finds_the_seat_again_passes_on_the_read_in_the_call_log_whatever_the_evidence_names(string shape)
+    {
+        // 201, then 200 with the same id (or inside the one object, or 204 and a read that shows the one seat): the evidence
+        // names only the join, and the read after the repeat is in the log, where code reads it.
+        var gated = SeatGate(await CallAsync(new SeatApp(shape), new Step("PUT", Seat), new Step("GET", Seat), new Step("PUT", Seat), new Step("GET", Seat)));
+        Assert.True(gated["passed"]!.GetValue<bool>(), gated["faults"]!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task Giving_the_seat_up_starts_afresh_so_a_join_after_it_is_not_a_second_record()
+    {
+        // The real run's sequence: join, read, read, join again (200, the same seat), read, give it up, read, join afresh (201,
+        // a new seat — rightly). Only a repeat while the seat is still there is coming back.
+        var gated = SeatGate(await CallAsync(new SeatApp("finds again"),
+            new Step("PUT", Seat), new Step("GET", Seat), new Step("GET", Seat), new Step("PUT", Seat), new Step("GET", Seat),
+            new Step("DELETE", Seat), new Step("GET", Seat), new Step("PUT", Seat), new Step("GET", Seat, As: "member-b")));
+        Assert.True(gated["passed"]!.GetValue<bool>(), gated["faults"]!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task A_seat_given_up_some_other_way_ends_when_a_read_shows_it_gone()
+    {
+        var gated = SeatGate(await CallAsync(new SeatApp("finds again"),
+            new Step("PUT", Seat), new Step("PUT", Seat), new Step("GET", Seat),
+            new Step("POST", Seat + "/leave"), new Step("GET", Seat), new Step("PUT", Seat), new Step("PUT", Seat), new Step("GET", Seat)));
+        Assert.True(gated["passed"]!.GetValue<bool>(), gated["faults"]!.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("joins twice", "(id s1, then id s2)")]
+    [InlineData("joins twice saying nothing", "(id s1, then, read back after the repeat, id s2)")]
+    public async Task A_second_seat_while_the_first_is_still_there_fails_even_beside_a_later_fresh_start(string shape, string ids)
+    {
+        // A second 201 with another id, with nothing given up between — or a 204 whose read shows another seat — is a second
+        // record; a give-up and a fresh join afterwards do not excuse it.
+        var gated = SeatGate(await CallAsync(new SeatApp(shape),
+            new Step("PUT", Seat), new Step("PUT", Seat), new Step("GET", Seat), new Step("DELETE", Seat), new Step("PUT", Seat)));
+        Assert.Equal(["r1:not-met"], FailingOf(gated));
+        Assert.False(gated["recheck"]!.GetValue<bool>());
+        Assert.Contains("made a second record " + ids, gated["faults"]!.AsArray().Select(f => f!.GetValue<string>()).Single(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_repeat_given_up_before_it_was_read_back_is_unshown_not_a_second_record()
+    {
+        // Join, join again, give it up, read (gone), join afresh: the repeat was never read while the seat was there.
+        var gated = SeatGate(await CallAsync(new SeatApp("finds again"),
+            new Step("PUT", Seat), new Step("PUT", Seat), new Step("DELETE", Seat), new Step("GET", Seat), new Step("PUT", Seat), new Step("GET", Seat)));
+        Assert.Equal(["r1:unshown"], FailingOf(gated));
+        Assert.True(gated["recheck"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Two_members_two_dives_or_two_paths_are_not_one_person_coming_back()
+    {
+        // The broken app would be caught by a true repeat; none of these is one, so nothing is shown and nothing is blamed.
+        var cited = "PUT api/dives/7/signup and PUT api/dives/8/signup as member-a; POST api/dives/7/members";
+        var twoMembers = SeatGate(await CallAsync(new SeatApp("joins twice"), new Step("PUT", Seat), new Step("PUT", Seat, As: "member-b"), new Step("GET", Seat)));
+        var twoDives = SeatGate(await CallAsync(new SeatApp("joins twice"), new Step("PUT", Seat), new Step("PUT", "api/dives/8/signup"), new Step("GET", Seat), new Step("GET", "api/dives/8/signup")), cited);
+        var twoPaths = SeatGate(await CallAsync(new SeatApp("joins twice"), new Step("PUT", Seat), new Step("POST", "api/dives/7/members"), new Step("GET", Seat)), cited);
+        foreach (var gated in new[] { twoMembers, twoDives, twoPaths })
+        {
+            Assert.Equal(["r1:unshown"], FailingOf(gated));
+            Assert.Contains("Code found no write its evidence names made twice", gated["faults"]!.ToJsonString(), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task The_read_back_is_the_same_persons_and_of_the_same_record()
+    {
+        // After the repeat, only another member read it, or the same member read something else: not read back.
+        var otherReader = SeatGate(await CallAsync(new SeatApp("finds again"), new Step("PUT", Seat), new Step("PUT", Seat), new Step("GET", Seat, As: "member-b")));
+        var otherPath = SeatGate(await CallAsync(new SeatApp("finds again"), new Step("PUT", Seat), new Step("PUT", Seat), new Step("GET", "api/dives/8/signup")));
+        foreach (var gated in new[] { otherReader, otherPath })
+        {
+            Assert.Equal(["r1:unshown"], FailingOf(gated));
+            Assert.Contains("Code found no read of it by that member after the repeat", gated["faults"]!.ToJsonString(), StringComparison.Ordinal);
+        }
     }
 
     [Theory]
