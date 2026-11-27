@@ -1,6 +1,8 @@
 import { useId, useState, type FormEvent } from "react";
 import { TITLE } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
+import { LINK } from "@/components/ui/layout";
 import { RISE, stagger } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/Icon";
@@ -138,34 +140,32 @@ export function SignInView() {
               <label htmlFor={nameId} className="font-medium">
                 Your name
               </label>
-              <input
+              <Input
                 id={nameId}
                 required
                 autoComplete="name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 text-base"
               />
             </div>
             <div className="flex flex-col gap-2">
               <label htmlFor={emailId} className="font-medium">
                 Email address
               </label>
-              <input
+              <Input
                 id={emailId}
                 type="email"
                 required
                 autoComplete="email webauthn"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 text-base"
               />
             </div>
             <div className="flex flex-col gap-2">
               <label htmlFor={codeId} className="font-medium">
                 Invitation code
               </label>
-              <input
+              <Input
                 id={codeId}
                 autoComplete="off"
                 autoCapitalize="off"
@@ -173,7 +173,7 @@ export function SignInView() {
                 aria-describedby={`${codeId}-hint`}
                 value={invitationCode}
                 onChange={(e) => setInvitationCode(e.target.value)}
-                className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 font-mono text-base"
+                className="font-mono"
               />
               <p id={`${codeId}-hint`} className="text-sm text-ink-muted">
                 The code you were sent or given when you were invited. It works once. Leave it empty only if you are the first person here.
@@ -194,9 +194,10 @@ export function SignInView() {
               <Icon name="secrets" />
               {busy === "login" ? "Waiting for your device…" : "Sign in with a passkey"}
             </Button>
-            <Button variant="quiet" className="px-0 text-primary-link hover:bg-transparent hover:text-primary-hover" onClick={() => setCreating(true)} disabled={busy !== null}>
-              First time here? <span className="font-semibold underline underline-offset-4">Create your passkey</span>
-            </Button>
+            {/* A question and its link, not a button: the words are the house link (one name, read whole). */}
+            <button type="button" className="min-h-touch text-left text-ink-body disabled:text-ink-muted" onClick={() => setCreating(true)} disabled={busy !== null}>
+              First time here? <span className={LINK}>Create your passkey</span>
+            </button>
           </div>
         )}
 

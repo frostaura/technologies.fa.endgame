@@ -6,6 +6,7 @@ import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LINK } from "@/components/ui/layout";
 import { formatNumber, plural } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { SECTION, TITLE } from "@/components/ui/page";
@@ -108,7 +109,7 @@ function AccountBody({ me }: { me: Me }) {
                     </ul>
                     {grants.some((g) => roleRank(g.role) >= roleRank("admin")) && (
                       <div className="border-t px-5 py-1.5 max-sm:px-4">
-                        <Link href={paths.people(org.slug)} className={cn("inline-flex items-center rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover", TAP)}>
+                        <Link href={paths.people(org.slug)} className={cn(LINK, "inline-flex items-center text-sm", TAP)}>
                           People in {org.name}
                         </Link>
                       </div>
