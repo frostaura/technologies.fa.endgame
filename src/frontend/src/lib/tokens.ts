@@ -155,6 +155,11 @@ export const motion = {
 } as const;
 
 /** The live-progress stripe and the skeleton shimmer, set as background images. */
+/** Masks: a scrolling list's two ends fade out (`fade-y`), so a line is never cut hard at the edge. */
+export const masks = {
+  "fade-y": "linear-gradient(to bottom, transparent 0, #000 1rem, #000 calc(100% - 1rem), transparent 100%)",
+} as const;
+
 export const surfaces = {
   stripe: "repeating-linear-gradient(115deg, rgb(255 255 255 / 0.3) 0 10px, rgb(255 255 255 / 0) 10px 20px)",
   shimmer: "linear-gradient(90deg, rgb(228 231 242 / 0.6) 0%, rgb(245 246 251 / 0.9) 50%, rgb(228 231 242 / 0.6) 100%)",
@@ -192,7 +197,7 @@ export const typography = {
  * `3xl` (1600) the page may set independent sections two across and the side panel widens; `4xl`
  * (2000) the same, with the whole console capped at `layout.width.frame` and centred.
  */
-export const breakpoints = { sm: 640, md: 768, lg: 1024, xl: 1280, "2xl": 1536, "3xl": 1600, "4xl": 2000, short: 500 } as const;
+export const breakpoints = { sm: 640, md: 768, lg: 1024, xl: 1280, "2xl": 1536, "3xl": 1600, "4xl": 2000, short: 500, low: 800 } as const;
 
 /** Tailwind's `screens`, from {@link breakpoints}. Plain widths only, so `max-sm:` and friends exist. */
 export const screens = {
@@ -204,6 +209,9 @@ export const screens = {
   "3xl": `${breakpoints["3xl"]}px`,
   "4xl": `${breakpoints["4xl"]}px`,
 } as const;
+
+/** The `low:` variant: a window with little height (a 1366×700 laptop, a phone or tablet on its side) — the conversation pane's header, strip and cost line fold to one line each. */
+export const lowQuery = `(max-height: ${breakpoints.low - 0.02}px)`;
 
 /** The `short:` variant: a phone on its side. */
 export const shortQuery = `(max-height: ${breakpoints.short - 0.02}px)`;
@@ -245,6 +253,8 @@ export const layout = {
     popover: "24rem",
     /** An attachment chip's name before it is cut short. */
     chip: "11rem",
+    /** A picture sent in the thread, at its own shape, at its widest. */
+    sent: "15rem",
   },
   /** The organisation graph's frame: tall enough to read, short enough to keep the page in view. A bottom sheet's tallest. */
   height: {
@@ -257,10 +267,14 @@ export const layout = {
     pane: "min(46rem, 80dvh)",
     /** The composer's text box at its tallest before it scrolls (about eight lines). */
     composer: "12rem",
+    /** In a phone's sheet the box stops sooner, so the thread keeps most of a small screen. */
+    "composer-sheet": "min(12rem, 22dvh)",
     /** A thumbnail of an attached image. */
     thumb: "4.5rem",
     /** The panel of what it can use, and the "/" and "@" menus, at their tallest. */
     popover: "min(28rem, 50dvh)",
+    /** The same, as a sheet rising from the composer on a phone or a tablet. */
+    "sheet-menu": "min(32rem, 62dvh)",
   },
   /** How far below the top a sticky panel sits: under the shell's header. */
   chrome: "var(--shell-chrome, 0px)",

@@ -460,6 +460,12 @@ export interface ConversationTurn {
   toolCalls: number;
   /** Work this turn started: an idea's research, a change, a try again. */
   started: { runId: string; kind: string; title: string }[];
+  /** Whether the turn has a reply (an assistant message). Absent from an older control plane. */
+  replied?: boolean;
+  /** The turn ended (failed, cancelled, its worker lost) with no reply and no notice saying why. */
+  endedWithoutReply?: boolean;
+  /** Why it ended without a reply, in a sentence, when that is known. */
+  interruption?: string | null;
 }
 
 /** One message of a docked conversation, in the order it was written. */

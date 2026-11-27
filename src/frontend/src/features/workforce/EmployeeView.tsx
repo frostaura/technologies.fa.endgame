@@ -38,8 +38,8 @@ import {
 } from "@/store/api";
 import type { Employee, EmployeeDetail, MemoryChange, MemoryEntry, MemoryKind, LedRun, TaskItem, TrackRecord, Tree } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
-import { ConversationDock } from "../home/ConversationDock";
-import { Talk } from "../shell/talk";
+import { usePageConversation } from "../conversation/pageConversation";
+import { TalkLauncher } from "../shell/talk";
 import { Fold } from "@/components/Fold";
 import { namesFor } from "../home/treeModel";
 import { useAppDispatch } from "@/store";
@@ -101,9 +101,12 @@ export function EmployeeView({ employeeId }: { employeeId: string }) {
       );
   }
   crumbs.push({ label: detail?.employee.name ?? "Employee" });
+  // Only this employee hears it, docked beside its page (ARCH-012); a contractor or someone let go is not talked to.
+  const talkable = detail && detail.employee.kind === "employee" && detail.employee.status !== "released" ? detail.employee : null;
+  const talk = usePageConversation(talkable ? { scope: talkable.scope, employeeId: talkable.id, name: talkable.name } : null);
 
   return (
-    <AppShell crumbs={crumbs} aside={detail ? <EmployeeAside detail={detail} tree={tree.data} /> : undefined}>
+    <AppShell crumbs={crumbs} aside={detail ? <EmployeeAside detail={detail} tree={tree.data} /> : undefined} talk={talk}>
       {view.kind === "loading" && (
         <Loading label="Loading the employee" className="flex flex-col gap-6">
           <div className="flex items-center gap-4">
@@ -238,27 +241,8 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
             </ErrorBoundary>
           </Fold>
         </div>
-        {employee.kind === "employee" && !released && tree?.organisation && (
-          <ErrorBoundary name="The conversation">
-            <Talk label={`Talk to ${employee.name}`} launcherClassName="max-sm:-order-1">
-              <section aria-labelledby="talk-title" className="flex min-w-0 flex-col gap-3 3xl:col-start-1">
-                <h2 id="talk-title" className={SECTION}>
-                  Talk to {employee.name}
-                </h2>
-                {/* The conversation is a framed pane of its own (ARCH-012): no card around it. */}
-                <ConversationDock
-                  tree={tree}
-                  selection={{
-                    scope: employee.scope,
-                    kind: "employee",
-                    trail: [...namesFor(tree, employee.scope), employee.name],
-                    employeeId: employee.id,
-                  }}
-                />
-              </section>
-            </Talk>
-          </ErrorBoundary>
-        )}
+        {/* A phone or a tablet: the button that opens this employee's conversation, near the top on a phone. */}
+        {employee.kind === "employee" && !released && <TalkLauncher className="max-sm:-order-1" />}
       </div>
     </>
   );

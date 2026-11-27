@@ -20,6 +20,7 @@ import { useAppSelector } from "@/store";
 import { api, useDecideIdeaMutation, useGetIdeaQuery } from "@/store/api";
 import type { DecisionChoice, ExistingProduct, Idea, Verdict, VerdictOutcome } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
+import { usePageConversation } from "../conversation/pageConversation";
 import { TryAgain } from "../runs/TryAgain";
 import { namesFor } from "../home/treeModel";
 import { decisionOptions, notResearched, paragraphs, plainProductName, redLineBreached, sameText, shortSummary, sourceLabel } from "./verdictModel";
@@ -84,8 +85,11 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
           </SideCard>,
         ];
 
+  // The conversation at the level the idea belongs to, docked beside its verdict (ARCH-012).
+  const talk = usePageConversation(idea?.scope ? { scope: idea.scope } : null);
+
   return (
-    <AppShell crumbs={crumbs} aside={aside}>
+    <AppShell crumbs={crumbs} aside={aside} talk={talk}>
       {view.kind === "loading" && (
         <Loading label="Loading the verdict" className="flex flex-col gap-6">
           <Skeleton className="h-56 rounded-lg" />

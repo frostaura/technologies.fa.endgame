@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 import plugin from "tailwindcss/plugin";
-import { blur, coarseQuery, cssVariables, layout, motion, radius, railQuery, screens, shortQuery, surfaces, tailwindColors, typography, viewportQueries } from "./src/lib/tokens";
+import { blur, coarseQuery, cssVariables, layout, lowQuery, masks, motion, radius, railQuery, screens, shortQuery, surfaces, tailwindColors, typography, viewportQueries } from "./src/lib/tokens";
 
 /**
  * The Tailwind theme. It holds no values: every colour, radius, shadow, typeface and motion comes
@@ -49,7 +49,7 @@ const config: Config = {
       minHeight: { touch: layout.touch, nav: layout.nav, bar: layout.bar },
       lineHeight: { touch: layout.touch },
       borderWidth: { touch: layout.touchPad },
-      minWidth: { touch: layout.touch, field: layout.field },
+      minWidth: { touch: layout.touch, field: layout.field, thumb: layout.height.thumb },
       margin: { wire: layout.wireInset },
       keyframes: motion.keyframes,
       animation: motion.animation,
@@ -62,6 +62,18 @@ const config: Config = {
   },
   plugins: [
     tokenVariables,
+    // `low:` — a window with little height: the conversation pane folds its header, strip and cost line to one line each.
+    plugin(({ addVariant }) => {
+      addVariant("low", `@media ${lowQuery}`);
+    }),
+    // `fade-y` (a list's ends fade out) and `text-vertical` (a rail's label, read bottom to top), from the tokens.
+    plugin(({ addUtilities }) => {
+      addUtilities({
+        ".fade-y": { maskImage: masks["fade-y"], WebkitMaskImage: masks["fade-y"] },
+        ".text-vertical": { writingMode: "vertical-rl", transform: "rotate(180deg)" },
+        ".wrap-balance": { textWrap: "balance" },
+      });
+    }),
     // `short:` — a phone on its side: little height, so headers and bars draw slimmer.
     plugin(({ addVariant }) => {
       addVariant("short", `@media ${shortQuery}`);

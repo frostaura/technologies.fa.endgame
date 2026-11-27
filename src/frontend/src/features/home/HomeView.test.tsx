@@ -205,7 +205,7 @@ describe("HomeView", () => {
 
     fireEvent.change(screen.getByLabelText("Message Tools"), { target: { value: "What needs me?" } });
     // What a message can cost at most is shown before it is sent (CLAUDE.md rule 11).
-    expect((await screen.findByTestId("message-estimate")).textContent).toMatch(/at most 3\.2 credits, usually about 0\.5 credits/);
+    expect((await screen.findByTestId("message-estimate")).textContent).toMatch(/at most 3\.2 credits, usually about 0\.5\./);
     await waitFor(() => expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(FakeEventSource.instances.length).toBe(1));

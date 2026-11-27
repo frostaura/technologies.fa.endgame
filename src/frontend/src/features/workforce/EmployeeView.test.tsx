@@ -59,7 +59,7 @@ describe("EmployeeView", () => {
     const memory = await screen.findByRole("list", { name: "Memory entries" });
     expect(within(memory).getByText("Proof before building")).toBeTruthy();
     expect(screen.getByText(/1 note merged, 1 removed as out of date, 1 habit corrected/)).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Talk to Ada" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Talking to Ada" })).toBeTruthy();
   });
 
   it("shows the work a factory build gave it: the tasks it claimed, judgements it made, and how its estimates went", async () => {

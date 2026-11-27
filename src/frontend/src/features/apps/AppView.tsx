@@ -14,7 +14,7 @@ import { capitalise, formatCredits, formatDate, formatDuration, formatNumber, he
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
-import { plainOrNull, shortTitle } from "@/lib/plain";
+import { plainOrNull } from "@/lib/plain";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store";
 import { useGetAppQuery, useGetCascadeQuery, useGetMeQuery, useGetSecretsQuery, useGetSharesQuery, useRemoveShareMutation, useUpdateAppSettingsMutation } from "@/store/api";
@@ -35,9 +35,9 @@ import { useCardNote } from "@/components/cardNote";
 import { CardNotesProvider } from "@/components/CardNotes";
 import { ChangeRequest } from "./ChangeRequest";
 import { History } from "./History";
-import { AppConversation } from "../home/ConversationDock";
 import { Fold } from "@/components/Fold";
-import { Talk } from "../shell/talk";
+import { TalkLauncher } from "../shell/talk";
+import { usePageConversation } from "../conversation/pageConversation";
 
 export function AppView({ appId }: { appId: string }) {
   const query = useGetAppQuery(appId, { pollingInterval: 20_000, skipPollingIfUnfocused: true });
@@ -61,9 +61,11 @@ export function AppView({ appId }: { appId: string }) {
     names.slice(1, -1).forEach((n, i) => crumbs.push({ label: n, href: paths.manage(parts.slice(0, i + 2).join("/")) }));
     crumbs.push({ label: app.name });
   } else crumbs.push({ label: "App" });
+  // The conversation about this app, docked beside its page (ARCH-012).
+  const talk = usePageConversation(app ? { scope: app.scope } : null);
 
   return (
-    <AppShell crumbs={crumbs} aside={app ? <AppAsideColumn app={app} orgName={org?.name ?? "your organisation"} /> : undefined}>
+    <AppShell crumbs={crumbs} aside={app ? <AppAsideColumn app={app} orgName={org?.name ?? "your organisation"} /> : undefined} talk={talk}>
       {view.kind === "loading" && (
         <Loading label="Loading the app" className="flex flex-col gap-6">
           <Skeleton className="h-12 w-1/2" />
@@ -229,13 +231,8 @@ function AppBody({ app }: { app: AppDetail }) {
         </ErrorBoundary>
       </Fold>
 
-      {/* A phone draws the button that opens this conversation straight under the figures (its order class). */}
-      <ErrorBoundary name="The conversation">
-        {/* The launcher is one line: a long app name is cut short in it (the h1 carries the whole name). */}
-        <Talk label={`Talk to ${shortTitle(app.name, 32)}`} launcherClassName="max-sm:-order-1">
-          <TalkToApp scope={app.scope} />
-        </Talk>
-      </ErrorBoundary>
+      {/* A phone or a tablet: the button that opens this app's conversation, straight under the figures on a phone (its order class). */}
+      <TalkLauncher className="max-sm:-order-1" />
 
       <div className="grid grid-cols-1 items-start gap-6 max-sm:gap-5 2xl:grid-cols-2">
         <Fold title="History" summary="Every version, and bringing one back">
@@ -735,12 +732,6 @@ function ConfirmPublic({ appName, onConfirm, onCancel }: { appName: string; onCo
       onCancel={onCancel}
     />
   );
-}
-
-/** The conversation scoped to this app: ask about it, or tell it what to change. */
-function TalkToApp({ scope }: { scope: string }) {
-  const tree = useActiveTree();
-  return <AppConversation scope={scope} trail={namesFor(tree.data, scope)} />;
 }
 
 /** The app's second address, behind a small toggle: said only when asked for. */

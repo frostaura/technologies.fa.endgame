@@ -16,7 +16,7 @@ import { NotificationsBell } from "./NotificationsBell";
 import { OrganisationSwitcher } from "@/features/account/OrganisationSwitcher";
 import { PhoneHeader, PhoneNav } from "./PhoneShell";
 import { CreditsPill, ModeToggle, SignOut } from "./shellControls";
-import { Talk } from "./talk";
+import { TalkInSheet } from "./talk";
 import { DockLayoutContext, useDockState } from "../conversation/dockLayout";
 import { ShellTalkContext, takeOpenTalkOnArrival } from "./talkContext";
 
@@ -40,10 +40,12 @@ export interface ShellConversation {
  * The console frame, as drawn: the mark, where you are, the mode toggle and the balance. The page
  * below is full width; each screen decides its own columns.
  *
- * Three layouts, by the width of the console's own viewport (`useViewport`):
- * - desktop: the header bar, the page, and beside it the side panel — or the conversation (`talk`);
- * - tablet: the same header; the side panel under the page; the conversation in a side sheet, opened
- *   from a button at the foot of the screen;
+ * Three layouts, by the width of the console's own viewport (`useViewport`), and one conversation
+ * placement each (ARCH-012) for the pages that have one (`talk`):
+ * - desktop: the header bar, the page column (capped and centred, its side cards beside or under the
+ *   page), and the conversation docked at the window's right edge, full height under the header;
+ * - tablet: the same header, the side panel under the page, and the conversation in a drawer from
+ *   the right, opened from the header's icon;
  * - phone: a one-row header (where you are, in full, with the way up), the bottom bar (Home, Talk,
  *   Alerts, Credits, More), and the conversation in a full-screen sheet. The mode, the organisation
  *   and signing out are under More.
@@ -58,27 +60,17 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
   const creditsScope = org && !active.entered && active.role === null ? (highestGrant(me?.memberships ?? [], org.slug)?.scope ?? org.slug) : org?.slug;
   const viewport = useViewport();
   const phone = viewport === "phone";
-  // Only a phone moves the conversation into a sheet; a tablet keeps it in the page, as a desktop does.
-  const compact = phone;
   const tablet = viewport === "tablet";
+  // A phone and a tablet draw the conversation in the shell's sheet; a desktop docks it.
+  const compact = phone || tablet;
 
-  // The conversation's sheet, and the pages' conversations that draw into it.
-  // "Talk" pressed on a page with none: the org chart opens its conversation as it arrives, once it has one.
+  // The conversation's sheet. "Talk" pressed on a page with none: home opens its conversation as it arrives.
   const [arrivedForTalk] = useState(takeOpenTalkOnArrival);
   const [talkChosen, setTalkOpen] = useState<boolean | null>(null);
   const [talkTarget, setTalkTarget] = useState<HTMLElement | null>(null);
-  const [registered, setRegistered] = useState<string[]>([]);
-  const register = useCallback((label: string) => {
-    setRegistered((was) => [...was, label]);
-    return () =>
-      setRegistered((was) => {
-        const i = was.indexOf(label);
-        return i < 0 ? was : [...was.slice(0, i), ...was.slice(i + 1)];
-      });
-  }, []);
   const openTalk = useCallback(() => setTalkOpen(true), []);
   const closeTalk = useCallback(() => setTalkOpen(false), []);
-  const talkLabel = talk?.label ?? registered[0] ?? null;
+  const talkLabel = talk?.label ?? null;
   // Something in the conversation asked to be shown (the academy pointing into it): open its sheet.
   useEffect(() => {
     if (!talkTarget) return;
@@ -87,10 +79,10 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
     return () => talkTarget.removeEventListener("endgame:reveal", reveal);
   }, [talkTarget]);
   const talkOpen = talkChosen ?? (arrivedForTalk && compact && talkLabel !== null);
-  const shell = useMemo(() => ({ compact, announce: tablet, target: talkTarget, open: openTalk, register }), [compact, tablet, talkTarget, openTalk, register]);
+  const shell = useMemo(() => ({ compact, target: talkTarget, label: talkLabel, open: openTalk }), [compact, talkTarget, talkLabel, openTalk]);
 
-  // A desktop docks the conversation at the right edge, full height under a header that stays put (ARCH-012). A page that
-  // also has side cards keeps them in the page column: beside the page from 3xl, under it below that.
+  // A desktop docks the conversation at the window's right edge, full height under a header that stays put (ARCH-012).
+  // A page that also has side cards keeps them in the page column: beside the page from 3xl, under it below that.
   const docked = viewport === "desktop" && !!talk;
   const dock = useDockState(me?.user.id ?? null);
   const chrome = useRef<HTMLDivElement>(null);
@@ -108,9 +100,10 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
     };
   }, [docked]);
 
-  const side = compact ? aside : docked ? null : aside ?? (talk && (tablet ? <Talk label={talk.label}>{talk.content}</Talk> : talk.content));
   // Every page's trail starts at the organisation and never names the same place twice in a row.
   const trail = normaliseCrumbs(crumbs, org ? { label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() } : null);
+  // Beside the docked pane the page's side cards sit beside the page only from 3xl; collapsed to its rail, from lg.
+  const besideFrom = !docked || dock.collapsed ? "lg" : "3xl";
 
   return (
     <ShellTalkContext.Provider value={shell}>
@@ -130,9 +123,10 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
               you are on a full-width row of its own beneath. Wide desktop (xl): one row, where you are
               between the mark and the controls. Every control is one height (44px). Where you are is always
               one line; a step is cut short only when the row is too narrow, the middle steps first. Below
-              xl, Sign out and System are icons, so the bar never wraps.
+              xl, Sign out and System are icons, so the bar never wraps. Beside the docked pane the bar runs
+              the window's whole width, so its controls end over the pane's edge.
             */}
-            <div className="mx-auto flex w-full max-w-frame flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 sm:px-8 xl:gap-x-3">
+            <div className={cn("mx-auto flex w-full flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 sm:px-8 xl:gap-x-3", !docked && "max-w-frame")}>
               <Link href={paths.home()} aria-label="Endgame home" className="mr-1 flex min-h-touch shrink-0 items-center gap-2.5 rounded-xs text-ink">
                 <img src="/brand/endgame-mark.svg" alt="" width={30} height={30} className="size-8" />
                 <span className={cn("font-display text-lg font-bold tracking-tight", trail.length > 0 && "hidden xl:inline")}>Endgame</span>
@@ -147,7 +141,7 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
                 {me && <OrganisationSwitcher compact />}
                 {creditsScope && <CreditsPill scope={creditsScope} />}
               </div>
-              {tablet && talkLabel && <TalkHere label={talkLabel} />}
+              {tablet && talkLabel && <TalkHere label={talkLabel} open={talkOpen} onOpen={openTalk} />}
               {org && <NotificationsBell organisation={org.slug} />}
               {me && (
                 <Link href={paths.account()} aria-label="Your account" title="Your account" className="flex size-11 shrink-0 items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
@@ -160,29 +154,24 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
         )}
         </div>
         {/* The device's safe area (a notch, in landscape) is kept clear of the page, outside its own gutter. */}
-        <div className="mx-auto flex w-full max-w-frame flex-1 flex-col pl-safe-l pr-safe-r lg:flex-row rail:flex-row rail:pl-0">
+        <div className="flex w-full flex-1 flex-col pl-safe-l pr-safe-r lg:flex-row rail:flex-row rail:pl-0">
           {/*
-            Docked (ARCH-012): the page column and the conversation pane side by side. Inside the page column, a page's side
-            cards sit beside the page from 3xl (1,600 px: the page keeps at least 640 px beside a wide pane and the cards) and
-            under it below that; with the pane collapsed they go beside the page from lg, as on any other page.
+            The page column, capped and centred in the room the pane leaves; the pane itself is docked to the window's
+            right edge at every width. Inside the page column, a page's side cards sit beside the page from 3xl (1,600 px:
+            the page keeps at least 640 px beside a wide pane and the cards) and under it below that; with the pane
+            collapsed they go beside the page from lg, as on any other page.
           */}
-          <div
-            data-page-column=""
-            className={cn("flex min-w-0 flex-1 flex-col", !docked && "lg:flex-row rail:flex-row", docked && (dock.collapsed ? "lg:flex-row" : "3xl:flex-row"), docked && dock.full && "hidden")}
-          >
-            <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10 rail:gap-4 rail:px-5 rail:py-4">
-              {children}
-            </main>
-            {aside ? (
-              <SidePanel beside={!docked || dock.collapsed ? "lg" : "3xl"} below={docked && !dock.collapsed}>
-                {aside}
-              </SidePanel>
-            ) : (
-              side && (
-                // The conversation: a panel the height of the page beside it on a desktop; on a tablet, under the page.
-                <aside className="flex min-w-0 flex-col gap-7 border-t bg-surface px-4 py-8 sm:px-8 lg:w-dock lg:shrink-0 lg:border-l lg:border-t-0 lg:py-10">{side}</aside>
-              )
-            )}
+          <div data-page-frame="" className={cn("flex min-w-0 flex-1 flex-col", docked && dock.full && "hidden")}>
+            <div data-page-column="" className={cn("mx-auto flex w-full min-w-0 max-w-frame flex-1 flex-col", besideFrom === "lg" ? "lg:flex-row rail:flex-row" : "3xl:flex-row")}>
+              <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10 rail:gap-4 rail:px-5 rail:py-4">
+                {children}
+              </main>
+              {aside && (
+                <SidePanel beside={besideFrom} below={docked && !dock.collapsed}>
+                  {aside}
+                </SidePanel>
+              )}
+            </div>
           </div>
           {docked && talk && (
             <DockLayoutContext.Provider value={dock}>
@@ -190,7 +179,7 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
                 aria-label="Conversation pane"
                 data-dock={dock.full ? "full" : dock.collapsed ? "collapsed" : dock.wide ? "wide" : "narrow"}
                 className={cn(
-                  "sticky top-chrome flex h-dock shrink-0 flex-col self-start border-l bg-surface 4xl:border-r",
+                  "sticky top-chrome flex h-dock shrink-0 flex-col self-start border-l bg-surface",
                   dock.full ? "flex-1" : dock.collapsed ? "w-dock-rail" : dock.wide ? "w-dock-wide" : "w-dock",
                 )}
               >
@@ -199,13 +188,10 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
             </DockLayoutContext.Provider>
           )}
         </div>
-        {compact && talk && (
-          <Talk label={talk.label} launcher={false}>
-            {talk.content}
-          </Talk>
-        )}
+        {compact && talk && <TalkInSheet>{talk.content}</TalkInSheet>}
         {compact && (
-          <Sheet open={talkOpen} onClose={closeTalk} title={talkLabel ?? "Conversation"} side="full" keepMounted hideTitle fill testId="talk-sheet">
+          // A phone: the whole screen. A tablet: a drawer from the right, the page still in sight behind it.
+          <Sheet open={talkOpen} onClose={closeTalk} title={talkLabel ?? "Conversation"} side={phone ? "full" : "side"} keepMounted hideTitle fill testId="talk-sheet">
             <div ref={setTalkTarget} data-talk-target="" className="flex h-full min-h-0 flex-col" />
           </Sheet>
         )}
@@ -248,17 +234,11 @@ function SidePanel({ children, beside = "lg", below = false }: { children: React
 }
 
 
-/** A tablet's "Talk": the conversation is on the page, further down; this brings it into view, ready to type. */
-function TalkHere({ label }: { label: string }) {
-  const go = () => {
-    const anchor = document.querySelector<HTMLElement>("[data-talk-anchor] section[aria-label='Conversation']");
-    if (!anchor) return;
-    anchor.scrollIntoView({ behavior: "smooth", block: "start" });
-    anchor.querySelector<HTMLInputElement>("form input")?.focus({ preventScroll: true });
-  };
+/** A tablet's "Talk": opens the conversation's drawer from the right, its message box ready. */
+function TalkHere({ label, open, onOpen }: { label: string; open: boolean; onOpen: () => void }) {
   return (
     // An icon, as the bell beside it is: the bar has no room for another word on a tablet.
-    <button type="button" onClick={go} aria-label={label} title={label} className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-primary-link hover:bg-ground">
+    <button type="button" onClick={onOpen} aria-label={label} title={label} aria-haspopup="dialog" aria-expanded={open} className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-primary-link hover:bg-ground">
       <MessageCircle aria-hidden className="size-5" />
     </button>
   );

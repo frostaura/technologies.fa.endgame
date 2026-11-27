@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
-import { ArrowDown, ChevronDown, Maximize2, MessageCircle, Minimize2, MoveHorizontal, PanelRightClose, PanelRightOpen, Paperclip } from "lucide-react";
-import { useActiveTree } from "@/lib/useActiveOrganisation";
+import { ArrowDown, ArrowUpRight, Check, ChevronDown, IdCard, Maximize2, MessageCircle, Minimize2, MoveHorizontal, PanelRightClose, Paperclip, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -11,11 +10,11 @@ import { Button } from "@/components/ui/button";
 import { describeError, viewOf } from "@/lib/queryState";
 import { navigate, paths, useLocation } from "@/lib/router";
 import { TAP } from "@/lib/touch";
-import { useFollowLatest } from "@/lib/useFollowLatest";
+import { ARRIVAL, useFollowLatest } from "@/lib/useFollowLatest";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { useControlRunMutation, useEstimateMessageQuery, useGetConversationCapabilitiesQuery, useGetConversationQuery, useGetMeQuery, useStartConversationMutation } from "@/store/api";
-import type { ConversationAttachment, ConversationMessage, ConversationTurn, MessageNarrowing, Tree } from "@/store/types";
+import type { ConversationAttachment, MessageNarrowing, Tree } from "@/store/types";
 import { conversationKey, messageQueued, messageSettled, selected, type ChatMessage, type Selection } from "@/store/uiSlice";
 import { ApprovalCard } from "../runs/ApprovalCard";
 import { isTerminal } from "../runs/runModel";
@@ -27,6 +26,7 @@ import { SentAttachments } from "../conversation/AttachmentChips";
 import { Composer } from "../conversation/Composer";
 import { useDockLayout } from "../conversation/dockLayout";
 import { contentsOf, suggestedPrompts, targetsOf, type Target } from "../conversation/scopeModel";
+import { answeredAt, interrupted, receiptsOf, segmentsOf, turnsOf, type HistoryTurn, type Receipt, type SaidLine } from "../conversation/turnModel";
 import { useDraftFiles } from "../conversation/useDraftFiles";
 import { WorkCard } from "../conversation/WorkCard";
 import { deriveWork } from "../conversation/workModel";
@@ -35,18 +35,19 @@ import { deriveWork } from "../conversation/workModel";
 let carriedDraft: string | null = null;
 
 const LEVEL: Record<Selection["kind"], string> = { organisation: "Organisation", division: "Division", project: "Project", app: "App", employee: "Employee" };
+const LEVELS: Exclude<Selection["kind"], "employee">[] = ["organisation", "division", "project", "app"];
 
 /** Says, once, what a screen reader should hear: a reply that arrived, work that ended, a question waiting. */
 const AnnounceContext = createContext<(text: string) => void>(() => undefined);
 
 /**
  * The conversation at a level (ARCH-012): a pane with its header, the thread, and the composer
- * pinned at its foot. On a desktop it is docked at the right edge (narrow, wide, collapsed or full
- * width); in a page (a tablet, an app's or an employee's page) it is a framed panel of its own
- * height; on a phone it fills the shell's sheet. What was said before is read from the control
- * plane, so it survives a reload; each new message starts a run, whose replies and work stream in.
+ * pinned at its foot. On a desktop it is docked at the window's right edge (narrow, wide, collapsed
+ * to a rail, or full width); on a tablet it fills the shell's drawer, on a phone its sheet. What was
+ * said before is read from the control plane, so it survives a reload — a turn still being answered
+ * picks up its reply where it is; each new message starts a run, whose replies and work stream in.
  */
-export function ConversationDock({ tree, selection, fill = true, onRetarget }: { tree: Tree; selection: Selection; fill?: boolean; onRetarget?: (selection: Selection) => void }) {
+export function ConversationDock({ tree, selection, onRetarget }: { tree: Tree; selection: Selection; onRetarget?: (selection: Selection) => void }) {
   const dispatch = useAppDispatch();
   const key = conversationKey(selection);
   const messages = useAppSelector((s) => s.ui.conversations[key]) ?? NONE;
@@ -72,40 +73,46 @@ export function ConversationDock({ tree, selection, fill = true, onRetarget }: {
   // What a message can cost at most, shown before it is sent (CLAUDE.md rule 11), the files in it counted.
   const estimateQuery = useEstimateMessageQuery(attachmentIds.length > 0 ? { ...scopeArgs, attachmentIds } : scopeArgs);
   const estimate = viewOf(estimateQuery);
-  const busy = activeWork(tree).filter((w) => !selection.employeeId || w.id === selection.employeeId);
+  const busy = useMemo(() => busyHere(tree, selection), [tree, selection]);
   const logRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const onEmployeePage = location.pathname.startsWith("/employees/");
+  const onHome = location.pathname === "/";
   const inSheet = useInSheet();
   const dock = useDockLayout();
-  const variant = inSheet ? "sheet" : dock ? "docked" : "framed";
+  const variant = inSheet ? "sheet" : dock?.full ? "full" : "docked";
   const { behind, toLatest } = useFollowLatest(logRef);
   const [dragging, setDragging] = useState(false);
+  const [threadBox, setThreadBox] = useState<HTMLDivElement | null>(null);
   const [said, setSaid] = useState("");
   const announce = useCallback((text: string) => setSaid(text), []);
 
-  const contents = useMemo(() => contentsOf(tree, selection.kind === "employee" ? selection.scope : selection.scope), [tree, selection.scope, selection.kind]);
+  const contents = useMemo(() => contentsOf(tree, selection.scope), [tree, selection.scope]);
   const targets = useMemo(() => targetsOf(contents, selection), [contents, selection]);
   const suggestions = useMemo(() => suggestedPrompts(tree, selection), [tree, selection]);
 
   // The reply being written now: the latest message sent here whose work has not ended. Stop cancels it.
-  const lastRun = [...messages].reverse().find((m) => m.runId)?.runId ?? null;
+  const turns = history.kind === "loaded" ? history.data.turns : null;
+  const lastRun = [...messages].reverse().find((m) => m.runId)?.runId ?? (turns && turns.length > 0 && !isTerminal(turns[turns.length - 1]?.status ?? null) ? (turns[turns.length - 1]?.runId ?? null) : null);
   const live = useAppSelector((s) => {
     if (!lastRun) return false;
     const events = s.runs[lastRun]?.events;
-    return !events || events[events.length - 1]?.type !== "run.finished";
+    if (!events) return messages.some((m) => m.runId === lastRun) || (turns?.find((t) => t.runId === lastRun)?.status ?? "finished") !== "finished";
+    return events[events.length - 1]?.type !== "run.finished";
   });
 
-  const retarget = (t: Target) => {
-    const next: Selection = t.kind === "employee" ? { scope: t.scope, kind: "employee", trail: t.trail, employeeId: t.employeeId } : { scope: t.scope, kind: "app", trail: t.trail };
+  const go = (next: Selection) => {
     if (onRetarget) {
       onRetarget(next);
       return;
     }
-    // Off the org chart (an app's or an employee's page), the conversation there moves to the org chart, words and all.
-    carriedDraft = draft;
     dispatch(selected(next));
-    navigate(paths.home());
+    if (!onHome) navigate(paths.home());
+  };
+  const retarget = (t: Target) => {
+    // Off the org chart (an app's or an employee's page), the conversation there moves to the org chart, words and all.
+    if (!onRetarget && !onHome) carriedDraft = draft;
+    go(t.kind === "employee" ? { scope: t.scope, kind: "employee", trail: t.trail, employeeId: t.employeeId } : { scope: t.scope, kind: "app", trail: t.trail });
   };
 
   const send = async (text: string, attachments: ConversationAttachment[], narrowing: MessageNarrowing) => {
@@ -144,23 +151,13 @@ export function ConversationDock({ tree, selection, fill = true, onRetarget }: {
   };
 
   const liveRuns = new Set(messages.map((m) => m.runId).filter((id): id is string => id !== null));
-  const turns = history.kind === "loaded" ? new Map(history.data.turns.map((t) => [t.runId, t])) : new Map<string, ConversationTurn>();
-  const earlier = history.kind === "loaded" ? groupTurns(withoutClosingRepeats(history.data.messages.filter((m) => !liveRuns.has(m.runId)))) : [];
+  const earlier = history.kind === "loaded" ? turnsOf(withoutClosingRepeats(history.data.messages.filter((m) => !liveRuns.has(m.runId))), history.data.turns) : [];
   const empty = history.kind === "loaded" && earlier.length === 0 && messages.length === 0;
   const answerer = selection.kind === "employee" ? name : null;
 
-  if (variant === "docked" && dock?.collapsed) {
-    return (
-      <section aria-label="Conversation" data-variant="collapsed" className="flex h-full flex-col items-center gap-3 py-4">
-        <button type="button" onClick={() => dock.setCollapsed(false)} aria-label={`Open the conversation with ${name}`} title={`Talk to ${name}`} className="flex flex-col items-center gap-2 rounded-xs p-1 text-ink-muted hover:text-ink">
-          <Avatar name={name} seed={selection.employeeId ?? selection.scope} size="sm" shape={selection.kind === "employee" ? "round" : "square"} />
-          <PanelRightOpen aria-hidden className="size-5" />
-        </button>
-        {live && <span className="size-2 animate-pulse rounded-full bg-primary motion-reduce:animate-none" aria-label="A reply is being written" role="img" />}
-      </section>
-    );
-  }
+  if (variant === "docked" && dock?.collapsed) return <CollapsedRail selection={selection} name={name} live={live} busy={busy.length} onOpen={() => dock.setCollapsed(false)} />;
 
+  const full = variant === "full";
   return (
     <AnnounceContext.Provider value={announce}>
       <section
@@ -176,70 +173,75 @@ export function ConversationDock({ tree, selection, fill = true, onRetarget }: {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
         }}
         onDrop={onDrop}
-        className={cn(
-          "relative flex min-h-0 flex-col",
-          variant === "sheet" && "h-full px-4 pt-3",
-          variant === "docked" && "h-full",
-          // On a tablet the side panel sets cards two by two; the conversation takes the whole row.
-          variant === "framed" && "h-pane overflow-hidden rounded-md border bg-surface shadow-card md:col-span-2",
-          variant === "framed" && !fill && "w-full",
-        )}
+        className="relative flex h-full min-h-0 flex-col"
       >
-        <PaneHeader selection={selection} name={name} inSheet={inSheet} onEmployeePage={onEmployeePage} />
-        <AlsoHappening busy={busy} inSheet={inSheet} />
+        <PaneHeader selection={selection} name={name} inSheet={inSheet} onEmployeePage={onEmployeePage} busy={busy} onGo={go} />
+        <AlsoHappening busy={busy} />
 
-        <div
-          ref={logRef}
-          role="log"
-          aria-live="off"
-          aria-label={`Conversation with ${name}`}
-          className={cn("flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain py-5", variant === "sheet" ? "py-4" : "px-4", dock?.full && "items-center")}
-        >
-          <div className={cn("flex w-full flex-col gap-5", dock?.full && "max-w-prose")}>
-            {history.kind === "loading" && (
-              <div role="status" aria-busy="true" data-state="loading" className="flex flex-col gap-3.5">
-                <span className="sr-only">Loading what was said before</span>
-                <Skeleton className="h-10 w-2/3 self-end rounded-md" />
-                <Skeleton className="h-16 w-5/6 rounded-md" />
-              </div>
-            )}
-            {history.kind === "failed" && (
-              <div role="alert" data-state="failed" className="flex flex-col gap-2 rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
-                What was said before could not be loaded: {history.reason} New messages still send.
-                <button type="button" onClick={() => void historyQuery.refetch()} className="min-h-touch self-start rounded-xs font-semibold underline">
-                  Try again
-                </button>
-              </div>
-            )}
-            {history.kind === "loaded" && history.stale && (
-              <p role="alert" data-state="stale" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
-                The latest refresh failed: {history.stale.reason}
-              </p>
-            )}
-            {empty && <EmptyThread selection={selection} name={name} suggestions={suggestions} canStart={caps.kind === "loaded" && caps.data.actions.length > 0} canAddress={targets.length > 0} onPick={(text) => {
-              setDraft(text);
-              requestAnimationFrame(() => document.getElementById(inputId)?.focus());
-            }} />}
-            {earlier.map((turn) => (
-              <EarlierTurn key={turn.key} turn={turn} info={turns.get(turn.runId) ?? null} myName={myName} answerer={answerer} root={logRef} />
-            ))}
-            {messages.map((m) => (
-              <Exchange key={m.id} message={m} onRetry={() => void send(m.text, m.attachments ?? [], {})} answerer={answerer} />
-            ))}
+        <div ref={setThreadBox} className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            ref={logRef}
+            role="log"
+            aria-live="off"
+            aria-label={`Conversation with ${name}`}
+            data-thread=""
+            className={cn("fade-y flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-5", inSheet && "pr-3", full && "items-center")}
+          >
+            <div className={cn("flex w-full flex-col gap-5", full && "max-w-prose")}>
+              {history.kind === "loading" && (
+                <div role="status" aria-busy="true" data-state="loading" className="flex flex-col gap-3.5">
+                  <span className="sr-only">Loading what was said before</span>
+                  <Skeleton className="h-10 w-2/3 self-end rounded-md" />
+                  <Skeleton className="h-16 w-5/6 rounded-md" />
+                </div>
+              )}
+              {history.kind === "failed" && (
+                <div role="alert" data-state="failed" className="flex flex-col gap-2 rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+                  What was said before could not be loaded: {history.reason} New messages still send.
+                  <button type="button" onClick={() => void historyQuery.refetch()} className="min-h-touch self-start rounded-xs font-semibold underline">
+                    Try again
+                  </button>
+                </div>
+              )}
+              {history.kind === "loaded" && history.stale && (
+                <p role="alert" data-state="stale" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+                  The latest refresh failed: {history.stale.reason}
+                </p>
+              )}
+              {empty && (
+                <EmptyThread
+                  selection={selection}
+                  name={name}
+                  suggestions={suggestions}
+                  canStart={caps.kind === "loaded" && caps.data.actions.length > 0}
+                  canAddress={targets.length > 0}
+                  onPick={(text) => {
+                    setDraft(text);
+                    requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+                  }}
+                />
+              )}
+              {earlier.map((turn) => (
+                <EarlierTurn key={turn.key} turn={turn} myName={myName} answerer={answerer} root={logRef} onAskAgain={(text) => void send(text, [], {})} />
+              ))}
+              {messages.map((m) => (
+                <Exchange key={m.id} message={m} onRetry={() => void send(m.text, m.attachments ?? [], {})} answerer={answerer} />
+              ))}
+            </div>
           </div>
         </div>
         {behind && (
-          // Over the foot of the log, outside it, so it is not read out as part of the conversation.
-          <div className="relative h-0">
-            <Button size="sm" variant="soft" onClick={toLatest} className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full font-semibold text-ink shadow-raised">
+          // Docked just above the composer, outside the log so it is never over what was said, and not read out as part of it.
+          <div className={cn("flex shrink-0 justify-center bg-surface pb-1 pt-1.5", full && "px-4")}>
+            <Button size="sm" variant="soft" onClick={toLatest} className="rounded-full font-semibold text-ink shadow-raised">
               <ArrowDown aria-hidden className="size-4" />
               New reply
             </Button>
           </div>
         )}
 
-        <div className={cn("shrink-0", dock?.full && "flex justify-center")}>
-          <div className={cn("w-full", dock?.full && "max-w-prose")}>
+        <div className={cn("shrink-0", full && "flex justify-center")}>
+          <div className={cn("w-full", full && "max-w-prose")}>
             <Composer
               name={name}
               scope={selection.scope}
@@ -258,6 +260,7 @@ export function ConversationDock({ tree, selection, fill = true, onRetarget }: {
               onStop={() => lastRun && void control({ id: lastRun, action: "cancel" })}
               onSend={submit}
               inSheet={inSheet}
+              scrimTarget={threadBox}
             />
           </div>
         </div>
@@ -276,48 +279,115 @@ export function ConversationDock({ tree, selection, fill = true, onRetarget }: {
   );
 }
 
-/** Who you are talking to, at which level, and — docked on a desktop — narrow or wide, full width, or collapsed. */
-function PaneHeader({ selection, name, inSheet, onEmployeePage }: { selection: Selection; name: string; inSheet: boolean; onEmployeePage: boolean }) {
+interface Busy {
+  id: string;
+  name: string;
+  line: string;
+}
+
+/** Who is at work at this level, each in a sentence that says what they are doing in the right verb. */
+function busyHere(tree: Tree, selection: Selection): Busy[] {
+  const roles = new Map<string, string | null>();
+  const visit = (workers: { id: string; standing: string | null }[]) => workers.forEach((w) => roles.set(w.id, w.standing));
+  visit(tree.organisation?.workers ?? []);
+  for (const d of tree.divisions) {
+    visit(d.workers);
+    for (const p of d.projects) {
+      visit(p.workers);
+      for (const a of p.apps) visit(a.workers);
+    }
+  }
+  return activeWork(tree)
+    .filter((w) => !selection.employeeId || w.id === selection.employeeId)
+    .map((w) => {
+      // The security reviewer reviews whatever the work is: never "is building" (finding 13).
+      const reviewing = roles.get(w.id) === "security-reviewer";
+      const subject = w.activity.replace(/^[A-Za-z ]+:\s+/, "");
+      return { id: w.id, name: w.name, line: reviewing ? `${w.name} is reviewing: ${subject}` : activityLine(w.name, w.activity) };
+    });
+}
+
+/** The levels above the one being talked to, each a way back up, and the level itself. */
+function scopeCrumbs(selection: Selection): { label: string; selection: Selection }[] {
+  const parts = selection.scope.split("/").filter(Boolean);
+  const out: { label: string; selection: Selection }[] = [];
+  parts.forEach((_, i) => {
+    const kind = LEVELS[Math.min(i, LEVELS.length - 1)] ?? "app";
+    out.push({ label: selection.trail[i] ?? parts[i] ?? "", selection: { scope: parts.slice(0, i + 1).join("/"), kind, trail: selection.trail.slice(0, i + 1) } });
+  });
+  return out;
+}
+
+/**
+ * Who you are talking to, at which level — the levels above as a way back up, an × to talk to the whole organisation
+ * again — and, docked on a desktop, narrow or wide, full width, or collapsed. A window with little height (`low:`)
+ * draws it as one line, with the work under way as a count beside it.
+ */
+function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo }: { selection: Selection; name: string; inSheet: boolean; onEmployeePage: boolean; busy: Busy[]; onGo: (s: Selection) => void }) {
   const dock = useDockLayout();
-  const narrowable = selection.kind === "organisation";
-  const hint = narrowable
-    ? "Select a division, project or employee to narrow this."
-    : onEmployeePage
-      ? `Only ${name} hears this, and answers from its job and what it remembers.`
+  const crumbs = scopeCrumbs(selection);
+  // The levels above this one; for an employee, every level of their place.
+  const above = selection.kind === "employee" ? crumbs : crumbs.slice(0, -1);
+  const narrowed = selection.kind !== "organisation";
+  const home = crumbs[0];
+  const hint =
+    selection.kind === "organisation"
+      ? "Select a division, project or employee to narrow this."
       : selection.kind === "app"
         ? `About ${name} only: ask about it, or ask for a change to it.`
-        : "Select the organisation band to talk to everything again.";
+        : onEmployeePage
+          ? `Only ${name} hears this, and answers from its job and what it remembers.`
+          : null;
   return (
-    <header className={cn("flex shrink-0 items-start gap-3 border-b", inSheet ? "pb-3 pr-12" : "px-4 py-3.5")}>
-      <Avatar name={name} seed={selection.employeeId ?? selection.scope} size="md" shape={selection.kind === "employee" ? "round" : "square"} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="text-eyebrow font-semibold uppercase text-ink-muted" data-level="">
-          {LEVEL[selection.kind]}
-          {selection.trail.length > 1 && <span className="font-normal normal-case tracking-normal"> · in {selection.trail[selection.trail.length - 2]}</span>}
-        </span>
+    <header className={cn("flex shrink-0 items-center gap-3 border-b px-4 py-3 low:py-1.5", inSheet && "pr-14")}>
+      <Avatar name={name} seed={selection.employeeId ?? selection.scope} size="md" shape={selection.kind === "employee" ? "round" : "square"} className="low:hidden" />
+      <div className="flex min-w-0 flex-1 flex-col low:flex-row-reverse low:items-baseline low:justify-end low:gap-2">
+        <nav aria-label="What this conversation is about" className="flex min-w-0 items-center gap-1 text-xs text-ink-muted" data-level="">
+          <span className="shrink-0 text-eyebrow font-semibold uppercase">{LEVEL[selection.kind]}</span>
+          {above.length > 0 && (
+            <ol className="flex min-w-0 items-center gap-1 truncate">
+              {above.map((c) => (
+                <li key={c.selection.scope} className="flex min-w-0 items-center gap-1">
+                  <span aria-hidden>·</span>
+                  <button type="button" onClick={() => onGo(c.selection)} aria-label={`Back up to ${c.label}`} title={`Talk to ${c.label}`} className="min-w-0 truncate rounded-xs hover:text-ink hover:underline">
+                    {c.label}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+          {narrowed && home && (
+            <button type="button" onClick={() => onGo(home.selection)} aria-label={`Talk to all of ${home.label} again`} title={`Talk to all of ${home.label} again`} className="flex size-6 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-ground hover:text-ink">
+              <X aria-hidden className="size-3.5" />
+            </button>
+          )}
+        </nav>
         <h2 className="truncate font-sans text-base font-semibold tracking-normal">Talking to {name}</h2>
-        <span className="text-xs text-ink-muted">{hint}</span>
+        {hint && <span className="truncate text-xs text-ink-muted low:hidden" title={hint}>{hint}</span>}
+      </div>
+      {busy.length > 0 && <BusyCount busy={busy} />}
+      <div className="-mr-2 flex shrink-0 items-center" role="group" aria-label="The pane">
         {selection.kind === "employee" && selection.employeeId && !onEmployeePage && (
-          <Link href={paths.employee(selection.employeeId)} className={cn("self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover", TAP)}>
-            See {name}’s job, record and memory
+          <Link href={paths.employee(selection.employeeId)} aria-label={`See ${name}’s job, record and memory`} title={`See ${name}’s job, record and memory`} className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
+            <IdCard aria-hidden className="size-4" />
           </Link>
         )}
-      </div>
-      {dock && (
-        <div className="-mr-2 -mt-1 flex shrink-0 items-center" role="group" aria-label="The pane">
-          {!dock.full && (
-            <HeaderButton label={dock.wide ? "Make the pane narrower" : "Make the pane wider"} onClick={() => dock.setWide(!dock.wide)} pressed={dock.wide}>
-              <MoveHorizontal aria-hidden className="size-4" />
-            </HeaderButton>
-          )}
+        {dock && !dock.full && dock.canWiden && (
+          <HeaderButton label={dock.wide ? "Make the pane narrower" : "Make the pane wider"} onClick={() => dock.setWide(!dock.wide)} pressed={dock.wide}>
+            <MoveHorizontal aria-hidden className="size-4" />
+          </HeaderButton>
+        )}
+        {dock && (
           <HeaderButton label={dock.full ? "Back to the page" : "Open full width"} onClick={() => dock.setFull(!dock.full)} pressed={dock.full}>
             {dock.full ? <Minimize2 aria-hidden className="size-4" /> : <Maximize2 aria-hidden className="size-4" />}
           </HeaderButton>
+        )}
+        {dock && (
           <HeaderButton label="Collapse the pane" onClick={() => dock.setCollapsed(true)}>
             <PanelRightClose aria-hidden className="size-4" />
           </HeaderButton>
-        </div>
-      )}
+        )}
+      </div>
     </header>
   );
 }
@@ -330,37 +400,102 @@ function HeaderButton({ label, onClick, pressed, children }: { label: string; on
   );
 }
 
-/**
- * Other work under way at this level, anchored under the header rather than floating in the thread: the first line
- * shown, the rest one tap away.
- */
-function AlsoHappening({ busy, inSheet }: { busy: { id: string; name: string; activity: string }[]; inSheet: boolean }) {
+/** On a low window, the work under way here as a count in the header; opened, who is doing what. */
+function BusyCount({ busy }: { busy: Busy[] }) {
   const [open, setOpen] = useState(false);
-  const first = busy[0];
-  if (!first) return null;
   return (
-    <div data-also-happening="" className={cn("shrink-0 border-b bg-ground text-sm text-ink-muted", inSheet ? "-mx-4 px-4" : "px-4")}>
-      <div className="flex min-h-touch items-center gap-2.5">
+    <div className="relative hidden shrink-0 low:block">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch items-center gap-1.5 rounded-full px-2 text-xs font-semibold text-ink-muted hover:bg-ground hover:text-ink">
         <TypingDots />
-        <span className="min-w-0 flex-1 truncate">
-          <span className="sr-only">Also happening here: </span>
-          {activityLine(first.name, first.activity)}
-        </span>
-        {busy.length > 1 && (
-          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch shrink-0 items-center gap-1 rounded-xs text-xs font-semibold text-primary-link hover:text-primary-hover">
-            {open ? "Less" : `${busy.length - 1} more`}
-            <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
-          </button>
-        )}
-      </div>
+        {busy.length} at work
+      </button>
       {open && (
-        <ul className="flex flex-col gap-1 pb-2.5 pl-8">
-          {busy.slice(1).map((w) => (
-            <li key={w.id}>{activityLine(w.name, w.activity)}</li>
+        <ul className="absolute right-0 top-full z-30 mt-1 flex w-popover max-w-popover flex-col gap-1.5 rounded-md border bg-surface p-3 text-sm text-ink-body shadow-raised">
+          {busy.map((w) => (
+            <li key={w.id} className="flex items-start gap-2">
+              <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
+              {w.line}
+            </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * Other work under way at this level, anchored under the header on a solid band with a divider, rather than floating
+ * in the thread: the first line shown, the rest one tap away, every row with the same dot. Folded into the header's
+ * count on a low window.
+ */
+function AlsoHappening({ busy }: { busy: Busy[] }) {
+  const [open, setOpen] = useState(false);
+  const first = busy[0];
+  if (!first) return null;
+  return (
+    <div data-also-happening="" className="relative z-10 shrink-0 border-b bg-ground px-4 text-sm text-ink-muted shadow-card low:hidden">
+      <ul className="flex flex-col pb-0.5">
+        {(open ? busy : [first]).map((w, i) => (
+          <li key={w.id} className="flex min-h-touch items-center gap-2.5">
+            <span aria-hidden className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />
+            <span className="min-w-0 flex-1 truncate" title={w.line}>
+              {i === 0 && <span className="sr-only">Also happening here: </span>}
+              {w.line}
+            </span>
+            {i === 0 && busy.length > 1 && (
+              <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch shrink-0 items-center gap-1 rounded-xs text-xs font-semibold text-primary-link hover:text-primary-hover">
+                {open ? "Less" : `${busy.length - 1} more`}
+                <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The pane collapsed to its rail: who it is, what to press to open it, its name read up the rail, a dot for each piece
+ * of work under way here, and a marker when a reply arrived while it was closed.
+ */
+function CollapsedRail({ selection, name, live, busy, onOpen }: { selection: Selection; name: string; live: boolean; busy: number; onOpen: () => void }) {
+  const [unread, setUnread] = useState(false);
+  const was = useRef(live);
+  useEffect(() => {
+    // A reply that finished while the pane was closed is news.
+    if (was.current && !live) setUnread(true);
+    was.current = live;
+  }, [live]);
+  return (
+    <section aria-label="Conversation" data-variant="collapsed" className="flex h-full flex-col items-center py-3">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open the conversation with ${name}${unread ? ": a new reply" : ""}`}
+        title={`Talk to ${name}`}
+        className="flex flex-1 flex-col items-center gap-3 rounded-md px-1.5 py-2 text-ink-muted hover:bg-ground hover:text-ink"
+      >
+        <span className="relative">
+          <Avatar name={name} seed={selection.employeeId ?? selection.scope} size="sm" shape={selection.kind === "employee" ? "round" : "square"} />
+          {unread && <span data-unread="" className="absolute -right-1 -top-1 size-3 rounded-full border-2 border-surface bg-primary" />}
+        </span>
+        <MessageCircle aria-hidden className="size-5 text-primary" />
+        <span className="text-vertical max-h-64 truncate text-sm font-semibold text-ink">Talk to {name}</span>
+        {live && (
+          <span className="flex flex-col items-center gap-1 text-xs" role="img" aria-label="A reply is being written">
+            <TypingDots />
+          </span>
+        )}
+        {busy > 0 && (
+          <span className="mt-auto flex flex-col items-center gap-1" role="img" aria-label={`${busy} at work here`}>
+            {Array.from({ length: Math.min(busy, 4) }, (_, i) => (
+              <span key={i} className="size-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />
+            ))}
+          </span>
+        )}
+      </button>
+    </section>
   );
 }
 
@@ -372,21 +507,19 @@ function EmptyThread({ selection, name, suggestions, canStart, canAddress, onPic
   return (
     <div data-state="empty" className="flex flex-col gap-4 py-2">
       <div className="flex flex-col gap-1.5">
-        <p className="font-display text-lg font-semibold text-ink">{employee ? `Ask ${name} anything about its work` : `Ask about ${name}, or tell it what to change`}</p>
+        <p className="wrap-balance font-display text-lg font-semibold text-ink">{employee ? `Ask ${name} anything about its work` : `Ask about ${name}, or tell it what to change`}</p>
         <p className="text-sm text-ink-muted">
-          {employee
-            ? `${name} answers from its job and what it remembers, and can take on work you give it.`
-            : `${covers}${canStart ? " It can also start work here, asking you first." : ""}`}
+          {employee ? `${name} answers from its job and what it remembers, and can take on work you give it.` : `${covers}${canStart ? " It can also start work here, asking you first." : ""}`}
         </p>
       </div>
       <p className="text-xs text-ink-muted">{canAddress ? "Type / for the actions here, or @ to send it to someone or an app beneath this level." : "Type / for the actions here."} Files can be attached or dropped in.</p>
       {suggestions.length > 0 && (
-        <ul aria-label="Things to ask" className="flex flex-col gap-2">
+        <ul aria-label="Things to ask" className="flex flex-wrap gap-2">
           {suggestions.map((s) => (
-            <li key={s}>
-              <button type="button" onClick={() => onPick(s)} className="flex min-h-touch w-full items-center gap-2.5 rounded-sm border bg-surface px-3.5 py-2.5 text-left text-sm text-ink-body transition hover:border-primary-line hover:bg-primary-tint motion-reduce:transition-none">
+            <li key={s} className="max-w-full">
+              <button type="button" onClick={() => onPick(s)} className="flex min-h-touch max-w-full items-center gap-2 rounded-full border bg-surface px-3.5 py-2 text-left text-sm text-ink-body shadow-card transition hover:border-primary-line hover:bg-primary-tint hover:text-ink motion-reduce:transition-none">
                 <MessageCircle aria-hidden className="size-4 shrink-0 text-primary" />
-                {s}
+                <span className="min-w-0">{s}</span>
               </button>
             </li>
           ))}
@@ -404,77 +537,98 @@ function newMessageId(): string {
   return `m-${sequence}`;
 }
 
-interface Turn {
-  key: string;
-  runId: string;
-  from: string;
-  owner: boolean;
-  by: string | null;
-  code: string | null;
-  texts: string[];
-  attachments: ConversationAttachment[];
-}
-
-/** Consecutive messages from the same person on the same run read as one bubble. */
-function groupTurns(messages: ConversationMessage[]): Turn[] {
-  const turns: Turn[] = [];
-  for (const m of messages) {
-    const owner = m.from === "owner";
-    const last = turns[turns.length - 1];
-    if (last && last.runId === m.runId && last.owner === owner && last.from === m.from && last.by === m.by) {
-      last.texts.push(m.text);
-      last.attachments.push(...(m.attachments ?? []));
-    } else turns.push({ key: `${m.runId}-${m.seq}`, runId: m.runId, from: m.from, owner, by: m.by, code: m.code, texts: [m.text], attachments: [...(m.attachments ?? [])] });
-  }
-  return turns;
-}
-
 /** Who a message is from, by name: the conversation at a level is shared by everyone there (TALK-11). */
 function Sender({ name, mine = false }: { name: string; mine?: boolean }) {
   return <span className={cn("text-xs font-semibold text-ink-muted", mine && "self-end")}>{name}</span>;
 }
 
-function OwnBubble({ who, text, attachments, sending = false }: { who: string; text: string; attachments: ConversationAttachment[]; sending?: boolean }) {
+function OwnBubble({ who, text, attachments, sending = false, children }: { who: string; text: string; attachments: ConversationAttachment[]; sending?: boolean; children?: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5 self-end" data-own-message="">
       <Sender name={who} mine />
       <SentAttachments files={attachments} />
       {text && <p className={cn("max-w-bubble self-end whitespace-pre-line break-words rounded-md rounded-br-xs bg-primary px-4 py-2.5 text-primary-ink", sending && "opacity-70")}>{text}</p>}
+      {children}
     </div>
   );
 }
 
-function ReplyBubble({ by, live = false, children }: { by: string; live?: boolean; children: ReactNode }) {
+function Bubble({ lines, live }: { lines: SaidLine[]; live: boolean }) {
   return (
-    <div data-reply={live ? "live" : "earlier"} className="flex flex-col gap-1">
-      <Sender name={by} />
-      <div className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">{children}</div>
+    <div data-reply={live ? "live" : "earlier"} {...(live ? { [ARRIVAL]: "" } : {})} className="flex max-w-reply flex-col gap-2 rounded-md rounded-bl-xs bg-ground px-4 py-3.5">
+      {lines.map((m) => (
+        <Markdown key={m.seq} text={m.text} />
+      ))}
     </div>
   );
 }
 
-/** A turn said before this visit. Work it did is streamed again only once it is in view, so a long history opens fast. */
-function EarlierTurn({ turn, info, myName, answerer, root }: { turn: Turn; info: ConversationTurn | null; myName: string | null; answerer: string | null; root: RefObject<HTMLDivElement | null> }) {
-  if (turn.owner) {
-    const mine = turn.by === null || turn.by === myName;
-    return <OwnBubble who={mine ? "You" : (turn.by ?? "Someone")} text={turn.texts.join("\n\n")} attachments={turn.attachments} />;
-  }
-  if (turn.from === "runner") return <Notice text={turn.texts.join(" ")} budget={turn.code === "budget_exhausted"} />;
-  const worked = info !== null && (info.toolCalls > 0 || info.started.length > 0 || !isTerminal(info.status));
+/** An approval the turn asked for, once answered: what was proposed, the answer, by whom and when, and the note. */
+function ReceiptRow({ receipt }: { receipt: Receipt }) {
+  const when = answeredAt(receipt.at);
+  const word = receipt.answer === "approved" ? "Approved" : receipt.answer === "rejected" ? "Declined" : "No longer waiting";
+  return (
+    <div data-receipt={receipt.answer} className="flex max-w-reply items-start gap-2.5 rounded-md border bg-surface px-3 py-2.5 text-sm">
+      <span aria-hidden className={cn("mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full", receipt.answer === "approved" ? "bg-success-tint text-success-text" : "bg-quiet text-ink-muted")}>
+        {receipt.answer === "approved" ? <Check className="size-3.5" strokeWidth={3} /> : <X className="size-3.5" strokeWidth={3} />}
+      </span>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="line-clamp-2 text-ink-body">{receipt.question}</p>
+        <p className="text-xs text-ink-muted">
+          <span className="font-semibold text-ink">{word}</span>
+          {receipt.by && ` by ${receipt.by}`}
+          {when && ` · ${when}`}
+        </p>
+        {receipt.note && <p className="text-xs italic text-ink-muted">“{receipt.note}”</p>}
+      </div>
+    </div>
+  );
+}
+
+/** A turn said before this visit. Its run is read again only when it did work, once it is in view; one still under way is followed at once. */
+function EarlierTurn({ turn, myName, answerer, root, onAskAgain }: { turn: HistoryTurn; myName: string | null; answerer: string | null; root: RefObject<HTMLDivElement | null>; onAskAgain: (text: string) => void }) {
+  const info = turn.info;
+  const mine = turn.owner?.by === null || turn.owner?.by === myName;
+  const running = info !== null && !isTerminal(info.status);
+  const worked = info !== null && (info.toolCalls > 0 || info.started.length > 0);
+  const owner = turn.owner && <OwnBubble who={mine ? "You" : (turn.owner.by ?? "Someone")} text={turn.owner.text} attachments={turn.owner.attachments} />;
+  const replyBy = turn.replies.find((r) => r.by)?.by ?? answerer ?? "Endgame";
   return (
     <>
-      {worked && <LazyWork runId={turn.runId} root={root} />}
-      <ReplyBubble by={turn.by ?? answerer ?? "Endgame"}>
-        {turn.texts.map((text, i) => (
-          <Markdown key={i} text={text} />
-        ))}
-      </ReplyBubble>
+      {owner}
+      {running ? (
+        // Still being answered (a reload mid-reply): its reply is picked up where it is.
+        <Answer runId={turn.runId} answerer={answerer} live onRetry={turn.owner ? () => onAskAgain(turn.owner?.text ?? "") : undefined} />
+      ) : worked ? (
+        <LazyAnswer turn={turn} by={replyBy} root={root} onAskAgain={onAskAgain} />
+      ) : (
+        <StaticAnswer turn={turn} by={replyBy} onAskAgain={onAskAgain} />
+      )}
     </>
   );
 }
 
-/** The steps and work of an earlier turn, read from its log once the turn scrolls into view. */
-function LazyWork({ runId, root }: { runId: string; root: RefObject<HTMLDivElement | null> }) {
+/** A turn that did no work: its reply and notices, from the history alone. */
+function StaticAnswer({ turn, by, onAskAgain }: { turn: HistoryTurn; by: string; onAskAgain: (text: string) => void }) {
+  const ended = turn.info?.endedWithoutReply ?? interrupted(turn.info?.status ?? null, turn.replies.length, turn.notices.length);
+  return (
+    <div className="flex flex-col gap-1.5" data-turn="">
+      {turn.replies.length > 0 && (
+        <>
+          <Sender name={by} />
+          <Bubble lines={turn.replies} live={false} />
+        </>
+      )}
+      {turn.notices.map((n) => (
+        <Notice key={n.seq} text={n.text} budget={n.code === "budget_exhausted"} finished={!n.code} />
+      ))}
+      {ended && <Interrupted why={turn.info?.interruption ?? null} onRetry={turn.owner?.text ? () => onAskAgain(turn.owner?.text ?? "") : undefined} />}
+    </div>
+  );
+}
+
+/** An earlier turn that did work: drawn from the history at once, then read from its log once it scrolls into view. */
+function LazyAnswer({ turn, by, root, onAskAgain }: { turn: HistoryTurn; by: string; root: RefObject<HTMLDivElement | null>; onAskAgain: (text: string) => void }) {
   // Where nothing can say what is in view (a test's document), it is read at once.
   const [shown, setShown] = useState(() => typeof IntersectionObserver === "undefined");
   const spot = useRef<HTMLDivElement>(null);
@@ -485,51 +639,113 @@ function LazyWork({ runId, root }: { runId: string; root: RefObject<HTMLDivEleme
     watch.observe(el);
     return () => watch.disconnect();
   }, [shown, root]);
-  return <div ref={spot}>{shown ? <TurnWork runId={runId} /> : <div className="h-6" />}</div>;
+  return <div ref={spot}>{shown ? <Answer runId={turn.runId} answerer={by} live={false} said={turn.replies} /> : <StaticAnswer turn={turn} by={by} onAskAgain={onAskAgain} />}</div>;
 }
 
-/** What one turn did besides replying: the steps it took, approvals it waits on, and the work it started, each live. */
-function TurnWork({ runId }: { runId: string }) {
-  const log = useRunStream(runId);
+/**
+ * What one turn said and did, in its fixed order: who answers, the steps it took (one row), its reply — split at each
+ * approval, answered ones kept as a receipt — Endgame's own notices, then the work it started, each a card.
+ */
+function Answer({ runId, answerer, live, said, onRetry }: { runId: string; answerer: string | null; live: boolean; said?: SaidLine[]; onRetry?: () => void }) {
+  const [retry, setRetry] = useState(0);
+  const log = useRunStream(runId, retry);
   const mode = useAppSelector((s) => s.ui.mode);
   const work = useMemo(() => deriveWork(log.events, mode), [log.events, mode]);
+  const run = work.run;
+  const done = isTerminal(run.status);
+  const announce = useContext(AnnounceContext);
+  // The run's log opens with the owner's own message; it is already drawn as their bubble. Endgame's own notices stand apart.
+  // Each thing said once: the closing word never repeats, or stands in for, the reply (D10, D49).
+  const fromLog = distinctReplies(run.messages).map((m) => ({ seq: m.seq, text: m.text, by: null }));
+  const replies = fromLog.length > 0 || log.events.length > 0 ? fromLog : (said ?? []);
+  const notices = noticesToShow(run.messages);
+  const receipts = useMemo(() => receiptsOf(log.events), [log.events]);
+  const segments = segmentsOf(replies, receipts);
+  const budget = log.events.some((e) => e.type === "message" && e.payload.code === "budget_exhausted");
+  const pending = work.pending;
+  const by = log.events.map((e) => (e.type === "message" && e.payload.from === "assistant" && typeof e.payload.by === "string" ? e.payload.by : null)).find((n) => n !== null) ?? answerer ?? "Endgame";
+  const lastReply = replies[replies.length - 1]?.text ?? null;
+  useEffect(() => {
+    if (live && lastReply) announce(`${by} replied: ${markdownToPlain(lastReply).slice(0, 200)}`);
+  }, [live, lastReply, by, announce]);
+  useEffect(() => {
+    if (pending.length > 0) announce(`Your answer is needed: ${pending[0]?.question ?? ""}`);
+  }, [pending.length, pending, announce]);
+  const hasWords = segments.length > 0;
+  const stopped = done && interrupted(run.status, replies.length, notices.length) && !budget;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2" data-turn="">
+      {(hasWords || work.steps.length > 0) && <Sender name={by} />}
       {work.steps.length > 0 && <Steps steps={work.steps} runId={runId} toolCalls={work.tools.total} />}
-      {work.pending.map((a) => (
-        <ApprovalCard key={a.id} runId={runId} approval={a} compact />
+      {segments.map((s) =>
+        s.kind === "bubble" ? (
+          <Bubble key={`b-${s.lines[0]?.seq ?? 0}`} lines={s.lines} live={live} />
+        ) : s.receipt.answer === "pending" ? (
+          // The conversation's own checkpoints are answered here, in the conversation (TALK-07).
+          <div key={s.receipt.id} className="max-w-reply" {...(live ? { [ARRIVAL]: "" } : {})}>
+            {pending.filter((a) => a.id === s.receipt.id).map((a) => (
+              <ApprovalCard key={a.id} runId={runId} approval={a} compact />
+            ))}
+          </div>
+        ) : (
+          <ReceiptRow key={s.receipt.id} receipt={s.receipt} />
+        ),
+      )}
+      {notices.map((m) => (
+        <Notice key={m.seq} text={m.text} budget={budget} finished={run.status === "finished" && !m.code} />
       ))}
+      {/* Stopped with nothing said (no AI model could be reached, its worker lost, a fault): it can be asked again as it was. */}
+      {stopped && <Interrupted why={run.finishedSummary} onRetry={onRetry} />}
+      {/* Stopped with only Endgame's own word for why (not the budget, which has its own way on): the same, asked again. */}
+      {done && run.status === "failed" && !budget && replies.length === 0 && notices.length > 0 && onRetry && (
+        <Button size="sm" variant="outline" className="self-start" onClick={onRetry}>
+          <RotateCcw aria-hidden className="size-4" />
+          Try again
+        </Button>
+      )}
       {work.started.map((s) => (
-        <WorkCard key={s.runId} runId={s.runId} kind={s.kind} />
+        <div key={s.runId} className="max-w-prose" {...(live ? { [ARRIVAL]: "" } : {})}>
+          <WorkCard runId={s.runId} kind={s.kind} />
+        </div>
       ))}
+      {live && !done && log.stream !== "failed" && <Working text={log.stream === "reconnecting" ? "Reconnecting…" : pending.length > 0 ? "Waiting for your answer" : "Working on it"} />}
+      {log.stream === "failed" && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+          {log.streamError} The reply is still being written.
+          <button type="button" onClick={() => setRetry((n) => n + 1)} className="min-h-touch rounded-xs font-semibold underline">
+            Reconnect
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-/** A simple answer's steps, collapsed to one line ("Read the org chart · Read the recent work"); opened, each one. */
+/** A simple answer's steps, as one row — how many, what they were, open them, or see the whole run; opened, each one. */
 function Steps({ steps, runId, toolCalls }: { steps: string[]; runId: string; toolCalls: number }) {
   const [open, setOpen] = useState(false);
+  const count = Math.max(toolCalls, steps.length);
   return (
-    <div data-steps="" className="flex flex-col gap-1 text-sm">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-3">
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch min-w-0 items-center gap-2 rounded-xs text-left text-ink-muted hover:text-ink">
-          <Icon name="plan" className="size-4 shrink-0 text-ink-muted" />
-          <span className="line-clamp-1">{steps.join(" · ")}</span>
+    <div data-steps="" className="flex max-w-reply flex-col gap-1 text-sm">
+      <div className="flex min-w-0 items-center gap-2 text-ink-muted">
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch min-w-0 flex-1 items-center gap-2 rounded-xs text-left hover:text-ink">
+          <Icon name="plan" className="size-4 shrink-0" />
+          <span className="shrink-0 font-semibold text-ink-body">{count === 1 ? "1 step" : `${count} steps`}</span>
+          <span aria-hidden className="shrink-0">·</span>
+          <span className="min-w-0 truncate">{steps.join(" · ")}</span>
           <ChevronDown aria-hidden className={cn("size-4 shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
         </button>
-        <Link href={paths.run(runId)} className={cn("rounded-xs text-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
+        <Link href={paths.run(runId)} className={cn("flex shrink-0 items-center gap-0.5 rounded-xs text-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
           See how it got there
+          <ArrowUpRight aria-hidden className="size-3.5" />
         </Link>
       </div>
       {open && (
-        <div className="flex flex-col gap-1 border-l-2 border-border pb-1 pl-4">
-          <ol className="flex flex-col gap-0.5 text-ink-body">
-            {steps.map((s) => (
-              <li key={s}>{s}</li>
-            ))}
-          </ol>
-          <span className="text-xs text-ink-muted">{toolCalls === 1 ? "1 step in all." : `${toolCalls} steps in all.`}</span>
-        </div>
+        <ol className="flex list-decimal flex-col gap-0.5 border-l-2 border-border pb-1 pl-8 text-ink-body">
+          {steps.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ol>
       )}
     </div>
   );
@@ -544,16 +760,35 @@ function Notice({ text, budget, finished = false }: { text: string; budget: bool
     <div
       role="status"
       data-tone={finished ? "neutral" : "attention"}
-      className={cn(
-        "flex max-w-reply flex-col gap-2 rounded-md border px-4 py-3 text-sm",
-        finished ? "border-border bg-surface text-ink-body" : "border-attention-line bg-attention-tint text-attention-text",
-      )}
+      className={cn("flex max-w-reply gap-2.5 rounded-md border px-3.5 py-3 text-sm", finished ? "border-border bg-surface text-ink-body" : "border-attention-line bg-attention-tint text-attention-text")}
     >
-      {text}
-      {budget && (
-        <Link href={paths.credits()} className="self-start rounded-xs font-semibold underline">
-          See credits
-        </Link>
+      {!finished && <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />}
+      <div className="flex flex-col gap-2">
+        {text}
+        {budget && (
+          <Link href={paths.credits()} className="self-start rounded-xs font-semibold underline">
+            See credits
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A turn that ended with nothing said for it: said plainly, and asked again in one press. */
+function Interrupted({ why, onRetry }: { why: string | null; onRetry?: () => void }) {
+  return (
+    <div role="status" data-interrupted="" className="flex max-w-reply flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-attention-line bg-attention-tint px-3.5 py-2.5 text-sm text-attention-text">
+      <TriangleAlert aria-hidden className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1">
+        The reply was interrupted.
+        {why && <span className="text-ink-muted"> {why}</span>}
+      </span>
+      {onRetry && (
+        <button type="button" onClick={onRetry} className="flex min-h-touch items-center gap-1 rounded-xs font-semibold underline">
+          <RotateCcw aria-hidden className="size-3.5" />
+          Try again
+        </button>
       )}
     </div>
   );
@@ -582,90 +817,20 @@ function Working({ text }: { text: string }) {
 function Exchange({ message, onRetry, answerer }: { message: ChatMessage; onRetry: () => void; answerer: string | null }) {
   return (
     <>
-      <OwnBubble who="You" text={message.text} attachments={message.attachments ?? []} sending={message.state === "sending"} />
+      <OwnBubble who="You" text={message.text} attachments={message.attachments ?? []} sending={message.state === "sending"}>
+        {message.state === "failed" && (
+          <div role="alert" className="flex max-w-bubble flex-wrap items-center justify-end gap-x-2 self-end text-right text-xs text-attention-text">
+            <TriangleAlert aria-hidden className="size-3.5 shrink-0" />
+            Not sent: {message.error}
+            <button type="button" onClick={onRetry} className="flex min-h-touch items-center gap-1 rounded-xs font-semibold underline">
+              Send again
+            </button>
+          </div>
+        )}
+      </OwnBubble>
       {/* From the moment it is sent, before the work that answers it has started ("Working on it" then takes over). */}
       {message.state === "sending" && <Working text="Sending…" />}
-      {message.state === "failed" && (
-        <div role="alert" className="flex flex-col gap-2 self-end rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
-          Not sent: {message.error}
-          <button type="button" onClick={onRetry} className="min-h-touch self-start rounded-xs font-semibold underline">
-            Send again
-          </button>
-        </div>
-      )}
-      {message.runId && <Replies runId={message.runId} answerer={answerer} onRetry={onRetry} />}
+      {message.runId && <Answer runId={message.runId} answerer={answerer} live onRetry={onRetry} />}
     </>
   );
-}
-
-function Replies({ runId, answerer, onRetry }: { runId: string; answerer: string | null; onRetry?: () => void }) {
-  const [retry, setRetry] = useState(0);
-  const log = useRunStream(runId, retry);
-  const mode = useAppSelector((s) => s.ui.mode);
-  const work = useMemo(() => deriveWork(log.events, mode), [log.events, mode]);
-  const run = work.run;
-  const done = isTerminal(run.status);
-  const announce = useContext(AnnounceContext);
-  // The run's log opens with the owner's own message; it is already drawn as their bubble. Endgame's own notices stand apart.
-  // Each thing said once: the closing word never repeats, or stands in for, the reply (D10, D49).
-  const replies = distinctReplies(run.messages);
-  const notices = noticesToShow(run.messages);
-  const budget = log.events.some((e) => e.type === "message" && e.payload.code === "budget_exhausted");
-  const pending = work.pending;
-  const by = log.events.map((e) => (e.type === "message" && e.payload.from === "assistant" && typeof e.payload.by === "string" ? e.payload.by : null)).find((n) => n !== null) ?? answerer;
-  const lastReply = replies[replies.length - 1]?.text ?? null;
-  useEffect(() => {
-    if (lastReply) announce(`${by ?? "Endgame"} replied: ${markdownToPlain(lastReply).slice(0, 200)}`);
-  }, [lastReply, by, announce]);
-  useEffect(() => {
-    if (pending.length > 0) announce(`Your answer is needed: ${pending[0]?.question ?? ""}`);
-  }, [pending.length, pending, announce]);
-  return (
-    <>
-      {work.steps.length > 0 && <Steps steps={work.steps} runId={runId} toolCalls={work.tools.total} />}
-      {replies.length > 0 && (
-        <ReplyBubble by={by ?? "Endgame"} live>
-          {replies.map((m) => (
-            <Markdown key={m.seq} text={m.text} />
-          ))}
-        </ReplyBubble>
-      )}
-      {notices.map((m) => (
-        <Notice key={m.seq} text={m.text} budget={budget} finished={run.status === "finished" && !m.code} />
-      ))}
-      {/* Stopped with no reply (no AI model could be reached, a fault): the message can be sent again as it was. */}
-      {onRetry && run.status === "failed" && !budget && replies.length === 0 && (
-        <Button size="sm" variant="outline" className="self-start" onClick={onRetry}>
-          Try again
-        </Button>
-      )}
-      {/* The conversation's own checkpoints are answered here, in the conversation (TALK-07). */}
-      {pending.map((a) => (
-        <ApprovalCard key={a.id} runId={runId} approval={a} compact />
-      ))}
-      {work.started.map((s) => (
-        <WorkCard key={s.runId} runId={s.runId} kind={s.kind} />
-      ))}
-      {!done && log.stream !== "failed" && <Working text={log.stream === "reconnecting" ? "Reconnecting…" : pending.length > 0 ? "Waiting for your answer" : "Working on it"} />}
-      {log.stream === "failed" && (
-        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
-          {log.streamError} The reply is still being written.
-          <button type="button" onClick={() => setRetry((n) => n + 1)} className="min-h-touch rounded-xs font-semibold underline">
-            Reconnect
-          </button>
-        </div>
-      )}
-    </>
-  );
-}
-
-/**
- * The conversation scoped to one app (TALK-04), for the app's own page: the same pane, about that app only. It may answer, start
- * an idea, ask for a change to the app or try stopped work again — each only once the person approves it here.
- */
-export function AppConversation({ scope, trail }: { scope: string; trail: string[] }) {
-  const tree = useActiveTree();
-  if (!tree.data) return null;
-  // In the app's page, among its sections: a framed pane of its own height, never the page's.
-  return <ConversationDock tree={tree.data} selection={{ scope, kind: "app", trail }} fill={false} />;
 }

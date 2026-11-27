@@ -66,3 +66,17 @@ export function messageCostLine(credits: number, ceiling: number | null): string
   const usual = credits < 0.1 ? approxCredits(credits) : `about ${formatCredits(credits)}`;
   return `A message here costs at most ${formatCredits(ceiling)}, usually ${usual}; it is charged at what it actually costs.`;
 }
+
+/**
+ * The same, as one short line under the composer (finding 23): the figures only, the same words before and after a
+ * reload; the full sentence ({@link messageCostLine}) is its tooltip.
+ */
+export function messageCostShort(credits: number, ceiling: number | null): string {
+  if (ceiling === null) return `A message here is estimated at ${approxCredits(credits)}.`;
+  if (ceiling > 20 * Math.max(credits, 0.01)) {
+    const usual = credits < 1 ? "well under 1 credit" : `about ${formatCredits(credits)}`;
+    return `A message here usually costs ${usual}, never more than ${formatNumber(ceiling)}.`;
+  }
+  const usual = credits < 0.1 ? "less than 0.1" : `about ${formatNumber(credits)}`;
+  return `A message here costs at most ${formatCredits(ceiling)}, usually ${usual}.`;
+}

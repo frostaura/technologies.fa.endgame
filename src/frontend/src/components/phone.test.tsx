@@ -5,7 +5,7 @@ import { json, ME, renderWithStore, stubApi } from "@/test/harness";
 import { currentViewport } from "@/lib/useViewport";
 import { breakpoints, viewportQueries } from "@/lib/tokens";
 import { AppShell } from "@/features/shell/AppShell";
-import { Talk } from "@/features/shell/talk";
+import { TalkLauncher } from "@/features/shell/talk";
 import { AskPanel } from "@/features/apps/AskPanel";
 import { BottomNav } from "./BottomNav";
 import { ClampedHeading, Disclosure, Fold } from "./Fold";
@@ -294,20 +294,26 @@ describe("the shell on a phone", () => {
     expect(screen.queryByRole("dialog", { name: "Where you are" })).toBeNull();
   });
 
-  it("puts the page's conversation in a sheet one tap away, leaving a button where it stood", async () => {
+  it("puts the page's conversation in a sheet one tap away, with the page's own launcher where it put it", async () => {
     pretend(PHONE);
     stub();
     renderWithStore(
-      <AppShell crumbs={[{ label: "Court booking" }]}>
-        <Talk label="Talk to Court booking">
-          <label>
-            Message Court booking
-            <input />
-          </label>
-        </Talk>
+      <AppShell
+        crumbs={[{ label: "Court booking" }]}
+        talk={{
+          label: "Talk to Court booking",
+          content: (
+            <label>
+              Message Court booking
+              <input />
+            </label>
+          ),
+        }}
+      >
+        <TalkLauncher />
       </AppShell>,
     );
-    // Where it stood (the bar's own "Talk" carries the same name).
+    // Where the page put it (the bar's own "Talk" carries the same name).
     const launcher = (await screen.findAllByRole("button", { name: "Talk to Court booking" })).find((b) => b.hasAttribute("data-talk-launcher"));
     expect(launcher).toBeTruthy();
     fireEvent.click(launcher as HTMLElement);
@@ -319,27 +325,24 @@ describe("the shell on a phone", () => {
     await waitFor(() => expect(screen.getByRole("dialog", { name: "Talk to Court booking" })).toBeTruthy());
   });
 
-  it("keeps the desktop's header, and the conversation where the page put it, on a desktop", () => {
+  it("keeps the desktop's header, and docks the conversation beside the page, on a desktop", () => {
     pretend(DESKTOP);
     stub();
     renderWithStore(
-      <AppShell crumbs={[{ label: "Court booking" }]}>
-        <Talk label="Talk to Court booking">
-          <p>The conversation</p>
-        </Talk>
+      <AppShell crumbs={[{ label: "Court booking" }]} talk={{ label: "Talk to Court booking", content: <p>The conversation</p> }}>
+        <TalkLauncher />
       </AppShell>,
     );
     expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
     expect(screen.getByRole("group", { name: "Mode" })).toBeTruthy();
-    expect(screen.getByText("The conversation")).toBeTruthy();
+    expect(within(screen.getByRole("complementary", { name: "Conversation pane" })).getByText("The conversation")).toBeTruthy();
+    // Docked, it needs no launcher.
     expect(screen.queryByRole("button", { name: "Talk to Court booking" })).toBeNull();
   });
 
-  it("on a tablet, keeps the conversation in the page, and the header's Talk brings it into view", () => {
+  it("on a tablet, opens the conversation in a drawer from the header's Talk, never in the page", async () => {
     pretend(TABLET);
     stub();
-    const scrolled = vi.fn();
-    Element.prototype.scrollIntoView = scrolled;
     renderWithStore(
       <AppShell crumbs={[{ label: "Acme" }]} talk={{ label: "Talk to Acme", content: <section aria-label="Conversation"><form><input aria-label="Message Acme" /></form></section> }}>
         <p>Page</p>
@@ -347,9 +350,10 @@ describe("the shell on a phone", () => {
     );
     expect(screen.getByRole("group", { name: "Mode" })).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
-    const box = screen.getByLabelText("Message Acme");
+    expect(screen.getByRole("main").textContent).not.toContain("Message Acme");
     fireEvent.click(screen.getByRole("button", { name: "Talk to Acme" }));
-    expect(scrolled).toHaveBeenCalledOnce();
-    expect(document.activeElement).toBe(box);
+    const drawer = await screen.findByRole("dialog", { name: "Talk to Acme" });
+    expect(drawer.closest("[data-sheet]")?.getAttribute("data-sheet")).toBe("side");
+    expect(within(drawer).getByLabelText("Message Acme")).toBeTruthy();
   });
 });

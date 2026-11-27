@@ -24,6 +24,7 @@ import { useControlRunMutation, useGetAppQuery, useGetRunQuery } from "@/store/a
 import type { Run, RunEvent, RunStatus } from "@/store/types";
 import type { StreamStatus } from "@/store/runsSlice";
 import { AppShell } from "../shell/AppShell";
+import { usePageConversation } from "../conversation/pageConversation";
 import { accuracy, deriveRun, estimateName, EXPIRED, isStartDeclined, isTerminal, lastSeq, planItemLabel, type DerivedApproval, type DerivedPlan, type DerivedRun, type DerivedTask, type Mode, type PlanItem, type StepTone } from "./runModel";
 import { distinctReplies } from "../home/conversationModel";
 import { actionCount, buildTimeline, groupCredits, PART_FINISH, PART_START, type TimelineGroup, type TimelineItem, type TimelineStep } from "./timeline";
@@ -107,8 +108,10 @@ export function RunView({ runId }: { runId: string }) {
   // tasks are drawn in the page instead.
   const beside = useMinWidth(breakpoints.xl);
   const name = view.kind === "loaded" ? shortRunName(view.data.title) : "Work";
+  // The conversation at the level the work belongs to (its app, project or division), docked beside it (ARCH-012).
+  const talk = usePageConversation(view.kind === "loaded" && view.data.scope ? { scope: view.data.scope } : null);
   return (
-    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: name }]} aside={view.kind === "loaded" && beside ? <RunAside runId={runId} /> : undefined}>
+    <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: name }]} aside={view.kind === "loaded" && beside ? <RunAside runId={runId} /> : undefined} talk={talk}>
       {view.kind === "loading" && <RunSkeleton />}
       {view.kind === "failed" && (
         <Failed title={view.status === 404 ? "This work could not be found" : "This work could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />

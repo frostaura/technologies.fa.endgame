@@ -4,12 +4,12 @@ import { kindOf, refusalFor, removeAttachment, uploadAttachment, type DraftFile 
 
 /**
  * The files waiting to go with the next message at one level: checked against the stated limits,
- * uploaded as soon as they are added, taken back when removed. A refusal is said once, beside the
- * composer, until the next file is added.
+ * uploaded as soon as they are added, taken back when removed. A file refused — before upload, by
+ * the limits, or by the control plane — stays as a chip in its error state with its reason on it,
+ * until it is taken off, so several refusals stand together and none replaces another.
  */
 export function useDraftFiles(scope: string, employeeId: string | undefined, limits: AttachmentLimits | null) {
   const [files, setFiles] = useState<DraftFile[]>([]);
-  const [problem, setProblem] = useState<string | null>(null);
   const held = useRef<DraftFile[]>([]);
   useEffect(() => {
     held.current = files;
@@ -23,7 +23,6 @@ export function useDraftFiles(scope: string, employeeId: string | undefined, lim
     setWas(at);
     for (const f of files) if (f.attachment) void removeAttachment(f.attachment.id);
     setFiles([]);
-    setProblem(null);
   }
 
   // Local previews are let go of with the page.
@@ -37,16 +36,17 @@ export function useDraftFiles(scope: string, employeeId: string | undefined, lim
   const add = useCallback(
     (incoming: File[]) => {
       if (!limits || incoming.length === 0) return;
-      const refusals: string[] = [];
+      const refused: DraftFile[] = [];
       const accepted: { draft: DraftFile; file: File }[] = [];
-      let current = held.current;
+      // A refused file stays on show, but never counts against the limits.
+      let current = held.current.filter((f) => f.state !== "failed");
       for (const file of incoming) {
+        sequence.current += 1;
         const refusal = refusalFor({ name: file.name, size: file.size }, limits, current);
         if (refusal) {
-          refusals.push(refusal);
+          refused.push({ key: `f${sequence.current}`, name: file.name, bytes: file.size, kind: kindOf(file.name), state: "failed", attachment: null, problem: refusal, preview: null });
           continue;
         }
-        sequence.current += 1;
         const kind = kindOf(file.name);
         const draft: DraftFile = {
           key: `f${sequence.current}`,
@@ -61,9 +61,8 @@ export function useDraftFiles(scope: string, employeeId: string | undefined, lim
         accepted.push({ draft, file });
         current = [...current, draft];
       }
-      setProblem(refusals.length > 0 ? refusals.join(" ") : null);
-      if (accepted.length === 0) return;
-      setFiles((was) => [...was, ...accepted.map((a) => a.draft)]);
+      if (accepted.length === 0 && refused.length === 0) return;
+      setFiles((was) => [...was, ...refused, ...accepted.map((a) => a.draft)]);
       for (const { draft, file } of accepted) {
         void uploadAttachment(scope, employeeId, file).then((outcome) => {
           setFiles((was) => {
@@ -76,7 +75,6 @@ export function useDraftFiles(scope: string, employeeId: string | undefined, lim
               f.key !== draft.key ? f : outcome.ok ? { ...f, state: "ready", attachment: outcome.data, kind: outcome.data.kind } : { ...f, state: "failed", problem: outcome.reason },
             );
           });
-          if (!outcome.ok) setProblem(`${file.name} was not added: ${outcome.reason}`);
         });
       }
     },
@@ -90,19 +88,18 @@ export function useDraftFiles(scope: string, employeeId: string | undefined, lim
       if (gone?.preview) URL.revokeObjectURL(gone.preview);
       return was.filter((f) => f.key !== key);
     });
-    setProblem(null);
   }, []);
 
   /** After sending: the files went with the message, so they are not taken back. */
   const sent = useCallback(() => {
     setFiles([]);
-    setProblem(null);
   }, []);
 
   const ready: ConversationAttachment[] = files.flatMap((f) => (f.state === "ready" && f.attachment ? [f.attachment] : []));
   const uploading = files.some((f) => f.state === "uploading");
   const images = files.some((f) => f.state !== "failed" && f.kind === "image");
-  return { files, problem, add, remove, sent, ready, uploading, images };
+  const refused = files.filter((f) => f.state === "failed");
+  return { files, refused, add, remove, sent, ready, uploading, images };
 }
 
 export type DraftFiles = ReturnType<typeof useDraftFiles>;

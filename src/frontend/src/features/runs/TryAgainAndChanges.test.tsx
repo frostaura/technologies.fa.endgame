@@ -105,7 +105,7 @@ describe("trying again", () => {
     });
     renderWithStore(<VerdictView ideaId="i1" />);
     fireEvent.click(await screen.findByRole("button", { name: "Build it with this change" }));
-    await waitFor(() => expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ choice: "build", applyChange: true }));
+    await waitFor(() => expect(api.calls.find((c) => c.method === "POST" && c.path === "/api/ideas/i1/decision")?.body).toEqual({ choice: "build", applyChange: true }));
   });
 });
 

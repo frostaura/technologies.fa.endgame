@@ -159,9 +159,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** One neutral chip for everything listed here; the accent is kept for what acts. What it may not do is struck through. */
 function Pill({ children, tone = "on" }: { children: ReactNode; tone?: "on" | "ask" | "off" }) {
   return (
-    <li className={cn("rounded-full border px-2.5 py-0.5 text-xs", tone === "on" ? "border-border bg-ground text-ink-body" : tone === "ask" ? "border-primary-line bg-surface text-primary-hover" : "border-border bg-surface text-ink-muted line-through")}>
+    <li className={cn("rounded-full border border-border px-2.5 py-0.5 text-xs", tone === "off" ? "bg-surface text-ink-muted line-through" : "bg-ground text-ink-body")}>
       {children}
     </li>
   );

@@ -1,40 +1,46 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowUp, AtSign, LayoutGrid, Paperclip, Slash, Square, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowUp, AtSign, LayoutGrid, Lightbulb, Paperclip, RotateCcw, SearchX, SlidersHorizontal, Slash, Square, TriangleAlert, UserPlus, Wrench, X } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { Icon } from "@/components/Icon";
 import { navigate, paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import type { ViewState } from "@/lib/queryState";
 import type { ConversationCapabilities, ConversationEstimate, MessageNarrowing } from "@/store/types";
-import { messageCostLine } from "../home/conversationModel";
+import { messageCostLine, messageCostShort } from "../home/conversationModel";
 import { DraftChips } from "./AttachmentChips";
 import { CanUse } from "./CanUse";
 import type { Target } from "./scopeModel";
 import type { DraftFiles } from "./useDraftFiles";
-
 
 /** The actions "/" offers, each a real thing a conversation does at this level (`capabilities.actions`), or a page that does it. */
 interface Action {
   key: string;
   label: string;
   hint: string;
+  icon: ReactNode;
   /** Words put in the box to start the request; the conversation asks before it acts. */
   lead?: string;
   href?: string;
 }
 
+const ACTION_ICON = "size-4 text-primary";
+
 function actionsFor(caps: ConversationCapabilities | null, scope: string, appName: string | null): Action[] {
   const out: Action[] = [];
   for (const a of caps?.actions ?? []) {
-    if (a === "start_idea") out.push({ key: a, label: "Start an idea", hint: "Research a new idea here. It asks you before it starts.", lead: "Start researching this idea: " });
-    if (a === "change_app") out.push({ key: a, label: appName ? `Change ${appName}` : "Change an app", hint: "Describe the change; it is built in a preview and checked. It asks you first.", lead: appName ? `Change ${appName}: ` : "Change the app " });
-    if (a === "try_again") out.push({ key: a, label: "Try stopped work again", hint: "Carry on stopped work from where it stopped. It asks you first.", lead: "Try the stopped work again: " });
-    if (a === "adjust_setting") out.push({ key: a, label: "Change a setting", hint: "How an app runs, or a setting the workforce may change. It asks you first.", lead: "Change a setting: " });
+    if (a === "start_idea")
+      out.push({ key: a, label: "Start an idea", icon: <Lightbulb aria-hidden className={ACTION_ICON} />, hint: "Research a new idea here: who already does it, what they leave undone, whether people would pay. It asks you before it starts.", lead: "Start researching this idea: " });
+    if (a === "change_app")
+      out.push({ key: a, label: appName ? `Change ${appName}` : "Change an app", icon: <Wrench aria-hidden className={ACTION_ICON} />, hint: "Describe the change: it is planned, built in a preview and checked, then published. It asks you first.", lead: appName ? `Change ${appName}: ` : "Change the app " });
+    if (a === "try_again")
+      out.push({ key: a, label: "Try stopped work again", icon: <RotateCcw aria-hidden className={ACTION_ICON} />, hint: "Carry on work that stopped, from where it stopped, keeping what was built. It asks you first.", lead: "Try the stopped work again: " });
+    if (a === "adjust_setting")
+      out.push({ key: a, label: "Change a setting", icon: <SlidersHorizontal aria-hidden className={ACTION_ICON} />, hint: "How an app sleeps, or what the workforce may do without asking. It asks you first.", lead: "Change a setting: " });
   }
-  out.push({ key: "hire", label: "Propose a hire", hint: "Opens Hiring for this level.", href: paths.hires(scope) });
+  out.push({ key: "hire", label: "Propose a hire", icon: <UserPlus aria-hidden className={ACTION_ICON} />, hint: "Opens Hiring for this level, to propose someone for work that keeps coming back.", href: paths.hires(scope) });
   return out;
 }
-
 
 type Menu = { kind: "slash"; filter: string } | { kind: "mention"; filter: string; start: number } | null;
 
@@ -65,25 +71,53 @@ export interface ComposerProps {
   onStop: () => void;
   onSend: () => void;
   inSheet: boolean;
+  /** Where the dimmed layer behind an open menu is drawn: over the thread, never over the composer itself. */
+  scrimTarget?: HTMLElement | null;
 }
 
+/** The width from which the composer's tools are named under their icons; narrower, icons with their names in a tooltip. */
+const LABELLED_FROM = 400;
+
+/**
+ * The composer (ARCH-012): the box, the files going with it, and one toolbar that never changes form while someone
+ * types or a reply is written — named tools wherever the pane is wide enough, icons with tooltips where it is not.
+ * Send turns into Stop in the same place while a reply is being written and the box is empty. "/" and "@" open
+ * menus anchored above it with the thread dimmed behind; on a phone or a tablet they and "What it can use here"
+ * are sheets the full width of the conversation. Escape closes only the topmost of them. The cost of a message is
+ * one short line, the full sentence in its tooltip.
+ */
 export function Composer(p: ComposerProps) {
   const box = useRef<HTMLTextAreaElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [menu, setMenu] = useState<Menu>(null);
   const [active, setActive] = useState(0);
   const [panel, setPanel] = useState(false);
+  const [triedEarly, setTriedEarly] = useState(false);
+  const [labelled, setLabelled] = useState(true);
   const listId = useId();
   const caps = p.caps.kind === "loaded" ? p.caps.data : null;
   const limits = caps?.attachments ?? null;
 
-  // The box grows with what is typed, up to about eight lines, then scrolls.
+  // The box grows with what is typed, up to about eight lines (less in a phone's sheet), then scrolls.
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [p.draft]);
+
+  // One toolbar form for the pane's width, decided by the width alone — never by what is typed.
+  useLayoutEffect(() => {
+    const el = form.current;
+    if (!el) return;
+    const measure = (w: number) => setLabelled(w >= LABELLED_FROM);
+    measure(el.getBoundingClientRect().width || LABELLED_FROM);
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver((entries) => measure(entries[0]?.contentRect.width ?? LABELLED_FROM));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
 
   const actions = useMemo(() => actionsFor(caps, p.scope, p.appName), [caps, p.scope, p.appName]);
   const items: { key: string; label: string; detail: string; icon: ReactNode; choose: () => void }[] = useMemo(() => {
@@ -95,7 +129,7 @@ export function Composer(p: ComposerProps) {
           key: a.key,
           label: a.label,
           detail: a.hint,
-          icon: <Slash aria-hidden className="size-4 text-primary" />,
+          icon: a.icon,
           choose: () => {
             setMenu(null);
             if (a.href) {
@@ -114,7 +148,8 @@ export function Composer(p: ComposerProps) {
       .map((t) => ({
         key: t.key,
         label: t.label,
-        detail: t.detail,
+        // A role that only repeats the name says nothing: the kind of thing it is says more.
+        detail: t.detail.toLowerCase() === t.label.toLowerCase() ? (t.kind === "employee" ? "Employee" : "App") : t.detail,
         icon: t.kind === "employee" ? <Avatar name={t.label} seed={t.employeeId} size="xs" /> : <Icon name="app" tinted className="size-4" />,
         choose: () => {
           setMenu(null);
@@ -127,35 +162,51 @@ export function Composer(p: ComposerProps) {
       }));
   }, [menu, actions, p]);
 
-  const open = menu !== null && items.length > 0;
-  const highlighted = open ? Math.min(active, items.length - 1) : 0;
+  // A menu stays open with "nothing matches" rather than vanishing under the person's typing.
+  const open = menu !== null && (menu.kind === "slash" || !!p.onRetarget);
+  const highlighted = open && items.length > 0 ? Math.min(active, items.length - 1) : 0;
 
   const onChange = (text: string, caret: number) => {
     p.onDraft(text);
     setMenu(menuAt(text, caret));
     setActive(0);
+    if (!p.files.uploading) setTriedEarly(false);
   };
 
-  const blocked = p.files.uploading
-    ? "Wait for the files to be added."
-    : p.files.images && caps && !caps.attachments.images
-      ? `${caps.answerer.kind === "employee" ? (caps.answerer.name ?? p.name) : "Endgame’s assistant"} reads text only, so an image cannot be sent here. Take the image off, or put it in a PDF${caps.answerer.kind === "assistant" ? ", or ask an employee who can look at pictures" : ""}.`
-      : null;
+  const imagesRefused = !!(p.files.images && caps && !caps.attachments.images);
+  const blocked = p.files.uploading ? "Wait for the files to be added." : imagesRefused ? imageRefusal(caps, p.name) : null;
   const empty = p.draft.trim().length === 0 && p.files.ready.length === 0;
-  // A box with nothing in it yet names its tools; once the person types they fold to icons.
-  const fresh = p.draft.length === 0 && p.files.files.length === 0 && !p.live;
   const canSend = !empty && !blocked && p.estimate.kind !== "loading";
+  // While a reply is being written and nothing new is typed, the send button is the stop button, in the same place.
+  const stopping = p.live && empty;
 
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
+    if (p.files.uploading && !empty) setTriedEarly(true);
     if (!canSend) return;
     setMenu(null);
     setPanel(false);
     p.onSend();
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  /** Escape closes the topmost layer only: a menu, else the panel; never the sheet the conversation is in. */
+  const onFormKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== "Escape") return;
     if (open) {
+      e.preventDefault();
+      e.stopPropagation();
+      setMenu(null);
+      box.current?.focus();
+    } else if (panel) {
+      e.preventDefault();
+      e.stopPropagation();
+      setPanel(false);
+      box.current?.focus();
+    }
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (open && items.length > 0) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         setActive((a) => (a + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length);
@@ -166,15 +217,6 @@ export function Composer(p: ComposerProps) {
         items[highlighted]?.choose();
         return;
       }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setMenu(null);
-        return;
-      }
-    }
-    if (e.key === "Escape" && panel) {
-      setPanel(false);
-      return;
     }
     // Enter sends; Shift+Enter is a new line; a word still being composed (an input method) is never sent.
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -193,35 +235,60 @@ export function Composer(p: ComposerProps) {
   // A narrowing is for one message: said beside the box while it is on.
   const narrowed = [p.narrow.noWebSearch && { key: "noWebSearch" as const, label: "No web search" }, p.narrow.answerOnly && { key: "answerOnly" as const, label: "Answer only" }].filter(Boolean) as { key: keyof MessageNarrowing; label: string }[];
 
+  // The panel closes when focus and pointer leave the composer entirely (a press on the thread behind it).
   useEffect(() => {
-    if (!panel) return;
-    const close = (e: globalThis.KeyboardEvent) => e.key === "Escape" && setPanel(false);
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [panel]);
+    if (!open && !panel) return;
+    const away = (e: PointerEvent) => {
+      if (form.current && e.target instanceof Node && !form.current.contains(e.target)) {
+        setMenu(null);
+        setPanel(false);
+      }
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [open, panel]);
+
+  const layer = open || (panel && !!caps);
+  const sheetLike = p.inSheet;
+  const costShort = p.estimate.kind === "loaded" ? messageCostShort(p.estimate.data.credits, p.estimate.data.ceiling) : null;
+  const costFull = p.estimate.kind === "loaded" ? messageCostLine(p.estimate.data.credits, p.estimate.data.ceiling) : null;
+  const filesCounted = p.estimate.kind === "loaded" && p.files.ready.length > 0;
 
   return (
-    <form onSubmit={submit} className={cn("relative flex shrink-0 flex-col gap-1.5 px-4 pb-3 pt-2", p.inSheet && "px-0")} data-composer="">
-      {(open || panel) && (
+    <form ref={form} onSubmit={submit} onKeyDown={onFormKeyDown} className="relative flex shrink-0 flex-col gap-1.5 px-4 pb-3 pt-2" data-composer="">
+      {layer && p.scrimTarget && createPortal(<div aria-hidden data-scrim="" className="absolute inset-0 z-20 bg-ink/10 motion-safe:animate-fade" />, p.scrimTarget)}
+      {layer && (
         <div
-          className="absolute inset-x-4 bottom-full z-20 mb-1 flex max-h-popover flex-col overflow-y-auto rounded-md border bg-surface p-1.5 shadow-raised"
-          data-composer-popover={panel ? "can-use" : menu?.kind}
+          className={cn(
+            "absolute bottom-full z-30 mb-2 flex flex-col overflow-y-auto border bg-surface shadow-raised",
+            // On a phone or a tablet: a sheet the conversation's width, rising from the composer.
+            sheetLike ? "inset-x-0 max-h-sheet-menu rounded-t-lg p-2 pb-3" : "inset-x-4 max-h-popover rounded-md p-1.5",
+          )}
+          data-composer-popover={panel && !open ? "can-use" : menu?.kind}
         >
-          {panel && caps ? (
-            <div className="flex flex-col gap-2 p-2.5">
-              <div className="flex items-center justify-between">
+          {panel && !open && caps ? (
+            <div className="flex min-h-0 flex-col">
+              <div className="sticky top-0 z-10 flex items-center justify-between bg-surface px-2.5 pt-1">
                 <h3 className="font-sans text-sm font-semibold text-ink">What {p.name} can use here</h3>
                 <button type="button" onClick={() => setPanel(false)} aria-label="Close" className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
                   <X aria-hidden className="size-4" />
                 </button>
               </div>
-              <CanUse caps={caps} who={p.name} narrow={p.narrow} onNarrow={p.onNarrow} scope={p.scope} />
+              <div className="px-2.5 pb-2.5">
+                <CanUse caps={caps} who={p.name} narrow={p.narrow} onNarrow={p.onNarrow} scope={p.scope} />
+              </div>
             </div>
           ) : (
             <ul role="listbox" id={listId} aria-label={menu?.kind === "slash" ? "Actions" : "Send it to"} className="flex flex-col">
               <li role="presentation" className="px-2.5 pb-1 pt-1.5 text-eyebrow font-semibold uppercase text-ink-muted">
                 {menu?.kind === "slash" ? "Actions here" : "Send it to"}
               </li>
+              {items.length === 0 && (
+                <li role="presentation" data-nothing-matches="" className="flex items-center gap-2.5 px-2.5 py-2.5 text-sm text-ink-muted">
+                  <SearchX aria-hidden className="size-4 shrink-0" />
+                  {menu?.kind === "slash" ? "No action here matches that." : "Nobody and no app here matches that."}
+                </li>
+              )}
               {items.map((item, i) => (
                 <li
                   key={item.key}
@@ -231,12 +298,12 @@ export function Composer(p: ComposerProps) {
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={item.choose}
                   onMouseEnter={() => setActive(i)}
-                  className={cn("flex min-h-touch cursor-pointer items-center gap-3 rounded-xs px-2.5 py-1.5", i === highlighted && "bg-primary-tint")}
+                  className={cn("flex min-h-touch cursor-pointer items-start gap-3 rounded-xs px-2.5 py-2", i === highlighted && "bg-primary-tint")}
                 >
-                  <span className="flex size-6 shrink-0 items-center justify-center">{item.icon}</span>
+                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-xs bg-ground">{item.icon}</span>
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-medium text-ink">{item.label}</span>
-                    <span className="truncate text-xs text-ink-muted">{item.detail}</span>
+                    <span className="line-clamp-2 text-xs text-ink-muted">{item.detail}</span>
                   </span>
                 </li>
               ))}
@@ -245,13 +312,8 @@ export function Composer(p: ComposerProps) {
         </div>
       )}
 
-      <div
-        className={cn(
-          "flex flex-col rounded-md border border-border-strong bg-surface shadow-card transition-colors focus-within:border-primary motion-reduce:transition-none",
-          blocked && p.files.images && "border-attention-line",
-        )}
-      >
-        <DraftChips files={p.files.files} onRemove={p.files.remove} />
+      <div className={cn("flex flex-col rounded-md border border-border-strong bg-surface shadow-card transition-colors focus-within:border-primary motion-reduce:transition-none", imagesRefused && "border-attention-line")}>
+        <DraftChips files={p.files.files} onRemove={p.files.remove} imagesRefused={imagesRefused} />
         <label htmlFor={p.inputId} className="sr-only">
           Message {p.name}
         </label>
@@ -269,11 +331,11 @@ export function Composer(p: ComposerProps) {
           enterKeyHint="send"
           aria-autocomplete="list"
           aria-controls={open ? listId : undefined}
-          aria-activedescendant={open ? `${listId}-${highlighted}` : undefined}
+          aria-activedescendant={open && items.length > 0 ? `${listId}-${highlighted}` : undefined}
           aria-describedby={`${p.inputId}-cost`}
-          className="max-h-composer min-h-12 w-full resize-none bg-transparent px-4 pb-1 pt-3 text-ink outline-none placeholder:text-ink-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+          className={cn("min-h-12 w-full resize-none bg-transparent px-4 pb-1 pt-3 text-ink outline-none placeholder:text-ink-muted focus-visible:ring-0 focus-visible:ring-offset-0", p.inSheet ? "max-h-composer-sheet" : "max-h-composer")}
         />
-        <div className="flex items-center gap-1 px-1.5 pb-1.5">
+        <div className="flex items-center gap-0.5 px-2 pb-2">
           <input
             ref={fileInput}
             type="file"
@@ -285,20 +347,30 @@ export function Composer(p: ComposerProps) {
               e.target.value = "";
             }}
           />
-          <ToolButton label="Attach files" text="Attach" showText={fresh} onClick={() => fileInput.current?.click()} disabled={!limits}>
+          <ToolButton label="Attach files" text="Attach" showText={labelled} onClick={() => fileInput.current?.click()} disabled={!limits}>
             <Paperclip aria-hidden className="size-5 shrink-0" />
           </ToolButton>
-          <ToolButton label="What it can use here" text="Can use" showText={fresh} onClick={() => setPanel((v) => !v)} pressed={panel} disabled={!caps}>
+          <ToolButton
+            label="What it can use here"
+            text="Can use"
+            showText={labelled}
+            onClick={() => {
+              setMenu(null);
+              setPanel((v) => !v);
+            }}
+            pressed={panel}
+            disabled={!caps}
+          >
             <LayoutGrid aria-hidden className="size-5 shrink-0" />
           </ToolButton>
-          <ToolButton label="Actions" text="Actions" showText={fresh} onClick={() => onChange("/", 1)} disabled={actions.length === 0}>
+          <ToolButton label="Actions" text="Actions" showText={labelled} onClick={() => onChange("/", 1)} disabled={actions.length === 0}>
             <Slash aria-hidden className="size-5 shrink-0" />
           </ToolButton>
           {p.onRetarget && p.targets.length > 0 && (
             <ToolButton
               label="Mention someone"
               text="Mention"
-              showText={fresh}
+              showText={labelled}
               onClick={() => {
                 const text = p.draft && !/\s$/.test(p.draft) ? `${p.draft} @` : `${p.draft}@`;
                 onChange(text, text.length);
@@ -308,7 +380,7 @@ export function Composer(p: ComposerProps) {
               <AtSign aria-hidden className="size-5 shrink-0" />
             </ToolButton>
           )}
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
             {narrowed.map((n) => (
               <button
                 key={n.key}
@@ -316,44 +388,53 @@ export function Composer(p: ComposerProps) {
                 aria-label={`Turn off ${n.label.toLowerCase()}`}
                 title={`Turn off ${n.label.toLowerCase()}`}
                 onClick={() => p.onNarrow({ ...p.narrow, [n.key]: false })}
-                className="inline-flex min-h-touch items-center gap-1 rounded-full px-1 text-xs font-semibold text-primary-hover"
+                className="inline-flex min-h-touch shrink-0 items-center rounded-full px-0.5 text-xs font-semibold text-primary-hover"
               >
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary-tint py-1 pl-2.5 pr-1.5">
+                <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-primary-tint py-1 pl-2.5 pr-1.5">
                   {n.label}
                   <X aria-hidden className="size-3.5" />
                 </span>
               </button>
             ))}
           </span>
-          {p.live && (
-            <button type="button" onClick={p.onStop} aria-label="Stop the reply" title="Stop the reply" className="flex min-h-touch min-w-touch items-center justify-center rounded-full border border-border-strong text-ink hover:bg-ground">
+          {stopping ? (
+            <button type="button" onClick={p.onStop} aria-label="Stop the reply" title="Stop the reply" className="ml-1 flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-full bg-ink text-primary-ink transition hover:bg-ink-body motion-reduce:transition-none">
               <Square aria-hidden className="size-3.5 fill-current" />
             </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!canSend}
+              aria-label="Send"
+              data-ready={canSend || undefined}
+              className="ml-1 flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-full bg-primary text-primary-ink shadow-press transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-quiet disabled:text-ink-muted/50 disabled:shadow-none motion-reduce:transition-none"
+            >
+              <ArrowUp aria-hidden className="size-5" strokeWidth={2.5} />
+            </button>
           )}
-          <button
-            type="submit"
-            disabled={!canSend}
-            aria-label="Send"
-            data-ready={canSend || undefined}
-            className="ml-1 flex min-h-touch min-w-touch items-center justify-center rounded-full bg-primary text-primary-ink shadow-press transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:border disabled:border-border-strong disabled:bg-ground disabled:text-ink-muted disabled:shadow-none motion-reduce:transition-none"
-          >
-            <ArrowUp aria-hidden className="size-5" strokeWidth={2.5} />
-          </button>
         </div>
       </div>
-      {(blocked || p.files.problem) && (
-        <p role="alert" className="text-xs text-attention-text">
-          {p.files.problem ?? blocked}
+      {(imagesRefused || (triedEarly && p.files.uploading)) && (
+        <p role="alert" className={cn("flex items-start gap-1.5 px-1 text-xs", imagesRefused ? "text-attention-text" : "text-ink-muted")}>
+          {imagesRefused && <TriangleAlert aria-hidden className="mt-px size-3.5 shrink-0" />}
+          {blocked}
         </p>
       )}
-      <p id={`${p.inputId}-cost`} data-testid="message-estimate" className="px-1 text-xs text-ink-muted" aria-live="polite">
-        {p.estimate.kind === "loading" && "Working out what a message costs…"}
-        {p.estimate.kind === "loaded" && messageCostLine(p.estimate.data.credits, p.estimate.data.ceiling)}
-        {p.estimate.kind === "failed" && `What a message costs could not be worked out: ${p.estimate.reason} Its cost is still held before each step and shown with the reply.`}
-        {p.estimate.kind === "loaded" && p.files.ready.length > 0 && ` ${p.files.ready.length === 1 ? "The file is" : "The files are"} counted in it.`}
+      <p id={`${p.inputId}-cost`} data-testid="message-estimate" title={costFull ? `${costFull}${filesCounted ? " The files are counted in it." : ""}` : undefined} className="flex min-w-0 items-center gap-1.5 px-1 text-xs text-ink-muted" aria-live="polite">
+        {p.estimate.kind === "failed" && <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-attention-text" />}
+        <span className="min-w-0 truncate">
+          {p.estimate.kind === "loading" && "Working out what a message costs…"}
+          {costShort}
+          {filesCounted && " The files are counted in it."}
+          {p.estimate.kind === "failed" && `What a message costs could not be worked out: ${p.estimate.reason} Its cost is still held before each step and shown with the reply.`}
+        </span>
       </p>
     </form>
   );
+}
+
+function imageRefusal(caps: ConversationCapabilities | null, name: string): string {
+  return `${caps?.answerer.kind === "employee" ? (caps.answerer.name ?? name) : "Endgame’s assistant"} reads text only, so an image cannot be sent here. Take the image off, or put it in a PDF${caps?.answerer.kind === "assistant" ? ", or ask an employee who can look at pictures" : ""}.`;
 }
 
 function ToolButton({ label, text, showText, onClick, children, pressed, disabled }: { label: string; text: string; showText: boolean; onClick: () => void; children: ReactNode; pressed?: boolean; disabled?: boolean }) {
@@ -367,13 +448,13 @@ function ToolButton({ label, text, showText, onClick, children, pressed, disable
       disabled={disabled}
       data-tool={text}
       className={cn(
-        "flex min-h-touch min-w-touch shrink-0 flex-col items-center justify-center rounded-full text-ink-muted hover:bg-ground hover:text-ink disabled:opacity-40",
-        showText && "rounded-sm px-1.5 py-0.5",
+        "flex min-h-touch min-w-touch shrink-0 flex-col items-center justify-center rounded-sm text-ink-muted hover:bg-ground hover:text-ink focus-visible:ring-inset disabled:opacity-40",
+        showText && "px-1.5 py-0.5",
         pressed && "bg-primary-tint text-primary-hover",
       )}
     >
       {children}
-      {/* Named on screen under its icon until the person starts typing; the icon alone after, its name kept in the tooltip and for screen readers. */}
+      {/* Named under its icon wherever the pane has room, always the same while typing; its name kept in the tooltip and for screen readers. */}
       {showText && (
         <span aria-hidden className="whitespace-nowrap text-xs font-medium leading-tight">
           {text}
