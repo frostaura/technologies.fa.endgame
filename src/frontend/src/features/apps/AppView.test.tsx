@@ -120,7 +120,7 @@ describe("AppView", () => {
   it("says when there is no traffic to measure, rather than showing zeros", async () => {
     stub(json({ ...APP, telemetry: { visitsToday: 0, requestsToday: 0, errorsToday: 0, latencyP50Ms: null, latencyP95Ms: null, lastVisitAt: null } }));
     renderWithStore(<AppView appId="a1" />);
-    expect(await screen.findByText("No traffic yet")).toBeTruthy();
+    expect(await screen.findByText(/No traffic yet/)).toBeTruthy();
     expect(screen.getByText("No visits yet")).toBeTruthy();
   });
 
@@ -156,7 +156,7 @@ describe("AppView", () => {
     renderWithStore(<AppView appId="a1" />);
     expect(await screen.findByRole("heading", { name: "Ledger web" })).toBeTruthy();
     const today = screen.getByRole("region", { name: "Today" });
-    expect(within(today).getAllByText("Not measured yet")).toHaveLength(2);
+    expect(within(today).getAllByText(/Not measured yet/)).toHaveLength(2);
     expect(within(today).queryByText("0")).toBeNull();
     expect(screen.getAllByText(/Not enough history yet to say what it costs a month/)).toHaveLength(2);
     expect(screen.queryByText(/About \d+ credits a month/)).toBeNull();

@@ -6,7 +6,8 @@ import { Link } from "@/components/Link";
 import { Icon } from "@/components/Icon";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
-import { shortTitle } from "@/lib/plain";
+import { useFitsScreen } from "@/components/ui/page";
+import { crumbShort, normaliseCrumbs } from "./crumbs";
 import { highestGrant } from "@/lib/roles";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { useGetMeQuery } from "@/store/api";
@@ -20,6 +21,8 @@ import { ShellTalkContext, takeOpenTalkOnArrival } from "./talkContext";
 
 export interface Crumb {
   label: string;
+  /** A short name for the header and the trail, when the label is a long title (a run named for its whole idea). */
+  short?: string;
   href?: string;
   /** Instead of a link: select this level in place (the home screen's breadcrumb). */
   onSelect?: () => void;
@@ -86,35 +89,39 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
   const shell = useMemo(() => ({ compact, announce: tablet, target: talkTarget, open: openTalk, register }), [compact, tablet, talkTarget, openTalk, register]);
 
   const side = compact ? aside : aside ?? (talk && (tablet ? <Talk label={talk.label}>{talk.content}</Talk> : talk.content));
+  // Every page's trail starts at the organisation and never names the same place twice in a row.
+  const trail = normaliseCrumbs(crumbs, org ? { label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() } : null);
 
   return (
     <ShellTalkContext.Provider value={shell}>
-      <div data-shell={viewport} className={cn("flex min-h-dvh flex-col", phone && "pb-nav-safe")}>
+      {/* A phone on its side (`rail:`): the bar becomes a rail at the left, and the page and its side panel sit side by side. */}
+      <div data-shell={viewport} className={cn("flex min-h-dvh flex-col", phone && "pb-nav-safe rail:pb-0 rail:pl-rail")}>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xs focus:bg-surface focus:px-4 focus:py-2">
           Skip to the content
         </a>
         {me?.isOperator && <GodModeBand />}
         {phone ? (
-          <PhoneHeader crumbs={crumbs} signedIn={!!me} />
+          <PhoneHeader crumbs={trail} signedIn={!!me} />
         ) : (
           <header className="border-b bg-surface">
             {/*
               Tablet and narrow desktop: the bar — the mark, then every control at the right — with where
               you are on a full-width row of its own beneath. Wide desktop (xl): one row, where you are
-              between the mark and the controls. Where you are is always one line; a step is cut short
-              only when the row is too narrow, the middle steps first.
+              between the mark and the controls. Every control is one height (44px). Where you are is always
+              one line; a step is cut short only when the row is too narrow, the middle steps first. Below
+              xl, Sign out and System are icons, so the bar never wraps.
             */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-8 xl:gap-x-5">
-              <Link href={paths.home()} aria-label="Endgame home" className="flex shrink-0 items-center gap-2.5 rounded-xs text-ink">
+            <div className="mx-auto flex w-full max-w-frame flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 sm:px-8 xl:gap-x-3">
+              <Link href={paths.home()} aria-label="Endgame home" className="mr-1 flex min-h-touch shrink-0 items-center gap-2.5 rounded-xs text-ink">
                 <img src="/brand/endgame-mark.svg" alt="" width={30} height={30} className="size-8" />
-                <span className={cn("font-display text-lg font-bold tracking-tight", crumbs.length > 0 && "hidden md:inline")}>Endgame</span>
+                <span className={cn("font-display text-lg font-bold tracking-tight", trail.length > 0 && "hidden xl:inline")}>Endgame</span>
               </Link>
-              {crumbs.length > 0 && (
+              {trail.length > 0 && (
                 <div className="flex min-w-0 flex-1 sm:order-last sm:basis-full xl:order-none xl:basis-0">
-                  <Breadcrumb crumbs={crumbs} />
+                  <Breadcrumb crumbs={trail} />
                 </div>
               )}
-              <div className="order-last flex w-full items-center justify-between gap-3 sm:order-none sm:ml-auto sm:w-auto sm:justify-end">
+              <div className="order-last flex w-full items-center justify-between gap-2 sm:order-none sm:ml-auto sm:w-auto sm:justify-end xl:gap-3">
                 <ModeToggle />
                 {me && <OrganisationSwitcher compact />}
                 {creditsScope && <CreditsPill scope={creditsScope} />}
@@ -122,21 +129,26 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
               {tablet && talkLabel && <TalkHere label={talkLabel} />}
               {org && <NotificationsBell organisation={org.slug} />}
               {me && (
-                <Link href={paths.account()} aria-label="Your account" title="Your account" className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-ink-muted hover:text-ink">
+                <Link href={paths.account()} aria-label="Your account" title="Your account" className="flex size-11 shrink-0 items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
                   <Icon name="employee" className="size-5" />
                 </Link>
               )}
-              {me && <SignOut />}
+              {me && <SignOut compact />}
             </div>
           </header>
         )}
-        <div className="flex flex-1 flex-col lg:flex-row">
-          <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10">
+        {/* The device's safe area (a notch, in landscape) is kept clear of the page, outside its own gutter. */}
+        <div className="mx-auto flex w-full max-w-frame flex-1 flex-col pl-safe-l pr-safe-r lg:flex-row rail:flex-row rail:pl-0">
+          <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10 rail:gap-4 rail:px-5 rail:py-4">
             {children}
           </main>
-          {side && (
-            // A tablet sets the side panel's cards two by two under the page; a phone, one under another.
-            <aside className="flex min-w-0 flex-col gap-7 border-t bg-surface px-4 py-8 sm:px-8 md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start lg:w-dock lg:shrink-0 lg:border-l lg:border-t-0 lg:py-10 xl:w-dock">{side}</aside>
+          {aside ? (
+            <SidePanel>{aside}</SidePanel>
+          ) : (
+            side && (
+              // The conversation: a panel the height of the page beside it on a desktop; on a tablet, under the page.
+              <aside className="flex min-w-0 flex-col gap-7 border-t bg-surface px-4 py-8 sm:px-8 lg:w-dock lg:shrink-0 lg:border-l lg:border-t-0 lg:py-10">{side}</aside>
+            )
           )}
         </div>
         {compact && talk && (
@@ -154,6 +166,31 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
     </ShellTalkContext.Provider>
   );
 }
+
+/**
+ * The side panel: a column of cards (`SideCard`), each ending with its content, beside the page from
+ * `lg` up and wider from `3xl`. While the column fits the screen it stays in view as the page scrolls;
+ * a column taller than the screen scrolls with the page, so nothing in it is ever out of reach. On a
+ * tablet the cards sit under the page, two across.
+ */
+function SidePanel({ children }: { children: ReactNode }) {
+  const { ref, fits } = useFitsScreen<HTMLDivElement>();
+  return (
+    <aside aria-label="Beside this page" className="min-w-0 px-4 pb-8 sm:px-8 lg:w-aside lg:shrink-0 lg:py-10 lg:pl-0 3xl:w-aside-wide rail:w-aside rail:shrink-0 rail:py-4 rail:pl-0 rail:pr-5">
+      <div ref={ref} data-side-panel="" className={cn(
+          "flex flex-col gap-5 md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start rail:!flex rail:gap-4",
+          // Every block a page puts here is drawn as a card that ends with its content.
+          "[&>*]:min-w-0 [&>*]:rounded-md [&>*]:border [&>*]:bg-surface [&>*]:p-5 [&>*]:shadow-card max-sm:[&>*]:p-4",
+          // A fieldset's legend would sit on the card's edge: it is the card's title instead.
+          "[&>fieldset>legend]:float-left [&>fieldset>legend]:mb-3 [&>fieldset>legend]:w-full [&>fieldset>legend+*]:clear-both",
+          fits && "lg:sticky lg:top-6",
+        )}>
+        {children}
+      </div>
+    </aside>
+  );
+}
+
 
 /** A tablet's "Talk": the conversation is on the page, further down; this brings it into view, ready to type. */
 function TalkHere({ label }: { label: string }) {
@@ -181,7 +218,7 @@ export function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
           const last = i === crumbs.length - 1;
           const middle = i > 0 && !last;
           // A step is a name, not a paragraph: a run titled with its whole idea is cut to a line.
-          const label = shortTitle(crumb.label, 48);
+          const label = crumbShort(crumb, 48);
           return (
             <li
               key={`${i}-${crumb.label}`}
@@ -198,13 +235,13 @@ export function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
                 i === firstShownOnPhone && i > 0 && "before:shrink-0 before:[content:'…_/'_/_''] sm:before:[content:none]",
               )}
             >
-              {i > 0 && <span aria-hidden className={cn("shrink-0", i === firstShownOnPhone && "hidden sm:inline")}>/</span>}
+              {i > 0 && <span aria-hidden className={cn("shrink-0 text-ink-muted", i === firstShownOnPhone && "hidden sm:inline")}>/</span>}
               {crumb.onSelect && !last ? (
                 <button type="button" onClick={crumb.onSelect} className="min-h-touch min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover">
                   {label}
                 </button>
               ) : crumb.href && !last ? (
-                <Link href={crumb.href} className="min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover">
+                <Link href={crumb.href} className="min-w-0 truncate rounded-xs text-primary-link hover:text-primary-hover touch:min-h-touch touch:leading-touch">
                   {label}
                 </Link>
               ) : (

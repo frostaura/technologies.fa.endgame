@@ -1,7 +1,8 @@
 import { Link } from "@/components/Link";
 import { TAP_LINE } from "@/lib/touch";
 import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
-import { estimateHeadline, estimateSpread } from "@/lib/estimates";
+import { estimateFigure, estimateHeadline, estimateSpread } from "@/lib/estimates";
+import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { formatCredits, formatDate, formatNumber, percent, plural } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
@@ -33,7 +34,7 @@ export function CreditsView() {
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: home }] : []), { label: "Credits" }]} aside={view.kind === "loaded" && org ? <OverdraftAside credits={view.data} organisation={org.slug} role={active.role} /> : undefined}>
       {me.data && !org && (
-        <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-6 text-ink-body">
+        <p data-state="empty" className="py-1 text-ink-body">
           There are no credits to show until your organisation is named. <Link href={paths.start()} className="font-semibold text-primary-link">Start</Link>
         </p>
       )}
@@ -76,25 +77,16 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
           Your role is in {branch}, so this shows its spending and caps. The balance is the whole organisation&rsquo;s, which its work draws on.
         </p>
       )}
-      <section className={cn("relative flex flex-wrap items-end justify-between gap-5 overflow-hidden rounded-lg px-6 py-8 text-primary-ink max-sm:px-5 max-sm:py-6 sm:px-8", negative ? "bg-attention-text" : "bg-primary", RISE)}>
-        <div aria-hidden className="absolute -top-24 right-20 size-aura animate-drift rounded-full bg-violet opacity-75 blur-aura motion-reduce:animate-none" />
-        <div aria-hidden className="absolute -bottom-36 -right-20 size-aura animate-drift rounded-full bg-teal opacity-75 blur-aura animate-delay-5 motion-reduce:animate-none" />
-        <div className="relative flex flex-col gap-1.5">
-          <span className="text-eyebrow font-semibold uppercase text-primary-ink-soft">{negative ? "Below zero" : "Credits left"}</span>
-          <h1 className="font-display text-5xl font-bold sm:text-balance">{formatNumber(credits.balance)}</h1>
-          <span className="text-primary-tint">{paceLine(credits)}</span>
+      {/* The hero: white, the balance as the page's title, the month's figures beside it. Below zero, the figure says so in red. */}
+      <section aria-label="Balance" className={cn("flex flex-wrap items-end gap-x-16 gap-y-5 rounded-lg border bg-surface px-6 py-7 shadow-card max-sm:px-5 max-sm:py-5 sm:px-8", RISE)}>
+        <div className="flex min-w-0 flex-col gap-1">
+          <Stat plain valueAs="h1" size="xl" tone={negative ? "bad" : "ink"} label={<span className="text-eyebrow font-semibold uppercase">{negative ? "Below zero" : "Credits left"}</span>} value={formatNumber(credits.balance)} />
+          <span className="text-ink-body">{paceLine(credits)}</span>
         </div>
-        <div className="relative flex flex-wrap gap-8 max-sm:grid max-sm:w-full max-sm:grid-cols-3 max-sm:gap-3">
-          {[
-            ["Spent this month", credits.month.spent],
-            ["On AI work", credits.month.ai],
-            ["On hosting", credits.month.hosting],
-          ].map(([label, n]) => (
-            <div key={label} className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-primary-tint max-sm:text-xs">{label}</span>
-              <span className="font-display text-2xl font-bold max-sm:text-xl">{formatNumber(n as number)}</span>
-            </div>
-          ))}
+        <div className="grid grid-cols-3 gap-x-8 gap-y-3 max-sm:w-full max-sm:gap-x-3">
+          <Stat plain label="Spent this month" value={formatNumber(credits.month.spent)} />
+          <Stat plain label="On AI work" value={formatNumber(credits.month.ai)} />
+          <Stat plain label="On hosting" value={formatNumber(credits.month.hosting)} />
         </div>
       </section>
 
@@ -106,7 +98,7 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
           </span>
         </div>
         {credits.budgets.length === 0 ? (
-          <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
+          <p data-state="empty" className="py-1 text-ink-muted">
             No spending or caps anywhere in the tree yet.
           </p>
         ) : (
@@ -121,32 +113,27 @@ function CreditsBody({ credits, organisation, isAdmin, branch }: { credits: Cred
         )}
       </section>
 
-      <section className={cn("grid grid-cols-1 gap-5 md:grid-cols-2", RISE, stagger(2))}>
-        <div className="flex flex-col gap-2.5 rounded-md border bg-surface px-6 py-5 shadow-card">
-          <h2 className="text-lg font-semibold">Estimates against what it cost</h2>
-          {credits.estimates && credits.estimates.pieces > 0 ? (
-            <>
-              <span className="font-display text-3xl font-semibold">{estimateHeadline(credits.estimates)}</span>
-              <span className="text-ink-body">
-                Across {plural(credits.estimates.pieces, "piece")} of work this month. {estimateSpread(credits.estimates)} The largest miss was {formatNumber(credits.estimates.largestMissPercent)}%.
-              </span>
-            </>
-          ) : (
-            <p data-state="empty" className="text-ink-muted">
-              No work has finished this month, so no estimate has been scored yet.
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col gap-2.5 rounded-md border bg-surface px-6 py-5 shadow-card">
-          <h2 className="text-lg font-semibold">What you were not charged for</h2>
-          <span className="font-display text-3xl font-semibold text-success-text">{formatCredits(credits.notCharged.credits)}</span>
-          <span className="text-ink-body">
-            {credits.notCharged.repairs > 0
+      <StatRow cols={2} label="How the month went" className={cn(RISE, stagger(2))}>
+        {credits.estimates && credits.estimates.pieces > 0 ? (
+          <Stat
+            label="Estimates against what it cost"
+            value={estimateFigure(credits.estimates)}
+            caption={`${estimateHeadline(credits.estimates)}. Across ${plural(credits.estimates.pieces, "piece")} of work this month. ${estimateSpread(credits.estimates)} The largest miss was ${formatNumber(credits.estimates.largestMissPercent)}%.`}
+          />
+        ) : (
+          <Stat label="Estimates against what it cost" value={NO_VALUE} tone="muted" caption="No work has finished this month, so no estimate has been scored yet." />
+        )}
+        <Stat
+          label="What you were not charged for"
+          value={formatCredits(credits.notCharged.credits)}
+          tone="good"
+          caption={
+            credits.notCharged.repairs > 0
               ? `${plural(credits.notCharged.repairs, "repair")} where an employee got it wrong the first time. Fixing its own mistake is never billed.`
-              : "No repairs this month. Fixing its own mistake is never billed."}
-          </span>
-        </div>
-      </section>
+              : "No repairs this month. Fixing its own mistake is never billed."
+          }
+        />
+      </StatRow>
     </>
   );
 }

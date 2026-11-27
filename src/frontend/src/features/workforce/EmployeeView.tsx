@@ -1,11 +1,14 @@
 import { useState, type FormEvent, type ReactNode } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { Avatar } from "@/components/Avatar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
+import { useShowAll } from "@/components/ui/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { estimateHeadline } from "@/lib/estimates";
+import { estimateFigure, estimateHeadline } from "@/lib/estimates";
 import { formatCredits, formatNumber, headlineCredits, plural, possessive, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf, type ViewState } from "@/lib/queryState";
@@ -72,7 +75,11 @@ export function EmployeeView({ employeeId }: { employeeId: string }) {
 
   const crumbs: Crumb[] = [];
   if (tree.data?.organisation) crumbs.push({ label: tree.data.organisation.name, href: active.entered ? paths.homeOf(tree.data.organisation.slug) : paths.home() });
-  if (detail) for (const name of namesFor(tree.data, detail.employee.scope).slice(1)) crumbs.push({ label: name });
+  // Every level above is a place to go: its own page under Manage.
+  if (detail) {
+    const parts = detail.employee.scope.split("/");
+    namesFor(tree.data, detail.employee.scope).slice(1).forEach((name, i) => crumbs.push({ label: name, href: paths.manage(parts.slice(0, i + 2).join("/")) }));
+  }
   crumbs.push({ label: detail?.employee.name ?? "Employee" });
 
   return (
@@ -144,9 +151,9 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
           </span>
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-3xl font-semibold sm:text-4xl">{employee.name}</h1>
+              <h1 className="text-3xl font-semibold max-sm:text-2xl">{employee.name}</h1>
               <Badge tone={status.tone}>{status.label}</Badge>
-              {employee.idle.flagged && !released && <Badge tone="attention">Nothing to do for {plural(employee.idle.afterDays, "day")}</Badge>}
+              {employee.idle.flagged && !released && <Badge tone="warn">Nothing to do for {plural(employee.idle.afterDays, "day")}</Badge>}
             </div>
             <span className="text-ink-body">
               {employee.role} · {kindWord} ·{" "}
@@ -164,23 +171,33 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
         {contractor && can.admin && !released && <ContractorActions employee={employee} />}
       </div>
 
-      <section aria-label="Track record" className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-4", RISE, stagger(1))}>
-        <Stat label="Work accepted" value={acceptedLine(trackRecord.work)}>
-          {trackRecord.work.sentBack > 0 ? `${plural(trackRecord.work.sentBack, "piece")} sent back` : "Nothing sent back"}
-          {trackRecord.work.judged > 0 && ` · ${plural(trackRecord.work.judged, "judgement")} of others’ work`}
-        </Stat>
-        <Stat label="Repairs not charged" value={headlineCredits(trackRecord.repairsNotCharged.credits)}>
-          {trackRecord.repairsNotCharged.calls > 0 ? `${plural(trackRecord.repairsNotCharged.calls, "repair")} of its own mistakes, never billed` : "No repairs of its own work"}
-        </Stat>
-        <Stat label="Cost so far" value={headlineCredits(costs.toDate)}>
-          {costLine(costs, job.monthlyCreditLimit)}
-        </Stat>
-        <Stat label="Estimates" value={trackRecord.estimates && trackRecord.estimates.pieces > 0 ? estimateHeadline(trackRecord.estimates) : "None scored yet"}>
-          {trackRecord.estimates && trackRecord.estimates.pieces > 0
-            ? `Across ${plural(trackRecord.estimates.pieces, "piece")} of work. The largest miss was ${formatNumber(trackRecord.estimates.largestMissPercent)}%.`
-            : "Scored once its first estimated work finishes"}
-        </Stat>
-      </section>
+      <StatRow cols={4} label="Track record" className={cn(RISE, stagger(1))}>
+        <Stat
+          label="Work accepted"
+          value={trackRecord.work.accepted + trackRecord.work.sentBack > 0 ? acceptedLine(trackRecord.work) : NO_VALUE}
+          tone={trackRecord.work.accepted + trackRecord.work.sentBack > 0 ? "ink" : "muted"}
+          caption={
+            trackRecord.work.accepted + trackRecord.work.sentBack === 0
+              ? acceptedLine(trackRecord.work)
+              : `${trackRecord.work.sentBack > 0 ? `${plural(trackRecord.work.sentBack, "piece")} sent back` : "Nothing sent back"}${trackRecord.work.judged > 0 ? ` · ${plural(trackRecord.work.judged, "judgement")} of others’ work` : ""}`
+          }
+        />
+        <Stat
+          label="Repairs not charged"
+          value={headlineCredits(trackRecord.repairsNotCharged.credits)}
+          caption={trackRecord.repairsNotCharged.calls > 0 ? `${plural(trackRecord.repairsNotCharged.calls, "repair")} of its own mistakes, never billed` : "No repairs of its own work"}
+        />
+        <Stat label="Cost so far" value={headlineCredits(costs.toDate)} caption={costLine(costs, job.monthlyCreditLimit)} />
+        {trackRecord.estimates && trackRecord.estimates.pieces > 0 ? (
+          <Stat
+            label="Estimates"
+            value={estimateFigure(trackRecord.estimates)}
+            caption={`${estimateHeadline(trackRecord.estimates)}. Across ${plural(trackRecord.estimates.pieces, "piece")} of work. The largest miss was ${formatNumber(trackRecord.estimates.largestMissPercent)}%.`}
+          />
+        ) : (
+          <Stat label="Estimates" value={NO_VALUE} tone="muted" caption="None scored yet. Scored once its first estimated work finishes." />
+        )}
+      </StatRow>
 
       <section aria-labelledby="job-title" className={cn("flex flex-col gap-3.5", RISE, stagger(2))}>
         <h2 id="job-title" className="text-lg font-semibold">
@@ -229,16 +246,6 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
         </ErrorBoundary>
       )}
     </>
-  );
-}
-
-function Stat({ label, value, children }: { label: string; value: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card">
-      <span className="text-ink-muted">{label}</span>
-      <span className="font-display text-2xl font-semibold">{value}</span>
-      <span className="text-sm text-ink-body">{children}</span>
-    </div>
   );
 }
 
@@ -307,7 +314,7 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
         <label htmlFor="rehire-to" className="font-medium">
           Where {employee.name} works again
         </label>
-        <select id="rehire-to" value={rehireTo} onChange={(e) => setRehireTo(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3">
+        <select id="rehire-to" value={rehireTo} onChange={(e) => setRehireTo(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3">
           {placements(tree).map((p) => (
             <option key={p.scope} value={p.scope}>
               {`${"— ".repeat(p.depth)}${p.label}${p.scope === employee.scope ? " (where it was)" : ""}`}
@@ -365,7 +372,7 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
           <label htmlFor="reassign-to" className="font-medium">
             Move {employee.name} to
           </label>
-          <select id="reassign-to" value={scope} onChange={(e) => setScope(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3">
+          <select id="reassign-to" value={scope} onChange={(e) => setScope(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3">
             {placements(tree).map((p) => (
               <option key={p.scope} value={p.scope}>
                 {`${"— ".repeat(p.depth)}${p.label}`}
@@ -376,7 +383,7 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
           <label htmlFor="reassign-manager" className="font-medium">
             Reports to
           </label>
-          <select id="reassign-manager" value={manager} onChange={(e) => setManager(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3">
+          <select id="reassign-manager" value={manager} onChange={(e) => setManager(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3">
             <option value="">Nobody: it answers to you</option>
             {managers.map((m) => (
               <option key={m.id} value={m.id}>
@@ -396,7 +403,7 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
           <label htmlFor="budget" className="font-medium">
             Credits a month
           </label>
-          <input id="budget" inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
+          <input id="budget" inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
           <span className="text-sm text-ink-muted">Counts what the contractors it briefs spend too. Leave it empty to have no budget of its own.</span>
           <Button type="submit" className="self-start" disabled={busy}>
             Save budget
@@ -405,18 +412,16 @@ function EmployeeActions({ employee, tree }: { employee: Employee; tree: Tree | 
       )}
 
       {open === "release" && (
-        <div role="group" aria-label="Confirm letting go" className="flex w-full flex-col gap-2 rounded-md border border-attention-line bg-attention-tint p-4 sm:w-dock">
-          <p className="font-medium text-attention-text">Let {employee.name} go?</p>
-          <p className="text-sm text-ink">It leaves the org chart and the bill. Its memory is archived, so rehiring it later is not a cold start. Anyone who reports to it moves up.</p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => void run(() => act({ id: employee.id, action: "release" }).unwrap(), "let go")} disabled={busy}>
-              Yes, let {employee.name} go
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setOpen(null)}>
-              Keep
-            </Button>
-          </div>
-        </div>
+        <ConfirmCard
+          label="Confirm letting go"
+          question={`Let ${employee.name} go?`}
+          detail="It leaves the org chart and the bill. Its memory is archived, so rehiring it later is not a cold start. Anyone who reports to it moves up."
+          confirm={`Yes, let ${employee.name} go`}
+          cancel="Keep"
+          busy={busy}
+          onConfirm={() => void run(() => act({ id: employee.id, action: "release" }).unwrap(), "let go")}
+          onCancel={() => setOpen(null)}
+        />
       )}
 
       {error && <ActionError text={error} />}
@@ -537,7 +542,7 @@ function ContractorActions({ employee }: { employee: Employee }) {
           <label htmlFor="contractor-cap" className="font-medium">
             Credits a month, at most
           </label>
-          <input id="contractor-cap" inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
+          <input id="contractor-cap" inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
           <span className="text-sm text-ink-muted">
             Held before each of its calls, so it is never passed{employee.briefedBy ? `; ${possessive(employee.briefedBy.name)} own budget still holds too` : ""}. Leave it empty for no cap of its own.
           </span>
@@ -548,20 +553,16 @@ function ContractorActions({ employee }: { employee: Employee }) {
       )}
 
       {open === "stop" && (
-        <div role="group" aria-label="Confirm stopping" className="flex w-full flex-col gap-2 rounded-md border border-attention-line bg-attention-tint p-4 sm:w-dock">
-          <p className="font-medium text-attention-text">Stop {employee.name}?</p>
-          <p className="text-sm text-ink">
-            It makes no more calls from its next step. What it has done is kept, and the work that briefed it carries on without it. A stopped contractor cannot be started again.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => void run(() => act({ id: employee.id, action: "stop" }).unwrap(), "stop it")} disabled={busy}>
-              Yes, stop it
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setOpen(null)}>
-              Keep it working
-            </Button>
-          </div>
-        </div>
+        <ConfirmCard
+          label="Confirm stopping"
+          question={`Stop ${employee.name}?`}
+          detail="It makes no more calls from its next step. What it has done is kept, and the work that briefed it carries on without it. A stopped contractor cannot be started again."
+          confirm="Yes, stop it"
+          cancel="Keep it working"
+          busy={busy}
+          onConfirm={() => void run(() => act({ id: employee.id, action: "stop" }).unwrap(), "stop it")}
+          onCancel={() => setOpen(null)}
+        />
       )}
 
       {error && <ActionError text={error} />}
@@ -649,7 +650,7 @@ function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs:
             </ul>
           </div>
         ) : tasks.length === 0 ? (
-          <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
+          <p data-state="empty" className="py-1 text-ink-muted">
             {worked.finished > 0
               ? `${employee.name} has finished ${plural(worked.finished, "piece")} of work here, none of it split into tasks (research is not).${employee.lastRunId ? " Its last piece of work is linked above." : ""}`
               : `${employee.name} has not taken on any work here yet.`}
@@ -711,7 +712,7 @@ function ContractorsBriefed({ detail }: { detail: EmployeeDetail }) {
         <ul aria-label="Contractors working now" className="flex flex-col gap-2">
           {detail.contractors.map((x) => (
             <li key={x.id}>
-              <Link href={paths.employee(x.id)} className="flex flex-col gap-1 rounded-sm border border-dashed border-violet-dash bg-surface px-4 py-3 text-ink transition-colors hover:bg-violet-tint">
+              <Link href={paths.employee(x.id)} className="flex flex-col gap-1 rounded-sm border bg-surface px-4 py-3 text-ink transition-colors hover:bg-violet-tint">
                 <span className="flex items-center gap-2 font-medium">
                   <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-violet-line border-t-violet motion-reduce:animate-none" />
                   {x.role}
@@ -753,6 +754,8 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
   const can = useCan(tree, employee.scope);
   const editable = can.build && !includeArchived && employee.kind === "employee";
   const changeList = changeView.kind === "loaded" ? changeView.data : [];
+  // A long memory shows its first entries and "Show all", so the side panel never runs far past the page.
+  const entries = useShowAll(view.kind === "loaded" ? view.data : [], 8, "entries");
 
   return (
     <section aria-label="Memory" className="flex flex-col gap-5">
@@ -782,11 +785,12 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
           </Empty>
         ) : (
           <ul aria-label="Memory entries" className="flex flex-col gap-2.5">
-            {view.data.map((entry) => (
+            {entries.shown.map((entry) => (
               <MemoryRow key={entry.id} entry={entry} employee={employee} tree={tree} changes={changeList} editable={editable} includeArchived={includeArchived} />
             ))}
           </ul>
         ))}
+      {entries.control}
 
       {employee.kind === "employee" && <ReviewPanel employee={employee} changes={changeView} onRetry={() => void changes.refetch()} editable={editable} />}
 
@@ -855,20 +859,20 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
         </span>
       )}
       {removing && (
-        <form onSubmit={(e) => void confirmRemove(e)} aria-label="Confirm removing" className="flex flex-col gap-2 rounded-xs bg-attention-tint p-3">
-          <label htmlFor={`why-${entry.id}`} className="text-sm font-medium text-attention-text">
+        <ConfirmCard
+          label="Confirm removing"
+          question={`Remove this from ${possessive(employee.name)} memory?`}
+          confirm="Remove it"
+          cancel="Keep it"
+          busy={removeState.isLoading}
+          onSubmit={(e) => void confirmRemove(e)}
+          onCancel={() => setRemoving(false)}
+        >
+          <label htmlFor={`why-${entry.id}`} className="text-sm font-medium text-ink">
             Why should {employee.name} forget this? (optional)
           </label>
-          <input id={`why-${entry.id}`} value={why} onChange={(e) => setWhy(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
-          <span className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" type="submit" disabled={removeState.isLoading}>
-              Remove it
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setRemoving(false)}>
-              Keep it
-            </Button>
-          </span>
-        </form>
+          <input id={`why-${entry.id}`} value={why} onChange={(e) => setWhy(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
+        </ConfirmCard>
       )}
       {error && (
         <p role="alert" className="text-sm text-attention-text">
@@ -909,15 +913,15 @@ function MemoryForm({ employee, entry, includeArchived, onDone }: { employee: Em
       <label htmlFor={`title-${id}`} className="text-sm font-medium">
         In a few words
       </label>
-      <input id={`title-${id}`} value={title} onChange={(e) => setTitle(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
+      <input id={`title-${id}`} value={title} onChange={(e) => setTitle(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
       <label htmlFor={`body-${id}`} className="text-sm font-medium">
         What {employee.name} should remember
       </label>
-      <textarea id={`body-${id}`} value={body} onChange={(e) => setBody(e.target.value)} rows={3} className="rounded-xs border border-border-strong bg-surface px-3 py-2" />
+      <textarea id={`body-${id}`} value={body} onChange={(e) => setBody(e.target.value)} rows={3} className="rounded-xs border border-border-field bg-surface px-3 py-2" />
       <label htmlFor={`kind-${id}`} className="text-sm font-medium">
         Kind
       </label>
-      <select id={`kind-${id}`} value={kind} onChange={(e) => setKind(e.target.value as MemoryKind)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3">
+      <select id={`kind-${id}`} value={kind} onChange={(e) => setKind(e.target.value as MemoryKind)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3">
         {MEMORY_KINDS.map((k) => (
           <option key={k} value={k}>
             {MEMORY_KIND[k]}

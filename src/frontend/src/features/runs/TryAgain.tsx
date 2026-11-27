@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Spinner } from "@/components/states";
 import { Link } from "@/components/Link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatCredits } from "@/lib/format";
@@ -58,7 +59,12 @@ export function TryAgain({ runId, why, ideaId = null, showCredits = false }: { r
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => void price()} disabled={estimating.isLoading}>
-            {estimating.isLoading ? "Working it out…" : "Try again"}
+            {estimating.isLoading ? (
+              <>
+                <Spinner inherit />
+                Working it out…
+              </>
+            ) : "Try again"}
           </Button>
           <span className="text-sm text-ink-body">It picks up where this stopped; you see what it costs first.</span>
           {showCredits && (

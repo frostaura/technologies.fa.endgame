@@ -1,8 +1,10 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { SideCard, TITLE } from "@/components/ui/page";
+import { ConfirmCard } from "@/components/ui/confirm";
+import { Stat } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCredits, formatDate, formatNumber } from "@/lib/format";
@@ -64,18 +66,15 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
   const admin = roleRank(effectiveRole(tree, me.data, hire.scope)) >= roleRank("admin");
   return (
     <>
-      <section className={cn("relative flex flex-col gap-3 overflow-hidden rounded-lg bg-violet px-6 py-7 text-primary-ink sm:px-8", RISE)}>
-        <div aria-hidden className="absolute -right-16 -top-28 size-aura animate-drift rounded-full bg-primary opacity-60 blur-aura motion-reduce:animate-none" />
-        <Badge tone={hireBadge(hire).tone} className="relative self-start bg-surface">
+      <section aria-label="The proposed hire" className={cn("flex flex-col gap-3 rounded-lg border bg-surface px-6 py-7 shadow-card sm:px-8", RISE)}>
+        <Badge tone={hireBadge(hire).tone} className="self-start">
           {hireBadge(hire).label}
         </Badge>
-        <h1 className="relative text-3xl font-semibold sm:text-4xl">
-          {nameWithRole(hire.name, hire.role)}
-        </h1>
-        <p className="relative text-primary-tint">
+        <h1 className={cn(TITLE, "max-w-prose")}>{nameWithRole(hire.name, hire.role)}</h1>
+        <p className="text-ink-body">
           For {scopeName(tree, hire.scope)} · {TRIGGER[hire.trigger]} · Raised by {hire.raisedBy === "person" ? "a person" : "Endgame"} {formatDate(hire.createdAt)}
         </p>
-        {hire.reason && <p className="relative max-w-prose text-base">{hire.reason}</p>}
+        {hire.reason && <p className="max-w-prose text-base">{hire.reason}</p>}
       </section>
 
       {editing ? (
@@ -163,27 +162,23 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
         </Button>
       </div>
       {confirming && (
-        <form onSubmit={(e) => void submit(e)} aria-label={confirming === "accept" ? "Confirm the hire" : "Confirm declining"} className={cn("flex max-w-prose flex-col gap-2 rounded-md border p-4", confirming === "accept" ? "border-primary bg-primary-tint" : "border-attention-line bg-attention-tint")}>
-          <p className="font-medium">
-            {confirming === "accept"
-              ? `Hire ${hire.name} at about ${formatCredits(expectedMonthly(hire))} a month?`
-              : "Decline this hire? The same need can be raised again later."}
-          </p>
+        <ConfirmCard
+          label={confirming === "accept" ? "Confirm the hire" : "Confirm declining"}
+          question={confirming === "accept" ? `Hire ${hire.name} at about ${formatCredits(expectedMonthly(hire))} a month?` : "Decline this hire? The same need can be raised again later."}
+          confirm={confirming === "accept" ? "Yes, hire" : "Yes, decline"}
+          cancel="Not now"
+          destructive={confirming === "decline"}
+          busy={state.isLoading}
+          onSubmit={(e) => void submit(e)}
+          onCancel={() => setConfirming(null)}
+        >
           {confirming === "decline" && hire.holdDays ? <p className="text-sm text-ink-body">{holdLine(hire.holdDays)}</p> : null}
           {confirming === "accept" && !hire.withinBudget && <p className="text-sm text-attention-text">This is more than the budget has room for this month ({formatCredits(hire.headroomCredits)} left).</p>}
           <label htmlFor="hire-note" className="text-sm text-ink-muted">
             A note for the record (optional)
           </label>
-          <input id="hire-note" value={note} onChange={(e) => setNote(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
-          <span className="flex flex-wrap gap-2">
-            <Button type="submit" size="sm" variant={confirming === "accept" ? "primary" : "outline"} disabled={state.isLoading}>
-              {confirming === "accept" ? "Yes, hire" : "Yes, decline"}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
-              Not now
-            </Button>
-          </span>
-        </form>
+          <input id="hire-note" value={note} onChange={(e) => setNote(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
+        </ConfirmCard>
       )}
     </section>
   );
@@ -275,7 +270,7 @@ function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; o
       <label htmlFor="hire-reason" className="text-sm font-medium">
         Why this hire
       </label>
-      <textarea id="hire-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="rounded-xs border border-border-strong bg-surface px-3 py-2" />
+      <textarea id="hire-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="rounded-xs border border-border-field bg-surface px-3 py-2" />
       <span className="flex flex-wrap gap-2">
         <Button type="submit" disabled={state.isLoading}>
           Save the proposal
@@ -299,7 +294,7 @@ function Field({ id, label, value, onChange, numeric = false }: { id: string; la
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
-      <input id={id} value={value} inputMode={numeric ? "numeric" : undefined} onChange={(e) => onChange(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
+      <input id={id} value={value} inputMode={numeric ? "numeric" : undefined} onChange={(e) => onChange(e.target.value)} className="min-h-touch rounded-xs border border-border-field bg-surface px-3" />
     </span>
   );
 }
@@ -307,19 +302,18 @@ function Field({ id, label, value, onChange, numeric = false }: { id: string; la
 function CostAside({ hire }: { hire: Hire }) {
   return (
     <>
-      <section className={cn("flex flex-col gap-2", RISE)}>
-        <h2 className="text-lg font-semibold">What it costs</h2>
-        <span className="font-display text-4xl font-semibold">{formatNumber(expectedMonthly(hire))}</span>
-        <span className="text-ink-body">{expectedMonthly(hire) < hire.expectedMonthlyCredits ? "credits a month at most: its own budget caps it" : "credits a month, expected"}</span>
-      </section>
-      <section className={cn("flex flex-col gap-2 rounded-sm px-4 py-4", hire.withinBudget ? "bg-success-tint" : "bg-attention-tint")}>
-        <span className={cn("flex items-center gap-2 font-semibold", hire.withinBudget ? "text-success-text" : "text-attention-text")}>
-          <Icon name="credits" />
-          {hire.withinBudget ? "Fits the budget" : "More than the budget has room for"}
-        </span>
-        <span className="text-ink">{formatCredits(hire.headroomCredits)} of room left this month where it would work.</span>
-      </section>
-      <p className="text-ink-body">An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start.</p>
+      <SideCard label="What it costs" className={RISE}>
+        <Stat plain size="lg" label="What it costs" value={formatNumber(expectedMonthly(hire))} caption={expectedMonthly(hire) < hire.expectedMonthlyCredits ? "credits a month at most: its own budget caps it" : "credits a month, expected"} />
+        <div className="flex flex-col gap-1 border-t pt-3">
+          <Badge tone={hire.withinBudget ? "good" : "bad"} className="self-start">
+            {hire.withinBudget ? "Fits the budget" : "More than the budget has room for"}
+          </Badge>
+          <span className="text-ink-body">{formatCredits(hire.headroomCredits)} of room left this month where it would work.</span>
+        </div>
+      </SideCard>
+      <SideCard>
+        <p className="text-ink-body">An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start.</p>
+      </SideCard>
     </>
   );
 }

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { ClampedHeading, Fold } from "@/components/Fold";
 import { useViewport } from "@/lib/useViewport";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Markdown } from "@/components/Markdown";
-import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
+import { useShowAll } from "@/components/ui/page";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { capitalise, formatCredits, formatNumber, formatTime, percent, plural, share } from "@/lib/format";
 import { RISE } from "@/lib/motion";
@@ -28,17 +31,17 @@ import { ANSWER_CUT_OFF } from "./retryModel";
 import { TryAgain } from "./TryAgain";
 
 const STATUS: Record<RunStatus, { label: string; tone: BadgeTone }> = {
-  queued: { label: "Waiting to start", tone: "quiet" },
-  running: { label: "Working", tone: "solid" },
-  waiting: { label: "Waiting for you", tone: "attention-strong" },
-  paused: { label: "Paused", tone: "quiet" },
-  finished: { label: "Finished", tone: "success" },
-  failed: { label: "Did not succeed", tone: "attention-strong" },
-  cancelled: { label: "Cancelled", tone: "quiet" },
+  queued: { label: "Waiting to start", tone: "neutral" },
+  running: { label: "Working", tone: "info" },
+  waiting: { label: "Waiting for you", tone: "warn" },
+  paused: { label: "Paused", tone: "neutral" },
+  finished: { label: "Finished", tone: "good" },
+  failed: { label: "Did not succeed", tone: "bad" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
 };
 
 /** Work the owner declined at its start: not a failure, and said in the same neutral voice as a pause (D19). */
-const DECLINED = { label: "You declined to start this", tone: "quiet" as BadgeTone };
+const DECLINED = { label: "You declined to start this", tone: "neutral" as BadgeTone };
 
 /** The events that change a run's state: once one arrives after a control, the log is the status again. */
 const STATE_EVENTS = new Set(["run.paused", "run.resumed", "run.finished"]);
@@ -172,15 +175,15 @@ function RunBody({ run, refetch }: { run: Run; refetch: () => void }) {
               </Button>
             )}
             {confirmCancel ? (
-              <span role="group" aria-label="Confirm cancelling" className="flex flex-wrap items-center gap-2 rounded-sm bg-attention-tint px-3 py-1">
-                <span className="text-sm text-attention-text">Stop this work for good?</span>
-                <Button size="sm" variant="outline" onClick={() => void act("cancel")}>
-                  Yes, cancel it
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setConfirmCancel(false)}>
-                  Keep going
-                </Button>
-              </span>
+              <ConfirmCard
+                label="Confirm cancelling"
+                question="Stop this work for good?"
+                confirm="Yes, cancel it"
+                cancel="Keep going"
+                busy={controlState.isLoading}
+                onConfirm={() => void act("cancel")}
+                onCancel={() => setConfirmCancel(false)}
+              />
             ) : (
               <Button variant="soft" onClick={() => setConfirmCancel(true)} disabled={controlState.isLoading}>
                 Cancel
@@ -302,40 +305,38 @@ function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, dec
   const replanned = planned !== null && estimate !== null && Math.abs(planned - estimate) >= 0.005 ? planned : null;
   // Spending is held against the latest figure: the plan's, once there is one.
   const against = replanned ?? estimate;
-  const estimateTile = <Stat label="Estimate" value={estimate !== null ? formatCredits(estimate) : "Not yet made"} note="Shown before the work began" extra={replanned !== null ? `${formatNumber(replanned)} once planned` : null} />;
+  const estimateTile = (
+    <Stat
+      label="Estimate"
+      value={estimate !== null ? formatCredits(estimate) : NO_VALUE}
+      caption={estimate === null ? "Not yet made" : replanned !== null ? `Shown before the work began; ${formatNumber(replanned)} once planned` : "Shown before the work began"}
+    />
+  );
   // Work declined at its start never began: there is nothing to score its estimate against (D19).
   if (declined)
     return (
-      <section aria-label="Cost" className="grid grid-cols-2 gap-3 sm:gap-4">
+      <StatRow cols={2} label="Cost">
         {estimateTile}
-        <Stat label="Charged" value={formatCredits(spent)} note="You declined to start it, so nothing was done." />
-      </section>
+        <Stat label="Charged" value={formatCredits(spent)} caption="You declined to start it, so nothing was done." />
+      </StatRow>
     );
+  // Four slots, always, in the same order: what was estimated, what is spent, the third figure (held now; scored once done), and what was not charged.
   return (
-    <section aria-label="Cost" className={cn("grid grid-cols-2 gap-3 sm:gap-4", scored ? "xl:grid-cols-4" : "sm:grid-cols-3")}>
+    <StatRow cols={4} meters={!!against} label="Cost">
       {estimateTile}
-      <Stat label="Spent so far" value={formatCredits(spent)} note={against ? `${share(spent, against)}% of ${estimateName(against, estimate, replanned)}` : "Settled from each call’s own cost"} bar={against ? share(spent, against) : null} />
+      <Stat
+        label="Spent so far"
+        value={formatCredits(spent)}
+        caption={against ? `${share(spent, against)}% of ${estimateName(against, estimate, replanned)}` : "Settled from each call’s own cost"}
+        meter={against ? { value: percent(share(spent, against), 100), label: `${share(spent, against)}% of the estimate spent`, tone: share(spent, against) > 100 ? "bad" : "primary" } : null}
+      />
       {scored ? (
-        <>
-          <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual)} note={`Against ${estimateName(scored.estimated, estimate, replanned)}: cost ${formatNumber(scored.actual)}`} />
-          <Stat label="Not charged" value={formatCredits(notCharged)} note="Repairs of the work’s own mistakes, never billed" />
-        </>
+        <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual)} caption={`Against ${estimateName(scored.estimated, estimate, replanned)}: cost ${formatNumber(scored.actual)}`} />
       ) : (
-        <Stat label="Held for calls in flight" value={formatCredits(reserved)} note="Reserved before each call, released when it settles" className="max-sm:col-span-2" />
+        <Stat label="Held for calls in flight" value={formatCredits(reserved)} caption="Reserved before each call, released when it settles" />
       )}
-    </section>
-  );
-}
-
-function Stat({ label, value, note, extra = null, bar = null, className }: { label: string; value: string; note: string; extra?: string | null; bar?: number | null; className?: string }) {
-  return (
-    <div className={cn("flex min-w-0 flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card max-sm:px-3.5 max-sm:py-3", className)}>
-      <span className="text-ink-muted max-sm:text-sm">{label}</span>
-      <span className="break-words font-display text-2xl font-semibold max-sm:text-xl">{value}</span>
-      {bar !== null && <Bar value={percent(bar, 100)} label={`${bar}% of the estimate spent`} tone={bar > 100 ? "attention" : "primary"} className="my-1" />}
-      <span className="text-sm text-ink-body">{note}</span>
-      {extra && <span className="text-sm text-ink-body">{extra}</span>}
-    </div>
+      <Stat label="Not charged" value={formatCredits(notCharged)} caption="Repairs of the work’s own mistakes, never billed" />
+    </StatRow>
   );
 }
 
@@ -418,7 +419,7 @@ function PlanPanel({ plan, mode, publicOnlyNote }: { plan: DerivedPlan; mode: Mo
         </h2>
         <span className="flex flex-wrap items-center gap-2">
           {plan.items.length > 0 && <span className="text-sm text-ink-muted">{`${formatNumber(passed)} of ${plural(plan.items.length, "part")} done`}</span>}
-          <Badge tone={plan.accepted ? "success" : "teal"}>{plan.accepted ? "Agreed" : "Proposed"}</Badge>
+          <Badge tone={plan.accepted ? "good" : "info"}>{plan.accepted ? "Agreed" : "Proposed"}</Badge>
         </span>
       </div>
       {(technical ? plan.summary : plainOrNull(plan.summary)) && <p className="text-ink-body">{plan.summary}</p>}
@@ -459,9 +460,9 @@ function PlanPanel({ plan, mode, publicOnlyNote }: { plan: DerivedPlan; mode: Mo
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <span className="min-w-0 break-words font-medium">{technical ? `${item.id} · ${label}` : label}</span>
                   {item.result ? (
-                    <Badge tone={item.result === "passed" ? "success" : "attention-strong"}>{item.result === "passed" ? "Passed its check" : "Sent back"}</Badge>
+                    <Badge tone={item.result === "passed" ? "good" : "warn"}>{item.result === "passed" ? "Passed its check" : "Sent back"}</Badge>
                   ) : (
-                    <Badge tone="quiet">To do</Badge>
+                    <Badge tone="neutral">To do</Badge>
                   )}
                 </div>
                 {technical && item.detail && <p className="whitespace-pre-line break-words text-sm text-ink-body">{item.detail}</p>}
@@ -504,7 +505,7 @@ function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]
   const latest = hidden > 0 ? timeline.items.slice(hidden) : timeline.items;
   const items = phone ? [...latest].reverse() : latest;
   const more = hidden > 0 && (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-border-strong bg-surface px-5 py-3 max-sm:px-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-surface px-5 py-3 max-sm:px-4">
       <span className="text-ink-body">{phone ? `${plural(hidden, "earlier step")} not shown yet.` : `${plural(hidden, "earlier step")} folded away; the latest ${formatNumber(items.length)} are below.`}</span>
       <Button size="sm" variant="outline" onClick={() => setShown((n) => n + batch)}>
         {`Show ${plural(Math.min(batch, hidden), "earlier step")}`}
@@ -525,7 +526,7 @@ function Trace({ events, mode, derived, stream, terminal }: { events: RunEvent[]
       </div>
       {timeline.items.length === 0 ? (
         stream === "failed" ? null : terminal ? (
-          <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface p-5 text-ink-muted">
+          <p data-state="empty" className="py-1 text-ink-muted">
             This work recorded no steps.
           </p>
         ) : (
@@ -578,9 +579,9 @@ function TimelineRow({ item }: { item: TimelineItem }) {
 }
 
 const GROUP_STATUS: Record<TimelineGroup["status"], { label: string; tone: BadgeTone }> = {
-  working: { label: "Working", tone: "solid" },
-  done: { label: "Done", tone: "success" },
-  stopped: { label: "Stopped", tone: "attention-strong" },
+  working: { label: "Working", tone: "info" },
+  done: { label: "Done", tone: "good" },
+  stopped: { label: "Stopped", tone: "bad" },
 };
 
 /** A sub-agent's piece of the work: one line with its outcome, its own steps folded beneath. */
@@ -635,6 +636,8 @@ function RunAside({ runId }: { runId: string }) {
   const derived = useMemo(() => deriveRun(events ?? []), [events]);
   const active = useActiveOrganisation();
   const done = derived.tasks.filter((t) => t.status === "done").length;
+  // A long plan shows its first tasks and "Show all": the side panel never outgrows the page beside it.
+  const tasks = useShowAll(derived.tasks, 6, "tasks");
   return (
     <>
       <Fold title="Tasks" summary={derived.tasks.length === 0 ? "None yet" : `${formatNumber(done)} of ${plural(derived.tasks.length, "task")} done`}>
@@ -648,11 +651,12 @@ function RunAside({ runId }: { runId: string }) {
           </p>
         ) : (
           <ul aria-label="Tasks" className="flex flex-col gap-2">
-            {derived.tasks.map((t) => (
+            {tasks.shown.map((t) => (
               <TaskRow key={t.id} task={t} />
             ))}
           </ul>
         )}
+        {tasks.control}
       </section>
       </Fold>
       <section className="flex flex-col gap-2">
@@ -669,21 +673,19 @@ function RunAside({ runId }: { runId: string }) {
 }
 
 const TASK_STATUS: Record<DerivedTask["status"], { label: string; tone: BadgeTone }> = {
-  open: { label: "To do", tone: "quiet" },
-  working: { label: "In progress", tone: "solid" },
-  done: { label: "Done", tone: "success" },
-  failed: { label: "Did not succeed", tone: "attention-strong" },
+  open: { label: "To do", tone: "neutral" },
+  working: { label: "In progress", tone: "info" },
+  done: { label: "Done", tone: "good" },
+  failed: { label: "Did not succeed", tone: "bad" },
 };
 
 function TaskRow({ task }: { task: DerivedTask }) {
   const s = TASK_STATUS[task.status];
   return (
-    <li data-task={task.id} data-status={task.status} className="flex flex-col gap-1 rounded-sm border px-4 py-3">
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-medium">{task.summary}</span>
-        <Badge tone={s.tone}>{s.label}</Badge>
-      </div>
-      {task.holder && <span className="text-sm text-violet-text">{task.holder}</span>}
+    <li data-task={task.id} data-status={task.status} className="flex flex-col items-start gap-1 border-t pt-2.5 first:border-t-0 first:pt-0">
+      <Badge tone={s.tone}>{s.label}</Badge>
+      <span className="font-medium">{task.summary}</span>
+      {task.holder && <span className="text-sm text-ink-muted">{task.holder}</span>}
       {task.note && <span className="text-sm text-ink-body">{task.note}</span>}
     </li>
   );

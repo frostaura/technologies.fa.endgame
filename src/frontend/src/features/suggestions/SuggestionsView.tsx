@@ -3,7 +3,7 @@ import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisatio
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
-import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { Empty, Failed, Loading, Skeleton, Stale, Spinner } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
@@ -55,7 +55,7 @@ export function SuggestionsView() {
     >
       <header className={cn("flex flex-wrap items-end justify-between gap-4", RISE)}>
         <div className="flex flex-col gap-1.5">
-          <h1 className="flex items-center gap-3 text-3xl font-semibold">
+          <h1 className="flex items-center gap-3 text-3xl font-semibold max-sm:text-2xl">
             <Icon name="research" tinted className="size-7" />
             Ideas from your portfolio
           </h1>
@@ -118,7 +118,7 @@ export function SuggestionsView() {
                             Taken — see its research
                           </Link>
                         ) : (
-                          <Badge tone="quiet">{x.status === "taken" ? "Taken" : "Set aside"}</Badge>
+                          <Badge tone="neutral">{x.status === "taken" ? "Taken" : "Set aside"}</Badge>
                         )}
                       </li>
                     ))}
@@ -209,7 +209,12 @@ function AskForIdeas({ scope, here, canAsk, started, suggesting, onStarted }: { 
         </div>
       ) : canAsk ? (
         <Button variant="outline" className="self-start" onClick={() => void see()} disabled={estimating.isLoading}>
-          {estimating.isLoading ? "Working it out…" : "See what it costs"}
+          {estimating.isLoading ? (
+              <>
+                <Spinner inherit />
+                Working it out…
+              </>
+            ) : "See what it costs"}
         </Button>
       ) : (
         <p className="text-sm text-ink-muted">Asking for ideas spends credits, so it needs the Builder role here.</p>
@@ -279,7 +284,7 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
             <dt className="text-sm font-semibold">What it would reuse</dt>
             <dd className="m-0 flex flex-wrap gap-1.5">
               {suggestion.reuses.map((r) => (
-                <Badge key={r} tone="primary">
+                <Badge key={r} tone="info">
                   {technical ? r : reuseLabel(r)}
                 </Badge>
               ))}
@@ -310,7 +315,12 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
         ) : (
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void price()} disabled={estimating.isLoading}>
-              {estimating.isLoading ? "Working it out…" : "Take this idea"}
+              {estimating.isLoading ? (
+              <>
+                <Spinner inherit />
+                Working it out…
+              </>
+            ) : "Take this idea"}
             </Button>
             <Button variant="ghost" onClick={() => void setAside()}>
               Set it aside

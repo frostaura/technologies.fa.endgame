@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Ellipsis, House, MessageCircle } from "lucide-react";
 import { BottomNav, type NavItem } from "@/components/BottomNav";
 import { Icon } from "@/components/Icon";
@@ -11,12 +11,14 @@ import { effectiveRole, highestGrant, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 import { useAppSelector } from "@/store";
 import { useGetCreditsQuery, useGetMeQuery } from "@/store/api";
 import { OrganisationSwitcher } from "@/features/account/OrganisationSwitcher";
 import { BellIcon } from "../notifications/NotificationFeed";
 import { useUnread } from "../notifications/useUnread";
 import type { Crumb } from "./AppShell";
+import { crumbShort } from "./crumbs";
 import { ModeToggle, SignOut } from "./shellControls";
 import { askToOpenTalkOnArrival } from "./talkContext";
 
@@ -27,17 +29,23 @@ import { askToOpenTalkOnArrival } from "./talkContext";
  */
 export function PhoneHeader({ crumbs, signedIn }: { crumbs: Crumb[]; signedIn: boolean }) {
   const [trail, setTrail] = useState(false);
+  const tucked = useTuckOnScroll();
   const here = crumbs[crumbs.length - 1];
   const above = crumbs.slice(0, -1);
   const up = [...above].reverse().find((c) => c.href || c.onSelect);
   const titleBody = here && (
     <>
       {above.length > 0 && <span className="max-w-full truncate text-xs text-ink-muted">{above.map((c) => shortTitle(c.label, 32)).join(" / ")}</span>}
-      <span className="line-clamp-2 break-words font-display text-base font-semibold leading-snug text-ink">{here.label}</span>
+      {/* The short name: the page's own title, in full, is its heading (clamped to two lines). */}
+      <span className="max-w-full truncate font-display text-base font-semibold leading-snug text-ink">{crumbShort(here)}</span>
     </>
   );
   return (
-    <header className="border-b bg-surface pl-safe-l pr-safe-r pt-safe-t">
+    // Sticky, and tucked away while the page is read downward: it comes back as soon as the person scrolls up.
+    <header
+      data-tucked={tucked || undefined}
+      className={cn("sticky top-0 z-30 border-b bg-surface pl-safe-l pr-safe-r pt-safe-t transition-transform duration-200 motion-reduce:transition-none", tucked && "-translate-y-full")}
+    >
       <div className="flex min-h-bar items-center gap-1 px-1.5 py-1 short:min-h-touch short:py-0">
         {up ? (
           <Step crumb={up} className="flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-xs text-ink hover:bg-ground" label={`Up to ${up.label}`}>
@@ -85,7 +93,7 @@ export function PhoneHeader({ crumbs, signedIn }: { crumbs: Crumb[]; signedIn: b
                       <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-muted" />
                     </Step>
                   ) : (
-                    <span aria-current={last ? "page" : undefined} className={cn(row, last ? "font-semibold text-ink" : "text-ink-muted")}>
+                    <span aria-current={last ? "page" : undefined} className={cn(row, last ? "font-semibold text-ink" : "text-ink")}>
                       <span className="min-w-0 flex-1 break-words">{crumb.label}</span>
                     </span>
                   )}
@@ -97,6 +105,26 @@ export function PhoneHeader({ crumbs, signedIn }: { crumbs: Crumb[]; signedIn: b
       </Sheet>
     </header>
   );
+}
+
+/**
+ * Whether the header is tucked away: the page has been scrolled down past the header's own height and
+ * the last move was down. Any move up, the top of the page, or a sheet opening brings it back.
+ */
+function useTuckOnScroll() {
+  const [tucked, setTucked] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (Math.abs(y - last) < 6) return;
+      setTucked(y > last && y > 80 && !document.documentElement.hasAttribute("data-sheet-open"));
+      last = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  return tucked;
 }
 
 /** A level of where you are: a link to it, or — on the org chart — selecting it in place. */
@@ -224,6 +252,25 @@ function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <Sheet open={open} onClose={onClose} title="More">
       <div className="flex flex-col gap-5">
+        {/* You first — your account, the mode, signing out — so they are on the first screen of the sheet; the pages follow. */}
+        <section aria-label="You" className="flex flex-col gap-3 rounded-md bg-ground p-4">
+          {me.data && (
+            <Link href={paths.account()} onClick={onClose} className="flex min-h-touch items-center gap-3 rounded-xs">
+              <Icon name="employee" tinted className="size-5" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="font-medium">Your account</span>
+                <span className="truncate text-sm text-ink-muted">{me.data.user.email}</span>
+              </span>
+              <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-muted" />
+            </Link>
+          )}
+          <OrganisationSwitcher />
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium">Mode</span>
+            <ModeToggle />
+          </div>
+          {me.data && <SignOut className={cn(buttonVariants({ variant: "soft" }), "w-full")} />}
+        </section>
         {pages.length > 0 && (
           <nav aria-label="Pages">
             <ul className="flex flex-col">
@@ -242,24 +289,6 @@ function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
             </ul>
           </nav>
         )}
-        <section aria-label="You" className="flex flex-col gap-3 rounded-md bg-ground p-4">
-          {me.data && (
-            <Link href={paths.account()} onClick={onClose} className="flex min-h-touch items-center gap-3 rounded-xs">
-              <Icon name="employee" tinted className="size-5" />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="font-medium">Your account</span>
-                <span className="truncate text-sm text-ink-muted">{me.data.user.email}</span>
-              </span>
-              <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-muted" />
-            </Link>
-          )}
-          <OrganisationSwitcher />
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">Mode</span>
-            <ModeToggle />
-          </div>
-          {me.data && <SignOut className="self-start px-0 font-semibold text-attention-text" />}
-        </section>
       </div>
     </Sheet>
   );

@@ -1,9 +1,9 @@
 /**
  * A link or small control that stands on its own line (not a word inside a sentence) is a thumb's
- * size on a phone: at least the `touch` height, its words centred in it. Wider layouts draw it as
- * they always did. `phone:` is the console's own phone layout (`useViewport`), upright or on its side.
+ * size wherever it is worked by touch — a phone or a tablet (`touch:`): at least the `touch` height, its
+ * words centred in it. A desktop worked by a mouse draws it as it always did.
  */
-export const TAP = "phone:inline-flex phone:min-h-touch phone:items-center";
+export const TAP = "touch:inline-flex touch:min-h-touch touch:items-center";
 
 /** The same for a link that is one line cut short with an ellipsis (a name in a table's row). */
-export const TAP_LINE = "phone:block phone:truncate phone:leading-touch";
+export const TAP_LINE = "touch:block touch:truncate touch:leading-touch";

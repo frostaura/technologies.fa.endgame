@@ -32,10 +32,10 @@ import { Fold } from "@/components/Fold";
 import { AppShell } from "../shell/AppShell";
 import { pricingRows } from "./operatorModel";
 
-const STANDING: Record<OperatorOrganisation["standing"], { label: string; tone: "success" | "attention-strong" | "attention" }> = {
-  "in-credit": { label: "In credit", tone: "success" },
-  overdrawn: { label: "Below zero", tone: "attention" },
-  "at-limit": { label: "At its limit", tone: "attention-strong" },
+const STANDING: Record<OperatorOrganisation["standing"], { label: string; tone: "good" | "warn" | "bad" }> = {
+  "in-credit": { label: "In credit", tone: "good" },
+  overdrawn: { label: "Below zero", tone: "warn" },
+  "at-limit": { label: "At its limit", tone: "bad" },
 };
 
 /**
@@ -58,7 +58,7 @@ export function OperatorView() {
       }
     >
       <header className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold">
+        <h1 className="flex items-center gap-3 text-3xl font-semibold max-sm:text-2xl">
           <Icon name="god-mode" tinted className="size-7" />
           God mode
         </h1>
@@ -381,7 +381,7 @@ function Requests() {
                     <span>
                       {r.organisationName || r.organisation} · {formatCredits(r.credits)}
                     </span>
-                    <Badge tone={r.status === "fulfilled" ? "success" : "quiet"}>{r.status === "fulfilled" ? "Added" : "Declined"}</Badge>
+                    <Badge tone={r.status === "fulfilled" ? "good" : "neutral"}>{r.status === "fulfilled" ? "Added" : "Declined"}</Badge>
                   </li>
                 ))}
               </ul>

@@ -86,12 +86,14 @@ export function Sheet({
         tabIndex={-1}
         className={cn(
           "absolute flex flex-col bg-surface text-ink shadow-raised outline-none",
-          side === "bottom" && "inset-x-0 bottom-0 max-h-sheet rounded-t-lg pb-safe-b motion-safe:animate-sheet",
+          // A phone on its side has no height to spare: a bottom sheet comes in from the side instead.
+          side === "bottom" &&
+            "inset-x-0 bottom-0 max-h-sheet rounded-t-lg pb-safe-b motion-safe:animate-sheet rail:inset-x-auto rail:inset-y-0 rail:right-0 rail:max-h-none rail:w-full rail:max-w-dock rail:rounded-none rail:border-l rail:pr-safe-r rail:pt-safe-t",
           side === "full" && "inset-0 pb-safe-b pt-safe-t motion-safe:animate-sheet",
           side === "side" && "inset-y-0 right-0 w-full max-w-dock border-l pb-safe-b pt-safe-t motion-safe:animate-slide",
         )}
       >
-        {side === "bottom" && <span aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border-strong" />}
+        {side === "bottom" && <span aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border-strong rail:hidden" />}
         {hideTitle ? (
           <h2 id={titleId} className="sr-only">
             {title}

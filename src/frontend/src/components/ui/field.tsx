@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /** The one look for a text box, a select and a text area. */
-export const inputClass = "min-h-touch w-full min-w-0 rounded-xs border border-border-strong bg-surface px-3 text-ink";
+export const inputClass = "min-h-touch w-full min-w-0 rounded-xs border border-border-field bg-surface px-3 text-ink";
 
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
   <input ref={ref} className={cn(inputClass, className)} {...props} />

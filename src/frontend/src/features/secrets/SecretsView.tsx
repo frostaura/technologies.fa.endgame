@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -48,7 +49,7 @@ export function SecretsView() {
   return (
     <AppShell crumbs={crumbs} aside={view !== "no-organisation" && view.kind === "loaded" ? <AddSecret scope={scope} where={here} existing={view.data.effective} notice={notice} onNotice={setNotice} /> : undefined}>
       <header className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold">
+        <h1 className="flex items-center gap-3 text-3xl font-semibold max-sm:text-2xl">
           <Icon name="secrets" tinted className="size-7" />
           {/* Before an organisation is named there is nothing to name the secrets for. */}
           {here ? `Secrets for ${here}` : "Secrets"}
@@ -127,7 +128,7 @@ function SecretsBody({ list, tree, where, notice, onNotice }: { list: SecretList
       <section aria-label="Secrets set beneath" className={cn("flex flex-col gap-3", RISE, stagger(2))}>
         <h2 className="font-display text-lg font-semibold">Set beneath</h2>
         {list.setBelow.length === 0 ? (
-          <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface px-5 py-4 text-ink-muted">
+          <p data-state="empty" className="py-1 text-ink-muted">
             Nothing beneath {where} sets a secret of its own.
           </p>
         ) : (
@@ -174,9 +175,9 @@ function SecretRow({ secret, scope, nameOf, notice, onNotice }: { secret: Secret
           <code className="break-all font-mono text-base font-semibold">{secret.name}</code>
           <div className="flex flex-wrap items-center gap-2 text-sm text-ink-muted">
             {setHere ? (
-              <Badge tone="primary">Set here</Badge>
+              <Badge tone="info">Set here</Badge>
             ) : (
-              <Badge tone="quiet">
+              <Badge tone="neutral">
                 Inherited from{" "}
                 <Link href={paths.secrets(secret.setAtPath)} className="underline">
                   {nameOf(secret.setAtPath)}
@@ -204,21 +205,15 @@ function SecretRow({ secret, scope, nameOf, notice, onNotice }: { secret: Secret
       <NoticeLine notice={notice} at={at} />
 
       {mode === "remove" && (
-        <div role="group" aria-label={`Confirm removing ${secret.name}`} className="flex flex-col gap-2 rounded-sm bg-attention-tint px-4 py-3">
-          <p className="text-attention-deep">
-            {secret.overrides.length > 0
-              ? `Remove ${secret.name} here? The one set at ${nameOf(secret.overrides[0] ?? "")} applies again.`
-              : `Remove ${secret.name}? Nothing here or beneath will have it, unless it sets its own.`}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => void confirmRemove()}>
-              Remove it
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode("idle")}>
-              Keep it
-            </Button>
-          </div>
-        </div>
+        <ConfirmCard
+          label={`Confirm removing ${secret.name}`}
+          question={secret.overrides.length > 0 ? `Remove ${secret.name} here?` : `Remove ${secret.name}?`}
+          detail={secret.overrides.length > 0 ? `The one set at ${nameOf(secret.overrides[0] ?? "")} applies again.` : "Nothing here or beneath will have it, unless it sets its own."}
+          confirm="Remove it"
+          cancel="Keep it"
+          onConfirm={() => void confirmRemove()}
+          onCancel={() => setMode("idle")}
+        />
       )}
 
       {/* A replaced secret closes its form; the saved message stays on the row. */}

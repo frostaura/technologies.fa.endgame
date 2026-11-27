@@ -24,8 +24,13 @@ export interface NavItem {
  */
 export function BottomNav({ items, label = "Main" }: { items: NavItem[]; label?: string }) {
   return (
-    <nav aria-label={label} data-bottom-nav="" className="fixed inset-x-0 bottom-0 z-40 border-t bg-surface/95 pb-safe-b pl-safe-l pr-safe-r backdrop-blur">
-      <ul className="mx-auto flex h-nav max-w-form items-stretch short:h-bar">
+    // A phone on its side (`rail:`): the same items as a slim rail down the left edge, so the page keeps its height.
+    <nav
+      aria-label={label}
+      data-bottom-nav=""
+      className="fixed inset-x-0 bottom-0 z-40 border-t bg-surface/95 pb-safe-b pl-safe-l pr-safe-r backdrop-blur rail:inset-x-auto rail:inset-y-0 rail:left-0 rail:w-rail rail:border-r rail:border-t-0 rail:pb-safe-b rail:pr-0 rail:pt-safe-t"
+    >
+      <ul className="mx-auto flex h-nav max-w-form items-stretch short:h-bar rail:h-full rail:flex-col rail:justify-center rail:gap-1">
         {items.map((item) => {
           const body = (
             <>
@@ -36,11 +41,11 @@ export function BottomNav({ items, label = "Main" }: { items: NavItem[]; label?:
             </>
           );
           const cls = cn(
-            "flex h-full min-h-touch w-full min-w-touch flex-col items-center justify-center gap-1 rounded-xs px-1 transition-colors short:flex-row short:gap-2",
+            "flex h-full min-h-touch w-full min-w-touch flex-col items-center justify-center gap-1 rounded-xs px-1 transition-colors short:flex-row short:gap-2 rail:h-auto rail:flex-col rail:gap-0.5 rail:py-1.5",
             item.current ? "text-primary" : "text-ink-muted hover:text-ink",
           );
           return (
-            <li key={item.key} className="flex min-w-0 flex-1">
+            <li key={item.key} className="flex min-w-0 flex-1 rail:flex-none">
               {item.href ? (
                 <Link href={item.href} aria-label={item.name} aria-current={item.current ? "page" : undefined} data-nav={item.key} className={cls}>
                   {body}

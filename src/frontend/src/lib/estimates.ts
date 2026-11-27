@@ -12,6 +12,13 @@ export function estimateHeadline(e: Estimates): string {
   return e.typically === "within" ? `Usually within ${formatNumber(Math.max(1, gap))}%` : `Usually ${formatNumber(gap)}% ${e.typically} the estimate`;
 }
 
+/** The same, as a figure short enough for a figure tile ("53% under"); the sentence goes in its caption. */
+export function estimateFigure(e: Estimates): string {
+  if (e.typicalGapPercent === null || e.typically === null) return `${formatNumber(e.withinPercent)}%`;
+  const gap = Math.round(Math.abs(e.typicalGapPercent));
+  return e.typically === "within" ? `±${formatNumber(Math.max(1, gap))}%` : `${formatNumber(gap)}% ${e.typically}`;
+}
+
 /** How many pieces came close, and how many cost less or more than estimated. */
 export function estimateSpread(e: Estimates): string {
   const close = Math.max(0, e.pieces - e.under - e.over);

@@ -1,11 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Fold } from "@/components/Fold";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { TITLE } from "@/components/ui/page";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatCredits, formatDate, formatNumber, percent, plural } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
@@ -45,7 +47,10 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   const crumbs: Crumb[] = [];
   const org = active.organisation;
   if (org) crumbs.push({ label: org.name, href: paths.home() });
-  if (idea?.scope) for (const name of namesFor(tree.data, idea.scope).slice(1)) crumbs.push({ label: name });
+  if (idea?.scope) {
+    const parts = idea.scope.split("/");
+    namesFor(tree.data, idea.scope).slice(1).forEach((name, i) => crumbs.push({ label: name, href: paths.manage(parts.slice(0, i + 2).join("/")) }));
+  }
   crumbs.push({ label: idea?.title ?? "Idea" });
 
   return (
@@ -99,13 +104,13 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
 function NoVerdictYet({ idea }: { idea: Idea }) {
   const failed = idea.status === "failed";
   return (
-    <section className={cn("flex flex-col items-start gap-4 rounded-lg px-6 py-8 sm:px-8", failed ? "border border-attention-line bg-attention-tint" : "bg-night text-primary-ink", RISE)} role={failed ? "alert" : "status"}>
-      <Badge tone={failed ? "attention-strong" : "teal"}>{failed ? "Research did not finish" : "Research in progress"}</Badge>
-      <h1 className="text-3xl font-semibold sm:text-4xl">{failed ? "No verdict could be reached." : "The verdict is being worked out."}</h1>
-      <p className={failed ? "text-ink" : "text-primary-tint"}>
+    <section className={cn("flex flex-col items-start gap-4 rounded-lg border bg-surface px-6 py-8 shadow-card sm:px-8", RISE)} role={failed ? "alert" : "status"}>
+      <Badge tone={failed ? "bad" : "info"}>{failed ? "Research did not finish" : "Research in progress"}</Badge>
+      <h1 className={cn(TITLE, "max-w-prose")}>{failed ? "No verdict could be reached." : "The verdict is being worked out."}</h1>
+      <p className="max-w-prose text-ink-body">
         {failed ? "Research stopped before it reached a verdict. The trace shows where." : "The case against the idea is argued first. You can watch every step as it happens."}
       </p>
-      <Link href={paths.run(idea.runId)} className={buttonVariants({ variant: failed ? (idea.tryAgain ? "outline" : "primary") : "white" })}>
+      <Link href={paths.run(idea.runId)} className={buttonVariants({ variant: failed && idea.tryAgain ? "outline" : "primary" })}>
         {failed ? "See what happened" : "Watch the research"}
       </Link>
       {failed && idea.tryAgain && <TryAgain runId={idea.tryAgain.runId} ideaId={idea.id} why={idea.tryAgain.why} showCredits={idea.tryAgain.why === "budget"} />}
@@ -140,7 +145,8 @@ function DecisionHistory({ idea }: { idea: Idea }) {
 }
 
 function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
-  const stamp = verdict.outcome === "build" ? "bg-success-tint text-success-text" : verdict.outcome === "change" ? "bg-primary-tint text-primary-hover" : "bg-attention-chip text-attention-text";
+  // The verdict's kind is its one coloured mark: a tag, on a white hero.
+  const stamp: BadgeTone = verdict.outcome === "build" ? "good" : verdict.outcome === "change" ? "info" : "bad";
   const redLine = redLineBreached(verdict, idea.redLine);
   const short = verdict.summary ? shortSummary(verdict.summary) : null;
   const [reasoning, setReasoning] = useState(false);
@@ -157,16 +163,14 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
   );
   return (
     <>
-      <section className={cn("relative flex flex-col gap-3.5 overflow-hidden rounded-lg bg-night px-6 py-7 text-primary-ink sm:px-8", RISE)}>
-        <div aria-hidden className="absolute -right-10 -top-32 size-aura animate-drift rounded-full bg-attention opacity-60 blur-aura motion-reduce:animate-none" />
-        <div aria-hidden className="absolute -bottom-44 right-56 size-aura animate-drift rounded-full bg-violet opacity-60 blur-aura animate-delay-5 motion-reduce:animate-none" />
-        <span className={cn("relative self-start rounded-full px-3.5 py-1.5 text-sm font-bold uppercase tracking-wide", stamp, "animate-stamp motion-reduce:animate-none")}>
+      <section aria-label="The verdict" className={cn("flex flex-col gap-3.5 rounded-lg border bg-surface px-6 py-7 shadow-card sm:px-8", RISE)}>
+        <Badge tone={stamp} className="self-start px-3 py-1 text-sm uppercase tracking-wide">
           Verdict · {OUTCOME[verdict.outcome].toLowerCase()}
-        </span>
-        <h1 className="relative max-w-prose text-3xl font-semibold leading-tight sm:text-4xl">{verdict.headline}</h1>
-        {short && <p className="relative max-w-prose text-base text-primary-tint">{short.text}</p>}
+        </Badge>
+        <h1 className={cn(TITLE, "max-w-prose")}>{verdict.headline}</h1>
+        {short && <p className="max-w-prose text-base text-ink-body">{short.text}</p>}
         {short && !short.full && (
-          <Button variant="white" size="sm" className="relative self-start" aria-expanded={reasoning} aria-controls="full-reasoning" onClick={() => setReasoning((x) => !x)}>
+          <Button variant="outline" size="sm" className="self-start" aria-expanded={reasoning} aria-controls="full-reasoning" onClick={() => setReasoning((x) => !x)}>
             {reasoning ? "Hide the full reasoning" : "Read the full reasoning"}
           </Button>
         )}
@@ -352,7 +356,7 @@ function ExistingProducts({ products, evidence }: { products: ExistingProduct[];
 function SourceLink({ url }: { url: string }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   return (
-    <a href={url} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-touch max-w-full items-center break-all rounded-xs text-sm text-primary-link hover:text-primary-hover sm:min-h-0">
+    <a href={url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-full items-center break-all rounded-xs text-sm text-primary-link hover:text-primary-hover touch:min-h-touch">
       {technical ? url : sourceLabel(url)}
     </a>
   );
@@ -422,15 +426,18 @@ function Decisions({ idea, verdict, redLine }: { idea: Idea; verdict: Verdict; r
       <div className="flex flex-wrap items-center gap-3 phone:flex-col phone:items-stretch">
         {options.map((o) =>
           confirming === o.choice && o.choice !== "change" ? (
-            <span key={o.choice} role="group" aria-label="Confirm" className="flex flex-wrap items-center gap-2 rounded-sm bg-attention-tint px-3 py-1.5 phone:py-3">
-              <span className="text-sm text-attention-text phone:w-full">{o.choice === "drop" ? "Drop this idea?" : "Build it against the verdict? This is recorded as an overrule."}</span>
-              <Button size="sm" variant="outline" className="phone:flex-1" onClick={() => void submit(o.choice)}>
-                Yes
-              </Button>
-              <Button size="sm" variant="ghost" className="phone:flex-1" onClick={() => setConfirming(null)}>
-                No
-              </Button>
-            </span>
+            <ConfirmCard
+              key={o.choice}
+              label="Confirm"
+              question={o.choice === "drop" ? "Drop this idea?" : "Build it against the verdict?"}
+              detail={o.choice === "drop" ? undefined : "This is recorded as an overrule."}
+              confirm="Yes"
+              cancel="No"
+              destructive={o.choice === "drop"}
+              busy={state.isLoading}
+              onConfirm={() => void submit(o.choice)}
+              onCancel={() => setConfirming(null)}
+            />
           ) : (
             <Button
               key={o.choice}
@@ -459,7 +466,7 @@ function Decisions({ idea, verdict, redLine }: { idea: Idea; verdict: Verdict; r
           <label htmlFor="change-note" className="font-medium">
             What should change?
           </label>
-          <textarea id="change-note" value={changeNote} onChange={(e) => setChangeNote(e.target.value)} rows={4} className="rounded-xs border border-border-strong bg-surface px-3 py-2" />
+          <textarea id="change-note" value={changeNote} onChange={(e) => setChangeNote(e.target.value)} rows={4} className="rounded-xs border border-border-field bg-surface px-3 py-2" />
           <span className="text-sm text-ink-muted">Research runs again with your change, and you see a new verdict before anything is built.</span>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={!changeNote.trim() || state.isLoading}>

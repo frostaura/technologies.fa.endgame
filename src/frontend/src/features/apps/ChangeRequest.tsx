@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
+import { Spinner } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/format";
 import { describeError } from "@/lib/queryState";
@@ -64,7 +65,7 @@ export function ChangeRequest({ appId, appName }: { appId: string; appName: stri
             setRequest(e.target.value);
             setEstimate(null);
           }}
-          className="rounded-xs border border-border-strong bg-surface px-3 py-2"
+          className="rounded-xs border border-border-field bg-surface px-3 py-2"
         />
         {estimate ? (
           <div role="status" className="flex flex-col gap-2 rounded-sm bg-primary-tint px-4 py-3">
@@ -81,7 +82,12 @@ export function ChangeRequest({ appId, appName }: { appId: string; appName: stri
           </div>
         ) : (
           <Button type="submit" variant="outline" className="self-start" disabled={!text || estimating.isLoading}>
-            {estimating.isLoading ? "Working it out…" : "See what it costs"}
+            {estimating.isLoading ? (
+              <>
+                <Spinner inherit />
+                Working it out…
+              </>
+            ) : "See what it costs"}
           </Button>
         )}
       </form>

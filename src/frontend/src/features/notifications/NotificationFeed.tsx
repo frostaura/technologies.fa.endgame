@@ -115,9 +115,9 @@ function Row({ organisation, item, onNavigate }: { organisation: string; item: N
       className={cn("flex min-w-0 flex-col gap-1.5 rounded-sm border px-4 py-3", !unread ? "bg-surface" : item.severity === "urgent" ? "border-attention-line bg-attention-wash" : "border-primary-line bg-primary-tint")}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={item.resolved ? "quiet" : item.severity === "urgent" ? "attention-strong" : "primary"}>{lines.kind}</Badge>
+        <Badge tone={item.resolved ? "neutral" : item.severity === "urgent" ? "warn" : "info"}>{lines.kind}</Badge>
         {unread && <span className="text-xs font-semibold text-ink">New</span>}
-        {item.resolved && <Badge tone={settled === "Closed" ? "quiet" : "success"}>{settled}</Badge>}
+        {item.resolved && <Badge tone={settled === "Closed" ? "neutral" : "good"}>{settled}</Badge>}
         <span className="ml-auto text-xs text-ink-muted">{timeAgo(item.createdAt)}</span>
       </div>
       <Link

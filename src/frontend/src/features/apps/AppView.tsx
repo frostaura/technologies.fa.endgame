@@ -1,8 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
@@ -51,7 +53,9 @@ export function AppView({ appId }: { appId: string }) {
   if (org) crumbs.push({ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() });
   if (app) {
     const names = namesFor(tree.data, app.scope);
-    for (const n of names.slice(1, -1)) crumbs.push({ label: n });
+    const parts = app.scope.split("/");
+    // Every level above the app is a place to go: its own page under Manage.
+    names.slice(1, -1).forEach((n, i) => crumbs.push({ label: n, href: paths.manage(parts.slice(0, i + 2).join("/")) }));
     crumbs.push({ label: app.name });
   } else crumbs.push({ label: "App" });
 
@@ -149,7 +153,12 @@ function AppBody({ app }: { app: AppDetail }) {
   const [rebuilt, setRebuilt] = useState<string | null>(null);
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const t = app.telemetry;
-  const healthText = { success: "text-success-text", attention: "text-attention-text", "attention-strong": "text-attention-text" } as Record<string, string>;
+  // The figure is the state in a word; an app never published has no health to report, so it is "—", never "Healthy".
+  const unpublished = !app.publishedAt && !app.notBuilt && health.label === "Healthy";
+  const healthValue: { value: string; tone: "ink" | "muted" | "good" | "bad" } =
+    unpublished || health.label === "Health unknown"
+      ? { value: NO_VALUE, tone: "muted" }
+      : { value: health.label, tone: health.tone === "good" ? "good" : health.tone === "bad" ? "bad" : "ink" };
   return (
     <>
       <div className={cn("flex flex-wrap items-start justify-between gap-5 max-sm:-order-3 max-sm:gap-3", RISE)}>
@@ -170,31 +179,30 @@ function AppBody({ app }: { app: AppDetail }) {
         </a>
       </div>
 
-      <section aria-label="Today" className="grid grid-cols-2 gap-3 max-sm:-order-2 sm:gap-4 xl:grid-cols-4">
-        <Tile index={1} label="Health" value={health.label} valueClass={healthText[health.tone] ?? "text-ink"} note={healthNote(app, technical)} pulse={health.label === "Healthy"} />
+      <StatRow cols={4} label="Today" className="max-sm:-order-2">
+        <Stat label="Health" value={healthValue.value} tone={healthValue.tone} caption={healthNote(app, technical)} />
         {t ? (
           <>
-            <Tile
-              index={2}
+            <Stat
               label="Visits today"
               value={formatNumber(t.visitsToday)}
-              note={t.errorsToday > 0 ? `${plural(t.errorsToday, "error")} in ${plural(t.requestsToday, "request")}` : t.lastVisitAt ? `Last visit ${timeAgo(t.lastVisitAt)}` : "No visits yet"}
+              caption={t.errorsToday > 0 ? `${plural(t.errorsToday, "error")} in ${plural(t.requestsToday, "request")}` : t.lastVisitAt ? `Last visit ${timeAgo(t.lastVisitAt)}` : "No visits yet"}
             />
-            <Tile
-              index={3}
+            <Stat
               label="Typical response"
-              value={t.latencyP50Ms !== null ? formatDuration(t.latencyP50Ms) : "No traffic yet"}
-              note={t.latencyP95Ms !== null ? `Slowest 1 in 20: ${formatDuration(t.latencyP95Ms)}` : "Measured once it has visitors"}
+              value={t.latencyP50Ms !== null ? formatDuration(t.latencyP50Ms) : NO_VALUE}
+              tone={t.latencyP50Ms !== null ? "ink" : "muted"}
+              caption={t.latencyP95Ms !== null ? `Slowest 1 in 20: ${formatDuration(t.latencyP95Ms)}` : "No traffic yet. Measured once it has visitors."}
             />
           </>
         ) : (
           <>
-            <Tile index={2} label="Visits today" value={NOT_MEASURED} valueClass="text-ink-muted" note="It reports its visits once it has run." />
-            <Tile index={3} label="Typical response" value={NOT_MEASURED} valueClass="text-ink-muted" note="Measured once it has visitors." />
+            <Stat label="Visits today" value={NO_VALUE} tone="muted" caption={`${NOT_MEASURED}. It reports its visits once it has run.`} />
+            <Stat label="Typical response" value={NO_VALUE} tone="muted" caption={`${NOT_MEASURED}. Measured once it has visitors.`} />
           </>
         )}
-        <Tile index={4} label="Cost this month" value={headlineNumber(app.cost.monthCredits)} note={capNote(app, budgets.data, nameOf)} />
-      </section>
+        <Stat label="Cost this month" value={headlineNumber(app.cost.monthCredits)} caption={capNote(app, budgets.data, nameOf)} />
+      </StatRow>
 
       {stopped && builder && (
         <section aria-label="It is not running" className="flex flex-col gap-2 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
@@ -373,22 +381,22 @@ function Sharing({ app }: { app: AppDetail }) {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="min-w-0 break-all font-medium">{share.email}</span>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={share.registered ? "success" : "quiet"}>{share.registered ? "Registered" : `Invited ${timeAgo(share.invitedAt)}`}</Badge>
+                      <Badge tone={share.registered ? "good" : "neutral"}>{share.registered ? "Registered" : `Invited ${timeAgo(share.invitedAt)}`}</Badge>
                       <Button size="sm" variant="ghost" onClick={() => setConfirmRemove(share.email)} aria-label={`Stop sharing with ${share.email}`}>
                         Stop sharing
                       </Button>
                     </div>
                   </div>
                   {confirmRemove === share.email && (
-                    <div role="group" aria-label={`Confirm stopping sharing with ${share.email}`} className="flex flex-wrap items-center gap-2 rounded-xs bg-attention-tint px-3 py-2">
-                      <span className="text-attention-deep">They lose access at once, and are signed out of {app.name}.</span>
-                      <Button size="sm" onClick={() => void stop(share.email)}>
-                        Stop sharing
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setConfirmRemove(null)}>
-                        Keep it
-                      </Button>
-                    </div>
+                    <ConfirmCard
+                      label={`Confirm stopping sharing with ${share.email}`}
+                      question={`Stop sharing with ${share.email}?`}
+                      detail={`They lose access at once, and are signed out of ${app.name}.`}
+                      confirm="Stop sharing"
+                      cancel="Keep it"
+                      onConfirm={() => void stop(share.email)}
+                      onCancel={() => setConfirmRemove(null)}
+                    />
                   )}
                 </li>
               ))}
@@ -509,19 +517,6 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
           </ul>
         ))}
     </section>
-  );
-}
-
-function Tile({ index, label, value, note, valueClass, pulse = false }: { index: number; label: string; value: string; note: string; valueClass?: string; pulse?: boolean }) {
-  return (
-    <div className={cn("flex min-w-0 flex-col gap-1 rounded-md border bg-surface px-5 py-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0 max-sm:px-3.5 max-sm:py-3", RISE, stagger(index))}>
-      <span className="text-ink-muted max-sm:text-sm">{label}</span>
-      <span className={cn("flex items-center gap-2.5 break-words font-display text-2xl font-semibold max-sm:text-xl", valueClass)}>
-        {pulse && <span aria-hidden className="size-2.5 animate-pulse rounded-full bg-success motion-reduce:animate-none" />}
-        {value}
-      </span>
-      <span className="break-words text-ink-body">{note}</span>
-    </div>
   );
 }
 
