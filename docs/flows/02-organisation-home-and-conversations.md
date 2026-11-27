@@ -1088,7 +1088,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Core · **Learn first:** TALK-01 · **What you learn:** a message can carry pictures, PDFs and text files, and whoever answers reads them.
 - **Steps:**
   1. Press **Attach files** and pick files, drop files anywhere on the pane ("Drop files to attach them"), or paste them into the box.
-  2. Each file shows as a chip above the box with its name and size (a picture shows itself), "Adding…" while it uploads (`POST /api/conversations/attachments`), and **Take off {name}**. The cost line adds "The files are counted in it." and its figures include them.
+  2. Each file shows as a chip above the box with its name and size (a picture shows itself), "Adding…" while it uploads (`POST /api/conversations/attachments`), and **Take off {name}**. The cost line adds "Files counted." and its figures include them; a file refused keeps its chip, in its error state, with the reason on it.
   3. Send. The files show with your message — pictures as thumbnails, other files as chips ("PDF, 3 pages", a size for text) — and each opens in a new tab. Whoever answers reads them first (in the demo: "I read **court-rules.md**. …").
 - **You know it worked when:** the files are on your message and the reply speaks to them.
 - **Variations and refusals:**

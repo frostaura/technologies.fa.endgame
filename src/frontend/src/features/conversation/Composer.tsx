@@ -77,6 +77,8 @@ export interface ComposerProps {
 
 /** The width from which the composer's tools are named under their icons; narrower, icons with their names in a tooltip. */
 const LABELLED_FROM = 400;
+/** The window height below which the tools are never named under their icons (`short:`). */
+const SHORT_FROM = 500;
 
 /**
  * The composer (ARCH-012): the box, the files going with it, and one toolbar that never changes form while someone
@@ -111,10 +113,12 @@ export function Composer(p: ComposerProps) {
   useLayoutEffect(() => {
     const el = form.current;
     if (!el) return;
-    const measure = (w: number) => setLabelled(w >= LABELLED_FROM);
+    // A phone on its side has no height for names under the icons: there the tools are icons, as on a narrow pane.
+    const measure = (w: number) => setLabelled(w >= LABELLED_FROM && (typeof window === "undefined" || window.innerHeight >= SHORT_FROM));
     measure(el.getBoundingClientRect().width || LABELLED_FROM);
     if (typeof ResizeObserver === "undefined") return;
-    const watch = new ResizeObserver((entries) => measure(entries[0]?.contentRect.width ?? LABELLED_FROM));
+    // The pane's width, edge to edge (its border box), not what is left inside the form's padding.
+    const watch = new ResizeObserver(() => measure(el.getBoundingClientRect().width));
     watch.observe(el);
     return () => watch.disconnect();
   }, []);
@@ -425,7 +429,7 @@ export function Composer(p: ComposerProps) {
         <span className="min-w-0 truncate">
           {p.estimate.kind === "loading" && "Working out what a message costs…"}
           {costShort}
-          {filesCounted && " The files are counted in it."}
+          {filesCounted && " Files counted."}
           {p.estimate.kind === "failed" && `What a message costs could not be worked out: ${p.estimate.reason} Its cost is still held before each step and shown with the reply.`}
         </span>
       </p>

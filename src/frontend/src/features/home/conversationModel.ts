@@ -74,8 +74,8 @@ export function messageCostLine(credits: number, ceiling: number | null): string
 export function messageCostShort(credits: number, ceiling: number | null): string {
   if (ceiling === null) return `A message here is estimated at ${approxCredits(credits)}.`;
   if (ceiling > 20 * Math.max(credits, 0.01)) {
-    const usual = credits < 1 ? "well under 1 credit" : `about ${formatCredits(credits)}`;
-    return `A message here usually costs ${usual}, never more than ${formatNumber(ceiling)}.`;
+    const usual = credits < 1 ? "under 1 credit" : `about ${formatCredits(credits)}`;
+    return `Usually ${usual} a message, never over ${formatNumber(ceiling)}.`;
   }
   const usual = credits < 0.1 ? "less than 0.1" : `about ${formatNumber(credits)}`;
   return `A message here costs at most ${formatCredits(ceiling)}, usually ${usual}.`;

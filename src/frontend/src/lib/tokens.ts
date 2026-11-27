@@ -253,6 +253,8 @@ export const layout = {
     popover: "24rem",
     /** An attachment chip's name before it is cut short. */
     chip: "11rem",
+    /** The same, waiting in the composer: short enough that two sit side by side in the docked pane. */
+    "chip-draft": "6.5rem",
     /** A picture sent in the thread, at its own shape, at its widest. */
     sent: "15rem",
   },

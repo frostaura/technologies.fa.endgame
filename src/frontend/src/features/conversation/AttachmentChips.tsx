@@ -20,7 +20,9 @@ export function DraftChips({ files, onRemove, imagesRefused = false }: { files: 
     <ul aria-label="Files to send" className="flex flex-wrap gap-2 px-3 pb-1 pt-3">
       {shown.map((f) => {
         const refused = f.state === "failed" || (imagesRefused && f.kind === "image");
-        const why = f.state === "failed" ? (f.problem ?? "Not added.") : refused ? "Can’t be read here" : null;
+        // The chip already names the file: its reason drops a leading "{name}: " or "{name} is …".
+        const reason = f.problem ? f.problem.replace(new RegExp(`^${f.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(:\\s*| is )`), (_, sep: string) => (sep.trim() === "is" ? "Is " : "")) : null;
+        const why = f.state === "failed" ? (reason ? reason.charAt(0).toUpperCase() + reason.slice(1) : "Not added.") : refused ? "Can’t be read here" : null;
         return (
           <li
             key={f.key}
@@ -33,18 +35,18 @@ export function DraftChips({ files, onRemove, imagesRefused = false }: { files: 
           >
             <Thumb preview={f.preview} kind={f.kind} uploading={f.state === "uploading"} failed={refused} />
             <span className="flex min-w-0 flex-col leading-tight">
-              <span className="max-w-chip truncate font-medium" title={f.name}>
+              <span className="max-w-chip-draft truncate font-medium" title={f.name}>
                 {f.name}
               </span>
               {why ? (
-                <span role={f.state === "failed" ? "alert" : undefined} className="max-w-chip truncate text-xs text-attention-text" title={why}>
+                <span role={f.state === "failed" ? "alert" : undefined} className="max-w-chip-draft truncate text-xs text-attention-text" title={f.problem ?? why}>
                   {why}
                 </span>
               ) : (
                 <span className="text-xs text-ink-muted">{f.state === "uploading" ? "Adding…" : formatBytes(f.bytes)}</span>
               )}
             </span>
-            <button type="button" onClick={() => onRemove(f.key)} aria-label={`Take off ${f.name}`} title={`Take off ${f.name}`} className="flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
+            <button type="button" onClick={() => onRemove(f.key)} aria-label={`Take off ${f.name}`} title={`Take off ${f.name}`} className="flex size-8 shrink-0 touch:min-h-touch touch:min-w-touch items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
               <X aria-hidden className="size-4" />
             </button>
           </li>
@@ -70,7 +72,7 @@ export function DraftChips({ files, onRemove, imagesRefused = false }: { files: 
 
 function Thumb({ preview, kind, uploading, failed }: { preview: string | null; kind: DraftFile["kind"]; uploading: boolean; failed: boolean }) {
   return (
-    <span className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xxs bg-ground">
+    <span className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-xxs bg-ground">
       {preview && kind === "image" ? <img src={preview} alt="" className="size-full object-cover" /> : failed ? <TriangleAlert aria-hidden className="size-4" /> : <FileText aria-hidden className="size-4 text-ink-muted" />}
       {uploading && (
         <span className="absolute inset-0 flex items-center justify-center bg-surface/70">

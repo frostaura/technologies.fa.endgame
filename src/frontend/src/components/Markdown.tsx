@@ -141,8 +141,18 @@ function inline(nodes: Inline[]): ReactNode {
         return <em key={i}>{inline(n.children)}</em>;
       case "code":
         return (
-          <code key={i} className="break-all rounded-xs border bg-surface px-1 py-0.5 font-mono text-sm">
-            {n.text}
+          // A path breaks only after a "/", never mid-word, with no space inside the box (real-stack 11).
+          <code key={i} className="whitespace-normal break-normal rounded-xs border bg-surface px-1 py-0.5 font-mono text-sm box-decoration-clone">
+            {n.text.split("/").map((part, j, all) => (
+              <Fragment key={j}>
+                {part}
+                {j < all.length - 1 && (
+                  <>
+                    /<wbr />
+                  </>
+                )}
+              </Fragment>
+            ))}
           </code>
         );
       case "link": {

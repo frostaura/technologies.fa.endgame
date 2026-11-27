@@ -385,8 +385,10 @@ export function deriveWork(events: readonly RunEvent[], mode: Mode = "normal"): 
   // Parts an earlier attempt built and checked, kept by this one (a try again): done before, and counted as done.
   for (const id of run.carried) {
     const part = parts.get(id);
-    if (part && (part.state === "waiting" || part.state === "passed") && part.tasks.length === 0) {
+    // Its task may be listed again by the try, but nobody takes it on: what was built before stands.
+    if (part && (part.state === "waiting" || part.state === "passed") && part.tasks.every((t) => t.status === "open")) {
       part.state = "carried";
+      part.tasks = [];
       part.outcome ??= "Built and checked in the earlier attempt; kept, not built or charged again.";
     }
   }

@@ -175,8 +175,8 @@ export function ConversationDock({ tree, selection, onRetarget }: { tree: Tree; 
         onDrop={onDrop}
         className="relative flex h-full min-h-0 flex-col"
       >
-        <PaneHeader selection={selection} name={name} inSheet={inSheet} onEmployeePage={onEmployeePage} busy={busy} onGo={go} />
-        <AlsoHappening busy={busy} />
+        <PaneHeader selection={selection} name={name} inSheet={inSheet} onEmployeePage={onEmployeePage} busy={busy} onGo={go} full={full} />
+        <AlsoHappening busy={busy} full={full} />
 
         <div ref={setThreadBox} className="relative flex min-h-0 flex-1 flex-col">
           <div
@@ -323,11 +323,11 @@ function scopeCrumbs(selection: Selection): { label: string; selection: Selectio
  * again — and, docked on a desktop, narrow or wide, full width, or collapsed. A window with little height (`low:`)
  * draws it as one line, with the work under way as a count beside it.
  */
-function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo }: { selection: Selection; name: string; inSheet: boolean; onEmployeePage: boolean; busy: Busy[]; onGo: (s: Selection) => void }) {
+function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo, full }: { selection: Selection; name: string; inSheet: boolean; onEmployeePage: boolean; busy: Busy[]; onGo: (s: Selection) => void; full: boolean }) {
   const dock = useDockLayout();
   const crumbs = scopeCrumbs(selection);
-  // The levels above this one; for an employee, every level of their place.
-  const above = selection.kind === "employee" ? crumbs : crumbs.slice(0, -1);
+  // The level just above this one (for an employee, their own place): one line, the full way up in its tooltip.
+  const above = (selection.kind === "employee" ? crumbs : crumbs.slice(0, -1)).slice(1).slice(-1);
   const narrowed = selection.kind !== "organisation";
   const home = crumbs[0];
   const hint =
@@ -339,16 +339,18 @@ function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo }: { 
           ? `Only ${name} hears this, and answers from its job and what it remembers.`
           : null;
   return (
-    <header className={cn("flex shrink-0 items-center gap-3 border-b px-4 py-3 low:py-1.5", inSheet && "pr-14")}>
+    <header className={cn("flex shrink-0 border-b px-4 py-3 low:py-1.5", inSheet && "pr-14")}>
+      {/* Full width: the header keeps to the conversation's own column, as the thread and the composer do. */}
+      <div className={cn("flex w-full min-w-0 items-center gap-3", full && "mx-auto max-w-prose")}>
       <Avatar name={name} seed={selection.employeeId ?? selection.scope} size="md" shape={selection.kind === "employee" ? "round" : "square"} className="low:hidden" />
-      <div className="flex min-w-0 flex-1 flex-col low:flex-row-reverse low:items-baseline low:justify-end low:gap-2">
-        <nav aria-label="What this conversation is about" className="flex min-w-0 items-center gap-1 text-xs text-ink-muted" data-level="">
-          <span className="shrink-0 text-eyebrow font-semibold uppercase">{LEVEL[selection.kind]}</span>
+      <div className="flex min-w-0 flex-1 flex-col low:flex-row low:items-center low:gap-2">
+        <nav aria-label="What this conversation is about" className="flex min-w-0 items-center gap-1 text-xs text-ink-muted low:order-last low:shrink-0" data-level="">
+          <span className="shrink-0 text-eyebrow font-semibold uppercase low:hidden">{LEVEL[selection.kind]}</span>
           {above.length > 0 && (
-            <ol className="flex min-w-0 items-center gap-1 truncate">
+            <ol className="flex min-w-0 items-center gap-1 truncate low:hidden">
               {above.map((c) => (
                 <li key={c.selection.scope} className="flex min-w-0 items-center gap-1">
-                  <span aria-hidden>·</span>
+                  <span aria-hidden>· in</span>
                   <button type="button" onClick={() => onGo(c.selection)} aria-label={`Back up to ${c.label}`} title={`Talk to ${c.label}`} className="min-w-0 truncate rounded-xs hover:text-ink hover:underline">
                     {c.label}
                   </button>
@@ -362,7 +364,7 @@ function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo }: { 
             </button>
           )}
         </nav>
-        <h2 className="truncate font-sans text-base font-semibold tracking-normal">Talking to {name}</h2>
+        <h2 className="truncate font-sans text-base font-semibold tracking-normal low:min-w-0 low:flex-1 low:text-sm">Talking to {name}</h2>
         {hint && <span className="truncate text-xs text-ink-muted low:hidden" title={hint}>{hint}</span>}
       </div>
       {busy.length > 0 && <BusyCount busy={busy} />}
@@ -388,6 +390,7 @@ function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo }: { 
           </HeaderButton>
         )}
       </div>
+      </div>
     </header>
   );
 }
@@ -405,9 +408,9 @@ function BusyCount({ busy }: { busy: Busy[] }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative hidden shrink-0 low:block">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch items-center gap-1.5 rounded-full px-2 text-xs font-semibold text-ink-muted hover:bg-ground hover:text-ink">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={`${busy.length} at work here`} title={`${busy.length} at work here`} className="flex min-h-touch items-center gap-1.5 rounded-full px-2 text-xs font-semibold text-ink-muted hover:bg-ground hover:text-ink">
         <TypingDots />
-        {busy.length} at work
+        {busy.length}
       </button>
       {open && (
         <ul className="absolute right-0 top-full z-30 mt-1 flex w-popover max-w-popover flex-col gap-1.5 rounded-md border bg-surface p-3 text-sm text-ink-body shadow-raised">
@@ -428,13 +431,13 @@ function BusyCount({ busy }: { busy: Busy[] }) {
  * in the thread: the first line shown, the rest one tap away, every row with the same dot. Folded into the header's
  * count on a low window.
  */
-function AlsoHappening({ busy }: { busy: Busy[] }) {
+function AlsoHappening({ busy, full }: { busy: Busy[]; full: boolean }) {
   const [open, setOpen] = useState(false);
   const first = busy[0];
   if (!first) return null;
   return (
     <div data-also-happening="" className="relative z-10 shrink-0 border-b bg-ground px-4 text-sm text-ink-muted shadow-card low:hidden">
-      <ul className="flex flex-col pb-0.5">
+      <ul className={cn("flex flex-col pb-0.5", full && "mx-auto max-w-prose")}>
         {(open ? busy : [first]).map((w, i) => (
           <li key={w.id} className="flex min-h-touch items-center gap-2.5">
             <span aria-hidden className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />

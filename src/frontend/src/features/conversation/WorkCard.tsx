@@ -3,7 +3,7 @@ import { ArrowUpRight, Check, ChevronDown, Clock, Eye, History, RotateCcw, Shiel
 import { Avatar } from "@/components/Avatar";
 import { Chip, PersonChip } from "@/components/ui/chip";
 import { useActiveTree } from "@/lib/useActiveOrganisation";
-import { fullRequest, shortRunName } from "../runs/runHeading";
+import { curlyQuotes, fullRequest, shortRunName } from "../runs/runHeading";
 import { employeeIds } from "./scopeModel";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -450,9 +450,20 @@ function PartBody({ part, technical }: { part: WorkPart; technical: boolean }) {
 // ---------------------------------------------------------------------------------------------
 
 /** What a researcher is doing, in the present tense while it works: "Looking for existing products". */
+const PRESENT: [RegExp, string][] = [
+  [/^looked\b/i, "Looking"],
+  [/^checked\b/i, "Checking"],
+  [/^searched\b/i, "Searching"],
+  [/^found\b/i, "Finding"],
+  [/^read\b/i, "Reading"],
+  [/^compared\b/i, "Comparing"],
+  [/^asked\b/i, "Asking"],
+];
+
 function lookingFor(title: string): string {
   const t = title.trim();
-  if (/^(looking|finding|searching|checking|reading)\b/i.test(t)) return t;
+  for (const [past, now] of PRESENT) if (past.test(t)) return t.replace(past, now);
+  if (/^[a-z]+ing\b/i.test(t)) return t;
   return `Looking for ${t.charAt(0).toLowerCase()}${t.slice(1)}`;
 }
 
@@ -503,7 +514,8 @@ function Researchers({ researchers, stacked }: { researchers: Researcher[]; stac
  */
 function Outcome({ work, runId, status, research, spent, estimate }: { work: WorkView; runId: string; status: RunStatus | null; research: boolean; spent: number; estimate: number | null }) {
   const run = useGetRunQuery(runId).data;
-  const outcome = work.run.finishedSummary ?? run?.summary ?? null;
+  const said = work.run.finishedSummary ?? run?.summary ?? null;
+  const outcome = said ? curlyQuotes(said) : null;
   const failed = status === "failed" || status === "cancelled";
   const appId = status === "finished" ? (work.run.app?.id ?? null) : null;
   let primary: ReactNode = null;
