@@ -27,12 +27,6 @@
     },
     {
       "flow": "NOTE-02",
-      "step": 2,
-      "size": "phone",
-      "reason": "The bell's dropdown is a laptop's: a phone's Alerts in the bottom bar opens the notifications page itself, as NOTE-03 teaches."
-    },
-    {
-      "flow": "NOTE-02",
       "step": 3,
       "size": "phone",
       "reason": "The bell's dropdown is a laptop's: a phone's Alerts in the bottom bar opens the notifications page itself, as NOTE-03 teaches."
@@ -72,6 +66,12 @@
       "step": 3,
       "size": "phone",
       "reason": "On a phone the working chip reads “3 contractors · researching”, so the words “contractor” only begin a word there; the laptop's chip is the word itself."
+    },
+    {
+      "flow": "CRED-02",
+      "step": 2,
+      "size": "phone",
+      "reason": "On a phone a level with no cap of its own shows only its spending; the meter of the cap above that holds it is drawn on a laptop's wider row."
     }
   ]
 }

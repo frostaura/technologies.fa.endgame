@@ -222,14 +222,19 @@ const MODAL = "[role=dialog], [role=alertdialog], dialog[open], [aria-modal=true
  * ring steps aside, so it never draws over the dialog's own words.
  */
 function covered(el: HTMLElement): boolean {
+  return coveringLayer(el) !== null;
+}
+
+/** The dialog, sheet or device prompt standing over an element, if one is. */
+export function coveringLayer(el: HTMLElement): HTMLElement | null {
   const r = el.getBoundingClientRect();
   const doc = el.ownerDocument;
   const x = Math.min(Math.max(r.left + r.width / 2, 0), (doc.defaultView?.innerWidth ?? 1) - 1);
   const y = Math.min(Math.max(r.top + r.height / 2, 0), (doc.defaultView?.innerHeight ?? 1) - 1);
   const hit = doc.elementFromPoint(x, y);
-  if (!hit || hit === el || el.contains(hit) || hit.contains(el)) return false;
-  const over = hit.closest(MODAL);
-  return !!over && !over.contains(el);
+  if (!hit || hit === el || el.contains(hit) || hit.contains(el)) return null;
+  const over = hit.closest<HTMLElement>(MODAL);
+  return over && !over.contains(el) ? over : null;
 }
 
 function hide() {

@@ -29,7 +29,8 @@
         }
       ],
       "highlight": {
-        "text": "Asking…",
+        "selector": "section[aria-label=\"Asking about this app\"]",
+        "region": true,
         "note": "Asking: a model writes one read-only query."
       }
     },

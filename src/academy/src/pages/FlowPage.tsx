@@ -659,7 +659,7 @@ function Finish({ flow: f, entry, celebrate, next, sectionRef }: { flow: Flow; e
       )}
       <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3" data-print="hide">
         {/* The step bar's Next stays the one filled action: here the next flow is a link that wraps, never cut. */}
-        {celebrate && next && (
+        {next && (
           <a href={href(`/flow/${next.flow.id}`)} className={`${ui.textLink} min-w-0 py-2 text-base`}>
             Next: {next.flow.id} {next.flow.title} →
           </a>

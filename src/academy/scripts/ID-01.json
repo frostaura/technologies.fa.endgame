@@ -55,7 +55,7 @@
         }
       ],
       "highlight": {
-        "text": "Waiting for your device…",
+        "text": "Create a passkey for endgame.example?",
         "note": "The code field stays empty: only the very first person may register without one."
       }
     },
@@ -63,7 +63,7 @@
       "step": 4,
       "kind": "demo",
       "highlight": {
-        "text": "Waiting for your device…",
+        "text": "Create a passkey for endgame.example?",
         "note": "The server checks this really is a fresh install before it sends passkey options."
       }
     },

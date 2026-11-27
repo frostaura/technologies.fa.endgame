@@ -82,7 +82,7 @@
             }
           ],
           "highlight": {
-            "selector": "nav[aria-label='Every part of the organisation'] button[aria-current='true']",
+            "selector": "nav[aria-label='Every part of the organisation'] button[aria-current='true'], section[aria-label^='Division: ']",
             "note": "A new division is added on Manage (TREE-02)."
           }
         },

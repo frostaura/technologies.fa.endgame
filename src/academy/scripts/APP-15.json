@@ -16,7 +16,7 @@
         }
       ],
       "highlight": {
-        "text": "Building its newest version again",
+        "text": "Rebuild and restart",
         "note": "Its newest version is built again and started."
       }
     },

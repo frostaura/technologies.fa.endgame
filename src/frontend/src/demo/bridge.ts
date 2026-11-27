@@ -4,7 +4,7 @@ import { approveWhileWaiting, deviceAsking } from "./device";
 import { currentAddress } from "@/lib/router";
 import { breakpoints } from "@/lib/tokens";
 import { currentViewport } from "@/lib/useViewport";
-import { clearSpotlight, clipFor, forgetSteps, moveCursor, pageRect, ringState, showSpotlight, subjectOf } from "./overlay";
+import { clearSpotlight, clipFor, coveringLayer, forgetSteps, moveCursor, pageRect, ringState, showSpotlight, subjectOf } from "./overlay";
 import { snapScroll } from "./placement";
 
 /**
@@ -325,8 +325,14 @@ async function closeOpenedSheet() {
 /** Opens each sheet in turn and finds what the words name outright in it; closes it again when it holds nothing. */
 async function lookInSheets(target: Target | string, field: boolean, show: boolean): Promise<HTMLElement | null> {
   const open = () => [...document.querySelectorAll<HTMLElement>("[role=dialog]")].filter(visible);
-  // A sheet already open (the conversation) holds what the step is about: nothing is opened over it.
-  if (open().length) return null;
+  // A prompt that asks something (the device, a confirmation) is never closed to look elsewhere; a
+  // sheet (the conversation, More) is, as a person closes it to reach the page.
+  for (const sheet of open()) {
+    const close = sheet.querySelector<HTMLElement>("[aria-label^='Close: ']");
+    if (!close) return null;
+    close.click();
+    await sleep(instantNow ? 120 : 300);
+  }
   for (const selector of SHEETS) {
     const opener = [...document.querySelectorAll<HTMLElement>(selector)].find(visible);
     if (!opener) continue;
@@ -671,6 +677,15 @@ export const endgameDemo = {
     if (!el) {
       clearSpotlight();
       return false;
+    }
+    // On a phone, a page's conversation or More is a sheet over it: a step about the page closes the
+    // sheet first (its own "Close: …"), as the laptop's docked pane never hides the page. A prompt
+    // that asks something (the device, a confirmation) is never closed for it.
+    const layer = coveringLayer(el);
+    const close = layer?.querySelector<HTMLElement>("[aria-label^='Close: ']");
+    if (close) {
+      close.click();
+      await sleep(300);
     }
     const subject = subjectOf(el, !!args.region);
     reveal(el, !reduced(), subject);

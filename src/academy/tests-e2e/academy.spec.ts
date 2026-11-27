@@ -150,7 +150,7 @@ test("the academy works from the keyboard alone", async ({ page }) => {
   }
   expect(found).toBe(true);
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: /Done/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Mark as not done" })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("progress is remembered, and the cover offers to resume", async ({ page }) => {
@@ -648,22 +648,27 @@ test("nothing is written over the console: the ring carries the step's number, t
   for (const viewport of [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
     const context = await browser.newContext({ viewport, isMobile: viewport.width < 640, hasTouch: viewport.width < 640 });
     const page = await context.newPage();
+    // One flow, a console step, a request step and a console step again: one frame size throughout.
     let size: string | null = null;
-    for (const address of ["./#/flow/ORG-08/step/1", "./#/flow/IDEA-02/step/1", "./#/flow/CRED-01/step/2", "./#/flow/ORG-01/step/2"]) {
-      await page.goto(address);
-      const frame = page.frameLocator("[data-testid=demo-frame]");
+    for (const n of [1, 2, 3]) {
+      await page.goto(`./#/flow/ORG-01/step/${n}`);
+      await expect(page.getByTestId("frame")).toBeVisible();
+      await page.waitForTimeout(400);
       const fb = await page.getByTestId("frame").boundingBox();
-      // One size for the frame, whatever the step shows (a console or a request).
       const now = `${Math.round(fb?.width ?? 0)}×${Math.round(fb?.height ?? 0)}`;
       size ??= now;
-      expect(now, `${address} at ${viewport.width}`).toBe(size);
+      expect(now, `ORG-01 step ${n} at ${viewport.width}`).toBe(size);
       const strip = await page.getByTestId("caption-strip").boundingBox();
-      expect(strip && fb && strip.y >= fb.y + fb.height, `${address}: the caption is under the frame`).toBe(true);
-      if (address.endsWith("ORG-01/step/2")) continue;
+      expect(strip && fb && strip.y >= fb.y + fb.height, `ORG-01 step ${n}: the caption is under the frame`).toBe(true);
+    }
+    for (const address of ["./#/flow/ORG-08/step/1", "./#/flow/IDEA-02/step/1", "./#/flow/CRED-01/step/2"]) {
+      await page.goto(address);
+      const frame = page.frameLocator("[data-testid=demo-frame]");
       await expect(frame.locator("[data-demo-marker]")).toBeVisible({ timeout: 20_000 });
       await expect(frame.locator("[data-demo-note]")).toHaveCount(0);
-      const number = (await frame.locator("[data-demo-marker]").textContent())?.trim();
-      expect(number).toBe(address.split("/").at(-1));
+      expect((await frame.locator("[data-demo-marker]").textContent())?.trim()).toBe(address.split("/").at(-1));
+      const [fb, strip] = [await page.getByTestId("frame").boundingBox(), await page.getByTestId("caption-strip").boundingBox()];
+      expect(strip && fb && strip.y >= fb.y + fb.height, `${address}: the caption is under the frame`).toBe(true);
     }
     await context.close();
   }
