@@ -683,3 +683,46 @@ describe("each hosted app's own page", () => {
     expect(screen.getByTestId("new-book").textContent).toBe("Add a book");
   });
 });
+
+// The kit changed (src/appkit/sdk-web/src/ui/layout.tsx and form.tsx); the demo's hosted apps show what a built app does.
+describe("the hosted apps carry the kit's header and form errors", () => {
+  afterEach(cleanup);
+
+  it("has the kit's header: the name linking home, its places, and an account button that opens name, e-mail and Sign out", () => {
+    render(<HostedAppView ctx={context({ app: { id: "app-reading-header" }, visitor: V.member, rest: "books/new" })} />);
+    const header = must(document.querySelector("[data-slot=app-header]"));
+    expect(header.querySelector("[data-testid=nav-home] .truncate")?.textContent).toBe(APP.name);
+    const places = screen.getByRole("navigation", { name: "Main" });
+    expect([...places.querySelectorAll("a")].map((a) => a.textContent)).toEqual(["Books", "Add a book"]);
+    expect(places.querySelector("[aria-current=page]")?.textContent).toBe("Add a book");
+    // The places run on one line that scrolls sideways (a phone's second row), never wrapping.
+    expect(places.className).toContain("flex-nowrap");
+    expect(places.className).toContain("overflow-x-auto");
+    const menu = screen.getByTestId("user-menu");
+    expect(menu.className).toContain("hidden");
+    fireEvent.click(screen.getByRole("button", { name: "Your account" }));
+    expect(menu.className).not.toContain("hidden");
+    expect(menu.textContent).toContain("Amara Okafor");
+    expect(menu.textContent).toContain("amara.okafor@bookclub.example");
+    expect(menu.querySelector("a")?.textContent).toBe("Sign out");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(menu.className).toContain("hidden");
+    // A lesson that names "Sign out" on a phone opens the menu, as the demo's folds do.
+    act(() => void menu.dispatchEvent(new CustomEvent("endgame:reveal", { bubbles: true })));
+    expect(menu.className).not.toContain("hidden");
+  });
+
+  it("clears a field's error as soon as it changes, and puts the focus on the first wrong field on a failed submit", async () => {
+    render(<HostedAppView ctx={context({ app: { id: "app-reading-form" }, visitor: V.member, rest: "books/new" })} />);
+    fireEvent.click(screen.getByTestId("save-book"));
+    expect(screen.getByText("Give the book's title.")).toBeTruthy();
+    expect(screen.getByText("Give the author's name.")).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("book-title")));
+    fireEvent.change(screen.getByTestId("book-title"), { target: { value: "Middlemarch" } });
+    expect(screen.queryByText("Give the book's title.")).toBeNull();
+    expect(screen.getByText("Give the author's name.")).toBeTruthy();
+    expect(screen.getByTestId("book-title").getAttribute("aria-invalid")).toBeNull();
+    fireEvent.click(screen.getByTestId("save-book"));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("book-author")));
+  });
+});

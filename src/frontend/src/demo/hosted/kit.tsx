@@ -1,11 +1,12 @@
 /**
  * The app kit's primitives (`src/appkit/sdk-web/src/ui/*`), reproduced for the reading-list app.
  * The kit's package is not importable into the console's build (it ships from its own `dist`), so
- * these carry the kit's class strings unchanged; the kit's role names are a subset of the console's,
+ * these carry the kit's class strings unchanged (the header's from `ui/layout.tsx`, a form's errors from `ui/form.tsx`); the kit's role names are a subset of the console's,
  * with the same values, so an app built on the kit and this one look the same.
  */
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { AVATAR, initial } from "./kitParts";
 
 const BUTTON_BASE =
   "inline-flex items-center justify-center gap-2 rounded-sm text-sm font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50";
@@ -273,6 +274,79 @@ export function FailedState({
         {title}
       </p>
       <p className="text-sm text-ink">{message}</p>
+    </div>
+  );
+}
+
+/** The kit's phone account menu (`ui/layout.tsx`); its class strings are in `kitParts.ts`. */
+/**
+ * The phone's account button (`AccountMenu`): the avatar, a 44px button, opening who is signed in — name and e-mail — and
+ * "Sign out". Escape or a tap outside closes it. Unlike the kit, the closed menu stays in the page (hidden) and answers the
+ * demo's `endgame:reveal`, so a lesson that says "Sign out" opens it on a phone as a person would.
+ */
+export function AccountMenu({ name, email, signOut }: { name: string; email: string; signOut: React.ReactElement }) {
+  const [open, setOpen] = React.useState(false);
+  const button = React.useRef<HTMLButtonElement>(null);
+  const panel = React.useRef<HTMLDivElement>(null);
+  const id = React.useId();
+
+  React.useEffect(() => {
+    const el = panel.current;
+    if (!el) return;
+    const reveal = () => setOpen(true);
+    el.addEventListener("endgame:reveal", reveal);
+    return () => el.removeEventListener("endgame:reveal", reveal);
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      button.current?.focus();
+    };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && !panel.current?.contains(target) && !button.current?.contains(target)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [open]);
+
+  return (
+    <div className="sm:hidden">
+      <button
+        ref={button}
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((now) => !now)}
+        className="flex size-11 items-center justify-center rounded-full hover:bg-ground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        data-testid="account-button"
+      >
+        <span aria-hidden className={cn(AVATAR, "size-9")}>
+          {initial(name)}
+        </span>
+        <span className="sr-only">Your account</span>
+      </button>
+      <div
+        id={id}
+        ref={panel}
+        hidden={!open}
+        data-fold-body=""
+        data-testid="user-menu"
+        className={cn("absolute right-0 top-full z-30 mt-2 w-64 flex-col gap-1 rounded-md border bg-surface p-2 shadow-raised", open ? "flex" : "hidden")}
+      >
+        <div className="flex min-w-0 flex-col border-b px-3 pb-3 pt-2">
+          <span className="truncate font-semibold text-ink">{name}</span>
+          {email && email !== name ? <span className="truncate text-ink-muted">{email}</span> : null}
+        </div>
+        {signOut}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { authRest } from "./gate";
-import { KitLink, NotFoundState } from "./kit";
+import { cn } from "@/lib/utils";
+import { AccountMenu, KitLink, NotFoundState } from "./kit";
+import { AVATAR, HEADER_ROW, HOME_LINK, initial, MENU_ROW, NAV, navItemClass, PAGE_FRAME } from "./kitParts";
 import type { Person } from "./readingList";
 
 /** What every hosted app's page is given: who is signed in, where it is, and how to move. */
@@ -18,40 +20,59 @@ export interface AppPageProps {
   navigate(rest: string): void;
 }
 
-/** The kit's `PAGE_FRAME`: the header and the page share one width, so their edges line up. */
-const PAGE_FRAME = "mx-auto w-full max-w-page px-4 sm:px-6 lg:px-8";
+/** A place in the app's navigation: its words and the path inside the app it opens. */
+export interface Place {
+  label: string;
+  rest: string;
+}
 
 /**
- * The chrome every app built on the kit's template has — the kit's `AppHeader` and `AppMain`: its name, linking home, and
- * the current user (initial, name) with "Sign out" — or "Sign in" for an anonymous visitor — above the app's own page.
+ * The chrome every app built on the kit's template has — the kit's `AppHeader` and `AppMain`: its name, linking home, the
+ * places to go (when it has more than one), and the current user with "Sign out" — or "Sign in" for an anonymous visitor —
+ * above the app's own page. On a phone the header is two compact rows: the name and a 44px avatar button that opens the
+ * person's name, e-mail and "Sign out"; then the places, on one line that scrolls sideways.
  */
 export function HostedAppShell({
   testId,
   page,
+  places,
   children,
   ...props
-}: AppPageProps & { testId: string; page: string; children: ReactNode }) {
+}: AppPageProps & { testId: string; page: string; places?: Place[]; children: ReactNode }) {
+  const here = props.rest.replace(/^\/+|\/+$/g, "").split("?")[0] ?? "";
   return (
     <div
       className="flex flex-1 flex-col bg-ground font-sans text-ink"
       data-testid={testId}
       data-page={page}
     >
-      <header className="border-b bg-surface">
-        <div
-          className={`${PAGE_FRAME} flex min-h-16 flex-wrap items-center gap-x-6 gap-y-1 py-2`}
-        >
-          <nav aria-label="Main" className="min-w-0 shrink">
-            <KitLink
-              plain
-              href={props.addressOf("")}
-              onFollow={() => props.navigate("")}
-              data-testid="nav-home"
-              className="flex min-h-11 items-center truncate font-display text-lg font-semibold text-ink hover:text-primary"
-            >
-              {props.appName}
-            </KitLink>
-          </nav>
+      <header className="sticky top-0 z-20 border-b bg-surface" data-slot="app-header">
+        <div className={cn(PAGE_FRAME, HEADER_ROW)}>
+          <KitLink
+            plain
+            href={props.addressOf("")}
+            onFollow={() => props.navigate("")}
+            data-testid="nav-home"
+            className={HOME_LINK}
+          >
+            <span className="truncate">{props.appName}</span>
+          </KitLink>
+          {places && places.length > 1 ? (
+            <nav aria-label="Main" className={NAV}>
+              {places.map((place) => (
+                <KitLink
+                  key={place.rest}
+                  plain
+                  href={props.addressOf(place.rest)}
+                  onFollow={() => props.navigate(place.rest)}
+                  aria-current={here === place.rest ? "page" : undefined}
+                  className={navItemClass(here === place.rest)}
+                >
+                  {place.label}
+                </KitLink>
+              ))}
+            </nav>
+          ) : null}
           <div className="ml-auto flex shrink-0 items-center">
             <UserMenu {...props} />
           </div>
@@ -79,28 +100,36 @@ function UserMenu({ me, here, addressOf, navigate }: AppPageProps) {
     );
   }
   const signOut = authRest("sign-out");
+  const name = me.displayName || me.id;
   return (
-    <div className="flex min-w-0 items-center gap-3 text-sm">
-      <span
-        aria-hidden
-        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-tint font-semibold text-primary-hover"
-      >
-        {me.displayName.trim().charAt(0).toUpperCase() || "?"}
+    <div className="relative flex min-w-0 items-center gap-3 text-sm">
+      <span aria-hidden className={cn(AVATAR, "max-sm:hidden")}>
+        {initial(name)}
       </span>
       <span
         className="max-w-48 truncate font-medium text-ink max-sm:sr-only"
         data-testid="signed-in-as"
       >
-        {me.displayName}
+        {name}
       </span>
       <KitLink
         variant="outline"
         size="sm"
+        className="max-sm:hidden"
         href={addressOf(signOut)}
         onFollow={() => navigate(signOut)}
       >
         Sign out
       </KitLink>
+      <AccountMenu
+        name={name}
+        email={me.id}
+        signOut={
+          <KitLink plain className={MENU_ROW} href={addressOf(signOut)} onFollow={() => navigate(signOut)}>
+            Sign out
+          </KitLink>
+        }
+      />
     </div>
   );
 }
