@@ -332,7 +332,10 @@ async function lookInSheets(target: Target | string, field: boolean, show: boole
     if (!opener) continue;
     opener.click();
     await sleep(instantNow ? 120 : 350);
-    const found = find(target, field, true, show, true);
+    // What the words name outright; else, inside the sheet just opened only, a control they begin or hold.
+    const sheet = open().at(-1);
+    const near = find(target, field, true, show, false);
+    const found = find(target, field, true, show, true) ?? (sheet && near && sheet.contains(near) ? near : null);
     if (found) {
       openedSheet = found.closest<HTMLElement>("[role=dialog]");
       return found;

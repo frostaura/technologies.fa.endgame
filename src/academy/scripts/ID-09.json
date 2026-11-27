@@ -38,7 +38,7 @@
         }
       ],
       "highlight": {
-        "selector": "header select",
+        "selector": "header select, [data-bottom-nav] [aria-label^='More']",
         "note": "Quayside Bakery's org chart opens; every screen now reads it, and this device remembers the choice."
       }
     }

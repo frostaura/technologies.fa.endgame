@@ -96,7 +96,7 @@
           "step": 1,
           "kind": "demo",
           "highlight": {
-            "selector": "nav[aria-label='Manage']",
+            "selector": "nav[aria-label='Manage'], [data-bottom-nav] [aria-label^='More']",
             "note": "Lena is a Builder: Manage, Autonomy, Hiring, Ideas and AI assistants, nothing more."
           }
         }

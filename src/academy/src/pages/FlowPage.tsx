@@ -553,9 +553,12 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
 /** Who can do it, where it starts, what it needs, the flow's own introduction, and where it comes from. */
 function AboutFlow({ flow: f }: { flow: Flow }) {
   const rows: [string, ReactNode][] = [];
+  // A flow with nothing to say about itself here (no who, no start, no introduction) shows no empty card.
+  const empty = !f.who && !f.startsAt && !f.needs && !f.whatYouLearn && f.intro.length === 0 && !f.where;
   if (f.who) rows.push(["Who can do it", <><Inline text={f.who} self={f.id} />{f.roles.length > 0 && <span className="text-ink-muted"> · {f.roles.map((r) => ROLE_LABEL[r]).join(", ")}</span>}</>]);
   if (f.startsAt) rows.push(["Starts at", <Inline text={f.startsAt} self={f.id} />]);
   if (f.needs) rows.push(["Needs", <Inline text={f.needs} self={f.id} />]);
+  if (empty) return null;
   return (
     <section aria-labelledby="about-flow" className="rounded-lg border bg-surface p-5">
       <h2 id="about-flow" className="font-display text-lg font-semibold text-ink">About this flow</h2>
@@ -688,7 +691,7 @@ function Variations({ flow: f, branches, playing, onShow }: { flow: Flow; branch
           <span className="font-display text-lg font-semibold text-ink">What else can happen</span>
           <span className="text-sm text-ink-muted group-open:hidden">Refusals, limits and other branches</span>
         </summary>
-        <div className="border-t px-5 pb-5 pt-2 text-sm">
+        <div className="border-t px-5 pb-5 pt-2 text-sm [&>p:first-child]:first-letter:uppercase">
           {branches.length > 0 && onShow && (
             <div className="mb-4 mt-3" data-print="hide">
               <p className="text-eyebrow font-semibold uppercase text-ink-muted">Watch it in the live console</p>

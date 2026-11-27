@@ -154,7 +154,12 @@ function bars(el: Element): { top: number; bottom: number } {
   }
   const header = document.querySelector<HTMLElement>("body > div header, header");
   const nav = document.querySelector<HTMLElement>("[data-bottom-nav]");
-  if (header && !header.contains(el) && /sticky|fixed/.test(getComputedStyle(header).position)) top = Math.max(top, header.getBoundingClientRect().bottom);
+  // A header stands over the page only once it is stuck at the top: above it (a God-mode band at
+  // the page's top, before any scroll) the page is still seen.
+  if (header && !header.contains(el) && /sticky|fixed/.test(getComputedStyle(header).position)) {
+    const h = header.getBoundingClientRect();
+    if (h.top <= 1) top = Math.max(top, h.bottom);
+  }
   if (nav && !nav.contains(el)) {
     const r = nav.getBoundingClientRect();
     if (r.height > 0) bottom = Math.min(bottom, r.top);

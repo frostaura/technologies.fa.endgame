@@ -165,7 +165,15 @@ for (const { script, variation, name } of plays) {
         counted.steps += 1;
         const state = (await call("state")) as { route: string };
         here[step.step] = state.route;
-        const ring = (await call("ring")) as RingState;
+        // The ring as the learner sees it a moment later: drawn and still (two reads 150 ms apart agree; at most 2 s).
+        let ring = (await call("ring")) as RingState;
+        for (let i = 0; i < 13 && !step.highlight?.none; i++) {
+          await page.waitForTimeout(150);
+          const again = (await call("ring")) as RingState;
+          const still = again.shown && ring.shown && near(again.visible, ring.visible, 1);
+          ring = again;
+          if (still) break;
+        }
         const note = step.highlight?.note ?? step.note;
         if (!failed && !step.highlight?.none) {
           const view: Box = { left: 0, top: 0, right: size.width, bottom: size.height };
@@ -192,7 +200,9 @@ for (const { script, variation, name } of plays) {
     if (routes.laptop && routes.phone) {
       for (const step of demoSteps) {
         counted.routes += 1;
-        const [a, b] = [routes.laptop[step.step], routes.phone[step.step]];
+        // A record made during the lesson (a run started again) has a new id on each play: the screen is what is compared.
+        const screen = (r: string | undefined) => (r ?? "").replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "{id}");
+        const [a, b] = [screen(routes.laptop[step.step]), screen(routes.phone[step.step])];
         if (a !== b && !allowed(script.flow, step.step, "phone", variation)) failures.push(`${script.flow}${variation ? ` variation ${variation}` : ""} step ${step.step}: the laptop ends at ${a}, the phone at ${b}`);
       }
     }
