@@ -77,6 +77,28 @@ export function toolLabel(tool: string, mode: Mode): string {
 /** The tools offered for choosing in a job and in rules; the others come with the work an agent is given. */
 export const KNOWN_TOOLS: readonly string[] = ["read_file", "list_files", "search", "web_search", "edit_file", "write_file", "run", "git_diff", "notes", "spawn"];
 
+/**
+ * The tools grouped as a person thinks of them, for laying a job's choices out under headings. A
+ * tool in no group (one the console does not name, kept on an existing job) goes under "Other".
+ */
+export const TOOL_GROUPS: readonly { title: string; tools: readonly string[] }[] = [
+  { title: "Reading", tools: ["read_file", "list_files", "search", "web_search", "read_page"] },
+  { title: "Changing the work", tools: ["edit_file", "write_file", "run", "git_diff", "commit", "git_commit", "check_preview"] },
+  { title: "Keeping track and others", tools: ["notes", "remember", "tasks", "spawn", "brief_contractor", "load_skill"] },
+];
+
+/** The tools on offer, under their group's heading, in the groups' order; the unknown last, under "Other". */
+export function groupedTools(tools: readonly string[]): { title: string; tools: string[] }[] {
+  const placed = new Set<string>();
+  const groups = TOOL_GROUPS.map((g) => {
+    const mine = g.tools.filter((t) => tools.some((x) => x.replace(/\(.*\)$/, "") === t)).flatMap((t) => tools.filter((x) => x.replace(/\(.*\)$/, "") === t));
+    mine.forEach((t) => placed.add(t));
+    return { title: g.title, tools: mine };
+  });
+  const other = tools.filter((t) => !placed.has(t));
+  return [...groups, { title: "Other", tools: other }].filter((g) => g.tools.length > 0);
+}
+
 const SERVICES: Record<string, string> = {
   identity: "Sign-in",
   models: "AI inside apps",
@@ -98,6 +120,43 @@ export const STATUS: Record<EmployeeStatus, { label: string; tone: BadgeTone }> 
   paused: { label: "Paused", tone: "warn" },
   released: { label: "Let go", tone: "neutral" },
 };
+
+/**
+ * One status vocabulary for a piece of work on an employee's record, whether a task it took or a run
+ * it led (ARCH-011): a cancelled piece of work is "Cancelled", never "Finished".
+ */
+export const WORK_STATUS: Record<string, { label: string; tone: BadgeTone; ended: boolean }> = {
+  todo: { label: "To do", tone: "neutral", ended: false },
+  queued: { label: "Waiting to start", tone: "neutral", ended: false },
+  blocked: { label: "Waiting to start", tone: "neutral", ended: false },
+  in_progress: { label: "In progress", tone: "info", ended: false },
+  running: { label: "In progress", tone: "info", ended: false },
+  waiting_approval: { label: "Waiting for you", tone: "warn", ended: false },
+  waiting: { label: "Waiting for you", tone: "warn", ended: false },
+  paused: { label: "Paused", tone: "warn", ended: false },
+  done: { label: "Done", tone: "good", ended: true },
+  finished: { label: "Done", tone: "good", ended: true },
+  succeeded: { label: "Done", tone: "good", ended: true },
+  failed: { label: "Did not succeed", tone: "bad", ended: true },
+  cancelled: { label: "Cancelled", tone: "neutral", ended: true },
+};
+
+/** A piece of work's status, said in the one vocabulary; an unknown one as itself, neutral. */
+export function workStatus(status: string): { label: string; tone: BadgeTone; ended: boolean } {
+  return WORK_STATUS[status] ?? { label: status.replace(/_/g, " "), tone: "neutral", ended: false };
+}
+
+/**
+ * The words that tell people with the same name apart in a list: "Nadia · QA engineer", and where
+ * each works when two share a name and a role ("Nadia · QA engineer, Dive Trip Ready"). Two different
+ * people are never told apart by their avatar's colour alone.
+ */
+export function personLabels<T extends { id: string; name: string; role: string; scope: string }>(people: readonly T[], tree: Tree | undefined): Map<string, string> {
+  const key = (p: T) => `${p.name.trim().toLowerCase()}|${p.role.trim().toLowerCase()}`;
+  const count = new Map<string, number>();
+  for (const p of people) count.set(key(p), (count.get(key(p)) ?? 0) + 1);
+  return new Map(people.map((p) => [p.id, `${p.name} · ${p.role}${(count.get(key(p)) ?? 0) > 1 ? `, ${scopeName(tree, p.scope)}` : ""}`]));
+}
 
 export const TRIGGER: Record<HireTrigger, string> = {
   division: "A new division needs someone",
