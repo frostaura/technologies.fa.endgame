@@ -24,10 +24,10 @@ import { useMasonry } from "./masonry";
 import { activityLine, appChips, appNote, contractorsLabel, progressLine, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
 
 /**
- * The chart's geometry. A division column is never narrower than 20 rem, a tablet still takes two, and the
+ * The chart's geometry. A division column is never narrower than 20 rem on a tablet (so it still takes two) nor 24 rem on a desktop (so a card's figures and names keep their room), and the
  * chart takes as many columns as its width holds, up to four.
  */
-const COLUMN = { min: 320, gap: 24, max: 4 } as const;
+const COLUMN = { min: 384, tablet: 320, gap: 24, max: 4 } as const;
 /** How many of a division's projects the chart shows before "Show all". */
 const PROJECTS_SHOWN = 6;
 
@@ -93,8 +93,8 @@ export function OrgChart({ tree, selection, onSelect }: Props) {
 
 /** Divisions as columns: each stacks under whichever column is shortest, so no column leaves a hole and none runs on alone. */
 function Masonry({ divisions, draw }: { divisions: TreeDivision[]; draw: (d: TreeDivision, i: number) => ReactNode }) {
-  const phone = useViewport() === "phone";
-  const { container, columns, measure } = useMasonry(divisions, (d) => d.id, estimate, { ...COLUMN, max: phone ? 1 : COLUMN.max });
+  const viewport = useViewport();
+  const { container, columns, measure } = useMasonry(divisions, (d) => d.id, estimate, { min: viewport === "desktop" ? COLUMN.min : COLUMN.tablet, gap: COLUMN.gap, max: viewport === "phone" ? 1 : COLUMN.max });
   return (
     <div ref={container} data-columns={columns.length} className="flex items-start gap-6">
       {columns.map((column, c) => (
@@ -310,7 +310,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
             type="button"
             aria-pressed={selected}
             disabled={project.role === null}
-            title={project.role === null ? "You hold no role here" : undefined}
+            title={project.role === null ? "You hold no role here" : project.name}
             onClick={() => onSelect({ scope, kind: "project", trail })}
             className="min-h-touch min-w-0 rounded-xs text-left text-base font-semibold leading-snug after:absolute after:inset-0 after:rounded-md disabled:cursor-default"
           >
