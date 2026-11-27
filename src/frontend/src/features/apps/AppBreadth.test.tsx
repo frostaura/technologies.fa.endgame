@@ -64,12 +64,12 @@ describe("asking about an app", () => {
     fireEvent.change(await screen.findByLabelText("Ask about this app"), { target: { value: "Which days are busiest?" } });
     expect(screen.queryByRole("button", { name: "Ask it" })).toBeNull();
     fireEvent.click(within(askPanel()).getByRole("button", { name: "See what it costs" }));
-    expect(await screen.findByText("At most 0.4 credits.")).toBeTruthy();
+    expect(await screen.findByText("At most 0.42 credits.")).toBeTruthy();
     expect(api.calls.some((c) => c.path === "/api/apps/a1/ask")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Ask it" }));
     expect(await screen.findByText("Tuesday and Thursday are the busiest days.")).toBeTruthy();
     expect(screen.getByRole("img", { name: /visits: Mon 52, Tue 96, Thu 88/ })).toBeTruthy();
-    expect(screen.getByText("Cost 0.1 credits of at most 0.4 credits")).toBeTruthy();
+    expect(screen.getByText("Cost 0.11 credits of at most 0.42 credits")).toBeTruthy();
     expect(screen.queryByText("The query")).toBeNull();
   });
 
@@ -372,6 +372,15 @@ describe("after the real-stack walk", () => {
   });
 
   // D39: a bar or line starts at zero, so 4 → 3 reads as a quarter less, not a collapse.
+  it("draws a table answer as the house table: a named list, one row per record, every cell under its column", () => {
+    render(<AskChartView chart={null} columns={["day", "visits"]} rows={[{ day: "Monday", visits: 1840.4 }, { day: "Tuesday", visits: 7.466 }]} />);
+    const list = screen.getByRole("list", { name: "The answer's rows" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    expect(list.textContent).toContain("1,840");
+    expect(list.textContent).toContain("7.47");
+    cleanup();
+  });
+
   it("draws bars and lines from zero", () => {
     const chart = (kind: "bar" | "line") => ({ kind, x: "day", y: ["visits"], series: [{ name: "visits", points: [{ x: "Mon", y: 4 }, { x: "Tue", y: 3 }] }] });
     const { container, unmount } = render(<AskChartView chart={chart("bar")} columns={[]} rows={[]} />);

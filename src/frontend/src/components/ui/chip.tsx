@@ -5,7 +5,8 @@ import { Avatar } from "../Avatar";
 /**
  * Chips (ARCH-011): a chip is one line. It never wraps — a label too long for its room is cut short with
  * the whole of it in the tooltip — and it is solid: a dashed outline is for a drop zone, never for a
- * thing that exists. A status is a `Badge` (the status tag), not a chip.
+ * thing that exists. A status is a `Badge` (the status tag), not a chip. One height: 32px (44 where it is
+ * pressed by touch), one tone (the ground fill). Pills are chips; a button is never a pill.
  */
 
 /** The look of every chip, for a control that has to be its own element (a link, a select). */
@@ -14,7 +15,7 @@ export const CHIP = "inline-flex max-w-full min-w-0 shrink-0 items-center gap-2 
 /** A plain chip: a name, a count, a setting. */
 export function Chip({ children, icon, title, className }: { children: ReactNode; icon?: ReactNode; title?: string; className?: string }) {
   return (
-    <span title={title ?? (typeof children === "string" ? children : undefined)} className={cn(CHIP, "min-h-8 px-3 py-1", className)}>
+    <span title={title ?? (typeof children === "string" ? children : undefined)} className={cn(CHIP, "h-8 px-3", className)}>
       {icon}
       <span className="min-w-0 truncate">{children}</span>
     </span>
@@ -55,7 +56,7 @@ export function PersonChip({
       {after}
     </>
   );
-  const look = cn(CHIP, "min-h-touch py-1 pl-1 pr-3", className);
+  const look = cn(CHIP, "h-8 pl-1 pr-3", onSelect && "touch:h-auto touch:min-h-touch", className);
   if (!onSelect)
     return (
       <span title={title ?? text} className={look}>

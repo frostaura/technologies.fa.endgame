@@ -21,7 +21,7 @@ export function TalkLauncher({ className }: { className?: string }) {
   const shell = useContext(ShellTalkContext);
   if (!shell?.compact || !shell.label) return null;
   return (
-    <Button variant="soft" size="lg" className={cn("w-full justify-start", className)} onClick={shell.open} aria-haspopup="dialog" data-talk-launcher="">
+    <Button variant="secondary" size="lg" className={cn("w-full justify-start", className)} onClick={shell.open} aria-haspopup="dialog" data-talk-launcher="">
       <MessageCircle aria-hidden className="size-5 text-primary" />
       {shell.label}
     </Button>

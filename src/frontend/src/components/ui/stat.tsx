@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -11,6 +11,11 @@ import { cn } from "@/lib/utils";
  *
  * In a {@link StatRow} every tile has the same slots in the same places: label, value, meter (reserved
  * in every tile when any tile in the row has one), caption. Captions therefore start on one line.
+ *
+ * Two looks only: boxed (a tile of its own) and `plain` (in a hero or a card already drawn). A value is
+ * NEVER cut with an ellipsis: when its slot is too narrow its type steps down until it fits. A label wraps
+ * rather than being cut; a caption is one line (the explanation belongs in the alert or text beside it).
+ * Numbers come from `formatNumber` (one precision rule, a true minus sign).
  */
 
 /** The value classes, exported only so the guard test can name them; use {@link Stat}. */
@@ -55,6 +60,7 @@ export function Stat({
 }) {
   const row = useContext(RowContext);
   const reserve = meter != null || row?.meters;
+  const valueRef = useFitValue();
   return (
     <div
       data-testid={testId}
@@ -64,12 +70,12 @@ export function Stat({
         className,
       )}
     >
-      <span title={typeof label === "string" ? label : undefined} className="truncate text-sm text-ink-muted">
-        {label}
-      </span>
+      <span className="break-words text-sm text-ink-muted">{label}</span>
       <Value
+        ref={valueRef}
+        data-stat-value=""
         className={cn(
-          "truncate font-sans font-semibold leading-tight tracking-tight tabular-nums",
+          "block overflow-hidden whitespace-nowrap font-sans font-semibold leading-tight tracking-tight tabular-nums",
           STAT_VALUE[size],
           { ink: "text-ink", muted: "text-ink-muted", good: "text-success-text", bad: "text-attention-text" }[tone],
         )}
@@ -81,9 +87,39 @@ export function Stat({
           {meter != null && <Meter {...meter} />}
         </span>
       )}
-      {caption && <span className="text-sm text-ink-body">{caption}</span>}
+      {caption && (
+        <span title={typeof caption === "string" ? caption : undefined} className="truncate text-sm text-ink-body">
+          {caption}
+        </span>
+      )}
     </div>
   );
+}
+
+/**
+ * A value that never ellipsises: while it is wider than its slot its type steps down (to no less than 12px),
+ * re-measured whenever the slot changes size.
+ */
+function useFitValue() {
+  const ref = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.fontSize = "";
+      let size = parseFloat(getComputedStyle(el).fontSize) || 24;
+      while (el.scrollWidth > el.clientWidth + 0.5 && size > 12) {
+        size = Math.max(12, size * 0.9);
+        el.style.fontSize = `${size}px`;
+      }
+    };
+    fit();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return ref as RefObject<HTMLSpanElement & HTMLHeadingElement>;
 }
 
 function Meter({ value, label, tone = "primary" }: { value: number; label: string; tone?: "primary" | "bad" }) {

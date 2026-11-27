@@ -31,6 +31,16 @@ Everything a person, an operator, an app's end user, an AI assistant or the host
 | **Reachable from** | A screen, or only the API, an assistant (MCP) or the command line. |
 | **Covered by tests** | The tests that exercise it. |
 
+## What every screen shares
+
+A flow names these once, where they matter; they hold everywhere.
+
+- **Numbers.** Credits and counts are written one way (`lib/format.ts`): whole and grouped from 10 ("1,840"), up to two decimals below 10 ("7.47", "0.2"), "<0.01" for more than nothing but under a hundredth, a debt with a true minus sign ("−120"), a top-up or change to a balance signed ("+3,000"), and "1 credit" only when exactly 1 is shown. Times of day are on the 24-hour clock ("14:05:09").
+- **Spent against an estimate** (`lib/estimates.ts`). Work under way says "Spent so far", with a bar and the true percentage of its estimate; finished work says "Spent", with no bar. Against an estimate under 1 credit there is no percentage and no bar: "Under 1 credit, as estimated", or "Estimated under 1 credit" if it went past a credit — never a red alarm (RUN-13).
+- **Confirmations and short forms.** Anything dropped, cancelled, declined, deleted, removed, revoked or let go is confirmed in one card in the page, directly under the control that asked: the question, what follows, and on one line a confirm and an outlined way back of the same size. Escape is the way back too. A short form that changes a setting in place — a cap, a budget, a limit, a top-up, a reassignment, a memory, a piece of context, a new part of the tree — is the same card, with its heading visible ("Cap for {name}", "Your own limit", "Top up {name}", "Reassign {name}", "Correct this memory", …). Nothing is a modal dialog; a weighty one — making an app public, bringing a version back, archiving or deleting a part — is the same card, which also takes the focus as it opens.
+- **Tables.** A list of like things — people and invitations, an employee's recent work, hiring proposals, budgets, autonomy rules, the operator access log — is one table with a sentence-case header row; when the table's own column is narrow (a phone, a tablet, beside a side panel or the docked conversation) the same rows become a list of cards, the first column as the title and every other value named by its column.
+- **States.** A pause, a cancel or a question is never drawn as a fault: an app held by its budget is an amber panel with "Raise the budget"; cancelled work reads a neutral "Cancelled" ("Research cancelled"); an approval is a hand, blue while it waits ("Asked for your approval", "Needs you") and neutral once answered.
+
 ## The academy path
 
 Five tracks, each in the order the files give them. A lesson can only teach what has a screen, so each track lists the flows a learner can do in the console and counts the rest separately. The **Operator** track is FrostAura's own handbook and is not for clients.

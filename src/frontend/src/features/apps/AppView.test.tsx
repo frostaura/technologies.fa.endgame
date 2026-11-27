@@ -86,8 +86,14 @@ describe("AppView", () => {
     stub(json({ ...APP, running: "paused", health: { state: "paused", summary: "Paused: the organisation reached its overdraft limit. A top-up restores it at once." }, paused: { reason: "overdraft_limit", note: "Paused: the organisation reached its overdraft limit. A top-up restores it at once." } }));
     renderWithStore(<AppView appId="a1" />);
     const today = await screen.findByRole("region", { name: "Today" });
-    expect(today.textContent).toContain("Paused: the organisation reached its overdraft limit. A top-up restores it at once.");
+    // The tile says it in a line; the amber panel under the figures says why, and raises the budget (ARCH-011).
+    expect(today.textContent).toContain("Paused by its budget");
     expect(today.textContent).not.toContain("Healthy");
+    const held = screen.getByTestId("paused-by-budget");
+    expect(held.dataset.tone).toBe("warn");
+    expect(held.textContent).toContain("Paused: the organisation reached its overdraft limit. A top-up restores it at once.");
+    expect(within(held).getByRole("link", { name: "Raise the budget" }).getAttribute("href")).toBe("/credits");
+    expect(screen.queryByRole("button", { name: "Rebuild and restart" })).toBeNull();
     cleanup();
     stub(json({ ...APP, status: "draft", publishedAt: null, version: null, health: { state: "unknown", summary: "Not built — the build was cancelled." }, notBuilt: { reason: "cancelled", note: "Not built — the build was cancelled.", runId: "b1", ideaId: null } }));
     renderWithStore(<AppView appId="a1" />);
@@ -99,7 +105,7 @@ describe("AppView", () => {
     renderWithStore(<AppView appId="a1" />);
     const today = await screen.findByRole("region", { name: "Today" });
     expect(today.textContent).toContain("Paused");
-    expect(today.textContent).toContain("Paused: a monthly budget above it is spent. Raising the budget or the new month restores it.");
+    expect(screen.getByTestId("paused-by-budget").textContent).toContain("Paused: a monthly budget above it is spent. Raising the budget or the new month restores it.");
     expect(today.textContent).not.toContain("Healthy");
     expect(today.textContent).not.toContain("No errors today");
   });

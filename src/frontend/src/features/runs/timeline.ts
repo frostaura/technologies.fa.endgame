@@ -1,7 +1,7 @@
-import { formatNumber, plural } from "@/lib/format";
+import { formatCredits, formatNumber, plural } from "@/lib/format";
 import { isPlain, plainOrNull } from "@/lib/plain";
 import type { RunEvent } from "@/store/types";
-import { declinedByOwner, describeEvent, evaluationDetail, formatCredits, num, refusalStep, str, type Mode, type StepTone, type TraceStep } from "./runModel";
+import { declinedByOwner, describeEvent, evaluationDetail, num, refusalStep, str, type Mode, type StepTone, type TraceStep } from "./runModel";
 
 /**
  * The run log as a person reads it. Normal mode speaks plainly: messages as written, each sub-agent
@@ -737,7 +737,7 @@ export function actionCount(actions: number, denials: number, declined = 0): str
 
 /** Credits spent by a group, as a label. */
 export function groupCredits(g: TimelineGroup): string | null {
-  return g.credits > 0 ? `${formatCredits(g.credits)} ${g.credits === 1 ? "credit" : "credits"}` : null;
+  return g.credits > 0 ? formatCredits(g.credits) : null;
 }
 
 export type { StepTone };

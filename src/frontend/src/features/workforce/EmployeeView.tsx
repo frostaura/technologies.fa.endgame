@@ -10,6 +10,9 @@ import { SECTION, TITLE, useShowAll } from "@/components/ui/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { CHIP } from "@/components/ui/chip";
+import { LINK, SCROLL_ROW } from "@/components/ui/layout";
+import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
 import { estimateFigure, estimateHeadline } from "@/lib/estimates";
 import { formatCredits, formatNumber, headlineCredits, plural, possessive, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
@@ -51,6 +54,7 @@ import {
   STATUS,
   acceptedLine,
   costLine,
+  costNote,
   draftOf,
   draftProblem,
   employeeCosts,
@@ -156,6 +160,15 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
   const status = contractor && released ? { label: "Finished", tone: STATUS.released.tone } : STATUS[employee.status];
   const kindWord = contractor ? "Contractor" : "Employee";
   const actions = useActions(employee, tree, can.admin);
+  const judged = trackRecord.work.accepted + trackRecord.work.sentBack > 0;
+  const estimates = trackRecord.estimates && trackRecord.estimates.pieces > 0 ? trackRecord.estimates : null;
+  const notes = [
+    trackRecord.work.judged > 0 ? `It also made ${plural(trackRecord.work.judged, "judgement")} of others’ work.` : null,
+    costNote(costs),
+    estimates
+      ? `Estimates scored across ${plural(estimates.pieces, "piece")} of work; the largest miss was ${formatNumber(estimates.largestMissPercent)}%.`
+      : "Estimates are scored once its first estimated work finishes.",
+  ].filter((n): n is string => n !== null);
 
   return (
     <>
@@ -179,12 +192,12 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
             <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span className="text-ink-muted">
                 {released ? "Worked at" : "Works at"}{" "}
-                <Link href={paths.manage(employee.scope)} className="rounded-xs font-medium text-primary-link hover:text-primary-hover">
+                <Link href={paths.manage(employee.scope)} className={LINK}>
                   {scopeName(tree, employee.scope)}
                 </Link>
               </span>
               {employee.currentRun && (
-                <Link href={paths.run(employee.currentRun.id)} className="min-w-0 rounded-xs text-primary-link hover:text-primary-hover">
+                <Link href={paths.run(employee.currentRun.id)} className={cn(LINK, "min-w-0")}>
                   Working now: {employee.currentRun.title}
                 </Link>
               )}
@@ -200,29 +213,23 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
       <StatRow cols={4} label="Track record" className={cn(RISE, stagger(1))}>
         <Stat
           label="Work accepted"
-          value={trackRecord.work.accepted + trackRecord.work.sentBack > 0 ? acceptedLine(trackRecord.work) : NO_VALUE}
-          tone={trackRecord.work.accepted + trackRecord.work.sentBack > 0 ? "ink" : "muted"}
-          caption={
-            trackRecord.work.accepted + trackRecord.work.sentBack === 0
-              ? acceptedLine(trackRecord.work)
-              : `${trackRecord.work.sentBack > 0 ? `${plural(trackRecord.work.sentBack, "piece")} sent back` : "Nothing sent back"}${trackRecord.work.judged > 0 ? ` · ${plural(trackRecord.work.judged, "judgement")} of others’ work` : ""}`
-          }
+          value={judged ? acceptedLine(trackRecord.work) : NO_VALUE}
+          tone={judged ? "ink" : "muted"}
+          caption={!judged ? acceptedLine(trackRecord.work) : trackRecord.work.sentBack > 0 ? `${plural(trackRecord.work.sentBack, "piece")} sent back` : "Nothing sent back"}
         />
         <Stat
           label="Repairs not charged"
           value={headlineCredits(trackRecord.repairsNotCharged.credits)}
-          caption={trackRecord.repairsNotCharged.calls > 0 ? `${plural(trackRecord.repairsNotCharged.calls, "repair")} of its own mistakes, never billed` : "No repairs of its own work"}
+          caption={trackRecord.repairsNotCharged.calls > 0 ? `${plural(trackRecord.repairsNotCharged.calls, "repair")}, never billed` : "No repairs of its own work"}
         />
         <Stat label="Cost so far" value={headlineCredits(costs.toDate)} caption={costLine(costs, job.monthlyCreditLimit)} />
-        {trackRecord.estimates && trackRecord.estimates.pieces > 0 ? (
-          <Stat
-            label="Estimates"
-            value={estimateFigure(trackRecord.estimates)}
-            caption={`${estimateHeadline(trackRecord.estimates)}. Across ${plural(trackRecord.estimates.pieces, "piece")} of work. The largest miss was ${formatNumber(trackRecord.estimates.largestMissPercent)}%.`}
-          />
+        {estimates ? (
+          <Stat label="Estimates" value={estimateFigure(estimates)} caption={estimateHeadline(estimates)} />
         ) : (
-          <Stat label="Estimates" value={NO_VALUE} tone="muted" caption="None scored yet. Scored once its first estimated work finishes." />
+          <Stat label="Estimates" value={NO_VALUE} tone="muted" caption="None scored yet" />
         )}
+        {/* What a one-line caption leaves out, said once under the tiles. */}
+        {notes.length > 0 && <p className="col-span-full text-sm text-ink-body">{notes.join(" ")}</p>}
       </StatRow>
 
       {/*
@@ -394,7 +401,7 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
             <Select id={ids.rehire} value={rehireTo} onChange={(e) => setRehireTo(e.target.value)} className="w-72 max-sm:w-full">
               {placements(tree).map((p) => (
                 <option key={p.scope} value={p.scope}>
-                  {`${"— ".repeat(p.depth)}${p.label}${p.scope === employee.scope ? " (where it was)" : ""}`}
+                  {`${"\u2003".repeat(p.depth)}${p.label}${p.scope === employee.scope ? " (where it was)" : ""}`}
                 </option>
               ))}
             </Select>
@@ -412,7 +419,7 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
   const buttons = contractor ? (
     <ActionGroup
       first={
-        <Button variant="outline" aria-expanded={open === "cap"} onClick={() => toggle("cap")} disabled={busy} className="max-sm:flex-1">
+        <Button variant="secondary" aria-expanded={open === "cap"} onClick={() => toggle("cap")} disabled={busy} className="max-sm:flex-1">
           Cap its spending
         </Button>
       }
@@ -430,19 +437,19 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
       }
       note={employee.standing !== null ? "A standing hire is never let go: every organisation keeps one." : null}
     >
-      <Button variant="outline" aria-expanded={open === "reassign"} onClick={() => toggle("reassign")} disabled={busy} className={MENU_ITEM}>
+      <Button variant="secondary" aria-expanded={open === "reassign"} onClick={() => toggle("reassign")} disabled={busy} className={MENU_ITEM}>
         Reassign
       </Button>
-      <Button variant="outline" aria-expanded={open === "budget"} onClick={() => toggle("budget")} disabled={busy} className={MENU_ITEM}>
+      <Button variant="secondary" aria-expanded={open === "budget"} onClick={() => toggle("budget")} disabled={busy} className={MENU_ITEM}>
         Change budget
       </Button>
       {employee.status === "paused" ? (
-        <Button variant="outline" onClick={() => void run(() => update({ id: employee.id, patch: { status: "idle" } }).unwrap(), "resume")} disabled={busy} className={MENU_ITEM}>
+        <Button variant="secondary" onClick={() => void run(() => update({ id: employee.id, patch: { status: "idle" } }).unwrap(), "resume")} disabled={busy} className={MENU_ITEM}>
           Resume
         </Button>
       ) : (
         <Button
-          variant="outline"
+          variant="secondary"
           onClick={() =>
             void run(
               () =>
@@ -465,15 +472,18 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
     </ActionGroup>
   );
 
-  const small = "flex w-full max-w-form flex-col gap-3 rounded-md border bg-surface p-5 shadow-card max-sm:p-4";
   const panel = (
     <>
       {open === "edit" && <EditJob employee={employee} managers={managers} tree={tree} onDone={() => setOpen(null)} onError={setError} />}
 
       {open === "reassign" && (
-        <form
-          aria-label="Reassign"
-          className={small}
+        <ConfirmCard
+          label="Reassign"
+          question={`Reassign ${employee.name}`}
+          confirm="Move"
+          cancel="Cancel"
+          destructive={false}
+          busy={busy || (scope === employee.scope && manager === (employee.reportsTo?.id ?? ""))}
           onSubmit={(e) => {
             e.preventDefault();
             void run(
@@ -486,12 +496,13 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
               "reassign",
             );
           }}
+          onCancel={() => setOpen(null)}
         >
           <Field id="reassign-to" label={`Move ${employee.name} to`} hint="Its memory travels with it.">
             <Select id="reassign-to" value={scope} onChange={(e) => setScope(e.target.value)}>
               {placements(tree).map((p) => (
                 <option key={p.scope} value={p.scope}>
-                  {`${"— ".repeat(p.depth)}${p.label}`}
+                  {`${"\u2003".repeat(p.depth)}${p.label}`}
                 </option>
               ))}
             </Select>
@@ -507,41 +518,32 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
               ))}
             </Select>
           </Field>
-          <span className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={busy || (scope === employee.scope && manager === (employee.reportsTo?.id ?? ""))}>
-              Move
-            </Button>
-            <Button variant="ghost" onClick={() => setOpen(null)}>
-              Cancel
-            </Button>
-          </span>
-        </form>
+        </ConfirmCard>
       )}
 
       {(open === "budget" || open === "cap") && (
-        <form aria-label={open === "budget" ? "Change budget" : "Cap its spending"} onSubmit={(e) => saveLimit(e, open)} className={small}>
-          <div className="grid grid-cols-1 items-end gap-x-5 gap-y-1.5 sm:grid-cols-2">
-            <span className="flex flex-col gap-1.5">
-              <label htmlFor={open === "budget" ? "budget" : "contractor-cap"} className="font-medium">
-                {open === "budget" ? "Credits a month" : "Credits a month, at most"}
-              </label>
-              <Input id={open === "budget" ? "budget" : "contractor-cap"} inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} />
-            </span>
-            <span className="text-sm text-ink-muted">
-              {open === "budget"
+        <ConfirmCard
+          label={open === "budget" ? "Change budget" : "Cap its spending"}
+          question={open === "budget" ? `Change ${possessive(employee.name)} budget` : `Cap ${possessive(employee.name)} spending`}
+          confirm={open === "budget" ? "Save budget" : "Save the cap"}
+          cancel="Cancel"
+          destructive={false}
+          busy={busy}
+          onSubmit={(e) => saveLimit(e, open)}
+          onCancel={() => setOpen(null)}
+        >
+          <Field
+            id={open === "budget" ? "budget" : "contractor-cap"}
+            label={open === "budget" ? "Credits a month" : "Credits a month, at most"}
+            hint={
+              open === "budget"
                 ? "Counts what the contractors it briefs spend too. Leave it empty to have no budget of its own."
-                : `Held before each of its calls, so it is never passed${employee.briefedBy ? `; ${possessive(employee.briefedBy.name)} own budget still holds too` : ""}. Leave it empty for no cap of its own.`}
-            </span>
-          </div>
-          <span className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={busy}>
-              {open === "budget" ? "Save budget" : "Save the cap"}
-            </Button>
-            <Button variant="ghost" onClick={() => setOpen(null)}>
-              Cancel
-            </Button>
-          </span>
-        </form>
+                : `Held before each of its calls, so it is never passed${employee.briefedBy ? `; ${possessive(employee.briefedBy.name)} own budget still holds too` : ""}. Leave it empty for no cap of its own.`
+            }
+          >
+            <Input id={open === "budget" ? "budget" : "contractor-cap"} inputMode="numeric" value={budget} onChange={(e) => setBudget(e.target.value)} aria-describedby={`${open === "budget" ? "budget" : "contractor-cap"}-hint`} />
+          </Field>
+        </ConfirmCard>
       )}
 
       {open === "release" && (
@@ -576,8 +578,8 @@ function useActions(employee: Employee, tree: Tree | undefined, admin: boolean):
   return { buttons, panel };
 }
 
-/** An action inside the group: a button in the row on a tablet or a desktop, a full-width row of the menu on a phone. */
-const MENU_ITEM = "max-sm:w-full max-sm:justify-start max-sm:border-transparent max-sm:hover:bg-ground";
+/** An action inside the group: a button in the row on a tablet or a desktop, a full-width button of the menu on a phone. */
+const MENU_ITEM = "max-sm:w-full";
 
 /**
  * The header's actions: one row from a tablet up; on a phone, the first action beside "More", which
@@ -599,7 +601,7 @@ function ActionGroup({ first, note, children }: { first: ReactNode; note?: strin
     <div className="flex min-w-0 flex-col gap-2 max-sm:w-full sm:items-end">
       <div role="group" aria-label="Actions" className="flex flex-wrap items-center gap-2 max-sm:w-full">
         {first}
-        <Button variant="outline" aria-expanded={menu} aria-controls={id} onClick={() => setMenu((x) => !x)} className="sm:hidden">
+        <Button variant="secondary" aria-expanded={menu} aria-controls={id} onClick={() => setMenu((x) => !x)} className="sm:hidden">
           More
           <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", menu && "rotate-180")} />
         </Button>
@@ -670,7 +672,7 @@ function EditJob({ employee, managers, tree, onDone, onError }: { employee: Empl
         <Button type="submit" disabled={state.isLoading}>
           Save the job
         </Button>
-        <Button variant="ghost" onClick={onDone}>
+        <Button variant="secondary" onClick={onDone}>
           Cancel
         </Button>
       </span>
@@ -732,6 +734,14 @@ function ledRow(r: LedRun): WorkRow {
   };
 }
 
+/** Recent work's columns: the work takes the room; credits only where its work is split into tasks. */
+const WORK_COLUMNS: Column[] = [
+  { key: "work", header: "Work", kind: "grow" },
+  { key: "status", header: "Status", kind: "status" },
+  { key: "when", header: "When", kind: "date" },
+  { key: "credits", header: "Credits", kind: "figure", track: "minmax(8rem, 0.9fr)" },
+];
+
 /**
  * Its recent work as one table in one status vocabulary: the tasks it took (a factory build's items,
  * checks and reviews included) or, where its work is not split into tasks (research, reviews), the runs
@@ -758,7 +768,7 @@ function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs:
           Recent work
         </h2>
         {last && (
-          <Link href={paths.run(last)} className="rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+          <Link href={paths.run(last)} className={cn(LINK, "text-sm")}>
             Its last piece of work
           </Link>
         )}
@@ -780,58 +790,37 @@ function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs:
           </p>
         ) : (
           <>
-            <div className="overflow-hidden rounded-md border bg-surface shadow-card">
-              <table aria-label={byTasks ? "Tasks" : "Work it led"} className="w-full border-collapse text-left">
-                <thead className="border-b bg-ground text-sm text-ink-muted max-sm:hidden">
-                  <tr>
-                    <th scope="col" className="w-full px-5 py-2.5 font-medium">
-                      Work
-                    </th>
-                    <th scope="col" className="px-3 py-2.5 font-medium">
-                      Status
-                    </th>
-                    <th scope="col" className="px-3 py-2.5 font-medium">
-                      When
-                    </th>
+            <Table label={byTasks ? "Tasks" : "Work it led"} columns={byTasks ? WORK_COLUMNS : WORK_COLUMNS.slice(0, 3)} at="medium">
+              {list.shown.map((r) => {
+                const s = workStatus(r.status);
+                return (
+                  <TableRow key={r.id} data-status={r.status}>
+                    <Cell col="work" primary>
+                      {r.href ? (
+                        <Link href={r.href} title={r.title} className={cn(LINK, "line-clamp-2")}>
+                          {r.title}
+                        </Link>
+                      ) : (
+                        <span title={r.title} className="line-clamp-2 font-medium">
+                          {r.title}
+                        </span>
+                      )}
+                    </Cell>
+                    <Cell col="status">
+                      <Badge tone={s.tone}>{s.label}</Badge>
+                    </Cell>
+                    <Cell col="when">
+                      <span className="text-sm text-ink-body">{r.when}</span>
+                    </Cell>
                     {byTasks && (
-                      <th scope="col" className="px-5 py-2.5 text-right font-medium">
-                        Credits
-                      </th>
+                      <Cell col="credits">
+                        <span className="text-sm text-ink-body">{r.credits ?? NO_VALUE}</span>
+                      </Cell>
                     )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {list.shown.map((r) => {
-                    const s = workStatus(r.status);
-                    return (
-                      <tr key={r.id} data-status={r.status} className="align-top max-sm:flex max-sm:flex-col max-sm:gap-1.5 max-sm:px-4 max-sm:py-3.5">
-                        <td className="px-5 py-3 max-sm:p-0">
-                          {r.href ? (
-                            <Link href={r.href} title={r.title} className="line-clamp-2 rounded-xs font-medium text-primary-link hover:text-primary-hover">
-                              {r.title}
-                            </Link>
-                          ) : (
-                            <span title={r.title} className="line-clamp-2 font-medium">
-                              {r.title}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 max-sm:hidden">
-                          <Badge tone={s.tone}>{s.label}</Badge>
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 text-sm text-ink-body max-sm:flex max-sm:items-center max-sm:gap-2 max-sm:p-0">
-                          <Badge tone={s.tone} className="sm:hidden">
-                            {s.label}
-                          </Badge>
-                          {r.when}
-                        </td>
-                        {byTasks && <td className="whitespace-nowrap px-5 py-3 text-right text-sm tabular-nums text-ink-body max-sm:p-0 max-sm:text-left">{r.credits ?? NO_VALUE}</td>}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  </TableRow>
+                );
+              })}
+            </Table>
             {list.control}
           </>
         ))}
@@ -849,7 +838,7 @@ function ContractorsBriefed({ detail }: { detail: EmployeeDetail }) {
         </h2>
         <p className="whitespace-pre-line text-ink-body">{detail.employee.brief}</p>
         {detail.employee.briefedBy && (
-          <Link href={paths.employee(detail.employee.briefedBy.id)} className="self-start rounded-xs text-primary-link hover:text-primary-hover">
+          <Link href={paths.employee(detail.employee.briefedBy.id)} className={cn(LINK, "self-start")}>
             Briefed by {detail.employee.briefedBy.name}
           </Link>
         )}
@@ -887,7 +876,7 @@ function ContractorsBriefed({ detail }: { detail: EmployeeDetail }) {
           {detail.reports.map((r, i) => (
             <span key={r.id}>
               {i > 0 && ", "}
-              <Link href={paths.employee(r.id)} className="rounded-xs text-primary-link hover:text-primary-hover">
+              <Link href={paths.employee(r.id)} className={LINK}>
                 {r.name}
               </Link>
             </span>
@@ -959,7 +948,7 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
             <Input id={searchId} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${formatNumber(all.length)} entries`} className="pl-9" />
           </span>
           {kinds.length > 1 && (
-            <div role="group" aria-label="Show entries of one kind" className="no-scrollbar flex flex-wrap gap-2 max-sm:-mx-4 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-4">
+            <div role="group" aria-label="Show entries of one kind" className={SCROLL_ROW}>
               {[null, ...kinds].map((k) => {
                 const n = k ? all.filter((e) => e.kind === k).length : all.length;
                 return (
@@ -968,10 +957,7 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
                     type="button"
                     aria-pressed={kind === k}
                     onClick={() => setKind(k)}
-                    className={cn(
-                      "inline-flex min-h-touch shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm transition-colors",
-                      kind === k ? "border-primary bg-primary-tint font-semibold text-primary-hover" : "bg-surface text-ink-body hover:bg-ground",
-                    )}
+                    className={cn(CHIP, "h-8 px-3 transition-colors touch:h-auto touch:min-h-touch", kind === k ? "bg-primary-tint font-semibold text-primary-hover ring-2 ring-primary" : "hover:bg-primary-tint")}
                   >
                     {k ? KIND_PLURAL[k] : "All"}
                     <span className="tabular-nums text-ink-muted">{formatNumber(n)}</span>
@@ -1015,7 +1001,7 @@ function MemoryPanel({ employee, tree }: { employee: Employee; tree: Tree | unde
         (adding ? (
           <MemoryForm employee={employee} includeArchived={includeArchived} onDone={() => setAdding(false)} />
         ) : (
-          <Button variant="outline" className="self-start" onClick={() => setAdding(true)}>
+          <Button variant="secondary" className="self-start" onClick={() => setAdding(true)}>
             Add something {employee.name} should know
           </Button>
         ))}
@@ -1034,13 +1020,6 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
   const [remove, removeState] = useRemoveMemoryMutation();
   const [error, setError] = useState<string | null>(null);
   const pending = entry.id.startsWith("pending-");
-
-  if (editing)
-    return (
-      <li className="p-3">
-        <MemoryForm employee={employee} entry={entry} includeArchived={includeArchived} onDone={() => setEditing(false)} />
-      </li>
-    );
 
   const confirmRemove = async (event: FormEvent) => {
     event.preventDefault();
@@ -1068,23 +1047,24 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
           {entry.sourceRunId && (
             <>
               {" · "}
-              <Link href={paths.run(entry.sourceRunId)} className="rounded-xs text-primary-link hover:text-primary-hover">
+              <Link href={paths.run(entry.sourceRunId)} className={LINK}>
                 the task
               </Link>
             </>
           )}
         </span>
-        {editable && !pending && !removing && (
+        {editable && !pending && !removing && !editing && (
           <span className="-my-1 flex flex-wrap gap-1">
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+            <Button size="sm" variant="quiet" onClick={() => setEditing(true)}>
               Correct
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setRemoving(true)}>
+            <Button size="sm" variant="quiet" onClick={() => setRemoving(true)}>
               Remove
             </Button>
           </span>
         )}
       </span>
+      {editing && <MemoryForm employee={employee} entry={entry} includeArchived={includeArchived} onDone={() => setEditing(false)} className="mt-2" />}
       {removing && (
         <ConfirmCard
           label="Confirm removing"
@@ -1111,7 +1091,7 @@ function MemoryRow({ entry, employee, tree, changes, editable, includeArchived }
   );
 }
 
-function MemoryForm({ employee, entry, includeArchived, onDone }: { employee: Employee; entry?: MemoryEntry; includeArchived: boolean; onDone: () => void }) {
+function MemoryForm({ employee, entry, includeArchived, onDone, className }: { employee: Employee; entry?: MemoryEntry; includeArchived: boolean; onDone: () => void; className?: string }) {
   const [title, setTitle] = useState(entry?.title ?? "");
   const [body, setBody] = useState(entry?.body ?? "");
   const [kind, setKind] = useState<MemoryKind>(entry?.kind ?? "fact");
@@ -1152,7 +1132,17 @@ function MemoryForm({ employee, entry, includeArchived, onDone }: { employee: Em
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={entry ? "Correct this memory" : "Add to the memory"} className="flex w-full max-w-form flex-col gap-3 rounded-md border border-primary bg-surface p-4 shadow-card">
+    <ConfirmCard
+      label={entry ? "Correct this memory" : "Add to the memory"}
+      question={entry ? "Correct this memory" : `Add something ${employee.name} should know`}
+      confirm={entry ? "Save the correction" : "Add it"}
+      cancel="Cancel"
+      destructive={false}
+      busy={adding.isLoading || correcting.isLoading}
+      onSubmit={(e) => void submit(e)}
+      onCancel={onDone}
+      className={className}
+    >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Field id={`title-${id}`} label="In a few words" className="sm:col-span-2">
           <Input id={`title-${id}`} value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -1170,20 +1160,12 @@ function MemoryForm({ employee, entry, includeArchived, onDone }: { employee: Em
       <Field id={`body-${id}`} label={`What ${employee.name} should remember`}>
         <Textarea id={`body-${id}`} value={body} onChange={(e) => setBody(e.target.value)} rows={3} className={GROWING} />
       </Field>
-      <span className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={adding.isLoading || correcting.isLoading}>
-          {entry ? "Save the correction" : "Add it"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
-      </span>
       {error && (
         <p role="alert" className="text-sm text-attention-text">
           {error}
         </p>
       )}
-    </form>
+    </ConfirmCard>
   );
 }
 
@@ -1225,7 +1207,7 @@ function MemoryHistory({ changes, entries, onRetry }: { changes: ViewState<Memor
                         {timeAgo(c.at)}
                       </time>
                       {c.runId && (
-                        <Link href={paths.run(c.runId)} className="whitespace-nowrap rounded-xs text-primary-link hover:text-primary-hover">
+                        <Link href={paths.run(c.runId)} className={cn(LINK, "whitespace-nowrap")}>
                           the work it came from
                         </Link>
                       )}
@@ -1235,7 +1217,7 @@ function MemoryHistory({ changes, entries, onRetry }: { changes: ViewState<Memor
               })}
             </ol>
             {changes.data.length > 8 && (
-              <Button size="sm" variant="ghost" className="self-start" onClick={() => setAll((x) => !x)}>
+              <Button size="sm" variant="quiet" className="self-start" onClick={() => setAll((x) => !x)}>
                 {all ? "Show the latest only" : `Show all ${formatNumber(changes.data.length)}`}
               </Button>
             )}
@@ -1273,9 +1255,9 @@ function ReviewPanel({ employee, changes, onRetry, editable }: { employee: Emplo
           {changes.kind === "failed" && (
             <div role="alert" data-state="failed" className="flex flex-col gap-1 text-sm text-attention-text">
               The last review could not be loaded: {changes.reason}
-              <button type="button" onClick={onRetry} className="min-h-touch self-start rounded-xs font-semibold underline">
+              <Button size="sm" variant="quiet" className="self-start" onClick={onRetry}>
                 Try again
-              </button>
+              </Button>
             </div>
           )}
           {changes.kind === "loaded" && <ReviewLine changes={changes.data} />}
@@ -1283,11 +1265,11 @@ function ReviewPanel({ employee, changes, onRetry, editable }: { employee: Emplo
         {editable && (
           <div className="flex flex-wrap items-center gap-3">
             {queued && (
-              <Link href={paths.run(queued)} className="rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+              <Link href={paths.run(queued)} className={cn(LINK, "text-sm")}>
                 Review started — watch it
               </Link>
             )}
-            <Button size="sm" variant="outline" onClick={() => void start()} disabled={state.isLoading || queued !== null}>
+            <Button size="sm" variant="secondary" onClick={() => void start()} disabled={state.isLoading || queued !== null}>
               Review now
             </Button>
           </div>
@@ -1320,7 +1302,7 @@ function ReviewLine({ changes }: { changes: MemoryChange[] }) {
         {last.runId && (
           <>
             {" "}
-            <Link href={paths.run(last.runId)} className="rounded-xs font-medium text-primary-link hover:text-primary-hover">
+            <Link href={paths.run(last.runId)} className={LINK}>
               See the review
             </Link>
           </>

@@ -10,6 +10,11 @@
       "kind": "demo",
       "act": [
         {
+          "click": {
+            "selector": "li[data-stage='build'] [data-kind='action'] button"
+          }
+        },
+        {
           "wait": {
             "text": "Remove here"
           }
@@ -17,7 +22,7 @@
       ],
       "highlight": {
         "text": "Remove here",
-        "note": "Rules set here can be removed; no confirmation."
+        "note": "Rules set here can be removed: Change opens the stage's form, with Remove here at the end of its buttons; no confirmation."
       }
     },
     {
@@ -26,7 +31,7 @@
       "act": [
         {
           "click": {
-            "selector": "li[data-stage='build'] button:nth-of-type(2)"
+            "text": "Remove here"
           }
         },
         {

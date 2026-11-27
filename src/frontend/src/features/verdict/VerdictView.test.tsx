@@ -336,12 +336,31 @@ describe("VerdictView", () => {
     expect(within(list).getAllByRole("link")[0]?.className).toContain("truncate");
   });
 
-  it("lists every source under the shared fold, never the browser's own disclosure", async () => {
+  it("lists every source in a row that opens, never the browser's own disclosure nor a fold inside a fold", async () => {
     stub(json(ideaFixture()));
     const { container } = renderWithStore(<VerdictView ideaId="i1" />);
     const fold = await screen.findByRole("button", { name: "Every source (2)" });
     expect(fold.getAttribute("aria-expanded")).toBe("false");
     expect(container.querySelector("details")).toBeNull();
+  });
+
+  it("shows cancelled research in the neutral tone, never the failure's red", async () => {
+    stub(json(ideaFixture({ status: "failed", verdict: null, tryAgain: { runId: "r1", what: "research", why: "cancelled" } })));
+    renderWithStore(<VerdictView ideaId="i1" />);
+    const tag = await screen.findByText("Research cancelled");
+    expect(tag.closest("span[class*='bg-quiet']")).toBeTruthy();
+    expect(screen.queryByText("Research did not finish")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("asks before dropping, under the choices, with the choices still in place", async () => {
+    stub(json(ideaFixture()));
+    renderWithStore(<VerdictView ideaId="i1" />);
+    const drop = await screen.findByRole("button", { name: "Drop the idea" });
+    fireEvent.click(drop);
+    expect(drop.getAttribute("aria-expanded")).toBe("true");
+    expect(within(screen.getByRole("group", { name: "Confirm" })).getByRole("button", { name: "No" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Overrule and build anyway" })).toBeTruthy();
   });
 
   it("says a dropped idea was dropped, with one tag and no decision left to take", async () => {

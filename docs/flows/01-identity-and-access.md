@@ -26,7 +26,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
   4. The server checks that this is a fresh install and sends passkey options. It keeps the registration's purpose in a sealed cookie that lasts five minutes.
   5. The device asks the person to approve. On approval the server checks the attestation and creates the first user, under a lock so two people cannot both become first. It stores the passkey and opens a session that lasts 14 days and renews with use.
   6. The console reloads who is signed in. Because no organisation exists yet, it shows **"Name your organisation, then describe your first idea."** That screen belongs to the organisation-tree reader.
-- **You know it worked when:** the sign-in screen is replaced by the console header (Endgame mark, **"Normal"**/**"Technical"** toggle, **"Sign out"**) and the first-run heading above.
+- **You know it worked when:** the sign-in screen is replaced by the console header (the Endgame mark, the **"Normal"**/**"Technical"** switch and **"Sign out"** — in the bar from 1,100 px wide, under the account menu below that) and the first-run heading above.
 - **Variations and refusals:**
   - Browser without passkeys: "This browser cannot use passkeys. Open Endgame in a current browser on a device with a screen lock." The buttons are disabled.
   - Prompt closed or timed out: "The passkey prompt was closed or timed out. Nothing was changed."
@@ -129,7 +129,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 
 ### ID-06 Sign out of the console
 - **Who:** any signed-in person
-- **Starts at:** **"Sign out"** in the header of every console screen
+- **Starts at:** **"Sign out"** on every console screen: in the header bar from 1,100 px wide (an icon until 1,280, then the words), in the account menu (**"Your account, the mode and signing out"**) below that, and under **More** on a phone
 - **Needs:** signed in
 - **Level:** Foundation
 - **Learn first:** ID-02
@@ -210,8 +210,8 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Steps:**
   1. The page shows the heading **"Operator access"** and the line "Every time someone from FrostAura entered {Org} or acted on it, newest first. It is never silent, and only the Owner can read it."
   2. While it loads: "Loading the operator log", with three skeleton cards.
-  3. The newest 500 entries appear. Each card has a plain-words title, the date and time, and the operator's name and e-mail (or "A FrostAura operator").
-  4. In technical mode each card also shows the raw action and its JSON detail.
+  3. The newest 500 entries appear as one table, the list "Operator log", with the columns "When" (the date and time), "What was done" (a plain-words title) and "By" (the operator's name and e-mail, or "A FrostAura operator"). Where its column is narrow the rows become a list of cards, each column named beside its value.
+  4. In technical mode each row also shows the raw action and its JSON detail.
 - **You know it worked when:** the list labelled "Operator log" shows entries, or the empty state.
 - **Variations and refusals:**
   - The plain-words titles are "Entered the organisation", "Set up the organisation", "Screened against the red lines: it crosses none (by a model)" or "(by hand: {reason})", "Added {credits}" (or "Added credits"), "Changed the deepest overdraft to {credits} below zero", "Answered a top-up request with {credits}", "Declined a top-up request for {credits}: {why}", "Changed the prices for every organisation", and, for every change an operator made inside the organisation as an Admin, "As an Admin: {what}" — for example "As an Admin: Added a division", "As an Admin: Changed a setting, budget or rule", "As an Admin: Accepted a hire". One change is one entry. "Acted on the organisation" is left only for an action this console does not know.
@@ -269,8 +269,8 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Steps:**
   1. The heading reads **"People in {name}"**, with the line "Everyone with a role here, and where each grant was set. A grant holds for everything beneath where it is set."
   2. While loading: "Loading the people".
-  3. At a desktop's width the people are a table with the columns Person, Role, Where it was set and Since; on a phone each is a card. Each row shows the person's name (with "(you)" against yourself), their e-mail, and the role — a drop-down where you may change it, otherwise its name in the same place — and, where you may, a trailing **"Remove"** (PPL-07).
-  4. Each row says "Set here" or "Set at {node}" — a node above (the Owner and organisation-wide grants hold here too and are listed) or beneath — and "Since {date}". People still to register are grouped under **"Invitations waiting"**, with **"No passkey yet: their code works until {date}"** (or "No passkey yet, and their code expired on {date}: send a new one") and "Send a new code" (PPL-05).
+  3. The people are one table with the columns Person, Role, Where it was set and Since; when the table's own column is narrow (under about 60 rem: a phone, a tablet, beside a side panel) the same rows are a list of cards, the name as the title and each other column named beside its value. Each row shows the person's name (with "(you)" against yourself), their e-mail, and the role — a drop-down where you may change it, otherwise its name in the same place — and, where you may, a trailing **"Remove"** (PPL-07).
+  4. Each row says "Set here" or "Set at {node}" — a node above (the Owner and organisation-wide grants hold here too and are listed) or beneath — and "Since {date}". People still to register are grouped under **"Invitations waiting"**, a second table of the same shape (the list "Invitations") whose last column is "Their invitation": **"No passkey yet: their code works until {date}"** (or "No passkey yet, and their code expired on {date}: send a new one") and "Send a new code" (PPL-05).
   5. Technical mode adds the grant's id.
   6. The side panel **"What each role may do"** lists the four roles with the text above, followed by "A role can be granted at the organisation, a division, a project or an app, and holds for everything beneath it — so one person can be a Builder in one division and a Viewer elsewhere."
 - **You know it worked when:** the list labelled "People" shows rows.
@@ -945,18 +945,18 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 
 ### SHL-01 Switch between normal and technical mode
 - **Who:** any signed-in person
-- **Starts at:** the header toggle **"Normal"** / **"Technical"** (group "Mode")
+- **Starts at:** the mode switch **"Normal"** / **"Technical"** (group "Mode"): in the header bar from 1,100 px wide, in the account menu below that, under **More** on a phone
 - **Needs:** signed in
 - **Level:** Foundation
 - **Learn first:** ID-02
 - **What you learn:** normal mode never names infrastructure; technical mode shows ids, raw events and protocol names.
 - **Steps:**
-  1. Click **"Technical"**. It looks pressed, and a **"System"** link appears beside the toggle.
+  1. Click **"Technical"**. It looks pressed, and **"System"** appears: an icon link of its own beside the bar's icons, outside the mode switch, so the switch is the same width in both modes. Below 1,100 px wide the switch is in the account menu (**"Your account, the mode and signing out"**), and System status is a row in that menu; on a phone both are under **More**.
   2. Screens add ids and raw detail, and name protocols: the AI assistants heading reads **"MCP access tokens"**.
   3. Every screen keeps the mode, and this browser remembers it after a reload.
 - **You know it worked when:** **"Technical"** is the pressed option and, for example, the AI assistants heading reads **"MCP access tokens"**.
 - **Variations and refusals:** a private window that refuses storage keeps the mode for the session only.
-- **Where:** `AppShell.tsx` (`ModeToggle`), `store/uiSlice.ts`, `store/index.ts`.
+- **Where:** `shellControls.tsx` (`ModeToggle`, `SystemLink`, `AccountMenu`), `AppShell.tsx`, `store/uiSlice.ts`, `store/index.ts`.
 - **Reachable from:** UI
 - **Covered by tests:** `App.test.tsx` "keeps system status behind technical mode, and remembers the mode"; `breadth.spec.ts` "a normal-mode run never prints…".
 
@@ -987,11 +987,12 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
   1. **"Endgame home"** (the mark) goes to `/`.
   2. The breadcrumb "Where you are" shows links for earlier steps and the current page as plain text. On the home screen the earlier steps re-select a level in place.
   3. Labels longer than 48 characters are cut, with the full text on hover.
-  4. On a tablet the header is the bar (mark, mode, balance, bell, account, sign out) with "Where you are" on a row beneath; where a screen has a conversation, **"Talk"** sits beside the bell and brings it into view, ready to type.
-  5. On a phone (under 640 px wide, or a phone on its side) the header is one row: **"Up to {level}"** (a chevron) or, at the top, the mark; then where you are — the page's name in full, up to two lines, with the levels above it in small type; then **"Your account"**. Tapping where you are opens the sheet **"Where you are"**, listing every level, each one tap away. The mode toggle, the organisation switcher and "Sign out" move under **More** in the bottom bar (SHL-07).
+  4. On a tablet and a desktop the header is one bar that never wraps: the mark; "Where you are" in the same row from 1,280 px wide, on a row of its own beneath the bar below that; then the controls, each 44 px. The organisation switcher **"Working in"** is always in the bar. The balance is a neutral chip that reads **"Credits"**, the figure and a small dot — green with room to spend, amber below zero, red only when nothing is left to spend, overdraft included, grey for an organisation never topped up — and leads to Credits; it is read out as "{n} credits left" (with ", below zero", ", at its limit" or ", never topped up" when one applies). Then the bell. From 1,100 px wide the mode switch, **"System"** (technical mode, an icon link of its own), **"Your account"** and **"Sign out"** sit in the bar; below 1,100 they are in the account menu, the icon **"Your account, the mode and signing out"**, which lists "Your account", "System status" (technical mode), the mode and "Sign out".
+  5. On a tablet a **"Talk"** icon sits beside the bell on every page. Where the page has a conversation it opens it in a drawer from the right, ready to type; on a page without one it goes to the org chart and opens its conversation in the drawer there.
+  6. On a phone (under 640 px wide, or a phone on its side) the header is one row: **"Up to {level}"** (a chevron) or, at the top, the mark; then where you are; then **"Your account"**. While the page's own title is in view the row names the level above it; once the title has scrolled under the header it names this place, by its short name. Tapping it opens the sheet **"Where you are"**, listing every level, each one tap away. The header tucks away as you scroll down and comes back as soon as you scroll up. The mode switch, the organisation switcher and "Sign out" move under **More** in the bottom bar (SHL-07).
 - **You know it worked when:** clicking a step lands on that level.
 - **Variations and refusals:** none found.
-- **Where:** `AppShell.tsx` (`Breadcrumb`), `PhoneShell.tsx` (`PhoneHeader`), `HomeView.tsx` (`crumbsFor`).
+- **Where:** `AppShell.tsx` (`Breadcrumb`, `TalkHere`), `shellControls.tsx` (`CreditsPill`, `AccountMenu`), `PhoneShell.tsx` (`PhoneHeader`), `HomeView.tsx` (`crumbsFor`).
 - **Reachable from:** UI
 - **Covered by tests:** `console.spec.ts` "shows the tree from the API, and selection scopes the breadcrumb…"; `components/phone.test.tsx` "names where you are in full with the way up…", "lists every level above in a sheet…"; `tests-demo/phone.spec.ts`.
 
@@ -1019,10 +1020,11 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Learn first:** ID-02
 - **What you learn:** operators always know they are in God mode, which organisation every screen is showing, and that what they do there is logged for the Owner.
 - **Steps:**
-  1. A coral band labelled "God mode" shows **"God mode"** (drawn in capitals). Outside an organisation it reads "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it."
-  2. Inside an organisation you entered it reads, on every screen, "You are inside {Name} as a FrostAura operator, acting as an Admin. Your entry and everything you change here are logged where its Owner can read them.", with **"Leave {Name}"**.
-  3. **"Leave {Name}"** returns every screen to your own organisation and opens `/operator`. **"Every organisation"** does the same; it is shown everywhere except on `/operator` while you are in no organisation.
-- **You know it worked when:** the band is visible, naming the organisation you are inside.
+  1. One slim coral bar labelled "God mode" sits above the header on every screen: **"God mode"** (drawn in capitals), the sentence on one line (cut short, in full on hover; on a phone the line is left out), **"Leave {Name}"** once you are inside one, **"Every organisation"**, and a chevron **"What God mode means"**. Outside an organisation the sentence is "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it."
+  2. Inside an organisation you entered it reads, on every screen, "You are inside {Name} as a FrostAura operator, acting as an Admin. Your entry and everything you change here are logged where its Owner can read them."
+  3. The chevron opens the full sentence beneath the bar (the bar's own line then says "Inside {Name}"), and its name becomes "Hide what God mode means". On a phone **"Every organisation"** is in that opened part rather than in the bar.
+  4. **"Leave {Name}"** returns every screen to your own organisation and opens `/operator`. **"Every organisation"** does the same; it is shown everywhere except on `/operator` while you are in no organisation.
+- **You know it worked when:** the bar is visible with "Leave {Name}" naming the organisation you are inside, and the chevron shows the full sentence.
 - **Variations and refusals:** the organisation entered is named in the address (`?organisation={slug}`) and remembered for the tab, so a link that does not carry it — the balance, the bell, Autonomy, People — still shows it until you leave.
 - **Where:** `features/shell/GodModeBand.tsx`, `lib/useActiveOrganisation.ts` (`useActiveOrganisation`, `useLeaveOrganisation`), `store/uiSlice.ts` (`entered`).
 - **Reachable from:** UI
@@ -1045,19 +1047,21 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Covered by tests:** `App.test.tsx` "answers an unknown address plainly".
 
 ### SHL-07 Use the console on a phone
-- **Who:** any signed-in person, on a phone (or in any window under 640 px wide, or under 500 px tall and under 1024 px wide — the academy's frame on a phone included).
+- **Who:** any signed-in person, on a phone (or in any window under 640 px wide — the academy's frame on a phone included — or a phone on its side: a window wider than it is tall, under 500 px tall and from 560 to 1,023 px wide).
 - **Starts at:** any console screen.
 - **Needs:** signed in.
 - **Level:** Foundation
 - **Learn first:** SHL-03
 - **What you learn:** the five places a thumb goes most are always at the foot of the screen, and every long page opens folded to what matters.
 - **Steps:**
-  1. The bottom bar shows **Home** (the org chart), **Talk** (this page's conversation), **Alerts** (the notifications page, with the unread count), the balance itself (to Credits) and **More**. The current one is marked. It sits above the home indicator.
+  1. The bottom bar shows **Home** (the org chart), **Talk** (this page's conversation), **Alerts** (the notifications page, with the unread count), **Credits** (to Credits, the balance as a small badge on its icon — "1,840", "12k", "−120" — red only when nothing is left to spend, overdraft included; read out as "Credits: {n} left") and **More**. The bar keeps five slots, so each item stays where it is and More stays at the end even when one is missing. The current one is marked. It sits above the home indicator.
   2. **Talk** opens the conversation of the page you are on — the level selected on the org chart, the app, the employee — in a full-screen sheet: what was said scrolls, the message box stays at the foot above the keyboard, approvals are answered inside it, and a reply streams in without the page moving. It opens at the latest message every time, follows the reply down as it arrives, and from the moment a message is sent typing dots say the answer is on its way ("Sending…", then "Working on it"); scrolled up to read what was said before, you stay there and a **"New reply"** button takes you down to it. Closing it keeps the reply streaming and the draft. On a page with no conversation, Talk opens the org chart's.
   3. **More** opens a sheet: Manage the organisation, Hiring, Autonomy, Ideas from your portfolio, People and Secrets (Admins and the Owner), AI assistants, Operator access (the Owner), God mode (operators), System status (technical mode); then "Your account", the organisation switcher, the mode and "Sign out".
   4. Long pages open folded on a phone: each section is a named row with a line about it, one tap to open (an app's "Change {app}", "Ask about this app", "Dashboard", "History", "Sharing", "Secrets", "Running and who can open it", "What it may spend", "What it uses", "The app itself"; a run's plan and tasks; the budget tree; the operator's prices; a verdict's evidence, NOTE-03's "What you are told about"). An opened row says its title once: it becomes the section's heading, and the section's own heading of the same words is not drawn again. A verdict puts the decision straight under the verdict (VERD-03). Notifications show the unread and the newest ten, then **"Show older"** ten at a time (NOTE-03). A run's steps show the latest first, twelve at a time, and an approval scrolled out of sight leaves a bar pinned at the top until it is answered.
-- **You know it worked when:** every screen is one column, nothing scrolls sideways, every control is at least 44 px tall (a link that is a word in a sentence aside), and Home, Talk, Alerts, the balance and More are one tap away from anywhere.
-- **Variations and refusals:** a tablet (640–1023 px) keeps the full header and the page's own columns, with the side panel's cards two by two under the page; nothing folds.
+- **You know it worked when:** every screen is one column, nothing scrolls sideways, every control is at least 44 px tall (a link that is a word in a sentence aside), and Home, Talk, Alerts, Credits and More are one tap away from anywhere.
+- **Variations and refusals:**
+  - A phone on its side (wider than tall, at least 560 px wide, under 500 px tall) gets the rail layout: the bar's five items become a slim rail down the left edge, the header is one line, and the page is one full-width column beside the rail, with the side panel's cards two across under it. A short window that is upright, or narrower than 560 px, keeps the phone layout with the bar at the foot.
+  - A tablet (640–1023 px) keeps the full header and the page's own columns, with the side panel's cards two by two under the page; nothing folds.
 - **Where:** `features/shell/AppShell.tsx`, `PhoneShell.tsx`, `talk.tsx`; `components/Sheet.tsx`, `BottomNav.tsx`, `Fold.tsx`; `lib/useViewport.ts`, the breakpoints in `lib/tokens.ts`.
 - **Reachable from:** UI
 - **Covered by tests:** `components/phone.test.tsx`; `tests-demo/phone.spec.ts` (every screen at 375 × 812 with touch; "every control on every main screen is a thumb's height", "the conversation opens at its latest message…", "an opened fold says its title once", the verdict and notification budgets).

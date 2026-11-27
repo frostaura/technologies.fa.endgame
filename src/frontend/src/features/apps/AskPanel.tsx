@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import { Icon } from "@/components/Icon";
+import { Disclosure } from "@/components/Fold";
 import { Empty, Failed, Loading, Skeleton, Stale, Spinner } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -119,8 +120,8 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
         </h2>
         <span className="max-w-prose text-ink-body">Ask in plain words about its visits, errors and what its people do in it. It answers from this app&rsquo;s own records only.</span>
         <div className="flex flex-col gap-2 pt-1 sm:flex-row">
-          <Input id={inputId} aria-labelledby={`${inputId}-title`} value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} placeholder="Which days are busiest?" className="min-h-12 flex-1 px-4" />
-          <Button type="submit" variant="outline" className="min-h-12" disabled={!typed || estimating.isLoading}>
+          <Input id={inputId} aria-labelledby={`${inputId}-title`} value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} placeholder="Which days are busiest?" className="flex-1" />
+          <Button type="submit" variant="secondary" className="shrink-0" disabled={!typed || estimating.isLoading}>
             {estimating.isLoading ? (
               <>
                 <Spinner inherit />
@@ -177,12 +178,12 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
           {technical && answer.sql && <Query sql={answer.sql} />}
           <div className="flex flex-wrap items-center gap-2">
             {canAsk && (
-              <Button variant="outline" onClick={() => void keep()} disabled={saving.isLoading || saved?.startsWith("It is on") === true}>
+              <Button variant="secondary" onClick={() => void keep()} disabled={saving.isLoading || saved?.startsWith("It is on") === true}>
                 {saving.isLoading ? "Keeping it…" : "Keep this on the dashboard"}
               </Button>
             )}
             <Button
-              variant="ghost"
+              variant="quiet"
               onClick={() => {
                 setAnswer(null);
                 setEstimate(null);
@@ -206,19 +207,17 @@ export function AskPanel({ appId, canAsk }: { appId: string; canAsk: boolean }) 
 
 function Query({ sql }: { sql: string }) {
   return (
-    <details>
-      <summary className="min-h-touch cursor-pointer py-2 text-sm text-ink-muted">The query</summary>
+    <Disclosure title="The query">
       <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xs bg-ground p-3 font-mono text-xs">{sql}</pre>
-    </details>
+    </Disclosure>
   );
 }
 
 /** Technical mode only: the last query tried and the guard's or the database's message about it. */
 function Underneath({ technical }: { technical: AskTechnical }) {
   return (
-    <details open className="text-sm">
-      <summary className="min-h-touch cursor-pointer py-2 text-ink-muted">What failed underneath</summary>
-      <div className="flex flex-col gap-2">
+    <Disclosure title="What failed underneath" defaultOpen>
+      <div className="flex flex-col gap-2 text-sm">
         {technical.sql && (
           <>
             <span className="text-ink-muted">The last query tried</span>
@@ -228,7 +227,7 @@ function Underneath({ technical }: { technical: AskTechnical }) {
         <span className="text-ink-muted">What refused it</span>
         <pre className="whitespace-pre-wrap break-words rounded-xs bg-ground p-3 font-mono text-xs">{technical.error}</pre>
       </div>
-    </details>
+    </Disclosure>
   );
 }
 
@@ -311,7 +310,7 @@ function SavedCard({ appId, question, canChange, onRefused }: { appId: string; q
       <div className="flex items-start gap-2">
         <h3 className="min-w-0 flex-1 break-words pt-0.5 font-display text-base font-semibold">{question.question}</h3>
         {canChange && !pending && (
-          <Button size="sm" variant="ghost" className="-mr-2 -mt-2 size-11 shrink-0 p-0 text-ink-muted hover:text-ink" onClick={() => void drop()} aria-label={`Take off “${question.question}”`} title="Take it off the dashboard">
+          <Button size="icon" variant="quiet" className="-mr-2 -mt-2" onClick={() => void drop()} aria-label={`Take off “${question.question}”`} title="Take it off the dashboard">
             <X aria-hidden className="size-4" />
           </Button>
         )}

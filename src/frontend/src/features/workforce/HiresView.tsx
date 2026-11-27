@@ -5,6 +5,9 @@ import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmCard } from "@/components/ui/confirm";
+import { LINK } from "@/components/ui/layout";
+import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { formatCredits, formatDate, formatNumber, plural } from "@/lib/format";
 import { PageHeader, SECTION, useShowAll } from "@/components/ui/page";
@@ -55,7 +58,7 @@ export function HiresView() {
         lead="Hires are proposed when the organisation needs someone: a new division, a project reaching a new stage, or a job that keeps coming back. In auto-mode one that fits the budget is taken on at once; otherwise it waits for you here."
         actions={
           scope && isAdmin && !raising ? (
-            <Button variant="outline" onClick={() => setRaising(true)}>
+            <Button variant="secondary" onClick={() => setRaising(true)}>
               Ask for a hire
             </Button>
           ) : undefined
@@ -112,7 +115,7 @@ function Proposals({ scope, tree }: { scope: string; tree: Tree | undefined }) {
                 Nothing is waiting. Every proposal here has been decided.
               </p>
             ) : (
-              <HireRows hires={open} tree={tree} />
+              <HireRows label="Proposals waiting for you" hires={open} tree={tree} />
             )}
           </section>
           {decided.length > 0 && (
@@ -120,7 +123,7 @@ function Proposals({ scope, tree }: { scope: string; tree: Tree | undefined }) {
               <h2 className={SECTION}>
                 Decided<span className="ml-2 font-sans text-base font-normal tabular-nums text-ink-muted">{formatNumber(decided.length)}</span>
               </h2>
-              <HireRows hires={decided} tree={tree} />
+              <HireRows label="Proposals decided" hires={decided} tree={tree} />
             </section>
           )}
         </>
@@ -129,51 +132,59 @@ function Proposals({ scope, tree }: { scope: string; tree: Tree | undefined }) {
   );
 }
 
+/** The columns of a list of proposals: who and where takes the room, then its cost and its state. */
+const HIRE_COLUMNS: Column[] = [
+  { key: "hire", header: "Proposal", kind: "grow" },
+  { key: "cost", header: "What it costs", kind: "text" },
+  { key: "state", header: "State", kind: "status" },
+];
+
 /**
- * Proposals as rows of one card, every row laid out alike (real-stack 43, console-desktop 48): who and
- * where, why and when; what it would cost; its state. A table at a desktop's width, stacked on a phone,
- * so an odd number never leaves an orphan card; the newest ten, then "Show all".
+ * Proposals as one table (the shared {@link Table}, real-stack 43, console-desktop 48): who and where, why and
+ * when; what it would cost; its state. Cards where it is narrow, so an odd number never leaves an orphan; each
+ * row opens its proposal; the newest ten, then "Show all".
  */
-function HireRows({ hires, tree }: { hires: Hire[]; tree: Tree | undefined }) {
+function HireRows({ label, hires, tree }: { label: string; hires: Hire[]; tree: Tree | undefined }) {
   const list = useShowAll(hires, 10, "proposals");
   return (
     <>
-      <ul className="flex flex-col divide-y overflow-hidden rounded-md border bg-surface shadow-card">
+      <Table label={label} columns={HIRE_COLUMNS} at="medium">
         {list.shown.map((h) => (
           <HireRow key={h.id} hire={h} tree={tree} />
         ))}
-      </ul>
+      </Table>
       {list.control}
     </>
   );
 }
 
 function HireRow({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
-  const badge = hire.status === "proposed" && !hire.withdrawn ? { label: "Waiting for you", tone: "warn" as const } : hireBadge(hire);
+  const waiting = hire.status === "proposed" && !hire.withdrawn;
+  const badge = waiting ? { label: "Waiting for you", tone: "warn" as const } : hireBadge(hire);
   return (
-    <li>
-      <Link
-        href={paths.hire(hire.id)}
-        className="grid grid-cols-1 gap-x-6 gap-y-1.5 px-5 py-4 text-ink transition-colors hover:bg-ground max-sm:px-4 md:grid-cols-[minmax(0,1fr)_16rem_10rem] md:items-center"
-      >
+    // The whole row opens the proposal: its title's link covers the row.
+    <TableRow className="relative transition-colors hover:bg-ground">
+      <Cell col="hire" primary>
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="font-semibold">
+          <Link href={paths.hire(hire.id)} className="font-semibold text-ink after:absolute after:inset-0">
             {nameWithRole(hire.name, hire.role)} for {scopeName(tree, hire.scope)}
-          </span>
+          </Link>
           <span className="text-sm text-ink-muted">
             {TRIGGER[hire.trigger]} · <span className="whitespace-nowrap">{formatDate(hire.createdAt)}</span>
           </span>
           {hire.withdrawn && hire.decision?.note && <span className="text-sm text-ink-body">{hire.decision.note}</span>}
         </span>
+      </Cell>
+      <Cell col="cost">
         <span className="flex flex-col gap-0.5 text-sm">
-          <span className="whitespace-nowrap text-ink-body">About {formatCredits(expectedMonthly(hire))} a month</span>
-          {!hire.withinBudget && hire.status === "proposed" && <span className="whitespace-nowrap text-attention-text">More than the budget has room for</span>}
+          <span className="text-ink-body">About {formatCredits(expectedMonthly(hire))} a month</span>
+          {!hire.withinBudget && waiting && <span className="text-attention-text">More than the budget has room for</span>}
         </span>
-        <span className="md:justify-self-end">
-          <Badge tone={badge.tone}>{badge.label}</Badge>
-        </span>
-      </Link>
-    </li>
+      </Cell>
+      <Cell col="state">
+        <Badge tone={badge.tone}>{badge.label}</Badge>
+      </Cell>
+    </TableRow>
   );
 }
 
@@ -246,27 +257,26 @@ function RecurringRow({ role, tree, isAdmin, waiting }: { role: RecurringRole; t
       </span>
       {role.lastBrief && <span className="text-sm text-ink-muted">Last brief: {role.lastBrief}</span>}
       {waiting ? (
-        <Link href={paths.hire(waiting.id)} className={cn("self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
+        <Link href={paths.hire(waiting.id)} className={cn(LINK, "self-start", TAP)}>
           Already proposed — open it
         </Link>
       ) : open ? (
-        <form onSubmit={(e) => void submit(e)} aria-label={`Propose ${role.role} as a hire`} className="flex flex-col gap-2 pt-1">
-          <label htmlFor={`name-${role.role}`} className="text-sm font-medium">
-            Name the new employee
-          </label>
-          <Input id={`name-${role.role}`} value={name} onChange={(e) => setName(e.target.value)} />
-          <span className="text-sm text-ink-muted">Expected about {formatCredits(monthly)} a month, from what the contractors cost.</span>
-          <span className="flex flex-wrap gap-2">
-            <Button type="submit" size="sm" disabled={state.isLoading}>
-              Propose the hire
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-          </span>
-        </form>
+        <ConfirmCard
+          label={`Propose ${role.role} as a hire`}
+          question={`Propose ${role.role} as a permanent hire?`}
+          confirm="Propose the hire"
+          cancel="Cancel"
+          destructive={false}
+          busy={state.isLoading}
+          onSubmit={(e) => void submit(e)}
+          onCancel={() => setOpen(false)}
+        >
+          <Field id={`name-${role.role}`} label="Name the new employee" hint={`Expected about ${formatCredits(monthly)} a month, from what the contractors cost.`}>
+            <Input id={`name-${role.role}`} value={name} onChange={(e) => setName(e.target.value)} aria-describedby={`name-${role.role}-hint`} />
+          </Field>
+        </ConfirmCard>
       ) : isAdmin ? (
-        <Button size="sm" variant="outline" className="self-start" onClick={() => setOpen(true)}>
+        <Button size="sm" variant="secondary" className="self-start" onClick={() => setOpen(true)}>
           Propose as a permanent hire
         </Button>
       ) : (
@@ -348,7 +358,7 @@ function RaiseHire({ scope, name, tree, onClose }: { scope: string; name: string
         <Button type="submit" disabled={state.isLoading}>
           {state.isLoading ? "Asking…" : "Ask for this hire"}
         </Button>
-        <Button variant="ghost" onClick={onClose}>
+        <Button variant="secondary" onClick={onClose}>
           Not now
         </Button>
       </span>

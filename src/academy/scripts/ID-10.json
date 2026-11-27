@@ -24,7 +24,7 @@
       "step": 2,
       "kind": "demo",
       "highlight": {
-        "selector": "ol[aria-label='Operator log']",
+        "selector": "[aria-label='Operator log']",
         "note": "While it loads, three skeleton cards; then the newest 500 entries."
       }
     },

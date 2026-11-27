@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * A tag is one line: it never wraps, and a label too long for its room is cut with the whole of it
  * in the tooltip.
  */
-const badgeVariants = cva("inline-flex max-w-full shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold", {
+const badgeVariants = cva("inline-flex h-6 max-w-full shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs font-semibold normal-case tracking-normal", {
   variants: {
     tone: {
       neutral: "bg-quiet text-quiet-text",

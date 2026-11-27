@@ -189,7 +189,7 @@ export function redLineBreached(verdict: Verdict, ideaRedLine: string | null): s
 export interface Option {
   choice: DecisionChoice;
   label: string;
-  variant: "primary" | "outline" | "ghost";
+  variant: "primary" | "secondary" | "danger-outline";
 }
 
 /**
@@ -203,27 +203,27 @@ export function decisionOptions(verdict: Verdict, redLine: string | null = null)
   if (redLine) {
     return [
       { choice: "change", label: change, variant: "primary" },
-      { choice: "drop", label: "Drop the idea", variant: "ghost" },
+      { choice: "drop", label: "Drop the idea", variant: "danger-outline" },
     ];
   }
   if (verdict.outcome === "build") {
     return [
       { choice: "build", label: "Build it", variant: "primary" },
-      { choice: "change", label: change, variant: "outline" },
-      { choice: "drop", label: "Drop the idea", variant: "ghost" },
+      { choice: "change", label: change, variant: "secondary" },
+      { choice: "drop", label: "Drop the idea", variant: "danger-outline" },
     ];
   }
   if (verdict.outcome === "change") {
     return [
       { choice: "change", label: change, variant: "primary" },
-      { choice: "build", label: "Build it as described", variant: "outline" },
-      { choice: "drop", label: "Drop the idea", variant: "ghost" },
+      { choice: "build", label: "Build it as described", variant: "secondary" },
+      { choice: "drop", label: "Drop the idea", variant: "danger-outline" },
     ];
   }
   return [
     ...(verdict.wouldChange ? [{ choice: "change" as const, label: change, variant: "primary" as const }] : []),
-    { choice: "overrule", label: "Overrule and build anyway", variant: verdict.wouldChange ? "outline" : "primary" },
-    { choice: "drop", label: "Drop the idea", variant: "ghost" },
+    { choice: "overrule", label: "Overrule and build anyway", variant: verdict.wouldChange ? "secondary" : "primary" },
+    { choice: "drop", label: "Drop the idea", variant: "danger-outline" },
   ];
 }
 

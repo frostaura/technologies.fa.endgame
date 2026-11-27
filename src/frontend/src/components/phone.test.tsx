@@ -30,8 +30,10 @@ function pretend(next: Size | null) {
     media: query,
     get matches() {
       const s = size ?? { width: 1440, height: 900 };
-      if (query === viewportQueries.phone) return s.width < breakpoints.sm || (s.height < breakpoints.short && s.width < breakpoints.lg);
+      if (query === viewportQueries.phone) return s.width < breakpoints.sm || (s.height < breakpoints.short && s.width > s.height && s.width >= breakpoints.railMin && s.width < breakpoints.lg);
       if (query === viewportQueries.desktop) return s.width >= breakpoints.lg;
+      const min = /^\(min-width: (\d+)px\)$/.exec(query);
+      if (min) return s.width >= Number(min[1]);
       return false;
     },
     addEventListener: () => undefined,
@@ -348,12 +350,39 @@ describe("the shell on a phone", () => {
         <p>Page</p>
       </AppShell>,
     );
+    // Below 1,100 px the mode switch and Sign out are in the account menu, so the header never wraps.
+    expect(screen.queryByRole("group", { name: "Mode" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Your account, the mode and signing out" }));
     expect(screen.getByRole("group", { name: "Mode" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
     expect(screen.getByRole("main").textContent).not.toContain("Message Acme");
     fireEvent.click(screen.getByRole("button", { name: "Talk to Acme" }));
     const drawer = await screen.findByRole("dialog", { name: "Talk to Acme" });
     expect(drawer.closest("[data-sheet]")?.getAttribute("data-sheet")).toBe("side");
     expect(within(drawer).getByLabelText("Message Acme")).toBeTruthy();
+  });
+
+  it("on a tablet page with no conversation, keeps the header's Talk, and it opens the org chart's in its drawer", async () => {
+    pretend(TABLET);
+    stub();
+    window.history.replaceState(null, "", "/account");
+    vi.stubGlobal("scrollTo", () => undefined);
+    renderWithStore(
+      <AppShell crumbs={[{ label: "Your account" }]}>
+        <p>Page</p>
+      </AppShell>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Talk: open the conversation on the org chart" }));
+    expect(window.location.pathname).toBe("/");
+    cleanup();
+    // The org chart, as it arrives, opens its conversation in the drawer.
+    renderWithStore(
+      <AppShell crumbs={[{ label: "Acme" }]} talk={{ label: "Talk to Acme", content: <input aria-label="Message Acme" /> }}>
+        <p>Org chart</p>
+      </AppShell>,
+    );
+    const drawer = await screen.findByRole("dialog", { name: "Talk to Acme" });
+    expect(drawer.closest("[data-sheet]")?.getAttribute("data-sheet")).toBe("side");
   });
 });

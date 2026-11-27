@@ -1,11 +1,12 @@
 import { useId, useState, type FormEvent } from "react";
 import { cn } from "@/lib/utils";
 import { SECTION } from "@/components/ui/page";
-import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
+import { ConfirmCard } from "@/components/ui/confirm";
+import { LINK_ALONE } from "@/components/ui/layout";
 import { Input } from "@/components/ui/field";
 import { formatCredits, plural } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -159,33 +160,34 @@ function Limit({
       )}
       {isAdmin &&
         (open ? (
-          <form onSubmit={(e) => void submit(e)} aria-label={`Set ${title.toLowerCase()}`} className="flex flex-col gap-1.5" noValidate>
+          // The house's one inline form, opened in place of the control that asked for it.
+          <ConfirmCard
+            destructive={false}
+            label={`Set ${title.toLowerCase()}`}
+            question={`Set ${title.toLowerCase()}`}
+            confirm="Save"
+            cancel="Not now"
+            busy={saving.isLoading}
+            onSubmit={(e) => void submit(e)}
+            onCancel={() => setOpen(false)}
+          >
             <label htmlFor={id} className="font-medium">
               Credits a month
             </label>
-            {/* The field and its buttons share one row, centred on the field. */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-invalid={Boolean(value.trim()) && n === null} aria-describedby={value.trim() && n === null ? `${id}-problem` : undefined} className="w-auto min-w-0 flex-1 basis-24" />
-              <Button type="submit" size="sm" disabled={n === null || saving.isLoading}>
-                Save
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-                Not now
-              </Button>
-            </div>
+            <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-invalid={Boolean(value.trim()) && n === null} aria-describedby={value.trim() && n === null ? `${id}-problem` : undefined} />
             {value.trim() && n === null && (
               <span id={`${id}-problem`} role="alert" className="text-sm text-attention-text">
                 Type a number of credits.
               </span>
             )}
-          </form>
+          </ConfirmCard>
         ) : (
           <span className="flex flex-wrap gap-1">
-            <Button size="sm" variant="ghost" className="text-primary-link" onClick={() => setOpen(true)}>
+            <Button size="sm" variant="quiet" onClick={() => setOpen(true)}>
               {own ? "Change it" : `Set one for ${app.name}`}
             </Button>
             {own && (
-              <Button size="sm" variant="ghost" disabled={removing.isLoading} onClick={() => void drop()}>
+              <Button size="sm" variant="quiet" disabled={removing.isLoading} onClick={() => void drop()}>
                 Remove it
               </Button>
             )}
@@ -232,7 +234,7 @@ export function IdleMinutes({ app, canChange }: { app: AppDetail; canChange: boo
       {/* "Save" sits on the field's own row, centred on it; the hint and any problem go under both. */}
       <div className="flex items-center gap-2">
         <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={`${id}-hint${value.trim() && !valid ? ` ${id}-problem` : ""}`} aria-invalid={!valid} className="w-auto min-w-0 flex-1" />
-        <Button type="submit" size="sm" variant="outline" disabled={!valid || n === app.idleMinutes || state.isLoading}>
+        <Button type="submit" size="sm" variant="secondary" disabled={!valid || n === app.idleMinutes || state.isLoading}>
           Save
         </Button>
       </div>
@@ -256,23 +258,21 @@ export function AppItself({ app, canChange, isAdmin }: { app: AppDetail; canChan
   const slug = app.scope.split("/").pop() ?? app.scope;
   const archived = isArchived(app);
   const entered = active.entered ? active.organisation?.slug : undefined;
-  // A long app name makes long button words ("Archive …", from the tree's own controls): here they wrap inside the card, never past it.
   return (
-    <section aria-labelledby="itself-title" className="flex flex-col gap-3 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:py-2 [&_button]:text-left">
+    <section aria-labelledby="itself-title" className="flex flex-col gap-3">
       <h2 id="itself-title" className={cn(SECTION, "flex items-center gap-2")}>
         <Icon name="app" tinted />
         The app itself
       </h2>
-      {canChange ? (
-        <>
-          <RenameNode level="app" id={app.id} name={app.name} slug={slug} tree={tree} />
-          <ArchiveNode level="app" id={app.id} name={app.name} archived={archived} published={app.version !== null || app.publishedAt !== null} tree={tree} />
-        </>
-      ) : (
-        <p className="text-sm text-ink-muted">A Builder or above renames or archives it.</p>
+      {canChange ? <RenameNode level="app" id={app.id} name={app.name} slug={slug} tree={tree} /> : <p className="text-sm text-ink-muted">A Builder or above renames or archives it.</p>}
+      {/* Archive and Delete side by side: the outlined choice, then the destructive one, at one size. */}
+      {(canChange || isAdmin) && (
+        <div className="flex min-w-0 flex-wrap items-start gap-2">
+          {canChange && <ArchiveNode level="app" id={app.id} name={app.name} archived={archived} published={app.version !== null || app.publishedAt !== null} tree={tree} />}
+          {isAdmin && <DeleteNode level="app" id={app.id} name={app.name} tree={tree} onDeleted={() => navigate(entered ? paths.homeOf(entered) : paths.home())} />}
+        </div>
       )}
-      {isAdmin && <DeleteNode level="app" id={app.id} name={app.name} tree={tree} onDeleted={() => navigate(entered ? paths.homeOf(entered) : paths.home())} />}
-      <Link href={paths.manage(app.scope, entered)} className={cn("self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover", TAP)}>
+      <Link href={paths.manage(app.scope, entered)} className={cn(LINK_ALONE, "self-start text-sm")}>
         Manage it with the rest of the organisation
       </Link>
     </section>

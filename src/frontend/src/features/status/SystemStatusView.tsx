@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
 import { useGetSystemStatusQuery, type ServiceHealth, type SystemStatus } from "@/store/api";
-import { POLL_INTERVAL_MS, formatCheckedAt, formatLatency, toViewState } from "./statusModel";
+import { formatTime } from "@/lib/format";
+import { POLL_INTERVAL_MS, formatLatency, toViewState } from "./statusModel";
 
 export function SystemStatusView() {
   const query = useGetSystemStatusQuery(undefined, { pollingInterval: POLL_INTERVAL_MS, skipPollingIfUnfocused: true });
@@ -20,7 +21,7 @@ export function SystemStatusView() {
         title="System status"
         lead="Every service, asked directly whether it is healthy."
         actions={
-          <Button variant="outline" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
+          <Button variant="secondary" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
             <RefreshCw aria-hidden className={cn("size-4", query.isFetching && "animate-spin motion-reduce:animate-none")} />
             Check again
           </Button>
@@ -57,7 +58,7 @@ function LoadedState({ status, stale }: { status: SystemStatus; stale: { reason:
           {allHealthy ? <CheckCircle2 aria-hidden className="size-6 text-success" /> : <AlertTriangle aria-hidden className="size-6 text-attention-text" />}
           <CardTitle className="text-lg">{allHealthy ? "All services healthy" : summariseUnhealthy(unhealthy.length, status.services.length)}</CardTitle>
           <Badge tone={allHealthy ? "good" : "bad"}>{allHealthy ? "Healthy" : "Needs attention"}</Badge>
-          <p className="text-sm text-ink-muted sm:ml-auto">Checked at {formatCheckedAt(status.checkedAt)}</p>
+          <p className="text-sm text-ink-muted sm:ml-auto">Checked at {formatTime(status.checkedAt)}</p>
         </CardHeader>
         {stale && (
           <CardContent>

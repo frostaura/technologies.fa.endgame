@@ -48,7 +48,7 @@ export function NotificationFeed({ organisation, limit, onNavigate, compact = fa
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-ink-body">{view.data.unread === 0 ? "Nothing unread." : `${view.data.unread} unread`}</span>
             {view.data.unread > 0 && (
-              <Button size="sm" variant="ghost" onClick={() => void readAll()} disabled={all.isLoading}>
+              <Button size="sm" variant="quiet" onClick={() => void readAll()} disabled={all.isLoading}>
                 Mark all read
               </Button>
             )}
@@ -98,7 +98,7 @@ function Feed({ items, older, onOlder, children }: { items: NotificationItem[]; 
         ))}
       </ul>
       {hidden > 0 && (
-        <Button variant="soft" className="self-center" onClick={onOlder}>
+        <Button variant="secondary" className="self-center" onClick={onOlder}>
           Show older ({formatNumber(Math.min(hidden, PHONE_PAGE))} of {formatNumber(hidden)})
         </Button>
       )}
@@ -108,7 +108,8 @@ function Feed({ items, older, onOlder, children }: { items: NotificationItem[]; 
 
 /**
  * One notice. Unread is said one way only: a dot before it (and its title in bold); a read notice has
- * neither. Its kind is one tag, the time sits in one place, and "Mark read" is a quiet action at the end.
+ * neither. Its kind is one tag, the time sits in one place, and "Mark read" is a quiet action at the end
+ * of the tag's line.
  */
 function Row({ organisation, item, onNavigate, compact = false }: { organisation: string; item: NotificationItem; onNavigate?: () => void; compact?: boolean }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
@@ -154,10 +155,10 @@ function Row({ organisation, item, onNavigate, compact = false }: { organisation
           {item.emailedAt && <span className="text-xs text-ink-muted">Also e-mailed</span>}
           {technical && <code className="font-mono text-xs text-ink-muted">{item.kind}</code>}
           {technical && lines.technical && <code className="basis-full break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
-          {/* Narrow, the time and "Mark read" end this line instead of taking a column of their own. */}
-          {inline && (
+          {/* "Mark read" ends the tag's line, at every width; narrow, the time joins it instead of taking a column of its own. */}
+          {(inline || unread) && (
             <span className="ml-auto flex items-center gap-1">
-              <Time at={item.createdAt} />
+              {inline && <Time at={item.createdAt} />}
               {unread && <MarkRead onClick={() => void read()} />}
             </span>
           )}
@@ -168,12 +169,7 @@ function Row({ organisation, item, onNavigate, compact = false }: { organisation
           </p>
         )}
       </div>
-      {!inline && (
-        <div className="flex flex-col items-end gap-0.5">
-          <Time at={item.createdAt} />
-          {unread && <MarkRead onClick={() => void read()} />}
-        </div>
-      )}
+      {!inline && <Time at={item.createdAt} />}
     </li>
   );
 }
@@ -188,7 +184,7 @@ function Time({ at }: { at: string }) {
 
 function MarkRead({ onClick }: { onClick: () => void }) {
   return (
-    <Button size="sm" variant="ghost" className="-mr-2 px-2 text-primary-link hover:text-primary-hover" onClick={onClick}>
+    <Button size="sm" variant="quiet" className="-mr-2" onClick={onClick}>
       Mark read
     </Button>
   );

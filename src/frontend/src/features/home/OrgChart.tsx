@@ -6,11 +6,12 @@ import { Link } from "@/components/Link";
 import { Disclosure } from "@/components/Fold";
 import { Bar } from "@/components/states";
 import { Chip as ChipView, PersonChip } from "@/components/ui/chip";
-import { NO_VALUE, Stat } from "@/components/ui/stat";
+import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
+import { LINK } from "@/components/ui/layout";
 import { Badge } from "@/components/ui/badge";
 import { useShowAll } from "@/components/ui/page";
 import { buttonVariants } from "@/components/ui/button";
-import { formatCredits, formatNumber, headlineCredits, headlineNumber, percent, plural, timeAgo } from "@/lib/format";
+import { formatCredits, formatNumber, headlineCredits, percent, plural, timeAgo } from "@/lib/format";
 import { effectiveRole, roleRank } from "@/lib/roles";
 import { useGetMeQuery } from "@/store/api";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
@@ -51,7 +52,7 @@ export function AddDivision({ tree }: { tree: Tree }) {
   const org = tree.organisation;
   if (!org || roleRank(effectiveRole(tree, me.data, org.slug)) < roleRank("admin")) return null;
   return (
-    <Link href={`${manage(org.slug)}&add=1`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-primary-link hover:text-primary-hover")}>
+    <Link href={`${manage(org.slug)}&add=1`} className={buttonVariants({ variant: "quiet", size: "sm" })}>
       <Plus aria-hidden className="size-4" />
       Add a division
     </Link>
@@ -187,7 +188,7 @@ function DivisionColumn({
         <div className="relative z-10 flex shrink-0 items-center gap-1">
           {archived && <Badge tone="neutral">Archived</Badge>}
           {division.role !== null && (
-            <Link href={manage(scope)} aria-label={`Manage ${division.name}`} className="flex min-h-touch items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
+            <Link href={manage(scope)} aria-label={`Manage ${division.name}`} className={buttonVariants({ variant: "quiet", size: "sm" })}>
               Manage
             </Link>
           )}
@@ -317,7 +318,7 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
             <span className="line-clamp-2 break-words">{project.name}</span>
           </button>
           {project.role !== null && (
-            <Link href={manage(scope)} aria-label={`Manage ${project.name}`} className="relative z-10 flex min-h-touch shrink-0 items-center rounded-xs px-2 text-sm text-primary-link hover:text-primary-hover">
+            <Link href={manage(scope)} aria-label={`Manage ${project.name}`} className={cn(buttonVariants({ variant: "quiet", size: "sm" }), "relative z-10 shrink-0")}>
               Manage
             </Link>
           )}
@@ -344,14 +345,14 @@ function ProjectCard({ project, scope, trail, selection, onSelect, manage }: { p
             </span>
           </div>
           {project.progress.of > 0 && <Bar live className="h-2.5" value={percent(project.progress.done ?? project.progress.step, project.progress.of)} label={progressLine(project.progress)} />}
-          <Link href={paths.run(project.progress.runId)} className="relative z-10 flex min-h-touch items-center self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+          <Link href={paths.run(project.progress.runId)} className={cn(LINK, "relative z-10 flex min-h-touch items-center self-start")}>
             Watch the work
           </Link>
         </div>
       )}
 
       {atVerdict && project.ideaId && (
-        <Link href={paths.idea(project.ideaId)} className="relative z-10 flex min-h-touch items-center self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+        <Link href={paths.idea(project.ideaId)} className={cn(LINK, "relative z-10 flex min-h-touch items-center self-start")}>
           Read the verdict
         </Link>
       )}
@@ -373,16 +374,22 @@ function AppRow({ app, merged }: { app: TreeApp; merged: boolean }) {
   const archived = isArchived(app);
   const chips: Chip[] = archived ? [{ label: "Archived", tone: "neutral" }] : appChips(app);
   const unmeasured = app.visitsToday === null && !app.lastVisitAt;
+  const unbuilt = !archived && chips.some((c) => c.label.startsWith("Not built"));
   return (
     <li className="flex flex-col gap-2 rounded-sm bg-ground px-4 py-3 max-sm:px-3">
       {merged ? (
         // The project is this app: its tags, and the way to its page, without saying its name twice.
         <div className="flex flex-wrap items-center justify-between gap-2">
           <ChipRow chips={chips} />
-          <Link href={paths.app(app.id)} title={app.name} className="relative z-10 flex min-h-touch items-center gap-1.5 rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
-            <Icon name="app" className="size-4" />
-            Open the app
-          </Link>
+          {unbuilt ? (
+            // Nothing is published yet, so there is nothing to open: said plainly, not offered as a link.
+            <span className="flex min-h-touch items-center text-sm text-ink-muted">No version yet</span>
+          ) : (
+            <Link href={paths.app(app.id)} title={app.name} className={cn(LINK, "relative z-10 flex min-h-touch items-center gap-1.5 text-sm")}>
+              <Icon name="app" className="size-4" />
+              Open the app
+            </Link>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
@@ -395,7 +402,7 @@ function AppRow({ app, merged }: { app: TreeApp; merged: boolean }) {
       )}
       {!archived && appNote(app) && <p className="text-sm text-ink-body">{appNote(app)}</p>}
       {/* Two figures, always side by side. Null visits means nothing has been measured yet: unknown, never zero — "—", with why under it. */}
-      <div className="grid grid-cols-2 gap-4">
+      <StatRow cols={2}>
         <Stat
           plain
           label={app.visitsToday !== null || !app.lastVisitAt ? "Visits today" : "Last visit"}
@@ -403,8 +410,8 @@ function AppRow({ app, merged }: { app: TreeApp; merged: boolean }) {
           tone={unmeasured ? "muted" : "ink"}
           caption={unmeasured ? "Not measured yet" : undefined}
         />
-        <Stat plain label="Credits this month" value={headlineNumber(app.spend.monthCredits)} />
-      </div>
+        <Stat plain label="Credits this month" value={formatNumber(app.spend.monthCredits)} />
+      </StatRow>
     </li>
   );
 }

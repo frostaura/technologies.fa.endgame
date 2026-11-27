@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FileText, LoaderCircle, TriangleAlert, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ConversationAttachment } from "@/store/types";
 import { formatBytes, openAttachment, useAttachmentUrl, type DraftFile } from "./attachments";
@@ -54,9 +55,9 @@ export function DraftChips({ files, onRemove, imagesRefused = false }: { files: 
       })}
       {files.length > shown.length && (
         <li>
-          <button type="button" onClick={() => setAll(true)} className="flex min-h-touch items-center rounded-xs border bg-ground px-3 text-sm font-semibold text-ink-body hover:bg-surface">
+          <Button variant="secondary" className="min-h-touch px-3" onClick={() => setAll(true)}>
             +{files.length - shown.length}
-          </button>
+          </Button>
         </li>
       )}
       {all && files.length > SHOWN + 1 && (

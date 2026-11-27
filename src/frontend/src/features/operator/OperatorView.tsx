@@ -8,7 +8,7 @@ import { ConfirmCard } from "@/components/ui/confirm";
 import { PageHeader, SECTION } from "@/components/ui/page";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { formatCredits, formatDate, formatNumber, isValidSlug, slugify, timeAgo } from "@/lib/format";
+import { formatCredits, formatDate, formatNumber, isValidSlug, signedNumber, slugify, timeAgo } from "@/lib/format";
 import { RISE } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -29,7 +29,8 @@ import {
 import { provisionOrganisation } from "@/store/sensitive";
 import type { OperatorEntry, OperatorOrganisation, OrganisationProvisioned, Pricing, TopUpRequest } from "@/store/types";
 import { parseCredits } from "../credits/creditsModel";
-import { Fold } from "@/components/Fold";
+import { Disclosure, Fold } from "@/components/Fold";
+import { Stat, StatRow } from "@/components/ui/stat";
 import { AppShell } from "../shell/AppShell";
 import { pricingRows } from "./operatorModel";
 
@@ -168,12 +169,18 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
           </p>
         )}
       </div>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-        <Figure label="Balance" value={formatNumber(org.balance)} tone={org.balance < 0 ? "bad" : undefined} />
-        <Figure label="Overdraft allowed" value={`${formatNumber(org.overdraft.effective)} below zero`} note={org.overdraft.ownLimit !== null ? `Their own: ${formatNumber(org.overdraft.ownLimit)}; yours: ${formatNumber(org.overdraft.frostauraLimit)}` : `Set by you: ${formatNumber(org.overdraft.frostauraLimit)}`} />
-        <Figure label="Apps" value={formatNumber(org.apps)} />
-        <Figure label="Last active" value={org.lastActivityAt ? timeAgo(org.lastActivityAt) : "Never"} />
-      </dl>
+      {/* Every card has the same four figures in the same places. */}
+      <StatRow cols={4} className="gap-x-6 sm:gap-x-6">
+        <Stat plain label="Balance" value={formatNumber(org.balance)} tone={org.balance < 0 ? "bad" : "ink"} />
+        <Stat
+          plain
+          label="Overdraft allowed"
+          value={`${formatNumber(org.overdraft.effective)} below zero`}
+          caption={org.overdraft.ownLimit !== null ? `Their own: ${formatNumber(org.overdraft.ownLimit)}; yours: ${formatNumber(org.overdraft.frostauraLimit)}` : `Set by you: ${formatNumber(org.overdraft.frostauraLimit)}`}
+        />
+        <Stat plain label="Apps" value={formatNumber(org.apps)} />
+        <Stat plain label="Last active" value={org.lastActivityAt ? timeAgo(org.lastActivityAt) : "Never"} />
+      </StatRow>
       {entry && (
         <div role="status" className="flex flex-col gap-2 rounded-sm border bg-ground px-4 py-3 lg:col-span-2">
           <p className="font-semibold">You entered {org.name} as an Admin, {timeAgo(entry.enteredAt)}.</p>
@@ -185,32 +192,32 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
       )}
       <div className="flex flex-wrap gap-2 lg:col-span-2">
         {!entry && (
-          <Button size="sm" onClick={() => void go()} disabled={entering.isLoading}>
+          <Button size="sm" variant="secondary" onClick={() => void go()} disabled={entering.isLoading}>
             {entering.isLoading ? "Entering…" : `Enter ${org.name}`}
           </Button>
         )}
-        <Button size="sm" variant="outline" aria-expanded={action === "top-up"} onClick={() => open("top-up")}>
+        <Button size="sm" variant="secondary" aria-expanded={action === "top-up"} onClick={() => open("top-up")}>
           Top up
         </Button>
-        <Button size="sm" variant="soft" aria-expanded={action === "overdraft"} onClick={() => open("overdraft")}>
+        <Button size="sm" variant="secondary" aria-expanded={action === "overdraft"} onClick={() => open("overdraft")}>
           Deepest overdraft
         </Button>
       </div>
       {action === "top-up" && (
-        <div className="lg:col-span-2">
+        <div className="flex flex-col lg:col-span-2">
           <TopUpForm organisation={org.slug} name={org.name} onDone={() => setAction(null)} />
         </div>
       )}
       {action === "overdraft" && (
-        <div className="lg:col-span-2">
-        <OverdraftForm
-          org={org}
-          onDone={() => setAction(null)}
-          onSaved={(text) => {
-            setAction(null);
-            setSaved(text);
-          }}
-        />
+        <div className="flex flex-col lg:col-span-2">
+          <OverdraftForm
+            org={org}
+            onDone={() => setAction(null)}
+            onSaved={(text) => {
+              setAction(null);
+              setSaved(text);
+            }}
+          />
         </div>
       )}
       {saved && (
@@ -224,17 +231,6 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
         </p>
       )}
     </li>
-  );
-}
-
-/** One of a card's figures: every card has the same four in the same places, each value on one line. */
-function Figure({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: "bad" }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="truncate text-sm text-ink-muted">{label}</dt>
-      <dd className={cn("m-0 whitespace-nowrap font-semibold tabular-nums", tone === "bad" && "text-attention-text")}>{value}</dd>
-      {note && <dd className="m-0 text-xs text-ink-muted">{note}</dd>}
-    </div>
   );
 }
 
@@ -267,8 +263,25 @@ function TopUpForm({ organisation, name, request, onDone, onAdded }: { organisat
     }
   };
 
+  // Added, the form has done its work: what it came to is said in its place.
+  if (result?.ok)
+    return (
+      <p role="status" className="text-success-text">
+        {result.text}
+      </p>
+    );
   return (
-    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-2 rounded-xs border border-border-strong p-4" noValidate aria-label={`Top up ${name}`}>
+    <ConfirmCard
+      label={`Top up ${name}`}
+      question={`Top up ${name}`}
+      detail="A top-up settles any debt first and restarts everything paused at once."
+      confirm={sending.isLoading ? "Adding…" : request ? "Add it and close the request" : "Add the credits"}
+      cancel="Not now"
+      destructive={false}
+      busy={!n || !note.trim() || sending.isLoading}
+      onSubmit={(e) => void submit(e)}
+      onCancel={onDone}
+    >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field id={ids.credits} label="Credits to add" problem={amount.trim() && !n ? "Type a number of credits." : null}>
           <Input id={ids.credits} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -277,23 +290,12 @@ function TopUpForm({ organisation, name, request, onDone, onAdded }: { organisat
           <Input id={ids.note} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} aria-describedby={`${ids.note}-hint`} />
         </Field>
       </div>
-      <p className="text-sm text-ink-muted">A top-up settles any debt first and restarts everything paused at once.</p>
       {result && (
-        <p role={result.ok ? "status" : "alert"} className={result.ok ? "text-success-text" : "rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text"}>
+        <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           {result.text}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
-        {!result?.ok && (
-          <Button type="submit" size="sm" disabled={!n || !note.trim() || sending.isLoading}>
-            {sending.isLoading ? "Adding…" : request ? "Add it and close the request" : "Add the credits"}
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" onClick={onDone}>
-          {result?.ok ? "Done" : "Not now"}
-        </Button>
-      </div>
-    </form>
+    </ConfirmCard>
   );
 }
 
@@ -318,7 +320,16 @@ function OverdraftForm({ org, onDone, onSaved }: { org: OperatorOrganisation; on
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-2 rounded-xs border border-border-strong p-4" noValidate aria-label={`Deepest overdraft for ${org.name}`}>
+    <ConfirmCard
+      label={`Deepest overdraft for ${org.name}`}
+      question={`Deepest overdraft for ${org.name}`}
+      confirm={saving.isLoading ? "Saving…" : "Save"}
+      cancel="Not now"
+      destructive={false}
+      busy={n === null || saving.isLoading}
+      onSubmit={(e) => void submit(e)}
+      onCancel={onDone}
+    >
       <Field id={id} label="The most it may go below zero" hint="No interest and no fees, ever. At the limit its employees stop and its apps pause; nothing is deleted." problem={value.trim() && n === null ? "Type a number of credits." : null}>
         <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby={`${id}-hint`} />
       </Field>
@@ -327,15 +338,7 @@ function OverdraftForm({ org, onDone, onSaved }: { org: OperatorOrganisation; on
           {failure}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={n === null || saving.isLoading}>
-          {saving.isLoading ? "Saving…" : "Save"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onDone}>
-          Not now
-        </Button>
-      </div>
-    </form>
+    </ConfirmCard>
   );
 }
 
@@ -376,8 +379,7 @@ function Requests() {
             </ul>
           )}
           {closed.length > 0 && (
-            <details className="rounded-md border bg-surface px-5 py-3">
-              <summary className="min-h-touch cursor-pointer py-2 font-medium">Answered ({closed.length})</summary>
+            <Disclosure title={`Answered (${closed.length})`}>
               <ul aria-label="Answered requests" className="flex flex-col divide-y">
                 {closed.map((r) => (
                   <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
@@ -388,7 +390,7 @@ function Requests() {
                   </li>
                 ))}
               </ul>
-            </details>
+            </Disclosure>
           )}
         </>
       )}
@@ -423,25 +425,28 @@ function RequestRow({ request, onAdded }: { request: TopUpRequest; onAdded: (tex
       {mode === "fulfil" ? (
         <TopUpForm organisation={request.organisation} name={request.organisationName || request.organisation} request={request} onDone={() => setMode(null)} onAdded={onAdded} />
       ) : mode === "decline" ? (
-        <div className="flex flex-col gap-2 rounded-xs border border-border-strong p-4">
+        <ConfirmCard
+          label={`Decline ${request.organisationName || request.organisation}'s request`}
+          question="Decline the request?"
+          confirm="Decline it"
+          cancel="Not now"
+          busy={closing.isLoading}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void decline();
+          }}
+          onCancel={() => setMode(null)}
+        >
           <Field id={whyId} label="Why (the Owner reads this)">
             <Textarea id={whyId} rows={2} value={why} onChange={(e) => setWhy(e.target.value)} />
           </Field>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => void decline()} disabled={closing.isLoading}>
-              Decline it
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode(null)}>
-              Not now
-            </Button>
-          </div>
-        </div>
+        </ConfirmCard>
       ) : (
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={() => setMode("fulfil")}>
             Add the credits
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setMode("decline")}>
+          <Button size="sm" variant="danger-outline" onClick={() => setMode("decline")}>
             Decline
           </Button>
         </div>
@@ -488,7 +493,7 @@ function TopUps() {
                     {t.byEmail ? ` · by ${t.byEmail}` : ""}
                   </span>
                 </span>
-                <span className="whitespace-nowrap font-semibold tabular-nums">+&nbsp;{formatNumber(t.credits)}</span>
+                <span className="whitespace-nowrap font-semibold tabular-nums">{signedNumber(t.credits)}</span>
               </li>
             ))}
           </ul>

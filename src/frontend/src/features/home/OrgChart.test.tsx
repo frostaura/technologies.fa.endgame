@@ -88,7 +88,7 @@ describe("activity as sentences (D82)", () => {
 });
 
 describe("a project card's work under way (R2-9)", () => {
-  it("never prints step 0 of a plan nor 0 of an estimated 0, and leads with 0 for a tiny monthly spend (R2-2)", () => {
+  it("never prints step 0 of a plan nor 0 of an estimated 0, and says a tiny monthly spend by the one precision rule (ARCH-011)", () => {
     stubApi({ "GET /api/me": json(ME) });
     const tools = TREE.divisions[0] as Tree["divisions"][number];
     const tinyApp = { ...(tools.projects[0]?.apps[0] ?? {}), status: undefined, spend: { monthCredits: 0.004 } };
@@ -96,8 +96,8 @@ describe("a project card's work under way (R2-9)", () => {
     const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
     const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
     expect(container.textContent).not.toMatch(/step 0 of|0 of an estimated 0|less than 0\.01/);
-    expect(container.textContent).toContain("0 credits this month");
-    expect(screen.getByText("Credits this month").nextSibling?.textContent).toBe("0");
+    expect(container.textContent).toContain("<0.01 credits this month");
+    expect(screen.getByText("Credits this month").nextSibling?.textContent).toBe("<0.01");
   });
 
   it("fills the bar with the finished steps and names the one under way", () => {
@@ -162,7 +162,7 @@ describe("the chart after the real-stack walk", () => {
   // D44: a figure written to six places reads as the console writes figures.
   it("rounds a long figure in a needs-you line", () => {
     expect(tidyFigures("277.323824 credits are left in the budget.")).toBe("277 credits are left in the budget.");
-    expect(tidyFigures("Start this work? Estimated 2.4567 credits.")).toBe("Start this work? Estimated 2.5 credits.");
+    expect(tidyFigures("Start this work? Estimated 2.4567 credits.")).toBe("Start this work? Estimated 2.46 credits.");
     expect(tidyFigures("Version 1.2.3 stays")).toBe("Version 1.2.3 stays");
   });
 });
@@ -196,6 +196,16 @@ describe("the chart's shape", () => {
     expect(within(card).queryByText(/credits this month$/)).toBeNull();
     expect(within(card).getByRole("link", { name: "Open the app" }).getAttribute("href")).toBe("/apps/a1");
     expect(within(card).getAllByText("Ledger")).toHaveLength(1);
+  });
+
+  it("offers nothing to open on an app with no version yet, saying so in muted words", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const draft = { ...app, name: "Ledger", status: "draft", spend: { monthCredits: 5 } };
+    const tree = { ...TREE, divisions: [division("d1", "Tools", [project("p1", "Ledger", [draft])]), division("d2", "Kit", [])] } as unknown as Tree;
+    renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    const card = screen.getByRole("article", { name: "Ledger" });
+    expect(within(card).queryByRole("link", { name: "Open the app" })).toBeNull();
+    expect(within(card).getByText("No version yet").className).toContain("text-ink-muted");
   });
 
   it("draws every division's letter in ink, never in a hue of its own", () => {

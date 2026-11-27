@@ -97,6 +97,10 @@ export const shadow = {
   raised: "0 2px 4px rgb(11 16 32 / 0.06), 0 18px 40px rgb(47 91 255 / 0.16)",
   press: "0 8px 20px rgb(47 91 255 / 0.22)",
   toggle: "0 1px 2px rgb(11 16 32 / 0.12)",
+  /** The cue at the foot of a sheet or menu that scrolls: there is more below. */
+  cue: "inset 0 -16px 14px -14px rgb(11 16 32 / 0.22)",
+  /** A menu or popover: a defined edge and a clear lift off the page. */
+  menu: "0 2px 6px rgb(11 16 32 / 0.08), 0 16px 36px rgb(11 16 32 / 0.16)",
 } as const;
 
 /**
@@ -194,13 +198,15 @@ export const typography = {
  * `3xl` (1600) the page may set independent sections two across and the side panel widens; `4xl`
  * (2000) the same, with the whole console capped at `layout.width.frame` and centred.
  */
-export const breakpoints = { sm: 640, md: 768, lg: 1024, xl: 1280, "2xl": 1536, "3xl": 1600, "4xl": 2000, short: 500, low: 800 } as const;
+export const breakpoints = { sm: 640, md: 768, lg: 1024, hd: 1100, xl: 1280, "2xl": 1536, "3xl": 1600, "4xl": 2000, short: 500, low: 800, railMin: 560 } as const;
 
 /** Tailwind's `screens`, from {@link breakpoints}. Plain widths only, so `max-sm:` and friends exist. */
 export const screens = {
   sm: `${breakpoints.sm}px`,
   md: `${breakpoints.md}px`,
   lg: `${breakpoints.lg}px`,
+  /** The desktop header holds the mode switch and Sign out on its own row only from here; below, they are in the account menu. */
+  hd: `${breakpoints.hd}px`,
   xl: `${breakpoints.xl}px`,
   "2xl": `${breakpoints["2xl"]}px`,
   "3xl": `${breakpoints["3xl"]}px`,
@@ -210,23 +216,47 @@ export const screens = {
 /** The `low:` variant: a window with little height (a 1366×700 laptop, a phone or tablet on its side) — the conversation pane's header, strip and cost line fold to one line each. */
 export const lowQuery = `(max-height: ${breakpoints.low - 0.02}px)`;
 
-/** The `short:` variant: a phone on its side. */
-export const shortQuery = `(max-height: ${breakpoints.short - 0.02}px)`;
+/**
+ * The `short:` variant: a phone on its side — little height, and WIDER than it is tall. A short window that is
+ * upright (a portrait phone with its keyboard open, 375×450) is not short: it keeps the phone layout.
+ */
+export const shortQuery = `(max-height: ${breakpoints.short - 0.02}px) and (orientation: landscape)`;
 
 /**
- * A phone on its side: short and not wide enough for the desktop. It gets a layout of its own (the
- * `rail:` variant) — a slim side rail in place of the bottom bar, a one-line header, the page and its
- * side panel side by side, and sheets that come in from the side.
+ * A phone on its side: short, wider than it is tall, at least `railMin` wide (room for the rail and a column
+ * beside it) and not wide enough for the desktop. It gets a layout of its own (the `rail:` variant) — a slim
+ * side rail in place of the bottom bar, a one-line header, one full-width column beside the rail, and sheets
+ * that come in from the side. Anything narrower or upright stays the phone layout, so content is never
+ * crushed beside a rail.
  */
-export const railQuery = `${shortQuery} and (max-width: ${breakpoints.lg - 0.02}px)`;
+export const railQuery = `${shortQuery} and (min-width: ${breakpoints.railMin}px) and (max-width: ${breakpoints.lg - 0.02}px)`;
 
 /** A screen worked by touch (any phone or tablet), or drawn as a phone: every control there is a thumb's size (`touch:`). */
-export const coarseQuery = `(pointer: coarse), (max-width: ${breakpoints.sm - 0.02}px), ${shortQuery} and (max-width: ${breakpoints.lg - 0.02}px)`;
+export const coarseQuery = `(pointer: coarse), (max-width: ${breakpoints.sm - 0.02}px), ${railQuery}`;
 
 /** The media queries the shell's script reads, from the same numbers. */
 export const viewportQueries = {
-  phone: `(max-width: ${breakpoints.sm - 0.02}px), ${shortQuery} and (max-width: ${breakpoints.lg - 0.02}px)`,
+  phone: `(max-width: ${breakpoints.sm - 0.02}px), ${railQuery}`,
   desktop: `(min-width: ${breakpoints.lg}px)`,
+} as const;
+
+/**
+ * Where a {@link Table} stops being a list of cards and becomes a table: the width of the table's OWN box (a
+ * container query), not the window's — a table beside a side panel or a docked pane switches when it has the
+ * room, wherever that is. A page picks the threshold its columns need.
+ */
+export const tableAt = { narrow: "36rem", medium: "48rem", wide: "60rem" } as const;
+
+/** A table's column widths by kind (`components/ui/table.tsx`): fixed by kind, never by content, so rows line up. */
+export const tableTracks = {
+  grow: "minmax(0, 2fr)",
+  text: "minmax(0, 1fr)",
+  figure: "minmax(5.5rem, 0.6fr)",
+  status: "minmax(8rem, 0.8fr)",
+  date: "minmax(9.5rem, 0.8fr)",
+  action: "minmax(7rem, auto)",
+  /** The width of a column's name beside its value, in a table's card form. */
+  cardLabel: "7.5rem",
 } as const;
 
 /** Named widths. `frame` caps the whole console (header, page and side panel) so nothing spans an ultrawide. */
@@ -258,7 +288,8 @@ export const layout = {
   /** The organisation graph's frame: tall enough to read, short enough to keep the page in view. A bottom sheet's tallest. */
   height: {
     graph: "40rem",
-    sheet: "calc(var(--visible-height, 100dvh) - 2.5rem)",
+    /** A bottom sheet's tallest: 85% of what is visible, so the page behind always shows it is a sheet. */
+    sheet: "calc(var(--visible-height, 100dvh) * 0.85)",
     visible: "var(--visible-height, 100dvh)",
     /** The docked conversation: the viewport under the shell's sticky header (`--shell-chrome`, kept current by the shell). */
     dock: "calc(100dvh - var(--shell-chrome, 0px))",
@@ -303,7 +334,6 @@ export const layout = {
   /** Grid tracks: a chart's label column beside its bars; a table of figures with a name column. */
   columns: {
     "chart-row": "fit-content(9rem) minmax(0, 1fr)",
-    "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))",
     /** A line that grows and the thing that ends it (a figure, an action): the money pages' rows. */
     "grow-end": "minmax(0, 1fr) auto",
     /** A control before its words (a switch, a dot), and the words; then, optionally, what ends the row. */
@@ -311,18 +341,8 @@ export const layout = {
     "lead-grow-end": "auto minmax(0, 1fr) auto",
     "dot-grow": "0.5rem minmax(0, 1fr)",
     "dot-grow-end": "0.5rem minmax(0, 1fr) auto",
-    /** Figures that each take only their own width, spread across their row. */
-    "fit-3": "auto auto auto",
-    /** The credits budget tree: level, spent this month, cap, and an Admin's one action. */
-    "budget-tree": "minmax(0, 1.5fr) minmax(7rem, 1fr) 5.5rem 9rem",
-    "budget-tree-read": "minmax(0, 1.5fr) minmax(7rem, 1fr) 5.5rem",
     /** A wide credits page: the budget tree, and the month's figures and top-ups beside it. */
     "main-side": "minmax(0, 1fr) 24rem",
-    /** Autonomy's stage matrix: the stage, its three lists, and its actions. */
-    "stage-matrix": "minmax(9rem, 0.9fr) repeat(3, minmax(0, 1fr)) 8.5rem",
-    /** The operator log: when, what was done, and by whom. */
-    "time-grow": "10.5rem minmax(0, 1fr)",
-    "time-grow-who": "10.5rem minmax(0, 1fr) minmax(14rem, 0.45fr)",
     /** God mode's organisation row: who it is, then its four figures. */
     "name-wide": "minmax(13rem, 1.1fr) minmax(0, 2.4fr)",
     /** A form's first field wider than the two after it. */

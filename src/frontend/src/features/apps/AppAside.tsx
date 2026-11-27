@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import type { IconName } from "@/components/iconNames";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
+import { LINK_ALONE } from "@/components/ui/layout";
 import { formatDate, formatTime, plural } from "@/lib/format";
 import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -77,7 +77,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
               {i < all.length - 1 ? ", " : "."}
             </span>
           ))}{" "}
-          <Link href={paths.secrets(app.scope)} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
+          <Link href={paths.secrets(app.scope)} className={LINK_ALONE}>
             Manage them
           </Link>
         </p>
@@ -85,7 +85,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
       {canSeeSecrets && secretsView.kind === "failed" && <p className="text-sm text-attention-text">Its secrets could not be read: {secretsView.reason}</p>}
       <p className="text-sm text-ink-body">
         An AI assistant you let in can use this app the way a person does.{" "}
-        <Link href={paths.assistants()} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
+        <Link href={paths.assistants()} className={LINK_ALONE}>
           Let an assistant in
         </Link>
       </p>
@@ -116,7 +116,7 @@ export function ItIsYours({ app, isOwner }: { app: AppDetail; isOwner: boolean }
       <p className="text-ink-body">Download the code, its full history and all its data whenever you like, at no cost. Secrets are never included.</p>
       {isOwner ? (
         <>
-          <Button variant="outline" className="self-start" disabled={state.kind === "working"} onClick={() => void download()}>
+          <Button variant="secondary" className="self-start" disabled={state.kind === "working"} onClick={() => void download()}>
             {state.kind === "working" ? "Preparing the download…" : "Download everything"}
           </Button>
           {state.kind === "done" && (

@@ -1,5 +1,6 @@
 import { formatNumber } from "@/lib/format";
 import { NO_VALUE, Stat } from "@/components/ui/stat";
+import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { AskChart } from "@/store/types";
 
@@ -151,31 +152,22 @@ function Line({ chart, className }: { chart: AskChart; className?: string }) {
 function AnswerTable({ columns, rows, className }: { columns: string[]; rows: Record<string, unknown>[]; className?: string }) {
   const cols = columns.length > 0 ? columns : Object.keys(rows[0] ?? {});
   if (rows.length === 0) return <p className={cn("text-ink-muted", className)}>No rows came back.</p>;
+  const shown = rows.slice(0, 50);
+  // The house table: numbers right-aligned in figure columns, and below its own width threshold a list of cards, so a
+  // narrow tile never squeezes its columns. The more columns, the wider it must be before it is drawn as a table.
+  const table: Column[] = cols.map((c, i) => ({ key: c, header: c.replace(/_/g, " "), kind: i === 0 ? "grow" : shown.every((r) => r[c] === null || r[c] === undefined || typeof r[c] === "number") ? "figure" : "text" }));
+  const at = cols.length <= 2 ? "narrow" : cols.length <= 4 ? "medium" : "wide";
   return (
-    // The table scrolls inside its own box on a phone; the page never does.
-    <div className={cn("max-w-full overflow-x-auto rounded-xs border", className)}>
-      <table className="w-full text-left text-sm">
-        <thead className="bg-ground text-ink-muted">
-          <tr>
-            {cols.map((c) => (
-              <th key={c} scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
-                {c.replace(/_/g, " ")}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.slice(0, 50).map((r, i) => (
-            <tr key={i} className="border-t">
-              {cols.map((c) => (
-                <td key={c} className="whitespace-nowrap px-3 py-2">
-                  {cell(r[c])}
-                </td>
-              ))}
-            </tr>
+    <Table label="The answer's rows" columns={table} at={at} className={className}>
+      {shown.map((r, i) => (
+        <TableRow key={i}>
+          {cols.map((c, j) => (
+            <Cell key={c} col={c} primary={j === 0}>
+              {cell(r[c])}
+            </Cell>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </TableRow>
+      ))}
+    </Table>
   );
 }

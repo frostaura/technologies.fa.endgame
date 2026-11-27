@@ -29,7 +29,7 @@ card inside a page. A page hands it to the shell (`AppShell`'s `talk`, built by
 | An employee (`/employees/{id}`) | That employee (not a contractor, not someone let go) |
 | A piece of work (`/runs/{id}`) | The level the work belongs to (`run.scope`: its app, project or division) |
 | A verdict (`/ideas/{id}`) | The level the idea belongs to (`idea.scope`) |
-| Every other page (credits, people, secrets, autonomy, hiring, notifications, account, the tree, God mode) | None: a tool page has no subject to talk to; the phone's "Talk" goes home and opens the conversation there |
+| Every other page (credits, people, secrets, autonomy, hiring, notifications, account, the tree, God mode) | None: a tool page has no subject to talk to; the phone's "Talk" and the tablet header's chat icon (present on every tablet page) go home and open the conversation there |
 
 | Width | Placement |
 | --- | --- |
@@ -37,7 +37,7 @@ card inside a page. A page hands it to the shell (`AppShell`'s `talk`, built by
 | Side cards beside a docked pane | In the page column: beside the page from `3xl` (1,600 px), under it two across from 1,024 to 1,599 px; with the pane collapsed, beside it from `lg`. Real pages (app, employee, run, verdict) pass both `aside` and `talk` |
 | Collapsed | A 3.5 rem rail at the window's edge: the avatar, a chat mark, "Talk to {name}" read up the rail, typing dots while a reply is written, a dot per piece of work under way, and an unread marker when a reply finished while it was closed |
 | Full width | The page is hidden; header, strip, thread and composer share one centred `prose` column |
-| Tablet (640–1,023 px) | A drawer from the right (`Sheet side="side"`, `dock` wide), opened from the header's chat icon; the composer is always on screen. Pages may also place `TalkLauncher` |
+| Tablet (640–1,023 px) | A drawer from the right (`Sheet side="side"`, `dock` wide), opened from the header's chat icon (on a page with no subject the icon goes home and opens the drawer there); the composer is always on screen. Pages may also place `TalkLauncher` |
 | Phone (and a phone on its side) | The full-screen sheet, from the bottom bar's "Talk" or the page's launcher |
 | A low window (`low:`, under 800 px tall: 1,366×700, tablets and phones on their side) | The pane header is one line (the title first, the level's × beside it), the "also happening" strip folds into a count in the header, the cost line is one line, and under 500 px tall the composer's tools are icons only, so a work card can be seen whole |
 

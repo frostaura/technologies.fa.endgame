@@ -20,13 +20,13 @@ export function OneTime({ label, value, children, onDone }: { label: string; val
       <div className="text-ink">{children}</div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <code className="min-w-0 max-w-full break-all rounded-xs bg-surface px-3 py-2 font-mono text-base">{value}</code>
-        <Button size="sm" variant="outline" onClick={() => void copy()}>
+        <Button size="sm" variant="secondary" onClick={() => void copy()}>
           {copied === "yes" ? "Copied" : "Copy"}
         </Button>
       </div>
       {copied === "failed" && <p className="text-sm text-attention-text">It could not be copied; select it and copy it by hand.</p>}
       <p className="font-semibold text-success-text">It will not be shown again.</p>
-      <Button size="sm" variant="ghost" className="self-start" onClick={onDone}>
+      <Button size="sm" variant="quiet" className="self-start" onClick={onDone}>
         Done
       </Button>
     </div>

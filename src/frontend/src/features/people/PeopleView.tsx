@@ -3,7 +3,9 @@ import { ConfirmCard } from "@/components/ui/confirm";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { OneTime } from "@/components/OneTime";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
 import { Field, Input, Select } from "@/components/ui/field";
 import { formatDate } from "@/lib/format";
 import { RISE } from "@/lib/motion";
@@ -75,16 +77,8 @@ export function PeopleView() {
                 <Skeleton className="h-16 rounded-sm" />
               </Loading>
             )}
-            {outcome && !outcome.done && (
-              <p role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
-                {outcome.text}
-              </p>
-            )}
-            {outcome?.done && (
-              <p role="status" data-state="done" className="rounded-xs bg-success-tint px-4 py-3 text-success-text">
-                {outcome.text}
-              </p>
-            )}
+            {outcome && !outcome.done && <Alert state="failed" title={outcome.text} />}
+            {outcome?.done && <Alert state="done" title={outcome.text} />}
             {view.kind === "failed" && <Failed title={view.status === 403 ? "You cannot see the people here" : "The people could not be loaded"} reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
             {view.kind === "loaded" && (
               <>
@@ -121,32 +115,30 @@ export function PeopleView() {
   );
 }
 
-/** The columns of a row, the same for the header row and every row under it, so the table reads down. */
-const COLUMNS = {
-  member: "md:grid-cols-[minmax(0,1.5fr)_9.5rem_minmax(0,1fr)_12rem_9.5rem]",
-  invitation: "md:grid-cols-[minmax(0,1.5fr)_9.5rem_minmax(0,1fr)_12rem_9.5rem]",
-} as const;
-const HEADINGS = {
-  member: ["Person", "Role", "Where it was set", "Since", ""],
-  invitation: ["Person", "Role", "Where it was set", "Their invitation", ""],
-} as const;
+/** The columns of a table of grants: the same for people and for invitations, so the two read alike. */
+const COLUMNS: Record<"member" | "invitation", Column[]> = {
+  member: [
+    { key: "person", header: "Person", kind: "grow" },
+    { key: "role", header: "Role", kind: "text" },
+    { key: "where", header: "Where it was set", kind: "text" },
+    { key: "since", header: "Since", kind: "date" },
+    { key: "action", header: "Action", kind: "action", hideHeader: true },
+  ],
+  invitation: [
+    { key: "person", header: "Person", kind: "grow" },
+    { key: "role", header: "Role", kind: "text" },
+    { key: "where", header: "Where it was set", kind: "text" },
+    { key: "since", header: "Their invitation", kind: "text" },
+    { key: "action", header: "Action", kind: "action", hideHeader: true },
+  ],
+};
 
-/**
- * A table of grants at a desktop's width — a header row, then one row per person, every column in the
- * same place — and a list of cards on a phone. One list (not a copy per layout).
- */
+/** A table of grants (the shared {@link Table}): a header row and a row per person, cards where it is narrow. */
 function Rows({ label, variant, members, row }: { label: string; variant: keyof typeof COLUMNS; members: Member[]; row: (m: Member) => ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-md border bg-surface shadow-card">
-      <div aria-hidden className={cn("hidden gap-x-5 border-b bg-ground px-5 py-2.5 text-sm font-medium text-ink-muted md:grid", COLUMNS[variant])}>
-        {HEADINGS[variant].map((h, i) => (
-          <span key={i}>{h}</span>
-        ))}
-      </div>
-      <ul aria-label={label} className="flex flex-col divide-y">
-        {members.map(row)}
-      </ul>
-    </div>
+    <Table label={label} columns={COLUMNS[variant]} at="wide">
+      {members.map(row)}
+    </Table>
   );
 }
 
@@ -250,16 +242,50 @@ function MemberRow({
         </Select>
       </>
     ) : (
-      // A role that is not changed here reads as the same field's words, in the same place, without the box.
-      <span className="flex min-h-touch items-center px-3 text-ink max-md:px-0 max-md:font-medium">
+      // A role that is not changed here is plain text in the same place as the field, at the field's height.
+      <span className="flex min-h-touch items-center text-ink">
         {ROLE_NAME[member.role]}
       </span>
     );
 
   return (
-    <li data-member={member.email} className="flex flex-col gap-3 px-5 py-3.5 max-sm:px-4">
-      <div className={cn("grid grid-cols-1 items-center gap-x-5 gap-y-1.5", COLUMNS[variant])}>
-        <div className="flex min-w-0 flex-col md:order-1">
+    <TableRow
+      data-member={member.email}
+      after={
+        <>
+          {renewed?.invitationCode && (
+            <OneTime label={`New invitation code for ${member.displayName}`} value={renewed.invitationCode} onDone={() => setRenewed(null)}>
+              {renewed.emailed ? "It was e-mailed to them too." : "E-mail is not set up here, so give them this code yourself."} It works
+              {renewed.expiresAt ? ` until ${formatDate(renewed.expiresAt)}` : ` for ${INVITATION_DAYS} days`}; the code they had before no longer does.
+            </OneTime>
+          )}
+          {variant === "invitation" && editable && !inherited && !confirm && (
+            <Button size="sm" variant="quiet" className="-ml-3 self-start" disabled={removing.isLoading} onClick={() => setConfirm(true)}>
+              Remove {member.displayName}
+            </Button>
+          )}
+          {confirm && (
+            <ConfirmCard
+              label={`Confirm removing ${member.displayName}`}
+              question={`Remove ${member.displayName}?`}
+              detail={`${member.displayName} loses this role at once. Grants set elsewhere stay.`}
+              confirm="Remove"
+              cancel="Keep them"
+              busy={removing.isLoading}
+              onConfirm={() => void drop()}
+              onCancel={() => setConfirm(false)}
+            />
+          )}
+          {problem && (
+            <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+              {problem}
+            </p>
+          )}
+        </>
+      }
+    >
+      <Cell col="person" primary>
+        <div className="flex min-w-0 flex-col">
           <span className="truncate font-semibold" title={member.displayName}>
             {member.displayName}
             {self && <span className="font-normal text-ink-muted"> (you)</span>}
@@ -270,59 +296,27 @@ function MemberRow({
           {technical && <code className="break-all font-mono text-xs text-ink-muted">{member.membershipId}</code>}
           {editable && inherited && <span className="pt-0.5 text-sm text-ink-muted">{fromAbove ? `This grant holds here from ${scopeName(tree, member.scope)}; change it there.` : `Change this grant at ${scopeName(tree, member.scope)}.`}</span>}
         </div>
-        {/* On a phone: where it was set and since when, on one line; then the role and the row's action side by side. */}
-        <div className="flex min-w-0 flex-wrap gap-x-2 text-sm md:contents">
-          <span className="text-ink-body md:order-3">{inherited ? `Set at ${scopeName(tree, member.scope)}` : "Set here"}</span>
-          <span aria-hidden className="text-ink-muted md:hidden">
-            ·
-          </span>
-          <span className={cn("text-ink-muted md:order-4", variant === "member" && "whitespace-nowrap")}>{member.hasPasskey ? `Since ${formatDate(member.grantedAt)}` : pendingLine(member.invitationExpiresAt)}</span>
-        </div>
-        <div className="flex min-w-0 items-center justify-between gap-3 md:contents">
-          <div className="min-w-0 max-md:w-48 md:order-2">{roleCell}</div>
-          <div className="flex md:order-5 md:justify-end">
-            {variant === "member" && editable && !inherited && !confirm && (
-              <Button size="sm" variant="ghost" aria-label={`Remove ${member.displayName}`} title={`Remove ${member.displayName}`} disabled={removing.isLoading} onClick={() => setConfirm(true)}>
-                Remove
-              </Button>
-            )}
-            {variant === "invitation" && editable && !inherited && !renewed && (
-              <Button size="sm" variant="soft" disabled={renewing} onClick={() => void renew()}>
-                {renewing ? "Sending a new code…" : "Send a new code"}
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-      {renewed?.invitationCode && (
-        <OneTime label={`New invitation code for ${member.displayName}`} value={renewed.invitationCode} onDone={() => setRenewed(null)}>
-          {renewed.emailed ? "It was e-mailed to them too." : "E-mail is not set up here, so give them this code yourself."} It works
-          {renewed.expiresAt ? ` until ${formatDate(renewed.expiresAt)}` : ` for ${INVITATION_DAYS} days`}; the code they had before no longer does.
-        </OneTime>
-      )}
-      {variant === "invitation" && editable && !inherited && !confirm && (
-        <Button size="sm" variant="ghost" className="-ml-3 self-start" disabled={removing.isLoading} onClick={() => setConfirm(true)}>
-          Remove {member.displayName}
-        </Button>
-      )}
-      {confirm && (
-        <ConfirmCard
-          label={`Confirm removing ${member.displayName}`}
-          question={`Remove ${member.displayName}?`}
-          detail={`${member.displayName} loses this role at once. Grants set elsewhere stay.`}
-          confirm="Remove"
-          cancel="Keep them"
-          busy={removing.isLoading}
-          onConfirm={() => void drop()}
-          onCancel={() => setConfirm(false)}
-        />
-      )}
-      {problem && (
-        <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
-          {problem}
-        </p>
-      )}
-    </li>
+      </Cell>
+      <Cell col="role">{roleCell}</Cell>
+      <Cell col="where">
+        <span className="text-sm text-ink-body">{inherited ? `Set at ${scopeName(tree, member.scope)}` : "Set here"}</span>
+      </Cell>
+      <Cell col="since">
+        <span className="text-sm text-ink-muted">{member.hasPasskey ? `Since ${formatDate(member.grantedAt)}` : pendingLine(member.invitationExpiresAt)}</span>
+      </Cell>
+      <Cell col="action">
+        {variant === "member" && editable && !inherited && !confirm && (
+          <Button size="sm" variant="quiet" aria-label={`Remove ${member.displayName}`} title={`Remove ${member.displayName}`} disabled={removing.isLoading} onClick={() => setConfirm(true)}>
+            Remove
+          </Button>
+        )}
+        {variant === "invitation" && editable && !inherited && !renewed && (
+          <Button size="sm" variant="secondary" disabled={renewing} onClick={() => void renew()}>
+            {renewing ? "Sending a new code…" : "Send a new code"}
+          </Button>
+        )}
+      </Cell>
+    </TableRow>
   );
 }
 

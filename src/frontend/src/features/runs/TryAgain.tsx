@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Spinner } from "@/components/states";
 import { Link } from "@/components/Link";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { formatCredits } from "@/lib/format";
 import { describeError } from "@/lib/queryState";
 import { navigate, paths } from "@/lib/router";
-import { cn } from "@/lib/utils";
 import { useEstimateRetryMutation, useRetryRunMutation } from "@/store/api";
 import type { RetryEstimate } from "@/store/types";
 import { keptText, STOPPED, type StopReason } from "./retryModel";
@@ -46,19 +46,20 @@ export function TryAgain({ runId, why, ideaId = null, showCredits = false }: { r
     <section aria-label="Try again" data-testid="try-again" className="flex min-w-0 flex-col gap-3">
       <p className="max-w-prose font-medium text-ink">{STOPPED[why]}</p>
       {estimate ? (
-        <>
-          <p className="max-w-prose text-ink-body">{keptText(estimate)}</p>
-          <p className="font-display text-xl font-semibold">Estimated {formatCredits(estimate.credits)}</p>
+        // The estimate before the new attempt (rule 11), as the house's one confirmation: start it, or the safe way back.
+        <ConfirmCard
+          destructive={false}
+          label="Confirm starting it again"
+          question={`Estimated ${formatCredits(estimate.credits)}`}
+          detail={keptText(estimate)}
+          confirm={starting.isLoading ? "Starting…" : "Start it again"}
+          cancel="Not now"
+          busy={starting.isLoading}
+          onConfirm={() => void start()}
+          onCancel={() => setEstimate(null)}
+        >
           <p className="max-w-prose text-sm text-ink-body">{estimate.basis}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void start()} disabled={starting.isLoading}>
-              {starting.isLoading ? "Starting…" : "Start it again"}
-            </Button>
-            <Button variant="ghost" onClick={() => setEstimate(null)}>
-              Not now
-            </Button>
-          </div>
-        </>
+        </ConfirmCard>
       ) : (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <Button onClick={() => void price()} disabled={estimating.isLoading}>
@@ -70,7 +71,7 @@ export function TryAgain({ runId, why, ideaId = null, showCredits = false }: { r
             ) : "Try again"}
           </Button>
           {showCredits && (
-            <Link href={paths.credits()} className={cn(buttonVariants({ variant: "outline" }))}>
+            <Link href={paths.credits()} className={buttonVariants({ variant: "secondary" })}>
               See credits
             </Link>
           )}

@@ -104,14 +104,14 @@ export function DeviceSheet() {
           <ul className="flex flex-col gap-2">
             {req.choices.map((c) => (
               <li key={c.id}>
-                <Button variant="outline" className="w-full justify-start" onClick={() => req.resolve(c.id)}>
+                <Button variant="secondary" className="w-full justify-start" onClick={() => req.resolve(c.id)}>
                   {c.label}
                 </Button>
               </li>
             ))}
           </ul>
         )}
-        <Button variant="ghost" onClick={() => req.resolve(null)}>
+        <Button variant="quiet" onClick={() => req.resolve(null)}>
           Cancel
         </Button>
       </div>

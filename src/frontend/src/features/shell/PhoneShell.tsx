@@ -6,7 +6,6 @@ import { Link } from "@/components/Link";
 import { Sheet } from "@/components/Sheet";
 import type { IconName } from "@/components/iconNames";
 import { formatNumber } from "@/lib/format";
-import { shortTitle } from "@/lib/plain";
 import { effectiveRole, highestGrant, roleRank } from "@/lib/roles";
 import { navigate, paths, useLocation } from "@/lib/router";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
@@ -30,15 +29,18 @@ import { askToOpenTalkOnArrival } from "./talkContext";
 export function PhoneHeader({ crumbs, signedIn }: { crumbs: Crumb[]; signedIn: boolean }) {
   const [trail, setTrail] = useState(false);
   const tucked = useTuckOnScroll();
+  const titleAway = useTitleScrolledAway();
   const here = crumbs[crumbs.length - 1];
   const above = crumbs.slice(0, -1);
+  const parent = above[above.length - 1];
   const up = [...above].reverse().find((c) => c.href || c.onSelect);
+  // One name, never the page's own title twice: the parent while the page's title is in view, then — once the
+  // title has scrolled under the header — this place's short name.
+  const shown = titleAway ? (here ? crumbShort(here) : null) : parent ? crumbShort(parent) : null;
   const titleBody = here && (
-    <>
-      {above.length > 0 && <span className="max-w-full truncate text-xs text-ink-muted">{above.map((c) => shortTitle(c.label, 32)).join(" / ")}</span>}
-      {/* The short name: the page's own title, in full, is its heading (clamped to two lines). */}
-      <span className="max-w-full truncate font-display text-base font-semibold leading-snug text-ink">{crumbShort(here)}</span>
-    </>
+    <span data-phone-title={titleAway ? "here" : "parent"} className={cn("max-w-full truncate font-display text-base font-semibold leading-snug", titleAway ? "text-ink" : "text-ink-body")}>
+      {shown ?? "Endgame"}
+    </span>
   );
   return (
     // Sticky, and tucked away while the page is read downward: it comes back as soon as the person scrolls up.
@@ -127,6 +129,38 @@ function useTuckOnScroll() {
   return tucked;
 }
 
+/**
+ * Whether the page's own title (its h1) has scrolled up under the header. A page with no title counts as
+ * scrolled, so the header names the place.
+ */
+function useTitleScrolledAway() {
+  const { pathname, search } = useLocation();
+  const [away, setAway] = useState(false);
+  useEffect(() => {
+    let watch: IntersectionObserver | null = null;
+    let seen: Element | null = null;
+    const attach = () => {
+      const h1 = document.querySelector("main h1");
+      if (h1 === seen) return;
+      seen = h1;
+      watch?.disconnect();
+      if (!h1) return setAway(true);
+      if (typeof IntersectionObserver === "undefined") return setAway(false);
+      watch = new IntersectionObserver(([e]) => setAway(!!e && !e.isIntersecting && e.boundingClientRect.top < 64), { rootMargin: "-64px 0px 0px 0px" });
+      watch.observe(h1);
+    };
+    attach();
+    const appear = typeof MutationObserver === "undefined" ? null : new MutationObserver(attach);
+    const main = document.querySelector("main");
+    if (main) appear?.observe(main, { childList: true, subtree: true });
+    return () => {
+      watch?.disconnect();
+      appear?.disconnect();
+    };
+  }, [pathname, search]);
+  return away;
+}
+
 /** A level of where you are: a link to it, or — on the org chart — selecting it in place. */
 function Step({ crumb, className, label, onDone, children }: { crumb: Crumb; className: string; label?: string; onDone?: () => void; children: ReactNode }) {
   if (crumb.onSelect)
@@ -195,9 +229,10 @@ export function PhoneNav({ creditsScope, talkLabel, talkOpen, onTalk }: { credit
       ? [
           {
             key: "credits",
-            // The balance stays in sight: the bar's label is the figure itself.
-            label: balance !== undefined ? formatNumber(balance) : credits.isError ? "Credits" : "…",
-            icon: <Icon name="credits" className={cn("size-5", balance !== undefined && balance <= 0 && "text-attention-text")} />,
+            // The tab is "Credits"; the balance stays in sight as a small value on its icon, red only at a real limit.
+            label: "Credits",
+            badge: balance !== undefined ? { text: compactNumber(balance), tone: credits.data && !credits.data.neverToppedUp && credits.data.available <= 0 ? ("bad" as const) : ("neutral" as const) } : undefined,
+            icon: <Icon name="credits" className="size-5" />,
             href: paths.credits(),
             name: balance !== undefined ? `Credits: ${formatNumber(balance)} left` : credits.isError ? "Credits: the balance could not be read" : "Credits",
             current: pathname === paths.credits(),
@@ -212,6 +247,11 @@ export function PhoneNav({ creditsScope, talkLabel, talkOpen, onTalk }: { credit
       <MoreSheet open={more} onClose={() => setMore(false)} />
     </>
   );
+}
+
+/** A balance short enough for a badge on an icon: "1,840", "12k", "−120". */
+function compactNumber(n: number): string {
+  return Math.abs(n) >= 10_000 ? `${n < 0 ? "\u2212" : ""}${Math.round(Math.abs(n) / 1000)}k` : formatNumber(n);
 }
 
 interface Destination {
@@ -269,7 +309,7 @@ function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
             <span className="text-sm font-medium">Mode</span>
             <ModeToggle />
           </div>
-          {me.data && <SignOut className={cn(buttonVariants({ variant: "soft" }), "w-full")} />}
+          {me.data && <SignOut className={cn(buttonVariants({ variant: "secondary" }), "w-full")} />}
         </section>
         {pages.length > 0 && (
           <nav aria-label="Pages">

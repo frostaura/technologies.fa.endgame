@@ -147,11 +147,11 @@ test.describe("notifications", () => {
     expect(fills).toBe(1);
     const card = await page.locator("[data-side-panel] > *").first().boundingBox();
     expect(card?.height ?? 0).toBeLessThan(500);
-    // "Mark read" ends its row, on the title's line.
+    // "Mark read" sits on its row's tag line, never alone between the time and the tags (real-stack 17).
     const row = feed.locator('li[data-notification][data-read="false"]').first();
     const button = await row.getByRole("button", { name: "Mark read" }).boundingBox();
-    const box = await row.boundingBox();
-    expect((button?.x ?? 0) + (button?.width ?? 0)).toBeGreaterThan((box?.x ?? 0) + (box?.width ?? 0) - 40);
+    const tag = await row.locator("span.rounded-full.h-6").first().boundingBox();
+    expect(Math.abs((button?.y ?? 0) + (button?.height ?? 0) / 2 - ((tag?.y ?? 99) + (tag?.height ?? 0) / 2))).toBeLessThanOrEqual(6);
   });
 });
 

@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ArrowUpRight, Check, ChevronDown, Clock, Eye, History, RotateCcw, ShieldCheck, X } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, Clock, Eye, History, LockKeyhole, RotateCcw, X } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { Chip, PersonChip } from "@/components/ui/chip";
 import { useActiveTree } from "@/lib/useActiveOrganisation";
@@ -354,7 +354,7 @@ function ReviewRow({ state, label }: { state: PartState; label: string }) {
       <div className="flex min-h-touch min-w-0 flex-1 items-start gap-2 py-1.5">
         <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
           <span className="flex items-center gap-1.5 text-sm text-ink">
-            <ShieldCheck aria-hidden className="size-4 text-ink-muted" />
+            <LockKeyhole aria-hidden className="size-4 text-ink-muted" />
             Security review
           </span>
           <Badge tone={STATE_STYLE[state].tone}>{label}</Badge>

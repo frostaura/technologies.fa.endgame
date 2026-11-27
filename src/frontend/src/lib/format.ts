@@ -2,40 +2,53 @@
 
 const LOCALE = "en-GB";
 
+/** The minus sign (U+2212), set tight to its digits: "−120", never "- 120" or a hyphen. */
+export const MINUS = "\u2212";
+
 /**
- * Whole numbers, except small fractional amounts (a model call can cost 1.5 credits), kept to one decimal. An amount
- * too small for one decimal is never shown as nothing: it keeps two ("0.05"), or reads "less than 0.01" (D12).
+ * The one way a number of credits (or any count) is written (ARCH-011), everywhere — a tile, a table, a run's
+ * step, a sentence:
+ *
+ * - 10 or more: whole, grouped — "1,840".
+ * - under 10: up to two decimals, trailing zeros dropped — "7.47", "0.2", "1.5", "3".
+ * - under a hundredth but more than nothing: "<0.01". A real cost never reads as nothing (D12).
+ * - a debt: a true minus sign tight to the digits — "−120". A debt too small to show is "0": zero has no sign.
  */
 export function formatNumber(n: number): string {
-  const rounded = !Number.isInteger(n) && Math.abs(n) < 10 ? Math.round(n * 10) / 10 : Math.round(n);
-  if (rounded === 0 && n > 0) {
-    const hundredths = Math.round(n * 100) / 100;
-    return hundredths === 0 ? "less than 0.01" : hundredths.toLocaleString(LOCALE);
-  }
-  // A tiny debt rounds to -0, which would read "-0 credits"; zero has no sign.
-  return (rounded === 0 ? 0 : rounded).toLocaleString(LOCALE);
+  const abs = Math.abs(n);
+  if (abs > 0 && abs < 0.005) return n > 0 ? "<0.01" : "0";
+  const rounded = abs >= 10 || Number.isInteger(n) ? Math.round(abs) : Math.round(abs * 100) / 100;
+  if (rounded === 0) return "0";
+  const text = rounded.toLocaleString(LOCALE, { maximumFractionDigits: 2 });
+  return n < 0 ? `${MINUS}${text}` : text;
 }
 
+/** "1 credit", "7.47 credits", "<0.01 credits": singular only when what is shown is exactly 1. */
 export function formatCredits(n: number): string {
-  // Singular by what is read: 0.96 is shown as "1", so it is "1 credit".
   const shown = formatNumber(n);
   return `${shown} ${shown === "1" ? "credit" : "credits"}`;
 }
 
-/**
- * A figure standing alone as a headline — a tile, a card's big number, a project's monthly spend. An
- * amount that rounds below one tenth reads "0" there (R2-2): "less than 0.01" is a phrase for a
- * sentence or a cost detail line (formatNumber), not a number to lead with.
- */
+/** A change to a balance: "+3,000", "−120" (a top-up, a charge). */
+export function signedNumber(n: number): string {
+  const shown = formatNumber(n);
+  return n > 0 && shown !== "0" ? `+${shown}` : shown;
+}
+
+/** A figure standing alone as a headline: the same rule as every other number (one precision rule, ARCH-011). */
 export function headlineNumber(n: number): string {
-  return Math.abs(n) < 0.05 ? "0" : formatNumber(n);
+  return formatNumber(n);
 }
 
 export function headlineCredits(n: number): string {
-  return `${headlineNumber(n)} ${n === 1 ? "credit" : "credits"}`;
+  return formatCredits(n);
 }
 
-/** An approximate figure: below a tenth it reads "less than 0.1 credits", never "about 0" (D77). */
+/**
+ * A usual, approximate cost said in a sentence ("usually about 0.5 credits"): the same rule, except that below a
+ * tenth it reads "less than 0.1 credits" — an approximation is never more precise than it is, and never "about 0"
+ * (D77).
+ */
 export function approxCredits(n: number): string {
   return n < 0.1 ? "less than 0.1 credits" : formatCredits(n);
 }

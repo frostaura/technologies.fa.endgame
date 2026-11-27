@@ -36,7 +36,7 @@ test.describe("the people pages on a wide desktop", () => {
     const problems = await open(page, "s4-employee-long-record");
     await expect(page.getByRole("heading", { level: 1, name: "Kasper" })).toBeVisible();
     await expect(page.getByRole("list", { name: "Memory entries" }).getByRole("listitem")).toHaveCount(10);
-    await expect(page.getByRole("table", { name: "Tasks" }).locator("tbody tr")).toHaveCount(10);
+    await expect(page.getByRole("list", { name: "Tasks" }).getByRole("listitem")).toHaveCount(10);
     await expect(page.getByRole("button", { name: "Show all 40 pieces of work" })).toBeVisible();
     // Was 16,162 px on the real stack with ~60 memory cards (real-stack 50).
     expect(await height(page)).toBeLessThan(3200);
@@ -62,7 +62,8 @@ test.describe("the people pages on a wide desktop", () => {
 
   test("hiring: every proposal a row with its state at the same place, no orphan card", async ({ page }) => {
     await open(page, "s4-hiring");
-    const tags = page.locator("section[aria-label] ul li a > span:last-child");
+    // The one table: every proposal's state in the same column.
+    const tags = page.locator("[data-table] .tbl-row > [data-kind='status']");
     await expect(tags).toHaveCount(3);
     const rights = await tags.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().right)));
     expect(new Set(rights).size).toBe(1);

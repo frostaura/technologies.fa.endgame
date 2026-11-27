@@ -3,6 +3,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Link } from "@/components/Link";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
+import { LINK, MENU } from "@/components/ui/layout";
 import { BellIcon, NotificationFeed } from "../notifications/NotificationFeed";
 import { useUnread } from "../notifications/useUnread";
 
@@ -41,16 +42,20 @@ export function NotificationsBell({ organisation }: { organisation: string }) {
         <BellIcon unread={unread} />
       </button>
       {open && (
-        <div id={panelId} role="dialog" aria-label="Notifications" className="absolute right-0 top-full z-40 mt-2 hidden max-h-graph w-dock flex-col gap-3 overflow-y-auto rounded-md border bg-surface p-4 shadow-raised sm:flex">
-          <div className="flex items-center justify-between gap-2">
+        // The one popover look (MENU): a defined edge and lift, 8px off the bell, a header that stays, and a list
+        // that scrolls inside it — so it always ends on a whole item, with "See all" in reach.
+        <div id={panelId} role="dialog" aria-label="Notifications" className={cn(MENU, "absolute right-0 top-full hidden w-dock overflow-hidden p-0 sm:flex")}>
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
             <h2 className="text-base font-semibold">Notifications</h2>
-            <Link href={paths.notifications()} onClick={() => setOpen(false)} className="rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+            <Link href={paths.notifications()} onClick={() => setOpen(false)} className={LINK}>
               See all
             </Link>
           </div>
-          <ErrorBoundary name="Your notifications">
-            <NotificationFeed organisation={organisation} limit={8} compact onNavigate={() => setOpen(false)} />
-          </ErrorBoundary>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+            <ErrorBoundary name="Your notifications">
+              <NotificationFeed organisation={organisation} limit={8} compact onNavigate={() => setOpen(false)} />
+            </ErrorBoundary>
+          </div>
         </div>
       )}
     </div>

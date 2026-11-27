@@ -1,14 +1,14 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { ConfirmCard } from "@/components/ui/confirm";
-import { TAP } from "@/lib/touch";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import { Button } from "@/components/ui/button";
+import { Alert, STATES } from "@/components/ui/alert";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { LINK_ALONE } from "@/components/ui/layout";
 import { Input } from "@/components/ui/field";
 import { capitalise, formatCredits, formatDate, formatDuration, formatNumber, headlineNumber, plural, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
@@ -153,7 +153,10 @@ function AppBody({ app }: { app: AppDetail }) {
   const { builder, admin } = useAppRole(app);
   const budgets = useGetCascadeQuery({ scope: app.scope, kind: "budget" });
   const nameOf = useNameOf();
-  const stopped = app.status === "failed" || app.status === "stopped";
+  // Held by its budget (or the organisation's overdraft limit): the amber pause whose action raises the budget, never
+  // the red stopped panel and a rebuild that cannot help (ARCH-011).
+  const held = heldByBudget(app);
+  const stopped = !held && (app.status === "failed" || app.status === "stopped");
   // Once the rebuild works the app reads as running and the panel above goes; what happened stays said.
   const [rebuilt, setRebuilt] = useState<string | null>(null);
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
@@ -185,24 +188,40 @@ function AppBody({ app }: { app: AppDetail }) {
               label="Typical response"
               value={t.latencyP50Ms !== null ? formatDuration(t.latencyP50Ms) : NO_VALUE}
               tone={t.latencyP50Ms !== null ? "ink" : "muted"}
-              caption={t.latencyP95Ms !== null ? `Slowest 1 in 20: ${formatDuration(t.latencyP95Ms)}` : "No traffic yet. Measured once it has visitors."}
+              caption={t.latencyP95Ms !== null ? `Slowest 1 in 20: ${formatDuration(t.latencyP95Ms)}` : "No traffic yet"}
             />
           </>
         ) : (
           <>
-            <Stat label="Visits today" value={NO_VALUE} tone="muted" caption={`${NOT_MEASURED}. It reports its visits once it has run.`} />
-            <Stat label="Typical response" value={NO_VALUE} tone="muted" caption={`${NOT_MEASURED}. Measured once it has visitors.`} />
+            <Stat label="Visits today" value={NO_VALUE} tone="muted" caption={NOT_MEASURED} />
+            <Stat label="Typical response" value={NO_VALUE} tone="muted" caption={NOT_MEASURED} />
           </>
         )}
         <Stat label="Cost this month" value={headlineNumber(app.cost.monthCredits)} caption={capNote(app, budgets.data, nameOf)} />
       </StatRow>
+      {/* What the figures cannot say in a line: why there are no visits or responses to measure yet. */}
+      {!held && (!t || t.latencyP50Ms === null) && (
+        <p className="max-w-prose text-sm text-ink-muted">{t ? "Its response times are measured once it has visitors." : "It reports its visits once it has run, and its response times once it has visitors."}</p>
+      )}
 
+      {held && (
+        <Alert
+          state="paused-by-budget"
+          testId="paused-by-budget"
+          title={`${app.name} is paused by its budget.`}
+          action={
+            <Link href={paths.credits()} className={buttonVariants({ variant: "secondary" })}>
+              Raise the budget
+            </Link>
+          }
+        >
+          {pausedNote(app)}
+        </Alert>
+      )}
       {stopped && builder && (
-        <section aria-label="It is not running" className="flex flex-col gap-2 rounded-md border border-attention-line bg-attention-tint px-5 py-4">
-          <p className="font-semibold text-attention-text">{app.status === "failed" ? `${app.name} stopped working.` : `${app.name} is stopped.`}</p>
-          <p className="text-ink">Rebuilding builds its newest version again and starts it. Nothing in its history changes.</p>
-          <RebuildAndRestart app={app} onResult={(r) => setRebuilt(r.published ? `${app.name} is rebuilt and running again.` : null)} />
-        </section>
+        <Alert state="crashed" title={app.status === "failed" ? `${app.name} stopped working.` : `${app.name} is stopped.`} action={<RebuildAndRestart app={app} onResult={(r) => setRebuilt(r.published ? `${app.name} is rebuilt and running again.` : null)} />}>
+          Rebuilding builds its newest version again and starts it. Nothing in its history changes.
+        </Alert>
       )}
       {!stopped && rebuilt && (
         <p role="status" className="rounded-xs bg-success-tint px-4 py-3 text-success-text">
@@ -295,12 +314,12 @@ function CopyAddress({ url, label }: { url: string; label: string }) {
   };
   const said = state === "copied" ? "Copied" : state === "failed" ? "It could not be copied; select it and copy it by hand" : label;
   return (
-    <button type="button" onClick={() => void copy()} aria-label={said} title={said} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "size-11 shrink-0 p-0 text-ink-muted hover:text-ink")}>
+    <Button variant="quiet" size="icon" onClick={() => void copy()} aria-label={said} title={said}>
       {state === "copied" ? <Check aria-hidden className="size-4 text-success-text" /> : <Copy aria-hidden className="size-4" />}
       <span role="status" className="sr-only">
         {state === "copied" ? "Copied" : state === "failed" ? said : ""}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -332,7 +351,7 @@ function OpenTheApp({ app }: { app: AppDetail }) {
   const why = notOpenable(app);
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
-      <a href={app.addresses.subdomain ?? app.addresses.path} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants({ variant: why ? "outline" : "primary" }), "max-sm:w-full")}>
+      <a href={app.addresses.subdomain ?? app.addresses.path} target="_blank" rel="noreferrer noopener" className={cn(buttonVariants({ variant: why ? "secondary" : "primary" }), "max-sm:w-full")}>
         Open the app
       </a>
       {why && (
@@ -344,13 +363,23 @@ function OpenTheApp({ app }: { app: AppDetail }) {
   );
 }
 
-/** The health line: in normal mode a version is "the latest version", never its id. */
+/** Held by money: the control plane's pause, or an app paused and not down. */
+function heldByBudget(app: AppDetail): boolean {
+  if (app.notBuilt) return false;
+  return !!app.paused || app.health.state === "paused" || (app.running === "paused" && app.health.state !== "down");
+}
+
+/** Why it is held, in the control plane's sentence ("Paused: a monthly budget above it is spent. …"). */
+function pausedNote(app: AppDetail): string {
+  return app.paused?.note ?? plainOrNull(app.health.summary) ?? "Paused: it serves nobody until it is restored.";
+}
+
+/** The health line: one line, in normal mode a version is "the latest version", never its id. */
 function healthNote(app: AppDetail, technical: boolean): string {
   if (technical) return app.health.summary;
-  // Paused: the control plane's sentence says why and what restores it ("Paused: a monthly budget above it is spent. …").
   if (app.notBuilt) return app.notBuilt.note;
-  if (app.paused) return app.paused.note;
-  if (app.health.state === "paused" || (app.running === "paused" && app.health.state !== "down")) return plainOrNull(app.health.summary) ?? "Paused: it serves nobody until it is restored.";
+  // Paused: the panel under the figures says why and what restores it; the tile says it in a line.
+  if (heldByBudget(app)) return STATES["paused-by-budget"].label;
   if (app.health.state === "healthy" && app.telemetry) return app.telemetry.errorsToday === 0 ? "No errors today" : `${plural(app.telemetry.errorsToday, "error")} today`;
   return plainOrNull(app.health.summary) ?? (app.publishedAt ? `Running the version from ${formatDate(app.publishedAt)}` : "Not published yet");
 }
@@ -467,7 +496,7 @@ function Sharing({ app }: { app: AppDetail }) {
                       </span>
                       <Badge tone={share.registered ? "good" : "neutral"}>{share.registered ? "Registered" : `Invited ${timeAgo(share.invitedAt)}`}</Badge>
                     </div>
-                    <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setConfirmRemove(share.email)} aria-label={`Stop sharing with ${share.email}`}>
+                    <Button size="sm" variant="quiet" className="shrink-0" onClick={() => setConfirmRemove(share.email)} aria-label={`Stop sharing with ${share.email}`}>
                       Stop sharing
                     </Button>
                   </div>
@@ -502,9 +531,9 @@ function Sharing({ app }: { app: AppDetail }) {
             autoComplete="off"
             aria-invalid={invalid}
             aria-describedby={invalid ? `${emailId}-problem` : undefined}
-            className="min-h-12 flex-1 px-4"
+            className="flex-1"
           />
-          <Button type="submit" className="min-h-12 px-5" disabled={!typed || invalid || inviting}>
+          <Button type="submit" className="shrink-0" disabled={!typed || invalid || inviting}>
             {inviting ? "Inviting…" : "Invite"}
           </Button>
         </div>
@@ -539,13 +568,13 @@ function InvitationCode({ created, appName, onDone }: { created: AppShareCreated
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <code className="min-w-0 break-all rounded-xs bg-surface px-3 py-2 font-mono text-base">{created.invitationCode}</code>
-        <Button size="sm" variant="outline" onClick={() => void copy()}>
+        <Button size="sm" variant="secondary" onClick={() => void copy()}>
           {copied === "yes" ? "Copied" : "Copy the code"}
         </Button>
       </div>
       {copied === "failed" && <p className="text-sm text-attention-text">The code could not be copied; select it and copy it by hand.</p>}
       <p className="font-semibold text-success-text">It will not be shown again.</p>
-      <Button size="sm" variant="ghost" className="self-start" onClick={onDone}>
+      <Button size="sm" variant="quiet" className="self-start" onClick={onDone}>
         Done
       </Button>
     </div>
@@ -574,7 +603,7 @@ function AppSecrets({ scope, canSee }: { scope: string; canSee: boolean }) {
           <Icon name="secrets" tinted />
           Secrets
         </h2>
-        <Link href={paths.secrets(scope)} className={cn("rounded-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
+        <Link href={paths.secrets(scope)} className={LINK_ALONE}>
           Manage secrets
         </Link>
       </div>

@@ -16,6 +16,8 @@ export interface NavItem {
   name?: string;
   /** For a button that opens a sheet. */
   expanded?: boolean;
+  /** A small value on the icon (the balance): the label stays a word. */
+  badge?: { text: string; tone?: "neutral" | "bad" };
 }
 
 /**
@@ -30,12 +32,23 @@ export function BottomNav({ items, label = "Main" }: { items: NavItem[]; label?:
       data-bottom-nav=""
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-surface/95 pb-safe-b pl-safe-l pr-safe-r backdrop-blur rail:inset-x-auto rail:inset-y-0 rail:left-0 rail:w-rail rail:border-r rail:border-t-0 rail:pb-safe-b rail:pr-0 rail:pt-safe-t"
     >
-      <ul className="mx-auto flex h-nav max-w-form items-stretch short:h-bar rail:h-full rail:flex-col rail:justify-center rail:gap-1">
+      {/* Five slots, always: a bar with fewer items keeps each where it would be, and More stays at the end. */}
+      <ul className="mx-auto grid h-nav max-w-form grid-cols-5 items-stretch short:h-bar rail:flex rail:h-full rail:flex-col rail:justify-center rail:gap-1">
         {items.map((item) => {
           const body = (
             <>
               <span aria-hidden className="relative flex">
                 {item.icon}
+                {item.badge && (
+                  <span
+                    className={cn(
+                      "absolute -top-2 left-3.5 rounded-full border border-surface px-1.5 text-xs font-semibold leading-4 tabular-nums",
+                      item.badge.tone === "bad" ? "bg-attention-text text-primary-ink" : "bg-quiet text-ink",
+                    )}
+                  >
+                    {item.badge.text}
+                  </span>
+                )}
               </span>
               <span className="max-w-full truncate text-xs font-medium leading-tight">{item.label}</span>
             </>
@@ -45,7 +58,7 @@ export function BottomNav({ items, label = "Main" }: { items: NavItem[]; label?:
             item.current ? "text-primary" : "text-ink-muted hover:text-ink",
           );
           return (
-            <li key={item.key} className="flex min-w-0 flex-1 rail:flex-none">
+            <li key={item.key} className="flex min-w-0 last:col-start-5 rail:flex-none">
               {item.href ? (
                 <Link href={item.href} aria-label={item.name} aria-current={item.current ? "page" : undefined} data-nav={item.key} className={cls}>
                   {body}

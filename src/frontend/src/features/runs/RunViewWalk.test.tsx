@@ -65,7 +65,10 @@ describe("RunView after the real-stack walk", () => {
       ["model.replied", { settledCredits: 0.045 }],
     ]);
     expect(stat("Spent so far").textContent).toContain("0.05 credits");
-    expect(stat("Spent so far").textContent).toContain("9% of the estimate");
+    // Under a 1-credit estimate a percentage says nothing: none is shown, and no bar raises an alarm (ARCH-011).
+    expect(stat("Spent so far").textContent).toContain("Under 1 credit, as estimated");
+    expect(stat("Spent so far").textContent).not.toContain("%");
+    expect(within(stat("Spent so far")).queryByRole("img")).toBeNull();
     cleanup();
     FakeEventSource.instances = [];
     await open({ ...RUN, estimateCredits: 12.3 });
@@ -74,6 +77,23 @@ describe("RunView after the real-stack walk", () => {
       ["model.replied", { settledCredits: 16 }],
     ]);
     expect(stat("Spent so far").textContent).toContain("130% of the estimate");
+    expect(within(stat("Spent so far")).getByRole("img").getAttribute("aria-label")).toBe("130% of the 12 estimated");
+  });
+
+  it("ARCH-011: finished work says Spent, with no bar, and a tiny estimate is never scored as a percentage", async () => {
+    await open({ ...RUN, kind: "conversation", estimateCredits: 0.05 });
+    feed([
+      ["estimate.made", { credits: 0.05 }],
+      ["model.replied", { settledCredits: 0.11 }],
+      ["estimate.scored", { expectedCredits: 0.05, actualCredits: 0.11 }],
+      ["run.finished", { outcome: "succeeded", summary: "Done." }],
+    ]);
+    await waitFor(() => expect(screen.queryByText("Spent so far")).toBeNull());
+    expect(stat("Spent").textContent).toContain("0.11 credits");
+    expect(within(stat("Spent")).queryByRole("img")).toBeNull();
+    const scored = stat("Estimate against actual");
+    expect(scored.textContent).not.toContain("%");
+    expect(scored.textContent).toContain("Under 1 credit, as estimated: cost 0.11");
   });
 
   it("R2-8: the estimate shown before the work began stands, with the plan's re-estimate beside it, and each share names its figure", async () => {

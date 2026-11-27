@@ -89,5 +89,11 @@ export default defineConfig({
         modulePreload: false,
         rolldownOptions: { output: { format: "iife" }, transform: { define: { "import.meta": "{}" } } },
       }
-    : { outDir: "dist", sourcemap: true },
+    : {
+        outDir: "dist",
+        sourcemap: true,
+        // React itself in a chunk of its own: it changes only on an upgrade, so it stays cached across releases, and the
+        // console's own entry stays well under the 500 kB warning however the shared layer is grouped.
+        rolldownOptions: { output: { codeSplitting: { groups: [{ name: "react", test: /node_modules[\\/](?:react|react-dom|scheduler)[\\/]/ }] } } },
+      },
 });

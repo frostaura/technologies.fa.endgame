@@ -4,7 +4,9 @@ import { Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CHIP } from "@/components/ui/chip";
-import { Select } from "@/components/ui/field";
+import { Input, Select } from "@/components/ui/field";
+import { Alert } from "@/components/ui/alert";
+import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
 import { PageHeader, SECTION } from "@/components/ui/page";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -51,7 +53,7 @@ function Origin({ setAtPath, scope, tree, fallback }: { setAtPath: string | null
 /** "Use the inherited setting": a quiet action beside the "Set here" it undoes, drawn as the link it is. */
 function UseInherited({ busy, onClick }: { busy: boolean; onClick: () => void }) {
   return (
-    <Button size="sm" variant="ghost" className="px-2 text-primary-link hover:text-primary-hover" disabled={busy} onClick={onClick}>
+    <Button size="sm" variant="quiet" disabled={busy} onClick={onClick}>
       Use the inherited setting
     </Button>
   );
@@ -95,7 +97,7 @@ export function AutonomyView() {
           )
         }
       />
-      {!admin && view.kind === "loaded" && <p className="rounded-xs bg-quiet px-4 py-3 text-quiet-text">You can read these. An Admin or the Owner sets them.</p>}
+      {!admin && view.kind === "loaded" && <Alert role="note" title="You can read these. An Admin or the Owner sets them." />}
       {view.kind === "loading" && (
         <Loading label="Loading the autonomy settings" className="flex flex-col gap-4">
           <Skeleton className="h-32 rounded-md" />
@@ -228,9 +230,6 @@ function Switch({ label, on, disabled, onChange }: { label: string; on: boolean;
   );
 }
 
-/** The columns every row of the stage matrix shares: the stage and where its rules were set, the three lists, and the actions. */
-const MATRIX = "sm:grid sm:grid-cols-stage-matrix sm:items-start sm:gap-x-5";
-
 function RuleSets({ autonomy, tree, admin }: { autonomy: Autonomy; tree: Tree | undefined; admin: boolean }) {
   return (
     <section aria-labelledby="rules-title" className={cn("flex flex-col gap-3", RISE, stagger(3))}>
@@ -241,20 +240,11 @@ function RuleSets({ autonomy, tree, admin }: { autonomy: Autonomy; tree: Tree | 
         <p className="max-w-prose text-ink-body">What the workforce may not do, what needs your sign-off first, and what it may do freely. A stage's own rules add to those for every stage.</p>
       </div>
       <Fold title="The stages" summary={`${plural(autonomy.stages.length, "stage")}, ${formatNumber(autonomy.ruleSets.length)} with rules of their own`}>
-        <div className="flex min-w-0 flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-          <div aria-hidden className={cn("hidden border-b px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-muted", MATRIX)}>
-            <span>Stage</span>
-            {LISTS.map((l) => (
-              <span key={l.key}>{l.title}</span>
-            ))}
-            <span />
-          </div>
-          <ul aria-label="Rules for each stage" className="flex flex-col">
-            {autonomy.stages.map((stage) => (
-              <StageRules key={stage} stage={stage} rule={autonomy.ruleSets.find((r) => r.stage === stage) ?? null} scope={autonomy.scope} tree={tree} admin={admin} />
-            ))}
-          </ul>
-        </div>
+        <Table label="Rules for each stage" columns={admin ? [...MATRIX, MATRIX_ACTION] : MATRIX}>
+          {autonomy.stages.map((stage) => (
+            <StageRules key={stage} stage={stage} rule={autonomy.ruleSets.find((r) => r.stage === stage) ?? null} scope={autonomy.scope} tree={tree} admin={admin} />
+          ))}
+        </Table>
       </Fold>
     </section>
   );
@@ -269,12 +259,15 @@ const LISTS: { key: ListName; title: string; example: string }[] = [
   { key: "allow", title: "May do", example: "edit_file" },
 ];
 
+/** The stage matrix's columns: the stage and where its rules were set, the three lists, and (for an Admin) its one action. */
+const MATRIX: Column[] = [{ key: "stage", header: "Stage", kind: "text" }, ...LISTS.map((l) => ({ key: l.key, header: l.title, kind: "text" as const }))];
+const MATRIX_ACTION: Column = { key: "change", header: "Change", kind: "action", hideHeader: true };
+
 /** One list's cell in a stage's row: each tool once, and in technical mode the rules beneath it as the harness reads them. */
-function RuleCell({ title, rules, mode }: { title: string; rules: string[]; mode: "normal" | "technical" }) {
+function RuleCell({ rules, mode }: { rules: string[]; mode: "normal" | "technical" }) {
   const groups = groupRules(rules);
   return (
-    <div className="flex min-w-0 gap-2 max-sm:items-baseline sm:flex-col">
-      <span className="w-28 shrink-0 text-sm text-ink-muted sm:hidden">{title}</span>
+    <>
       {groups.length === 0 ? (
         <span className="text-ink-muted">—</span>
       ) : (
@@ -292,7 +285,7 @@ function RuleCell({ title, rules, mode }: { title: string; rules: string[]; mode
           ))}
         </ul>
       )}
-    </div>
+    </>
   );
 }
 
@@ -332,56 +325,69 @@ function StageRules({ stage, rule, scope, tree, admin }: { stage: string; rule: 
     }
   };
 
+  const notes = (setHere && rule && rule.overrides.length > 0) || (rule && rule.checkpoints.length > 0);
   return (
-    <li data-stage={stage} className={cn("flex min-w-0 flex-col gap-2.5 border-b px-5 py-3.5 last:border-b-0 max-sm:py-4", MATRIX, "sm:gap-y-3")}>
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:flex-col sm:items-start">
-        <h3 className="font-semibold">{stageLabel(stage)}</h3>
-        {rule && <Origin setAtPath={rule.setAtPath} scope={scope} tree={tree} fallback="" />}
-      </div>
-      {empty ? (
-        <span className="text-ink-muted sm:col-span-3">No rules set for this stage</span>
-      ) : (
-        LISTS.map((l) => <RuleCell key={l.key} title={l.title} rules={rule?.[l.key] ?? []} mode={mode} />)
-      )}
-      <div className="flex flex-wrap gap-1 sm:flex-col sm:items-end">
-        {admin && !editing && (
+    <TableRow
+      data-stage={stage}
+      after={
+        notes || editing || error ? (
           <>
-            <Button size="sm" variant="outline" onClick={start} disabled={busy}>
-              {setHere ? "Change" : "Set rules here"}
-            </Button>
-            {setHere && (
-              <Button size="sm" variant="ghost" onClick={() => void remove()} disabled={busy}>
-                Remove here
-              </Button>
+            {notes && (
+              <div className="flex flex-col gap-1 text-sm text-ink-body">
+                {setHere && rule && rule.overrides.length > 0 && <p className="text-ink-muted">Replaces the rules set at {rule.overrides.map((p) => scopeName(tree, p)).join(", ")}.</p>}
+                {rule && rule.checkpoints.length > 0 && <p>Also stops for you at: {rule.checkpoints.join(", ")}.</p>}
+              </div>
+            )}
+            {editing && (
+              <div className="flex flex-col gap-4 rounded-xs bg-ground p-4">
+                <RuleEditor draft={draft} onChange={setDraft} mode={mode} stage={stage} />
+                {/* Saving, the way back, and — where the rules are set here — taking them away, on one line. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" onClick={() => void submit()} disabled={busy}>
+                    Save for {scopeName(tree, scope)}
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => setEditing(false)}>
+                    Cancel
+                  </Button>
+                  {setHere && (
+                    <Button size="sm" variant="quiet" className="sm:ml-auto" onClick={() => void remove()} disabled={busy}>
+                      Remove here
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+            {error && (
+              <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+                {error}
+              </p>
             )}
           </>
-        )}
-      </div>
-      {(setHere && rule && rule.overrides.length > 0) || (rule && rule.checkpoints.length > 0) ? (
-        <div className="flex flex-col gap-1 text-sm text-ink-body sm:col-span-3 sm:col-start-2">
-          {setHere && rule && rule.overrides.length > 0 && <p className="text-ink-muted">Replaces the rules set at {rule.overrides.map((p) => scopeName(tree, p)).join(", ")}.</p>}
-          {rule && rule.checkpoints.length > 0 && <p>Also stops for you at: {rule.checkpoints.join(", ")}.</p>}
-        </div>
-      ) : null}
-      {editing && (
-        <div className="col-span-full flex flex-col gap-4 rounded-xs bg-ground p-4">
-          <RuleEditor draft={draft} onChange={setDraft} mode={mode} stage={stage} />
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => void submit()} disabled={busy}>
-              Save for {scopeName(tree, scope)}
+        ) : undefined
+      }
+    >
+      <Cell col="stage" primary>
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:flex-col sm:items-start">
+          <h3 className="font-semibold">{stageLabel(stage)}</h3>
+          {rule && <Origin setAtPath={rule.setAtPath} scope={scope} tree={tree} fallback="" />}
+          {empty && <span className="text-sm text-ink-muted">No rules set for this stage</span>}
+        </span>
+      </Cell>
+      {LISTS.map((l) => (
+        <Cell key={l.key} col={l.key}>
+          <RuleCell rules={empty ? [] : (rule?.[l.key] ?? [])} mode={mode} />
+        </Cell>
+      ))}
+      {admin && (
+        <Cell col="change">
+          {!editing && (
+            <Button size="sm" variant="secondary" onClick={start} disabled={busy}>
+              {setHere ? "Change" : "Set rules here"}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              Cancel
-            </Button>
-          </div>
-        </div>
+          )}
+        </Cell>
       )}
-      {error && (
-        <p role="alert" className="col-span-full rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
-          {error}
-        </p>
-      )}
-    </li>
+    </TableRow>
   );
 }
 
@@ -422,27 +428,35 @@ function RuleList({ title, example, rules, mode, id, onChange }: { title: string
       </label>
       {mode === "technical" ? (
         <span className="flex gap-2">
-          <input id={`add-${id}`} value={next} onChange={(e) => setNext(e.target.value)} onKeyDown={(e) => {
+          <Input
+            id={`add-${id}`}
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
                 add();
               }
-            }} placeholder={example} title="A tool, or a tool with a pattern" className="min-h-touch min-w-0 flex-1 rounded-xs border border-border-field bg-surface px-3 font-mono text-sm" />
-          <Button size="sm" variant="outline" onClick={add}>
+            }}
+            placeholder={example}
+            title="A tool, or a tool with a pattern"
+            className="flex-1 font-mono"
+          />
+          <Button size="sm" variant="secondary" onClick={add}>
             Add
           </Button>
         </span>
       ) : (
         <span className="flex gap-2">
-          <select id={`add-${id}`} value={next} onChange={(e) => setNext(e.target.value)} className="min-h-touch min-w-0 flex-1 rounded-xs border border-border-field bg-surface px-2 text-sm">
+          <Select id={`add-${id}`} value={next} onChange={(e) => setNext(e.target.value)} className="flex-1">
             <option value="">Choose…</option>
             {KNOWN_TOOLS.filter((t) => !rules.includes(t)).map((t) => (
               <option key={t} value={t}>
                 {toolLabel(t, "normal")}
               </option>
             ))}
-          </select>
-          <Button size="sm" variant="outline" onClick={add} disabled={!next}>
+          </Select>
+          <Button size="sm" variant="secondary" onClick={add} disabled={!next}>
             Add
           </Button>
         </span>
