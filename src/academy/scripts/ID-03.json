@@ -31,7 +31,10 @@
           }
         }
       ],
-      "note": "It sends an empty body, so the account named by ENDGAME_DEV_USER_EMAIL is signed in."
+      "highlight": {
+        "text": "Signing in…",
+        "note": "It sends an empty body, so the account named by ENDGAME_DEV_USER_EMAIL is signed in."
+      }
     },
     {
       "step": 4,

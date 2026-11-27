@@ -77,7 +77,10 @@
           }
         }
       ],
-      "note": "Your device approves; the first person is created, under a lock, and a 14-day session opens."
+      "highlight": {
+        "text": "Name your organisation, then describe your first idea.",
+        "note": "Your device approves; the first person is created, under a lock, and a 14-day session opens."
+      }
     },
     {
       "step": 6,

@@ -276,6 +276,10 @@ async function waitFor(target: Target | string, field = false, ms = 6000, prefer
   // holds it is asked to open (on a phone, "Hiring" is a link inside a folded list whose own row
   // merely mentions it); only then a control or text that holds the words is taken.
   const unfoldUntil = performance.now() + Math.min(ms, 2500);
+  // On a phone, what a desktop shows in its header or in full on home (the mode, your account, a
+  // page's link, what needs you) is in a sheet: once the screen has had a moment, each is looked in.
+  const moreFrom = performance.now() + Math.min(ms / 3, 1200);
+  let triedMore = false;
   for (;;) {
     const exact = find(target, field, true, show, true);
     if (exact) return exact;
@@ -283,12 +287,38 @@ async function waitFor(target: Target | string, field = false, ms = 6000, prefer
       await sleep(80);
       continue;
     }
+    if (!triedMore && performance.now() > moreFrom) {
+      triedMore = true;
+      const inMore = await lookInSheets(target, field, show);
+      if (inMore) return inMore;
+    }
     const el = find(target, field, performance.now() < patient, show);
     if (el) return el;
     const asked = revealHidden(target);
     if (performance.now() > until) throw new Error(`Nothing on the screen matches ${JSON.stringify(target)}.`);
     await sleep(asked ? 60 : 100);
   }
+}
+
+/**
+ * The sheets a phone keeps a desktop's page in: the bottom bar's More (every page, your account,
+ * the mode) and home's "things need you" summary (the list a desktop shows in full).
+ */
+const SHEETS = ["[data-needs-summary]", "[data-bottom-nav] [aria-label^='More']"];
+
+/** Opens each sheet in turn and finds what the words name outright in it; closes it again when it holds nothing. */
+async function lookInSheets(target: Target | string, field: boolean, show: boolean): Promise<HTMLElement | null> {
+  for (const selector of SHEETS) {
+    const opener = [...document.querySelectorAll<HTMLElement>(selector)].find(visible);
+    if (!opener) continue;
+    opener.click();
+    await sleep(instantNow ? 120 : 350);
+    const found = find(target, field, true, show, true);
+    if (found) return found;
+    [...document.querySelectorAll<HTMLElement>("[role=dialog] [aria-label^='Close']")].find(visible)?.click();
+    await sleep(instantNow ? 60 : 200);
+  }
+  return null;
 }
 
 function sleep(ms: number) {

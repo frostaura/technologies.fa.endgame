@@ -15,7 +15,10 @@
           }
         }
       ],
-      "note": "The app's own Sign out goes to _endgame/auth/sign-out."
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "The app's own Sign out goes to _endgame/auth/sign-out."
+      }
     },
     {
       "step": 2,
@@ -25,7 +28,11 @@
           "wait": 800
         }
       ],
-      "note": "Edge ends this app's session, deletes its cookie and sends them back."
+      "highlight": {
+        "selector": "[data-testid='edge-page']",
+        "region": true,
+        "note": "Edge ends this app's session, deletes its cookie and sends them back."
+      }
     },
     {
       "step": 3,

@@ -78,6 +78,14 @@
         "text": "What never changes",
         "note": "What no setting changes: the budget, going public, red lines, free repairs."
       }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "One rule, used everywhere",
+        "note": "The side panel: one rule, used everywhere, and what never changes."
+      }
     }
   ]
 }

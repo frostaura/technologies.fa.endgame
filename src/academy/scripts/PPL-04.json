@@ -49,7 +49,10 @@
           }
         }
       ],
-      "note": "The server grants the role and issues no code."
+      "highlight": {
+        "text": "Priya Shah",
+        "note": "The server grants the role and issues no code."
+      }
     },
     {
       "step": 3,

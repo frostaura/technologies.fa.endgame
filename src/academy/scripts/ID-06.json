@@ -26,7 +26,10 @@
           "wait": 1500
         }
       ],
-      "note": "The console session ends, and with it every app session this browser held."
+      "highlight": {
+        "text": "Sign in",
+        "note": "The console session ends, and with it every app session this browser held."
+      }
     },
     {
       "step": 3,

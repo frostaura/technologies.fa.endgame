@@ -93,6 +93,14 @@
         "text": "See credits",
         "note": "It is kept in the conversation’s history."
       }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "none": "This world’s run fails on the budget only; the other failure’s words are in the step."
+      },
+      "note": "Any other failure reads “I could not finish answering that. Please ask again.”"
     }
   ]
 }

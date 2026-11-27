@@ -77,7 +77,10 @@
           }
         }
       ],
-      "note": "Research this idea: the button reads “Starting research…” while the organisation and the idea are made."
+      "highlight": {
+        "text": "Starting research…",
+        "note": "Research this idea: the button reads “Starting research…” while the organisation and the idea are made."
+      }
     },
     {
       "step": 6,

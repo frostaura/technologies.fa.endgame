@@ -43,6 +43,14 @@
       }
     },
     {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Research · Research started",
+        "note": "Every step is one row: its mark, who did what, what it cost and when."
+      }
+    },
+    {
       "step": 5,
       "kind": "demo",
       "clock": {
@@ -58,6 +66,14 @@
       "highlight": {
         "text": "Finished",
         "note": "When it finishes the stream closes."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "text": "Where the credits go",
+        "note": "From 1280 wide, “Tasks” and “Where the credits go” stand beside the page."
       }
     }
   ]

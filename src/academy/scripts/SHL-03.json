@@ -57,6 +57,14 @@
         "selector": "header",
         "note": "On a phone: only the last two steps after “…”, and at most two rows."
       }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "selector": "nav[aria-label='Where you are']",
+        "note": "On a phone the header is one row: “Up to” a level, where you are in full, then your account."
+      }
     }
   ]
 }

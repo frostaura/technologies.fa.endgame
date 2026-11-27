@@ -27,6 +27,15 @@
         "selector": "ul[aria-label='Who works on what'] > li",
         "note": "Each card: what it is, its name (a link for people and apps), and a line for each relation, such as “works on Court booking”."
       }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "ul[aria-label='Who works on what']",
+        "region": true,
+        "note": "On a phone the list is grouped by kind, the first group open and the rest one tap away."
+      }
     }
   ]
 }

@@ -6,6 +6,14 @@
   "start": "/",
   "steps": [
     {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "none": "The skeletons show only while the tree loads, which is over before a ring could be drawn; step 2 rings what it leaves."
+      },
+      "note": "While the organisation loads: skeletons."
+    },
+    {
       "step": 2,
       "kind": "demo",
       "highlight": {

@@ -9,7 +9,10 @@
       "step": 1,
       "kind": "demo",
       "goto": "/apps/{app}",
-      "note": "A signed-out visitor opens an app's page in the console. “Opening Endgame” shows while the session is checked."
+      "note": "A signed-out visitor opens an app's page in the console. “Opening Endgame” shows while the session is checked.",
+      "highlight": {
+        "none": "The “Opening Endgame” skeleton shows only while the session is checked, which is over before a ring could be drawn; step 2 rings the sign-in it lands on."
+      }
     },
     {
       "step": 2,

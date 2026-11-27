@@ -39,7 +39,10 @@
           }
         }
       ],
-      "note": "An e-mail, an optional name, and one approval on the device."
+      "highlight": {
+        "text": "Create a passkey for endgame.example?",
+        "note": "An e-mail, an optional name, and one approval on the device."
+      }
     },
     {
       "step": 3,

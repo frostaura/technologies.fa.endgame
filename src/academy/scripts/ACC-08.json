@@ -34,7 +34,10 @@
           "wait": 1500
         }
       ],
-      "note": "Signed in, the server answers with a one-time hand-off link that lasts one minute."
+      "highlight": {
+        "testId": "signed-in-as",
+        "note": "Signed in, the server answers with a one-time hand-off link that lasts one minute."
+      }
     },
     {
       "step": 4,

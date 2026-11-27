@@ -122,10 +122,11 @@ function isCard(el: HTMLElement): boolean {
 const CONTROL = "button, a[href], input, select, textarea, summary, [role=button], [role=link], [role=tab], [role=switch], [role=checkbox], [role=radio], [role=menuitem]";
 
 /**
- * The card the step before rang, and what it named in it: a step about another thing inside that
- * same card (its Approve button, after the plan above it) rings that thing, not the same card again.
+ * The cards this lesson has rung so far, each with what it named in it: a later step about another
+ * thing inside one of them (its Approve button, after the plan above it; the third figure of a
+ * balance already rung) rings that thing, not the same card again.
  */
-let before: { subject: HTMLElement; named: HTMLElement } | null = null;
+let rung: { subject: HTMLElement; named: HTMLElement }[] = [];
 
 /** What the ring surrounds for this element (see `chooseSubject`); a region is ringed as it is. */
 export function subjectOf(el: HTMLElement, region = false): HTMLElement {
@@ -133,9 +134,9 @@ export function subjectOf(el: HTMLElement, region = false): HTMLElement {
   const named = boxOf(el);
   const isControl = el.matches(CONTROL) && (named.right - named.left) >= 24 && (named.bottom - named.top) >= 16;
   if (isControl) return el;
-  const avoid = before && before.named !== el && before.subject.isConnected && before.subject.contains(el) ? before.subject : null;
+  const avoid = rung.filter((r) => r.named !== el && r.subject !== el && r.subject.isConnected && r.subject.contains(el)).map((r) => r.subject);
   const rungs: { el: HTMLElement; rung: Rung }[] = [];
-  for (let p = el.parentElement; p && p !== el.ownerDocument.body && p !== el.ownerDocument.documentElement && p !== avoid; p = p.parentElement) {
+  for (let p = el.parentElement; p && p !== el.ownerDocument.body && p !== el.ownerDocument.documentElement && !avoid.includes(p); p = p.parentElement) {
     rungs.push({ el: p, rung: { box: boxOf(p), card: isCard(p) } });
   }
   const chosen = chooseSubject(named, rungs.map((r) => r.rung), { width: window.innerWidth, height: window.innerHeight });
@@ -262,12 +263,20 @@ function place() {
   // Measured again when the control moves, and every so often while it stays (the page may still be filling in).
   if (!placed || placed.key !== key || now - placed.at > 400) {
     const subject = boxOf(subjectEl && onPage(subjectEl) ? subjectEl : tracked);
-    // Inside the console's own width: a card that spans a phone's screen is ringed just inside its edges.
-    placed = { key, at: now, ring: keepInside(ringBox(subject, ringInsets(subject, contentBoxes())), { left: 0, top: -Infinity, right: view.width, bottom: Infinity }) };
+    const around = ringBox(subject, ringInsets(subject, contentBoxes()));
+    // A subject that shows whole is ringed whole: where its room around would run past the edge of
+    // its scroll area (a card the width of a phone, a pane's last row), the ring is drawn just
+    // inside that edge. One cut by the edge is left cut, and so shown for what it is.
+    const whole = subject.left >= clip.left - 2 && subject.right <= clip.right + 2 && subject.top >= clip.top - 2 && subject.bottom <= clip.bottom + 2;
+    // A subject bigger than its scroll area (a whole app's page, a long list) is ringed where it shows.
+    const bigger = subject.bottom - subject.top > clip.bottom - clip.top;
+    placed = { key, at: now, ring: whole || bigger ? keepInside(bigger ? intersect(around, clip) : around, clip) : keepInside(around, { left: 0, top: -Infinity, right: view.width, bottom: Infinity }) };
   }
   const box = placed.ring;
   // Out of view (scrolled past, under a bar): no ring at all until what it marks is back.
-  const seen = shownFraction(named, clip);
+  // Taller than its scroll area (a long list, a whole app's page), it is in view when it fills most of it.
+  const filling = (Math.min(named.bottom, clip.bottom) - Math.max(named.top, clip.top)) / Math.max(1, clip.bottom - clip.top);
+  const seen = Math.max(shownFraction(named, clip), named.bottom - named.top > clip.bottom - clip.top ? filling : 0);
   if (seen < (asRegion ? 0.25 : 0.9)) {
     hide();
     last = { shown: false, ring: box, visible: null, clip, named };
@@ -307,7 +316,7 @@ export function showSpotlight(el: HTMLElement, options: { marker?: number | null
   el.setAttribute("data-demo-ringed", "");
   refind = again ?? null;
   subjectEl = subjectOf(el, asRegion);
-  before = { subject: subjectEl, named: el };
+  rung = [...rung.filter((r) => r.subject.isConnected), { subject: subjectEl, named: el }];
   ring = layer("pointer-events-none fixed z-50 rounded-md border-2 border-primary outline outline-1 outline-surface motion-safe:transition-[left,top,width,height] motion-safe:duration-200");
   ring.setAttribute("data-demo-spotlight", "");
   ring.hidden = true;
@@ -339,7 +348,7 @@ export function clearSpotlight() {
 
 /** A new screen or a new lesson: what the step before rang no longer matters. */
 export function forgetSteps() {
-  before = null;
+  rung = [];
 }
 
 /** What the ring shows now, in the demo's page coordinates: for the academy's checks of every step. */

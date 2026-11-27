@@ -20,6 +20,14 @@
         "text": "You don’t have access to this app",
         "note": "Edge's check answered deny: 403."
       }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "Sign in as someone else",
+        "note": "The app’s sign-out, which comes back to its sign-in page — and, for a member, “Go to Endgame” first."
+      }
     }
   ],
   "variations": [
