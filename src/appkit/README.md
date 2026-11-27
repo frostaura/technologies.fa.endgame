@@ -33,6 +33,12 @@ What the web SDK does for every app, so no app has to:
   `/testing`, in a test titled `BAD_INPUT_TEST`, feeds a field what a person can give it (a six-digit year,
   a huge number, a blank required field, …) and fails unless the page stays whole and refuses it beside the
   field; the factory runs these for every form field a part adds.
+- **A corrected field stops being marked wrong.** `useFormErrors()` (from `/ui`) holds a form's field errors: shown on
+  submit (and from a `ValidationError`), the focus on the first wrong field, and each field's error cleared as soon as the
+  person changes that field — not left red until the next submit.
+- **The header fits a phone.** `AppHeader` is one row on a tablet or desktop; on a phone two compact rows — the app's name
+  beside the avatar (which opens the person's name and "Sign out", 44 px targets), then the places on one line that
+  scrolls sideways and never wraps.
 - **Screens are predictable.** Every app uses the same `data-testid` forms (`page-<view>`,
   `<entity>-item`, `save-<entity>`, …), listed in `template/AGENTS.md`.
 

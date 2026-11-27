@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { api, ApiError, checkDateInput, formatDateTime, formatNumber, NotSignedInError, signInUrl, signUpUrl, useCurrentUser, ValidationError } from "@endgame/appkit";
-import { Button, EmptyState, FailedState, Field, FormActions, FormCard, Input, LoadingState, PageHeader, PageLayout, Panel, Textarea } from "@endgame/appkit/ui";
+import { Button, EmptyState, FailedState, Field, FormActions, FormCard, Input, LoadingState, PageHeader, PageLayout, Panel, Textarea, useFormErrors, type FieldErrors } from "@endgame/appkit/ui";
 import { usePageTitle } from "../usePageTitle";
 import { BODY_MAX, HAPPENS_AT_LIMITS, TITLE_MAX, type NoteDetail } from "./types";
 
@@ -54,7 +54,8 @@ function NewNoteForm() {
   // What the date field holds, exactly as typed: a browser lets values through that no date can be (a six-digit year).
   const [happensAt, setHappensAt] = useState("");
   const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  // The kit holds the field errors: shown on submit, focus on the first, and each cleared as soon as its field is changed.
+  const form = useFormErrors();
   const [failure, setFailure] = useState<ApiError | null>(null);
 
   async function submit(event: FormEvent) {
@@ -62,14 +63,13 @@ function NewNoteForm() {
     setFailure(null);
     // Checked before it is sent, field by field, with the same limits as the inputs: a browser does not stop a person typing
     // past min and max. The server checks again, and its field errors are shown the same way.
-    const errors: Record<string, string[]> = {};
+    const errors: FieldErrors = {};
     if (!title.trim()) errors.Title = ["Give the note a title."];
     else if (title.trim().length > TITLE_MAX) errors.Title = [`Keep the title to ${TITLE_MAX} characters.`];
     if (body.length > BODY_MAX) errors.Body = [`Keep the note to ${formatNumber(BODY_MAX)} characters.`];
     const when = checkDateInput(happensAt, HAPPENS_AT_LIMITS);
     if (when.error) errors.HappensAt = [when.error];
-    setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (form.show(errors)) return;
     setSaving(true);
     try {
       const note = await api<NoteDetail>("notes", { method: "POST", body: { title, body, happensAt: when.date?.toISOString() ?? null } });
@@ -79,15 +79,15 @@ function NewNoteForm() {
         window.location.assign(error.signInUrl ?? signInUrl());
         return;
       }
-      if (error instanceof ValidationError) setFieldErrors(error.errors);
+      if (error instanceof ValidationError) form.show(error.errors);
       else setFailure(error instanceof ApiError ? error : new ApiError(0, { detail: String(error) }));
       setSaving(false);
     }
   }
 
-  const titleError = fieldErrors.Title?.[0];
-  const happensAtError = fieldErrors.HappensAt?.[0];
-  const bodyError = fieldErrors.Body?.[0];
+  const titleError = form.error("title");
+  const happensAtError = form.error("happensAt");
+  const bodyError = form.error("body");
   // A desktop uses its width: the form in a measured column, and beside it the note as it will read. On a phone the preview
   // follows the form.
   return (
@@ -106,7 +106,7 @@ function NewNoteForm() {
       }
     >
       <FormCard>
-        <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+        <form {...form.formProps} className="flex flex-col gap-5" onSubmit={submit}>
           <Field label="Title" htmlFor="title" error={titleError} errorId="title-error" hint={`Up to ${TITLE_MAX} characters.`}>
             <Input
               id="title"

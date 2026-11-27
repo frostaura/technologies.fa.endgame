@@ -93,7 +93,9 @@ page and fails the build: **every page you add gets a row there** (`{ at, page, 
 
 **The frame (already in `App.tsx`; keep it).**
 - One header, the kit's `AppHeader`: the app's name (linking home), its navigation as `NavItem`s when it has more than one
-  place, and who is signed in with "Sign out". Never a second header, a page-level sign-out or a hand-made user menu.
+  place, and who is signed in with "Sign out". Never a second header, a page-level sign-out or a hand-made user menu. On a
+  phone it draws itself as two compact rows — the name (cut short if long) beside the person's avatar, which opens their name
+  and "Sign out"; then the places on one line that scrolls sideways — so keep `NavItem` labels short and never wrap them.
 - The header and every page share one width (`AppMain`), so the header's edges line up with the content's.
 
 **Every page.**
@@ -106,6 +108,10 @@ page and fails the build: **every page you add gets a row there** (`{ at, page, 
   controls already are), the main action full width. The side panel follows the page; it never disappears.
 - Shows loading, failed, empty and loaded differently (rule 5), with the kit's states. An empty list is `EmptyState` with the
   action that fills it — never a dashed box. An address with nothing at it is `NotFoundState` with a way back.
+- Says only what is true. A page's description, a hint, an empty state's line and a button's words describe what the app
+  does in the request's own terms; they never invent a fact the request did not state — a place ("left on the boat" when no
+  boat was mentioned), a person, a time, a price or a rule. Where the request is silent, say less: "Things people have lost
+  and found", not a story about where.
 
 **A list page** (`kind: "list"`).
 - The items fill the width: `CardGrid` (as many columns as fit — one on a phone, three or four on a desktop) of `ItemCard`s,
@@ -119,18 +125,29 @@ page and fails the build: **every page you add gets a row there** (`{ at, page, 
 - Each field is the kit's `Field` (label above, hint, error beside it) around `Input`, `Select`, `Textarea` or `Checkbox` —
   their edge is the 3:1 field border; a raw `<input>` is faint (about 1.2:1) and ESLint (`endgame/use-kit-fields`) refuses it.
 - `FormActions` at the foot: the main action **and Cancel** beside it (`cancel={<Link to="/">Cancel</Link>}`).
+- The field errors are the kit's `useFormErrors()`: `<form {...form.formProps} onSubmit={submit}>`, `if (form.show(errors))
+  return;` after checking on submit, `form.show(error.errors)` for a `ValidationError`, and `form.error("title")` as the
+  `Field`'s `error` and the control's `invalid`. A field the person changes stops being marked wrong at once (it is checked
+  again on the next submit), and a failed submit puts the focus on the first wrong field. Never keep the errors in your own
+  state, where a corrected field stays red until the next submit.
 
 **A detail page** (`kind: "detail"`).
 - A way back, the record's name as the title, its content, and beside it its facts (`Facts`) and what a person can do.
 - A status and an action are two things: a `Badge` saying "You are on this dive", and a button beside it ("Give up my seat",
   `variant="danger"` when it removes something). Never one button that says both.
 - A link to share is `CopyLink` (shown short, with "Copy link"), never a raw address in a text box.
+- An action that is done leaves no card behind. Once there is nothing left to do — the item is back with its owner, the trip
+  is over — the action's `Panel` goes, and what happened becomes a fact in the details (`Facts`: "Returned" → "3 Dec 2026",
+  with a `Badge` in the header such as "Returned"). The side panel holds the details and what can still be done, nothing else.
+- The content takes the space it needs. A record whose own words are a line or two shows them as the page's description (or
+  the first of its `Facts`), not as a wide card with an empty screen under it; a body card is for a body.
 - Things to tick are a `Checklist` of `ChecklistItem`s — a real check box, the whole row the target, done items struck
   through — with a `Progress` for "7 of 12 packed". Never rows of grey bars.
 
 Checklist before a page is done: one `PageHeader`; a way back below the first page; the width used beside a side panel on a
-desktop; one column and 44 px targets on a phone; kit fields only; Cancel beside a form's main action; a `Badge` for every
-status; the four states; a row in `pageShapes.test.tsx`.
+desktop; one column and 44 px targets on a phone; kit fields only, their errors through `useFormErrors`; Cancel beside a
+form's main action; a `Badge` for every status; no finished action left as a card; no fact the request did not state; the
+four states; a row in `pageShapes.test.tsx`.
 
 ## A person's own record — found again, never made twice
 
