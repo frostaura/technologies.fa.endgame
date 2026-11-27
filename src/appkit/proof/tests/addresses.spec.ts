@@ -65,7 +65,7 @@ for (const shape of shapes) {
       await expect(page.getByRole("alert")).toHaveCount(0); // and not a failure
 
       // Client-side route to a lazily loaded page; signed out, it offers the platform's sign-in.
-      await page.getByRole("link", { name: "New note" }).click();
+      await page.getByRole("main").getByRole("link", { name: "New note" }).click();
       await expect(page).toHaveURL(at("notes/new"));
       await page.getByRole("main").getByRole("link", { name: "Sign in" }).click();
 
