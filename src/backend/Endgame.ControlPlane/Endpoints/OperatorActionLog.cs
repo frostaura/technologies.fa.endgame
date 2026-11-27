@@ -9,12 +9,23 @@ namespace Endgame.ControlPlane.Endpoints;
 /// God mode is never silent (CLAUDE.md rule 1): every change an operator makes inside an organisation
 /// they entered as an Admin — a hire decided, a cap or a secret set, a person invited — is written to
 /// that organisation's operator log, one entry per action, with a plain title its Owner can read. Reads
-/// are covered by the visit entry and are not repeated. Nothing from the request body is recorded, so a
-/// secret's value never reaches the log.
+/// are covered by the visit entry and are not repeated — including the few reads that are posted, because they
+/// carry a body: working out what something would cost (<see cref="Reads"/>). Nothing from the request body is
+/// recorded, so a secret's value never reaches the log.
 /// </summary>
 internal sealed class OperatorActionLog : IEndpointFilter
 {
     public const string Prefix = "admin.";
+
+    /// <summary>
+    /// Posted, but only reads: each works out what something would cost and changes nothing ("Free"). An estimate
+    /// is not an act, so it is no entry of its own; the visit entry already says the operator was there. Every
+    /// endpoint named <c>Estimate…</c> must be listed here (a test holds it), so a new one is a decision, not a default.
+    /// </summary>
+    public static readonly IReadOnlySet<string> Reads = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "EstimateIdea", "EstimateRetry", "EstimateChange", "EstimateMessage", "EstimateAsk", "EstimateSuggestions",
+    };
 
     /// <summary>What each change is called in the log. Anything not named here is described by its summary.</summary>
     private static readonly Dictionary<string, string> Titles = new(StringComparer.Ordinal)
@@ -97,6 +108,11 @@ internal sealed class OperatorActionLog : IEndpointFilter
 
         var endpoint = http.GetEndpoint();
         var name = endpoint?.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName ?? "Unnamed";
+        if (Reads.Contains(name))
+        {
+            return result;
+        }
+
         var title = Titles.TryGetValue(name, out var known)
             ? known
             : endpoint?.Metadata.GetMetadata<IEndpointSummaryMetadata>()?.Summary is { Length: > 0 } summary ? FirstSentence(summary) : "Changed something as an Admin";

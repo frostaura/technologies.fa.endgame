@@ -30,7 +30,8 @@
    ago — the visit slides on with each read, so a polling org chart is one entry. Concurrent first reads
    write one row (an advisory lock on organisation and operator). The last-seen time is kept per process;
    after a restart the log is the record, so the rule only errs toward logging. Every change the operator
-   makes there as Admin is one more entry (`admin.<EndpointName>`, titled plainly); a refused change is none.
+   makes there as Admin is one more entry (`admin.<EndpointName>`, titled plainly); a refused change is none, and
+   neither is an estimate (`Estimate…`, posted only because it carries a body): it is a read, which the visit covers.
    In the console every screen works on the entered organisation, which is named in the God-mode band.
 5. The sweep releases reservations that lapsed with their lease and requeues runs whose lease lapsed.
 6. God mode's screens (operators only, never by access token): `GET /api/operator/organisations` — each

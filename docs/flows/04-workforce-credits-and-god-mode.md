@@ -833,7 +833,7 @@ Shared vocabulary used below:
   2. Press "Open its org chart". `/?organisation=<slug>` shows that organisation's tree, with the in-organisation band naming it.
   3. From then on every screen works on that organisation — Credits, Hiring, People, Secrets, Autonomy, Notifications, the header's balance and bell — until the operator presses "Leave <Name>" or "Every organisation". The organisation is remembered for the tab, so a link without `?organisation=` keeps working.
   4. Any call the operator makes inside that organisation is treated as Admin. Reads continue the visit. Coming back more than 10 minutes later logs a new entry.
-  5. As Admin the operator can do anything an Admin can: decide hires, change employees, set caps and tighter limits, manage people and secrets. Every change is one entry in the organisation's operator log, titled plainly ("As an Admin: Added a division"); a refused change is not.
+  5. As Admin the operator can do anything an Admin can: decide hires, change employees, set caps and tighter limits, manage people and secrets. Every change is one entry in the organisation's operator log, titled plainly ("As an Admin: Added a division"); a refused change is not, and neither is asking what something would cost (an estimate is a read).
   6. The operator cannot set the own limit, read the operator log, grant Admin, ask for a top-up, or act as Owner.
 - **You know it worked when:** the "You entered … as an Admin" status and the entered organisation's org chart appear.
 - **Variations and refusals:**
