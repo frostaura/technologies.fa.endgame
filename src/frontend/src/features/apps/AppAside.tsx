@@ -73,7 +73,7 @@ export function WhatItUses({ app, canSeeSecrets }: { app: AppDetail; canSeeSecre
           {/* A secret's name is one long word: it may break anywhere, so the card never grows past the panel. */}
           {secretsView.data.effective.map((x, i, all) => (
             <span key={x.name}>
-              <span className="break-all">{x.name}</span>
+              <span className="[overflow-wrap:anywhere]">{x.name}</span>
               {i < all.length - 1 ? ", " : "."}
             </span>
           ))}{" "}
