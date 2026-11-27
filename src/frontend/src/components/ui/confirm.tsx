@@ -102,7 +102,7 @@ export function ConfirmCard({
       {detail && <p className="text-sm text-ink-body">{detail}</p>}
       {children}
       {/* The two choices, the same size, on one line: what was asked, then the safe way back. */}
-      <div className="grid grid-cols-2 gap-2 pt-1 sm:inline-grid sm:w-fit sm:auto-cols-fr sm:grid-flow-col sm:grid-cols-none">
+      <div className="flex flex-wrap gap-2 pt-1 max-sm:[&>*]:grow sm:inline-grid sm:w-fit sm:auto-cols-fr sm:grid-flow-col">
         <Button variant={destructive ? "danger" : "primary"} type={onSubmit ? "submit" : "button"} onClick={onSubmit ? undefined : onConfirm} disabled={busy}>
           {confirm}
         </Button>
