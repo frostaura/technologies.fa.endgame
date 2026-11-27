@@ -211,24 +211,25 @@ test("the address is the step: keys, Back and Forward, an edited address and scr
   await agrees(2, "Where it goes");
 });
 
-test("the step being read has one outline, its kind inside it, also under the keyboard's focus", async ({ page }) => {
+test("the step being read has one outline; the keyboard's focus is a separate ring; a kind is named only where a flow mixes kinds", async ({ page }) => {
   await withDemo(page);
-  await page.goto("./#/flow/OPS-12/step/1");
+  await page.goto("./#/flow/ORG-01/step/1");
   await page.keyboard.press("ArrowRight");
   const button = page.locator("[aria-current=step]");
   await expect(button).toBeFocused();
-  // The focused button draws no ring of its own: the card's border is the one outline.
-  const ring = await button.evaluate((b) => getComputedStyle(b).boxShadow);
-  expect(ring === "none" || (ring.match(/-?\d+(\.\d+)?px/g) ?? []).every((v) => parseFloat(v) === 0), ring).toBe(true);
+  // Focus is its own dashed ring, set off the card: never the same look as the step being read (35).
+  expect(await button.evaluate((b) => getComputedStyle(b).outlineStyle)).toBe("dashed");
   const card = page.locator("[data-testid=step-card]", { has: button });
-  const [c, chip] = [await card.boundingBox(), await card.getByText("Terminal", { exact: true }).boundingBox()];
+  const [c, chip] = [await card.boundingBox(), await card.getByText("Request", { exact: true }).boundingBox()];
   expect(c && chip && chip.y + chip.height <= c.y + c.height && chip.y >= c.y).toBe(true);
-  // The live console is the rule: no step repeats a "Live" chip; the frame says it once.
+  // A flow that shows every step the same way names no kind under its steps (47).
+  await page.goto("./#/flow/OPS-12/step/1");
+  await expect(page.getByTestId("side-column").getByText("Terminal", { exact: true })).toHaveCount(0);
   await page.goto("./#/flow/IDEA-02/step/1");
   await expect(page.getByTestId("side-column").getByText("Live", { exact: true })).toHaveCount(0);
 });
 
-test("a step's placeholders read as what they stand for, and quoted words on the dark panel stay legible", async ({ page }) => {
+test("a step's placeholders read as what they stand for, and quoted words on the end card stay legible", async ({ page }) => {
   await withDemo(page);
   await page.goto("./#/flow/IDEA-02/step/2");
   const steps = page.getByRole("list", { name: "Steps" });
@@ -346,16 +347,22 @@ test("on a phone, a path shows its progress and what is next, and a done flow is
   await context.close();
 });
 
-test("on a phone, the player keeps the step and its controls in reach: buttons, swipes, the stage on top, nothing off screen", async ({ browser }) => {
+test("on a phone, the player keeps the step and its controls in reach: buttons, swipes, the phone frame on top, nothing off screen", async ({ browser }) => {
   const { page, context } = await phone(browser);
   await page.goto("./#/flow/IDEA-02/step/1");
-  const frame = page.getByTestId("demo-frame");
-  await expect(frame).toBeVisible();
+  const frame = page.getByTestId("frame");
+  await expect(page.getByTestId("demo-frame")).toBeVisible();
+  // The phone's own console, in a phone-shaped frame (frame 1).
+  await expect(frame).toHaveAttribute("data-device", "phone");
+  await expect(page.getByTestId("demo-frame")).toHaveAttribute("data-console-width", "390");
+  // The full title is above the frame (academy 23).
+  const title = await page.getByRole("heading", { level: 1 }).boundingBox();
+  expect(title && (await frame.boundingBox()) && title.y + title.height <= ((await frame.boundingBox())?.y ?? 0)).toBe(true);
   const controls = page.getByRole("group", { name: "Step controls" });
   const next = controls.getByRole("button", { name: "Next step" });
   const prev = controls.getByRole("button", { name: "Previous step" });
-  // The pager sits on the bottom edge, inside the screen, and its targets are at least 44 px.
-  for (const b of [next, prev]) {
+  // The controls are fixed to the bottom edge, inside the screen, and their targets are at least 44 px.
+  for (const b of [next, prev, controls.getByRole("button", { name: "Try it yourself" }), controls.getByRole("button", { name: "Show me again" })]) {
     const r = await b.boundingBox();
     expect(r && r.height >= 44 && r.width >= 44 && r.y + r.height <= 844 && r.x >= 0 && r.x + r.width <= 390).toBe(true);
   }
@@ -363,14 +370,14 @@ test("on a phone, the player keeps the step and its controls in reach: buttons, 
   await next.click();
   await expect(page).toHaveURL(/\/step\/2$/);
   await expect(controls.getByText("Step 2 of 5")).toBeVisible();
-  // The console is on screen above the pager, and the pager carries the step's own words.
+  // The frame is on screen above the controls, and the caption under it carries the step's own words.
   await expect
     .poll(async () => {
       const [f, p] = [await frame.boundingBox(), await controls.boundingBox()];
       return !!(f && p && f.y >= 0 && f.y + f.height <= p.y);
     })
     .toBe(true);
-  await expect(controls).toContainText("Where it goes");
+  await expect(page.getByTestId("caption")).toContainText("Where it goes");
   // A swipe left over the stage moves on; a swipe right goes back.
   await page.waitForTimeout(1200);
   await swipe(page, 320, 80, 300);
@@ -378,16 +385,22 @@ test("on a phone, the player keeps the step and its controls in reach: buttons, 
   await page.waitForTimeout(1200);
   await swipe(page, 80, 320, 300);
   await expect(page).toHaveURL(/\/step\/2$/);
-  // The console's spotlight and caption are drawn inside its frame, so they stay on screen with it.
+  // The controls stay on the bottom edge however far the page is scrolled (academy 26).
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(async () => Math.round(((await controls.boundingBox())?.y ?? 0) + ((await controls.boundingBox())?.height ?? 0))).toBe(844);
+  await page.evaluate(() => window.scrollTo(0, 0));
   const fb = await frame.boundingBox();
   expect(fb && fb.x >= 0 && fb.x + fb.width <= 390).toBe(true);
-  // The larger console keeps the pager, which then carries the step's words.
+  // "Larger console" is a full-screen sheet with a visible Close (academy 34).
   await page.getByRole("button", { name: "Larger console" }).click();
-  await expect(page.getByRole("button", { name: "Smaller console" })).toHaveAttribute("aria-pressed", "true");
+  const sheet = page.getByRole("dialog", { name: /^Larger console/ });
+  await expect(sheet).toBeVisible();
   const big = await frame.boundingBox();
   expect(big && fb && big.height > fb.height).toBe(true);
-  const pb = await controls.boundingBox();
-  expect(pb && big && big.y + big.height <= pb.y + 1).toBe(true);
+  await expect(sheet.getByRole("button", { name: "Close" })).toBeInViewport();
+  await expect(sheet.getByRole("button", { name: "Next step" })).toBeInViewport();
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(sheet).toHaveCount(0);
   expect(await fitsWidth(page)).toBe(true);
   await context.close();
 });
@@ -399,7 +412,8 @@ test("on a phone, finishing a flow says so and makes the next one a single tap",
   await controls.getByRole("button", { name: "Finish" }).click();
   const done = page.getByTestId("flow-done");
   await expect(done).toBeVisible({ timeout: 5000 });
-  await expect(done).toContainText(/Done — next: [A-Z]+-\d+/);
+  await expect(done).toContainText("Done");
+  await expect(page.getByTestId("worked").getByRole("link", { name: /^Next: [A-Z]+-\d+/ })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Flow done." })).toHaveCount(1);
   const go = controls.getByRole("link", { name: /^Next flow: / });
   await expect(go).toBeVisible();
@@ -553,18 +567,17 @@ test("the frame has an accessible name and no title, so no browser tooltip cover
   await expect(page.getByText("Tap to try it yourself")).toHaveCount(0);
 });
 
-test("on a phone held upright, the console takes at least 60% of the height, and its caption sits outside it", async ({ browser }) => {
+test("on a phone held upright the phone frame is the hero, on a tablet the laptop's console spans the page, and the caption sits under it, never in it", async ({ browser }) => {
   for (const viewport of [{ width: 375, height: 812 }, { width: 390, height: 844 }, { width: 768, height: 1024 }]) {
     const context = await browser.newContext({ viewport, isMobile: viewport.width < 768, hasTouch: true });
     const page = await context.newPage();
     await withDemo(page);
     await page.goto("./#/flow/IDEA-02/step/1");
-    const frame = page.getByTestId("demo-frame");
-    await expect(frame).toBeVisible();
-    const box = await page.getByTestId("stage-media").boundingBox();
-    expect((box?.height ?? 0) / viewport.height, `${viewport.width}×${viewport.height}`).toBeGreaterThanOrEqual(0.599);
-    // The caption is set under the console, and the console is asked for no note of its own.
-    const caption = await page.getByTestId("caption").boundingBox();
+    await expect(page.getByTestId("demo-frame")).toBeVisible();
+    const box = await page.getByTestId("frame").boundingBox();
+    if (viewport.width < 640) expect((box?.height ?? 0) / viewport.height, `${viewport.width}×${viewport.height}`).toBeGreaterThanOrEqual(0.6);
+    else expect((box?.width ?? 0) / viewport.width, `${viewport.width}×${viewport.height}`).toBeGreaterThanOrEqual(0.9);
+    const caption = await page.getByTestId("caption-strip").boundingBox();
     expect(caption && box && caption.y >= box.y + box.height).toBe(true);
     await expect.poll(async () => (await received(page)).filter((l) => l.startsWith("highlight")).length).toBeGreaterThan(0);
     for (const l of (await received(page)).filter((x) => x.startsWith("highlight"))) expect(l).not.toContain('"note"');
@@ -573,15 +586,18 @@ test("on a phone held upright, the console takes at least 60% of the height, and
   }
 });
 
-test("on a phone on its side, the console takes the height with one slim step bar under it", async ({ browser }) => {
+test("on a phone on its side, the frame takes the whole height and the controls sit in a strip beside it", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 812, height: 375 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await withDemo(page);
   await page.goto("./#/flow/IDEA-02/step/1");
-  const media = await page.getByTestId("stage-media").boundingBox();
-  const overlay = await page.getByTestId("step-overlay").boundingBox();
-  expect(media && media.height >= 375 * 0.6).toBe(true);
-  expect(overlay && media && overlay.y >= media.y + media.height && overlay.y + overlay.height <= 375 && overlay.height <= 64).toBe(true);
+  const frame = await page.getByTestId("frame").boundingBox();
+  const controls = await page.getByRole("group", { name: "Step controls" }).boundingBox();
+  expect(frame && frame.height >= 375 * 0.9).toBe(true);
+  expect(controls && frame && controls.x >= frame.x + frame.width && controls.y + controls.height <= 375).toBe(true);
+  // The site's header steps aside, and the player carries its own way back.
+  await expect(page.getByRole("banner")).toBeHidden();
+  await expect(page.getByRole("link", { name: /^← / })).toBeVisible();
   expect(await fitsWidth(page)).toBe(true);
   await context.close();
 });
@@ -628,26 +644,26 @@ test("Next always leads to another flow, never the one being read (A21)", async 
 /* ------------------------------------------------------------------ with the real console */
 
 
-test("the console's caption sits beside what it names, never over it, with one pointer, and is not printed twice (A5, A16)", async ({ browser }) => {
-  for (const viewport of [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }]) {
-    const context = await browser.newContext({ viewport });
+test("nothing is written over the console: the ring carries the step's number, the caption is a strip under the frame, and the frame keeps its size from step to step (A5, A16, frame 14, 25, 33)", async ({ browser }) => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
+    const context = await browser.newContext({ viewport, isMobile: viewport.width < 640, hasTouch: viewport.width < 640 });
     const page = await context.newPage();
-    for (const address of ["./#/flow/ORG-08/step/1", "./#/flow/IDEA-02/step/1", "./#/flow/CRED-01/step/1"]) {
+    let size: string | null = null;
+    for (const address of ["./#/flow/ORG-08/step/1", "./#/flow/IDEA-02/step/1", "./#/flow/CRED-01/step/2", "./#/flow/ORG-01/step/2"]) {
       await page.goto(address);
       const frame = page.frameLocator("[data-testid=demo-frame]");
-      const note = frame.locator("[data-demo-note]");
-      await expect(note).toBeVisible({ timeout: 20_000 });
-      await page.waitForTimeout(600);
-      const [n, ring] = [await note.boundingBox(), await frame.locator("[data-demo-spotlight]").boundingBox()];
-      expect(n && ring, address).toBeTruthy();
-      if (n && ring) {
-        const w = Math.max(0, Math.min(n.x + n.width, ring.x + ring.width) - Math.max(n.x, ring.x));
-        const h = Math.max(0, Math.min(n.y + n.height, ring.y + ring.height) - Math.max(n.y, ring.y));
-        expect(w * h, `${address} at ${viewport.width}: the caption covers what it points at`).toBe(0);
-      }
-      // Its words are not repeated under the frame.
-      const words = ((await note.textContent()) ?? "").trim();
-      await expect(page.getByTestId("caption")).not.toHaveText(words);
+      const fb = await page.getByTestId("frame").boundingBox();
+      // One size for the frame, whatever the step shows (a console or a request).
+      const now = `${Math.round(fb?.width ?? 0)}×${Math.round(fb?.height ?? 0)}`;
+      size ??= now;
+      expect(now, `${address} at ${viewport.width}`).toBe(size);
+      const strip = await page.getByTestId("caption-strip").boundingBox();
+      expect(strip && fb && strip.y >= fb.y + fb.height, `${address}: the caption is under the frame`).toBe(true);
+      if (address.endsWith("ORG-01/step/2")) continue;
+      await expect(frame.locator("[data-demo-marker]")).toBeVisible({ timeout: 20_000 });
+      await expect(frame.locator("[data-demo-note]")).toHaveCount(0);
+      const number = (await frame.locator("[data-demo-marker]").textContent())?.trim();
+      expect(number).toBe(address.split("/").at(-1));
     }
     await context.close();
   }

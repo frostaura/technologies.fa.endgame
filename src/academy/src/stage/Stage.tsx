@@ -127,7 +127,10 @@ export function Stage({ flow, script, active, run, interactive, onTry, onBack, b
     lastScript.current = script;
     const ops = script ? plan(script, played.current, active, replay) : played.current ? [] : planExplore(flow.startRoute ?? "/");
     played.current = active;
-    if (ops.length) setRequest({ key: `${flow.id}:${active}:${run}:${attempt}`, ops: ops.map((o) => (o.op === "highlight" && !o.catchUp ? { ...o, args: { ...o.args, marker } } : o)) });
+    // A spotlight carries the step's number for its ring, and never its words: those are set in the
+    // strip under the frame, so nothing is written over the console.
+    const spot = (args: Record<string, unknown>) => Object.fromEntries(Object.entries({ ...args, marker }).filter(([k]) => k !== "note"));
+    if (ops.length) setRequest({ key: `${flow.id}:${active}:${run}:${attempt}`, ops: ops.map((o) => (o.op === "highlight" && !o.catchUp ? { ...o, args: spot(o.args) } : o)) });
     // The step's words are read again from their start.
     setExpanded(false);
   }, [active, run, media, usesFrame, script, flow, marker, attempt]);
@@ -215,7 +218,7 @@ export function Stage({ flow, script, active, run, interactive, onTry, onBack, b
   );
 
   const strip = (
-    <div className={`flex shrink-0 items-start gap-3 rounded-md border bg-surface px-3 py-2.5 ${phoneWords ? (expanded ? "min-h-caption-sm w-full" : "h-caption-sm w-full") : "h-caption"} ${interactive ? "border-primary bg-primary-tint" : ""}`} style={fit && !phoneWords ? { width: `${fit.width}px`, maxWidth: "100%" } : undefined} data-testid="caption-strip" data-print="hide">
+    <div className={`flex shrink-0 items-start gap-3 rounded-md border bg-surface px-3 py-2.5 ${phoneWords ? (expanded ? "min-h-caption-sm w-full" : "h-caption-sm w-full") : "h-caption compact:h-caption-sm"} ${interactive ? "border-primary bg-primary-tint" : ""}`} style={fit && !phoneWords ? { width: `${fit.width}px`, maxWidth: "100%" } : undefined} data-testid="caption-strip" data-print="hide">
       {interactive ? (
         <>
           <p className="min-w-0 flex-1 self-center text-sm text-ink" aria-live="polite" data-testid="caption">
@@ -227,7 +230,7 @@ export function Stage({ flow, script, active, run, interactive, onTry, onBack, b
         <>
           <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold tabular-nums text-primary-ink" aria-hidden="true">{marker}</span>
           <div className="min-w-0 flex-1">
-            <p className={`text-sm leading-snug text-ink ${expanded ? "" : phoneWords ? "line-clamp-2" : "line-clamp-3"}`} aria-live="polite" data-testid="caption">{lead}</p>
+            <p className={`text-sm leading-snug text-ink ${expanded ? "" : phoneWords ? "line-clamp-2" : "line-clamp-3 compact:line-clamp-2"}`} aria-live="polite" data-testid="caption">{lead}</p>
             {expanded && more && <p className="mt-2 text-sm leading-snug text-ink-muted">{more}</p>}
           </div>
           {phoneWords && (lead || more) && (

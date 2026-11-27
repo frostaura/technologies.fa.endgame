@@ -48,7 +48,11 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: false,
     assetsInlineLimit: 0,
-    chunkSizeWarningLimit: 2400,
+    // One classic script by design (it must run from file://, where chunks cannot load), carrying
+    // every flow, script, search index and print row: it grows with the product's flows (CLAUDE.md
+    // rule 14). This is the budget it is held to, with room for a season of new flows; past it, the
+    // content itself must be made smaller, not split.
+    chunkSizeWarningLimit: 2600,
     rolldownOptions: { output: { format: "iife", codeSplitting: false } },
   },
 });

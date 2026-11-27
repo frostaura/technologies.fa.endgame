@@ -80,10 +80,10 @@ export const academy = {
     "ring-lg": "7rem",
     medal: "3.5rem",
     /** The step controls' fixed places, so nothing in the row moves from step to step. */
-    prev: "8rem",
-    try: "10.5rem",
-    again: "10.5rem",
-    next: "11rem",
+    prev: "7.5rem",
+    try: "10rem",
+    again: "10.25rem",
+    next: "9rem",
     "next-sm": "5.5rem",
     /** The strip beside the frame of a phone on its side. */
     "side-strip": "20rem",
@@ -93,6 +93,8 @@ export const academy = {
   /** The player: the console beside its side column, or on top of the steps on a phone. */
   gridTemplateColumns: {
     player: "minmax(0, 1fr) 26rem",
+    /** Under 1536 wide: a narrower column, so the console keeps the width. */
+    "player-sm": "minmax(0, 1fr) 22rem",
     "player-xl": "minmax(0, 1fr) 30rem",
     /** Cards that fill their row: as many as fit at this width, never an orphan stretched alone. */
     cards: "repeat(auto-fill, minmax(17rem, 1fr))",
@@ -154,5 +156,5 @@ export const academy = {
     "sheet-b": "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
   },
   /** `short:` — a phone on its side (or any window under 600 px tall): the stage's controls fold into one row. */
-  screens: { split: { raw: SPLIT_QUERY }, short: { raw: SHORT_QUERY }, mouse: { raw: MOUSE_QUERY }, touch: { raw: "(hover: none), (pointer: coarse)" }, tall: { raw: "(min-height: 1000px)" } },
+  screens: { split: { raw: SPLIT_QUERY }, short: { raw: SHORT_QUERY }, mouse: { raw: MOUSE_QUERY }, touch: { raw: "(hover: none), (pointer: coarse)" }, tall: { raw: "(min-height: 1000px)" }, compact: { raw: "(max-height: 920px)" }, "phone-side": { raw: "(max-height: 600px) and (max-width: 1023px)" } },
 } as const;

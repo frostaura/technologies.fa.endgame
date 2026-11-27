@@ -42,7 +42,7 @@ export function Shell({ children, operator = false, player = false }: { children
       </a>
       {/* Opaque and a fixed height: nothing shows through it, and nothing under it moves when what it holds changes. */}
       {/* A phone on its side gives a lesson's frame the whole height: the player carries its own way back. */}
-      <header className={`sticky top-0 z-30 h-header-sm border-b md:h-header short:h-header-short bg-surface ${player ? "short:max-lg:hidden" : ""}`} data-print="hide">
+      <header className={`sticky top-0 z-30 h-header-sm border-b md:h-header short:h-header-short bg-surface ${player ? "phone-side:hidden" : ""}`} data-print="hide">
         <div className={`${ui.container} flex h-full items-center gap-2 md:gap-5`}>
           <a href={href(operator ? "/operator" : "/")} className="flex min-h-touch shrink-0 items-center gap-2.5" aria-label={operator ? "Operator handbook home" : "The Endgame Academy, cover"}>
             <Mark className="h-8 w-8" />

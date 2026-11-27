@@ -45,7 +45,7 @@ export function StepPager({ active, total, furthest, onPrev, onNext, end, resume
   const steps = total === 1 ? "1 step" : `${total} steps`;
   const where = (
     <div className="min-w-0 flex-1">
-      <p className="text-center text-sm font-semibold tabular-nums text-ink" aria-live="polite">
+      <p className="whitespace-nowrap text-center text-sm font-semibold tabular-nums text-ink" aria-live="polite">
         {total > 1 ? `Step ${active} of ${total}` : steps}
       </p>
       <StepTrack total={total} furthest={furthest} active={active} className="mx-auto mt-1.5 max-w-md" />

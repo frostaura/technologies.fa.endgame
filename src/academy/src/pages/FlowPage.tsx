@@ -454,12 +454,14 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
         <header className="shrink-0 py-3 xl:py-4">
           {chips}
           <div className="mt-1.5">{title("line-clamp-2 max-w-5xl text-player-title")}</div>
-          {lead && <p className="mt-1 line-clamp-2 max-w-5xl text-pretty text-base text-ink-body">{lead}</p>}
+          {/* On a window of laptop height the lede goes to the top of the side column, so the console keeps the height. */}
+          {lead && <p className="mt-1 line-clamp-2 max-w-5xl text-pretty text-base text-ink-body compact:hidden">{lead}</p>}
         </header>
-        <div ref={gridRef} className={`grid min-h-0 flex-1 gap-6 pb-4 ${total > 0 ? "grid-cols-player 2xl:grid-cols-player-xl xl:gap-8" : ""}`}>
+        <div ref={gridRef} className={`grid min-h-0 flex-1 gap-6 pb-4 ${total > 0 ? "grid-cols-player-sm 2xl:grid-cols-player-xl xl:gap-8" : ""}`}>
           {stage && <div className="flex min-h-0 min-w-0 flex-col" data-print="hide">{stage}</div>}
           <div className="relative min-h-0">
             <div ref={colRef} className="h-full overflow-y-auto overscroll-contain pb-6 pr-1 pt-2" data-testid="side-column">
+              {lead && <p className="mb-5 hidden text-pretty text-base text-ink-body compact:block">{lead}</p>}
               {noSteps}
               {steps}
               {finish}
