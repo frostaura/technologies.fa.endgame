@@ -380,7 +380,7 @@ export function partStateLabel(state: PartState, repairs: number): string {
     case "checking":
       return "Being checked";
     case "repair":
-      return repairs > 1 ? `Sent back for repair ${repairs}` : "Sent back for repair";
+      return `Sent back for repair (round ${Math.max(1, repairs)})`;
     case "passed":
       return "Passed";
     case "needs-look":

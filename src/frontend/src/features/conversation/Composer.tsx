@@ -142,6 +142,8 @@ export function Composer(p: ComposerProps) {
       ? `${caps.answerer.kind === "employee" ? (caps.answerer.name ?? p.name) : "Endgame’s assistant"} reads text only, so an image cannot be sent here. Take the image off, or put it in a PDF${caps.answerer.kind === "assistant" ? ", or ask an employee who can look at pictures" : ""}.`
       : null;
   const empty = p.draft.trim().length === 0 && p.files.ready.length === 0;
+  // A box with nothing in it yet names its tools; once the person types they fold to icons.
+  const fresh = p.draft.length === 0 && p.files.files.length === 0 && !p.live;
   const canSend = !empty && !blocked && p.estimate.kind !== "loading";
 
   const submit = (event?: FormEvent) => {
@@ -283,25 +285,27 @@ export function Composer(p: ComposerProps) {
               e.target.value = "";
             }}
           />
-          <ToolButton label="Attach files" onClick={() => fileInput.current?.click()} disabled={!limits}>
-            <Paperclip aria-hidden className="size-5" />
+          <ToolButton label="Attach files" text="Attach" showText={fresh} onClick={() => fileInput.current?.click()} disabled={!limits}>
+            <Paperclip aria-hidden className="size-5 shrink-0" />
           </ToolButton>
-          <ToolButton label="What it can use here" onClick={() => setPanel((v) => !v)} pressed={panel} disabled={!caps}>
-            <LayoutGrid aria-hidden className="size-5" />
+          <ToolButton label="What it can use here" text="Can use" showText={fresh} onClick={() => setPanel((v) => !v)} pressed={panel} disabled={!caps}>
+            <LayoutGrid aria-hidden className="size-5 shrink-0" />
           </ToolButton>
-          <ToolButton label="Actions" onClick={() => onChange("/", 1)} disabled={actions.length === 0}>
-            <Slash aria-hidden className="size-5" />
+          <ToolButton label="Actions" text="Actions" showText={fresh} onClick={() => onChange("/", 1)} disabled={actions.length === 0}>
+            <Slash aria-hidden className="size-5 shrink-0" />
           </ToolButton>
           {p.onRetarget && p.targets.length > 0 && (
             <ToolButton
-              label="Address someone"
+              label="Mention someone"
+              text="Mention"
+              showText={fresh}
               onClick={() => {
                 const text = p.draft && !/\s$/.test(p.draft) ? `${p.draft} @` : `${p.draft}@`;
                 onChange(text, text.length);
                 box.current?.focus();
               }}
             >
-              <AtSign aria-hidden className="size-5" />
+              <AtSign aria-hidden className="size-5 shrink-0" />
             </ToolButton>
           )}
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
@@ -330,7 +334,8 @@ export function Composer(p: ComposerProps) {
             type="submit"
             disabled={!canSend}
             aria-label="Send"
-            className="flex min-h-touch min-w-touch items-center justify-center rounded-full bg-primary text-primary-ink transition hover:bg-primary-hover disabled:bg-quiet disabled:text-ink-muted motion-reduce:transition-none"
+            data-ready={canSend || undefined}
+            className="ml-1 flex min-h-touch min-w-touch items-center justify-center rounded-full bg-primary text-primary-ink shadow-press transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:border disabled:border-dashed disabled:border-border-strong disabled:bg-surface disabled:text-ink-muted disabled:shadow-none motion-reduce:transition-none"
           >
             <ArrowUp aria-hidden className="size-5" strokeWidth={2.5} />
           </button>
@@ -351,7 +356,7 @@ export function Composer(p: ComposerProps) {
   );
 }
 
-function ToolButton({ label, onClick, children, pressed, disabled }: { label: string; onClick: () => void; children: ReactNode; pressed?: boolean; disabled?: boolean }) {
+function ToolButton({ label, text, showText, onClick, children, pressed, disabled }: { label: string; text: string; showText: boolean; onClick: () => void; children: ReactNode; pressed?: boolean; disabled?: boolean }) {
   return (
     <button
       type="button"
@@ -360,9 +365,20 @@ function ToolButton({ label, onClick, children, pressed, disabled }: { label: st
       title={label}
       aria-pressed={pressed}
       disabled={disabled}
-      className={cn("flex min-h-touch min-w-touch items-center justify-center rounded-full text-ink-muted hover:bg-ground hover:text-ink disabled:opacity-40", pressed && "bg-primary-tint text-primary-hover")}
+      data-tool={text}
+      className={cn(
+        "flex min-h-touch min-w-touch shrink-0 flex-col items-center justify-center rounded-full text-ink-muted hover:bg-ground hover:text-ink disabled:opacity-40",
+        showText && "rounded-sm px-1.5 py-0.5",
+        pressed && "bg-primary-tint text-primary-hover",
+      )}
     >
       {children}
+      {/* Named on screen under its icon until the person starts typing; the icon alone after, its name kept in the tooltip and for screen readers. */}
+      {showText && (
+        <span aria-hidden className="whitespace-nowrap text-xs font-medium leading-tight">
+          {text}
+        </span>
+      )}
     </button>
   );
 }

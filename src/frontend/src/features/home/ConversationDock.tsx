@@ -186,6 +186,7 @@ export function ConversationDock({ tree, selection, fill = true, onRetarget }: {
         )}
       >
         <PaneHeader selection={selection} name={name} inSheet={inSheet} onEmployeePage={onEmployeePage} />
+        <AlsoHappening busy={busy} inSheet={inSheet} />
 
         <div
           ref={logRef}
@@ -224,12 +225,6 @@ export function ConversationDock({ tree, selection, fill = true, onRetarget }: {
             ))}
             {messages.map((m) => (
               <Exchange key={m.id} message={m} onRetry={() => void send(m.text, m.attachments ?? [], {})} answerer={answerer} />
-            ))}
-            {busy.slice(0, 2).map((w) => (
-              <div key={w.name} className="flex items-center gap-2.5 text-sm text-ink-muted">
-                <TypingDots />
-                {activityLine(w.name, w.activity)}
-              </div>
             ))}
           </div>
         </div>
@@ -332,6 +327,40 @@ function HeaderButton({ label, onClick, pressed, children }: { label: string; on
     <button type="button" onClick={onClick} aria-label={label} title={label} aria-pressed={pressed} className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
       {children}
     </button>
+  );
+}
+
+/**
+ * Other work under way at this level, anchored under the header rather than floating in the thread: the first line
+ * shown, the rest one tap away.
+ */
+function AlsoHappening({ busy, inSheet }: { busy: { id: string; name: string; activity: string }[]; inSheet: boolean }) {
+  const [open, setOpen] = useState(false);
+  const first = busy[0];
+  if (!first) return null;
+  return (
+    <div data-also-happening="" className={cn("shrink-0 border-b bg-ground text-sm text-ink-muted", inSheet ? "-mx-4 px-4" : "px-4")}>
+      <div className="flex min-h-touch items-center gap-2.5">
+        <TypingDots />
+        <span className="min-w-0 flex-1 truncate">
+          <span className="sr-only">Also happening here: </span>
+          {activityLine(first.name, first.activity)}
+        </span>
+        {busy.length > 1 && (
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-touch shrink-0 items-center gap-1 rounded-xs text-xs font-semibold text-primary-link hover:text-primary-hover">
+            {open ? "Less" : `${busy.length - 1} more`}
+            <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+          </button>
+        )}
+      </div>
+      {open && (
+        <ul className="flex flex-col gap-1 pb-2.5 pl-8">
+          {busy.slice(1).map((w) => (
+            <li key={w.id}>{activityLine(w.name, w.activity)}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

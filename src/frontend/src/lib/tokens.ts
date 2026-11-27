@@ -205,7 +205,7 @@ export const layout = {
     aside: "22rem",
     /** The conversation pane docked at the right: narrow, wide, and collapsed to a rail (ARCH-011). */
     dock: "26rem",
-    "dock-wide": "36rem",
+    "dock-wide": "34rem",
     rail: "3.5rem",
     form: "40rem",
     prose: "45rem",

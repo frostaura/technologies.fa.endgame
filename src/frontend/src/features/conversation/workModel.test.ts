@@ -45,8 +45,9 @@ describe("the work card's reading of a build", () => {
     expect(w.parts.map((p) => p.state)).toEqual(["repair", "waiting", "waiting"]);
     expect(w.parts[0]?.repairs).toBe(1);
     expect(w.active).toBe("r1");
-    expect(partStateLabel("repair", 1)).toBe("Sent back for repair");
-    expect(partStateLabel("repair", 2)).toBe("Sent back for repair 2");
+    expect(partStateLabel("repair", 1)).toBe("Sent back for repair (round 1)");
+    expect(partStateLabel("repair", 2)).toBe("Sent back for repair (round 2)");
+    expect(partStateLabel("needs-look", 0)).toBe("Needs a look");
 
     log.push(e("message", { kind: "agent.start", agent: "evaluator-r1-1" }));
     w = deriveWork(log);

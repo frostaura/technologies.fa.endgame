@@ -49,12 +49,12 @@ export function WorkCard({ runId, kind }: { runId: string; kind?: string }) {
     >
       <header className="flex flex-col gap-2.5 border-b px-4 pb-3 pt-3.5">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xs bg-teal-tint text-teal">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xs bg-ground text-ink-muted">
             <Icon name={research ? "research" : "build"} className="size-4" />
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-eyebrow font-semibold uppercase text-ink-muted">{heading(what, research)}</span>
-            <h3 className="line-clamp-2 font-sans text-sm font-semibold text-ink">{title}</h3>
+            <Title title={title} />
           </div>
           <StatusChip status={status} waiting={work.pending.length > 0} />
         </div>
@@ -66,7 +66,8 @@ export function WorkCard({ runId, kind }: { runId: string; kind?: string }) {
       </header>
 
       <div className="flex flex-col gap-3 px-4 py-3">
-        {work.now && !done && <p className="text-sm text-ink-body">{work.now}</p>}
+        {/* What is happening, in a sentence, only where there is no plan or researchers to show it. */}
+        {work.now && !done && work.parts.length === 0 && work.researchers.length === 0 && <p className="text-sm text-ink-body">{work.now}</p>}
         {research && work.researchers.length > 0 && <Researchers researchers={work.researchers} />}
         {work.parts.length > 0 && <Plan work={work} technical={mode === "technical"} />}
         {work.parts.length === 0 && !research && work.tools.total > 0 && <p className="text-sm text-ink-muted">{tallySentence(work.tools)}</p>}
@@ -193,14 +194,14 @@ function spentLine(spent: number, estimate: number | null): string {
 // The plan
 // ---------------------------------------------------------------------------------------------
 
-const STATE_STYLE: Record<PartState, { dot: string; bar: string; text: string }> = {
-  waiting: { dot: "border-border-strong bg-surface text-ink-muted", bar: "bg-quiet", text: "text-ink-muted" },
-  working: { dot: "border-primary bg-primary text-primary-ink", bar: "bg-primary bg-stripe animate-sheen motion-reduce:animate-none", text: "text-primary-hover" },
-  checking: { dot: "border-teal bg-teal text-primary-ink", bar: "bg-teal bg-stripe animate-sheen motion-reduce:animate-none", text: "text-teal-text" },
-  repair: { dot: "border-attention bg-attention-tint text-attention-text", bar: "bg-attention-dash", text: "text-attention-text" },
-  passed: { dot: "border-success bg-success text-primary-ink", bar: "bg-success", text: "text-success-text" },
-  "needs-look": { dot: "border-violet bg-violet-tint text-violet-text", bar: "bg-violet", text: "text-violet-text" },
-  failed: { dot: "border-attention-text bg-attention-text text-primary-ink", bar: "bg-attention-text", text: "text-attention-text" },
+const STATE_STYLE: Record<PartState, { dot: string; bar: string; text: string; tag: string }> = {
+  waiting: { dot: "border-border-strong bg-surface text-ink-muted", bar: "bg-quiet", text: "text-ink-muted", tag: "bg-quiet text-quiet-text" },
+  working: { dot: "border-primary bg-primary text-primary-ink", bar: "bg-primary bg-stripe animate-sheen motion-reduce:animate-none", text: "text-primary-hover", tag: "bg-primary-tint text-primary-hover" },
+  checking: { dot: "border-primary bg-surface text-primary", bar: "bg-primary-soft", text: "text-primary-hover", tag: "bg-primary-tint text-primary-hover" },
+  repair: { dot: "border-attention bg-attention-tint text-attention-text", bar: "bg-attention-dash", text: "text-attention-text", tag: "bg-attention-tint text-attention-text" },
+  passed: { dot: "border-success bg-success text-primary-ink", bar: "bg-success", text: "text-success-text", tag: "bg-success-tint text-success-text" },
+  "needs-look": { dot: "border-violet bg-violet-tint text-violet-text", bar: "bg-violet", text: "text-violet-text", tag: "bg-violet-tint text-violet-text" },
+  failed: { dot: "border-attention-text bg-attention-text text-primary-ink", bar: "bg-attention-text", text: "text-attention-text", tag: "bg-attention-chip text-attention-text" },
 };
 
 function StateIcon({ state }: { state: PartState }) {
@@ -223,122 +224,97 @@ function StateIcon({ state }: { state: PartState }) {
   }
 }
 
-/** The plan: a compact track for five parts or fewer, a stepper for more; the part being worked on open beneath. */
+/** The plan: a summary track of every part, then each part by name in a stepper; the part being worked on is open. */
 function Plan({ work, technical }: { work: WorkView; technical: boolean }) {
   const total = work.parts.length;
   const [chosen, setChosen] = useState<string | null>(null);
-  const open = chosen ?? work.active ?? work.parts.find((p) => p.state !== "passed")?.id ?? work.parts[total - 1]?.id ?? null;
+  const open = chosen ?? work.active ?? work.parts.find((p) => p.state !== "passed")?.id ?? null;
   const accepted = work.run.plan?.accepted ?? false;
   return (
-    <section aria-label="The plan" className="flex flex-col gap-2.5" data-plan={total <= 5 ? "track" : "stepper"}>
+    <section aria-label="The plan" className="flex flex-col gap-2.5" data-plan="stepper">
       <div className="flex items-baseline justify-between gap-2">
         <h4 className="text-sm font-semibold text-ink">{accepted ? "The plan" : "The plan, waiting for you"}</h4>
         <span className="text-xs tabular-nums text-ink-muted" data-parts-done="">
           {work.done} of {plural(total, "part")} done
         </span>
       </div>
-      {total <= 5 ? (
-        <>
-          <ol className="flex gap-1.5" aria-label="Parts">
-            {work.parts.map((part, i) => (
-              <li key={part.id} className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => setChosen(part.id)}
-                  aria-pressed={open === part.id}
-                  aria-label={`Part ${i + 1}: ${part.label}. ${partStateLabel(part.state, part.repairs)}`}
-                  className={cn("flex min-h-touch w-full flex-col justify-center gap-1.5 rounded-xs px-0.5 text-left", open === part.id && "bg-ground")}
-                >
-                  <span className={cn("block h-1.5 w-full overflow-hidden rounded-full", STATE_STYLE[part.state].bar)} />
-                  <span className={cn("flex items-center gap-1 px-0.5 text-xs font-semibold", STATE_STYLE[part.state].text)}>
-                    <StateIcon state={part.state} />
-                    {i + 1}
-                  </span>
-                </button>
-              </li>
-            ))}
-            {work.review && <ReviewSegment state={work.review} />}
-          </ol>
-          {open && <PartDetail part={work.parts.find((p) => p.id === open) as WorkPart} index={work.parts.findIndex((p) => p.id === open)} total={total} technical={technical} />}
-        </>
-      ) : (
-        <ol className="flex flex-col" aria-label="Parts">
-          {work.parts.map((part, i) => (
-            <StepperRow key={part.id} part={part} index={i} total={total} open={open === part.id} onOpen={() => setChosen(open === part.id ? "" : part.id)} technical={technical} last={i === total - 1 && !work.review} />
+      {total > 1 && (
+        // A summary line: every part at a glance, in order. The names are in the stepper beneath.
+        <div aria-hidden className="flex gap-1" data-plan-track="">
+          {work.parts.map((part) => (
+            <span key={part.id} className={cn("h-1.5 min-w-0 flex-1 overflow-hidden rounded-full", STATE_STYLE[part.state].bar)} />
           ))}
-          {work.review && <ReviewRow state={work.review} />}
-        </ol>
+          {work.review && <span className={cn("h-1.5 w-6 shrink-0 rounded-full", STATE_STYLE[work.review === "passed" ? "passed" : work.review === "repair" ? "repair" : "checking"].bar)} />}
+        </div>
       )}
+      <ol className="flex flex-col" aria-label="Parts">
+        {work.parts.map((part, i) => (
+          <StepperRow key={part.id} part={part} index={i} total={total} open={open === part.id} onOpen={() => setChosen(open === part.id ? "" : part.id)} technical={technical} last={i === total - 1 && !work.review} />
+        ))}
+        {work.review && <ReviewRow state={work.review} />}
+      </ol>
     </section>
   );
 }
 
-function ReviewSegment({ state }: { state: NonNullable<WorkView["review"]> }) {
-  const s: PartState = state === "passed" ? "passed" : state === "repair" ? "repair" : "checking";
+/** The work's title on one line; the whole of what was asked one tap away. */
+function Title({ title }: { title: string }) {
+  const [all, setAll] = useState(false);
+  const long = title.length > 60;
   return (
-    <li className="w-12 shrink-0" title="Security review">
-      <span className="flex min-h-touch flex-col justify-center gap-1.5 px-0.5">
-        <span className={cn("block h-1.5 w-full rounded-full", STATE_STYLE[s].bar)} />
-        <span className={cn("flex items-center gap-1 text-xs font-semibold", STATE_STYLE[s].text)}>
-          <Icon name="secrets" className="size-3.5" />
-          <span className="sr-only">Security review: {state === "passed" ? "passed" : state === "repair" ? "fixing what it found" : "checking"}</span>
-        </span>
-      </span>
-    </li>
+    <>
+      <h3 className={cn("font-sans text-sm font-semibold text-ink", !all && "line-clamp-1")} title={title}>
+        {title}
+      </h3>
+      {long && (
+        <button type="button" onClick={() => setAll((a) => !a)} aria-expanded={all} className={cn("self-start rounded-xs text-xs font-semibold text-primary-link hover:text-primary-hover", TAP)}>
+          {all ? "Show less" : "Show what was asked"}
+        </button>
+      )}
+    </>
   );
 }
 
 function ReviewRow({ state }: { state: NonNullable<WorkView["review"]> }) {
   const s: PartState = state === "passed" ? "passed" : state === "repair" ? "repair" : "checking";
   return (
-    <li className="flex items-center gap-3 py-1.5">
+    <li className="flex min-h-touch items-center gap-3" data-part-state={s} data-review="">
       <span className={cn("flex size-6 shrink-0 items-center justify-center rounded-full border-2", STATE_STYLE[s].dot)}>
         <StateIcon state={s} />
       </span>
       <span className="flex-1 text-sm text-ink">Security review</span>
-      <span className={cn("text-xs font-semibold", STATE_STYLE[s].text)}>{state === "passed" ? "Passed" : state === "repair" ? "Fixing what it found" : "Checking"}</span>
+      <span className={cn("text-xs font-semibold", STATE_STYLE[s].text)}>{state === "passed" ? "Passed" : state === "repair" ? "Fixing what it found" : "Being checked"}</span>
     </li>
   );
 }
 
 const StepperRow = memo(function StepperRow({ part, index, total, open, onOpen, technical, last }: { part: WorkPart; index: number; total: number; open: boolean; onOpen: () => void; technical: boolean; last: boolean }) {
   return (
-    <li className="relative flex gap-3" data-part-state={part.state}>
+    <li className="relative flex gap-3" data-part-state={part.state} data-open-part={open ? "" : undefined}>
       {!last && <span aria-hidden className={cn("absolute bottom-0 left-3 top-8 -ml-px w-0.5", part.state === "passed" ? "bg-success" : "bg-border")} />}
-      <span className={cn("relative z-10 mt-1.5 flex size-6 shrink-0 items-center justify-center rounded-full border-2", STATE_STYLE[part.state].dot)}>
+      <span className={cn("relative z-10 mt-2.5 flex size-6 shrink-0 items-center justify-center rounded-full border-2", STATE_STYLE[part.state].dot)}>
         <StateIcon state={part.state} />
       </span>
-      <div className="flex min-w-0 flex-1 flex-col pb-2">
-        <button type="button" onClick={onOpen} aria-expanded={open} className="flex min-h-touch w-full items-center gap-2 text-left">
-          <span className="min-w-0 flex-1 text-sm text-ink">
-            <span className="sr-only">Part {index + 1} of {total}: </span>
+      <div className={cn("flex min-w-0 flex-1 flex-col pb-1.5", open && "pb-3")}>
+        <button type="button" onClick={onOpen} aria-expanded={open} className="flex min-h-touch w-full flex-wrap items-center gap-x-2 gap-y-1 py-1 text-left">
+          <span className={cn("min-w-0 flex-1 basis-40 text-sm", open ? "font-semibold text-ink" : "text-ink-body")}>
+            <span className="sr-only">
+              Part {index + 1} of {total}:{" "}
+            </span>
             {part.label}
           </span>
-          <span className={cn("shrink-0 text-xs font-semibold", STATE_STYLE[part.state].text)}>{partStateLabel(part.state, part.repairs)}</span>
+          <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold", STATE_STYLE[part.state].tag)}>{partStateLabel(part.state, part.repairs)}</span>
           <ChevronDown aria-hidden className={cn("size-4 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />
         </button>
-        {open && <PartBody part={part} technical={technical} />}
+        {open && (
+          <div className="rounded-xs border bg-ground px-3 py-2.5">
+            <PartBody part={part} technical={technical} />
+          </div>
+        )}
       </div>
     </li>
   );
 });
-
-function PartDetail({ part, index, total, technical }: { part: WorkPart; index: number; total: number; technical: boolean }) {
-  return (
-    <div className="flex flex-col gap-2 rounded-xs border bg-ground px-3 py-2.5" data-part-state={part.state} data-open-part="">
-      <div className="flex items-start gap-2">
-        <span className="min-w-0 flex-1 text-sm font-medium text-ink">
-          <span className="text-ink-muted">
-            Part {index + 1} of {total}:{" "}
-          </span>
-          {part.label}
-        </span>
-        <span className={cn("shrink-0 text-xs font-semibold", STATE_STYLE[part.state].text)}>{partStateLabel(part.state, part.repairs)}</span>
-      </div>
-      <PartBody part={part} technical={technical} />
-    </div>
-  );
-}
 
 /** Under a part: its tasks with who holds each and how it went, what the checker said, and what the tools did. */
 function PartBody({ part, technical }: { part: WorkPart; technical: boolean }) {
@@ -397,10 +373,10 @@ function Researchers({ researchers }: { researchers: Researcher[] }) {
       </div>
       <ul className={cn("grid gap-2", researchers.length >= 3 ? "grid-cols-3" : researchers.length === 2 ? "grid-cols-2" : "grid-cols-1")}>
         {researchers.map((r) => (
-          <li key={r.id} data-researcher={r.state} className={cn("flex min-w-0 flex-col gap-1.5 rounded-xs border px-2.5 py-2", r.state === "working" ? "border-teal bg-teal-tint" : r.state === "done" ? "bg-surface" : "border-attention-line bg-attention-tint")}>
+          <li key={r.id} data-researcher={r.state} className={cn("flex min-w-0 flex-col gap-1.5 rounded-xs border bg-surface px-2.5 py-2", r.state === "working" && "border-primary-line")}>
             <span className="flex items-center gap-1.5 text-xs font-semibold">
-              {r.state === "working" ? <LoaderCircle aria-hidden className="size-3.5 animate-spin text-teal motion-reduce:animate-none" /> : r.state === "done" ? <Check aria-hidden className="size-3.5 text-success" strokeWidth={3} /> : <TriangleAlert aria-hidden className="size-3.5 text-attention-text" />}
-              <span className={r.state === "working" ? "text-teal-text" : r.state === "done" ? "text-success-text" : "text-attention-text"}>{r.state === "working" ? "Looking" : r.state === "done" ? "Reported" : "Stopped"}</span>
+              {r.state === "working" ? <LoaderCircle aria-hidden className="size-3.5 animate-spin text-primary motion-reduce:animate-none" /> : r.state === "done" ? <Check aria-hidden className="size-3.5 text-success" strokeWidth={3} /> : <TriangleAlert aria-hidden className="size-3.5 text-attention-text" />}
+              <span className={r.state === "working" ? "text-primary-hover" : r.state === "done" ? "text-success-text" : "text-attention-text"}>{r.state === "working" ? "Looking" : r.state === "done" ? "Reported" : "Stopped"}</span>
             </span>
             <span className="line-clamp-3 text-xs text-ink">{r.title}</span>
             <span className="text-xs tabular-nums text-ink-muted">

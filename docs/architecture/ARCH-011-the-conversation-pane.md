@@ -22,7 +22,7 @@ and a link.
   height (`sticky top-0 h-[calc(100dvh-header)]`), its own surface and left border. Three rows:
   the **header** (avatar, "Talking to {name}", the level — Organisation · Division · Project · App ·
   Employee — and actions: narrow/wide, collapse, open full width), the **thread** (scrolls, fills),
-  the **composer** (pinned to the foot). Two widths, `dock` (26 rem) and `dock-wide` (36 rem);
+  the **composer** (pinned to the foot). Two widths, `dock` (26 rem) and `dock-wide` (34 rem, the default from 1,880 px wide);
   collapsed it is a 3.5 rem rail with the avatar and an "Open conversation" button. Full width
   hides the page and centres the thread at `prose` width. Width, collapsed and full width are
   remembered per person (`localStorage`, keyed by user id) — per-device convenience, not state.
@@ -35,7 +35,7 @@ and a link.
 
 ## Composer
 
-- A text area that grows to 8 lines; Enter sends, Shift+Enter is a new line; a stop button while
+- A text area that grows to 8 lines; its tools are named on screen while the box is empty and fold to icons once the person types; Enter sends, Shift+Enter is a new line; a stop button while
   a reply is being written (`POST /api/runs/{id}/control` `cancel`).
 - **Attachments** by button, drag-and-drop onto the pane, or paste: chips with name, size,
   remove, and a thumbnail for images. Uploaded as soon as they are added
@@ -54,6 +54,8 @@ and a link.
 
 ## The work card
 
+The card leads with the work in one line (the whole request behind "Show what was asked") and its status, so the eye lands on the plan. Other work at the level sits in an "Also happening here" line under the pane header, not in the thread.
+
 Every reply that used tools or started work is drawn as a card driven by the run's event stream
 (`useRunStream`, batched every 50 ms); work the conversation started (`message` `kind:
 "work.started"`, carrying the started run's id) is followed in the same card. A card in the
@@ -65,7 +67,7 @@ the log, memoised by the log's length.
 | --- | --- |
 | `run.started` / `run.finished` | status chip (Working · Waiting for you · Finished · Stopped), elapsed time, outcome sentence |
 | `estimate.made` / `model.replied` (`settledCredits`, billable) | credits spent against the estimate, as a slim meter |
-| `plan.proposed` / `plan.accepted` | the plan: a stepper (a compact track for ≤ 5 parts), "n of m parts done" |
+| `plan.proposed` / `plan.accepted` | the plan: a thin summary track, then every part by name in a stepper with its state as a tag, "n of m parts done" |
 | `task.created` / `task.claimed` / `task.done` / `task.failed` | the tasks under each part, who holds each, its outcome |
 | `tool.requested` (`agent` `builder-<item>-<round>`, `evaluator-<item>-<round>`) | the part's state (working now / being checked) and grouped tool counts ("read 12 files, changed 4, ran the tests 3 times"); each action in technical mode |
 | `evaluation.passed` / `evaluation.failed` (`round`, `needsLook`, `final`) | passed · sent back for repair *n* · needs a look · failed |

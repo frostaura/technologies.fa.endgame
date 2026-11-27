@@ -25,7 +25,7 @@ export function useDockLayout(): DockLayout | null {
 const KEY = "endgame.dock";
 
 /** The viewport width from which the pane opens wide until someone chooses. */
-export const WIDE_FROM = 1800;
+export const WIDE_FROM = 1880;
 
 interface Stored {
   wide: boolean;
@@ -47,7 +47,7 @@ export function readDock(person: string | null): Stored {
   } catch {
     // Storage can be refused (a private window): the dock opens at its default.
   }
-  // Until someone chooses, a wide screen opens the wide pane: on 1800 pixels and more the narrow one leaves the page a sea of space.
+  // Until someone chooses, a wide screen opens the wide pane: on 1,880 pixels and more the narrow one leaves the page a sea of space.
   return { wide: typeof window !== "undefined" && window.innerWidth >= WIDE_FROM, collapsed: false };
 }
 
