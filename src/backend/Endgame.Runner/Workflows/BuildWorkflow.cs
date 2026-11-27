@@ -504,7 +504,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
                 failures.Add(Json.Strings(recorded, "failing"));
                 stoppedEarly = SameFailureThrice(failures) && round < run.Options.MaxRepairRounds;
-                if (stoppedEarly)
+                if (stoppedEarly || Unverified(recorded))
                 {
                     break;
                 }
@@ -532,6 +532,11 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                 }
 
                 failures.Add(Json.Strings(lastEvaluation, "failing"));
+                if (Unverified(lastEvaluation))
+                {
+                    break;
+                }
+
                 continue;
             }
 
@@ -564,6 +569,13 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
                 break;
             }
 
+            // Not shown in a way code can verify, after the second look: the check's, not the builder's (R6).
+            if (Unverified(evaluation))
+            {
+                failures.Add(Json.Strings(evaluation, "failing"));
+                break;
+            }
+
             // Work sent back is a lesson for the one who did it, kept for the next task.
             if (Json.Strings(evaluation, "faults").FirstOrDefault() is { } fault)
             {
@@ -576,6 +588,18 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             {
                 break;
             }
+        }
+
+        if (Unverified(lastEvaluation))
+        {
+            // Never repaired and never escalated: the builder cannot change how a checker showed its work, and a correct app
+            // was sent to three repair rounds on ever stronger models for it (run 67018a21). The part stops, saying so plainly.
+            var failing = Json.Strings(lastEvaluation, "failing");
+            var what = StuckOn(plan, item, failing, "in a way the factory’s own check can verify");
+            await FinishTaskAsync(run, taskId, "failed", $"Stopped after a second look at the same build: {what}. Nothing in it was shown not to work, so it was not sent for repair.", cancellationToken);
+            return WorkflowOutcome.Failure($"'{item.Deliverable}' could not be verified by code's gate after a second look at the same build ({string.Join(", ", failing)}), so it was not sent to repair: {string.Join(" ", Json.Strings(lastEvaluation, "faults"))}")
+                with
+            { ForOwner = $"\"{item.Text.TrimEnd('.')}\" could not be checked: {what}, even after a second look at the same build. Nothing in it was shown not to work, so it was not sent for repair, and the app was not {(change ? "changed" : "published")}. Its work so far is saved; “Try again” carries on from it." };
         }
 
         if (Json.Bool(lastEvaluation, "passed") != true && stoppedEarly)
@@ -640,9 +664,11 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             ["evidence"] = OutputText.Truncate(Json.Str(evaluation, "evidence") ?? "", 4000),
             ["faults"] = evaluation["faults"]?.DeepClone(),
         };
-        // The same failure a third time stops the part: this judgement is its last, and no repair follows.
-        var stops = !passedNow && round < run.Options.MaxRepairRounds && SameFailureThrice([.. failures, Json.Strings(evaluation, "failing")]);
-        if (!passedNow && round < run.Options.MaxRepairRounds && !stops)
+        // The same failure a third time stops the part: this judgement is its last, and no repair follows. So does a check that
+        // still could not verify how the work was shown after its second look: no builder can repair the evidence.
+        var unverified = Unverified(evaluation);
+        var stops = !passedNow && !unverified && round < run.Options.MaxRepairRounds && SameFailureThrice([.. failures, Json.Strings(evaluation, "failing")]);
+        if (!passedNow && round < run.Options.MaxRepairRounds && !stops && !unverified)
         {
             judgement["repairCharged"] = false;
         }
@@ -653,6 +679,12 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             {
                 judgement["stoppedEarly"] = true;
             }
+
+            if (unverified)
+            {
+                judgement["unverified"] = true;
+                judgement["summary"] = UnverifiedSummary(item, shown);
+            }
         }
 
         if (Json.Bool(evaluation, "rechecked") == true)
@@ -662,7 +694,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
         await run.AppendAsync(passedNow ? HarnessEvents.EvaluationPassed : HarnessEvents.EvaluationFailed, judgement, cancellationToken);
         // The judgement above already says how the part fared, in the owner's words; the check's own task says only that it is done.
-        await FinishTaskAsync(run, checkTaskId, "done", CheckDone(item, passedNow, round, run.Options.MaxRepairRounds, stops), cancellationToken);
+        await FinishTaskAsync(run, checkTaskId, "done", CheckDone(item, passedNow, round, run.Options.MaxRepairRounds, stops, unverified), cancellationToken);
         await run.Journal.RecordAsync(key, evaluation, cancellationToken);
         return (evaluation, null);
     }
@@ -818,6 +850,13 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var regated = await GateAsync(run, plan, item, Verdict(again), workspace, [evaluatorId, recheckId], cancellationToken);
         regated["rechecked"] = true;
         regated["firstFaults"] = gated["faults"]?.DeepClone();
+        if (Json.Bool(regated, "recheck") == true)
+        {
+            // Still only how it was shown, after the second look: nothing in the app was shown wrong, so it is never the
+            // builder's to repair (R6 — run 67018a21 sent a correct app to three repair rounds on this, and ended on it).
+            regated["unverified"] = true;
+        }
+
         return regated;
     }
 
@@ -1102,6 +1141,19 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     }
 
     /// <summary>
+    /// Whether an evaluation failed only on how the work was shown even after its free second look (<c>unverified</c>): code
+    /// could not verify it, and nothing in the app was shown wrong, so it is never sent to a builder to repair.
+    /// </summary>
+    public static bool Unverified(JsonObject? evaluation) => Json.Bool(evaluation, "passed") != true && Json.Bool(evaluation, "unverified") == true;
+
+    private static string UnverifiedSummary(PlanItem item, IReadOnlyList<JsonObject> requirements)
+    {
+        var shown = requirements.Count(r => Json.Bool(r, "met") == true);
+        var count = requirements.Count == 0 ? "" : $" ({shown} of {requirements.Count} of your requirements shown working in the running app)";
+        return $"Not sent back for repair: code could not verify how it was shown, after a second look at the same build, and nothing in it was shown not to work: {item.Text.TrimEnd('.')}{count}.";
+    }
+
+    /// <summary>
     /// Whether the last three failed rounds failed the same way — the same requirements, each for the same reason — so a further
     /// round would repeat what three could not change. A failure of the evaluator's own free-form faults is never "the same".
     /// </summary>
@@ -1121,19 +1173,20 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     }
 
     /// <summary>What a part is stuck on, in the owner's words: the requirements that could not be shown working.</summary>
-    private static string StuckOn(PlanContract plan, PlanItem item, IReadOnlyList<string> failing)
+    private static string StuckOn(PlanContract plan, PlanItem item, IReadOnlyList<string> failing, string how = "in the running app")
     {
         var texts = failing.Select(f => f.Split(':')[0]).Select(id => plan.RequirementsOf(item).FirstOrDefault(r => r.Id == id)?.Text.TrimEnd('.')).OfType<string>().Distinct().ToList();
         return texts.Count == 0
             ? "its check could not be completed"
-            : $"“{string.Join("” and “", texts)}” could not be shown working in the running app";
+            : $"“{string.Join("” and “", texts)}” could not be shown working {how}";
     }
 
     /// <summary>The check task's own line: done, and what follows. The judgement beside it carries the result in full.</summary>
-    private static string CheckDone(PlanItem item, bool passed, int round, int rounds, bool stops)
+    private static string CheckDone(PlanItem item, bool passed, int round, int rounds, bool stops, bool unverified)
     {
         var of = $"The check of “{item.Text.TrimEnd('.')}”{(round == 0 ? "" : $" after repair {round}")} is finished";
         return passed ? $"{of}: it works."
+            : unverified ? $"{of}: how it was shown could not be verified, so no repair follows."
             : stops || round >= rounds ? $"{of}: it still does not work, and no repair follows."
             : $"{of}: it goes back for repair, at no charge.";
     }

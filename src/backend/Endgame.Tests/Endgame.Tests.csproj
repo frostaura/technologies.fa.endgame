@@ -41,6 +41,10 @@
     <Content Remove="Hosting/Fixtures/**" />
     <None Remove="Hosting/Fixtures/**" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Real runs' evaluator call logs, trimmed, that the gate's tests replay. -->
+    <EmbeddedResource Include="Harness/Fixtures/*.json" LogicalName="Endgame.Tests.Harness.Fixtures.%(Filename)%(Extension)" />
+  </ItemGroup>
   <!--
     Every referenced service ships an appsettings.json and all land in this one output directory, so which
     survives depends on copy order (Edge's did, failing RoutingTableTests). The control plane's is the one
