@@ -16,8 +16,8 @@
         }
       ],
       "highlight": {
-        "text": "System status is technical detail",
-        "note": "In normal mode, system status is offered, not shown: it names the services Endgame runs on."
+        "text": "Is Endgame working?",
+        "note": "In normal mode the page answers in plain words whether Endgame is working, without naming the services it runs on."
       }
     },
     {

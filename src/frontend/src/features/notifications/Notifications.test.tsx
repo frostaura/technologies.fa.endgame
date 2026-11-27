@@ -7,7 +7,7 @@ import { NOTIFICATIONS } from "@/test/breadth";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { AppShell } from "../shell/AppShell";
 import { NotificationsView } from "./NotificationsView";
-import { byDay, excerpt, notificationHref, notificationLines, phoneShown } from "./notificationModel";
+import { byDay, curlyQuotes, excerpt, noticeTitle, notificationHref, notificationLines, phoneShown, plainFigures } from "./notificationModel";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 
@@ -262,10 +262,30 @@ describe("a long feed (real-stack 21: thirty notices, long titles)", () => {
     expect(list.querySelector('[data-notification="x25"]')).toBeTruthy();
     expect(within(list).getAllByRole("heading").length).toBeGreaterThan(2);
     for (const link of within(list).getAllByRole("link")) {
-      expect(link.textContent).toMatch(/…$/);
+      expect(link.textContent).toMatch(/…[”’]*$/);
       expect(link.textContent).not.toMatch(/“[^”]*…$/);
     }
-    fireEvent.click(screen.getByRole("button", { name: "Show older (10 of 19)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show 10 older of 19" }));
     expect(list.querySelectorAll("li[data-notification]")).toHaveLength(21);
+  });
+});
+
+describe("a notice's title and line as the house writes them (real-stack 19)", () => {
+  it("drops a run's raw kind and part, and closes a quotation the server cut", () => {
+    expect(noticeTitle('You approved “Change Web: Each service record should now include a short "Done by" text...')).toBe("You approved “Each service record should now include a short ‘Done by’…”");
+    expect(noticeTitle('In "Build: A packing checklist for the dive trip"')).toBe("In “A packing checklist for the dive trip”");
+  });
+
+  it("never mixes straight and curly marks", () => {
+    expect(curlyQuotes('You declined "Accept this plan?"')).toBe("You declined “Accept this plan?”");
+    expect(curlyQuotes("Kasper's plan")).toBe("Kasper's plan");
+  });
+
+  it("writes the server's figures the console's way and leaves the place to the title", () => {
+    expect(plainFigures("361.0 of 450 credits")).toBe("361 of 450 credits");
+    expect(plainFigures("The balance is -402 credits")).toBe("The balance is −402 credits");
+    expect(plainFigures("Version 2.0.1 stays")).toBe("Version 2.0.1 stays");
+    const budget = { id: "n1", kind: "budget.80", severity: "info", title: "Technologies has used 80% of its monthly budget", detail: "361.0 of 450 credits spent this month at northwind/technologies.", scope: "northwind/technologies", subject: null, createdAt: "2026-11-25T01:00:00Z", read: false, emailedAt: null, resolved: false } as unknown as NotificationItem;
+    expect(notificationLines(budget).line).toBe("361 of 450 credits spent this month.");
   });
 });

@@ -105,9 +105,11 @@ export function SignInView() {
 
   return (
     // One composed page on the house look: the sign-in card and, beside it from md up (under it on a phone),
-    // what Endgame does, both centred in the screen. Black on white, one accent.
-    <div className="flex min-h-screen items-center justify-center bg-ground px-4 py-10 pl-safe-l pr-safe-r sm:px-8">
-      <div className="grid w-full max-w-page grid-cols-1 items-center gap-10 md:grid-cols-2 lg:gap-16">
+    // what Endgame does, centred in the screen as one block whose two columns share a top. Black on white, one accent.
+    // The safe-area insets sit on the outer box and the 16 px gutter inside it, so neither overrides the other (real-stack 59).
+    <div className="flex min-h-screen bg-ground pl-safe-l pr-safe-r">
+      <div className="flex w-full items-center justify-center px-4 py-10 sm:px-8">
+      <div className="grid w-full max-w-page grid-cols-1 items-start gap-10 md:grid-cols-2 lg:gap-16">
       <div className="flex flex-col gap-8 rounded-lg border bg-surface px-6 py-8 shadow-card sm:px-10 sm:py-10">
         <div className="flex items-center gap-2.5">
           <img src="/brand/endgame-mark.svg" alt="" width={40} height={40} className="size-10" />
@@ -212,8 +214,9 @@ export function SignInView() {
         />
       </div>
 
-      <aside aria-label="What Endgame does" className="flex flex-col gap-6 px-2 max-md:hidden">
-        <p className="text-eyebrow font-semibold uppercase text-ink-muted">One place to run every product you own</p>
+      {/* Its first line sits level with the card's mark (the card's own top padding), so the two tops read as one. */}
+      <aside aria-label="What Endgame does" className="flex flex-col gap-7 px-2 pt-8 max-md:hidden sm:pt-10">
+        <p className="font-display text-2xl font-bold leading-10 tracking-tight text-ink">One place to run every product you own</p>
         <ul className="flex flex-col gap-6">
           {LEADS.map((lead, i) => (
             <li key={lead.title} className={cn("flex gap-4", RISE, stagger(i + 1))}>
@@ -228,6 +231,7 @@ export function SignInView() {
           ))}
         </ul>
       </aside>
+      </div>
       </div>
     </div>
   );
@@ -252,7 +256,7 @@ function DevelopmentSignIn({ options, busy, onSignIn }: { options: ReturnType<ty
   if (!options.data?.developmentSignIn) return null;
   return (
     <div className="flex max-w-form flex-col gap-2 rounded-md border bg-ground p-4">
-      <span className="text-eyebrow font-semibold uppercase text-ink-muted">Development only</span>
+      <span className="text-sm font-semibold text-ink">Development only</span>
       <p className="text-sm text-ink-body">This deployment is in development and offers a sign-in without a passkey.</p>
       <Button variant="secondary" className="self-start" onClick={onSignIn} disabled={busy !== null}>
         {busy === "development" ? "Signing in…" : "Development sign-in"}

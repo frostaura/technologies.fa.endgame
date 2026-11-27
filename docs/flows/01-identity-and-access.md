@@ -966,13 +966,13 @@ The identity pages sit at `{app address}_endgame/auth/sign-in`, `sign-up`, `sign
 - **Needs:** signed in
 - **Level:** Core
 - **Learn first:** SHL-01
-- **What you learn:** system status is technical detail, shown only in technical mode.
+- **What you learn:** normal mode says whether Endgame is working; which service is technical detail, shown only in technical mode.
 - **Steps:**
-  1. In normal mode the page reads **"System status is technical detail"**, "It names the services Endgame runs on, so it is shown in technical mode only.", with **"Switch to technical mode"**.
-  2. Clicking it turns technical mode on, and the status shows.
-- **You know it worked when:** the status view replaces the notice.
+  1. In normal mode the page reads **"Is Endgame working?"** and answers in plain words ("Everything is working", or "Part of Endgame is not answering"), with how many parts answered and when it was checked; beside it, **"Switch to technical mode"**.
+  2. Clicking it turns technical mode on, and the status shows, every service by name.
+- **You know it worked when:** the status view replaces the plain answer.
 - **Variations and refusals:** none found.
-- **Where:** `App.tsx` (`SystemRoute`).
+- **Where:** `features/status/SystemRoute.tsx` (`SystemRoute`).
 - **Reachable from:** UI
 - **Covered by tests:** `App.test.tsx`.
 

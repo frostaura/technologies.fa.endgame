@@ -1,13 +1,9 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Failed, Loading, NotFoundPage, Skeleton } from "@/components/states";
-import { PageHeader } from "@/components/ui/page";
-import { Button } from "@/components/ui/button";
 import { errorStatus, describeError } from "@/lib/queryState";
 import { matchRoute, navigate, paths, useLocation, type Route } from "@/lib/router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetMeQuery } from "@/store/api";
-import { modeSet } from "@/store/uiSlice";
 import { SignInView } from "@/features/auth/SignInView";
 import { HomeView } from "@/features/home/HomeView";
 import { AppShell } from "@/features/shell/AppShell";
@@ -19,7 +15,7 @@ const CreditsView = lazy(() => import("@/features/credits/CreditsView").then((x)
 const RunView = lazy(() => import("@/features/runs/RunView").then((x) => ({ default: x.RunView })));
 const SecretsView = lazy(() => import("@/features/secrets/SecretsView").then((x) => ({ default: x.SecretsView })));
 const StartView = lazy(() => import("@/features/start/StartView").then((x) => ({ default: x.StartView })));
-const SystemStatusView = lazy(() => import("@/features/status/SystemStatusView").then((x) => ({ default: x.SystemStatusView })));
+const SystemRoute = lazy(() => import("@/features/status/SystemRoute").then((x) => ({ default: x.SystemRoute })));
 const VerdictView = lazy(() => import("@/features/verdict/VerdictView").then((x) => ({ default: x.VerdictView })));
 const AutonomyView = lazy(() => import("@/features/autonomy/AutonomyView").then((x) => ({ default: x.AutonomyView })));
 const EmployeeView = lazy(() => import("@/features/workforce/EmployeeView").then((x) => ({ default: x.EmployeeView })));
@@ -136,25 +132,6 @@ function Screen({ route }: { route: Route }) {
     default:
       return <NotFound />;
   }
-}
-
-/** System status is technical detail; in normal mode it is offered, not shown. */
-function SystemRoute() {
-  const mode = useAppSelector((s) => s.ui.mode);
-  const dispatch = useAppDispatch();
-  return (
-    <AppShell crumbs={[{ label: "System" }]}>
-      {mode === "technical" ? (
-        <SystemStatusView />
-      ) : (
-        <PageHeader icon="health" title="System status is technical detail" lead="It names the services Endgame runs on, so it is shown in technical mode only.">
-          <Button className="self-start" onClick={() => dispatch(modeSet("technical"))}>
-            Switch to technical mode
-          </Button>
-        </PageHeader>
-      )}
-    </AppShell>
-  );
 }
 
 function NotFound() {

@@ -1,4 +1,5 @@
 import { formatNumber } from "@/lib/format";
+import type { OperatorOrganisation } from "@/store/types";
 
 const LABELS: Record<string, string> = {
   creditsPerUsd: "Credits per dollar",
@@ -34,3 +35,10 @@ export function pricingRows(before: unknown, after: unknown): { label: string; b
     .filter((k) => b[k] !== a[k])
     .map((k) => ({ label: LABELS[k] ?? k, before: show(b[k]), after: show(a[k]) }));
 }
+
+/** An organisation's standing as its tag says it: in credit, below zero (waits on a top-up), or at its limit. */
+export const STANDING: Record<OperatorOrganisation["standing"], { label: string; tone: "good" | "warn" | "bad" }> = {
+  "in-credit": { label: "In credit", tone: "good" },
+  overdrawn: { label: "Below zero", tone: "warn" },
+  "at-limit": { label: "At its limit", tone: "bad" },
+};

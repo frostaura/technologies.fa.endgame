@@ -32,13 +32,7 @@ import { parseCredits } from "../credits/creditsModel";
 import { Disclosure, Fold } from "@/components/Fold";
 import { Stat, StatRow } from "@/components/ui/stat";
 import { AppShell } from "../shell/AppShell";
-import { pricingRows } from "./operatorModel";
-
-const STANDING: Record<OperatorOrganisation["standing"], { label: string; tone: "good" | "warn" | "bad" }> = {
-  "in-credit": { label: "In credit", tone: "good" },
-  overdrawn: { label: "Below zero", tone: "warn" },
-  "at-limit": { label: "At its limit", tone: "bad" },
-};
+import { pricingRows, STANDING } from "./operatorModel";
 
 /**
  * God mode (UC-111), for FrostAura operators only and distinctly marked: every organisation with its
@@ -520,11 +514,10 @@ function PricingPanel() {
       )}
       {view.kind === "failed" && <Failed title="The prices could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && (
-        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
-          {view.stale && <Stale reason={view.stale.reason} className="xl:col-span-3" />}
-          <div className="xl:col-span-2">
-            <PricingForm key={JSON.stringify(view.data.pricing)} pricing={view.data.pricing} source={view.data.source} updatedAt={view.data.updatedAt} result={result} onResult={setResult} />
-          </div>
+        // The form across the page's width, its fields three across where there is room, and the changes under it (console-desktop 53).
+        <div className="flex flex-col gap-6">
+          {view.stale && <Stale reason={view.stale.reason} />}
+          <PricingForm key={JSON.stringify(view.data.pricing)} pricing={view.data.pricing} source={view.data.source} updatedAt={view.data.updatedAt} result={result} onResult={setResult} />
           <div className="flex flex-col gap-2">
             <h3 className="font-display text-base font-semibold">Changes</h3>
             {view.data.history.length === 0 ? (
@@ -532,9 +525,9 @@ function PricingPanel() {
                 Never changed: the defaults hold.
               </p>
             ) : (
-              <ol aria-label="Price changes" className="flex flex-col gap-2">
+              <ol aria-label="Price changes" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
                 {view.data.history.map((h, i) => (
-                  <li key={`${h.at}-${i}`} className="flex flex-col gap-1 rounded-xs border border-border-strong px-3 py-2">
+                  <li key={`${h.at}-${i}`} className="grid grid-cols-1 gap-x-6 gap-y-1 border-b px-5 py-3 last:border-b-0 md:grid-cols-name-wide">
                     <span className="text-sm font-medium">
                       {formatDate(h.at)}
                       {h.byEmail ? ` · ${h.byEmail}` : ""}
@@ -610,7 +603,7 @@ function PricingForm({
       noValidate
     >
       <p className="text-sm text-ink-muted">{source === "stored" && updatedAt ? `Last changed ${formatDate(updatedAt)}.` : "These are the defaults; they have never been changed."}</p>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
         {FIELDS.map((f) => (
           <Field key={f.key} id={`${base}-${f.key}`} label={f.label} hint={f.hint} problem={bad.includes(f.key) ? (f.key === "margin" ? "At least 1.0: a margin below one would sell at a loss." : "A number, zero or more.") : null}>
             <Input id={`${base}-${f.key}`} inputMode="decimal" value={values[f.key] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} aria-describedby={`${base}-${f.key}-hint`} aria-invalid={bad.includes(f.key)} />

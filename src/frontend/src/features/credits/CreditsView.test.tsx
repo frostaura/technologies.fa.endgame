@@ -99,7 +99,9 @@ describe("CreditsView", () => {
     renderWithStore(<CreditsView />);
     expect(await screen.findByText(/Usually 84% under the estimate/)).toBeTruthy();
     expect(screen.queryByText(/Within 0%/)).toBeNull();
-    expect(screen.getByText(/Across 4 pieces of work this month\. None came within 10% of its estimate; 4 cost less, 0 more\. The largest miss was 85%\./)).toBeTruthy();
+    // The caption is one short line; the sentence that explains it sits under the figures, whole.
+    expect(screen.getByText("Across 4 pieces of work")).toBeTruthy();
+    expect(screen.getByText(/Usually 84% under the estimate this month\. None came within 10% of its estimate; 4 cost less, 0 more\. The largest miss was 85%\./)).toBeTruthy();
   });
 
   it("says when the estimates usually land close, or usually run over", async () => {

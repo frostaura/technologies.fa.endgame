@@ -10,6 +10,7 @@ import { useGetOperatorAccessQuery } from "@/store/api";
 import type { OperatorAction } from "@/store/types";
 import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
 import { AppShell } from "../shell/AppShell";
+import { adminLine } from "./operatorLogModel";
 
 /** The log's columns. "When" holds a date and a time of day on one line, wider than a date column alone. */
 const LOG_COLUMNS: Column[] = [
@@ -52,8 +53,7 @@ function describeAction(action: OperatorAction): string {
     case "pricing.changed":
       return "Changed the prices for every organisation";
     default:
-      // Everything else an operator changed inside the organisation, as an Admin, carries its own title.
-      return action.action.startsWith("admin.") && text("title") ? `As an Admin: ${text("title")}` : "Acted on the organisation";
+      return adminLine(action.action, text("title"));
   }
 }
 

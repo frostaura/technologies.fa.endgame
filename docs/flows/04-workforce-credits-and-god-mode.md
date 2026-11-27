@@ -631,10 +631,11 @@ Shared vocabulary used below:
 - **Starts at:** `/credits`, the two panels.
 - **Needs:** nothing.
 - **Steps:**
-  1. "Estimates against what it cost" shows a headline and "Across <n> pieces of work this month. <spread> The largest miss was <n>%."
-  2. "What you were not charged for" shows "<n> credits" and "<n> repairs where an employee got it wrong the first time. Fixing its own mistake is never billed."
+  1. "Estimates against what it cost" shows a figure ("38% under") with the one-line caption "Across <n> pieces of work".
+  2. "What you were not charged for" shows "<n> credits" with the caption "<n> repairs".
+  3. Under the two figures one sentence explains them: "<headline> this month. <spread> The largest miss was <n>%. <n> repairs, where an employee got it wrong the first time, cost you nothing: fixing its own mistake is never billed."
 - **You know it worked when:** both panels show figures, or their empty lines.
-- **Variations and refusals:** "No work has finished this month, so no estimate has been scored yet." · "No repairs this month. Fixing its own mistake is never billed."
+- **Variations and refusals:** no estimate scored: the figure "—", caption "Not scored yet", and the sentence "No work has finished this month, so no estimate has been scored yet." · no repairs: caption "No repairs this month", and the sentence ends "Fixing its own mistake is never billed."
 - **Where:** `CreditsView.tsx`. `ReadModels.EstimatesAsync`.
 - **Reachable from:** UI.
 - **Covered by tests:** `CreditsView.test.tsx` (three estimate tests).
@@ -954,7 +955,7 @@ Shared vocabulary used below:
 - **Needs:** Owner.
 - **Steps:**
   1. The heading reads "Operator access", with "Every time someone from FrostAura entered <Org> or acted on it, newest first. It is never silent, and only the Owner can read it."
-  2. One table, newest first, with the columns "When", "What was done" and "By" (a list of cards where its column is narrow). Entries read, for example, "Entered the organisation", "Screened against the red lines: it crosses none (by a model)", "Set up the organisation", "Added <n> credits", "Changed the deepest overdraft to <n> credits below zero", "Answered a top-up request with <n> credits", "Declined a top-up request for <n> credits: <why>", "Changed the prices for every organisation" and "As an Admin: <what they changed>", each with "<operator name> · <email>". Technical mode adds the raw action and its detail.
+  2. One table, newest first, with the columns "When", "What was done" and "By" (a list of cards where its column is narrow). Entries read, for example, "Entered the organisation", "Screened against the red lines: it crosses none (by a model)", "Set up the organisation", "Added <n> credits", "Changed the deepest overdraft to <n> credits below zero", "Answered a top-up request with <n> credits", "Declined a top-up request for <n> credits: <why>", "Changed the prices for every organisation" and "As an Admin: <what they changed>" (a change the control plane titles only with its endpoint's description reads "Changed something as an Admin", never that description; asking what a message would cost reads "As an Admin: Asked what a message in the conversation would cost"), each with "<operator name> · <email>". Technical mode adds the raw action and its detail.
 - **You know it worked when:** the log, or its empty state, is shown.
 - **Variations and refusals:**
   - Empty: "No one from FrostAura has entered <Org>" with "If anyone does, it is written here first."
