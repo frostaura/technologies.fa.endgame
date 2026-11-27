@@ -5,6 +5,7 @@ import { SECTION } from "@/components/ui/page";
 import { Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { formatCredits } from "@/lib/format";
 import { describeError } from "@/lib/queryState";
 import { navigate, paths } from "@/lib/router";
@@ -73,18 +74,18 @@ export function ChangeRequest({ appId, appName }: { appId: string; appName: stri
           className="resize-y"
         />
         {estimate ? (
-          <div role="status" className="flex flex-col gap-2 rounded-sm bg-primary-tint px-4 py-3">
-            <span className="font-display text-xl font-semibold">Estimated {formatCredits(estimate.credits)}</span>
-            <span className="text-sm text-ink-body">{estimate.basis}</span>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={() => void start()} disabled={starting.isLoading}>
-                {starting.isLoading ? "Starting…" : "Make this change"}
-              </Button>
-              <Button type="button" variant="quiet" onClick={() => setEstimate(null)}>
-                Not now
-              </Button>
-            </div>
-          </div>
+          // The estimate before the change starts (rule 11), as the house's one confirmation.
+          <ConfirmCard
+            destructive={false}
+            label="Confirm making this change"
+            question={`Estimated ${formatCredits(estimate.credits)}`}
+            detail={estimate.basis}
+            confirm={starting.isLoading ? "Starting…" : "Make this change"}
+            cancel="Not now"
+            busy={starting.isLoading}
+            onConfirm={() => void start()}
+            onCancel={() => setEstimate(null)}
+          />
         ) : (
           <Button type="submit" variant="secondary" className="self-start" disabled={!text || estimating.isLoading}>
             {estimating.isLoading ? (

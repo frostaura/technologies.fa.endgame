@@ -372,6 +372,15 @@ describe("after the real-stack walk", () => {
   });
 
   // D39: a bar or line starts at zero, so 4 → 3 reads as a quarter less, not a collapse.
+  it("draws a table answer as the house table: a named list, one row per record, every cell under its column", () => {
+    render(<AskChartView chart={null} columns={["day", "visits"]} rows={[{ day: "Monday", visits: 1840.4 }, { day: "Tuesday", visits: 7.466 }]} />);
+    const list = screen.getByRole("list", { name: "The answer's rows" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    expect(list.textContent).toContain("1,840");
+    expect(list.textContent).toContain("7.47");
+    cleanup();
+  });
+
   it("draws bars and lines from zero", () => {
     const chart = (kind: "bar" | "line") => ({ kind, x: "day", y: ["visits"], series: [{ name: "visits", points: [{ x: "Mon", y: 4 }, { x: "Tue", y: 3 }] }] });
     const { container, unmount } = render(<AskChartView chart={chart("bar")} columns={[]} rows={[]} />);
