@@ -165,6 +165,12 @@
       "items": {
         "$ref": "#/definitions/variation"
       }
+    },
+    "device": {
+      "enum": [
+        "phone"
+      ],
+      "description": "The console this flow is taught on at every window size: phone, for a flow about the phone itself (its bottom bar, its sheets). Unset, a desk or tablet window shows a laptop's console and a phone a phone's."
     }
   },
   "definitions": {
@@ -487,6 +493,15 @@
                 },
                 "note": {
                   "$ref": "#/definitions/note"
+                },
+                "region": {
+                  "const": true,
+                  "description": "The target is a region that shows the step's state, ringed as it is rather than as the card around it."
+                },
+                "none": {
+                  "type": "string",
+                  "minLength": 10,
+                  "description": "The step has nothing to ring at all; why. The ring is cleared."
                 }
               }
             },

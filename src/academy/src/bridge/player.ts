@@ -52,8 +52,11 @@ export function plan(script: StepScript, from: number, to: number, replay = fals
   const who = { persona: script.persona, scenario: script.scenario };
   const target = stepOf(script, to);
   const forwardByOne = !replay && from > 0 && to === from + 1;
+  // A step with no console play of its own (a request, a step the script leaves out) still clears
+  // the ring of the step before: it names what that step showed, not this one.
+  const clear: PlannedOp = { op: "highlight", args: {}, catchUp: false };
   if (forwardByOne) {
-    if (target?.kind !== "demo") return [];
+    if (target?.kind !== "demo") return [clear];
     return opsFor(script, target, false);
   }
   const ops: PlannedOp[] = [
@@ -62,6 +65,7 @@ export function plan(script: StepScript, from: number, to: number, replay = fals
   ];
   for (const s of demoSteps(script, to - 1)) ops.push(...opsFor(script, s, true));
   if (target?.kind === "demo") ops.push(...opsFor(script, target, false));
+  else ops.push(clear);
   return ops;
 }
 

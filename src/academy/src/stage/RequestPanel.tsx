@@ -1,5 +1,5 @@
 import type { RequestStep } from "../content/scripts.ts";
-import { FrameChrome } from "./DemoFrame.tsx";
+import { ScrollPane } from "./ScrollPane.tsx";
 
 function json(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v, null, 2);
@@ -9,8 +9,8 @@ function json(v: unknown): string {
 export function RequestPanel({ step }: { step: RequestStep }) {
   const ok = step.response.status < 400;
   return (
-    <FrameChrome address={`request · ${step.method} ${step.path}`} fit>
-    <div className="flex min-h-0 flex-col gap-4 overflow-auto bg-surface p-5" data-testid="request">
+    <ScrollPane className="bg-surface" testId="request">
+    <div className="flex flex-col gap-4 p-5">
       <div>
         <p className="text-eyebrow font-semibold uppercase text-ink-muted">Request</p>
         <p className="mt-2 flex flex-wrap items-center gap-2 font-mono text-sm">
@@ -34,6 +34,6 @@ export function RequestPanel({ step }: { step: RequestStep }) {
         {step.response.body !== undefined && <pre className="mt-3 overflow-x-auto rounded-xs bg-ground p-3 font-mono text-xs text-ink">{json(step.response.body)}</pre>}
       </div>
     </div>
-    </FrameChrome>
+    </ScrollPane>
   );
 }

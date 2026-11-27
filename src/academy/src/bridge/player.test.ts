@@ -34,8 +34,13 @@ describe("the step player", () => {
     expect(p.at(-1)).toEqual({ op: "highlight", args: {}, catchUp: false });
   });
 
-  it("a step with no demo media sends the console nothing when moving on by one", () => {
-    expect(plan(script, 2, 3)).toEqual([]);
+  it("a step with no demo media only clears the ring of the step before when moving on by one", () => {
+    expect(plan(script, 2, 3)).toEqual([{ op: "highlight", args: {}, catchUp: false }]);
+  });
+
+  it("a step the script leaves out clears the ring too, so no step shows another's", () => {
+    expect(plan(script, 4, 5)).toEqual([{ op: "highlight", args: {}, catchUp: false }]);
+    expect(ops(plan(script, 0, 5)).at(-1)).toBe("highlight");
   });
 
   it("jumping resets and replays earlier steps instantly, without their spotlights", () => {

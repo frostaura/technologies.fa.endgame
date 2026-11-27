@@ -34,6 +34,20 @@ export function printMmPerPx(width: number, font: number): number {
   return Math.min(PRINT_SHOT.mmPerPx, forText, PRINT_SHOT.columnMm / width);
 }
 
+/**
+ * The console in the academy's frame is always drawn at one of two fixed sizes and scaled to fit,
+ * so every lesson plays on the layout its script was written against and nothing reflows between
+ * steps: `desk`, a laptop's console (its conversation pane docked, every desktop control there),
+ * for every desktop and tablet window; `phone`, a phone's console (its bottom tab bar), for a
+ * phone held either way and for a flow about the phone itself. `chrome` is the frame's address bar
+ * (desk) and `bezel` the phone frame's edge, in screen pixels.
+ */
+export const CONSOLE = {
+  desk: { width: 1280, height: 800, chrome: 36, bezel: 1 },
+  phone: { width: 390, height: 640, chrome: 0, bezel: 4 },
+} as const;
+export type ConsoleSize = keyof typeof CONSOLE;
+
 export const academy = {
   fontSize: {
     cover: ["88px", { lineHeight: "0.98", letterSpacing: "-0.045em" }],
@@ -65,6 +79,14 @@ export const academy = {
     ring: "3.25rem",
     "ring-lg": "7rem",
     medal: "3.5rem",
+    /** The step controls' fixed places, so nothing in the row moves from step to step. */
+    prev: "8rem",
+    try: "10.5rem",
+    again: "10.5rem",
+    next: "11rem",
+    "next-sm": "5.5rem",
+    /** The strip beside the frame of a phone on its side. */
+    "side-strip": "20rem",
     /** The search results panel under the header's box: wide enough for a title on two lines, never wider than the window. */
     "search-panel": "min(37.5rem, calc(100vw - 2rem))",
   },
@@ -104,6 +126,10 @@ export const academy = {
     "frame-phone": "60svh",
     /** The frame's browser bar. */
     chrome: "2.25rem",
+    /** The caption strip under the frame: three lines of a step's words, the same height on every step. */
+    caption: "4.75rem",
+    /** On a phone: two lines, with "More" to read the rest. */
+    "caption-sm": "3.75rem",
     stage: "calc(100svh - 7rem)",
     "stage-short": "calc(100svh - 4.5rem)",
     "stage-sm": "50svh",

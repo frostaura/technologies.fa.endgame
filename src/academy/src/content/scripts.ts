@@ -45,8 +45,12 @@ export interface DemoStep {
   goto?: string;
   /** From this step on, someone else is signed in to the same world; needs a `goto`. */
   persona?: Persona;
-  /** Spotlight a control, with an optional callout. */
-  highlight?: Target & { note?: string };
+  /**
+   * What the step is about, ringed in the console, with the caption shown under the frame.
+   * `region`: the target is a region that shows the step's state (ringed as it is, not as the card
+   * around it); `none`: the step has nothing to ring at all, and why.
+   */
+  highlight?: Target & { note?: string; region?: true; none?: string };
   /** Perform these, in order, with visible motion. */
   act?: Action[];
   /** Move the demo's clock (live progress, timers). */
@@ -120,6 +124,8 @@ export interface StepScript {
   scenario: Scenario;
   /** The console address the frame opens at before step 1. */
   start: string;
+  /** The console this flow is taught on at every window size: `phone` for a flow about the phone itself. */
+  device?: "phone";
   steps: ScriptStep[];
   /** What else can happen: refusals and branches, each played from its own start (shown under the steps). */
   variations?: Variation[];

@@ -12,7 +12,7 @@ export function Facts({ flow }: { flow: Flow }) {
     ["Where in the code", flow.where],
   ];
   return (
-    <aside className="flex h-full flex-col gap-5 overflow-auto rounded-lg border bg-ground p-6" aria-label="About this flow" data-testid="facts">
+    <aside className="absolute inset-0 flex flex-col gap-5 overflow-auto bg-ground p-6" aria-label="About this flow" data-testid="facts">
       <div className="flex items-center gap-3">
         <ReachChip reach={flow.reach} />
         {flow.roles.length > 0 && <span className="text-xs text-ink-muted">{flow.roles.map((r) => ROLE_LABEL[r]).join(" · ")}</span>}
