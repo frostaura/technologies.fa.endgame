@@ -1,4 +1,5 @@
 import type { RequestStep } from "../content/scripts.ts";
+import { FrameChrome } from "./DemoFrame.tsx";
 
 function json(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v, null, 2);
@@ -8,7 +9,8 @@ function json(v: unknown): string {
 export function RequestPanel({ step }: { step: RequestStep }) {
   const ok = step.response.status < 400;
   return (
-    <div className="flex h-full flex-col gap-4 overflow-auto rounded-lg border bg-surface p-5 shadow-raised" data-testid="request">
+    <FrameChrome address={`request · ${step.method} ${step.path}`} fit>
+    <div className="flex min-h-0 flex-col gap-4 overflow-auto bg-surface p-5" data-testid="request">
       <div>
         <p className="text-eyebrow font-semibold uppercase text-ink-muted">Request</p>
         <p className="mt-2 flex flex-wrap items-center gap-2 font-mono text-sm">
@@ -32,5 +34,6 @@ export function RequestPanel({ step }: { step: RequestStep }) {
         {step.response.body !== undefined && <pre className="mt-3 overflow-x-auto rounded-xs bg-ground p-3 font-mono text-xs text-ink">{json(step.response.body)}</pre>}
       </div>
     </div>
+    </FrameChrome>
   );
 }

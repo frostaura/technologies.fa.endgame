@@ -32,6 +32,11 @@
     @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-surface;
   }
 
+  /* A link's ring follows a rounded shape, as a button's does, never a square box. */
+  a:focus-visible {
+    @apply rounded-xs;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -59,6 +64,20 @@
   .print-break {
     break-before: page;
   }
+  /* A heading stays with what follows it: never alone at the foot of a page. */
+  .keep-next {
+    break-after: avoid;
+  }
+  /* On paper a link is not a control: no link colour, underline or box; a placeholder reads as italic words. */
+  .print-doc a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .print-doc var {
+    @apply border-0 bg-transparent p-0 font-sans italic text-ink-body;
+    font-size: inherit;
+  }
+
   html,
   body {
     @apply bg-surface text-ink;

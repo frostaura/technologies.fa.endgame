@@ -37,7 +37,7 @@ export const REACH_BLURB: Record<Reach, string> = {
   api: "Flows with no screen: only the API or an AI assistant reaches them.",
   cli: "Flows run from a terminal on the host.",
   automatic: "Things Endgame does by itself, which you watch happen.",
-  none: "Entries the reading found with no route at all.",
+  none: "Things the product does that no person starts: there is no screen, call or command for them. Each flow says what it does and where in the code it lives.",
 };
 
 export const LEVEL_BLURB: Record<Level, string> = {

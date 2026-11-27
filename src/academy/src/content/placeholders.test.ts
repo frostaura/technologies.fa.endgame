@@ -23,3 +23,14 @@ describe("placeholders read as what they stand for", () => {
     expect(container.querySelector("code")?.textContent).toBe("GET /apps/{app}");
   });
 });
+
+describe("angle-bracket placeholders", () => {
+  it("read as what they stand for, outside code, and stay as written inside it", () => {
+    expect(placeholderWords("<App>")).toBe("app name");
+    expect(placeholderWords("<n>")).toBe("number");
+    const { container } = render(createElement(Inline, { text: "Open <App> and run `GET /apps/<id>`" }));
+    expect(container.querySelector("var")?.textContent).toBe("app name");
+    expect(container.querySelector("code")?.textContent).toBe("GET /apps/<id>");
+    expect(container.textContent).not.toContain("<App>");
+  });
+});

@@ -31,6 +31,14 @@ export function qrPath(text: string): { size: number; path: string } {
  * The images `make academy-shots` captured: `public/shots/index.json` maps "<FLOW-ID>/<step>" (and
  * "<FLOW-ID>/v<n>" for a variation's last step) to a file under public/shots/. None captured is fine.
  */
+/** Each captured picture's print copy (`make academy-shots`): its JPEG, and whether it is the whole screen or a detail. */
+export function readPrints(dir = path.join(root, "public/shots")): Record<string, { file: string; whole: boolean }> {
+  const file = path.join(dir, "index.json");
+  if (!existsSync(file)) return {};
+  const index = JSON.parse(readFileSync(file, "utf8")) as { print?: Record<string, { file: string; whole: boolean }> };
+  return Object.fromEntries(Object.entries(index.print ?? {}).filter(([, p]) => existsSync(path.join(dir, p.file))));
+}
+
 export function readShots(dir = path.join(root, "public/shots")): Record<string, string> {
   const file = path.join(dir, "index.json");
   if (!existsSync(file)) return {};
@@ -70,6 +78,7 @@ function main() {
   writeFileSync(path.join(out, "content.json"), JSON.stringify(content));
   writeFileSync(path.join(out, "scripts.json"), JSON.stringify(scripts.scripts));
   writeFileSync(path.join(out, "shots.json"), JSON.stringify(shots));
+  writeFileSync(path.join(out, "prints.json"), JSON.stringify(readPrints()));
   writeFileSync(path.join(out, "search-index.json"), JSON.stringify(buildIndex(content.flows)));
   writeFileSync(
     path.join(out, "site.json"),

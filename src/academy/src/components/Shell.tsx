@@ -16,7 +16,7 @@ import { ui } from "./ui.ts";
  * left off, search and a menu — and the rest opens as a sheet from the bottom edge, in reach of a
  * thumb. The operator handbook has its own header tone and never mixes into client navigation.
  */
-export function Shell({ children, operator = false }: { children: ReactNode; operator?: boolean }) {
+export function Shell({ children, operator = false, player = false }: { children: ReactNode; operator?: boolean; player?: boolean }) {
   const { parts } = useLocation();
   const here = parts[0] ?? "";
   const [menu, setMenu] = useState<null | "menu" | "search">(null);
@@ -40,8 +40,9 @@ export function Shell({ children, operator = false }: { children: ReactNode; ope
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-ink">
         Skip to the content
       </a>
-      <header className={`sticky top-0 z-30 border-b backdrop-blur ${operator ? "bg-night text-primary-ink" : "bg-surface/90"}`} data-print="hide">
-        <div className="mx-auto flex max-w-page items-center gap-2 px-4 py-2 sm:px-6 md:gap-5 md:py-3 short:py-1">
+      {/* Opaque and a fixed height: nothing shows through it, and nothing under it moves when what it holds changes. */}
+      <header className={`sticky top-0 z-30 h-header-sm border-b md:h-header short:h-header-short ${operator ? "bg-night text-primary-ink" : "bg-surface"}`} data-print="hide">
+        <div className={`${ui.container} flex h-full items-center gap-2 md:gap-5`}>
           <a href={href(operator ? "/operator" : "/")} className="flex min-h-touch shrink-0 items-center gap-2.5" aria-label={operator ? "Operator handbook home" : "The Endgame Academy, cover"}>
             <Mark className="h-8 w-8" />
             <span className="hidden font-display text-base font-semibold tracking-tight xl:block">
@@ -50,13 +51,13 @@ export function Shell({ children, operator = false }: { children: ReactNode; ope
           </a>
           <nav aria-label="Academy" className="hidden items-center gap-1 md:flex">
             {nav.map((n) => (
-              <a key={n.to} href={href(n.to)} aria-current={n.on ? "page" : undefined} className={`rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${pill(n.on)}`}>
+              <a key={n.to} href={href(n.to)} aria-current={n.on ? "page" : undefined} className={`whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${pill(n.on)}`}>
                 {n.label}
               </a>
             ))}
           </nav>
           <ResumePill operator={operator} />
-          <div className="ml-auto hidden min-w-0 flex-1 justify-end text-ink md:flex"><Search scope={operator ? "operator" : "client"} /></div>
+          <div className="ml-auto hidden w-52 shrink-0 text-ink md:block lg:w-search xl:w-search-lg"><Search scope={operator ? "operator" : "client"} /></div>
           <div className="ml-auto flex items-center md:hidden">
             <button type="button" className={`${ui.icon} ${iconTone}`} aria-label="Search the academy" aria-haspopup="dialog" onClick={() => setMenu("search")}>
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" /><path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
@@ -98,20 +99,23 @@ export function Shell({ children, operator = false }: { children: ReactNode; ope
         )}
       </Sheet>
       <main id="main" tabIndex={-1} className="flex-1 focus:outline-none">{children}</main>
-      <footer className="border-t bg-ground" data-print="hide">
-        <div className="mx-auto flex max-w-page flex-col gap-4 px-4 py-8 text-sm text-ink-muted sm:flex-row sm:items-center sm:px-6">
+      {/* The player fills the window under the header on a wide screen; its footer would only be scrolled to by accident. */}
+      <footer className={`border-t bg-ground ${player ? "split:hidden short:block" : ""}`} data-print="hide">
+        <div className={`${ui.container} flex flex-col gap-4 py-8 text-sm text-ink-muted sm:flex-row sm:items-center`}>
           <span className="flex items-center gap-2"><Mark className="h-5 w-5" /> The Endgame Academy, built from the product's own flow documents.</span>
           <span className="flex flex-wrap gap-x-5 gap-y-1 sm:ml-auto">
-            <a className="inline-flex min-h-touch items-center hover:text-ink" href={href("/progress")}>Your progress</a>
-            <a className="inline-flex min-h-touch items-center hover:text-ink" href={href("/about")}>About this academy</a>
-            <a className="inline-flex min-h-touch items-center hover:text-ink" href={href("/finish")}>Share it</a>
-            {operator ? <a className="inline-flex min-h-touch items-center hover:text-ink" href={href("/")}>Client academy</a> : <a className="inline-flex min-h-touch items-center hover:text-ink" href={href("/operator")}>Operator handbook (FrostAura)</a>}
+            <a className={footLink} href={href("/progress")}>Your progress</a>
+            <a className={footLink} href={href("/about")}>About this academy</a>
+            <a className={footLink} href={href("/finish")}>Share it</a>
+            {operator ? <a className={footLink} href={href("/")}>Client academy</a> : <a className={footLink} href={href("/operator")}>Operator handbook (FrostAura)</a>}
           </span>
         </div>
       </footer>
     </div>
   );
 }
+
+const footLink = "-mx-2 inline-flex min-h-touch items-center rounded-full px-2 hover:text-ink";
 
 /**
  * Back to the step last viewed, from any page but that flow itself: the flow's id and how far in,
@@ -126,24 +130,24 @@ function ResumePill({ operator }: { operator: boolean }) {
   // The flow last read is finished: the way on is what is next up, not its last step again.
   const next = progress.flows[f.id]?.done ? overallNext(progress, catalogue, CLIENT_LEVELS)?.flow : undefined;
   if (progress.flows[f.id]?.done && !next) return null;
-  const target = next ?? f;
-  if (parts[0] === "flow" && flow(parts[1] ?? "")?.id === target.id) return null;
+  // On a flow the player carries its own way on: the header adds no second "next".
+  if (parts[0] === "flow") return null;
   return (
     <a
       href={href(next ? `/flow/${next.id}` : `/flow/${f.id}/step/${last.step}`)}
       aria-label={next ? `Next up: ${next.id} ${next.title}` : `Pick up where you left off: ${f.id} ${f.title}, step ${last.step} of ${f.steps.length}`}
-      className={`inline-flex min-h-touch min-w-0 shrink items-center gap-2 rounded-full border px-3 text-sm font-medium ${operator ? "border-primary-ink-soft/40 hover:bg-surface/10" : "border-primary-line bg-primary-tint text-primary-link hover:border-primary"}`}
+      className={`inline-flex min-h-touch shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-sm font-medium md:border-l md:rounded-l-none md:pl-5 ${operator ? "border-primary-ink-soft/30 text-primary-ink-soft hover:text-primary-ink" : "text-primary-link hover:bg-primary-tint"}`}
       data-testid="header-resume"
     >
       <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-hidden="true"><path d="M5 3.5v9l7-4.5z" fill="currentColor" /></svg>
-      <span className="shrink-0">{next ? "Next up" : "Resume"}</span>
-      <span className="hidden truncate font-mono text-xs sm:inline">{next ? next.id : `${f.id} · ${last.step}/${f.steps.length}`}</span>
+      <span>{next ? "Next up" : "Resume"}</span>
+      <span className="hidden tabular-nums lg:inline">{next ? next.id : f.id}</span>
     </a>
   );
 }
 
 export function Page({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`mx-auto w-full max-w-page px-4 py-8 sm:px-6 sm:py-14 ${className}`}>{children}</div>;
+  return <div className={`${ui.container} py-8 sm:py-12 ${className}`}>{children}</div>;
 }
 
 export function Eyebrow({ children }: { children: ReactNode }) {

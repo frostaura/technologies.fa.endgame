@@ -31,6 +31,8 @@ export const RING_PAD = 6;
 export const NOTE_GAP = 10;
 /** The space kept between a mark and the edge of the page. */
 export const EDGE = 8;
+/** How much covering a pixel of the page's words or controls costs, against a pixel of distance. */
+const WORDS = 8;
 
 const area = (b: Box) => Math.max(0, b.right - b.left) * Math.max(0, b.bottom - b.top);
 
@@ -118,6 +120,8 @@ export function noteCost(ring: Box, note: Size, content: Box[], left: number, to
   let score = rank < 100 ? rank * 2 : 200 + 2 * away;
   const onRing = overlap(box, { left: ring.left - gap / 2, top: ring.top - gap / 2, right: ring.right + gap / 2, bottom: ring.bottom + gap / 2 });
   if (onRing > 0) score += 1_000_000 + onRing;
-  for (const b of content) score += overlap(box, b);
+  // Covering words or a control is weighed well above distance: a note a little further off, over
+  // nothing, beats one beside the ring over a heading, a figure or a button.
+  for (const b of content) score += WORDS * overlap(box, b);
   return score;
 }
