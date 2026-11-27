@@ -321,16 +321,7 @@ function AppAddress({ addresses }: { addresses: AppDetail["addresses"] }) {
         <CopyAddress url={main} label="Copy the address" />
       </p>
       {other && (
-        <details className="group min-w-0 max-w-full text-sm text-ink-muted">
-          <summary className="inline-flex min-h-touch cursor-pointer list-none items-center gap-1 rounded-xs hover:text-ink [&::-webkit-details-marker]:hidden">
-            Also at
-            <ChevronDown aria-hidden className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
-          </summary>
-          <p className="flex min-w-0 items-center gap-1">
-            <Breakable url={other} />
-            <CopyAddress url={other} label="Copy the other address" />
-          </p>
-        </details>
+        <AlsoAt url={other} />
       )}
     </div>
   );
@@ -750,4 +741,28 @@ function ConfirmPublic({ appName, onConfirm, onCancel }: { appName: string; onCo
 function TalkToApp({ scope }: { scope: string }) {
   const tree = useActiveTree();
   return <AppConversation scope={scope} trail={namesFor(tree.data, scope)} />;
+}
+
+/** The app's second address, behind a small toggle: said only when asked for. */
+function AlsoAt({ url }: { url: string }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <div className="min-w-0 max-w-full text-sm text-ink-muted">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex min-h-touch items-center gap-1 rounded-xs hover:text-ink"
+      >
+        Also at
+        <ChevronDown aria-hidden className={cn("size-4 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+      </button>
+      <p id={id} className={cn("min-w-0 items-center gap-1", open ? "flex" : "hidden")}>
+        <Breakable url={url} />
+        <CopyAddress url={url} label="Copy the other address" />
+      </p>
+    </div>
+  );
 }
