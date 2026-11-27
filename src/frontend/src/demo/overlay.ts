@@ -1,17 +1,21 @@
-import { noteCost, placeNote, ringBox, ringInsets, type Box } from "./placement";
+import { chooseSubject, intersect, keepInside, markerAt, ringBox, ringInsets, shownFraction, type Box, type Rung } from "./placement";
 
 /**
- * The academy's marks on the page: a spotlight ring around a control, with an optional note, and
- * a soft cursor that moves to what a step acts on. Both are drawn above the console, never take a
- * click (`pointer-events: none`), and follow the control as the page scrolls or reflows.
+ * The academy's marks on the page: a spotlight ring around what a step is about, with the step's
+ * number on its corner, and a soft cursor that moves to what a step acts on. Both are drawn above
+ * the console, never take a click (`pointer-events: none`), and follow what they mark as the page
+ * scrolls or reflows. The ring is cut where the scroll area it sits in ends (under a sticky header,
+ * above a phone's bottom bar), and is not drawn at all while what it marks is out of view.
  */
 
 let ring: HTMLDivElement | null = null;
-let note: HTMLDivElement | null = null;
-let arrow: HTMLSpanElement | null = null;
+let marker: HTMLDivElement | null = null;
 let cursor: HTMLDivElement | null = null;
 let cursorFade = 0;
 let tracked: HTMLElement | null = null;
+/** What the ring goes round: the tracked element, or the card it sits in — decided once, as it is shown. */
+let subjectEl: HTMLElement | null = null;
+let asRegion = false;
 let frame = 0;
 
 function layer(className: string): HTMLDivElement {
@@ -27,26 +31,36 @@ function layer(className: string): HTMLDivElement {
  * Where an element sits in the demo's own page: an Edge page is drawn in a frame, so its controls'
  * boxes are moved by the frame's own place on the page.
  */
-export function pageRect(el: Element): { left: number; top: number; width: number; height: number; bottom: number } {
+export function pageRect(el: Element): { left: number; top: number; width: number; height: number; bottom: number; right: number } {
   const r = el.getBoundingClientRect();
-  let left = r.left;
-  let top = r.top;
+  const { dx, dy } = offsetOf(el);
+  return { left: r.left + dx, top: r.top + dy, width: r.width, height: r.height, bottom: r.bottom + dy, right: r.right + dx };
+}
+
+/** How far an element's own document is moved on the demo's page: by each Edge page frame it is drawn in. */
+function offsetOf(el: Element): { dx: number; dy: number } {
+  let dx = 0;
+  let dy = 0;
   // Out to the demo's own page, and no further: embedded, the demo is itself in the academy's frame.
   let win = el.ownerDocument.defaultView;
   while (win && win !== window && win.frameElement) {
-    const frame = win.frameElement;
-    const f = frame.getBoundingClientRect();
-    left += f.left + frame.clientLeft;
-    top += f.top + frame.clientTop;
-    win = frame.ownerDocument.defaultView;
+    const f = win.frameElement;
+    const r = f.getBoundingClientRect();
+    dx += r.left + f.clientLeft;
+    dy += r.top + f.clientTop;
+    win = f.ownerDocument.defaultView;
   }
-  return { left, top, width: r.width, height: r.height, bottom: top + r.height };
+  return { dx, dy };
 }
+
+const boxOf = (el: Element): Box => {
+  const r = pageRect(el);
+  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+};
 
 /**
  * What the page shows inside the viewport: each run of words and each control, image or chart, in
- * the demo's own page coordinates (an Edge page's frame included). The note is set where it hides
- * least of these, and the ring stands clear of them.
+ * the demo's own page coordinates (an Edge page's frame included). The ring stands clear of them.
  */
 function contentBoxes(): Box[] {
   const out: Box[] = [];
@@ -86,8 +100,94 @@ function contentBoxes(): Box[] {
   return out;
 }
 
+const CARDISH = "li, article, fieldset, dialog, tr, [role=group], [role=region], [role=listitem], [role=row], [role=article], [role=dialog], [data-card]";
+const transparent = (c: string) => c === "transparent" || /rgba\([^)]*,\s*0\)$/.test(c);
+
+/** Drawn as a card: a border, a shadow, a ground of its own — or a list item or a group the page names. */
+function isCard(el: HTMLElement): boolean {
+  if (el.matches(CARDISH)) return true;
+  const s = (el.ownerDocument.defaultView ?? window).getComputedStyle(el);
+  if (s.boxShadow && s.boxShadow !== "none") return true;
+  const bordered = ["Top", "Right", "Bottom", "Left"].filter((side) => parseFloat(s.getPropertyValue(`border-${side.toLowerCase()}-width`)) > 0 && !transparent(s.getPropertyValue(`border-${side.toLowerCase()}-color`))).length;
+  if (bordered >= 3) return true;
+  const ground = s.backgroundColor;
+  if (!transparent(ground) && el.parentElement) {
+    const parent = (el.ownerDocument.defaultView ?? window).getComputedStyle(el.parentElement).backgroundColor;
+    if (ground !== parent && s.borderRadius !== "0px") return true;
+  }
+  return false;
+}
+
+/** Things a learner presses or types into: ringed as themselves, not as the card around them. */
+const CONTROL = "button, a[href], input, select, textarea, summary, [role=button], [role=link], [role=tab], [role=switch], [role=checkbox], [role=radio], [role=menuitem]";
+
+/**
+ * The card the step before rang, and what it named in it: a step about another thing inside that
+ * same card (its Approve button, after the plan above it) rings that thing, not the same card again.
+ */
+let before: { subject: HTMLElement; named: HTMLElement } | null = null;
+
+/** What the ring surrounds for this element (see `chooseSubject`); a region is ringed as it is. */
+export function subjectOf(el: HTMLElement, region = false): HTMLElement {
+  if (region) return el;
+  const named = boxOf(el);
+  const isControl = el.matches(CONTROL) && (named.right - named.left) >= 24 && (named.bottom - named.top) >= 16;
+  if (isControl) return el;
+  const avoid = before && before.named !== el && before.subject.isConnected && before.subject.contains(el) ? before.subject : null;
+  const rungs: { el: HTMLElement; rung: Rung }[] = [];
+  for (let p = el.parentElement; p && p !== el.ownerDocument.body && p !== el.ownerDocument.documentElement && p !== avoid; p = p.parentElement) {
+    rungs.push({ el: p, rung: { box: boxOf(p), card: isCard(p) } });
+  }
+  const chosen = chooseSubject(named, rungs.map((r) => r.rung), { width: window.innerWidth, height: window.innerHeight });
+  return rungs.find((r) => r.rung.box === chosen)?.el ?? el;
+}
+
+/** Fixed or sticky bars that stand over the page (the console's header, a phone's bottom bar), unless they hold the element. */
+function bars(el: Element): { top: number; bottom: number } {
+  let top = 0;
+  let bottom = window.innerHeight;
+  const header = document.querySelector<HTMLElement>("body > div header, header");
+  const nav = document.querySelector<HTMLElement>("[data-bottom-nav]");
+  if (header && !header.contains(el) && /sticky|fixed/.test(getComputedStyle(header).position)) top = Math.max(top, header.getBoundingClientRect().bottom);
+  if (nav && !nav.contains(el)) {
+    const r = nav.getBoundingClientRect();
+    if (r.height > 0) bottom = Math.min(bottom, r.top);
+  }
+  return { top, bottom };
+}
+
+/**
+ * The part of the page an element can be seen in: the viewport, less the bars standing over it, cut
+ * by every box on its way up that scrolls or clips its contents (a pane, a sheet, an Edge page's frame).
+ */
+export function clipFor(el: Element): Box {
+  const b = bars(el);
+  let clip: Box = { left: 0, top: b.top, right: window.innerWidth, bottom: b.bottom };
+  let node: Element | null = el.parentElement;
+  while (node) {
+    const doc = node.ownerDocument;
+    if (node === doc.documentElement || node === doc.body) {
+      const frameEl: Element | null = doc.defaultView && doc.defaultView !== window ? doc.defaultView.frameElement : null;
+      if (!frameEl) break;
+      clip = intersect(clip, boxOf(frameEl));
+      node = frameEl.parentElement;
+      continue;
+    }
+    const s = (doc.defaultView ?? window).getComputedStyle(node);
+    if (/(auto|scroll|hidden|clip)/.test(`${s.overflowX} ${s.overflowY}`)) {
+      const r = boxOf(node);
+      const html = node as HTMLElement;
+      // The box's inside: its scrollbars and borders are not where the page is drawn.
+      clip = intersect(clip, { left: r.left + html.clientLeft, top: r.top + html.clientTop, right: r.left + html.clientLeft + html.clientWidth, bottom: r.top + html.clientTop + html.clientHeight });
+    }
+    node = node.parentElement;
+  }
+  return clip;
+}
+
 let refind: (() => HTMLElement | null) | null = null;
 let lostSince = 0;
+let number: number | null = null;
 /** Still drawn: in the page, or in an Edge page's frame that is itself still in the page (a removed frame's nodes stay "connected" to its own document). */
 function onPage(el: Element): boolean {
   if (!el.isConnected) return false;
@@ -96,14 +196,16 @@ function onPage(el: Element): boolean {
   return win === window || (win.frameElement !== null && onPage(win.frameElement));
 }
 
-let placed: { key: string; at: number; left: number; top: number; score: number; ring: Box } | null = null;
+let placed: { key: string; at: number; ring: Box } | null = null;
+/** What the ring showed last, for the academy's checks (`endgameDemo.ring()`). */
+let last: { shown: boolean; ring: Box | null; visible: Box | null; clip: Box | null; named: Box | null } = { shown: false, ring: null, visible: null, clip: null, named: null };
 
 /** What stands over a page as a whole: a dialog, a sheet, the device's own prompt. */
 const MODAL = "[role=dialog], [role=alertdialog], dialog[open], [aria-modal=true], [data-demo-device]";
 
 /**
  * Whether something modal now covers the control — a dialog opened over it after it was ringed. The
- * ring and note then step aside, so they never draw over the dialog's own words.
+ * ring steps aside, so it never draws over the dialog's own words.
  */
 function covered(el: HTMLElement): boolean {
   const r = el.getBoundingClientRect();
@@ -116,26 +218,10 @@ function covered(el: HTMLElement): boolean {
   return !!over && !over.contains(el);
 }
 
-/**
- * The note's pointer: a small notch on the side that faces the ring, aimed at the ring's middle, so
- * the note reads as being about that control. None when the note had to sit over the ring.
- */
-function aim(box: Box, left: number, top: number) {
-  if (!note || !arrow) return;
-  const w = note.offsetWidth;
-  const h = note.offsetHeight;
-  const cx = (box.left + box.right) / 2;
-  const cy = (box.top + box.bottom) / 2;
-  const clamp = (v: number, max: number) => Math.max(12, Math.min(v, max - 12));
-  let side: "top" | "bottom" | "left" | "right" | null = null;
-  if (top >= box.bottom - 1) side = "top";
-  else if (top + h <= box.top + 1) side = "bottom";
-  else if (left >= box.right - 1) side = "left";
-  else if (left + w <= box.left + 1) side = "right";
-  arrow.hidden = side === null;
-  if (!side) return;
-  const at = side === "top" || side === "bottom" ? { left: `${clamp(cx - left, w) - 5}px`, top: side === "top" ? "-5px" : `${h - 5}px` } : { top: `${clamp(cy - top, h) - 5}px`, left: side === "left" ? "-5px" : `${w - 5}px` };
-  Object.assign(arrow.style, at);
+function hide() {
+  if (ring) ring.hidden = true;
+  if (marker) marker.hidden = true;
+  last = { ...last, shown: false, visible: null };
 }
 
 function place() {
@@ -145,83 +231,91 @@ function place() {
     // The screen drew it again (a refresh, a retry): the ring follows the new one, and waits a while for it.
     const again = refind?.();
     if (again) {
+      tracked.removeAttribute("data-demo-ringed");
       tracked = again;
       tracked.setAttribute("data-demo-ringed", "");
-    }
-    else {
+      subjectEl = subjectOf(again, asRegion);
+      placed = null;
+    } else {
       lostSince ||= performance.now();
       if (performance.now() - lostSince > 10_000) {
         clearSpotlight();
         return;
       }
-      ring.hidden = true;
-      if (note) note.hidden = true;
+      hide();
       frame = requestAnimationFrame(place);
       return;
     }
   }
   lostSince = 0;
-  // A dialog opened over the control: the ring and note wait, hidden, until it closes.
-  const hidden = covered(tracked);
-  ring.hidden = hidden;
-  if (note) note.hidden = hidden;
-  if (hidden) {
+  // A dialog opened over the control: the ring waits, hidden, until it closes.
+  if (covered(tracked)) {
+    hide();
     frame = requestAnimationFrame(place);
     return;
   }
-  const r = pageRect(tracked);
-  const target: Box = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.bottom };
+  const named = boxOf(tracked);
+  const clip = clipFor(tracked);
   const view = { width: window.innerWidth, height: window.innerHeight };
-  const key = [target.left, target.top, target.right, target.bottom, view.width, view.height, note?.offsetWidth ?? 0, note?.offsetHeight ?? 0].map(Math.round).join(",");
+  const key = [named.left, named.top, named.right, named.bottom, clip.top, clip.bottom, view.width, view.height].map(Math.round).join(",");
   const now = performance.now();
   // Measured again when the control moves, and every so often while it stays (the page may still be filling in).
   if (!placed || placed.key !== key || now - placed.at > 400) {
-    const content = contentBoxes();
-    const box = ringBox(target, ringInsets(target, content), view);
-    let left = 0;
-    let top = 0;
-    let score = 0;
-    if (note) {
-      const best = placeNote(box, { width: note.offsetWidth, height: note.offsetHeight }, view, content);
-      // Stays put unless the control moved or somewhere is clearly better now, so the note does not jitter.
-      const size = { width: note.offsetWidth, height: note.offsetHeight };
-      const here = placed && placed.key === key ? noteCost(box, size, content, placed.left, placed.top, 0) : Infinity;
-      ({ left, top, score } = here - best.score < 200 && placed ? { left: placed.left, top: placed.top, score: here } : best);
-    }
-    placed = { key, at: now, left, top, score, ring: box };
+    const subject = boxOf(subjectEl && onPage(subjectEl) ? subjectEl : tracked);
+    // Inside the console's own width: a card that spans a phone's screen is ringed just inside its edges.
+    placed = { key, at: now, ring: keepInside(ringBox(subject, ringInsets(subject, contentBoxes())), { left: 0, top: -Infinity, right: view.width, bottom: Infinity }) };
   }
   const box = placed.ring;
-  // The light outline is drawn outside the element's own box: the box is set one pixel inside the ring's.
-  Object.assign(ring.style, { left: `${box.left + 1}px`, top: `${box.top + 1}px`, width: `${box.right - box.left - 2}px`, height: `${box.bottom - box.top - 2}px` });
-  if (note) {
-    Object.assign(note.style, { left: `${placed.left}px`, top: `${placed.top}px` });
-    aim(box, placed.left, placed.top);
+  // Out of view (scrolled past, under a bar): no ring at all until what it marks is back.
+  const seen = shownFraction(named, clip);
+  if (seen < (asRegion ? 0.25 : 0.9)) {
+    hide();
+    last = { shown: false, ring: box, visible: null, clip, named };
+    frame = requestAnimationFrame(place);
+    return;
   }
+  const visible = intersect(box, clip);
+  ring.hidden = false;
+  // The light outline is drawn outside the element's own box: the box is set one pixel inside the ring's.
+  Object.assign(ring.style, {
+    left: `${box.left + 1}px`,
+    top: `${box.top + 1}px`,
+    width: `${box.right - box.left - 2}px`,
+    height: `${box.bottom - box.top - 2}px`,
+    // Cut where its scroll area ends: never drawn over a sticky header, a bar, or the next pane.
+    clipPath: `inset(${Math.max(0, visible.top - box.top - 1)}px ${Math.max(0, box.right - visible.right - 1)}px ${Math.max(0, box.bottom - visible.bottom - 1)}px ${Math.max(0, visible.left - box.left - 1)}px)`,
+  });
+  if (marker) {
+    marker.hidden = false;
+    const at = markerAt(visible, clip);
+    Object.assign(marker.style, { left: `${at.left}px`, top: `${at.top}px` });
+  }
+  last = { shown: true, ring: box, visible, clip, named };
   frame = requestAnimationFrame(place);
 }
 
-/** `again` finds the control anew when the screen replaces it, so a re-drawn page keeps its ring. */
-export function showSpotlight(el: HTMLElement, text: string | null, again?: () => HTMLElement | null) {
+/**
+ * Ring an element: `marker` is the step's number, drawn on the ring's corner (the academy's caption
+ * under its frame starts with the same number); `region` rings a region as it is, where a step
+ * shows a state rather than a control. `again` finds the element anew when the screen replaces it.
+ */
+export function showSpotlight(el: HTMLElement, options: { marker?: number | null; region?: boolean } = {}, again?: () => HTMLElement | null) {
   clearSpotlight();
   tracked = el;
+  asRegion = !!options.region;
+  number = options.marker ?? null;
   el.setAttribute("data-demo-ringed", "");
   refind = again ?? null;
-  // A line, not a band: it stands off the control into the gap around it and never paints over a neighbour's words.
-  ring = layer("pointer-events-none fixed z-50 rounded-sm border-2 border-primary outline outline-1 outline-surface transition-all duration-200 motion-reduce:transition-none");
+  subjectEl = subjectOf(el, asRegion);
+  before = { subject: subjectEl, named: el };
+  ring = layer("pointer-events-none fixed z-50 rounded-md border-2 border-primary outline outline-1 outline-surface motion-safe:transition-[left,top,width,height] motion-safe:duration-200");
   ring.setAttribute("data-demo-spotlight", "");
-  if (text) {
-    note = layer("pointer-events-none fixed z-50 max-w-xs rounded-sm bg-ink px-3 py-2 text-sm text-surface shadow-raised");
-    note.setAttribute("role", "status");
-    note.setAttribute("data-demo-note", "");
-    note.removeAttribute("aria-hidden");
-    const words = document.createElement("span");
-    words.className = "relative";
-    words.textContent = text;
-    arrow = document.createElement("span");
-    arrow.setAttribute("aria-hidden", "true");
-    arrow.className = "absolute size-2.5 rotate-45 bg-ink";
-    arrow.hidden = true;
-    note.append(arrow, words);
+  ring.hidden = true;
+  if (number !== null) {
+    marker = layer("pointer-events-none fixed z-50 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold tabular-nums text-primary-ink shadow-raised outline outline-2 outline-surface");
+    marker.setAttribute("data-demo-marker", "");
+    marker.textContent = String(number);
+    marker.hidden = true;
   }
   place();
 }
@@ -231,14 +325,26 @@ export function clearSpotlight() {
   frame = 0;
   tracked?.removeAttribute("data-demo-ringed");
   ring?.remove();
-  note?.remove();
+  marker?.remove();
   ring = null;
-  note = null;
-  arrow = null;
+  marker = null;
   tracked = null;
+  subjectEl = null;
   refind = null;
   lostSince = 0;
   placed = null;
+  number = null;
+  last = { shown: false, ring: null, visible: null, clip: null, named: null };
+}
+
+/** A new screen or a new lesson: what the step before rang no longer matters. */
+export function forgetSteps() {
+  before = null;
+}
+
+/** What the ring shows now, in the demo's page coordinates: for the academy's checks of every step. */
+export function ringState() {
+  return { ...last, marker: number, region: asRegion, tracking: tracked !== null };
 }
 
 /** A small pointer, its tip on the point it names: an arrow outlined in white so it reads on any ground. */
