@@ -4,7 +4,7 @@ import type { AppDetail } from "@/store/types";
 import { ONTOLOGY_APP, SAVED, VERSIONS } from "@/test/breadth";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { AppView } from "./AppView";
-import { notOpenable } from "./appModel";
+import { notOpenable, visitsNote } from "./appModel";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const TREE = { organisation: null, divisions: [], needsYou: [] };
@@ -87,7 +87,7 @@ describe("AppView", () => {
     renderWithStore(<AppView appId="a1" />);
     const today = await screen.findByRole("region", { name: "Today" });
     // The tile says it in a line; the amber panel under the figures says why, and raises the budget (ARCH-011).
-    expect(today.textContent).toContain("Paused by its budget");
+    expect(today.textContent).toContain("At overdraft limit");
     expect(today.textContent).not.toContain("Healthy");
     const held = screen.getByTestId("paused-by-budget");
     expect(held.dataset.tone).toBe("warn");
@@ -123,8 +123,8 @@ describe("AppView", () => {
     expect(address.textContent).toContain("host.test/acme/tools/ledger");
     expect(screen.getByText("Healthy")).toBeTruthy();
     expect(screen.getByText("120 ms")).toBeTruthy();
-    expect(screen.getByText("Slowest 1 in 20: 1.5 s")).toBeTruthy();
-    expect(screen.getByText("Cap 100 credits")).toBeTruthy();
+    expect(screen.getByText("Slowest 5%: 1.5 s")).toBeTruthy();
+    expect(screen.getByText("Cap: 100")).toBeTruthy();
     expect((screen.getByRole("radio", { name: /Sleeps when unused/ }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText(/About 80 credits a month/)).toBeTruthy();
     expect((screen.getByRole("radio", { name: /Private: only people in Acme/ }) as HTMLInputElement).checked).toBe(true);
@@ -135,6 +135,19 @@ describe("AppView", () => {
     renderWithStore(<AppView appId="a1" />);
     expect(await screen.findByText(/No traffic yet/)).toBeTruthy();
     expect(screen.getByText("No visits yet")).toBeTruthy();
+  });
+
+  // console-small 22, the app page: a tile's caption is one line, so it is written short enough for a phone's half-width tile.
+  it("keeps the figure tiles' captions short, and times no response on a day with no traffic", async () => {
+    const now = new Date("2026-11-20T12:00:00Z");
+    const t = { visitsToday: 4, requestsToday: 186, errorsToday: 0, latencyP50Ms: 40, latencyP95Ms: 210, lastVisitAt: "2026-11-20T11:58:00Z" };
+    expect(visitsNote(t, now)).toBe("Last visit 2 min ago");
+    expect(visitsNote({ ...t, lastVisitAt: "2026-11-20T09:00:00Z" }, now)).toBe("Last visit 3 h ago");
+    expect(visitsNote({ ...t, errorsToday: 2 }, now)).toBe("2 of 186 failed");
+    stub(json({ ...APP, telemetry: { visitsToday: 0, requestsToday: 0, errorsToday: 0, latencyP50Ms: 0, latencyP95Ms: 0, lastVisitAt: "2026-11-19T09:00:00Z" } }));
+    renderWithStore(<AppView appId="a1" />);
+    expect(await screen.findByText("No traffic today")).toBeTruthy();
+    expect(screen.queryByText("0 ms")).toBeNull();
   });
 
   it("switches running at once and keeps the change when it saves", async () => {

@@ -37,7 +37,7 @@ const DASHED_ALLOWED = new Set(["src/demo/hosted/kit.tsx", "src/features/home/Co
  */
 const RETIRED_HUES = /\b(?:bg|text|border|ring|fill|stroke)-(?:violet|teal)\b[\w/-]*/g;
 const RETIRED_HUE_ALLOWANCE: Record<string, number> = {
-  "src/features/apps/AskChart.tsx": 6,
+  "src/features/apps/AskChart.tsx": 4,
   "src/features/autonomy/AutonomyView.tsx": 1,
 };
 

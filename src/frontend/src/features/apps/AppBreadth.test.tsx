@@ -5,7 +5,7 @@ import type { AppDetail } from "@/store/types";
 import { ASK_ANSWER, ASK_ESTIMATE, ONTOLOGY_APP, SAVED, VERSIONS } from "@/test/breadth";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { AppView } from "./AppView";
-import { historyRows, isBookkeeping, reuseLabel, servicesOf, versionTitle } from "./appModel";
+import { historyRows, isBookkeeping, niceStep, reuseLabel, servicesOf, versionTitle } from "./appModel";
 import { AskChartView } from "./AskChart";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
@@ -297,7 +297,7 @@ describe("what it uses, and taking it away", () => {
     renderWithStore(<AppView appId="a1" />);
     const uses = await screen.findByRole("list", { name: "What it uses" });
     expect(within(uses).getByText("Sign-in")).toBeTruthy();
-    expect(within(uses).getByText("Visits and errors measured")).toBeTruthy();
+    expect(within(uses).getByText("Health and traffic")).toBeTruthy();
     expect(within(uses).getByText("1 secret")).toBeTruthy();
     expect(within(uses).getByText("Open to AI assistants")).toBeTruthy();
     expect(screen.getByText(/^Secrets it can read:/).textContent).toMatch(/^Secrets it can read: MAIL_KEY\. /);
@@ -346,18 +346,20 @@ describe("after the real-stack walk", () => {
   });
 
   // D35: the graph names service:data for an app that has run or stores data; nothing is guessed beyond its edges.
-  it("counts Data among what an app uses when the graph says so, and nothing it does not", async () => {
+  // One name everywhere: "Stored data", as the organisation's "How data flows" matrix heads its column.
+  it("counts Stored data among what an app uses when the graph says so, and nothing it does not", async () => {
     expect(servicesOf({ id: "a1" }, ONTOLOGY_APP)).toEqual(["telemetry", "identity", "data"]);
     expect(servicesOf({ id: "a1" }, { nodes: [], edges: [] })).toEqual([]);
     stub();
     renderWithStore(<AppView appId="a1" />);
-    expect(within(await screen.findByRole("list", { name: "What it uses" })).getByText("Data")).toBeTruthy();
+    expect(within(await screen.findByRole("list", { name: "What it uses" })).getByText("Stored data")).toBeTruthy();
   });
 
   // D50: the same plain service names wherever a service is named.
   it("names a service the way the app page does", () => {
     expect(reuseLabel("identity (service)")).toBe("Sign-in");
-    expect(reuseLabel("the email service")).toBe("E-mail");
+    expect(reuseLabel("the email service")).toBe("Email");
+    expect(reuseLabel("data")).toBe("Stored data");
     expect(reuseLabel("Court booking's sessions")).toBe("Court booking's sessions");
   });
 
@@ -384,8 +386,13 @@ describe("after the real-stack walk", () => {
   it("draws bars and lines from zero", () => {
     const chart = (kind: "bar" | "line") => ({ kind, x: "day", y: ["visits"], series: [{ name: "visits", points: [{ x: "Mon", y: 4 }, { x: "Tue", y: 3 }] }] });
     const { container, unmount } = render(<AskChartView chart={chart("bar")} columns={[]} rows={[]} />);
-    const widths = [...container.querySelectorAll<HTMLElement>("[style]")].map((el) => el.style.width);
-    expect(widths).toEqual(["100%", "75%"]);
+    const shares = [...container.querySelectorAll<HTMLElement>("[data-share]")].map((el) => el.dataset.share);
+    expect(shares).toEqual(["100", "75"]);
+    // Every bar is drawn in the accent from its first frame: no entrance animation that could leave it at nothing.
+    for (const bar of container.querySelectorAll("[data-share]")) {
+      expect(bar.className).toContain("bg-primary");
+      expect(bar.className).not.toContain("animate-");
+    }
     unmount();
     const line = render(<AskChartView chart={chart("line")} columns={[]} rows={[]} />);
     expect(line.container.textContent).toContain("0");
@@ -394,6 +401,17 @@ describe("after the real-stack walk", () => {
     const ys = points.split(" ").map((p) => Number(p.split(",")[1]));
     expect(ys[1]).toBeGreaterThan(ys[0] ?? 0);
     expect(ys[1]).toBeLessThan(150);
+    // Round gridlines from zero, a dot for each point that says its value on hover, and the day under each.
+    expect([...line.container.querySelectorAll("[data-tick]")].map((t) => t.textContent)).toEqual(["0", "1", "2", "3", "4"]);
+    expect(line.container.querySelectorAll("line")).toHaveLength(5);
+    expect([...line.container.querySelectorAll("[role=tooltip]")].map((t) => t.textContent)).toEqual(["Mon: 4", "Tue: 3"]);
+  });
+
+  it("rounds an axis to 1, 2 or 5 of a power of ten", () => {
+    expect(niceStep(203)).toBe(50);
+    expect(niceStep(61)).toBe(20);
+    expect(niceStep(4)).toBe(1);
+    expect(niceStep(0)).toBe(1);
   });
 
   // D34 + D37: what saving said sits under the field, and the side panel says one thing at a time.
@@ -414,7 +432,7 @@ describe("after the real-stack walk", () => {
     expect(within(row).getByRole("button", { name: "Save" })).toBeTruthy();
     expect(row.contains(saved)).toBe(false);
     // Another card acts: the first card's message goes.
-    fireEvent.click(screen.getAllByRole("button", { name: "Set one for Ledger web" })[0] as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "Set its own" })[0] as HTMLElement);
     expect(screen.queryByText("It sleeps after 30 idle minutes now.")).toBeTruthy();
     fireEvent.change(screen.getAllByLabelText("Credits a month")[0] as HTMLElement, { target: { value: "50" } });
     fireEvent.click(within(screen.getAllByRole("form", { name: /^Set its/ })[0] as HTMLElement).getByRole("button", { name: "Save" }));

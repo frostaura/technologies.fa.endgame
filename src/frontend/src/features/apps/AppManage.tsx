@@ -184,7 +184,8 @@ function Limit({
         ) : (
           <span className="flex flex-wrap gap-1">
             <Button size="sm" variant="quiet" onClick={() => setOpen(true)}>
-              {own ? "Change it" : `Set one for ${app.name}`}
+              {/* Short, so the side card never cuts it: the card's title says what "its own" is. */}
+              {own ? "Change it" : "Set its own"}
             </Button>
             {own && (
               <Button size="sm" variant="quiet" disabled={removing.isLoading} onClick={() => void drop()}>

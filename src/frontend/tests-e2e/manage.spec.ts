@@ -105,8 +105,8 @@ test.describe("the app page", () => {
     await page.goto("/apps/app1");
     const spend = page.getByRole("region", { name: "What it may spend" });
     await expect(spend.getByText("500 credits a month, set on Booking desk")).toBeVisible();
-    await expect(page.getByText("Its own cap: 500 credits a month")).toBeVisible();
-    await spend.getByRole("button", { name: "Set one for Booking desk" }).click();
+    await expect(page.getByText("Own cap: 500")).toBeVisible();
+    await spend.getByRole("button", { name: "Set its own" }).click();
     await spend.getByLabel("Credits a month").fill("80");
     await spend.getByRole("button", { name: "Save" }).click();
     await expect(spend.getByText("80 credits a month, set on Booking desk")).toBeVisible();

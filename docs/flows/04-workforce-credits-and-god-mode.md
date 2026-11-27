@@ -743,7 +743,7 @@ Shared vocabulary used below:
   1. Each AI call reserves its worst case against every cap and the balance, then settles at the reply's cost converted by the current prices.
   2. Repairs are recorded as not billed.
   3. Hosting samples become hosting entries at the hosting rates and are never refused.
-  4. Both appear in "On AI work" / "On hosting", the budget bars, the employee's "Cost so far", the app's "Cost this month" tile ("Its own cap: <n> credits a month", "No cap of its own; <Above>'s <n> credits applies" or "No cap on it or above it") and the operator's balances.
+  4. Both appear in "On AI work" / "On hosting", the budget bars, the employee's "Cost so far", the app's "Cost this month" tile ("Own cap: <n>", "Cap above: <n>" or "No cap set") and the operator's balances.
   5. An app's own model calls also stop at its monthly AI allowance (default from prices, OP-09).
 - **You know it worked when:** the figures rise after work runs.
 - **Variations and refusals:** the same sample is charged once. Over the app's allowance, the refusal says "The app's own model calls have <n> credits left of their <n> this month…"

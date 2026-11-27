@@ -64,11 +64,12 @@ function stub(extra: Record<string, Parameters<typeof stubApi>[0][string]> = {},
 }
 
 describe("the cap note", () => {
-  const names = (path: string) => (path === "acme/tools" ? "Tools" : path);
-  it("names the app's own cap, a cap above it and where, or none anywhere", () => {
-    expect(capNote(APP, [{ ...CAP, setAtPath: APP.scope }] as never, names)).toBe("Its own cap: 400 credits a month");
-    expect(capNote(APP, INHERITED_CAP as never, names)).toBe("No cap of its own; Tools's 400 credits applies");
-    expect(capNote({ ...APP, cost: { monthCredits: 0, capCredits: null } }, [], names)).toBe("No cap on it or above it");
+  // One short line, so a phone's half-width tile never cuts it; where a cap above is set is said in "What it may spend".
+  it("names the app's own cap, a cap above it, or none anywhere, in one short line", () => {
+    expect(capNote(APP, [{ ...CAP, setAtPath: APP.scope }] as never)).toBe("Own cap: 400");
+    expect(capNote(APP, INHERITED_CAP as never)).toBe("Cap above: 400");
+    expect(capNote({ ...APP, cost: { monthCredits: 0, capCredits: null } }, [])).toBe("No cap set");
+    for (const note of ["Own cap: 400", "Cap above: 400", "No cap set"]) expect(note.length).toBeLessThanOrEqual(16);
   });
 });
 
@@ -79,13 +80,13 @@ describe("what the app may spend", () => {
     const section = within(await screen.findByRole("region", { name: "What it may spend" }));
     expect((await section.findByTestId("monthly_credits-now")).textContent).toBe("400 credits a month, from Tools");
     expect(section.getByText("None is set on it or above it, so FrostAura's standard allowance applies.")).toBeTruthy();
-    expect(screen.getByText("No cap of its own; Tools's 400 credits applies")).toBeTruthy();
+    expect(screen.getByText("Cap above: 400")).toBeTruthy();
   });
 
   it("lets an Admin set the app's own AI allowance", async () => {
     const api = stub({ "PUT /api/cascade": json({ kind: "setting", key: "app_models.monthly_credits", value: 80, setAtLevel: "app", setAtPath: APP.scope, setAt: "t", overrides: [] }) });
     renderWithStore(<AppView appId="a1" />);
-    const offers = await screen.findAllByRole("button", { name: "Set one for Ledger web" });
+    const offers = await screen.findAllByRole("button", { name: "Set its own" });
     fireEvent.click(offers[offers.length - 1] as HTMLElement);
     const form = within(screen.getByRole("form", { name: "Set its ai allowance" }));
     fireEvent.change(form.getByLabelText("Credits a month"), { target: { value: "80" } });

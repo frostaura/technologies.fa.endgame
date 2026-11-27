@@ -283,14 +283,15 @@ export function Dashboard({ appId, canChange }: { appId: string; canChange: bool
 }
 
 /** The skeleton's two tiles. */
-const GRID = "grid grid-cols-1 gap-4 xl:grid-cols-2 3xl:grid-cols-3";
+const GRID = "grid grid-cols-1 gap-4 xl:grid-cols-2 4xl:grid-cols-3";
 
 /**
- * The dashboard's tiles: two columns on a desktop, three from 1600. Each tile is as tall as what it
+ * The dashboard's tiles: two columns on a desktop, three from 2000 (beside the docked conversation and the side panel, the
+ * page column is about 745 px at 1920: three there left each tile too narrow for a line's days). Each tile is as tall as what it
  * holds (a single number is a short tile, never stretched to a table's height), and the tiles flow down
  * balanced columns, so no column is left with a hole under a short tile. The first row's tops align.
  */
-const TILES = "gap-4 xl:columns-2 3xl:columns-3";
+const TILES = "gap-4 xl:columns-2 4xl:columns-3";
 
 function SavedCard({ appId, question, canChange, onRefused }: { appId: string; question: SavedQuestion; canChange: boolean; onRefused: (text: string | null) => void }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";

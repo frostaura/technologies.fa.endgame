@@ -1,18 +1,29 @@
-import { formatCredits } from "@/lib/format";
+import { formatNumber, timeAgo } from "@/lib/format";
 import { plainOrNull } from "@/lib/plain";
 import type { IconName } from "@/components/iconNames";
+import type { Mode } from "@/features/runs/runModel";
+import { nodeName } from "../home/ontologyModel";
 import type { AppDetail, AppVersion, CascadeValue } from "@/store/types";
 
-/** The platform services an app can lean on, as the owner reads them. */
-export const SERVICE: Record<string, { label: string; icon: IconName }> = {
-  identity: { label: "Sign-in", icon: "employee" },
-  data: { label: "Data", icon: "project" },
-  models: { label: "AI", icon: "research" },
-  email: { label: "E-mail", icon: "email" },
-  webhooks: { label: "Incoming data", icon: "incoming-data" },
-  schedules: { label: "Schedules", icon: "schedules" },
-  telemetry: { label: "Visits and errors measured", icon: "health" },
+/** The platform services an app can lean on: each one's icon. Its name is the home matrix's ({@link serviceName}). */
+export const SERVICE: Record<string, { icon: IconName }> = {
+  identity: { icon: "employee" },
+  data: { icon: "project" },
+  models: { icon: "research" },
+  email: { icon: "email" },
+  webhooks: { icon: "incoming-data" },
+  schedules: { icon: "schedules" },
+  telemetry: { icon: "health" },
 };
+
+/**
+ * A platform service's name, one name everywhere: the organisation's "How data flows" matrix names its columns with the
+ * same function ("Stored data", "Sign-in", "Health and traffic"), so the app page and the suggestions never say it another
+ * way. Technical mode adds the internal name in brackets, as the matrix does.
+ */
+export function serviceName(service: string, mode: Mode = "normal"): string {
+  return nodeName({ id: `service:${service}`, type: "service", name: service, scope: null, status: null, attributes: null }, mode);
+}
 
 /**
  * A saved step of the factory's own work rather than a change a person would look for (D38): the factory's progress
@@ -49,7 +60,7 @@ export function reuseLabel(text: string): string {
   const t = text.trim();
   const named = t.match(/^(?:the\s+)?([a-z-]+)(?:\s+(?:service|\(service\)))?$/i);
   const key = named?.[1]?.toLowerCase();
-  if (key && SERVICE[key]) return SERVICE[key].label;
+  if (key && SERVICE[key]) return serviceName(key);
   return t.replace(/\s+\((service|app|project|division)\)$/i, "");
 }
 
@@ -112,13 +123,16 @@ export const ALLOWANCE_KEY = "app_models.monthly_credits";
 export const numberOf = (v: CascadeValue | undefined) => (typeof v?.value === "number" ? v.value : null);
 const number = numberOf;
 
-/** The "Cost this month" tile's note: the app's own cap, a cap set above it and where, or none anywhere. */
-export function capNote(app: AppDetail, budgets: CascadeValue[] | undefined, nameOf: (path: string) => string): string {
+/**
+ * The "Cost this month" tile's note, one short line (a phone's half-width tile): the app's own monthly cap, a cap set above
+ * it, or none anywhere. Where a cap above it is set, and that it is monthly, is said in "What it may spend".
+ */
+export function capNote(app: AppDetail, budgets: CascadeValue[] | undefined): string {
   const cap = budgets?.find((v) => v.key === CAP_KEY);
-  if (budgets === undefined) return app.cost.capCredits !== null ? `Cap ${formatCredits(app.cost.capCredits)}` : "No cap on it or above it";
-  if (!cap || number(cap) === null) return "No cap on it or above it";
-  if (cap.setAtPath === app.scope) return `Its own cap: ${formatCredits(number(cap) ?? 0)} a month`;
-  return `No cap of its own; ${nameOf(cap.setAtPath)}'s ${formatCredits(number(cap) ?? 0)} applies`;
+  if (budgets === undefined) return app.cost.capCredits !== null ? `Cap: ${formatNumber(app.cost.capCredits)}` : "No cap set";
+  if (!cap || number(cap) === null) return "No cap set";
+  if (cap.setAtPath === app.scope) return `Own cap: ${formatNumber(number(cap) ?? 0)}`;
+  return `Cap above: ${formatNumber(number(cap) ?? 0)}`;
 }
 
 
@@ -131,4 +145,29 @@ export function notOpenable(app: AppDetail): string | null {
   if (app.paused || app.running === "paused" || app.health.state === "paused") return "It is paused, so its visitors see a holding page until it is restored.";
   if (app.status === "failed" || app.status === "stopped") return "It is not running, so its visitors are told it is unavailable.";
   return null;
+}
+
+/**
+ * The visits tile's one line, short enough for a phone's half-width tile: the failures among today's requests, or when
+ * the last visit was ("Last visit 2 min ago").
+ */
+export function visitsNote(t: NonNullable<AppDetail["telemetry"]>, now: Date = new Date()): string {
+  if (t.errorsToday > 0) return `${formatNumber(t.errorsToday)} of ${formatNumber(t.requestsToday)} failed`;
+  if (!t.lastVisitAt) return "No visits yet";
+  return `Last visit ${shortAgo(t.lastVisitAt, now)}`;
+}
+
+/** "just now", "2 min ago", "3 h ago", "2 days ago": `timeAgo`, cut to fit a figure tile's caption. */
+function shortAgo(iso: string, now: Date): string {
+  const said = timeAgo(iso, now);
+  return said.replace(/\bminutes?\b/, "min").replace(/\bhours?\b/, "h");
+}
+
+/** A round step for an axis: 1, 2 or 5 times a power of ten, so about five steps cover the range. */
+export function niceStep(range: number, steps = 5): number {
+  if (range <= 0) return 1;
+  const rough = range / steps;
+  const power = 10 ** Math.floor(Math.log10(rough));
+  const unit = rough / power;
+  return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power;
 }

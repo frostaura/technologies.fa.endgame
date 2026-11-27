@@ -292,7 +292,7 @@ test.describe("app and credits", () => {
     await expect(address).toContainText("northwind.example.test/booking");
     await address.getByText("Also at").click();
     await expect(address).toContainText("endgame.example.test/northwind/software/booking");
-    await expect(page.getByText("Slowest 1 in 20: 540 ms")).toBeVisible();
+    await expect(page.getByText("Slowest 5%: 540 ms")).toBeVisible();
     await page.getByRole("radio", { name: /Sleeps when unused/ }).check();
     await expect(page.getByRole("radio", { name: /Sleeps when unused/ })).toBeChecked();
     const saved = (await mockRequests()).find((r) => r.path === "/api/apps/app1/settings");

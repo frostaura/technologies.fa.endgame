@@ -22,6 +22,7 @@ import {
   Label,
   Select,
 } from "./kit";
+import { useFormErrors } from "./kitParts";
 import {
   readingListFor,
   STATUS_LABEL,
@@ -32,6 +33,12 @@ import {
 } from "./readingList";
 
 export type ReadingListAppProps = AppPageProps;
+
+/** The reading list's places, in its header as the kit's `NavItem`s: on a phone, the line of tabs under its name. */
+const PLACES = [
+  { label: "Books", rest: "" },
+  { label: "Add a book", rest: "books/new" },
+];
 
 const TONE: Record<BookStatus, "neutral" | "info" | "good"> = {
   want: "neutral",
@@ -52,7 +59,7 @@ const formatWhen = (iso: string) =>
 export function ReadingListApp(props: ReadingListAppProps) {
   const route = routeOf(props.rest);
   return (
-    <HostedAppShell {...props} testId="reading-list-app" page="reading-list">
+    <HostedAppShell {...props} testId="reading-list-app" page="reading-list" places={PLACES}>
       {route === "" ? (
         <BooksPage {...props} />
       ) : route === "books/new" ? (
@@ -273,13 +280,14 @@ function NewBookForm({
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [note, setNote] = useState("");
-  const [errors, setErrors] = useState<Record<string, string[]>>({});
+  // The kit's form errors: each clears as soon as its field changes, and a failed submit puts the focus on the first wrong one.
+  const form = useFormErrors();
 
   function submit(event: FormEvent) {
     event.preventDefault();
     const result = readingListFor(appId).add({ title, author, note }, me);
     if (result.ok) navigate("");
-    else setErrors(result.problem.errors ?? {});
+    else form.show(result.problem.errors ?? {});
   }
 
   const field = (
@@ -299,7 +307,7 @@ function NewBookForm({
         value={value}
         onChange={(e) => set(e.target.value)}
         invalid={!!error}
-        aria-describedby={`${id}-error`}
+        aria-describedby={error ? `${id}-error` : undefined}
         maxLength={max}
       />
       <FieldError id={`${id}-error`}>{error}</FieldError>
@@ -311,14 +319,14 @@ function NewBookForm({
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
       <Card className="w-full max-w-form p-5 sm:p-6">
-        <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
-          {field("title", "Title", title, setTitle, errors.Title?.[0], 200)}
+        <form {...form.formProps} className="flex flex-col gap-5" onSubmit={submit}>
+          {field("title", "Title", title, setTitle, form.error("title"), 200)}
           {field(
             "author",
             "Author",
             author,
             setAuthor,
-            errors.Author?.[0],
+            form.error("author"),
             120,
           )}
           {field(
@@ -326,7 +334,7 @@ function NewBookForm({
             "One-line note (optional)",
             note,
             setNote,
-            errors.Note?.[0],
+            form.error("note"),
             160,
           )}
           <div className="flex flex-wrap items-center gap-3 border-t pt-5 max-sm:flex-col max-sm:items-stretch">
