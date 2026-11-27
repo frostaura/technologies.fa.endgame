@@ -8,7 +8,15 @@ import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { useAppSelector } from "@/store";
 import { useGetOperatorAccessQuery } from "@/store/api";
 import type { OperatorAction } from "@/store/types";
+import { Cell, Table, TableRow, type Column } from "@/components/ui/table";
 import { AppShell } from "../shell/AppShell";
+
+/** The log's columns. "When" holds a date and a time of day on one line, wider than a date column alone. */
+const LOG_COLUMNS: Column[] = [
+  { key: "when", header: "When", kind: "date", track: "minmax(11.5rem, auto)" },
+  { key: "what", header: "What was done", kind: "grow" },
+  { key: "who", header: "By", kind: "text" },
+];
 
 const LINES: Record<string, string> = {
   "tobacco-gambling-finance": "tobacco, exploitative gambling or predatory finance",
@@ -92,31 +100,37 @@ export function OperatorAccessView() {
                   If anyone does, it is written here first.
                 </Empty>
               ) : (
-                // One list, newest first, every entry on the same grid: when, then what was done and by whom.
-                <ol aria-label="Operator log" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
+                // One table, newest first, every entry in the same columns: when, what was done, and by whom.
+                <Table label="Operator log" columns={LOG_COLUMNS} at="medium">
                   {[...view.data]
                     .sort((x, y) => Date.parse(y.at) - Date.parse(x.at))
                     .map((entry) => (
-                      <li key={entry.id} className="grid grid-cols-1 gap-x-6 gap-y-1 border-b px-5 py-3.5 last:border-b-0 sm:grid-cols-time-grow lg:grid-cols-time-grow-who">
-                        <time dateTime={entry.at} className="whitespace-nowrap text-sm tabular-nums text-ink-muted sm:pt-px">
-                          {formatDate(entry.at)}, {formatTime(entry.at)}
-                        </time>
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <span className="break-words font-semibold">{describeAction(entry)}</span>
-                          {technical && (
-                            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xs bg-ground px-3 py-2 font-mono text-xs text-ink-body">
-                              {entry.action}
-                              {entry.detail ? ` ${JSON.stringify(entry.detail)}` : ""}
-                            </pre>
-                          )}
-                        </div>
-                        <span className="min-w-0 break-words text-sm text-ink-body sm:col-start-2 lg:col-start-3 lg:pt-px">
-                          {entry.operator.displayName || "A FrostAura operator"}
-                          {entry.operator.email ? ` · ${entry.operator.email}` : ""}
-                        </span>
-                      </li>
+                      <TableRow key={entry.id}>
+                        <Cell col="when">
+                          <time dateTime={entry.at} className="whitespace-nowrap text-sm tabular-nums text-ink-muted">
+                            {formatDate(entry.at)}, {formatTime(entry.at)}
+                          </time>
+                        </Cell>
+                        <Cell col="what" primary>
+                          <span className="flex min-w-0 flex-col gap-1">
+                            <span className="break-words font-semibold">{describeAction(entry)}</span>
+                            {technical && (
+                              <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xs bg-ground px-3 py-2 font-mono text-xs text-ink-body">
+                                {entry.action}
+                                {entry.detail ? ` ${JSON.stringify(entry.detail)}` : ""}
+                              </pre>
+                            )}
+                          </span>
+                        </Cell>
+                        <Cell col="who">
+                          <span className="break-words text-sm text-ink-body">
+                            {entry.operator.displayName || "A FrostAura operator"}
+                            {entry.operator.email ? ` · ${entry.operator.email}` : ""}
+                          </span>
+                        </Cell>
+                      </TableRow>
                     ))}
-                </ol>
+                </Table>
               )}
             </>
           )}
